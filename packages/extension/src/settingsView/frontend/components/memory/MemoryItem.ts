@@ -9,6 +9,7 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
@@ -196,7 +197,13 @@ export class MemoryItem extends LitElement {
     const previewText = this.item.preview?.trim() ? this.item.preview : null;
 
     return html`
-      <div class="list-item memory-item ${this.item.pinned ? 'pinned' : ''}">
+      <div
+        class=${classMap({
+          'list-item': true,
+          'memory-item': true,
+          pinned: this.item.pinned === true,
+        })}
+      >
         <div class="list-item-header">
           <div class="memory-path">${this.item.displayPath}</div>
           <wa-button-group label="Memory actions">

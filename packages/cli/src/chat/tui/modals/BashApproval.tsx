@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Box, Text, useInput, useWindowSize } from 'ink';
+import { useMemo } from 'react';
+import { Box, Text, useWindowSize } from 'ink';
 
 import type { BashPermission } from '@shared/schemas';
 import { clamp } from '@utils/core';
@@ -7,17 +7,13 @@ import { clamp } from '@utils/core';
 import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
-  maxScrollableRowOffset,
-  scrollBoundedRows,
+  boundedScrollableLines,
+  compactAwareMaxScrollOffset,
+  scrollPageRows,
+  type ScrollableDisplayLine,
 } from '../render/scrollBounds';
-import {
-  hiddenRowsText,
-  moreRowsText,
-  previousRowsText,
-  scrollStatusText,
-} from '../render/overflowText';
-import { clipToWidth, textDisplayWidth } from '../render/terminalText';
 import { KeyHints } from '../ui/KeyHints';
+import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface BashApprovalProps {
@@ -26,10 +22,7 @@ export interface BashApprovalProps {
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
-export interface BashCommandDisplayLine {
-  readonly kind: 'command' | 'overflow';
-  readonly text: string;
-}
+export type BashCommandDisplayLine = ScrollableDisplayLine<'command'>;
 
 const BASH_APPROVAL_TITLE = 'Run bash command?';
 const MIN_BASH_COMMAND_WIDTH = 20;
@@ -88,15 +81,7 @@ export function maxBashCommandScrollOffset(
   totalLines: number,
   maxDisplayLines: number,
 ): number {
-  if (
-    maxDisplayLines <= COMPACT_BASH_COMMAND_ROWS &&
-    totalLines > maxDisplayLines
-  ) {
-    const contentRows = Math.max(1, maxDisplayLines - 1);
-    return Math.max(0, totalLines - contentRows);
-  }
-
-  return maxScrollableRowOffset({
+  return compactAwareMaxScrollOffset({
     compactRows: COMPACT_BASH_COMMAND_ROWS,
     maxDisplayLines,
     totalLines,
@@ -104,25 +89,10 @@ export function maxBashCommandScrollOffset(
 }
 
 export function bashApprovalPageRows(maxCommandRows: number): number {
-  return maxCommandRows <= COMPACT_BASH_COMMAND_ROWS
-    ? Math.max(1, maxCommandRows - 1)
-    : Math.max(1, maxCommandRows - 2);
-}
-
-function compactHiddenCommandText({
-  firstLine,
-  hiddenLines,
-  width,
-}: {
-  readonly firstLine: string;
-  readonly hiddenLines: number;
-  readonly width: number;
-}): string {
-  const suffix = ` ${hiddenRowsText(hiddenLines)}`;
-  const prefixWidth = width - textDisplayWidth(suffix);
-  if (prefixWidth <= 0) return clipToWidth(hiddenRowsText(hiddenLines), width);
-
-  return `${clipToWidth(firstLine, prefixWidth).trimEnd()}${suffix}`;
+  return scrollPageRows({
+    compactRows: COMPACT_BASH_COMMAND_ROWS,
+    maxDisplayLines: maxCommandRows,
+  });
 }
 
 export function boundedBashCommandDisplayLines({
@@ -136,73 +106,17 @@ export function boundedBashCommandDisplayLines({
   readonly scrollOffset?: number;
   readonly width: number;
 }): BashCommandDisplayLine[] {
-  const lines = bashCommandDisplayLines({ command, width });
-  if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
-
-  if (maxDisplayLines <= COMPACT_BASH_COMMAND_ROWS) {
-    const contentRows = Math.max(1, maxDisplayLines - 1);
-    const offset = clamp(
-      scrollOffset,
-      0,
-      maxBashCommandScrollOffset(lines.length, maxDisplayLines),
-    );
-
-    if (maxDisplayLines === 1) {
-      return [
-        {
-          kind: 'overflow',
-          text: compactHiddenCommandText({
-            firstLine: lines[offset]?.text ?? '',
-            hiddenLines: lines.length - 1,
-            width,
-          }),
-        },
-      ];
-    }
-
-    const visible = lines.slice(offset, offset + contentRows);
-    const hiddenBefore = offset;
-    const hiddenAfter = Math.max(0, lines.length - (offset + visible.length));
-    return [
-      ...visible,
-      {
-        kind: 'overflow',
-        text: clipToWidth(scrollStatusText(hiddenBefore, hiddenAfter), width),
-      },
-    ];
-  }
-
-  const { hiddenAfter, hiddenBefore, visibleRows } = scrollBoundedRows({
+  return boundedScrollableLines({
     compactRows: COMPACT_BASH_COMMAND_ROWS,
+    lines: bashCommandDisplayLines({ command, width }),
     maxDisplayLines,
-    rows: lines,
     scrollOffset,
+    width,
   });
-
-  return [
-    ...(hiddenBefore > 0
-      ? [
-          {
-            kind: 'overflow' as const,
-            text: previousRowsText(hiddenBefore),
-          },
-        ]
-      : []),
-    ...visibleRows,
-    ...(hiddenAfter > 0
-      ? [
-          {
-            kind: 'overflow' as const,
-            text: moreRowsText(hiddenAfter),
-          },
-        ]
-      : []),
-  ];
 }
 
 export function BashApproval(props: BashApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
-  const [scrollOffset, setScrollOffset] = useState(0);
   const commandWidth = Math.max(
     MIN_BASH_COMMAND_WIDTH,
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
@@ -223,8 +137,10 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
     commandRows,
     maxCommandRows,
   );
-  const scrollable = maxScrollOffset > 0;
-  const pageRows = bashApprovalPageRows(maxCommandRows);
+  const { scrollOffset, scrollable } = useScrollableOffset({
+    maxScrollOffset,
+    pageRows: bashApprovalPageRows(maxCommandRows),
+  });
   const compactCommandLayout = maxCommandRows <= COMPACT_BASH_COMMAND_ROWS;
   const showScrollHints = scrollable && maxCommandRows > 1;
   const displayLines = boundedBashCommandDisplayLines({
@@ -233,27 +149,6 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
     scrollOffset,
     width: commandWidth,
   });
-
-  function scrollTo(next: number | ((currentOffset: number) => number)): void {
-    setScrollOffset((current) => {
-      const requested = typeof next === 'function' ? next(current) : next;
-      return clamp(requested, 0, maxScrollOffset);
-    });
-  }
-
-  useEffect(() => {
-    setScrollOffset((current) => clamp(current, 0, maxScrollOffset));
-  }, [maxScrollOffset]);
-
-  useInput(
-    (_input, key) => {
-      if (key.downArrow) scrollTo((current) => current + 1);
-      else if (key.upArrow) scrollTo((current) => current - 1);
-      else if (key.pageDown) scrollTo((current) => current + pageRows);
-      else if (key.pageUp) scrollTo((current) => current - pageRows);
-    },
-    { isActive: scrollable },
-  );
 
   return (
     <ConfirmCard

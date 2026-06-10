@@ -31,8 +31,7 @@ import { setOutputChannelFactory } from '@logger/logUtils';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - tool integrations
-import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
-import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 // Local imports - CLI runtime
 import { applyCliGitAuthorConfig } from './gitAuthor';
@@ -191,13 +190,9 @@ export async function initCliPlatform(
     if (context.installSignalHandlers !== false) {
       installCliShutdownSignalHandlers(lifecycle);
     }
-    // Direct LSP adapter for Lean tools — spawns `lake env lean --server`
-    // lazily, one server per Lake project root. Errors are surfaced via the
-    // Tools dashboard if `lake` isn't on PATH; nothing happens at startup
-    // when no Lean tools are invoked.
-    const leanAdapter = createDirectLspLeanAdapter();
-    setLeanLanguageServices(leanAdapter);
-    lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => leanAdapter.dispose());
+    // Direct LSP adapter for Lean tools. Errors are surfaced via the Tools
+    // dashboard if `lake` isn't on PATH.
+    registerDirectLeanLanguageServices(lifecycle);
 
     // Attribute agent-authored commits to the TeXRA identity by default;
     // configurable via `.texra/config.json` `texra.git.markCommits`.

@@ -100,6 +100,27 @@ export const designTokens: CSSResult = css`
     /* Letter spacing for uppercase labels/badges (em scales with font-size). */
     --letter-spacing-caps: 0.06em;
   }
+
+  /* Match text selection to the host editor theme instead of the browser
+     default. ::selection does not pierce shadow roots, so this ships with the
+     token sheet every component adopts. */
+  ::selection {
+    background-color: var(--wa-color-editor-selection);
+  }
+
+  /* Honor the OS-level reduced-motion preference inside every shadow root
+     that adopts the token sheet: collapse animations and transitions to a
+     single imperceptible frame instead of removing end states. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 `;
 
 export const animationStyles: CSSResult = css`

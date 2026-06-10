@@ -8,7 +8,7 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
-import { customElement, property, query, state } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
 
@@ -30,11 +30,7 @@ import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
-import {
-  extractDroppedFilePaths,
-  hasDroppedFilePayload,
-  postDroppedFiles,
-} from '../fileDropHandler';
+import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { handleImagePaste } from '../pasteHandler';
 import { SESSION_TYPES, type SessionType } from '../constants';
 import {
@@ -415,14 +411,13 @@ export class InstructionPanel extends LitElement {
 
   @property({ type: Boolean }) showSessionHint = true;
 
-  @state()
-  private isDragActive = false;
-
   /** Reference to instruction textarea for paste handling */
   @query('#instruction')
   private instructionTextarea?: HTMLElement;
 
-  private dragDepth = 0;
+  private fileDrop = new FileDropController(this, (paths) =>
+    postDroppedFiles(paths),
+  );
 
   /** Get the tooltip for an agent dropdown based on the selected agent's description. */
   private getAgentTooltip(
@@ -523,48 +518,6 @@ export class InstructionPanel extends LitElement {
     }
   };
 
-  private handleDragEnter(event: DragEvent): void {
-    if (!hasDroppedFilePayload(event.dataTransfer)) return;
-    event.preventDefault();
-    this.dragDepth += 1;
-    this.isDragActive = true;
-  }
-
-  private handleDragOver(event: DragEvent): void {
-    if (!hasDroppedFilePayload(event.dataTransfer)) return;
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'copy';
-    }
-  }
-
-  private handleDragLeave(event: DragEvent): void {
-    if (!hasDroppedFilePayload(event.dataTransfer)) return;
-    event.preventDefault();
-    this.dragDepth = Math.max(0, this.dragDepth - 1);
-    if (this.dragDepth === 0) {
-      this.isDragActive = false;
-    }
-  }
-
-  private handleDrop(event: DragEvent): void {
-    // Always clear the drag-active visuals on drop. `dragenter`/`dragover`
-    // can only inspect `dataTransfer.types` (protected mode), so a non-file
-    // URI such as an https link is optimistically treated as droppable and
-    // activates the outline. At drop time the payload is readable and may be
-    // rejected — but no `dragleave` follows a `drop`, so failing to reset here
-    // would leave the panel permanently stuck in the drop-active state.
-    const wasDragActive = this.isDragActive;
-    this.dragDepth = 0;
-    this.isDragActive = false;
-    if (!hasDroppedFilePayload(event.dataTransfer)) {
-      if (wasDragActive) event.preventDefault();
-      return;
-    }
-    event.preventDefault();
-    postDroppedFiles(extractDroppedFilePaths(event.dataTransfer));
-  }
-
   private handleActionClick(event: MouseEvent): void {
     const button = (event.target as HTMLElement).closest<HTMLElement>(
       '[data-action]',
@@ -626,12 +579,12 @@ export class InstructionPanel extends LitElement {
       <div
         class=${classMap({
           'instruction-box': true,
-          'drop-active': this.isDragActive,
+          'drop-active': this.fileDrop.isDragActive,
         })}
-        @dragenter=${this.handleDragEnter}
-        @dragover=${this.handleDragOver}
-        @dragleave=${this.handleDragLeave}
-        @drop=${this.handleDrop}
+        @dragenter=${this.fileDrop.handleDragEnter}
+        @dragover=${this.fileDrop.handleDragOver}
+        @dragleave=${this.fileDrop.handleDragLeave}
+        @drop=${this.fileDrop.handleDrop}
       >
         <div class="instruction-header">
           <div class="instruction-header-leading">

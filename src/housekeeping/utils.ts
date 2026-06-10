@@ -12,7 +12,10 @@ import {
   normalizeLegacyModel,
 } from '@agent/output/workflowOutputLayout';
 import * as logger from '@logger/logUtils';
+import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
+
+import { DEFAULT_MAX_ROUNDS } from './constants';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -100,6 +103,46 @@ export function getFilePatterns(
     );
   }
   return patterns;
+}
+
+export interface HousekeepingTargets {
+  baseName: string;
+  inputDir: string;
+  filePatterns: string[];
+}
+
+/**
+ * Validates the parameters shared by clean and pack operations, then derives
+ * the parsed input path parts and round-aware file patterns for the agent's
+ * output layouts. Returns null (after logging) when a parameter is missing.
+ */
+export function resolveHousekeepingTargets(
+  model: string,
+  inputFile: string,
+  agent: string,
+): HousekeepingTargets | null {
+  if (!inputFile || !model || !agent) {
+    logger.error(
+      CHANNEL,
+      `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
+    );
+    return null;
+  }
+
+  const baseName = path.parse(inputFile).name;
+  const inputDir = path.dirname(inputFile);
+  logger.debug(
+    CHANNEL,
+    `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
+  );
+
+  const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
+  // Pass the raw agent; getFilePatterns derives both the legacy chunk and
+  // the new clean-agent forms internally so both disk layouts are matched.
+  const filePatterns = getFilePatterns(baseName, model, agent, maxRounds);
+  logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
+
+  return { baseName, inputDir, filePatterns };
 }
 
 export function findFilesFromPatterns(

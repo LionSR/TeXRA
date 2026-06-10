@@ -153,10 +153,14 @@ export const multiFilesStyles = css`
     border-radius: var(--border-radius-small);
   }
 
+  .file-item:hover {
+    background-color: var(--wa-color-list-hover-bg);
+  }
+
+  /* Truncation lives on the .file-name-main / .file-folder children — this is
+     a flex column, where text-overflow has no effect. */
   .file-name {
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     flex: 1;
     min-width: 0;
     display: flex;

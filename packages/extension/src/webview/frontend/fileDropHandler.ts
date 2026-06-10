@@ -7,6 +7,9 @@ import { postMessage } from '@shared/hostBridge';
 // Local imports - shared schemas
 import type { MultipleDocumentFileType } from '@shared/schemas';
 
+// Third-party type imports
+import type { ReactiveController, ReactiveControllerHost } from 'lit';
+
 type FileWithPath = File & {
   path?: string;
 };
@@ -111,6 +114,86 @@ export function extractDroppedFilePaths(
   }
 
   return [...paths];
+}
+
+/**
+ * Drag-and-drop lifecycle for a file drop target. Tracks nested
+ * dragenter/dragleave pairs so child elements don't flicker the highlight,
+ * and hands validated drop payloads to `onDrop`. Bind all four handlers on
+ * the drop target and drive the visual state from `isDragActive`.
+ */
+export class FileDropController implements ReactiveController {
+  private dragDepth = 0;
+  private active = false;
+
+  constructor(
+    private readonly host: ReactiveControllerHost,
+    private readonly onDrop: (paths: string[]) => void,
+  ) {
+    host.addController(this);
+  }
+
+  get isDragActive(): boolean {
+    return this.active;
+  }
+
+  hostConnected(): void {}
+
+  hostDisconnected(): void {
+    this.reset();
+  }
+
+  private setActive(active: boolean): void {
+    if (this.active === active) return;
+    this.active = active;
+    this.host.requestUpdate();
+  }
+
+  private reset(): void {
+    this.dragDepth = 0;
+    this.setActive(false);
+  }
+
+  readonly handleDragEnter = (event: DragEvent): void => {
+    if (!hasDroppedFilePayload(event.dataTransfer)) return;
+    event.preventDefault();
+    this.dragDepth += 1;
+    this.setActive(true);
+  };
+
+  readonly handleDragOver = (event: DragEvent): void => {
+    if (!hasDroppedFilePayload(event.dataTransfer)) return;
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  };
+
+  readonly handleDragLeave = (event: DragEvent): void => {
+    if (!hasDroppedFilePayload(event.dataTransfer)) return;
+    event.preventDefault();
+    this.dragDepth = Math.max(0, this.dragDepth - 1);
+    if (this.dragDepth === 0) {
+      this.setActive(false);
+    }
+  };
+
+  readonly handleDrop = (event: DragEvent): void => {
+    // Always clear the drag-active visuals on drop. `dragenter`/`dragover`
+    // can only inspect `dataTransfer.types` (protected mode), so a non-file
+    // URI such as an https link is optimistically treated as droppable and
+    // activates the outline. At drop time the payload is readable and may be
+    // rejected — but no `dragleave` follows a `drop`, so failing to reset here
+    // would leave the drop target permanently stuck in the drop-active state.
+    const wasDragActive = this.active;
+    this.reset();
+    if (!hasDroppedFilePayload(event.dataTransfer)) {
+      if (wasDragActive) event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    this.onDrop(extractDroppedFilePaths(event.dataTransfer));
+  };
 }
 
 export function postDroppedFiles(

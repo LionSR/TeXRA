@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Box, Text, useInput, useWindowSize } from 'ink';
+import { useMemo, useState } from 'react';
+import { Box, Text, useWindowSize } from 'ink';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { clamp } from '@utils/core';
@@ -15,6 +15,7 @@ import {
 } from '../render/DiffView';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { KeyHints } from '../ui/KeyHints';
+import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 const EDIT_DIFF_PADDING = 6;
@@ -105,7 +106,6 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [feedbackMode, setFeedbackMode] = useState(false);
   const [feedbackValue, setFeedbackValue] = useState('');
-  const [scrollOffset, setScrollOffset] = useState(0);
   const title = `Apply edit to ${props.request.path}?`;
   const diffWidth = Math.max(MIN_EDIT_DIFF_WIDTH, columns - EDIT_DIFF_PADDING);
   const maxDiffLines = editApprovalDiffRowsBudget({
@@ -136,33 +136,14 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     [diffWidth, hunks],
   );
   const maxScrollOffset = maxDiffScrollOffset(diffRows, maxDiffLines);
-  const diffScrollable = maxScrollOffset > 0;
-  const pageRows = Math.max(1, maxDiffLines - 2);
+  const { scrollOffset, scrollable: diffScrollable } = useScrollableOffset({
+    maxScrollOffset,
+    pageRows: Math.max(1, maxDiffLines - 2),
+  });
   const compactDiffLayout = maxDiffLines <= COMPACT_DIFF_DISPLAY_LINES;
   const compactCard =
     props.availableRows !== undefined &&
     props.availableRows <= COMPACT_EDIT_APPROVAL_MAX_ROWS;
-
-  function scrollTo(next: number | ((currentOffset: number) => number)): void {
-    setScrollOffset((current) => {
-      const requested = typeof next === 'function' ? next(current) : next;
-      return clamp(requested, 0, maxScrollOffset);
-    });
-  }
-
-  useEffect(() => {
-    setScrollOffset((current) => clamp(current, 0, maxScrollOffset));
-  }, [maxScrollOffset]);
-
-  useInput(
-    (_input, key) => {
-      if (key.downArrow) scrollTo((current) => current + 1);
-      else if (key.upArrow) scrollTo((current) => current - 1);
-      else if (key.pageDown) scrollTo((current) => current + pageRows);
-      else if (key.pageUp) scrollTo((current) => current - pageRows);
-    },
-    { isActive: diffScrollable },
-  );
 
   return (
     <ConfirmCard

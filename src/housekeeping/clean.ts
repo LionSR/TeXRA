@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'node:path';
-
 // Third-party imports
 import { sync as globSync } from 'glob';
 import { MODELS } from 'llm-zoo';
@@ -10,7 +7,6 @@ import type { FileOpResult } from '@agent/types/ResultTypes';
 // Internal imports
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports
@@ -18,10 +14,9 @@ import {
   EXCLUDED_DIRS,
   TEMP_EXTENSIONS,
   PACK_EXTENSIONS,
-  DEFAULT_MAX_ROUNDS,
   HISTORY_DIR,
 } from './constants';
-import { getFilePatterns, findFilesFromPatterns } from './utils';
+import { findFilesFromPatterns, resolveHousekeepingTargets } from './utils';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -36,26 +31,11 @@ export async function runCleanSingle(
     `Starting cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
 
-  if (!inputFile || !model || !agent) {
-    logger.error(
-      CHANNEL,
-      `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
-    );
+  const targets = resolveHousekeepingTargets(model, inputFile, agent);
+  if (!targets) {
     return { status: 'missingParams' };
   }
-
-  const baseName = path.parse(inputFile).name;
-  const inputDir = path.dirname(inputFile);
-  logger.debug(
-    CHANNEL,
-    `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
-  );
-
-  const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
-  // Pass the raw agent; getFilePatterns derives both the legacy chunk and
-  // the new clean-agent forms internally so both disk layouts are matched.
-  const filePatterns = getFilePatterns(baseName, model, agent, maxRounds);
-  logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
+  const { inputDir, filePatterns } = targets;
 
   const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];
   logger.debug(CHANNEL, `Using extensions: ${extensions}`);
