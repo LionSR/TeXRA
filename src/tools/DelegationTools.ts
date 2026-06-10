@@ -674,10 +674,7 @@ function formatAgentList(
 ): string {
   return agents
     .map((agent) => {
-      const desc =
-        agent.name === 'assistant'
-          ? `${agent.description || 'No description'} General-purpose: prefer a more specialized agent when the task maps cleanly to one; pick assistant when the work spans several of its domains.`
-          : agent.description || 'No description';
+      const desc = agent.description || 'No description';
       const toolsSuffix = agent.tools?.length
         ? `\n  Tools: ${agent.tools.join(', ')}`
         : '';
@@ -1065,7 +1062,7 @@ export class DelegateAgentTool extends defineTool({
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
 
-Agent selection: choose the most specific agent whose description matches the task. Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks. Choose assistant for broad cross-phase work only when no listed specialized agent covers the work, and state that reason in the instruction.
+Agent selection: choose the most specific agent whose description matches the task. Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks. When using a general-purpose agent, state why the work does not map cleanly to a listed specialist.
 
 Available models: loaded from the active API mode at runtime.
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
