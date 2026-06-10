@@ -157,7 +157,8 @@ For details on how LaTeX diff works, see the [LaTeX Diff guide](./latex-diff.md)
 ## From the CLI
 
 The same agents are one command away from the terminal. After
-`npm install -g @texra-ai/cli` (Node.js >=22.9.0):
+`npm install -g @texra-ai/cli` (Node.js >=22.9.0) or
+`brew install texra-ai/tap/texra`:
 
 ```bash
 # Sign in for included hosted access, or set ANTHROPIC_API_KEY / OPENAI_API_KEY in your shell:
