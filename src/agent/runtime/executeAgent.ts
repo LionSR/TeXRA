@@ -113,7 +113,7 @@ function buildWorkflowFlowResult(
 ): AgentFlowResult {
   return {
     category: 'workflow',
-    status: result.status,
+    outcome: result.outcome,
     outputs: toOutputSummaries(result.roundOutputs),
     compileFailures: toCompileFailureSummaries(result.roundOutputs),
     executionId,
@@ -134,7 +134,7 @@ function buildToolUseFlowResult(
 ): AgentFlowResult {
   return {
     category: 'toolUse',
-    status: result.status,
+    outcome: result.outcome,
     lastResponse: result.lastResponse,
     touchedFiles: result.touchedFiles,
     executionId,

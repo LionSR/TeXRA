@@ -20,12 +20,8 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
-import { executionToEndStatus } from '@common/constants/streamStatus';
-import {
-  END_GROUP_STATUS,
-  EXECUTION_STATUS,
-  type EndGroupStatus,
-} from '@shared/schemas';
+import { deriveRunOutcome } from '@common/constants/streamStatus';
+import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import type { SubagentProgressUpdate } from '@shared/schemas';
 
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -73,7 +69,7 @@ export interface RunToolUseFlowInput<
 }
 
 export interface RunToolUseFlowResult {
-  status: EndGroupStatus;
+  outcome: RunOutcome;
   lastResponse?: string;
   /** Workspace-relative paths of files edited by tool calls during this session. */
   touchedFiles?: string[];
@@ -271,7 +267,7 @@ export async function runToolUseFlow<C = unknown>(
     switchModel,
   };
 
-  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
+  let outcome: RunOutcome = RUN_OUTCOME.CANCELLED;
   let lastResponse: string | undefined;
   let touchedFiles: string[] | undefined;
   let totalCostUsd: number | undefined;
@@ -345,28 +341,25 @@ export async function runToolUseFlow<C = unknown>(
       ? extractedTouchedFiles
       : undefined;
 
-    if (shared.lastError) {
-      status = END_GROUP_STATUS.ERROR;
-      // Re-throw so runFlowWithLifecycle logs the error and shows
-      // the user notification, while preserving terminal run accounting.
-      throw new ToolUseFlowError(shared.lastError.message, {
-        status,
-        lastResponse,
-        touchedFiles,
-        totalCostUsd,
-      });
-    }
-
     const isInterrupted = input.checkInterruption();
     const interruptedAfterDeliveredSubagentResult =
       input.isSubagent &&
       shared.deliveredToOrchestrator === true &&
       isInterrupted;
-    const execStatus =
-      isInterrupted && !interruptedAfterDeliveredSubagentResult
-        ? EXECUTION_STATUS.INTERRUPTED
-        : EXECUTION_STATUS.COMPLETED;
-    status = executionToEndStatus(execStatus) as EndGroupStatus;
+    outcome = deriveRunOutcome({
+      failed: Boolean(shared.lastError),
+      cancelled: isInterrupted && !interruptedAfterDeliveredSubagentResult,
+    });
+    if (shared.lastError) {
+      // Re-throw so runFlowWithLifecycle logs the error and shows
+      // the user notification, while preserving terminal run accounting.
+      throw new ToolUseFlowError(shared.lastError.message, {
+        outcome,
+        lastResponse,
+        touchedFiles,
+        totalCostUsd,
+      });
+    }
   } finally {
     activePersistedFlow = undefined;
     teardownSetup?.();
@@ -390,7 +383,7 @@ export async function runToolUseFlow<C = unknown>(
   }
 
   return {
-    status,
+    outcome,
     lastResponse,
     touchedFiles,
     totalCostUsd,

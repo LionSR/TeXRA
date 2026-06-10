@@ -93,7 +93,7 @@ describe('headless delegation', () => {
     });
     mocks.executeAgent.mockResolvedValue({
       category: 'toolUse',
-      status: 'stopped',
+      outcome: 'completed',
       executionId: 'child-exec',
       streamId: 'child-stream',
       lastResponse: 'The proof is correct.',
@@ -155,14 +155,14 @@ describe('headless delegation', () => {
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
       await options.onError?.(new Error('review model failed'), {
         category: 'toolUse',
-        status: 'error',
+        outcome: 'failed',
         executionId: 'child-exec',
         streamId: 'child-stream',
         totalCostUsd: 0.42,
       });
       return {
         category: 'toolUse',
-        status: 'error',
+        outcome: 'failed',
         executionId: 'child-exec',
         streamId: 'child-stream',
         totalCostUsd: 0.42,
@@ -207,7 +207,7 @@ describe('headless delegation', () => {
     mocks.executeAgent.mockRejectedValueOnce(
       new AgentFlowError('review model failed', {
         category: 'toolUse',
-        status: 'error',
+        outcome: 'failed',
         executionId: 'child-exec',
         streamId: 'child-stream',
         totalCostUsd: 0.57,
@@ -249,14 +249,14 @@ describe('headless delegation', () => {
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
       await options.onError?.(new Error('review model failed'), {
         category: 'toolUse',
-        status: 'error',
+        outcome: 'failed',
         executionId: 'child-exec',
         streamId: 'child-stream',
         totalCostUsd: 0.31,
       });
       return {
         category: 'toolUse',
-        status: 'error',
+        outcome: 'failed',
         executionId: 'child-exec',
         streamId: 'child-stream',
         totalCostUsd: 0.31,

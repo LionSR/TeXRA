@@ -25,13 +25,13 @@ import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
 } from '@agent/output/workflowOutputLayout';
-import { executionToEndStatus } from '@common/constants/streamStatus';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
-  END_GROUP_STATUS,
+  RUN_OUTCOME,
   type AgentFileLocation,
   type EndGroupStatus,
   type RoundOutput,
+  type RunOutcome,
   type StorageKey,
   type WorkspaceFileLocation,
 } from '@shared/schemas';
@@ -70,7 +70,7 @@ export interface RunReflectionFlowInput<
 
 export interface RunReflectionFlowResult {
   roundOutputs: RoundOutput[];
-  status: EndGroupStatus;
+  outcome: RunOutcome;
   totalCostUsd?: number;
 }
 
@@ -93,7 +93,7 @@ export async function runReflectionFlow<C = unknown>(
     onRoundFinalized = async () => {},
   } = input;
 
-  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
+  let outcome: RunOutcome = RUN_OUTCOME.CANCELLED;
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
@@ -288,22 +288,22 @@ export async function runReflectionFlow<C = unknown>(
       await pf.setShared(shared);
     }
 
-    const flowStatus = await pf.run(shared);
+    const flowOutcome = await pf.run(shared);
     shared = await pf.getShared();
 
     if (shared?.lastError) {
-      status = END_GROUP_STATUS.ERROR;
+      outcome = RUN_OUTCOME.FAILED;
       // Re-throw so runFlowWithLifecycle logs the error and shows
       // the user notification. State was already projected per-step.
       throw new Error(shared.lastError.message);
     } else {
-      status = executionToEndStatus(flowStatus) as EndGroupStatus;
+      outcome = flowOutcome;
     }
   } catch (error) {
-    status = END_GROUP_STATUS.ERROR;
+    outcome = RUN_OUTCOME.FAILED;
     throw error;
   } finally {
-    if (status === END_GROUP_STATUS.STOPPED) {
+    if (outcome === RUN_OUTCOME.COMPLETED) {
       try {
         await kv.delete(flowKey(executionId));
       } catch {
@@ -322,7 +322,7 @@ export async function runReflectionFlow<C = unknown>(
 
   return {
     roundOutputs: shared?.roundOutputs ?? [],
-    status,
+    outcome,
     ...(totalCostUsd > 0 ? { totalCostUsd } : {}),
   };
 }

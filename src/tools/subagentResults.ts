@@ -134,11 +134,8 @@ export function formatSubagentDelivery(
     workingDirectory?: string;
   },
 ): string {
-  // Internal status "stopped" is shown to agents as "completed".
-  const displayStatus =
-    result.status === 'stopped' ? 'completed' : result.status;
   const lines = [
-    `<subagent-result id="${escapeAttr(result.executionId)}" agent="${escapeAttr(agentName)}" category="${escapeAttr(result.category)}" status="${escapeAttr(displayStatus)}">`,
+    `<subagent-result id="${escapeAttr(result.executionId)}" agent="${escapeAttr(agentName)}" category="${escapeAttr(result.category)}" status="${escapeAttr(result.outcome)}">`,
   ];
 
   if (options?.wallTimeMs !== undefined) {

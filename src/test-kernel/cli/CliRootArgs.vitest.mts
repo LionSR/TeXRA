@@ -49,7 +49,7 @@ import {
 import { isKnownCliModel } from '@cli/runtime/cliConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
-import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
+import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   return {
@@ -790,7 +790,7 @@ describe('CLI root argument routing', () => {
         'corrected.tex',
         undefined,
         {
-          status: END_GROUP_STATUS.ERROR,
+          outcome: RUN_OUTCOME.FAILED,
           category: AgentCategory.Workflow,
           executionId: 'execution-without-output',
           streamId: 'stream-without-output',
@@ -805,18 +805,30 @@ describe('CLI root argument routing', () => {
     );
   });
 
-  it('maps stopped end-group status to completed terminal status by default', () => {
+  it('maps run outcomes to terminal statuses by default', () => {
     expect(
       cliTerminalStatus({
-        status: 'stopped',
+        outcome: RUN_OUTCOME.COMPLETED,
       } as Parameters<typeof cliTerminalStatus>[0]),
     ).toBe(EXECUTION_STATUS.COMPLETED);
+    expect(
+      cliTerminalStatus({
+        outcome: RUN_OUTCOME.CANCELLED,
+      } as Parameters<typeof cliTerminalStatus>[0]),
+    ).toBe(EXECUTION_STATUS.INTERRUPTED);
+    expect(
+      cliTerminalStatus({
+        outcome: RUN_OUTCOME.FAILED,
+      } as Parameters<typeof cliTerminalStatus>[0]),
+    ).toBe(EXECUTION_STATUS.ERROR);
   });
 
   it('honors stored interrupted terminal status', () => {
     expect(
       cliTerminalStatus(
-        { status: 'stopped' } as Parameters<typeof cliTerminalStatus>[0],
+        {
+          outcome: RUN_OUTCOME.COMPLETED,
+        } as Parameters<typeof cliTerminalStatus>[0],
         EXECUTION_STATUS.INTERRUPTED,
       ),
     ).toBe(EXECUTION_STATUS.INTERRUPTED);
@@ -825,7 +837,7 @@ describe('CLI root argument routing', () => {
   it('includes working directory metadata in CLI run results', () => {
     const result = createCliRunResult(
       {
-        status: END_GROUP_STATUS.STOPPED,
+        outcome: RUN_OUTCOME.COMPLETED,
         category: AgentCategory.ToolUse,
         executionId: 'completed-without-output',
         streamId: 'stream-without-output',
@@ -908,7 +920,7 @@ describe('CLI root argument routing', () => {
         'corrected.tex',
         undefined,
         {
-          status: END_GROUP_STATUS.STOPPED,
+          outcome: RUN_OUTCOME.COMPLETED,
           category: AgentCategory.Workflow,
           executionId: 'completed-without-output',
           streamId: 'completed-stream-without-output',
@@ -929,7 +941,7 @@ describe('CLI root argument routing', () => {
         'corrected.tex',
         undefined,
         {
-          status: END_GROUP_STATUS.STOPPED,
+          outcome: RUN_OUTCOME.CANCELLED,
           category: AgentCategory.Workflow,
           executionId: 'stopped-without-output',
           streamId: 'stopped-stream-without-output',
