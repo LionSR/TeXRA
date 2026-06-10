@@ -3,13 +3,9 @@ import * as path from 'node:path';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
-import {
-  flexibleFS,
-  TaskRunFileService,
-  pathToLocation,
-  type FileLocation,
-} from '@utils/files';
+import { flexibleFS, TaskRunFileService, pathToLocation } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 
 // Local imports - latex utils

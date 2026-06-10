@@ -13,11 +13,11 @@ import { toErrorMessage } from '@common/errors';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { debug } from '@logger/logUtils';
+import type { FileLocation } from '@shared/schemas';
 import {
   createExternalLocation,
   createWorkspaceLocation,
   WorkspaceFS,
-  type FileLocation,
 } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 

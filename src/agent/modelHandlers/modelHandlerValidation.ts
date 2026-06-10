@@ -9,7 +9,7 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - tools and utils
 import type { ToolFileAttachment } from '@tools/result';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 
 // Local imports - model handlers
 import { ModelHandler } from './ModelHandler';

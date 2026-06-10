@@ -13,8 +13,8 @@ import {
 } from '@shared/constants/latex';
 
 // Local imports - utilities
+import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
-import type { FileLocation } from '@utils/files';
 
 const CHANNEL = 'OpenBuildUtils';
 

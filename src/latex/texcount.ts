@@ -3,8 +3,8 @@ import { z } from 'zod';
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import type { FileLocation } from '@shared/schemas';
 import { flexibleFS, pathToLocation } from '@utils/files';
-import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
 import { filterNotNull, ensureArray } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';

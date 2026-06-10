@@ -11,7 +11,7 @@ import type {
   ConversationRoundStateSnapshot,
 } from '@agent/core/execution/AgentState';
 import { ensureError, normalizeProviderError } from '@common/errors';
-import type { AgentFileLocation } from '@utils/files';
+import type { AgentFileLocation } from '@shared/schemas';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {

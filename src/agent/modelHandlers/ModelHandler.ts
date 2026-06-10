@@ -47,7 +47,7 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import {
   getProviderStreaming,
   getGlobalStreaming,

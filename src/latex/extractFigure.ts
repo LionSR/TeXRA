@@ -1,8 +1,8 @@
 // Standard library imports
 import * as path from 'node:path';
 
+import type { FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
-import type { FileLocation } from '@utils/files';
 import { joinLatexPath } from '@utils/core/pathCore';
 
 import { findExistingLatexPath, resolveLatexDir } from './latexParsingUtils';
