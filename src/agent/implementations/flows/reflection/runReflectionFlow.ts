@@ -29,17 +29,17 @@ import { executionToEndStatus } from '@common/constants/streamStatus';
 import { LatexMediaManager } from '@latex';
 import {
   END_GROUP_STATUS,
+  type AgentFileLocation,
   type EndGroupStatus,
   type RoundOutput,
   type StorageKey,
+  type WorkspaceFileLocation,
 } from '@shared/schemas';
 import {
   AbsoluteFS,
   TaskRunFileService,
   WorkspaceFS,
   createWorkspaceLocation,
-  type AgentFileLocation,
-  type WorkspaceFileLocation,
 } from '@utils/files';
 import { PromptBuilder } from '@utils/prompt';
 

@@ -5,11 +5,11 @@ import path from 'node:path';
 import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 
 // Local imports - utilities
+import type { FileLocation } from '@shared/schemas';
 import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
-  type FileLocation,
 } from '@utils/files';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 

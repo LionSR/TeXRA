@@ -7,12 +7,12 @@ import type { AgentTrace } from '@agent/trace';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 
 import { toErrorMessage } from '@common/errors';
+import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas/toolConfig';
 import {
   TaskRunFileService,
   flexibleFS,
   pathToLocation,
-  type FileLocation,
 } from '@utils/files';
 import { filterNotNullish } from '@utils/core';
 import { isFile } from '@utils/files/fsEntryType';

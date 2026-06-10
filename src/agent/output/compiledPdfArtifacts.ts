@@ -3,11 +3,14 @@ import * as path from 'node:path';
 
 // Local imports - shared schemas
 import { platform } from '@platform/platform';
-import type { ExecutionId, FileLocation } from '@shared/schemas';
+import type {
+  ExecutionId,
+  FileLocation,
+  RunStorageFileLocation,
+} from '@shared/schemas';
 import {
   createRunStorageLocation,
   getComparablePath,
-  type RunStorageFileLocation,
 } from '@utils/files';
 import { isFile } from '@utils/files/fsEntryType';
 

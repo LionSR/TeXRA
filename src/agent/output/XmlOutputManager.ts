@@ -12,13 +12,12 @@ import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import { toErrorMessage } from '@common/errors';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import type { OutputFileInfo } from '@shared/schemas';
+import type { FileLocation, OutputFileInfo } from '@shared/schemas';
 import {
   AbsoluteFS,
   createExternalLocation,
   getFileDirectory,
   TaskRunFileService,
-  type FileLocation,
 } from '@utils/files';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {

@@ -12,7 +12,8 @@ import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 
 // Local file imports
 import { flexibleFS } from './flexibleFS';
-import { getComparablePath, type FileLocation } from './taskRunStorage';
+import type { FileLocation } from '@shared/schemas';
+import { getComparablePath } from './taskRunStorage';
 
 /**
  * Create a mapping between two file lists based on name similarity.

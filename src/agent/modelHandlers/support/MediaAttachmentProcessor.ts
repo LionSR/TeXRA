@@ -10,6 +10,7 @@ import { logFilesLoaded, type AgentTrace } from '@agent/trace';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { toErrorMessage } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import type { FileLocation } from '@shared/schemas';
 
 // Local imports - utils
 import { ensureArray } from '@utils/core';
@@ -17,7 +18,6 @@ import {
   AbsoluteFS,
   getMimeType,
   getShortDisplayPath,
-  type FileLocation,
 } from '@utils/files';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import {

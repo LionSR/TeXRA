@@ -20,7 +20,7 @@ import {
 // Local imports - tools and utils
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype } from '@utils/text/stringUtils';

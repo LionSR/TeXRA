@@ -32,7 +32,8 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 // Type imports
 
 // Local imports - model config
-import { pathToLocation, type FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
+import { pathToLocation } from '@utils/files';
 
 // Type imports
 import type {
