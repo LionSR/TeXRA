@@ -24,7 +24,11 @@ export const DEFAULT_NODE_STORAGE_ROOT = path.join(
  * a checked-in `.texra/config.json` behaves the same in both.
  */
 export function workspaceTexraConfigPath(workspaceRoot: string): string {
-  return path.join(workspaceRoot, TEXRA_STORAGE_DIR_NAME, TEXRA_CONFIG_FILE_NAME);
+  return path.join(
+    workspaceRoot,
+    TEXRA_STORAGE_DIR_NAME,
+    TEXRA_CONFIG_FILE_NAME,
+  );
 }
 
 interface NodeStorageProviderOptions {

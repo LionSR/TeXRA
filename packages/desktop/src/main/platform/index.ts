@@ -33,7 +33,8 @@ export interface ElectronPlatformInitResult {
   progressSnapshotStore: StreamSnapshotStore;
 }
 
-const WORKSPACE_CONFIG_MIGRATED_KEY = 'desktop.workspaceConfigMigratedToProject';
+const WORKSPACE_CONFIG_MIGRATED_KEY =
+  'desktop.workspaceConfigMigratedToProject';
 
 export async function initializeElectronPlatform(
   mainDirname: string,
@@ -61,7 +62,10 @@ export async function initializeElectronPlatform(
   // file the CLI reads and writes — so a checked-in config behaves
   // identically in both hosts. Sessions without a workspace fall back to the
   // internal per-workspace store.
-  const legacyWorkspaceConfigPath = join(storage.getStoragePath(), 'config.json');
+  const legacyWorkspaceConfigPath = join(
+    storage.getStoragePath(),
+    'config.json',
+  );
   const workspaceConfigStore = await JsonStore.open(
     workspacePath
       ? workspaceTexraConfigPath(workspacePath)

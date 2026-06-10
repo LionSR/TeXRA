@@ -64,7 +64,9 @@ async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
 async function loadUserDefaults(): Promise<PartialDefaults> {
   try {
     return defaultsFromConfigValues(
-      parseCliConfigValues(await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME)),
+      parseCliConfigValues(
+        await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME),
+      ),
     );
   } catch {
     return {};
