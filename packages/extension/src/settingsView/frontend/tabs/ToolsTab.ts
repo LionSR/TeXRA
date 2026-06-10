@@ -16,7 +16,8 @@ import type {
   ToolCategory,
 } from '@shared/schemas/settingsViewMessages';
 
-// Side-effect imports - register WA icon and switch components
+// Side-effect imports - register WA button, icon, and switch components
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -156,8 +157,6 @@ export class ToolsTab extends LitElement {
         color: var(--wa-color-testing-failed, #f48771);
       }
 
-      /* Base recheck-btn styles provided by .tab-action-btn in commonViewStyles */
-
       .category-section {
         margin-bottom: var(--wa-space-s);
       }
@@ -291,15 +290,17 @@ export class ToolsTab extends LitElement {
                 ? 'DSN set'
                 : 'DSN missing'}
             </wa-tag>
-            <button
-              class="tab-action-btn"
+            <wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
               @click=${this.handleSetDesktopCrashReportingDsn}
             >
-              <wa-icon library="texra" name="key"></wa-icon>
+              <wa-icon slot="start" library="texra" name="key"></wa-icon>
               ${this.desktopCrashReportingConfigured
                 ? 'Replace DSN'
                 : 'Set DSN'}
-            </button>
+            </wa-button>
           </div>
         </div>
       </div>
@@ -427,14 +428,16 @@ export class ToolsTab extends LitElement {
         <div class="tools-header">
           <div class="tools-header-actions">
             ${this.renderSummary(items)}
-            <button
-              class="tab-action-btn"
-              @click=${this.handleRecheck}
+            <wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
               title="Re-check tool availability"
+              @click=${this.handleRecheck}
             >
-              <wa-icon library="texra" name="refresh"></wa-icon>
+              <wa-icon slot="start" library="texra" name="refresh"></wa-icon>
               Re-check
-            </button>
+            </wa-button>
           </div>
         </div>
 

@@ -11,6 +11,7 @@ import { MemoryViewEvents } from '../components/memory/events';
 // Side-effect: register child components.
 import '../components/memory/MemoryToggle';
 import '../components/memory/MemoryList';
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 @customElement('memory-tab')
@@ -63,18 +64,33 @@ export class MemoryTab extends LitElement {
             provide more contextual and personalized help.
           </div>
           <div class="settings-reminder-actions">
-            <button class="tab-action-btn" @click=${this.handleRefresh}>
-              <wa-icon library="texra" name="rotate-right"></wa-icon>
-              Refresh
-            </button>
-            <button
-              class="tab-action-btn"
-              @click=${this.handleOpenFolder}
-              title="Open memory folder in file explorer"
+            <wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
+              @click=${this.handleRefresh}
             >
-              <wa-icon library="texra" name="folder-open"></wa-icon>
+              <wa-icon
+                slot="start"
+                library="texra"
+                name="rotate-right"
+              ></wa-icon>
+              Refresh
+            </wa-button>
+            <wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
+              title="Open memory folder in file explorer"
+              @click=${this.handleOpenFolder}
+            >
+              <wa-icon
+                slot="start"
+                library="texra"
+                name="folder-open"
+              ></wa-icon>
               Open Folder
-            </button>
+            </wa-button>
           </div>
         </div>
       </div>

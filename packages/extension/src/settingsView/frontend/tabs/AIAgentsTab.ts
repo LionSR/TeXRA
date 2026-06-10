@@ -27,6 +27,7 @@ import type {
 } from '@shared/schemas/settingsViewMessages';
 
 // Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
@@ -305,14 +306,16 @@ export class AIAgentsTab extends LitElement {
             runs, such as coding agents, GitHub, and reference managers. Each
             integration shows its own setup and authentication state here.
           </p>
-          <button
-            class="tab-action-btn"
-            @click=${this.handleRecheck}
+          <wa-button
+            appearance="outlined"
+            variant="neutral"
+            size="small"
             title="Re-check integration availability"
+            @click=${this.handleRecheck}
           >
-            <wa-icon library="texra" name="refresh"></wa-icon>
+            <wa-icon slot="start" library="texra" name="refresh"></wa-icon>
             Re-check
-          </button>
+          </wa-button>
         </div>
 
         ${items.length === 0

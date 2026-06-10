@@ -15,7 +15,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderLoadingState } from '@shared/wa/loadingState';
 
-// Web Awesome icon bundle (side-effect import)
+// Web Awesome button + icon bundles (side-effect imports)
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared schemas
@@ -261,8 +262,11 @@ export class LaTeXTab extends LitElement {
             ? nothing
             : dep.actionEvent
               ? html`
-                  <button
-                    class="tab-action-btn"
+                  <wa-button
+                    appearance="outlined"
+                    variant="neutral"
+                    size="small"
+                    title="${dep.actionLabel ?? 'Install'}"
                     @click=${() =>
                       this.dispatchEvent(
                         new CustomEvent(dep.actionEvent!, {
@@ -270,11 +274,14 @@ export class LaTeXTab extends LitElement {
                           composed: true,
                         }),
                       )}
-                    title="${dep.actionLabel ?? 'Install'}"
                   >
-                    <wa-icon library="texra" name="cloud-download"></wa-icon>
+                    <wa-icon
+                      slot="start"
+                      library="texra"
+                      name="cloud-download"
+                    ></wa-icon>
                     ${dep.actionLabel ?? 'Install'}
-                  </button>
+                  </wa-button>
                 `
               : html`<wa-tag
                   class="setting-badge"
@@ -287,14 +294,20 @@ export class LaTeXTab extends LitElement {
           ? html`
               <div class="dependency-install-actions">
                 <wa-copy-button value=${installCmd.command}></wa-copy-button>
-                <button
-                  class="tab-action-btn"
+                <wa-button
+                  appearance="outlined"
+                  variant="neutral"
+                  size="small"
                   title="Run: ${installCmd.command}"
                   @click=${() => this.handleRunInTerminal(installCmd.command)}
                 >
-                  <wa-icon library="texra" name="terminal"></wa-icon>
+                  <wa-icon
+                    slot="start"
+                    library="texra"
+                    name="terminal"
+                  ></wa-icon>
                   Run in Terminal
-                </button>
+                </wa-button>
               </div>
             `
           : nothing}
@@ -358,16 +371,18 @@ export class LaTeXTab extends LitElement {
         <div class="hint-actions">
           <code class="install-command-text">${installCommand}</code>
           <wa-copy-button value=${installCommand}></wa-copy-button>
-          <button
-            class="tab-action-btn"
+          <wa-button
+            appearance="outlined"
+            variant="neutral"
+            size="small"
             title=${this.desktopHost
               ? `Run ${pmName} installer`
               : `Run ${pmName} installer in VS Code terminal`}
             @click=${() => this.handleRunInTerminal(installCommand)}
           >
-            <wa-icon library="texra" name="terminal"></wa-icon>
+            <wa-icon slot="start" library="texra" name="terminal"></wa-icon>
             Run in Terminal
-          </button>
+          </wa-button>
         </div>
       </wa-callout>
     `;
@@ -405,24 +420,28 @@ export class LaTeXTab extends LitElement {
         </div>
         ${isSet
           ? html`
-              <button
-                class="tab-action-btn"
-                @click=${() => this.handleApply(info.key, true)}
+              <wa-button
+                appearance="outlined"
+                variant="neutral"
+                size="small"
                 title="Reset this setting to default"
+                @click=${() => this.handleApply(info.key, true)}
               >
-                <wa-icon library="texra" name="discard"></wa-icon>
+                <wa-icon slot="start" library="texra" name="discard"></wa-icon>
                 Reset
-              </button>
+              </wa-button>
             `
           : html`
-              <button
-                class="tab-action-btn"
-                @click=${() => this.handleApply(info.key)}
+              <wa-button
+                appearance="outlined"
+                variant="neutral"
+                size="small"
                 title="Apply this setting"
+                @click=${() => this.handleApply(info.key)}
               >
-                <wa-icon library="texra" name="check"></wa-icon>
+                <wa-icon slot="start" library="texra" name="check"></wa-icon>
                 Apply
-              </button>
+              </wa-button>
             `}
       </div>
     `;
@@ -442,14 +461,20 @@ export class LaTeXTab extends LitElement {
         ${!this.desktopHost && !this.allSettingsSet()
           ? html`
               <div class="latex-header">
-                <button
-                  class="tab-action-btn"
-                  @click=${() => this.handleApply()}
+                <wa-button
+                  appearance="outlined"
+                  variant="neutral"
+                  size="small"
                   title="Apply all recommended settings"
+                  @click=${() => this.handleApply()}
                 >
-                  <wa-icon library="texra" name="check-all"></wa-icon>
+                  <wa-icon
+                    slot="start"
+                    library="texra"
+                    name="check-all"
+                  ></wa-icon>
                   Apply All
-                </button>
+                </wa-button>
               </div>
             `
           : nothing}
@@ -656,13 +681,16 @@ export class LaTeXTab extends LitElement {
           title="Toggle"
         ></wa-switch>
         ${isCustom
-          ? html`<button
-              class="tab-action-btn"
-              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
+          ? html`<wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
+              aria-label="Reset to default"
               title="Reset to default (${opts.defaultValue ? 'On' : 'Off'})"
+              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
             >
               <wa-icon library="texra" name="discard"></wa-icon>
-            </button>`
+            </wa-button>`
           : nothing}
       </div>
     `;
@@ -724,13 +752,16 @@ export class LaTeXTab extends LitElement {
           ></wa-input>
         </div>
         ${isCustom
-          ? html`<button
-              class="tab-action-btn"
-              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
+          ? html`<wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
+              aria-label="Reset to default"
               title="Reset to default (${opts.defaultValue})"
+              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
             >
               <wa-icon library="texra" name="discard"></wa-icon>
-            </button>`
+            </wa-button>`
           : nothing}
       </div>
     `;
@@ -770,13 +801,16 @@ export class LaTeXTab extends LitElement {
           </wa-select>
         </div>
         ${isCustom
-          ? html`<button
-              class="tab-action-btn"
-              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
+          ? html`<wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
+              aria-label="Reset to default"
               title="Reset to default (${opts.defaultValue})"
+              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
             >
               <wa-icon library="texra" name="discard"></wa-icon>
-            </button>`
+            </wa-button>`
           : nothing}
       </div>
     `;
