@@ -6,7 +6,7 @@
 
 import path from 'node:path';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
@@ -186,11 +186,9 @@ export function appendStaticTranscriptItems({
   readonly width?: number;
 }): readonly StaticTranscriptItem[] {
   const seen = new Set(currentItems.map((item) => item.id));
-  const nextItems: StaticTranscriptItem[] = [...currentItems];
-  let currentRows = nextItems.reduce(
-    (total, item) => total + staticTranscriptItemRowCount(item, width),
-    0,
-  );
+  // Copied lazily: this runs on every stream-sync tick and most ticks append
+  // nothing.
+  let nextItems: StaticTranscriptItem[] | undefined;
   if (!seen.has(SESSION_HEADER_ID)) {
     const header: StaticTranscriptItem = {
       id: SESSION_HEADER_ID,
@@ -203,10 +201,17 @@ export function appendStaticTranscriptItems({
       }),
       meta,
     };
-    if (
+    // The row budget only applies on compact terminals (maxRows defined), and
+    // counting rows wraps every item's full text — O(history) — so it must
+    // stay behind the maxRows gate rather than run eagerly per tick.
+    const fitsBudget =
       maxRows === undefined ||
-      currentRows + staticTranscriptItemRowCount(header, width) <= maxRows
-    ) {
+      currentItems.reduce(
+        (total, item) => total + staticTranscriptItemRowCount(item, width),
+        staticTranscriptItemRowCount(header, width),
+      ) <= maxRows;
+    if (fitsBudget) {
+      nextItems = [...currentItems];
       const firstEntryIndex = nextItems.findIndex(
         (item) => item.kind === 'entry',
       );
@@ -215,7 +220,6 @@ export function appendStaticTranscriptItems({
         0,
         header,
       );
-      currentRows += staticTranscriptItemRowCount(header, width);
       seen.add(SESSION_HEADER_ID);
     }
   }
@@ -223,18 +227,19 @@ export function appendStaticTranscriptItems({
   // Only the selected scrollback owner feeds `<Static>` output. Root focus owns
   // root history; child focus owns that child's history. Other streams stay
   // available through their own focus or the transcript viewer.
-  if (!scrollbackStreamId) return nextItems;
-  const slice = streams.get(scrollbackStreamId);
+  const slice = scrollbackStreamId
+    ? streams.get(scrollbackStreamId)
+    : undefined;
   for (const entry of slice?.entries ?? []) {
     if (!entry.finalized) continue;
     if (seen.has(entry.id)) continue;
-    const item: StaticTranscriptItem = { id: entry.id, kind: 'entry', entry };
-    nextItems.push(item);
+    nextItems ??= [...currentItems];
+    nextItems.push({ id: entry.id, kind: 'entry', entry });
     seen.add(entry.id);
   }
   // Same reference when nothing was appended so the `setItems` functional
   // update doesn't schedule a re-render on every stream-sync tick.
-  return nextItems.length === currentItems.length ? currentItems : nextItems;
+  return nextItems ?? currentItems;
 }
 
 export function StaticConversationTranscript({
@@ -312,8 +317,14 @@ export function StaticConversationTranscript({
     width,
   ]);
 
+  // Keep our scrollback state readonly and adapt once at the Ink boundary.
+  // `<Static>` declares `items: T[]`; memoizing the defensive copy avoids the
+  // old O(history) spread on unrelated renders without exposing state to a
+  // mutable third-party prop.
+  const staticItems = useMemo(() => [...items], [items]);
+
   return (
-    <Static key={`transcript:${ownerKey}`} items={[...items]}>
+    <Static key={`transcript:${ownerKey}`} items={staticItems}>
       {(item: StaticTranscriptItem) => (
         <Box key={item.id} flexDirection="column">
           {item.kind === 'header' ? (
