@@ -23,6 +23,7 @@ import type {
   InquiryResumeOutcome,
   StreamTabId,
 } from '@shared/schemas';
+import { formatRelativeTime } from '@shared/utils/string';
 import { truncateSummary, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import {
@@ -47,23 +48,12 @@ function formatStillOpen(threads: ExternalInquiryThreadSummary[]): string[] {
   if (!threads.length) return [];
   const lines = ['', 'Still open on this stream:'];
   for (const t of threads) {
-    const since = formatRelativeTime(t.lastActivityIso);
+    const since = formatRelativeTime(Date.parse(t.lastActivityIso));
     lines.push(
       `  - ${t.threadId}  "${truncateWithEllipsis(t.lastQuestionPreview, 60)}"  (dispatched ${since})`,
     );
   }
   return lines;
-}
-
-function formatRelativeTime(iso: string): string {
-  const elapsedMs = Math.max(0, Date.now() - Date.parse(iso));
-  const minutes = Math.floor(elapsedMs / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }
 
 export function buildContinuationText(params: {

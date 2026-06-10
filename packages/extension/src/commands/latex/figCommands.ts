@@ -14,13 +14,10 @@ import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 import * as logger from '@logger/logUtils';
 import { pathToLocation } from '@utils/files';
+import { pluralize } from '@utils/text/stringUtils';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
-
-function pluralize(count: number, singular: string): string {
-  return count === 1 ? singular : `${singular}s`;
-}
 
 async function runLaTeXCommand(
   action: string,

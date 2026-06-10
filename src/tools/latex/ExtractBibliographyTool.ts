@@ -12,6 +12,7 @@ import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
+import { formatResultCount } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
 
 const ExtractBibliographyInputSchema = z.strictObject({
@@ -112,15 +113,16 @@ export class ExtractBibliographyTool extends defineTool({
     );
 
     const entryCount = entries.size;
-    const citationCount = citationKeys.length;
-    const keyPlural = citationCount === 1 ? '' : 's';
-    const entryWord = entryCount === 1 ? 'entry' : 'entries';
+    const citationKeyCount = formatResultCount(
+      citationKeys.length,
+      'citation key',
+    );
 
     let summary: string;
     if (entryCount === 0) {
-      summary = `No matching bibliography entries found for ${citationCount} citation key${keyPlural} in ${display}.`;
+      summary = `No matching bibliography entries found for ${citationKeyCount} in ${display}.`;
     } else {
-      summary = `Resolved ${entryCount} bibliography ${entryWord} for ${citationCount} citation key${keyPlural} in ${display}.`;
+      summary = `Resolved ${formatResultCount(entryCount, 'bibliography entry', 'bibliography entries')} for ${citationKeyCount} in ${display}.`;
     }
 
     const instructions = [

@@ -25,3 +25,13 @@ export function getBasename(filePath: string | undefined | null): string {
 
   return cleaned.split('/').at(-1) ?? '';
 }
+
+/**
+ * Basename without its final extension (`'paper'` for `'dir/paper.tex'`).
+ * Dotfiles keep their name (`'.gitignore'` → `'.gitignore'`).
+ */
+export function getFileStem(filePath: string | undefined | null): string {
+  const fileName = getBasename(filePath);
+  const dotIndex = fileName.lastIndexOf('.');
+  return dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+}

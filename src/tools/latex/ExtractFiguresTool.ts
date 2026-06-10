@@ -7,6 +7,7 @@ import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
+import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,
   resolveLatexFileOrThrow,
@@ -56,9 +57,7 @@ export class ExtractLatexFiguresTool extends defineTool({
     );
     const header = `Figures referenced in ${display}`;
     const output = formatToolOutput(header, formattedList);
-    const summary = `Found ${limitedPaths.length} figure file${
-      limitedPaths.length === 1 ? '' : 's'
-    } in ${display}.`;
+    const summary = `Found ${formatResultCount(limitedPaths.length, 'figure file')} in ${display}.`;
 
     const fullOutput = limitReached
       ? `${output}\n\nNote: Limited attachments to ${attachments.length} files.`

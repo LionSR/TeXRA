@@ -21,5 +21,5 @@ export {
   filterNotNullish,
   ensureArray,
 } from './typeGuards';
-export { debounce, delay } from './async';
+export { debounce, delay, withTimeout } from './async';
 export { clamp, clampIndex } from './math';

@@ -10,8 +10,9 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { platform } from '@platform/platform';
+import { AbsoluteFS } from '@utils/files';
 import { executeCommandSync } from '@utils/system/execUtils';
+import { IS_WINDOWS } from '@utils/system/platformPaths';
 
 type ElectronProcess = NodeJS.Process & {
   defaultApp?: boolean;
@@ -29,17 +30,6 @@ export function getPackagedElectronResourcesPath(): string | undefined {
   if (electronProcess.versions.electron == null) return undefined;
   if (electronProcess.defaultApp === true) return undefined;
   return electronProcess.resourcesPath;
-}
-
-/**
- * Check whether a file-system path exists using the platform FS abstraction.
- * Returns `true` if `stat()` succeeds, `false` on any error (including ENOENT).
- */
-export async function pathExists(target: string): Promise<boolean> {
-  return platform()
-    .fs.stat(target)
-    .then(() => true)
-    .catch(() => false);
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +125,7 @@ export async function resolveBinary(
   // Fallback — may find an older version that doesn't match the SDK.
   {
     const lookupResult = executeCommandSync(
-      [process.platform === 'win32' ? 'where' : 'which', config.pathCommand],
+      [IS_WINDOWS ? 'where' : 'which', config.pathCommand],
       {
         timeout: 5000,
       },
@@ -148,8 +138,8 @@ export async function resolveBinary(
       const p = hit.trim();
       if (!p) continue;
       // The SDK spawns the binary directly, so skip shell-only npm shims.
-      if (process.platform === 'win32' && /\.(cmd|ps1)$/i.test(p)) continue;
-      if (await pathExists(p)) return p;
+      if (IS_WINDOWS && /\.(cmd|ps1)$/i.test(p)) continue;
+      if (await AbsoluteFS.exists(p)) return p;
     }
   }
 
