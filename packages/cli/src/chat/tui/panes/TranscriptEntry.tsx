@@ -20,7 +20,8 @@ import type {
 
 const INQUIRY_CONTINUATION_RE =
   /^\[inquiry\]\s+\S+\s+(?:answered|dropped by user)\.(?:\n|$)/;
-export const USER_ENTRY_MARGIN_BOTTOM_ROWS = 0;
+export const USER_ENTRY_MARGIN_TOP_ROWS = 1;
+export const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 export const ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS = 0;
 export const PROCESS_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 
@@ -97,14 +98,21 @@ function UserEntryRow({
   readonly colorEnabled?: boolean;
   readonly width?: number;
 }): React.JSX.Element {
-  // Mark a user turn with a full-width reverse-video band (theme-adaptive via
-  // reverse video). Static transcript rows are print-once terminal scrollback:
-  // a row keeps the width it had when it was appended, while later rows render
-  // at the latest width. The `› ` chevron is 2 cols; row estimators add the
-  // exported margin constant alongside their wrapped-line count.
-  const cols = Math.max(1, Math.floor(width ?? 80));
+  // Mark a user turn with a reverse-video band (theme-adaptive via reverse
+  // video), inset one column from each terminal edge — the same gutter the
+  // error/tool/process rows get from their padded boxes — with a blank row
+  // above and below so the turn breathes. Static transcript rows are
+  // print-once terminal scrollback: a row keeps the width it had when it was
+  // appended, while later rows render at the latest width. The `› ` chevron
+  // is 2 cols; row estimators add the exported margin constants alongside
+  // their wrapped-line count.
+  const cols = Math.max(1, Math.floor(width ?? 80) - 2);
   return (
-    <Box marginBottom={USER_ENTRY_MARGIN_BOTTOM_ROWS}>
+    <Box
+      marginTop={USER_ENTRY_MARGIN_TOP_ROWS}
+      marginBottom={USER_ENTRY_MARGIN_BOTTOM_ROWS}
+      paddingX={1}
+    >
       <Text inverse={colorEnabled !== false}>
         {compactPrefixedDisplayRows({
           fillWidth: true,
@@ -127,12 +135,13 @@ function InquiryContinuationRow({
   readonly colorEnabled?: boolean;
   readonly width?: number;
 }): React.JSX.Element {
-  const cols = Math.max(1, Math.floor(width ?? 80));
+  // Same one-column gutter as the user band so both `› ` chevrons align.
+  const cols = Math.max(1, Math.floor(width ?? 80) - 2);
   const lines = prefixedWrappedLines(entry.text, cols);
   const displayLines =
     fillWidth === true ? fillRows(lines.join('\n'), cols).split('\n') : lines;
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" paddingX={1}>
       {displayLines.map((line, index) => (
         <Text
           key={index}

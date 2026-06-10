@@ -12,8 +12,6 @@ function rowKey(row: CompactTodosPlanRow): string {
       return `todo:${row.todo.content}`;
     case 'planSummary':
       return 'plan:summary';
-    case 'planStep':
-      return `plan:${row.step.title}`;
   }
 }
 
@@ -36,46 +34,39 @@ describe('CLI TodosPlanPanel display model', () => {
     },
   ];
   const plan: Plan = {
-    summary: 'Coordinate a small math proof through nested CLI work.',
-    steps: [
-      {
-        title: 'Route proof obligations',
-        description: 'Choose the right specialist for each proof branch.',
-        files: [],
-        status: TODO_STATUS.COMPLETED,
-      },
-      {
-        title: 'Check formalizable parts',
-        description: 'Have a subagent inspect the Lean-style finite case.',
-        files: [],
-        status: TODO_STATUS.IN_PROGRESS,
-      },
-    ],
+    objective: [
+      'Coordinate a small math proof through nested CLI work.',
+      '',
+      'Route proof obligations to the right specialist and merge results.',
+    ].join('\n'),
   };
 
   it('keeps active todo rows visible in a constrained mixed panel', () => {
-    const display = compactTodosPlanRows({ maxRows: 4, plan, todos });
+    const display = compactTodosPlanRows({ maxRows: 3, plan, todos });
 
     expect(display.rows.map(rowKey)).toEqual([
       'todo:Ask leanSolver to verify the finite case',
       'todo:Merge subagent conclusions into final answer',
-      'plan:Check formalizable parts',
     ]);
-    expect(display.hiddenCount).toBe(3);
+    expect(display.hiddenCount).toBe(2);
   });
 
   it('uses all rows when the todo and plan content fits', () => {
-    const display = compactTodosPlanRows({ maxRows: 6, plan, todos });
+    const display = compactTodosPlanRows({ maxRows: 4, plan, todos });
 
     expect(display.rows.map(rowKey)).toEqual([
       'todo:Split theorem into algebraic and analytic checks',
       'todo:Ask leanSolver to verify the finite case',
       'todo:Merge subagent conclusions into final answer',
       'plan:summary',
-      'plan:Route proof obligations',
-      'plan:Check formalizable parts',
     ]);
     expect(display.hiddenCount).toBe(0);
+
+    // The plan row shows the document's first non-empty line.
+    const summaryRow = display.rows.find((row) => row.kind === 'planSummary');
+    expect(summaryRow?.summary).toBe(
+      'Coordinate a small math proof through nested CLI work.',
+    );
   });
 
   it('uses the single available row for the highest-signal item', () => {
@@ -84,27 +75,19 @@ describe('CLI TodosPlanPanel display model', () => {
     expect(display.rows.map(rowKey)).toEqual([
       'todo:Ask leanSolver to verify the finite case',
     ]);
-    expect(display.hiddenCount).toBe(5);
+    expect(display.hiddenCount).toBe(3);
   });
 
-  it('shows pending plan steps before completed context rows', () => {
+  it('drops the plan summary before todo rows under pressure', () => {
     const display = compactTodosPlanRows({
-      maxRows: 2,
-      plan: {
-        summary: 'Finish the remaining proof obligations.',
-        steps: [
-          {
-            title: 'Check the last lemma',
-            description: 'Verify the only unfinished plan item.',
-            files: [],
-            status: TODO_STATUS.PENDING,
-          },
-        ],
-      },
+      maxRows: 1,
+      plan,
       todos: [todos[0]],
     });
 
-    expect(display.rows.map(rowKey)).toEqual(['plan:Check the last lemma']);
-    expect(display.hiddenCount).toBe(2);
+    expect(display.rows.map(rowKey)).toEqual([
+      'todo:Split theorem into algebraic and analytic checks',
+    ]);
+    expect(display.hiddenCount).toBe(1);
   });
 });

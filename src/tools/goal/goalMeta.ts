@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
-import { PlanSchema } from '@shared/schemas/plan';
 
 export const GOAL_FEATURE_FLAG_KEY = 'texra.goal.enabled' as const;
 
@@ -16,14 +15,6 @@ export const LEGACY_GOAL_FEATURE_FLAG_KEYS = [
   'texra.odyssey.enabled',
   'texra.experimental.odyssey.enabled',
 ] as const;
-
-/**
- * Optional USD spend cap for autonomous goals. `0` (the default) means
- * unbounded. Snapshotted into the goal record at `GoalStore.start` so editing
- * the setting mid-goal doesn't silently retarget a running budget. Async
- * subagent spend is counted when the child execution settles.
- */
-export const GOAL_COST_CAP_CONFIG_KEY = 'texra.goal.costCapUsd' as const;
 
 /**
  * A goal is a live pursuit: it exists only while the autonomous loop is
@@ -52,30 +43,6 @@ export const GoalSchema = z.object({
   status: GoalStatusSchema,
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  /**
-   * Structured plan that seeded the goal, when it was started from a
-   * Plan-tool approval. Pure metadata for UI / inspection — the
-   * continuation prompt still uses `objective` as the canonical instruction.
-   */
-  plan: PlanSchema.nullish(),
-  /**
-   * USD spend cap snapshot from `texra.goal.costCapUsd` at start.
-   * Null/absent = unbounded. When `spentUsd` reaches this, the goal
-   * auto-pauses (resumable) instead of continuing.
-   */
-  costCapUsd: z.number().positive().nullish(),
-  /**
-   * The stream's run cost (USD) when the goal first reported spend — spend
-   * from before the goal started is excluded from the cap. Set lazily by
-   * `GoalStore.noteRunCost` on its first observation.
-   */
-  baselineRunCostUsd: z.number().nonnegative().nullish(),
-  /**
-   * Total goal spend in USD: run cost since `baselineRunCostUsd`, which
-   * already includes completed subagents (their cost rolls into the parent
-   * run's usage accumulator at the delegation boundary).
-   */
-  spentUsd: z.number().nonnegative().prefault(0),
 });
 export type Goal = z.infer<typeof GoalSchema>;
 

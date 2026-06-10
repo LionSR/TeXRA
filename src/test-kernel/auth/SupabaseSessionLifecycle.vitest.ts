@@ -10,7 +10,6 @@ import {
   fetchWithTimeout,
   parseStoredSupabaseSession,
   SupabaseSessionCoordinator,
-  toStorableGitHubTokenExchangeSession,
   toStorableSupabaseSession,
   type SupabaseSession,
   type SupabaseSessionStorage,
@@ -205,9 +204,9 @@ describe('SupabaseSession', () => {
     });
   });
 
-  describe('toStorableGitHubTokenExchangeSession', () => {
-    it('converts GitHub token exchange responses into the stored shape', () => {
-      const session = toStorableGitHubTokenExchangeSession(
+  describe('toStorableSupabaseSession exchange responses', () => {
+    it('converts token exchange responses into the stored shape', () => {
+      const session = toStorableSupabaseSession(
         {
           access_token: 'access-token',
           refresh_token: 'refresh-token',
@@ -218,8 +217,10 @@ describe('SupabaseSession', () => {
             email: 'user@example.com',
           },
         },
-        'fallback@example.com',
-        DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+        {
+          fallbackLabel: 'fallback@example.com',
+          defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+        },
       );
 
       assert.deepEqual(session, {
@@ -231,13 +232,12 @@ describe('SupabaseSession', () => {
           label: 'user@example.com',
         },
         expiresAt: 123_000,
-        useCustomRefresh: true,
       });
     });
 
     it('falls back to the supplied label and default expiry', () => {
       const earliestExpiry = Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;
-      const session = toStorableGitHubTokenExchangeSession(
+      const session = toStorableSupabaseSession(
         {
           access_token: 'access-token',
           refresh_token: 'refresh-token',
@@ -247,8 +247,10 @@ describe('SupabaseSession', () => {
             email: null,
           },
         },
-        'fallback@example.com',
-        DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+        {
+          fallbackLabel: 'fallback@example.com',
+          defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+        },
       );
 
       assert.equal(session.account.label, 'fallback@example.com');
@@ -385,6 +387,8 @@ describe('SupabaseSession', () => {
       assert.equal(await coordinator.ensureFreshToken(), 'new-access');
       assert.equal(getReadCount(), 1);
 
+      // The refresh endpoint returns a native GoTrue session, so the stored
+      // result drops useCustomRefresh and migrates to the standard path.
       assert.deepEqual(read(), {
         id: 'user-id',
         accessToken: 'new-access',
@@ -394,7 +398,6 @@ describe('SupabaseSession', () => {
           label: 'new@example.com',
         },
         expiresAt: 789_000,
-        useCustomRefresh: true,
       });
     });
 
