@@ -1,14 +1,9 @@
 // Utilities for registering newly created agents
 
-// Standard library imports
-import * as path from 'path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { isValidAgentYaml } from '@agent/runtime/agentLoad';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import * as logger from '@logger/logUtils';
 
@@ -58,53 +53,4 @@ export async function promptToAddAgentToConfig(
     await vscode.commands.executeCommand('texra.refreshAllOptions');
     vscode.window.showInformationMessage(`Agent "${agentName}" is now visible`);
   }
-}
-
-/**
- * Validate the given YAML file as an agent definition and prompt to add
- * the agent name to the configuration if it isn't already present.
- *
- * @param filePath Absolute path to the YAML file
- * @param showInvalid Whether to warn when the YAML is invalid
- * @param prompt Whether to prompt the user (false = auto-add)
- */
-export async function validateYamlAndPromptAdd(
-  filePath: string,
-  showInvalid = false,
-  prompt = true,
-): Promise<void> {
-  const validationResult = await isValidAgentYaml(filePath);
-  if (!validationResult) {
-    if (showInvalid) {
-      vscode.window.showWarningMessage(
-        'Selected file is not a valid agent YAML.',
-      );
-    }
-    return;
-  }
-
-  const filenameBase = path.basename(filePath, path.extname(filePath));
-  const internalName = validationResult.name;
-
-  if (filenameBase !== internalName) {
-    vscode.window.showWarningMessage(
-      `Agent file '${filenameBase}.yaml' has a different internal name '${internalName}' defined in its YAML. ` +
-        `Consider renaming the file or updating the internal name in the YAML for consistency.`,
-    );
-    return;
-  }
-
-  const configuredAgents = workspaceSM.get<string[]>(
-    WorkspaceStateKey.ENABLED_AGENTS,
-    [],
-  );
-  if (configuredAgents.includes(filenameBase)) {
-    return;
-  }
-
-  const { settings } = validationResult;
-  const isWorkflow = settings.agentCategory !== AgentCategory.ToolUse;
-  const category = isWorkflow ? 'workflow' : 'toolUse';
-
-  await promptToAddAgentToConfig(filenameBase, !prompt, category);
 }
