@@ -7,7 +7,7 @@ import {
   toRemoteAgentProfileData,
 } from '@agent/index';
 import { DEFAULT_OAUTH_PROVIDER, getAuthCallbackUri } from '@auth/config';
-import { createHostAuthCoordinator } from '@auth/createHostAuthCoordinator';
+import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   type SupabaseCallbackResult,

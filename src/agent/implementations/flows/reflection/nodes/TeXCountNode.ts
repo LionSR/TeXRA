@@ -1,6 +1,6 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { getTeXCountStats } from '@latex';
+import { getTeXCountStats } from '@latex/texcount';
 import type { FileLocation } from '@shared/schemas';
 
 import { getFilesForRound } from '../helpers';
