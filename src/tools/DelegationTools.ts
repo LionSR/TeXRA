@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { randomUUID } from 'node:crypto';
+import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 // Local imports - agent
@@ -734,7 +734,7 @@ async function proposeAndExecute(
     });
   }
 
-  const proposalId = randomUUID();
+  const proposalId = nanoid();
 
   const result = await runCoordinatorBridge.waitForProposal(streamId, {
     proposalId,

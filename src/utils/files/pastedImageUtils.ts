@@ -1,6 +1,7 @@
 // Standard library imports
-import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';
+
+import { nanoid } from 'nanoid';
 
 // Local imports
 import { PASTED_PREFIX } from '@shared/files/pastedImageConstants';
@@ -30,7 +31,7 @@ export function getPastedImageFullPath(filename: string): string {
  * `PASTED_PREFIX` lets {@link isPastedImage} recognize it later.
  */
 export function generatePastedImageName(ext: string): string {
-  return `${PASTED_PREFIX}${Date.now()}_${randomBytes(4).toString('hex')}.${ext}`;
+  return `${PASTED_PREFIX}${Date.now()}_${nanoid(6)}.${ext}`;
 }
 
 /**

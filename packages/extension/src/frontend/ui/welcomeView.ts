@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
 /**
@@ -21,7 +22,8 @@ function renderWelcomeHtml(): string {
   const openFolder = 'command:workbench.action.files.openFolder';
   const cloneRepo = 'command:git.clone';
   const docs = 'https://texra.ai';
-  const nonce = Math.random().toString(36).slice(2);
+  // CSP nonces must be unpredictable — nanoid is crypto-random.
+  const nonce = nanoid();
 
   return /* html */ `
 <!DOCTYPE html>
