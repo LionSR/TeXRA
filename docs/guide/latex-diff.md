@@ -66,7 +66,7 @@ The "Current" button (<wa-icon library="texra" name="file-code"></wa-icon>) allo
 
 ### Step 2: Generate the Diff
 
-Click the "latexdiff" button with the <wa-icon library="texra" name="diff-single"></wa-icon> icon. TeXRA then runs the same five-stage pipeline for every diff route — only the tool and output name change:
+Click the **Diff** button (<wa-icon library="texra" name="diff-single"></wa-icon>) beneath the Edited dropdown. TeXRA then runs the same five-stage pipeline for every diff route — only the tool and output name change:
 
 <FlowSteps :steps="[
   { n: 1, icon: 'diff-single', title: 'Run latexdiff', desc: 'Invokes the latexdiff tool on your selected base and edited files.' },
@@ -101,7 +101,7 @@ The commit dropdown shows recent commits. Click the refresh icon (<wa-icon libra
 
 ### Step 2: Generate the Diff
 
-Click the "latexdiff-vc" button (<wa-icon library="texra" name="diff-single"></wa-icon> icon) to compare your file with its version at the selected commit.
+Click the **Diff** button (<wa-icon library="texra" name="diff-single"></wa-icon>) beneath the Commit dropdown to compare your file with its version at the selected commit.
 
 TeXRA runs the same five-stage pipeline shown above — only this route uses the `latexdiff-vc` tool and names its output with the commit hash (e.g., `original_diff_rev[commit_hash].tex`).
 

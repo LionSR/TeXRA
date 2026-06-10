@@ -2,6 +2,7 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { html, nothing, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
@@ -29,6 +30,12 @@ export interface IconActionButtonOptions {
    * makes sense over a square icon button.
    */
   readonly busy?: boolean;
+  /**
+   * Native Web Awesome tooltip text. Requires `id` — the `<wa-tooltip>`
+   * anchors via `for` within the same shadow root. Replaces the `title`
+   * attribute so the browser tooltip never doubles up with the WA one.
+   */
+  readonly tooltip?: string;
   readonly onClick?: (event: MouseEvent) => void;
 }
 
@@ -60,6 +67,7 @@ function renderActionButtonBase({
   variant = 'neutral',
   disabled,
   busy,
+  tooltip,
   onClick,
 }: ActionButtonBaseOptions): TemplateResult {
   const classes = [
@@ -70,6 +78,11 @@ function renderActionButtonBase({
     .filter(Boolean)
     .join(' ');
   const ariaLabel = label ?? text ?? '';
+  // wa-tooltip is position:absolute, so the sibling never affects flex flow.
+  const tooltipTemplate =
+    tooltip && id
+      ? html`<wa-tooltip for=${id}>${tooltip}</wa-tooltip>`
+      : nothing;
 
   const button = html`
     <wa-button
@@ -80,7 +93,9 @@ function renderActionButtonBase({
       size="small"
       type="button"
       aria-label=${ariaLabel}
-      title=${title ?? ariaLabel}
+      title=${ifDefined(
+        tooltipTemplate === nothing ? (title ?? ariaLabel) : undefined,
+      )}
       data-action=${ifDefined(action)}
       ?disabled=${disabled || busy}
       @click=${onClick}
@@ -91,7 +106,7 @@ function renderActionButtonBase({
 
   // `busy` undefined → plain button (unchanged for every other caller).
   // `busy` defined → stable overlay wrapper so toggling never reflows the row.
-  if (busy === undefined) return button;
+  if (busy === undefined) return html`${button}${tooltipTemplate}`;
   return html`
     <span class="action-icon-busy">
       ${button}
@@ -102,6 +117,7 @@ function renderActionButtonBase({
           ></wa-spinner>`
         : nothing}
     </span>
+    ${tooltipTemplate}
   `;
 }
 
