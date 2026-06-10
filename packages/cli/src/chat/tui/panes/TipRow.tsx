@@ -17,11 +17,11 @@ const AGENT_SELECTION_TIP = 'Press /agent to choose the root agent';
 
 export function tipRowText({
   agentSelectionAvailable = false,
-  hour = new Date().getHours(),
+  hour,
 }: {
   readonly agentSelectionAvailable?: boolean;
-  readonly hour?: number;
-} = {}): string {
+  readonly hour: number;
+}): string {
   const tips = agentSelectionAvailable
     ? [BASE_TIPS[0], BASE_TIPS[1], AGENT_SELECTION_TIP, ...BASE_TIPS.slice(2)]
     : BASE_TIPS;
@@ -31,11 +31,11 @@ export function tipRowText({
 
 export function TipRow(props: {
   readonly agentSelectionAvailable?: boolean;
+  readonly hour: number;
 }): React.JSX.Element {
-  // Pick a deterministic tip based on the current hour so it rotates
-  // naturally without timers or extra state.
   const tip = tipRowText({
     agentSelectionAvailable: props.agentSelectionAvailable,
+    hour: props.hour,
   });
 
   return (
