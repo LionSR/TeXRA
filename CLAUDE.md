@@ -16,16 +16,16 @@ TeXRA is a VS Code extension that serves as an AI-powered LaTeX research assista
 # Install dependencies
 corepack pnpm install
 
-# Development build (recommended - uses esbuild + Vite, much faster)
+# Development build (esbuild + Vite)
 npm run compile:fast
 
-# Development build with watch mode (recommended)
+# Development build with watch mode
 npm run watch:fast
 
-# Production build (recommended - uses esbuild + Vite)
+# Production build
 npm run package:fast
 
-# Build VSIX extension file (recommended)
+# Build VSIX extension file
 npm run build:fast
 # Creates: releases/texra-{version}.vsix
 
@@ -42,9 +42,9 @@ npm run format
 npm test
 ```
 
-### Fast Builds (Recommended)
+### Builds and Type Checking
 
-The project supports fast builds using esbuild (for the extension host) and Vite (for webviews):
+All builds use esbuild (for the extension host) and Vite (for webviews); the legacy webpack pipeline has been removed, and `npm run compile` / `watch` / `package` are aliases for the `:fast` variants:
 
 - `npm run compile:fast` - Development build
 - `npm run watch:fast` - Watch mode for development
@@ -52,9 +52,7 @@ The project supports fast builds using esbuild (for the extension host) and Vite
 - `npm run build:fast` - Build VSIX extension file
 - `npm run build:initial` - Build desktop plus VSIX artifacts and verify both
 
-These commands are significantly faster and do not require increased memory allocation.
-
-**Important:** Fast builds do NOT perform TypeScript type checking (esbuild only strips types). To verify there are no type errors, run:
+**Important:** These builds do NOT perform TypeScript type checking (esbuild only strips types). To verify there are no type errors, run:
 
 ```bash
 npm run typecheck
@@ -82,9 +80,9 @@ needed. Re-run `texra-local:build` to refresh. Override the install dir with
 
 The core of TeXRA is its agent architecture in repo-root `src/agent/`:
 
-- **Core interfaces** define agent behavior and state management
-- **Implementations** provide reasoning strategies (Direct, Chain-of-Thought, Merge, Workflow)
-- **Model handlers** abstract AI provider APIs (Anthropic, OpenAI, Google, etc.)
+- **`core/`** holds the host-agnostic domain model, organized by bounded concern: `definition/` (what an agent is), `execution/` (run state), `usage/` (usage value objects), `tools/` (tool contracts), and `flows/` (reusable cycle primitives). See `src/agent/core/README.md` for the module map and dependency rules.
+- **`implementations/flows/`** provides the PocketFlow-based flow implementations (reflection, tooluse)
+- **`modelHandlers/`** abstracts AI provider APIs (Anthropic, OpenAI, Google, OpenRouter)
 - Agents are configured via YAML files in `packages/extension/resources/agents/`
 
 Agent prompts handle single and multi-document output through one unified YAML per agent. Workflow edit prompts use the input filenames as the output filenames, and agents that generate new artifacts may declare `defaultOutputFiles` and refer to `OUTPUT_FILES`.
@@ -97,6 +95,7 @@ This repository is a pnpm workspace:
 - `packages/extension/` holds the VS Code extension entrypoint, commands, webviews, and packaged resources.
 - `packages/desktop/` holds the Electron desktop shell and adapters around the shared core.
 - `packages/core/` exposes the shared core package surface for workspace consumers.
+- `packages/cli/` holds the `texra` terminal client (Ink TUI plus headless `texra run` / `--print` modes).
 - `src/hosts/` defines host capability ports used by both VS Code and Electron integrations.
 - `src/test-kernel/` contains Vitest suites for host-neutral and Electron-facing behavior.
 
@@ -104,9 +103,10 @@ This repository is a pnpm workspace:
 
 Key directories in `src/`:
 
-- `agent/` - Agent core, implementations, model handlers, runtime, toolUse, output, storage, remote, node
+- `agent/` - Agent core, implementations, model handlers, runtime, toolUse, output, storage, remote, node, trace, goal, features
   - `implementations/flows/` - PocketFlow-based flow implementations (reflection, tooluse)
-- `platform/` - Platform abstraction layer (composition root). Hosts (VS Code, future CLI/Electron) call `initPlatform()` once at startup; core code accesses host services via `platform()` from `@platform`. See `src/platform/platform.ts`.
+- `platform/` - Platform abstraction layer (composition root). Hosts (VS Code, CLI, Electron) call `initPlatform()` once at startup; core code accesses host services via `platform()` from `@platform`. See `src/platform/platform.ts`.
+- `controllers/` - Host-neutral orchestration for the main, progress, and settings views behind injected ports
 - `common/` - Backend-only helpers (errors, state, files, webview base classes)
 - `utils/` - Utilities shared between extension host and webviews
 - `tools/` - Tool implementations for tool-use agents
@@ -119,6 +119,9 @@ Key directories in `src/`:
 - `logger/` - Logging infrastructure
 - `eventBus/` - Progress event system
 - `replacement/` - Text cleanup rules
+- `skills/` - Skill schemas, loading, and runtime skill sources
+- `telemetry/` - Usage logging
+- `transcript/` - Stream logs, snapshots, and run transcript recording
 - `test-kernel/` - Vitest suites (run via `npm test`); shared fakes live in `test-kernel/support/`
 
 Key directories in `packages/extension/`:
@@ -128,7 +131,7 @@ Key directories in `packages/extension/`:
 - `packages/extension/src/frontend/` - Extension-host utilities for shared UI flows
 - `packages/extension/src/webview/` - Main agent interaction interface
 - `packages/extension/src/progressView/` - Task tracking board
-- `packages/extension/src/settingsView/` - Unified settings webview (History, Memory, Models, Agents, Multi-Agent, LaTeX, Tools tabs)
+- `packages/extension/src/settingsView/` - Unified settings webview (Memory, History, Models, Agents, Multi-Agent, Tools, AI Agents, Git, LaTeX, Goal tabs)
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
 
 Key documentation in `docs/`:
@@ -137,6 +140,7 @@ Key documentation in `docs/`:
 
 ### Commands (`packages/extension/src/commands/`)
 
+- `_shared/` - Helpers shared across command domains
 - `agent/` - Running and managing agents, merge operations
 - `api/` - API key management
 - `auth/` - Authentication commands
@@ -147,6 +151,7 @@ Key documentation in `docs/`:
 - `latex/` - LaTeX operations (diff, figures, etc.)
 - `progress/` - Progress board management
 - `settings/` - Settings view commands
+- `setup/` - Setup assistant
 - `system/` - Help, tests, XML/YAML utilities, editor commands
 - `tests/` - Test commands
 
@@ -370,6 +375,7 @@ For good separation of concerns, testability, and platform independence, core bu
 - `src/shared/` (IPC schemas, message types)
 - `src/replacement/` (text cleanup rules)
 - `src/eventBus/` (progress event system)
+- `src/hosts/` (host capability ports)
 - Webview frontends (`packages/extension/src/webview/frontend/`, `packages/extension/src/progressView/frontend/`, `packages/extension/src/settingsView/frontend/`)
 
 **VS Code-allowed zones** — platform-specific wiring belongs here:
@@ -402,6 +408,8 @@ Common aliases (full list in `tsconfig.json`):
 - `@model/*`, `@latex/*`, `@logger/*`, `@tools/*`, `@webview/*`
 - `@progressView/*`, `@settingsView/*`, `@shared/*`, `@eventBus/*`
 - `@replacement/*`, `@housekeeping/*`, `@auth/*`, `@types/*`
+- `@controllers/*`, `@hosts/*`, `@skills/*`, `@telemetry/*`, `@transcript/*`
+- `@cli/*`, `@desktop/*`, `@test/*`, `@resources/*`, `@extensionSchemas/*`
 - `@platform`, `@platform/*` (platform abstraction layer)
 
 ## Adding New Components
