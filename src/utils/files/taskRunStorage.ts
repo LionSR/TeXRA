@@ -1,6 +1,6 @@
 // Standard library imports
-import * as path from 'path';
-import { promises as fs } from 'fs';
+import * as path from 'node:path';
+import { promises as fs } from 'node:fs';
 
 import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { isFileNotFoundError, toErrorMessage } from '@common/errors';

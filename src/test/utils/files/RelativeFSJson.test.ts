@@ -1,8 +1,8 @@
 // Third-party imports
-import * as assert from 'assert';
-import * as os from 'os';
-import * as path from 'path';
-import { promises as fs } from 'fs';
+import * as assert from 'node:assert';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { promises as fs } from 'node:fs';
 
 // Local imports - utils
 import { RelativeFS } from '@utils/files/relativeFS';

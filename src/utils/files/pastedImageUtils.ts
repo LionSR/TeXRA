@@ -1,6 +1,6 @@
 // Standard library imports
 import { randomBytes } from 'node:crypto';
-import * as path from 'path';
+import * as path from 'node:path';
 
 // Local imports
 import { PASTED_PREFIX } from '@shared/files/pastedImageConstants';

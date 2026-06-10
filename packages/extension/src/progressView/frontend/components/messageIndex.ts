@@ -87,7 +87,7 @@ export class MessageIndex {
 
     // Sort messages by timestamp and classify by groupId.
     // JS engines use stable sort, so equal timestamps preserve original order.
-    const sortedMessages = [...messages].sort(
+    const sortedMessages = messages.toSorted(
       (a, b) =>
         (a.timestamp ?? Number.MAX_SAFE_INTEGER) -
         (b.timestamp ?? Number.MAX_SAFE_INTEGER),
@@ -157,8 +157,7 @@ export class MessageIndex {
     ].sort((a, b) => a.time - b.time);
     this.timeline = timeline;
     this.timelineMessageIndex.clear();
-    for (let i = 0; i < timeline.length; i++) {
-      const item = timeline[i];
+    for (const [i, item] of timeline.entries()) {
       if ('msg' in item) this.timelineMessageIndex.set(item.key, i);
     }
   }
@@ -281,6 +280,7 @@ export class MessageIndex {
 
     for (let i = this.timeline.length - 1; i >= 0; i--) {
       const item = this.timeline[i];
+      if (!item) continue;
       if (!('msg' in item)) continue;
       const fresh = this.ungroupedById.get(item.key);
       if (fresh && fresh !== item.msg) {

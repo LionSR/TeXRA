@@ -5,7 +5,7 @@
  * preview data for memory items displayed in views or terminal UI.
  */
 
-import * as path from 'path';
+import * as path from 'node:path';
 
 import pMap from 'p-map';
 

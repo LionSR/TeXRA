@@ -1,6 +1,6 @@
 // Third-party imports
-import * as assert from 'assert';
-import * as path from 'path';
+import * as assert from 'node:assert';
+import * as path from 'node:path';
 
 // Local imports - common
 import { isTexFile } from '@common/files/fileTypeUtils';

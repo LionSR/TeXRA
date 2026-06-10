@@ -1,5 +1,5 @@
 // Standard library imports
-import path from 'path';
+import path from 'node:path';
 
 // Local imports - agent
 import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';

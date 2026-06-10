@@ -1,5 +1,5 @@
 // Standard library imports
-import * as path from 'path';
+import * as path from 'node:path';
 
 // Local imports - files
 import { WorkspaceFS } from '@utils/files';

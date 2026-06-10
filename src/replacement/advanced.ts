@@ -336,14 +336,11 @@ export function replaceMathUnicode(text: string): string {
         continue;
       }
 
-      const mathContent = text.substring(envStart, envEnd);
+      const mathContent = text.slice(envStart, envEnd);
       const replacedContent = convertMathContent(mathContent);
 
       if (replacedContent !== mathContent) {
-        text =
-          text.substring(0, envStart) +
-          replacedContent +
-          text.substring(envEnd);
+        text = text.slice(0, envStart) + replacedContent + text.slice(envEnd);
       }
 
       startIdx = envStart + replacedContent.length;

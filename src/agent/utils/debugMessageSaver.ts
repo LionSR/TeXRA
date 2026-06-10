@@ -1,4 +1,4 @@
-import * as path from 'path';
+import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
 import { toErrorMessage } from '@common/errors';

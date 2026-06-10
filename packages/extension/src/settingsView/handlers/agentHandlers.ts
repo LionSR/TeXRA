@@ -5,7 +5,7 @@
  * Handles agent enable/disable, create/customize/delete, YAML editing,
  * custom agent directories, and agent teams.
  */
-import * as path from 'path';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';

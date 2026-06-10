@@ -1,8 +1,8 @@
-import { execFileSync } from 'child_process';
-import { createHash } from 'crypto';
-import { existsSync } from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 // Local imports - agent config
 import { platform } from '@platform/platform';

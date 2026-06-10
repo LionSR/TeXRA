@@ -1,5 +1,5 @@
 // Standard library imports
-import * as path from 'path';
+import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -97,7 +97,7 @@ export async function handleExtractTikzFigures(): Promise<void> {
           ([label, tikzpicturess]: [string, string[]]) => ({
             label: `${label} (${tikzpicturess.length} TikZ ${pluralize(tikzpicturess.length, 'picture')})`,
             description: `Figure with label: ${label}`,
-            detail: `${tikzpicturess[0].substring(0, 100)}...`,
+            detail: `${tikzpicturess[0].slice(0, 100)}...`,
           }),
         );
 
