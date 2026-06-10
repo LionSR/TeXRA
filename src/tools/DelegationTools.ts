@@ -14,10 +14,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getExecutionStore, registerExecution } from '@agent/storage';
-import {
-  getVisibleAgent,
-  getVisibleAgents,
-} from '@agent/index/agentRegistry';
+import { getVisibleAgent, getVisibleAgents } from '@agent/index/agentRegistry';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
