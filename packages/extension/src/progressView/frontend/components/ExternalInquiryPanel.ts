@@ -36,6 +36,7 @@ import {
 } from '@shared/styles';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { tryParseUrl } from '@utils/core';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { ProgressEvents } from '../events';
@@ -69,14 +70,10 @@ function getThreadId(permission: { data: unknown }): string {
 }
 
 function safeHttpUrl(link: string): string | undefined {
-  try {
-    const url = new URL(link);
-    return url.protocol === 'http:' || url.protocol === 'https:'
-      ? url.href
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  const url = tryParseUrl(link);
+  return url && (url.protocol === 'http:' || url.protocol === 'https:')
+    ? url.href
+    : undefined;
 }
 
 /** Clear draft for a resolved inquiry. Called from eventHandlers on submit/drop. */

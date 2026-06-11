@@ -22,6 +22,7 @@ import type {
   WebFetchPayload,
   LogMessageData,
 } from '@shared/schemas';
+import { tryParseUrl } from '@utils/core';
 import { buildBannerContent, joinWithSeparator } from './helpers';
 
 // Web search provider display names
@@ -131,11 +132,7 @@ export function formatWebFetchTemplate(
 
   let titleText = 'Web Fetch';
   if (url) {
-    try {
-      titleText += `: ${new URL(url).hostname}`;
-    } catch {
-      titleText += `: ${url}`;
-    }
+    titleText += `: ${tryParseUrl(url)?.hostname ?? url}`;
   }
   if (isFailed) titleText += ' (failed)';
 

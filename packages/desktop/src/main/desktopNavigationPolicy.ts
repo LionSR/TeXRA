@@ -1,4 +1,5 @@
 import { shell, type WebContents } from 'electron';
+import { tryParseUrl } from '@utils/core';
 
 const ALLOWED_HTTPS_HOSTS = new Set<string>([
   'github.com',
@@ -8,13 +9,8 @@ const ALLOWED_HTTPS_HOSTS = new Set<string>([
 ]);
 
 export function isAllowedExternalUrl(url: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== 'https:') return false;
+  const parsed = tryParseUrl(url);
+  if (!parsed || parsed.protocol !== 'https:') return false;
   const host = parsed.hostname;
   // Auth flows hit remote.texra.ai (covered by *.texra.ai). A blanket
   // *.supabase.co rule would let any Supabase project host phishing pages.

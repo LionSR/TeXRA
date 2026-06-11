@@ -39,11 +39,10 @@ function sendUpdaterMessage(
   sendMessage: ProgressBackendMessageSender,
   message: ProgressViewOutboundMessage,
 ): void {
-  try {
-    void Promise.resolve(sendMessage(message)).catch(() => undefined);
-  } catch {
-    // View refreshes are best-effort; a closed transport must not take down the backend.
-  }
+  // View refreshes are best-effort; a closed transport must not take down the
+  // backend. The async wrapper funnels sync throws and rejections into one
+  // swallowed path.
+  void (async () => sendMessage(message))().catch(() => undefined);
 }
 
 /**
