@@ -138,28 +138,29 @@ export class MainViewProvider
    * Called when auth state changes (login/logout affects both).
    */
   async refreshOptionsAndView() {
-    const view = this.getMainModeView();
-    if (!view) return;
-
     await refresh();
-    await this.messageHandler.handleMessage(
-      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
-      view,
-    );
+    const view = this.getMainModeView();
+    if (view) {
+      await this.messageHandler.handleMessage(
+        { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
+        view,
+      );
+      return;
+    }
+    await this.refreshOnboardingFunnel();
   }
 
   /**
    * Single derivation point for the onboarding funnel on this host (PRD:
    * agent-native onboarding). Recomputes the user-scoped funnel state,
-   * pushes it to the webview, and acts on the State 0 → 1 transition:
-   * clear a stale skip, select the setup agent, and kick the conversation
-   * off once. Invoked by the message handler on webview ready — which the
-   * credential-changed hooks replay via refreshOptionsAndView — and after
-   * the welcome-card actions (skip / API-key entry).
+   * pushes it to the webview when the main tab is visible, and acts on the
+   * State 0 → 1 transition: clear a stale skip, select the setup agent, and
+   * start setup only when there is no visible launcher for the user to run.
+   * Invoked by the message handler on webview ready — which credential-changed
+   * hooks replay via refreshOptionsAndView — and after welcome-card actions.
    */
   async refreshOnboardingFunnel(): Promise<void> {
     const view = this.getMainModeView();
-    if (!view) return;
 
     // Includes the server-side-key (relay sign-in) check.
     const hasCredential = await SecretManager.anyApiKeyExists().catch(
@@ -171,15 +172,17 @@ export class MainViewProvider
     );
     this.onboardingFunnelState = transition.state;
 
-    view.webview.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: transition.state,
-    });
+    if (view) {
+      view.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+        state: transition.state,
+      });
+    }
 
     if (transition.clearDeclined) {
       await setOnboardingDeclined(this.context.globalState, false);
     }
-    if (transition.selectSetupAgent) {
+    if (view && transition.selectSetupAgent) {
       // Resolve the qualified registry key so the dropdown matches by value;
       // the plain name still resolves by label if the registry isn't loaded.
       const entry = getAgent('setup', true);
@@ -189,10 +192,10 @@ export class MainViewProvider
         sessionType: 'toolUse',
       });
     }
-    if (transition.kickoffSetup && !this.setupKickoffStarted) {
+    if (transition.kickoffSetup && !view && !this.setupKickoffStarted) {
       this.setupKickoffStarted = true;
-      // Fire-and-forget: the setup agent run owns its own progress UI and
-      // error surfacing; the funnel push above must not wait on it.
+      // Fire-and-forget: when no launcher is visible, the setup agent run owns
+      // its own progress UI and error surfacing.
       void runSetupAssistant();
     }
   }
