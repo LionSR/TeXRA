@@ -23,7 +23,7 @@ surfaces that could help them disagree with each other.
 **The extension launcher shows everything at once.** In workflow mode:
 an Interactive/Workflow radio, the agent dropdown (7 built-in workflow
 agents, 16 built-in tool-use agents, plus the remote roster after
-sign-in — `getVisibleAgents` shows *all* agents when visibility was
+sign-in — `getVisibleAgents` shows _all_ agents when visibility was
 never configured, `agentRegistry.ts`), the model dropdown, a Files
 panel with three groups (Input/Context/Media, each with its own picker
 and four buttons), and a LaTeX Diffs section with three more dropdowns.
@@ -63,7 +63,7 @@ among four.
 (`resources/tool_use_agents/setup.yaml`) has `probe_environment`,
 `set_api_key`, `send_to_terminal`, arXiv tools, and
 `delegate_agent`/`delegate_workflow` — it can configure the
-environment *and run the user's first task*. The orchestrator answers
+environment _and run the user's first task_. The orchestrator answers
 "which of these 23 agents do I pick?" by picking for you. Neither is
 the default experience.
 
@@ -93,13 +93,13 @@ The one-line narrative every surface hangs off:
 
 ## The funnel
 
-State is *derived*, never a mode the user (or code) sets:
+State is _derived_, never a mode the user (or code) sets:
 
-| State | Condition | Meaning |
-| --- | --- | --- |
-| **0 — needs credential** | no usable credential, not previously declined | The one step no agent can do for the user |
-| **1 — setup** | credential present, first run not yet completed | The setup agent owns the session |
-| **2 — done** | a run has completed (or setup handed off) | Normal product, good defaults |
+| State                    | Condition                                       | Meaning                                   |
+| ------------------------ | ----------------------------------------------- | ----------------------------------------- |
+| **0 — needs credential** | no usable credential, not previously declined   | The one step no agent can do for the user |
+| **1 — setup**            | credential present, first run not yet completed | The setup agent owns the session          |
+| **2 — done**             | a run has completed (or setup handed off)       | Normal product, good defaults             |
 
 Derivation lives in one host-neutral module (see Implementation
 surface) built from the pieces the CLI already has
@@ -112,9 +112,9 @@ agent hands off.
 The extension/desktop launcher renders a single welcome card — a port
 of the CLI picker, not a new design:
 
-1. **Sign in — free for academics (Researcher Access)** *(recommended)*
+1. **Sign in — free for academics (Researcher Access)** _(recommended)_
 2. **Use your own provider API key**
-3. *Skip for now* (quiet link; persists the same declined flag the CLI
+3. _Skip for now_ (quiet link; persists the same declined flag the CLI
    uses)
 
 While in State 0 this card **replaces** the login, API-key, and
@@ -140,11 +140,11 @@ five walkthrough links, and a settings tab:
 - probes the environment and fixes missing LaTeX tooling
   (`probe_environment`, `send_to_terminal`) — the dependency banner
   disappears from onboarding;
-- asks *"what are you working on?"* and applies the matching roster
+- asks _"what are you working on?"_ and applies the matching roster
   via a new **`apply_team`** tool over the existing
   `AGENT_MODE_PRESETS` (the discipline-picker UI is never built);
-- offers the first task: *your own draft / sample project / Overleaf /
-  arXiv* — the `GettingStartedBanner` links become things the agent
+- offers the first task: _your own draft / sample project / Overleaf /
+  arXiv_ — the `GettingStartedBanner` links become things the agent
   does;
 - runs the demo: a `polish` pass on the chosen file via
   `delegate_workflow`, ending at a diff — the same five-minute loop
@@ -168,7 +168,7 @@ five walkthrough links, and a settings tab:
 ## Dropdown hygiene (ships with the funnel, useful without it)
 
 1. **Curated starter roster, written as state.** On fresh install
-   (no `ENABLED_AGENTS`/`ENABLED_TOOL_USE_AGENTS` keys *and* no run
+   (no `ENABLED_AGENTS`/`ENABLED_TOOL_USE_AGENTS` keys _and_ no run
    history), activation writes a starter set into those keys:
    - workflow: `correct`, `polish`
    - tool-use: `chat`, `research`, `review`, `latexFixer`, `setup`
@@ -180,6 +180,7 @@ five walkthrough links, and a settings tab:
    with shipped UI. The setup agent's `apply_team` overwrites this
    roster when the user picks a discipline (acceptable: at that moment
    nothing is hand-configured).
+
 2. **Human display names.** Optional `displayName:` on agent YAMLs
    (parsed in `agentYamlScanner.ts`, fallback to `name`), e.g.
    `correct` → "Correct — typos, grammar & LaTeX". Canonical `name`
@@ -192,9 +193,9 @@ five walkthrough links, and a settings tab:
 
 ## Vocabulary
 
-| Term | Means | Stops meaning |
-| --- | --- | --- |
-| **login** | getting a credential (Researcher Access or API key) | — |
+| Term      | Means                                                | Stops meaning             |
+| --------- | ---------------------------------------------------- | ------------------------- |
+| **login** | getting a credential (Researcher Access or API key)  | —                         |
 | **setup** | the agent-led flow (environment, roster, first task) | the CLI credential picker |
 
 Concretely: CLI `texra setup` becomes the agent-led flow (credential
@@ -205,11 +206,11 @@ credentials-only. A deprecation note covers the transition.
 
 ## The narrative contract (docs + product, one story)
 
-| State | Extension / desktop | CLI | Walkthrough beat | Docs page |
-| --- | --- | --- | --- | --- |
-| 0 | welcome card | first-run picker (shipped) | "Sign in — free for academics — or add a key" | `first-run.md` step 0; `quick-start.md` lead |
-| 1 | setup agent auto-starts | setup agent after picker | "The setup assistant takes it from here" | `first-run.md` body (polish demo, agent-run or manual) |
-| 2 | orchestrator default | orchestrator/chat default | "Meet the orchestrator" | `quick-start.md` (launcher reference), `built-in-agents.md` (catalog) |
+| State | Extension / desktop     | CLI                        | Walkthrough beat                              | Docs page                                                             |
+| ----- | ----------------------- | -------------------------- | --------------------------------------------- | --------------------------------------------------------------------- |
+| 0     | welcome card            | first-run picker (shipped) | "Sign in — free for academics — or add a key" | `first-run.md` step 0; `quick-start.md` lead                          |
+| 1     | setup agent auto-starts | setup agent after picker   | "The setup assistant takes it from here"      | `first-run.md` body (polish demo, agent-run or manual)                |
+| 2     | orchestrator default    | orchestrator/chat default  | "Meet the orchestrator"                       | `quick-start.md` (launcher reference), `built-in-agents.md` (catalog) |
 
 Doc changes:
 
@@ -218,7 +219,7 @@ Doc changes:
   recommended first). The per-provider API table moves to
   `configuration.md`/`models.md` as reference. The rest of the page
   remains the State 2 launcher reference.
-- **`first-run.md`:** keeps the polish demo (it *is* the demo), gains
+- **`first-run.md`:** keeps the polish demo (it _is_ the demo), gains
   the funnel's step 0, and notes that on a fresh install the setup
   agent offers to run exactly this.
 - **Walkthrough (`resources/walkthroughs/getting-started.md`):** three
@@ -257,7 +258,7 @@ mirrors it; this PRD's State 0 wording is the canonical text.
   and never see the welcome card (they have credentials and/or run
   history). Nobody's dropdown shrinks.
 - **Fresh-install detection:** absence of both enabled-agents state
-  keys *and* run history. False negatives are harmless (user keeps
+  keys _and_ run history. False negatives are harmless (user keeps
   today's behavior).
 - **Skip:** the declined flag suppresses State 0 on subsequent
   launches (CLI behavior today, extended to the extension card's
@@ -279,20 +280,20 @@ mirrors it; this PRD's State 0 wording is the canonical text.
 
 ## Implementation surface
 
-| Concern | Files |
-| --- | --- |
-| Funnel state derivation (host-neutral) | new `src/controllers/onboarding/` module; lift `packages/cli/src/onboarding/onboardingState.ts` + `packages/cli/src/runtime/credentialStatus.ts` logic behind `@platform` |
-| Shared copy | new `src/shared/copy/onboarding.ts`; consume in `runOnboarding.tsx`, new welcome card, walkthrough source |
-| Welcome card (extension/desktop) | new component in `packages/extension/src/webview/frontend/components/`; visibility wiring in `BannerGroup.ts` / `MainApp.ts` |
-| State 0 → 1 handoff | extension credential-changed event → select `setup` + kickoff; CLI post-picker continuation in `chat.ts` / `orchestrate.ts` |
-| `apply_team` tool | new tool in `src/tools/`; preset application path exists in `SettingsAgentCatalogController.ts` |
-| Starter roster + fresh-install detection | `agentRegistryConstants.ts` (`STARTER_AGENTS`), activation in `packages/extension/src/extension.ts` and CLI init |
-| `displayName` | `agentYamlScanner.ts`, `agentOptionsBuilder.ts`, `selectTemplates.ts`, agent YAMLs |
-| "Browse all agents…" tail item | `selectTemplates.ts`, `InstructionPanel.ts` |
-| State 2 defaults | `agentRegistryConstants.ts` preferred lists (orchestrator/chat already first); default-selection logic in launcher controller |
-| Vocabulary (`texra setup`) | `packages/cli/src/commands/setup.ts` |
-| Walkthrough rewrite | `packages/extension/resources/walkthroughs/getting-started.md` |
-| Docs site | `docs/guide/quick-start.md`, `docs/guide/first-run.md`, `docs/guide/configuration.md` |
+| Concern                                  | Files                                                                                                                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Funnel state derivation (host-neutral)   | new `src/controllers/onboarding/` module; lift `packages/cli/src/onboarding/onboardingState.ts` + `packages/cli/src/runtime/credentialStatus.ts` logic behind `@platform` |
+| Shared copy                              | new `src/shared/copy/onboarding.ts`; consume in `runOnboarding.tsx`, new welcome card, walkthrough source                                                                 |
+| Welcome card (extension/desktop)         | new component in `packages/extension/src/webview/frontend/components/`; visibility wiring in `BannerGroup.ts` / `MainApp.ts`                                              |
+| State 0 → 1 handoff                      | extension credential-changed event → select `setup` + kickoff; CLI post-picker continuation in `chat.ts` / `orchestrate.ts`                                               |
+| `apply_team` tool                        | new tool in `src/tools/`; preset application path exists in `SettingsAgentCatalogController.ts`                                                                           |
+| Starter roster + fresh-install detection | `agentRegistryConstants.ts` (`STARTER_AGENTS`), activation in `packages/extension/src/extension.ts` and CLI init                                                          |
+| `displayName`                            | `agentYamlScanner.ts`, `agentOptionsBuilder.ts`, `selectTemplates.ts`, agent YAMLs                                                                                        |
+| "Browse all agents…" tail item           | `selectTemplates.ts`, `InstructionPanel.ts`                                                                                                                               |
+| State 2 defaults                         | `agentRegistryConstants.ts` preferred lists (orchestrator/chat already first); default-selection logic in launcher controller                                             |
+| Vocabulary (`texra setup`)               | `packages/cli/src/commands/setup.ts`                                                                                                                                      |
+| Walkthrough rewrite                      | `packages/extension/resources/walkthroughs/getting-started.md`                                                                                                            |
+| Docs site                                | `docs/guide/quick-start.md`, `docs/guide/first-run.md`, `docs/guide/configuration.md`                                                                                     |
 
 ### Suggested shipping order
 
