@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   clearLeanServerRegistry,
-  formatUptime,
   isLeanServerActive,
   listLeanServers,
   registerLeanServer,
@@ -108,20 +107,6 @@ describe('leanServerRegistry', () => {
     });
     updateLeanServer('does-not-exist', { status: 'running' });
     expect(calls).toBe(0);
-  });
-});
-
-describe('formatUptime', () => {
-  it.each([
-    [0, '0s'],
-    [1500, '1s'],
-    [59_000, '59s'],
-    [60_000, '1m 0s'],
-    [185_000, '3m 5s'],
-    [3_600_000, '1h 0m'],
-    [3_660_000, '1h 1m'],
-  ])('renders %i ms as %s', (ms, label) => {
-    expect(formatUptime(ms)).toBe(label);
   });
 });
 

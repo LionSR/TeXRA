@@ -6,7 +6,7 @@
  * buildErrorLogData, etc.) should be imported directly from
  * @common/errors/sdkErrorUtils - they are not part of the public barrel.
  */
-export { formatError, formatZodError } from './errorFormatUtils';
+export { formatError } from './errorFormatUtils';
 export { toErrorMessage, ensureError } from './errorMessage';
 export {
   isAbortError,
