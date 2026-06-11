@@ -73,6 +73,13 @@ describe('deriveOnboardingFunnelState', () => {
         firstRunDone: true,
       }),
     ).toBe('done');
+    expect(
+      deriveOnboardingFunnelState({
+        hasCredential: false,
+        declined: false,
+        firstRunDone: true,
+      }),
+    ).toBe('done');
   });
 });
 
@@ -141,6 +148,21 @@ describe('planOnboardingFunnelTransition', () => {
     expect(
       planOnboardingFunnelTransition('needs-credential', {
         hasCredential: true,
+        declined: false,
+        firstRunDone: true,
+      }),
+    ).toEqual({
+      state: 'done',
+      selectSetupAgent: false,
+      kickoffSetup: false,
+      clearDeclined: false,
+    });
+  });
+
+  it('first run already done: missing credentials stay in State 2', () => {
+    expect(
+      planOnboardingFunnelTransition('needs-credential', {
+        hasCredential: false,
         declined: false,
         firstRunDone: true,
       }),

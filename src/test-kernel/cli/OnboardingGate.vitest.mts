@@ -7,11 +7,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   hasCliCredentialForApiMode: vi.fn(),
+  listExecutions: vi.fn(),
   state: new Map<string, unknown>(),
 }));
 
 vi.mock('@cli/runtime/credentialStatus', () => ({
   hasCliCredentialForApiMode: mocks.hasCliCredentialForApiMode,
+}));
+
+vi.mock('@agent/storage', () => ({
+  listExecutions: mocks.listExecutions,
 }));
 
 vi.mock('@platform/platform', () => ({
@@ -43,6 +48,7 @@ describe('maybeRunCliOnboarding gate', () => {
 
   beforeEach(() => {
     mocks.hasCliCredentialForApiMode.mockReset().mockResolvedValue(false);
+    mocks.listExecutions.mockReset().mockResolvedValue([]);
     mocks.state.clear();
     originalIsTty = process.stdout.isTTY;
     Object.defineProperty(process.stdout, 'isTTY', {
@@ -97,6 +103,18 @@ describe('maybeRunCliOnboarding gate', () => {
       declined: false,
     });
     expect(mocks.state.get(GlobalStateKey.ONBOARDING_DECLINED)).toBe(false);
+  });
+
+  it('skips onboarding for credential-less users with prior run history', async () => {
+    mocks.listExecutions.mockResolvedValue([{ id: 'previous-run' }]);
+
+    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
+      configured: false,
+      declined: false,
+    });
+    expect(mocks.state.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE)).toBe(
+      true,
+    );
   });
 
   it('skips on a dumb terminal before checking credentials', async () => {

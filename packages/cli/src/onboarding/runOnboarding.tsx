@@ -23,12 +23,14 @@ import {
   getOnboardingDeclined,
   setOnboardingDeclined,
 } from '@controllers/onboarding/onboardingFunnel';
+import { listExecutions } from '@agent/storage';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { type OAuthProvider } from '@auth/sharedConfig';
 import { type SupabaseSession } from '@auth/SupabaseSession';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import {
   ONBOARDING_CARD_TITLE,
@@ -121,15 +123,27 @@ export async function maybeRunCliOnboarding(
     () => false,
   );
   // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI upgrader
-  // who already has a credential never enters State 1. hasRunHistory is false
-  // by design — listing CLI run history is expensive and the credential check
-  // covers upgraders. One-shot and best-effort: if a credential appears after a
-  // previous skip, the stale skip is cleared below and the setup agent gets one
-  // chance to run.
+  // who already has a credential or execution history never enters State 0/1.
+  // One-shot and best-effort: if a credential appears after a previous skip,
+  // the stale skip is cleared below and the setup agent gets one chance to run.
+  const needsFirstRunBackfill =
+    globalState.get<boolean | undefined>(
+      GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+    ) === undefined;
+  const hasRunHistory =
+    needsFirstRunBackfill && !hasCredential
+      ? await listExecutions().then(
+          (entries) => entries.length > 0,
+          () => false,
+        )
+      : false;
   await backfillFirstRunDone(globalState, {
     hasCredential,
-    hasRunHistory: false,
+    hasRunHistory,
   }).catch(() => {});
+  if (!hasCredential && getFirstRunDone(globalState)) {
+    return NO_ONBOARDING_RESULT;
+  }
   if (hasCredential) {
     if (getOnboardingDeclined(globalState)) {
       await setOnboardingDeclined(globalState, false).catch(() => {});

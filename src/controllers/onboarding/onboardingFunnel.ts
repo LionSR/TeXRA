@@ -35,7 +35,8 @@ export interface OnboardingFunnelInputs {
 export function deriveOnboardingFunnelState(
   inputs: OnboardingFunnelInputs,
 ): OnboardingFunnelState {
-  if (inputs.hasCredential) return inputs.firstRunDone ? 'done' : 'setup';
+  if (inputs.firstRunDone) return 'done';
+  if (inputs.hasCredential) return 'setup';
   // A deliberate skip suppresses State 0 on subsequent launches; the user
   // gets the normal product until a credential appears (which re-enters the
   // funnel at State 1 because configuring a credential clears the flag).
