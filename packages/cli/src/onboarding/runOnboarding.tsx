@@ -27,6 +27,7 @@ import { listExecutions } from '@agent/storage';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { type OAuthProvider } from '@auth/sharedConfig';
 import { type SupabaseSession } from '@auth/SupabaseSession';
+import { USE_INCLUDED_ACCESS_KEY } from '@auth/serverKeys/ServerSideKeyService';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -137,10 +138,15 @@ export async function maybeRunCliOnboarding(
         () => false,
       )
     : false;
+  // Prior-install signals in the CLI/desktop shared store: the desktop stamps
+  // LAST_KNOWN_VERSION, and the API-mode preference is written whenever
+  // relay/keys mode was ever chosen — the CLI itself has no version stamp, so
+  // a pure-CLI relay veteran is only recognizable by the latter.
   const hasPriorInstall =
     needsFirstRunBackfill &&
-    globalState.get<string | undefined>(GlobalStateKey.LAST_KNOWN_VERSION) !==
-      undefined;
+    (globalState.get<string | undefined>(GlobalStateKey.LAST_KNOWN_VERSION) !==
+      undefined ||
+      globalState.get<unknown>(USE_INCLUDED_ACCESS_KEY) !== undefined);
   await backfillFirstRunDone(globalState, {
     hasCredential,
     hasPriorInstall,
