@@ -3,6 +3,7 @@
 <script setup>
 import InquiryFlowHero from '../.vitepress/components/InquiryFlowHero.vue';
 import SearchResultsHero from '../.vitepress/components/SearchResultsHero.vue';
+import CliSearchChatHero from '../.vitepress/components/CliSearchChatHero.vue';
 </script>
 
 You're deep in a manuscript and realise you need to cite "that attention paper from 2017" but can't remember the title. Or you want to verify an integral in your appendix. Or you need to pull twenty BibTeX entries from your Zotero library into a new project. TeXRA's research agents handle all of this without leaving your editor — in VS Code or the `texra` CLI.
@@ -28,6 +29,13 @@ Focus on work from 2023-2024 that handles mathematical equations.
 <SearchResultsHero />
 
 <p class="hero-caption">A typical <code>search</code> result set: each preprint carries its title, authors, an arXiv or Crossref source tag, and a one-click <strong>Cite</strong> — every row a real lookup, never fabricated.</p>
+
+The same search streams in a terminal, each lookup surfacing as a tool call
+you can watch:
+
+<CliSearchChatHero />
+
+<p class="hero-caption">The postdoc's search in <code>texra chat --agent search</code>: each grounded lookup surfaces as a tool-call row, with results streaming under it.</p>
 
 ### <wa-icon library="texra" name="link"></wa-icon> Look Up Citations
 

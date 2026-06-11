@@ -1,70 +1,67 @@
 <script setup>
-// Frameless terminal-output card for `texra tools list`. The Tools and
-// Integrations section of guide/texra-cli.md describes the command as reporting
-// "each integration id, name, category, enabled state, and detection result" —
-// five structured columns the reader currently has to imagine. This renders that
-// tabular output so the columns, the enabled-vs-disabled state (status dot), and
-// the detected-vs-not state (check / x glyph) are concrete at a glance.
+// Terminal-output card for `texra tools list`. The real command prints six
+// tab-separated columns — ID NAME CATEGORY ENABLED DETECTED NOTE, booleans as
+// yes / no / - and NOTE carrying the registered install command when a tool is
+// not detected (packages/cli/src/runtime/tools.ts formatCliToolList /
+// noteForTool). This renders that table so the columns and the
+// enabled-vs-detected distinction are concrete at a glance.
 //
-// Standalone (no MockupFrame) — a terminal card on the .mockup surface, mirroring
-// CliChatHero's titlebar + mono body, so the shared --mk-* tokens resolve here
-// and the whole thing flips with the docs light / dark theme. Integration ids,
-// names, and categories match resources/externalToolDefs verbatim; the
-// enabled/detection mix is a believable static snapshot showing both states.
+// Built on the <TermWindow> primitive; the shared --mk-* tokens resolve here
+// and the card flips with the docs light / dark theme. Integration ids, names,
+// categories, and the claude-agent install command match
+// src/tools/externalToolDefs.ts verbatim; the enabled / detection mix is a
+// believable static snapshot showing all three states.
 const rows = [
   {
     id: 'codex',
     name: 'OpenAI Codex CLI',
     category: 'ai-agents',
-    enabled: true,
-    detected: true,
+    enabled: 'yes',
+    detected: 'yes',
+    note: '',
   },
   {
     id: 'claude-agent',
     name: 'Claude Code CLI',
     category: 'ai-agents',
-    enabled: true,
-    detected: true,
+    enabled: 'yes',
+    detected: 'no',
+    note: 'npm install -g @anthropic-ai/claude-code',
   },
   {
     id: 'wolfram',
     name: 'Wolfram Language',
     category: 'computation',
-    enabled: true,
-    detected: false,
+    enabled: 'yes',
+    detected: 'no',
+    note: '',
   },
   {
     id: 'lean4',
     name: 'Lean 4',
     category: 'lean',
-    enabled: false,
-    detected: true,
+    enabled: 'no',
+    detected: 'yes',
+    note: '',
   },
   {
     id: 'texcount',
     name: 'TeXcount',
     category: 'latex',
-    enabled: true,
-    detected: true,
+    enabled: 'yes',
+    detected: 'yes',
+    note: '',
   },
 ];
 </script>
 
 <template>
-  <div class="mockup ctl" role="group" aria-label="texra tools list output">
-    <!-- Faux terminal titlebar -->
-    <div class="mk-term-bar">
-      <span class="mk-term-light mk-term-light--r"></span>
-      <span class="mk-term-light mk-term-light--y"></span>
-      <span class="mk-term-light mk-term-light--g"></span>
-      <span class="mk-term-title">texra tools list</span>
-    </div>
-
-    <div class="ctl-body">
+  <TermWindow title="texra tools list" aria-label="texra tools list output">
+    <div class="ctl-scroll">
       <!-- Prompt line -->
-      <div class="ctl-prompt">
-        <span class="ctl-sigil">$</span>
-        <span class="ctl-cmd">texra tools list</span>
+      <div class="mk-term-prompt ctl-prompt">
+        <span class="mk-term-sigil">$</span>
+        <span class="mk-term-cmd">texra tools list</span>
       </div>
 
       <!-- Column header -->
@@ -74,6 +71,7 @@ const rows = [
         <span class="ctl-c ctl-c--cat">CATEGORY</span>
         <span class="ctl-c ctl-c--enabled">ENABLED</span>
         <span class="ctl-c ctl-c--detected">DETECTED</span>
+        <span class="ctl-c ctl-c--note">NOTE</span>
       </div>
 
       <!-- Integration rows -->
@@ -84,70 +82,47 @@ const rows = [
         <span class="ctl-c ctl-c--enabled">
           <span
             class="ctl-dot"
-            :class="r.enabled ? 'ctl-dot--on' : 'ctl-dot--off'"
+            :class="r.enabled === 'yes' ? 'ctl-dot--on' : 'ctl-dot--off'"
           ></span>
-          {{ r.enabled ? 'enabled' : 'disabled' }}
+          {{ r.enabled }}
         </span>
         <span
           class="ctl-c ctl-c--detected"
-          :class="r.detected ? 'ctl-det--yes' : 'ctl-det--no'"
+          :class="r.detected === 'yes' ? 'ctl-det--yes' : 'ctl-det--no'"
         >
           <wa-icon
             library="texra"
-            :name="r.detected ? 'check' : 'close'"
+            :name="r.detected === 'yes' ? 'check' : 'close'"
           ></wa-icon>
-          {{ r.detected ? 'detected' : 'not found' }}
+          {{ r.detected }}
         </span>
+        <span class="ctl-c ctl-c--note">{{ r.note }}</span>
       </div>
     </div>
-  </div>
+  </TermWindow>
 </template>
 
 <style scoped>
-.ctl {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  margin: var(--mk-space-12) 0;
-  overflow: hidden;
-  font-family: var(--vp-font-family-base);
-}
-
-/* Titlebar comes from the shared `.mk-term-*` classes in theme/mockup.css. */
-
-/* Body */
-.ctl-body {
-  padding: var(--mk-space-12) var(--mk-space-14);
-  background: var(--mk-bg-deep);
-  font-family: var(--vp-font-family-mono);
-  font-size: var(--mk-fs-76);
-  line-height: 1.6;
-  color: var(--wa-color-text-normal);
+/* Card shell, titlebar, and body come from TermWindow + the shared .mk-term-*
+   classes in theme/mockup.css. The table is denser than prose terminal cards,
+   so it tightens the body font a step and scrolls horizontally on narrow
+   columns rather than reflowing — terminal output is intrinsically
+   column-aligned. */
+.ctl-scroll {
   overflow-x: auto;
+  font-size: var(--mk-fs-76);
 }
 .ctl-prompt {
-  display: flex;
-  align-items: baseline;
-  gap: var(--mk-space-7);
   margin-bottom: var(--mk-space-8);
 }
-.ctl-sigil {
-  color: var(--mk-syn-fn);
-  font-weight: 600;
-}
-.ctl-cmd {
-  color: var(--mk-text);
-}
 
-/* Table rows: a fixed grid so columns align like fixed-width terminal output. */
+/* Table rows: a fixed grid so columns align like fixed-width terminal output.
+   The tokenized floor keeps columns readable; .ctl-scroll provides the
+   horizontal scroll instead of reflowing. */
 .ctl-row {
   display: grid;
-  grid-template-columns:
-    minmax(96px, 0.9fr)
-    minmax(120px, 1.4fr)
-    minmax(80px, 0.9fr)
-    minmax(86px, 0.8fr)
-    minmax(92px, 0.8fr);
+  grid-template-columns: 0.8fr 1.3fr 0.8fr 0.55fr 0.6fr 1.4fr;
+  min-width: var(--mk-size-520);
   gap: var(--mk-space-8);
   align-items: center;
   padding: var(--mk-space-3) 0;
@@ -206,18 +181,8 @@ const rows = [
 .ctl-c--detected wa-icon {
   font-size: var(--mk-space-11);
 }
-
-/* On a narrow column, the body scrolls horizontally (overflow-x:auto) rather
-   than reflowing — terminal output is intrinsically column-aligned. */
-@media (max-width: 560px) {
-  .ctl-row {
-    grid-template-columns:
-      minmax(88px, 0.9fr)
-      minmax(110px, 1.3fr)
-      minmax(74px, 0.8fr)
-      minmax(82px, 0.8fr)
-      minmax(86px, 0.8fr);
-    min-width: 460px;
-  }
+.ctl-c--note {
+  color: var(--mk-text-faint);
+  font-size: var(--mk-fs-72);
 }
 </style>

@@ -2,6 +2,7 @@
 import MultiOutputMatchHero from '../.vitepress/components/MultiOutputMatchHero.vue'
 import MultiInputOrderHero from '../.vitepress/components/MultiInputOrderHero.vue'
 import MultiOutputModesHero from '../.vitepress/components/MultiOutputModesHero.vue'
+import CliRunHero from '../.vitepress/components/CliRunHero.vue'
 </script>
 
 # Handling Multiple Files (Inputs & Outputs)
@@ -27,6 +28,20 @@ The TeXRA UI provides dedicated sections for managing multiple input files.
 <MultiInputOrderHero />
 
 <p class="hero-caption">The Input group is an ordered list — drag to reorder. For editing agents the row order is the output order, and each input filename is reused as its output filename.</p>
+
+Multi-file runs are not webview-only. In the terminal, repeated `--input`
+flags are the same ordered Input list, and `--output-dir` collects the
+per-file artifacts:
+
+<CliRunHero
+  command="texra run polish --input chapter1.tex --input chapter2.tex --output-dir polished"
+  :rounds="[
+    { label: 'r0 — draft revision', state: 'done' },
+    { label: 'r1 — critique and revise', state: 'done' },
+  ]"
+  :outputs="['polished/chapter1.tex', 'polished/chapter2.tex']"
+  note="One copied path per output — relative document paths are preserved under the directory."
+/>
 
 _(See [File Management](./file-management.md) for general UI controls.)_
 
