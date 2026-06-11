@@ -45,7 +45,11 @@ const SOURCE_LABEL = 'TeXRA Agent Review';
 const REVIEW_AGENT = 'changeReviewer';
 /** Tool-use agent used for "Fix with Agent" — a general surgical editor. */
 const FIX_AGENT = 'coder';
-/** Hard cap so a runaway reviewer session cannot flood the panel. */
+/**
+ * Hard cap so a runaway reviewer session cannot flood the panel.
+ * Deliberately slack above the changeReviewer prompt's 10-issue guidance —
+ * the prompt sets the editorial limit, this is the safety backstop.
+ */
 const MAX_ISSUES_PER_REVIEW = 25;
 
 export const AGENT_REVIEW_VIEW_ID = 'texra.agentReviewView';

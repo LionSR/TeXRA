@@ -151,6 +151,25 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(result.value.diff.length).toBeLessThan(200 * 1024);
   });
 
+  it('falls back to the origin remote-tracking branch when no local main exists', async () => {
+    // Simulate a manually added remote: origin/main exists as a tracking
+    // ref, origin/HEAD is unset, and there is no local main branch.
+    await git('checkout', '-b', 'feature');
+    await git('update-ref', 'refs/remotes/origin/main', 'refs/heads/main');
+    await git('branch', '-D', 'main');
+    await writeFile(path.join(repo, 'paper.tex'), 'changed line\n');
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: false,
+      includeSubmodules: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.baseDescription).toBe('main branch (origin/main)');
+    expect(result.value.diff).toContain('+changed line');
+  });
+
   it('resolves the repository root when run from a subdirectory', async () => {
     await git('checkout', '-b', 'feature');
     await mkdir(path.join(repo, 'sub'));

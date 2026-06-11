@@ -101,7 +101,12 @@ interface BaseBranch {
   shortName: string;
 }
 
-/** Resolve the repository's main branch: origin/HEAD first, then well-known names. */
+/**
+ * Resolve the repository's main branch: origin/HEAD first, then well-known
+ * names — each probed as a local branch and as an origin remote-tracking
+ * ref, so a clone without a local main (e.g. a manually added remote with
+ * no origin/HEAD) still resolves. Local wins over remote for a name.
+ */
 async function detectBaseBranch(cwd: string): Promise<BaseBranch | null> {
   const originHead = await git(cwd, [
     'symbolic-ref',
@@ -114,14 +119,25 @@ async function detectBaseBranch(cwd: string): Promise<BaseBranch | null> {
     return { ref, shortName: ref.replace(/^origin\//, '') };
   }
   const verified = await Promise.all(
-    BASE_BRANCH_CANDIDATES.map((candidate) =>
+    BASE_BRANCH_CANDIDATES.flatMap((candidate) => [
       git(cwd, ['rev-parse', '--verify', '--quiet', `refs/heads/${candidate}`]),
-    ),
+      git(cwd, [
+        'rev-parse',
+        '--verify',
+        '--quiet',
+        `refs/remotes/origin/${candidate}`,
+      ]),
+    ]),
   );
-  const index = verified.findIndex((sha) => sha !== null);
-  if (index === -1) return null;
-  const candidate = BASE_BRANCH_CANDIDATES[index];
-  return { ref: candidate, shortName: candidate };
+  for (const [index, candidate] of BASE_BRANCH_CANDIDATES.entries()) {
+    if (verified[index * 2] !== null) {
+      return { ref: candidate, shortName: candidate };
+    }
+    if (verified[index * 2 + 1] !== null) {
+      return { ref: `origin/${candidate}`, shortName: candidate };
+    }
+  }
+  return null;
 }
 
 /**
@@ -134,6 +150,9 @@ async function resolveOnBaseBranch(
   cwd: string,
   branch: string,
 ): Promise<Pick<ReviewDiff, 'baseRef' | 'baseDescription'>> {
+  // `git diff --quiet` signals "differences found" via exit code 1, which
+  // the `git` helper maps to null — a genuine git error looks the same and
+  // safely degrades to the HEAD base (whose diff then fails the collection).
   const treeClean = (await git(cwd, ['diff', '--quiet', 'HEAD'])) !== null;
   if (!treeClean) {
     return {
