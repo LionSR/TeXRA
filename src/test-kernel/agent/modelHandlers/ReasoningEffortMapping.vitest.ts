@@ -4,7 +4,7 @@ import { ReasoningEffort } from 'llm-zoo';
 
 // Local imports - mappings under test
 import { toOpenRouterReasoningEffort } from '@agent/modelHandlers/openrouter/openRouterStreaming';
-import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
+import { toOpenAIReasoningEffort } from '@agent/modelHandlers/support/reasoningEffort';
 
 // Regression coverage for the SDK-vocabulary mismatch that produced
 // `400 reasoning_effort: Invalid option: expected one of
