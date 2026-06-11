@@ -133,6 +133,12 @@ export enum GlobalStateKey {
 
   // Experimental
   INLINE_CRITICISM_ENABLED = 'texra.inlineCriticism.enabled',
+
+  // Onboarding funnel (user-scoped; see @controllers/onboarding/onboardingFunnel)
+  /** Legacy key string — predates the shared funnel, kept for CLI compat. */
+  ONBOARDING_DECLINED = 'texra.cli.onboardingDeclined',
+  ONBOARDING_FIRST_RUN_DONE = 'texra.onboarding.firstRunDone',
+  ONBOARDING_DEFAULT_TEAM_ID = 'texra.onboarding.defaultTeamId',
 }
 
 /** Prefix used for per-instruction suppression flags */

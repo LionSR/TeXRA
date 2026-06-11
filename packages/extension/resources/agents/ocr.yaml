@@ -1,4 +1,5 @@
 name: ocr
+displayName: OCR — PDF to LaTeX
 description: Converts handwritten mathematical content from images into LaTeX.
 
 settings:

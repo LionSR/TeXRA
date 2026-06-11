@@ -9,6 +9,7 @@
  *   - install_vscode_extension — install LaTeX Workshop / Lean 4
  *   - send_to_terminal — type into VS Code's integrated terminal for
  *     sudo / interactive prompts the captured-stdio bash tool can't handle
+ *   - apply_team — apply a discipline roster + record the default team
  *
  * Shell-rc writes go through the regular `bash` tool (and its approval
  * dialog) — there's no dedicated rc-writing tool. A hand-rolled validator
@@ -26,6 +27,7 @@ export { InvokeCommandTool } from './InvokeCommandTool';
 export { InstallVscodeExtensionTool } from './InstallVscodeExtensionTool';
 export { ReadConfigTool, UpdateConfigTool } from './ConfigTools';
 export { SendToTerminalTool } from './SendToTerminalTool';
+export { ApplyTeamTool } from './ApplyTeamTool';
 export {
   setSetupPlatform,
   type SetupPlatform,

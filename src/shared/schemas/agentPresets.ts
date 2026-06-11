@@ -22,6 +22,33 @@ export const AgentModePresetSchema = z.object({
 export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
 
 /**
+ * Generic default team applied when the user skips the setup agent's
+ * discipline question (PRD: agent-native onboarding). Deliberately NOT part
+ * of {@link AGENT_MODE_PRESETS}: it is not a discipline and must not appear
+ * as a team card in the settings UI — only `apply_team` and default-team
+ * seeding resolve it.
+ *
+ * `orchestrator` is relay-served and only resolves after sign-in; listing it
+ * here is harmless because roster application intersects preset names with
+ * the live registry.
+ */
+export const STARTER_AGENT_MODE_PRESET: AgentModePreset = {
+  id: 'starter',
+  name: 'Starter',
+  description: 'Balanced default roster for a first project.',
+  icon: 'codicon-rocket',
+  workflowAgents: ['correct', 'polish'],
+  toolUseAgents: [
+    'assistant',
+    'research',
+    'review',
+    'latexFixer',
+    'setup',
+    'orchestrator',
+  ],
+};
+
+/**
  * Built-in agent teams.
  *
  * Agent names listed here are matched by name (not source:name key)

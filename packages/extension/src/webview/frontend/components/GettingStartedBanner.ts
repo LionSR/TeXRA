@@ -17,6 +17,7 @@ import { COMMAND_LINKS } from '@shared/utils/uiConstants';
 import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
+/** Slim project-bootstrap row shown when the workspace has no LaTeX files. */
 @customElement('getting-started-banner')
 export class GettingStartedBanner extends LitElement {
   static override styles = [
@@ -37,30 +38,12 @@ export class GettingStartedBanner extends LitElement {
         border-bottom-color: currentColor;
       }
 
-      .getting-started-header {
+      .getting-started-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: var(--wa-space-2xs);
-      }
-
-      .getting-started-list {
-        margin: var(--wa-space-2xs) 0 0 0;
-        padding-left: var(--wa-space-m);
-        line-height: var(--line-height-relaxed);
-      }
-
-      .getting-started-list li {
         font-size: var(--font-size-sm);
-        margin-block: 1px;
-      }
-
-      .getting-started-list li::marker {
-        color: color-mix(
-          in srgb,
-          var(--wa-color-brand-fill-loud) 60%,
-          transparent
-        );
       }
     `,
   ];
@@ -85,48 +68,26 @@ export class GettingStartedBanner extends LitElement {
           class="getting-started-banner"
           variant="brand"
         >
-          ${waIcon('lightbulb', { slot: 'icon' })}
-          <div class="getting-started-header">
+          <div class="getting-started-row">
             <span>
-              <strong>Welcome to TeXRA!</strong> No LaTeX files here yet — pick
-              how you'd like to start:
+              Empty folder —
+              <a href=${COMMAND_LINKS.CREATE_SAMPLE_PROJECT}>Sample project</a>
+              ·
+              <a href=${COMMAND_LINKS.CLONE_OVERLEAF}>Pull from Overleaf</a>
+              ·
+              <a href=${COMMAND_LINKS.DOWNLOAD_ARXIV}>Grab from arXiv</a>
+              — or just ask below.
             </span>
             <wa-button
               appearance="plain"
               size="small"
-              title="Dismiss (can be re-enabled in settings)"
-              aria-label="Dismiss getting started banner"
+              title="Dismiss for this session"
+              aria-label="Dismiss getting started row"
               @click=${this.handleDismiss}
             >
               ${waIcon('xmark')}
             </wa-button>
           </div>
-          <ul class="getting-started-list">
-            <li>
-              <a href=${COMMAND_LINKS.RUN_SETUP_ASSISTANT}>
-                Run the setup assistant agent
-              </a>
-              -- checks tools, credentials, and LaTeX setup
-            </li>
-            <li>
-              <a href=${COMMAND_LINKS.GETTING_STARTED}>Walk me through setup</a>
-              -- takes a few minutes
-            </li>
-            <li>
-              <a href=${COMMAND_LINKS.CREATE_SAMPLE_PROJECT}>
-                Try the sample project
-              </a>
-              -- play around risk-free
-            </li>
-            <li>
-              <a href=${COMMAND_LINKS.CLONE_OVERLEAF}>Pull from Overleaf</a>
-              -- import an existing project
-            </li>
-            <li>
-              <a href=${COMMAND_LINKS.DOWNLOAD_ARXIV}>Grab from arXiv</a>
-              -- download a paper's source
-            </li>
-          </ul>
         </wa-callout>
       </div>
     `;

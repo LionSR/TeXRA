@@ -1,0 +1,118 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Integration test for the combined `texra setup` flow (agent-native
+// onboarding PRD): State 0 picker first when credential-less, then the
+// setup-agent chat — with the picker skipped entirely for already-
+// credentialed users. The picker, platform init, and chat TUI are mocked;
+// the decision flow in `runSetup` is real.
+
+const mocks = vi.hoisted(() => ({
+  hasCliCredentialForApiMode: vi.fn(),
+  runCliOnboarding: vi.fn(),
+  runChat: vi.fn(),
+  initCliPlatform: vi.fn(),
+}));
+
+vi.mock('@cli/runtime/credentialStatus', () => ({
+  hasCliCredentialForApiMode: mocks.hasCliCredentialForApiMode,
+}));
+
+vi.mock('@cli/onboarding/runOnboarding', () => ({
+  runCliOnboarding: mocks.runCliOnboarding,
+}));
+
+vi.mock('@cli/chat/tui/runChatTui', () => ({
+  runChat: mocks.runChat,
+}));
+
+vi.mock('@cli/runtime/initPlatform', () => ({
+  initCliPlatform: mocks.initCliPlatform,
+}));
+
+import { runSetup } from '@cli/commands/setup';
+import { CliExitCode } from '@cli/runtime/exitCodes';
+import type { CliContext } from '@cli/runtime/cliContext';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+
+const INTERACTIVE_CONTEXT = {
+  mode: 'interactive',
+  stdoutIsTty: true,
+  termIsDumb: false,
+  stdoutColorEnabled: false,
+  colorEnabled: false,
+} as unknown as CliContext;
+
+describe('texra setup combined flow', () => {
+  beforeEach(() => {
+    mocks.hasCliCredentialForApiMode.mockReset().mockResolvedValue(false);
+    mocks.runCliOnboarding
+      .mockReset()
+      .mockResolvedValue({ configured: false, declined: true });
+    mocks.runChat.mockReset().mockResolvedValue({ exitCode: 0 });
+    mocks.initCliPlatform.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('rejects non-interactive terminals before doing anything', async () => {
+    const stderrSpy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+    try {
+      const exit = await runSetup({
+        ...INTERACTIVE_CONTEXT,
+        mode: 'headless',
+      } as CliContext);
+      expect(exit).toBe(CliExitCode.Usage);
+      expect(mocks.initCliPlatform).not.toHaveBeenCalled();
+      expect(mocks.runCliOnboarding).not.toHaveBeenCalled();
+      expect(mocks.runChat).not.toHaveBeenCalled();
+    } finally {
+      stderrSpy.mockRestore();
+    }
+  });
+
+  it('runs the picker, then enters the setup-agent chat once configured', async () => {
+    mocks.runCliOnboarding.mockResolvedValue({
+      configured: true,
+      declined: false,
+    });
+    mocks.runChat.mockResolvedValue({ exitCode: CliExitCode.Success });
+
+    const exit = await runSetup(INTERACTIVE_CONTEXT);
+
+    expect(mocks.runCliOnboarding).toHaveBeenCalledTimes(1);
+    expect(mocks.runChat).toHaveBeenCalledWith(INTERACTIVE_CONTEXT, {
+      agentOverride: SETUP_AGENT_NAME,
+    });
+    expect(exit).toBe(CliExitCode.Success);
+  });
+
+  it('exits cleanly when the picker is skipped — no chat session', async () => {
+    const exit = await runSetup(INTERACTIVE_CONTEXT);
+
+    expect(mocks.runCliOnboarding).toHaveBeenCalledTimes(1);
+    expect(mocks.runChat).not.toHaveBeenCalled();
+    expect(exit).toBe(CliExitCode.Success);
+  });
+
+  it('skips the picker for already-credentialed users — straight to the agent', async () => {
+    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
+    mocks.runChat.mockResolvedValue({ exitCode: CliExitCode.Success });
+
+    const exit = await runSetup(INTERACTIVE_CONTEXT);
+
+    expect(mocks.runCliOnboarding).not.toHaveBeenCalled();
+    expect(mocks.runChat).toHaveBeenCalledWith(INTERACTIVE_CONTEXT, {
+      agentOverride: SETUP_AGENT_NAME,
+    });
+    expect(exit).toBe(CliExitCode.Success);
+  });
+
+  it('propagates the chat session exit code', async () => {
+    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
+    mocks.runChat.mockResolvedValue({ exitCode: CliExitCode.AgentError });
+
+    await expect(runSetup(INTERACTIVE_CONTEXT)).resolves.toBe(
+      CliExitCode.AgentError,
+    );
+  });
+});

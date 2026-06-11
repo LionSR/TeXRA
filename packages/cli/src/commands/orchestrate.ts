@@ -1,8 +1,11 @@
 import { defineCommand, showUsage } from 'citty';
 
+import { platform } from '@platform/platform';
+import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { getVisibleAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
+import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';
 import { listCliHistoryEntries } from '../runtime/history';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -99,6 +102,24 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // printed. Exit cleanly instead of dropping into a launcher full of
     // "login required" models — same opt-out behavior as `texra chat`.
     return CliExitCode.Success;
+  }
+  // State 1 continuation (docs/prd/agent-native-onboarding.md): on a true
+  // first run the picker hands straight to a chat session owned by the setup
+  // agent instead of the launcher. Existing users (firstRunDone backfilled or
+  // earned) and users who pinned an agent via env land on the launcher as
+  // before. `orchestrate` has no `--agent` flag here; the env override is the
+  // only explicit agent pin this entry point honors.
+  const setupAgentOverride = firstRunSetupAgentOverride({
+    onboardingConfigured: onboarding.configured,
+    firstRunDone: getFirstRunDone(platform().globalState),
+    pinnedAgent: context.envAgent,
+  });
+  if (setupAgentOverride) {
+    const { runChat } = await import('../chat/tui/runChatTui');
+    const result = await runChat(context, {
+      agentOverride: setupAgentOverride,
+    });
+    return result.exitCode;
   }
   const history = await listCliHistoryEntries();
   const presets = readCliMultiAgentPresets();

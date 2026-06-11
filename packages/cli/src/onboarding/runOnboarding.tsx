@@ -17,13 +17,27 @@ import { Spinner } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
 import { platform } from '@platform/platform';
+import {
+  backfillFirstRunDone,
+  getFirstRunDone,
+  getOnboardingDeclined,
+  setOnboardingDeclined,
+} from '@controllers/onboarding/onboardingFunnel';
+import { listExecutions } from '@agent/storage';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { type OAuthProvider } from '@auth/sharedConfig';
 import { type SupabaseSession } from '@auth/SupabaseSession';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
+import {
+  ONBOARDING_CARD_TITLE,
+  ONBOARDING_CHOICE_API_KEY,
+  ONBOARDING_CHOICE_SIGN_IN,
+  ONBOARDING_CHOICE_SKIP_LABEL,
+} from '@shared/copy/onboarding';
 import { assertNever } from '../chat/tui/assertNever';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
@@ -48,13 +62,14 @@ import {
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { saveProviderApiKey } from './applyOnboardingResult';
-import {
-  getOnboardingDeclined,
-  setOnboardingDeclined,
-} from './onboardingState';
 
 export interface CliOnboardingResult {
-  /** True when the user finished a sign-in or saved a key this run. */
+  /**
+   * True only when the picker configured a credential in this process —
+   * the signal for the post-picker setup-agent continuation. A launch that
+   * merely finds a pre-existing credential reports false (a stale skip is
+   * handled by clearing the declined flag, never through this field).
+   */
   readonly configured: boolean;
   /** True when the picker was shown and the user chose "Skip for now" this run.
    *  Lets `chat` exit cleanly (the skip summary already printed) instead of
@@ -103,10 +118,54 @@ export async function maybeRunCliOnboarding(
   if (interactiveTerminalFailure(context) || !process.stdout.isTTY) {
     return NO_ONBOARDING_RESULT;
   }
-  if (getOnboardingDeclined(platform().globalState)) {
+  const globalState = platform().globalState;
+  const hasCredential = await hasCliCredentialForApiMode(context.apiMode).catch(
+    () => false,
+  );
+  // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
+  // with execution history never enters State 0/1. Credential presence alone
+  // does not prove this is an upgrader: fresh installs can inherit env keys.
+  // One-shot and best-effort: if a credential appears after a previous skip,
+  // the stale skip is cleared below so a later sign-out re-enters State 0.
+  const needsFirstRunBackfill =
+    globalState.get<boolean | undefined>(
+      GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+    ) === undefined;
+  const hasRunHistory = needsFirstRunBackfill
+    ? await listExecutions().then(
+        (entries) => entries.length > 0,
+        () => false,
+      )
+    : false;
+  // LAST_KNOWN_VERSION is stamped by desktop/extension startup. The CLI's
+  // API-mode preference is written during platform init, including first launch,
+  // so it is not a reliable prior-install signal.
+  const hasPriorInstall =
+    needsFirstRunBackfill &&
+    globalState.get<string | undefined>(GlobalStateKey.LAST_KNOWN_VERSION) !==
+      undefined;
+  await backfillFirstRunDone(globalState, {
+    hasCredential,
+    hasPriorInstall,
+    hasRunHistory,
+  }).catch(() => {});
+  if (!hasCredential && getFirstRunDone(globalState)) {
     return NO_ONBOARDING_RESULT;
   }
-  if (await hasCliCredentialForApiMode(context.apiMode).catch(() => false)) {
+  if (hasCredential) {
+    // A credential clears a stale skip (the PRD's "configuring a credential
+    // clears the flag"), but an already-credentialed launch is NOT a
+    // post-picker continuation: `configured` stays false so the setup agent
+    // only takes the session right after the picker actually configured a
+    // credential in this process. Anything looser hijacks every launch into
+    // setup until firstRunDone flips, with no exit path if the setup
+    // conversation never completes a run.
+    if (getOnboardingDeclined(globalState)) {
+      await setOnboardingDeclined(globalState, false).catch(() => {});
+    }
+    return NO_ONBOARDING_RESULT;
+  }
+  if (getOnboardingDeclined(globalState)) {
     return NO_ONBOARDING_RESULT;
   }
   return runOnboardingFlow({
@@ -117,9 +176,11 @@ export async function maybeRunCliOnboarding(
 }
 
 /**
- * `texra setup`: always show the picker for re-configuration, bypassing the
- * has-credentials / declined gate. Still TTY-only — the command rejects
- * headless before calling this.
+ * `texra setup`'s State 0 step: show the picker unconditionally — the command
+ * only calls this after checking that no usable credential exists, and then
+ * continues into the setup-agent chat once one is configured. Credentials-only
+ * (re)configuration is `texra login`'s job. Still TTY-only — the command
+ * rejects headless before calling this.
  */
 export async function runCliOnboarding(
   colorEnabled = true,
@@ -182,14 +243,9 @@ async function runOnboardingFlow(options: {
     await setOnboardingDeclined(platform().globalState, false).catch(() => {});
   }
   if (resolution.summary) writeTextStdout(resolution.summary);
-  // Standalone `texra setup` ends here, so tell the user where to go next
-  // (matches `texra init`). The first-run gate skips this: orchestrate/chat
-  // continue into the launcher in the same process.
-  if (resolution.configured && !options.firstRun) {
-    writeTextStdout(
-      'Next: run `texra` for the launcher, or `texra chat` to start.',
-    );
-  }
+  // No "what next" hint after configuring: every caller continues in the same
+  // process — orchestrate/chat into their session, `texra setup` into the
+  // setup-agent chat.
   return { configured: resolution.configured, declined: resolution.declined };
 }
 
@@ -387,19 +443,19 @@ type OnboardingPickerItem = SelectItem<OnboardingChoice>;
 
 const RELAY_PICKER_ITEM: OnboardingPickerItem = {
   value: 'relay',
-  label: 'Included relay access',
-  description: 'sign in, no API key needed (recommended)',
+  label: ONBOARDING_CHOICE_SIGN_IN.label,
+  description: ONBOARDING_CHOICE_SIGN_IN.description,
 };
 
 const KEY_PICKER_ITEM: OnboardingPickerItem = {
   value: 'key',
-  label: 'Provider API key',
-  description: 'paste Anthropic / OpenAI / Google',
+  label: ONBOARDING_CHOICE_API_KEY.label,
+  description: ONBOARDING_CHOICE_API_KEY.description,
 };
 
 const SKIP_PICKER_ITEM: OnboardingPickerItem = {
   value: 'skip',
-  label: 'Skip for now',
+  label: ONBOARDING_CHOICE_SKIP_LABEL,
   description: 'set up later: texra login / texra setup',
 };
 
@@ -433,7 +489,7 @@ function PickerStep(props: {
 }): React.JSX.Element {
   return (
     <OnboardingFrame
-      title="Welcome to TeXRA"
+      title={ONBOARDING_CARD_TITLE}
       subtitle={props.subtitle}
       hints={[
         { key: '↑/↓', action: 'navigate' },

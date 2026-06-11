@@ -30,6 +30,21 @@ describe('CLI AgentListForm row budget', () => {
     ).toBe('lean');
   });
 
+  it('resolves current agents by value name when rows use display labels', () => {
+    const displayAgents = [
+      { value: 'builtInToolUse:setup', label: 'Setup assistant' },
+      { value: 'remote:orchestrator', label: 'Orchestrator' },
+    ];
+
+    expect(currentVisibleAgent(displayAgents, 'setup')?.label).toBe(
+      'Setup assistant',
+    );
+    expect(
+      currentVisibleAgent(displayAgents, 'remote:orchestrator')?.label,
+    ).toBe('Orchestrator');
+    expect(hiddenCurrentAgentHint(displayAgents, 'setup')).toBeUndefined();
+  });
+
   it('labels the current agent when it is hidden from the picker', () => {
     expect(hiddenCurrentAgentHint(visibleAgents, 'builtInToolUse:review')).toBe(
       'Current: review (hidden from picker)',
