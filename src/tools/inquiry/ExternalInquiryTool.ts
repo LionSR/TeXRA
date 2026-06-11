@@ -152,16 +152,17 @@ export async function handleExternalInquiryAction(
       answer: payload.answer,
       sessionLinks: payload.sessionLinks ?? undefined,
     });
+    // Removes the inquiry card from `ApprovalRequestHandler.pending`; without
+    // this the request would replay on next webview load and the stream would
+    // be reported as having pending permissions forever. Emit even for stale
+    // submits so duplicate/delayed UI actions do not leave a leaked permission.
+    bus.emit('resolveExternalInquiry', { requestId: payload.threadId });
     if (!persisted) {
       logger.warn(
         `Inquiry submit ignored: thread ${payload.threadId} has no open turn.`,
       );
       return;
     }
-    // Removes the inquiry card from `ApprovalRequestHandler.pending`; without
-    // this the request would replay on next webview load and the stream would
-    // be reported as having pending permissions forever.
-    bus.emit('resolveExternalInquiry', { requestId: payload.threadId });
     // Pass the manifest we just wrote so the injector doesn't re-read from
     // disk — a concurrent follow-up `ask` from another stream could flip
     // the status back to `open` between writes and would otherwise cause
