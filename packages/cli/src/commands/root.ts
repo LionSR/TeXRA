@@ -71,7 +71,7 @@ export const rootCommand = withUsageSections(
     // (see `readCliVersion` in cliContext.ts).
     meta: async () => ({
       name: 'texra',
-      description: 'TeXRA CLI — AI LaTeX research assistant',
+      description: 'TeXRA CLI — your AI theorist in the terminal',
       version: await readCliVersion(),
     }),
     // Global flags are duplicated here so citty's `findSubCommandIndex` knows

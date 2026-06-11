@@ -1,7 +1,7 @@
 {
   "name": "@texra-ai/cli",
   "version": "0.38.8",
-  "description": "TeXRA CLI — AI-powered LaTeX research assistant for the terminal.",
+  "description": "TeXRA CLI — your AI theorist in the terminal.",
   "license": "SEE LICENSE IN LICENSE.txt",
   "author": "TeXRA.ai",
   "homepage": "https://texra.ai",
