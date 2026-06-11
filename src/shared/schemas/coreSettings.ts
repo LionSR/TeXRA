@@ -49,12 +49,15 @@ export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
   'workspaceTemp',
 ] as const;
 
+export const AGENT_REVIEW_APPROACHES = ['quick', 'thorough'] as const;
+
 export type NonRegexReplacementCategory =
   (typeof NON_REGEX_REPLACEMENT_CATEGORIES)[number];
 export type RegexReplacementCategory =
   (typeof REGEX_REPLACEMENT_CATEGORIES)[number];
 export type LatexdiffTempFileLocation =
   (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number];
+export type AgentReviewApproach = (typeof AGENT_REVIEW_APPROACHES)[number];
 
 export const DEFAULT_CORE_SETTINGS = {
   agentOutputs: {
@@ -227,6 +230,13 @@ export const DEFAULT_CORE_SETTINGS = {
   git: {
     numberOfCommitsToShow: 20,
     emitPrCiStartedEvents: false,
+  },
+  agentReview: {
+    runOnCommit: false,
+    includeSubmodules: true,
+    includeUntrackedFiles: true,
+    approach: 'quick' as AgentReviewApproach,
+    model: '',
   },
   audio: {
     soxPath: '',
@@ -454,6 +464,23 @@ export const CoreSettingsShape = {
         .prefault(DEFAULT_CORE_SETTINGS.git.emitPrCiStartedEvents),
     })
     .prefault(DEFAULT_CORE_SETTINGS.git),
+  agentReview: z
+    .strictObject({
+      runOnCommit: z
+        .boolean()
+        .prefault(DEFAULT_CORE_SETTINGS.agentReview.runOnCommit),
+      includeSubmodules: z
+        .boolean()
+        .prefault(DEFAULT_CORE_SETTINGS.agentReview.includeSubmodules),
+      includeUntrackedFiles: z
+        .boolean()
+        .prefault(DEFAULT_CORE_SETTINGS.agentReview.includeUntrackedFiles),
+      approach: z
+        .enum(AGENT_REVIEW_APPROACHES)
+        .prefault(DEFAULT_CORE_SETTINGS.agentReview.approach),
+      model: z.string().prefault(DEFAULT_CORE_SETTINGS.agentReview.model),
+    })
+    .prefault(DEFAULT_CORE_SETTINGS.agentReview),
   audio: z
     .strictObject({
       soxPath: z.string().prefault(DEFAULT_CORE_SETTINGS.audio.soxPath),
@@ -559,6 +586,11 @@ export const CORE_SETTING_PATHS = [
   'latexdiff.tempFileLocation',
   'git.numberOfCommitsToShow',
   'git.emitPrCiStartedEvents',
+  'agentReview.runOnCommit',
+  'agentReview.includeSubmodules',
+  'agentReview.includeUntrackedFiles',
+  'agentReview.approach',
+  'agentReview.model',
   'audio.soxPath',
   'logger.debugMode',
   'debug.saveDebugObjects',

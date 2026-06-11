@@ -1,0 +1,148 @@
+/**
+ * "Start Agent Review on Commit": watches the built-in git extension for
+ * HEAD movements on the workspace repository and triggers a review after
+ * each new commit when `texra.agentReview.runOnCommit` is enabled.
+ *
+ * Branch switches move HEAD too, so the watcher only fires when the commit
+ * changes while the branch name stays the same — checking out another
+ * branch resets the baseline without reviewing.
+ */
+
+// Standard library imports
+import * as path from 'node:path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports
+import { toErrorMessage } from '@common/errors';
+import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
+import * as logger from '@logger/logUtils';
+import { WorkspaceFS } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
+
+import { AgentReviewService } from './AgentReviewService';
+
+const CHANNEL = 'AgentReview';
+const COMMIT_DEBOUNCE_MS = 1500;
+
+/** True when the workspace root lives inside the repository. */
+function isWorkspaceRepository(repository: GitRepository): boolean {
+  const workspacePath = WorkspaceFS.getPath();
+  if (!workspacePath) return false;
+  const relative = path.relative(repository.rootUri.fsPath, workspacePath);
+  return (
+    relative === '' ||
+    (!relative.startsWith('..') && !path.isAbsolute(relative))
+  );
+}
+
+function watchRepository(
+  repository: GitRepository,
+  context: vscode.ExtensionContext,
+  watchedRoots: Set<string>,
+): void {
+  if (!isWorkspaceRepository(repository)) return;
+  const repoRoot = repository.rootUri.fsPath;
+  if (watchedRoots.has(repoRoot)) return;
+  watchedRoots.add(repoRoot);
+
+  let lastName = repository.state.HEAD?.name;
+  let lastCommit = repository.state.HEAD?.commit;
+  let debounce: NodeJS.Timeout | undefined;
+  /** Oldest un-reviewed base while commits coalesce in the debounce window. */
+  let pendingBaseRef: string | undefined;
+
+  const subscription = repository.state.onDidChange(() => {
+    const head = repository.state.HEAD;
+    const name = head?.name;
+    const commit = head?.commit;
+
+    if (name !== lastName) {
+      // Branch switch (or detach): re-baseline without reviewing, and drop
+      // any review still pending from a commit on the previous branch. A
+      // checkout also invalidates the reviewed change set, so stale results
+      // are cleared — except on the initial state population (lastName
+      // undefined), which is not a user checkout.
+      if (debounce) clearTimeout(debounce);
+      debounce = undefined;
+      pendingBaseRef = undefined;
+      if (lastName !== undefined) {
+        AgentReviewService.clear();
+      }
+      lastName = name;
+      lastCommit = commit;
+      return;
+    }
+    if (!commit || commit === lastCommit) {
+      lastCommit = commit;
+      return;
+    }
+    // An undefined→commit transition is indistinguishable from the git
+    // extension lazily populating its state on workspace open, so it never
+    // triggers. This also skips a repo's very first commit — acceptable, as
+    // that commit has no base to diff against anyway.
+    const previousCommit = lastCommit;
+    const hadCommit = previousCommit !== undefined;
+    lastCommit = commit;
+    if (!hadCommit) return;
+    if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
+
+    if (debounce) clearTimeout(debounce);
+    // Rapid commits (amend, rebase replays) coalesce into one review; keep
+    // the OLDEST pending base so the combined run still covers every commit
+    // since the last completed review.
+    pendingBaseRef ??= previousCommit;
+    const baseRef = pendingBaseRef;
+    if (!baseRef) return;
+    debounce = setTimeout(() => {
+      debounce = undefined;
+      pendingBaseRef = undefined;
+      // Re-check at fire time: the user may have disabled run-on-commit
+      // during the debounce window, and a review costs a model session.
+      if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
+      logger.info(
+        CHANNEL,
+        `Commit detected on ${name ?? 'HEAD'}; starting agent review`,
+      );
+      void AgentReviewService.runReview('commit', {
+        baseRef,
+        baseDescription: `previous commit on ${name ?? 'HEAD'}`,
+      });
+    }, COMMIT_DEBOUNCE_MS);
+  });
+
+  context.subscriptions.push({
+    dispose: () => {
+      subscription.dispose();
+      if (debounce) clearTimeout(debounce);
+      pendingBaseRef = undefined;
+      watchedRoots.delete(repoRoot);
+    },
+  });
+}
+
+/** Register the run-on-commit watcher. No-op when the git extension is unavailable. */
+export function registerAgentReviewCommitWatcher(
+  context: vscode.ExtensionContext,
+): void {
+  void (async () => {
+    const git = await getGitAPI();
+    if (!git) return;
+
+    const watchedRoots = new Set<string>();
+    for (const repository of git.repositories) {
+      watchRepository(repository, context, watchedRoots);
+    }
+    context.subscriptions.push(
+      git.onDidOpenRepository((repository) =>
+        watchRepository(repository, context, watchedRoots),
+      ),
+    );
+  })().catch((err: unknown) => {
+    logger.warn(
+      CHANNEL,
+      `Could not watch git commits for agent review: ${toErrorMessage(err)}`,
+    );
+  });
+}

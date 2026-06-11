@@ -42,6 +42,7 @@ import {
 } from '@commands/extensionCommandSurface';
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
+import { registerAgentReviewCommands } from '@commands/review/agentReviewCommands';
 // Local file imports
 import { MainViewProvider } from './MainViewProvider';
 
@@ -55,6 +56,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerFileSelectionCommands(context);
   registerLatexdiffCommands(context);
   registerGitCommands(context);
+  registerAgentReviewCommands(context);
   registerPackCommands(context);
   registerCleanCommands(context);
   registerMergeCommands(context);

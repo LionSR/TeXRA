@@ -56,6 +56,10 @@ All notable changes to this project will be documented in this file.
 
 ### Extension (VS Code)
 
+#### Features
+
+- **Local Agent Review** — a new Agent Review section in the TeXRA sidebar reviews your working-tree changes against the main branch with an AI agent and lists potential issues in both the Agent Review view and Problems panel. You can dismiss findings, hand one or all findings to a fixing agent, review automatically after each commit, include submodules and untracked files, choose a quick or thorough pass, and pin a dedicated review model.
+
 #### Bug Fixes
 
 - **In-editor GitHub sign-in works again** — signing in with GitHub through the editor's account flow had been failing with a server configuration error and silently falling back to browser sign-in; it now completes again. Long-standing existing sessions may ask you to sign in one more time.
