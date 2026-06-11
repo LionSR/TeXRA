@@ -6,6 +6,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -1706,11 +1707,11 @@ export class MainApp extends MainAppBase {
                   <wa-tab-panel name="progress"></wa-tab-panel>
                 </wa-tab-group>
                 <wa-button
+                  id="openDashboardButton"
                   class="header-action"
                   aria-label="Open dashboard"
                   appearance="plain"
                   size="small"
-                  title="Open dashboard"
                   @click=${this.onOpenDashboard}
                 >
                   <wa-icon
@@ -1719,12 +1720,15 @@ export class MainApp extends MainAppBase {
                     variant="solid"
                   ></wa-icon>
                 </wa-button>
+                <wa-tooltip for="openDashboardButton">
+                  Open dashboard
+                </wa-tooltip>
                 <wa-button
+                  id="popOutProgressButton"
                   class="header-action"
                   aria-label="Open progress sessions in editor"
                   appearance="plain"
                   size="small"
-                  title="Open progress sessions in editor"
                   @click=${this.onPopOutProgress}
                 >
                   <wa-icon
@@ -1733,6 +1737,9 @@ export class MainApp extends MainAppBase {
                     variant="solid"
                   ></wa-icon>
                 </wa-button>
+                <wa-tooltip for="popOutProgressButton">
+                  Open progress sessions in editor
+                </wa-tooltip>
               </div>
             `}
 
