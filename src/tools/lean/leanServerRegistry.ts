@@ -12,6 +12,7 @@
  */
 
 import { warn } from '@logger/logUtils';
+import { formatCompactDuration } from '@utils/core/stringCore';
 
 import { LEAN_SERVER_MODE_LABELS } from './leanConstants';
 
@@ -129,23 +130,12 @@ export function clearLeanServerRegistry(): void {
   notify();
 }
 
-export function formatUptime(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remSeconds = seconds % 60;
-  if (minutes < 60) return `${minutes}m ${remSeconds}s`;
-  const hours = Math.floor(minutes / 60);
-  const remMinutes = minutes % 60;
-  return `${hours}h ${remMinutes}m`;
-}
-
 function statusTail(info: LeanServerInfo, now: number): string {
   switch (info.status) {
     case 'error':
       return ` — error: ${info.errorMessage ?? 'unknown'}`;
     case 'running':
-      return ` — uptime ${formatUptime(now - info.startedAt)}`;
+      return ` — uptime ${formatCompactDuration(now - info.startedAt)}`;
     case 'starting':
       return ' — starting…';
     case 'stopped':

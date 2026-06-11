@@ -1,11 +1,10 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { runAgent } from '@agent/runtime/runAgent';
-import { formatZodError } from '@common/errors';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as logger from '@logger/logUtils';
@@ -50,7 +49,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     );
   } catch (error) {
     if (error instanceof ZodError) {
-      const message = `Invalid agent configuration. ${formatZodError(error)}`;
+      const message = `Invalid agent configuration. ${z.prettifyError(error)}`;
       logger.warn(CHANNEL, message, { data: error });
       void vscode.window.showErrorMessage(message);
       return;
