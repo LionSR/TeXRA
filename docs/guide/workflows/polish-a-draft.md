@@ -1,6 +1,7 @@
 <script setup>
 import CritiquePassCard from '../../.vitepress/components/CritiquePassCard.vue';
 import PolishRoundsTree from '../../.vitepress/components/PolishRoundsTree.vue';
+import CliRunHero from '../../.vitepress/components/CliRunHero.vue';
 </script>
 
 # Polish a draft
@@ -36,6 +37,17 @@ texra run polish \
   --input intro.tex \
   --instruction "Tighten prose. Preserve all math and citations."
 ```
+
+<CliRunHero
+  command='texra run polish --input intro.tex --instruction "Tighten prose. Preserve all math and citations."'
+  :rounds="[
+    { label: 'r0 — first revision', state: 'done' },
+    { label: 'r1 — critique-and-revise pass', state: 'done' },
+  ]"
+  :outputs="['.texra/runs/c4e19b07a52d/r1/intro.tex']"
+/>
+
+<p class="hero-caption">Rounds stream as progress, then the path to the final revision prints on stdout — that printed path is the success signal.</p>
 
 Each round writes its output into the run's task storage, using the
 **input filename** as the document name:

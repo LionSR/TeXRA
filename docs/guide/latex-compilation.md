@@ -1,3 +1,7 @@
+<script setup>
+import DoctorSliceHero from '../.vitepress/components/DoctorSliceHero.vue';
+</script>
+
 # LaTeX Compilation Environment
 
 While TeXRA focuses on AI-assisted editing and generation of LaTeX source code, several features rely on having a working LaTeX distribution installed on your system for tasks like compiling previews or processing generated `latexdiff` files.
@@ -12,7 +16,18 @@ You need a functional LaTeX distribution installed, such as:
 
 Getting LaTeX set up correctly can sometimes feel like wrestling an octopus, but it's necessary for features like compiling diffs and TikZ previews.
 
-Ensure that the `latexmk` command is available (preferred for TeXRA) or at least `pdflatex`. These should be accessible from your system's command line.
+Ensure that the `latexmk` command is available (preferred for TeXRA) or at least `pdflatex`. These should be accessible from your system's command line. `texra doctor` verifies the whole toolchain in one go, on any platform:
+
+<DoctorSliceHero
+  :rows="[
+    { state: 'pass', name: 'LaTeX latexmk', message: 'LaTeX build orchestration' },
+    { state: 'pass', name: 'LaTeX pdflatex', message: 'PDFLaTeX compiler' },
+    { state: 'pass', name: 'LaTeX bibtex', message: 'BibTeX bibliography processing' },
+    { state: 'pass', name: 'LaTeX latexdiff', message: 'LaTeX diff generation' },
+  ]"
+/>
+
+<p class="hero-caption">The doctor's LaTeX rows confirm each binary is on PATH — the same check works for extension and CLI users alike.</p>
 
 See the main [Installation Guide](./installation.md) for more details on installing LaTeX and other essential dependencies like Perl (required for `latexdiff`).
 

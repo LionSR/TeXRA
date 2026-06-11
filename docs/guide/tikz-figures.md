@@ -70,7 +70,14 @@ Because these are tool-use agents, they can compile the figure and inspect the r
 3. Provide a detailed description of the figure you want.
 4. Click Execute (<wa-icon library="texra" name="play"></wa-icon>).
 
-From the CLI, the same task runs with `texra chat` (then describe the figure) or, headlessly, with `texra agents run research --input figures.tex --instruction "Create a TikZ figure of ..."`. (`texra run` is for workflow agents only; tool-use agents like `research` use `texra agents run`.)
+From the CLI, the same draw → compile → inspect loop shown below runs
+headlessly (`texra run` is for workflow agents only; tool-use agents like
+`research` use `texra agents run`):
+
+```bash
+texra agents run research --input figures.tex \
+  --instruction "Create a TikZ flowchart of the ML pipeline in Section 2."
+```
 
 **Example instruction:**
 

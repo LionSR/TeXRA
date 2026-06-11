@@ -1,3 +1,7 @@
+<script setup>
+import RunParityHero from '../.vitepress/components/RunParityHero.vue';
+</script>
+
 # TeXRA
 
 An AI theorist for VS Code and the terminal. Multi-agent
@@ -58,6 +62,10 @@ output.
 The VS Code extension and the `texra` CLI share the same agents, the
 same sign-in, and the same run history. A run started in the CLI shows
 up in the extension's Progress Board, and vice versa.
+
+<RunParityHero />
+
+<p class="hero-caption">One run, two surfaces: the same execution id lands in the terminal's output and the extension's Progress view.</p>
 
 ```mermaid
 graph TB

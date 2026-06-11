@@ -555,6 +555,60 @@
   color: var(--mk-text-faint);
 }
 
+/* Standalone terminal card — shell, recessed mono body, optional bottom hint
+   strip, and the prompt line every terminal figure opens with. Extracted from
+   CliChatHero / CliToolsListHero (which previously each re-rolled this CSS) and
+   served to consumers through the <TermWindow> primitive, so heroes keep only
+   their own row vocabulary. */
+.mockup.mk-term-card,
+.mockup .mk-term-card {
+  background: var(--mk-bg);
+  border: 1px solid var(--mk-border-soft);
+  border-radius: var(--mk-radius-lg);
+  overflow: hidden;
+  font-family: var(--vp-font-family-base);
+}
+/* Root-level cards space themselves off the prose; nested shells (e.g. the
+   halves of RunParityHero) leave spacing to their layout container. */
+.mockup.mk-term-card {
+  margin: var(--mk-space-12) 0;
+}
+.mockup .mk-term-body {
+  padding: var(--mk-space-12) var(--mk-space-14);
+  background: var(--mk-bg-deep);
+  font-family: var(--vp-font-family-mono);
+  font-size: var(--mk-fs-78);
+  line-height: 1.6;
+  color: var(--wa-color-text-normal);
+}
+.mockup .mk-term-hint {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--mk-space-7);
+  padding: var(--mk-space-8) var(--mk-space-14);
+  background: var(--mk-bg-soft);
+  border-top: 1px solid var(--mk-border);
+}
+/* Prompt line: `$` sigil + typed command; flags read in the comment color. */
+.mockup .mk-term-prompt {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mk-space-7);
+}
+.mockup .mk-term-sigil {
+  color: var(--mk-syn-fn);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.mockup .mk-term-cmd {
+  color: var(--mk-text);
+  min-width: 0;
+}
+.mockup .mk-term-flag {
+  color: var(--mk-syn-comment);
+}
+
 /* Code / terminal output surface (editor body) */
 .mockup .surface {
   flex: 1;

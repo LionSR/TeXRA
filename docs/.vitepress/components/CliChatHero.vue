@@ -1,196 +1,169 @@
 <script setup>
-// Frameless terminal-window card for `texra chat` — the interactive tool-use
-// TUI described in guide/texra-cli.md. The CLI is a terminal product, so this
-// shows what a compressed session actually looks like: a faux prompt line, a
-// user turn, a streaming "reasoning" line with a bridged <wa-spinner>, two
-// tool-call rows (the MemoryCommandsHero status-dot + tool + verb-chip + path
-// vocabulary), an inline diff hunk (CompareHero's ins/del styling), and a
-// bottom hint strip listing the slash commands `/tools` `/api` `/resume`.
+// Terminal-window card for `texra chat` — the interactive tool-use TUI
+// described in guide/texra-cli.md. Built on the <TermWindow> primitive and
+// fact-checked against the real TUI sources so the figure shows what the
+// session actually renders (packages/cli/src/chat/tui/panes/
+// StaticConversationTranscript.tsx, toolRenderers.tsx, StatusBar.tsx):
+// the once-printed session header (`{ T } TeXRA` + version + api mode over a
+// rule, then `agent: … · model: …`), a reverse-video user band prefixed `› `
+// (no speaker chips), plain assistant text, `● tool (preview)` call rows whose
+// status dot is dim while running and green when done, dim `⎿ ` output lines,
+// and an edit rendered as full-width +/− diff bands (never strikethrough).
+// The bottom strip mirrors the status bar: ◆ status · api mode · round
+// counter · token usage.
 //
-// Standalone (no MockupFrame) — just the terminal card on the .mockup surface,
-// so the shared --mk-* tokens resolve here and the whole thing flips with the
-// docs light / dark theme. Believable static strings only; no live dates.
-
-// Tool-call rows mirror MemoryCommandsHero: status dot + tool + verb chip +
-// path + one-line effect. The last row is `active` (in-flight spinner).
+// .mockup-scoped, so the shared --mk-* tokens resolve here and the whole card
+// flips with the docs light / dark theme. Believable static strings only.
 const calls = [
   {
     state: 'done',
     tool: 'read_file',
-    verb: 'read',
-    path: 'sections/intro.tex',
-    effect: 'Reads the opening paragraph',
+    preview: 'sections/intro.tex',
+    output: 'In this paper we present a novel… +41 lines (ctrl + t to view)',
   },
   {
-    state: 'active',
+    state: 'running',
     tool: 'edit_file',
-    verb: 'edit',
-    path: 'sections/intro.tex',
-    effect: 'Tightens the motivating sentence',
+    preview: 'sections/intro.tex',
   },
 ];
 </script>
 
 <template>
-  <div class="mockup cli-chat" role="group" aria-label="texra chat session">
-    <!-- Faux terminal titlebar: traffic-light dots + window title -->
-    <div class="mk-term-bar">
-      <span class="mk-term-light mk-term-light--r"></span>
-      <span class="mk-term-light mk-term-light--y"></span>
-      <span class="mk-term-light mk-term-light--g"></span>
-      <span class="mk-term-title">texra chat</span>
+  <TermWindow title="texra chat" aria-label="texra chat session">
+    <!-- Shell prompt that launched the session -->
+    <div class="mk-term-prompt">
+      <span class="mk-term-sigil">$</span>
+      <span class="mk-term-cmd"
+        >texra chat <span class="mk-term-flag">--agent</span> research</span
+      >
     </div>
 
-    <div class="cc-body">
-      <!-- Prompt line that launched the session -->
-      <div class="cc-prompt">
-        <span class="cc-sigil">$</span>
-        <span class="cc-cmd"
-          >texra chat <span class="cc-flag">--agent</span> research</span
-        >
+    <!-- Session header: printed once at the top of every chat session -->
+    <div class="cc-header">
+      <div class="cc-brand-row">
+        <span class="cc-brand">{ T } TeXRA</span>
+        <span class="cc-meta">v0.38.8</span>
+        <span class="cc-meta">relay</span>
       </div>
+      <div class="cc-identity">agent: research · model: deepseekT</div>
+    </div>
 
-      <!-- User turn -->
-      <div class="cc-turn cc-turn--user">
-        <span class="cc-who cc-who--user">you</span>
-        <span class="cc-msg"
-          >Polish the introduction and fix the awkward opener.</span
-        >
-      </div>
+    <!-- User turn: reverse-video band with the `› ` chevron, no name chip -->
+    <div class="cc-user">
+      <span class="cc-chevron">›</span>
+      <span class="cc-user-msg"
+        >Polish the introduction and fix the awkward opener.</span
+      >
+    </div>
 
-      <!-- Streaming assistant reasoning line (in-flight spinner) -->
-      <div class="cc-turn cc-turn--ai">
-        <span class="cc-who cc-who--ai">research</span>
-        <wa-spinner class="cc-spin mk-spinner"></wa-spinner>
-        <span class="cc-reasoning"
-          >Reading the section, then rewriting the first sentence…</span
-        >
-      </div>
+    <!-- Assistant turn: plain unlabeled text -->
+    <p class="cc-assistant">Reading the section, then tightening the opener.</p>
 
-      <!-- Tool-call rows -->
-      <ul class="cc-tools">
-        <li
-          v-for="(c, i) in calls"
-          :key="i"
-          class="cc-tool-row"
-          :class="{ active: c.state === 'active' }"
-        >
-          <wa-spinner
-            v-if="c.state === 'active'"
-            class="cc-tspin mk-spinner"
-          ></wa-spinner>
-          <span v-else class="cc-dot"></span>
-          <span class="cc-tname">{{ c.tool }}</span>
-          <code class="cc-verb">{{ c.verb }}</code>
-          <span class="cc-path">{{ c.path }}</span>
-          <span class="cc-effect">{{ c.effect }}</span>
-        </li>
-      </ul>
-
-      <!-- Inline diff hunk (the change edit_file is making) -->
-      <div class="cc-diff">
-        <div class="cc-dl cc-dl--del">
-          <span class="cc-gut">−</span>
-          <span class="cc-code"
-            ><del>In this paper we present a novel approach to</del></span
+    <!-- Tool-call rows: ● tool (preview); dot dim while running, green done -->
+    <ul class="cc-tools">
+      <li v-for="c in calls" :key="c.tool" class="cc-call">
+        <div class="cc-call-row">
+          <span
+            class="cc-dot"
+            :class="c.state === 'done' ? 'cc-dot--done' : 'cc-dot--running'"
+            >●</span
           >
+          <span class="cc-tname">{{ c.tool }}</span>
+          <span class="cc-preview">({{ c.preview }})</span>
         </div>
-        <div class="cc-dl cc-dl--add">
-          <span class="cc-gut">+</span>
-          <span class="cc-code"><ins>We introduce</ins></span>
+        <div v-if="c.output" class="cc-out">
+          <span class="cc-corner">⎿</span>
+          <span class="cc-out-text">{{ c.output }}</span>
         </div>
+      </li>
+    </ul>
+
+    <!-- The edit in flight, as the TUI's full-width diff bands -->
+    <div class="cc-diff">
+      <div class="cc-out">
+        <span class="cc-corner">⎿</span>
+        <span class="cc-out-text">sections/intro.tex</span>
+      </div>
+      <div class="cc-dl cc-dl--del">
+        <span class="cc-gut">-</span>
+        <span class="cc-code"
+          >In this paper we present a novel approach to</span
+        >
+      </div>
+      <div class="cc-dl cc-dl--add">
+        <span class="cc-gut">+</span>
+        <span class="cc-code">We introduce</span>
       </div>
     </div>
 
-    <!-- Slash-command hint strip -->
-    <div class="cc-hint">
-      <span class="cc-hint-label">slash commands</span>
-      <code class="cc-slash">/tools</code>
-      <code class="cc-slash">/api</code>
-      <code class="cc-slash">/resume</code>
-    </div>
-  </div>
+    <!-- Status-bar strip: ◆ status · elapsed · api mode · round · tokens -->
+    <template #hint>
+      <span class="cc-diamond">◆</span>
+      <span class="cc-status">working</span>
+      <span class="cc-seg">8s</span>
+      <span class="cc-seg">relay</span>
+      <span class="cc-seg">r1</span>
+      <span class="cc-seg">12.3k/200k (6%)</span>
+      <span class="cc-bindings"
+        >[/model]models&ensp;[/api]api&ensp;[Ctrl-C]stop</span
+      >
+    </template>
+  </TermWindow>
 </template>
 
 <style scoped>
-/* Standalone terminal card. Tokens come from `.mockup` (theme/mockup.css). */
-.cli-chat {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  margin: var(--mk-space-12) 0;
-  overflow: hidden;
-  font-family: var(--vp-font-family-base);
+/* Card shell, body, prompt line, and hint strip come from TermWindow and the
+   shared .mk-term-* classes in theme/mockup.css. */
+
+/* Session header */
+.cc-header {
+  margin-top: var(--mk-space-9);
+  padding-top: var(--mk-space-7);
+  border-top: 1px solid var(--mk-border);
 }
-
-/* Titlebar comes from the shared `.mk-term-*` classes in theme/mockup.css. */
-
-/* Terminal body */
-.cc-body {
-  padding: var(--mk-space-12) var(--mk-space-14);
-  background: var(--mk-bg-deep);
-  font-family: var(--vp-font-family-mono);
-  font-size: var(--mk-fs-78);
-  line-height: 1.6;
-  color: var(--wa-color-text-normal);
-}
-
-.cc-prompt {
+.cc-brand-row {
   display: flex;
   align-items: baseline;
-  gap: var(--mk-space-7);
+  gap: var(--mk-space-10);
 }
-.cc-sigil {
-  color: var(--mk-syn-fn);
-  font-weight: 600;
-  flex-shrink: 0;
+.cc-brand {
+  color: var(--mk-accent);
+  font-weight: 700;
 }
-.cc-cmd {
-  color: var(--mk-text);
+.cc-meta {
+  color: var(--mk-text-faint);
+  font-size: var(--mk-fs-72);
 }
-.cc-flag {
-  color: var(--mk-syn-comment);
+.cc-identity {
+  color: var(--mk-text-dim);
+  font-size: var(--mk-fs-74);
 }
 
-/* Conversation turns */
-.cc-turn {
+/* User band: the TUI's reverse-video message highlight */
+.cc-user {
   display: flex;
   align-items: baseline;
-  flex-wrap: wrap;
   gap: var(--mk-space-7);
   margin-top: var(--mk-space-9);
-}
-.cc-who {
-  flex-shrink: 0;
-  font-size: var(--mk-fs-70);
-  font-weight: 600;
-  padding: 0 var(--mk-space-5);
+  padding: var(--mk-space-4) var(--mk-space-8);
   border-radius: var(--mk-radius-sm);
+  background: var(--mk-bg-raised);
 }
-.cc-who--user {
-  color: var(--color-text-secondary);
-  background: color-mix(in srgb, var(--mk-accent) 5%, transparent);
+.cc-chevron {
+  color: var(--mk-accent);
+  font-weight: 700;
+  flex-shrink: 0;
 }
-.cc-who--ai {
-  color: var(--mk-syn-fn);
-  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
-}
-.cc-msg {
+.cc-user-msg {
   color: var(--mk-text);
   min-width: 0;
-  flex: 1;
 }
-.cc-reasoning {
-  color: var(--mk-text-faint);
-  font-style: italic;
-  min-width: 0;
-  flex: 1;
-}
-/* Bridged Web Awesome spinner; track/indicator colors flip with the theme. */
-.cc-spin {
-  align-self: center;
-  font-size: var(--mk-space-11);
-  flex-shrink: 0;
+
+/* Assistant text */
+.cc-assistant {
+  margin: var(--mk-space-9) 0 0;
+  color: var(--mk-text);
 }
 
 /* Tool-call rows */
@@ -200,129 +173,108 @@ const calls = [
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--mk-space-2);
+  gap: var(--mk-space-4);
 }
-.cc-tool-row {
+.cc-call-row {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: var(--mk-space-7);
-  padding: var(--mk-space-5) var(--mk-space-6);
-  border-radius: var(--mk-radius-md);
-  font-size: var(--mk-fs-74);
-  line-height: 1.5;
-}
-.cc-tool-row.active {
-  background: color-mix(in srgb, var(--mk-accent) 8%, transparent);
 }
 .cc-dot {
-  align-self: center;
-  width: var(--mk-space-8);
-  height: var(--mk-space-8);
-  border-radius: 50%;
-  background: var(--color-success);
   flex-shrink: 0;
 }
-.cc-tspin {
-  align-self: center;
-  font-size: var(--mk-space-11);
-  flex-shrink: 0;
+.cc-dot--done {
+  color: var(--color-success);
+}
+.cc-dot--running {
+  color: var(--mk-text-faint);
 }
 .cc-tname {
-  color: var(--mk-syn-fn);
+  color: var(--mk-text);
   font-weight: 600;
-  flex-shrink: 0;
 }
-.cc-verb {
-  color: var(--mk-accent);
-  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
-  border-radius: var(--mk-radius-sm);
-  padding: 0 var(--mk-space-5);
-  font-size: var(--mk-fs-72);
-  flex-shrink: 0;
-}
-.cc-path {
-  color: var(--color-text-link);
+.cc-preview {
+  color: var(--mk-text-faint);
   word-break: break-all;
   min-width: 0;
 }
-.cc-effect {
+
+/* Dim output line under a call, hanging off the ⎿ corner glyph */
+.cc-out {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mk-space-7);
+  padding-left: var(--mk-space-16);
   color: var(--mk-text-faint);
-  font-family: var(--vp-font-family-base);
-  font-size: var(--mk-fs-72);
-  flex: 1;
+  font-size: var(--mk-fs-74);
+}
+.cc-corner {
+  flex-shrink: 0;
+}
+.cc-out-text {
   min-width: 0;
 }
 
-/* Inline diff hunk */
+/* Diff bands: full-width colored rows, no strikethrough */
 .cc-diff {
-  margin-top: var(--mk-space-9);
-  padding: var(--mk-space-6) 0;
-  border-top: 1px solid var(--mk-border);
+  margin-top: var(--mk-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mk-space-2);
 }
 .cc-dl {
   display: flex;
   align-items: baseline;
   gap: var(--mk-space-10);
+  padding-left: var(--mk-space-16);
   white-space: pre-wrap;
   font-size: var(--mk-fs-74);
   line-height: 1.7;
 }
 .cc-dl--del {
   background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  color: var(--mk-del-text);
 }
 .cc-dl--add {
   background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--mk-ins-text);
 }
 .cc-gut {
   flex-shrink: 0;
-  width: var(--mk-size-21);
-  text-align: center;
-  color: var(--color-text-tertiary);
   user-select: none;
 }
 .cc-code {
   min-width: 0;
 }
-.cc-dl del {
-  color: var(--mk-del-text);
-  text-decoration: line-through;
-}
-.cc-dl ins {
-  color: var(--mk-ins-text);
-  text-decoration: none;
-}
 
-/* Slash-command hint strip */
-.cc-hint {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--mk-space-7);
-  padding: var(--mk-space-8) var(--mk-space-14);
-  background: var(--mk-bg-soft);
-  border-top: 1px solid var(--mk-border);
-}
-.cc-hint-label {
+/* Status-bar strip segments (inside the shared .mk-term-hint) */
+.cc-diamond {
+  color: var(--mk-accent);
   font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
-  margin-right: var(--mk-space-4);
 }
-.cc-slash {
+.cc-status {
   font-family: var(--vp-font-family-mono);
   font-size: var(--mk-fs-72);
-  color: var(--mk-accent);
-  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-pill);
-  padding: 0 var(--mk-space-8);
+  color: var(--mk-text);
+}
+.cc-seg {
+  font-family: var(--vp-font-family-mono);
+  font-size: var(--mk-fs-70);
+  color: var(--mk-text-faint);
+}
+.cc-bindings {
+  margin-left: auto;
+  font-family: var(--vp-font-family-mono);
+  font-size: var(--mk-fs-68);
+  color: var(--mk-text-faint);
 }
 
-/* Stack effect under verb/path on narrow screens. */
+/* Let the bindings wrap under the segments on narrow screens. */
 @media (max-width: 560px) {
-  .cc-effect {
+  .cc-bindings {
+    margin-left: 0;
     flex-basis: 100%;
-    padding-left: var(--mk-space-16);
   }
 }
 </style>

@@ -1,6 +1,7 @@
 <script setup>
 import TaskRecipeCards from '../.vitepress/components/TaskRecipeCards.vue';
 import OutputArtifactsTree from '../.vitepress/components/OutputArtifactsTree.vue';
+import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 </script>
 
 # Quick Start Guide
@@ -50,6 +51,12 @@ Expand a provider's row (click the chevron) to toggle streaming or, for provider
 :::
 
 You can also place a `.env` file in your workspace with variables like `OPENAI_API_KEY`. TeXRA loads this automatically so you don't need to enter keys every time.
+
+::: tip CLI credentials
+The terminal uses the same two paths — `texra login` for included hosted
+access, or provider env vars for your own keys. See
+[Authentication](./texra-cli.md#authentication) on the CLI page.
+:::
 
 ## Basic Workflow
 
@@ -164,13 +171,24 @@ The same agents are one command away from the terminal. After
 # Sign in for included hosted access, or set ANTHROPIC_API_KEY / OPENAI_API_KEY in your shell:
 texra login
 
-# One-shot run (writes output next to the input):
+# One-shot run (prints the revised file's path; --output copies it next to the input):
 texra run polish --input draft.tex \
   --instruction "Improve clarity; preserve math and citations."
 
 # Or open an interactive tool-use session:
 texra chat
 ```
+
+<CliRunHero
+  command='texra run polish --input draft.tex --instruction "Improve clarity; preserve math and citations."'
+  :rounds="[
+    { label: 'r0 — draft revision', state: 'done' },
+    { label: 'r1 — critique and revise', state: 'done' },
+  ]"
+  :outputs="['.texra/runs/9f3a6c81d24e/r1/draft.tex']"
+/>
+
+<p class="hero-caption">What a one-shot run looks like: rounds stream as progress, then the path to the revised document prints on stdout.</p>
 
 Run history is shared with VS Code, so a run started in the CLI shows up in the
 extension's ProgressBoard (and vice versa). See [TeXRA CLI](./texra-cli.md) for
@@ -280,7 +298,9 @@ folder per round. Each round holds three artifacts, and the document keeps your
 <p class="hero-caption">One folder per round under <code>r{round}/&lt;input-filename&gt;</code>: the revised <strong>Output</strong>, a <strong>Log</strong> of the run, and the <strong>Diff</strong> PDF. Round 1 (and any further reflection rounds) repeat the same trio.</p>
 
 So if your input file is `paper.tex`, the first round's output lands at
-`r0/paper.tex` — the filename you started with, never `output.tex`.
+`r0/paper.tex` — the filename you started with, never `output.tex`. The CLI
+writes the same per-round tree under `.texra/runs/<run-id>/` — see
+[First run](./first-run.md) for the terminal walkthrough.
 
 ## Next Steps
 
