@@ -98,6 +98,9 @@ function watchRepository(
     debounce = setTimeout(() => {
       debounce = undefined;
       pendingBaseRef = undefined;
+      // Re-check at fire time: the user may have disabled run-on-commit
+      // during the debounce window, and a review costs a model session.
+      if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
       logger.info(
         CHANNEL,
         `Commit detected on ${name ?? 'HEAD'}; starting agent review`,
