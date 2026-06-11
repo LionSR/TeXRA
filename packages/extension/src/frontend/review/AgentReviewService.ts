@@ -214,6 +214,9 @@ class AgentReviewServiceImpl {
     }
 
     // Start a fresh collection; the reviewer session reports into it live.
+    // Snapshot the previous results so a session that fails before reporting
+    // anything restores them instead of leaving the panel empty.
+    const previousIssues = this.issues;
     this.reviewRoot = repoRoot;
     this.issues = [];
     this.updateDiagnostics();
@@ -242,7 +245,12 @@ class AgentReviewServiceImpl {
     } catch (err) {
       // Run-lifecycle failures are already logged and surfaced; keep the
       // panel state honest without a second notification.
-      this.summary = `Review failed: ${toErrorMessage(err)}`;
+      const restored = this.issues.length === 0 && previousIssues.length > 0;
+      if (restored) {
+        this.issues = previousIssues;
+        this.updateDiagnostics();
+      }
+      this.summary = `Review failed: ${toErrorMessage(err)}${restored ? ' · showing previous results' : ''}`;
       logger.warn(
         CHANNEL,
         `Agent review session failed: ${toErrorMessage(err)}`,

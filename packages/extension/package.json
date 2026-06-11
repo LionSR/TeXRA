@@ -586,8 +586,8 @@
               "thorough"
             ],
             "enumDescriptions": [
-              "Review the diff alone — fast and cheap.",
-              "Also send the full contents of changed files for deeper, higher-cost analysis."
+              "The reviewer verifies only its strongest suspicions with tools — fast and cheap.",
+              "The reviewer reads every changed file in full, checks callers, and pulls diagnostics before reporting — deeper, higher-cost analysis."
             ],
             "default": "quick",
             "description": "Choose between quick or more thorough, higher-cost analysis.",
@@ -597,7 +597,7 @@
           "texra.agentReview.model": {
             "type": "string",
             "default": "",
-            "description": "Model id used for agent review (e.g. a stronger model for thorough reviews). Leave empty to use the helper model.",
+            "description": "Model id for the review session (e.g. a stronger model for thorough reviews). Leave empty to use the default agent model.",
             "scope": "resource",
             "order": 5
           }
