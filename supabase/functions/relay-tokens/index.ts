@@ -23,6 +23,7 @@ import { Hono, type Context as HonoContext } from '@hono/hono';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
+import { randomBase64Url } from '../_shared/crypto.ts';
 import { RELAY_CI_TOKEN_PREFIX, sha256Hex } from '../_shared/relayCiToken.ts';
 import { versionedJsonResponse } from '../_shared/responses.ts';
 
@@ -109,17 +110,6 @@ function errorResponse(c: Context, error: string, status: number) {
   return versionedJsonResponse(c.req.raw, VERSION, { error }, status);
 }
 
-function randomTokenSecret(): string {
-  const bytes = new Uint8Array(TOKEN_RANDOM_BYTES);
-  crypto.getRandomValues(bytes);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replace(/=+$/, '');
-}
-
 function tokenHint(token: string): string {
   return `…${token.slice(-TOKEN_HINT_CHARS)}`;
 }
@@ -177,7 +167,7 @@ app.post('/mint', async (c) => {
       );
     }
 
-    const token = `${RELAY_CI_TOKEN_PREFIX}${randomTokenSecret()}`;
+    const token = `${RELAY_CI_TOKEN_PREFIX}${randomBase64Url(TOKEN_RANDOM_BYTES)}`;
     const expiresAt = new Date(Date.now() + expiresInDays * MS_PER_DAY);
     const { data, error } = await supabase
       .from('relay_ci_tokens')

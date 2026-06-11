@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import { platform } from '@platform/platform';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { type OAuthProvider } from '@auth/sharedConfig';
+import { type SupabaseSession } from '@auth/SupabaseSession';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -196,6 +197,7 @@ type Screen =
   | 'picker'
   | 'relay-provider'
   | 'relay-progress'
+  | 'relay-device-progress'
   | 'key-provider'
   | 'key-entry';
 
@@ -211,7 +213,6 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
   const [relayProvider, setRelayProvider] = useState<OAuthProvider>(
     DEFAULT_OAUTH_PROVIDER,
   );
-  const [relayMethod, setRelayMethod] = useState<RelayMethod>('loopback');
   const [noBrowser, setNoBrowser] = useState(false);
   const [keyProvider, setKeyProvider] = useState<ApiProvider>('anthropic');
   const [error, setError] = useState<string | undefined>(undefined);
@@ -252,36 +253,36 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
         onSelect={(provider) => {
           setError(undefined);
           setRelayProvider(provider);
-          setRelayMethod('loopback');
           setScreen('relay-progress');
         }}
         onDeviceCode={() => {
           setError(undefined);
-          setRelayMethod('device');
-          setScreen('relay-progress');
+          setScreen('relay-device-progress');
         }}
         onCancel={() => setScreen('picker')}
       />
     );
   }
 
-  if (screen === 'relay-progress') {
-    return (
+  if (screen === 'relay-progress' || screen === 'relay-device-progress') {
+    const onSuccess = (label: string): void =>
+      finish({
+        configured: true,
+        declined: false,
+        summary: `Signed in as ${label}. Included relay access is active.`,
+      });
+    const onError = (message: string): void => {
+      setError(message);
+      setScreen('relay-provider');
+    };
+    return screen === 'relay-device-progress' ? (
+      <RelayDeviceProgressStep onSuccess={onSuccess} onError={onError} />
+    ) : (
       <RelayProgressStep
-        method={relayMethod}
         provider={relayProvider}
         noBrowser={noBrowser}
-        onSuccess={(label) =>
-          finish({
-            configured: true,
-            declined: false,
-            summary: `Signed in as ${label}. Included relay access is active.`,
-          })
-        }
-        onError={(message) => {
-          setError(message);
-          setScreen('relay-provider');
-        }}
+        onSuccess={onSuccess}
+        onError={onError}
       />
     );
   }
@@ -453,9 +454,6 @@ function PickerStep(props: {
   );
 }
 
-/** How the relay sign-in completes: loopback OAuth callback or device code. */
-type RelayMethod = 'loopback' | 'device';
-
 function RelayProviderStep(props: {
   readonly activeProvider: OAuthProvider;
   readonly noBrowser: boolean;
@@ -503,55 +501,44 @@ function RelayProviderStep(props: {
   );
 }
 
-function RelayProgressStep(props: {
-  readonly method: RelayMethod;
-  readonly provider: OAuthProvider;
-  readonly noBrowser: boolean;
+interface RelayProgressCallbacks {
   readonly onSuccess: (accountLabel: string) => void;
   readonly onError: (message: string) => void;
-}): React.JSX.Element {
-  const { method, provider, noBrowser, onSuccess, onError } = props;
-  const [url, setUrl] = useState<string | undefined>(undefined);
-  const [deviceAuth, setDeviceAuth] = useState<DeviceAuthorization | undefined>(
-    undefined,
-  );
+}
 
-  // Start the sign-in exactly once on mount. Empty deps is deliberate (not the
-  // captured props): re-running would open a second browser + loopback server
-  // (or request a second device code), and a deps-triggered cleanup would flip
-  // `cancelled` and orphan the in-flight login (eternal spinner). The captured
-  // callbacks only invoke stable state setters / app.exit, so the mount-time
-  // closure stays correct. `cancelled` guards against the real unmount (the
-  // user navigating away).
+/**
+ * Run a sign-in exactly once on mount. Empty deps is deliberate (not the
+ * captured props): re-running would open a second browser + loopback server
+ * (or request a second device code), and a deps-triggered cleanup would flip
+ * `cancelled` and orphan the in-flight login (eternal spinner). The captured
+ * callbacks only invoke stable state setters / app.exit, so the mount-time
+ * closure stays correct. `cancelled` guards against the real unmount (the
+ * user navigating away); progress callbacks receive it to drop late updates.
+ */
+function useSignInOnMount(
+  signIn: (isCancelled: () => boolean) => Promise<SupabaseSession>,
+  callbacks: RelayProgressCallbacks,
+): void {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const session =
-          method === 'device'
-            ? await signInCliSupabaseDeviceCode({
-                onDeviceCode: (authorization) => {
-                  if (!cancelled) setDeviceAuth(authorization);
-                },
-              })
-            : await signInCliSupabase({
-                provider,
-                openBrowser: !noBrowser,
-                manualBrowserHint: 'texra login --no-browser',
-                onAuthUrl: (authUrl) => {
-                  if (!cancelled) setUrl(authUrl);
-                },
-              });
-        if (!cancelled) onSuccess(session.account.label);
+        const session = await signIn(() => cancelled);
+        if (!cancelled) callbacks.onSuccess(session.account.label);
       } catch (loginError: unknown) {
-        if (!cancelled) onError(toErrorMessage(loginError));
+        if (!cancelled) callbacks.onError(toErrorMessage(loginError));
       }
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+}
 
+function RelayProgressFrame(props: {
+  readonly spinnerLabel: string;
+  readonly children: React.ReactNode;
+}): React.JSX.Element {
   return (
     <Box
       borderStyle="round"
@@ -563,55 +550,92 @@ function RelayProgressStep(props: {
         Sign in · included relay
       </Text>
       <Box marginTop={1} flexDirection="column">
-        {method === 'device' ? (
-          <>
-            <Text>{CLI_DEVICE_AUTH_URL_PROMPT}</Text>
-            {deviceAuth ? (
-              <>
-                <Text color="cyan">{deviceAuth.verification_uri}</Text>
-                <Text>
-                  and enter this code:{' '}
-                  <Text bold color="cyan">
-                    {deviceAuth.user_code}
-                  </Text>
-                </Text>
-              </>
-            ) : (
-              <Text dimColor>Requesting a sign-in code…</Text>
-            )}
-          </>
-        ) : (
-          <>
-            <Text>
-              {noBrowser
-                ? CLI_MANUAL_AUTH_URL_PROMPT
-                : `Opening your browser to sign in with ${provider}…`}
-            </Text>
-            {url ? (
-              <Text color="cyan">{url}</Text>
-            ) : (
-              <Text dimColor>
-                {noBrowser
-                  ? 'Preparing the sign-in URL…'
-                  : "If it doesn't open, the URL will appear here."}
-              </Text>
-            )}
-            {noBrowser ? (
-              <Text dimColor>{CLI_MANUAL_AUTH_REMOTE_HINT}</Text>
-            ) : null}
-          </>
-        )}
+        {props.children}
       </Box>
       <Box marginTop={1}>
-        <Spinner
-          label={
-            method === 'device'
-              ? 'Waiting for you to approve in the browser… (Ctrl-C cancels)'
-              : 'Waiting for you to finish in the browser… (Ctrl-C cancels)'
-          }
-        />
+        <Spinner label={props.spinnerLabel} />
       </Box>
     </Box>
+  );
+}
+
+function RelayProgressStep(
+  props: RelayProgressCallbacks & {
+    readonly provider: OAuthProvider;
+    readonly noBrowser: boolean;
+  },
+): React.JSX.Element {
+  const { provider, noBrowser } = props;
+  const [url, setUrl] = useState<string | undefined>(undefined);
+
+  useSignInOnMount(
+    (isCancelled) =>
+      signInCliSupabase({
+        provider,
+        openBrowser: !noBrowser,
+        manualBrowserHint: 'texra login --no-browser',
+        onAuthUrl: (authUrl) => {
+          if (!isCancelled()) setUrl(authUrl);
+        },
+      }),
+    props,
+  );
+
+  return (
+    <RelayProgressFrame spinnerLabel="Waiting for you to finish in the browser… (Ctrl-C cancels)">
+      <Text>
+        {noBrowser
+          ? CLI_MANUAL_AUTH_URL_PROMPT
+          : `Opening your browser to sign in with ${provider}…`}
+      </Text>
+      {url ? (
+        <Text color="cyan">{url}</Text>
+      ) : (
+        <Text dimColor>
+          {noBrowser
+            ? 'Preparing the sign-in URL…'
+            : "If it doesn't open, the URL will appear here."}
+        </Text>
+      )}
+      {noBrowser ? <Text dimColor>{CLI_MANUAL_AUTH_REMOTE_HINT}</Text> : null}
+    </RelayProgressFrame>
+  );
+}
+
+function RelayDeviceProgressStep(
+  props: RelayProgressCallbacks,
+): React.JSX.Element {
+  const [deviceAuth, setDeviceAuth] = useState<DeviceAuthorization | undefined>(
+    undefined,
+  );
+
+  useSignInOnMount(
+    (isCancelled) =>
+      signInCliSupabaseDeviceCode({
+        onDeviceCode: (authorization) => {
+          if (!isCancelled()) setDeviceAuth(authorization);
+        },
+      }),
+    props,
+  );
+
+  return (
+    <RelayProgressFrame spinnerLabel="Waiting for you to approve in the browser… (Ctrl-C cancels)">
+      <Text>{CLI_DEVICE_AUTH_URL_PROMPT}</Text>
+      {deviceAuth ? (
+        <>
+          <Text color="cyan">{deviceAuth.verification_uri}</Text>
+          <Text>
+            and enter this code:{' '}
+            <Text bold color="cyan">
+              {deviceAuth.user_code}
+            </Text>
+          </Text>
+        </>
+      ) : (
+        <Text dimColor>Requesting a sign-in code…</Text>
+      )}
+    </RelayProgressFrame>
   );
 }
 

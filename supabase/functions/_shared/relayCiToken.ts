@@ -9,6 +9,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { authenticateJwt } from './auth.ts';
 
 export const RELAY_CI_TOKEN_PREFIX = 'texra_relay_';
 
@@ -94,4 +95,36 @@ export async function authenticateRelayCiToken(
   }
 
   return { ok: true, userId: row.user_id };
+}
+
+export type RelayCredentialResolution =
+  | { ok: true; userId: string; profileClient: SupabaseClient<any> }
+  | { ok: false; status: number; message: string };
+
+/**
+ * Resolve a relay-facing bearer credential — a normal user JWT or a CI relay
+ * token — to the owning user plus a client that can read that user's profile
+ * (RLS-scoped for JWTs; service-role for CI tokens, which carry no JWT, so
+ * callers must filter by the returned userId explicitly).
+ */
+export async function resolveRelayCredential(
+  token: string,
+  adminClient: SupabaseClient<any> | null,
+): Promise<RelayCredentialResolution> {
+  if (isRelayCiToken(token)) {
+    if (!adminClient) {
+      console.error(
+        '[CI_TOKEN] CI token presented but service role key missing',
+      );
+      return { ok: false, status: 500, message: 'Server configuration error' };
+    }
+    const ciAuth = await authenticateRelayCiToken(adminClient, token);
+    if (!ciAuth.ok) return ciAuth;
+    return { ok: true, userId: ciAuth.userId, profileClient: adminClient };
+  }
+  const auth = await authenticateJwt(token);
+  if (!auth) {
+    return { ok: false, status: 401, message: 'Invalid or expired token' };
+  }
+  return { ok: true, userId: auth.user.id, profileClient: auth.client };
 }

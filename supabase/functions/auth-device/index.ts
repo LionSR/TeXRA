@@ -32,6 +32,7 @@ import { Hono, type Context as HonoContext } from '@hono/hono';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
+import { randomBase64Url } from '../_shared/crypto.ts';
 import { mintGoTrueSession } from '../_shared/goTrueSession.ts';
 import { sha256Hex } from '../_shared/relayCiToken.ts';
 import { versionedJsonResponse } from '../_shared/responses.ts';
@@ -152,17 +153,6 @@ function randomUserCode(): string {
   return (code + randomUserCode()).slice(0, USER_CODE_LENGTH);
 }
 
-function randomDeviceCode(): string {
-  const bytes = new Uint8Array(DEVICE_CODE_BYTES);
-  crypto.getRandomValues(bytes);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replace(/=+$/, '');
-}
-
 /** XXXX-XXXX display form shown to humans. */
 function formatUserCode(userCode: string): string {
   return `${userCode.slice(0, 4)}-${userCode.slice(4)}`;
@@ -203,7 +193,7 @@ app.post('/code', async (c) => {
       .delete()
       .lt('expires_at', new Date().toISOString());
 
-    const deviceCode = randomDeviceCode();
+    const deviceCode = randomBase64Url(DEVICE_CODE_BYTES);
     const deviceCodeHash = await sha256Hex(deviceCode);
     const expiresAt = new Date(Date.now() + DEVICE_CODE_TTL_SECONDS * 1000);
 
@@ -434,16 +424,31 @@ app.get('/verify', (c) => {
   if (!supabaseUrl || !supabaseAnonKey) {
     return errorResponse(c, 'Server configuration error', 500);
   }
-  return new Response(verifyPageHtml(supabaseUrl, supabaseAnonKey), {
-    status: 200,
-    headers: {
-      ...getCorsHeaders(c.req.raw),
-      'Content-Type': 'text/html; charset=utf-8',
-      // The page handles OAuth tokens in the URL fragment; keep it un-cached.
-      'Cache-Control': 'no-store',
-      'Referrer-Policy': 'no-referrer',
+  const scriptNonce = randomBase64Url(16);
+  return new Response(
+    verifyPageHtml(supabaseUrl, supabaseAnonKey, scriptNonce),
+    {
+      status: 200,
+      headers: {
+        ...getCorsHeaders(c.req.raw),
+        'Content-Type': 'text/html; charset=utf-8',
+        // The page handles OAuth tokens in the URL fragment; keep it un-cached.
+        'Cache-Control': 'no-store',
+        'Referrer-Policy': 'no-referrer',
+        // Defense-in-depth: only the nonced inline module plus esm.sh may run
+        // scripts, and network calls are limited to GoTrue and this function.
+        'Content-Security-Policy': [
+          "default-src 'none'",
+          `script-src 'nonce-${scriptNonce}' https://esm.sh`,
+          `connect-src 'self' ${new URL(supabaseUrl).origin}`,
+          "style-src 'unsafe-inline'",
+          "base-uri 'none'",
+          "form-action 'none'",
+          "frame-ancestors 'none'",
+        ].join('; '),
+      },
     },
-  });
+  );
 });
 
 // 404 for other routes
@@ -455,7 +460,11 @@ Deno.serve(app.fetch);
 // Verification page
 // =============================================================================
 
-function verifyPageHtml(projectUrl: string, anonKey: string): string {
+function verifyPageHtml(
+  projectUrl: string,
+  anonKey: string,
+  scriptNonce: string,
+): string {
   // Static page: sign in with the normal Supabase OAuth web flow (redirecting
   // back here, keeping ?device_code= through the round trip), then approve or
   // deny the code with the signed-in user's JWT. Supabase owns ?code= for the
@@ -492,7 +501,7 @@ function verifyPageHtml(projectUrl: string, anonKey: string): string {
   <button id="deny">Deny</button>
 </div>
 <p id="status"></p>
-<script type="module">
+<script type="module" nonce="${scriptNonce}">
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   const supabase = createClient(${JSON.stringify(projectUrl)}, ${JSON.stringify(anonKey)});

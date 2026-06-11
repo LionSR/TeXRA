@@ -18,12 +18,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
+import { bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
-import {
-  authenticateRelayCiToken,
-  isRelayCiToken,
-} from '../_shared/relayCiToken.ts';
+import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
 import { versionedJsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
@@ -140,20 +137,11 @@ Deno.serve(async (req: Request) => {
     // 2. Validate user with Supabase. CI relay tokens (texra setup-token)
     // are accepted too so headless pipeline usage still feeds the spending
     // accounting the relay enforces.
-    let userId: string;
-    if (isRelayCiToken(jwtToken)) {
-      const ciAuth = await authenticateRelayCiToken(adminClient, jwtToken);
-      if (!ciAuth.ok) {
-        return errorResponse(req, ciAuth.message, ciAuth.status);
-      }
-      userId = ciAuth.userId;
-    } else {
-      const auth = await authenticateJwt(jwtToken);
-      if (!auth) {
-        return errorResponse(req, 'Invalid or expired token', 401);
-      }
-      userId = auth.user.id;
+    const credential = await resolveRelayCredential(jwtToken, adminClient);
+    if (!credential.ok) {
+      return errorResponse(req, credential.message, credential.status);
     }
+    const userId = credential.userId;
 
     // 3. Parse request body
     let body: unknown;
