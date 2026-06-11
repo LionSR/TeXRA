@@ -2,6 +2,7 @@
 import ProgressLogHero from '../.vitepress/components/ProgressLogHero.vue';
 import XmlRepairCard from '../.vitepress/components/XmlRepairCard.vue';
 import ToolPathSearchOrder from '../.vitepress/components/ToolPathSearchOrder.vue';
+import DoctorSliceHero from '../.vitepress/components/DoctorSliceHero.vue';
 </script>
 
 # Troubleshooting
@@ -46,10 +47,26 @@ to confirm available models, and `texra tools status` to check tool availability
 
 **Problem**: Error messages about missing dependencies like LaTeX, Perl, or GraphicsMagick.
 
+One command checks them all — `texra doctor` probes the LaTeX toolchain (plus
+Node, auth, and model access) and says exactly what is missing and how to fix
+it:
+
+<DoctorSliceHero
+  :rows="[
+    { state: 'pass', name: 'LaTeX latexmk', message: 'LaTeX build orchestration' },
+    { state: 'pass', name: 'LaTeX pdflatex', message: 'PDFLaTeX compiler' },
+    {
+      state: 'warn',
+      name: 'LaTeX latexdiff',
+      message: 'latexdiff was not found on PATH.',
+      hint: 'Install latexdiff or a TeX distribution that provides it.',
+    },
+  ]"
+/>
+
 **Solutions**:
 
-1. **Verify dependencies**:
-   Run these commands in your terminal to check installations:
+1. **Verify dependencies manually**:
 
    ```bash
    latexmk --version  # or pdflatex --version

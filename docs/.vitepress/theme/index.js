@@ -25,6 +25,7 @@ import MemoryPinHero from '../components/MemoryPinHero.vue';
 // blocks, so a page can show ONE component without the full VS Code window.
 import MockupPanel from '../components/MockupPanel.vue';
 import MockCard from '../components/MockCard.vue';
+import TermWindow from '../components/TermWindow.vue';
 import StatusPill from '../components/StatusPill.vue';
 import MockSwitch from '../components/MockSwitch.vue';
 import AgentClasses from '../components/AgentClasses.vue';
@@ -103,6 +104,7 @@ export default {
     // Frameless mock-UI primitives (also usable directly in markdown).
     app.component('MockupPanel', MockupPanel);
     app.component('MockCard', MockCard);
+    app.component('TermWindow', TermWindow);
     app.component('StatusPill', StatusPill);
     app.component('MockSwitch', MockSwitch);
     app.component('AgentClasses', AgentClasses);

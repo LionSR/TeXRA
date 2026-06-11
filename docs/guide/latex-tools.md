@@ -2,6 +2,7 @@
 import ToolStatusPanel from '../.vitepress/components/ToolStatusPanel.vue';
 import ToolConfigHero from '../.vitepress/components/ToolConfigHero.vue';
 import TikzDepsHero from '../.vitepress/components/TikzDepsHero.vue';
+import DoctorSliceHero from '../.vitepress/components/DoctorSliceHero.vue';
 </script>
 
 # LaTeX Tools
@@ -25,6 +26,22 @@ All are configured from **Dashboard → Tools** (<wa-icon library="texra" name="
 <ToolStatusPanel />
 
 <p class="hero-caption">Dashboard → Tools — ready tools show a green <strong>Available</strong> check; missing dependencies show an amber <strong>Not Found</strong> with a one-click <strong>Install</strong>.</p>
+
+The same status is one command away in any terminal — `texra doctor` probes
+the identical toolchain:
+
+<DoctorSliceHero
+  :rows="[
+    { state: 'pass', name: 'LaTeX latexmk', message: 'LaTeX build orchestration' },
+    { state: 'pass', name: 'LaTeX latexdiff', message: 'LaTeX diff generation' },
+    {
+      state: 'warn',
+      name: 'LaTeX latexindent',
+      message: 'latexindent was not found on PATH.',
+      hint: 'Install latexindent or a TeX distribution that provides it.',
+    },
+  ]"
+/>
 
 ## <wa-icon library="texra" name="symbol-keyword"></wa-icon> Formatting Tools
 

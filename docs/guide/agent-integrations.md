@@ -1,6 +1,7 @@
 <script setup>
 import IntegrationCard from '../.vitepress/components/IntegrationCard.vue';
 import DelegatedStreamHero from '../.vitepress/components/DelegatedStreamHero.vue';
+import CliToolsLifecycleHero from '../.vitepress/components/CliToolsLifecycleHero.vue';
 </script>
 
 # Agent Integrations
@@ -30,6 +31,13 @@ Both integrations follow the same setup flow from the TeXRA Dashboard.
 
 <IntegrationCard />
 <p class="hero-caption">Each integration has its own card: a <strong>Not Found</strong> card expands its setup actions, and <strong>Recheck</strong> flips it to <strong>Available</strong> with a settings summary.</p>
+
+The same flow runs beat for beat in a terminal — detect, install, sign in,
+recheck:
+
+<CliToolsLifecycleHero />
+
+<p class="hero-caption"><code>texra tools</code> drives the full lifecycle: <code>show</code> reports the registered install and auth commands, <code>install --run</code> executes the installer after printing it, and <code>auth</code> hands off to the tool's own sign-in.</p>
 
 Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by the global **Require approval for shell commands & agent sessions** switch under **Dashboard → Tools → Approval & Safety** (on by default); turn it off to let agents call Codex or Claude Code without confirming each time.
 

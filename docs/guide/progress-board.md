@@ -3,6 +3,7 @@ import StreamHeaderActions from '../.vitepress/components/StreamHeaderActions.vu
 import StatusDotLegend from '../.vitepress/components/StatusDotLegend.vue';
 import TodoLifecycle from '../.vitepress/components/TodoLifecycle.vue';
 import ProgressLogHero from '../.vitepress/components/ProgressLogHero.vue';
+import CliHistoryHero from '../.vitepress/components/CliHistoryHero.vue';
 </script>
 
 # ProgressBoard
@@ -15,6 +16,10 @@ streaming reasoning, tool calls, and diffs in its `texra chat` terminal UI. Past
 runs are shared across surfaces — browse them with `texra history` or **Show
 Agent Execution History** in VS Code.
 :::
+
+<CliHistoryHero />
+
+<p class="hero-caption">The board's runs, from a terminal: the same executions, one tab-separated row each — and <code>texra resume</code> picks a stored session back up.</p>
 
 ## Accessing the ProgressBoard
 

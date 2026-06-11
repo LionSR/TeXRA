@@ -1,5 +1,6 @@
 <script setup>
 import MemoryItemAnatomy from '../.vitepress/components/MemoryItemAnatomy.vue';
+import CliMemoryHero from '../.vitepress/components/CliMemoryHero.vue';
 </script>
 
 # Memory
@@ -76,6 +77,13 @@ The toolbar above the list has **Refresh** and **Open Folder** — the latter re
 <MemoryItemAnatomy />
 
 <p class="hero-caption">One expanded note, part by part: the <code>/memories/...</code> path, the metadata strip, the pin / open / delete actions, and the collapsible Contents preview — with Refresh and Open Folder in the toolbar above.</p>
+
+The same store is inspectable from a terminal — memory is shared state, not a
+Dashboard feature:
+
+<CliMemoryHero />
+
+<p class="hero-caption"><code>memory list</code> prints each note with its pinned state, size, and last writer; <code>memory show</code> previews one note. In chat, <code>/memory</code> does the same.</p>
 
 ## Memory is shared across the run
 

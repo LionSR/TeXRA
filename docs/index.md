@@ -4,6 +4,10 @@ title: TeXRA — Multi-agent AI for theorists
 titleTemplate: false
 ---
 
+<script setup>
+import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
+</script>
+
 <LandingHero />
 
 <section class="trust-row">
@@ -178,6 +182,7 @@ titleTemplate: false
     <a href="/guide/built-in-agents" class="cta-button cta-secondary">Browse All Agents</a>
     <a href="/guide/texra-cli" class="cta-button cta-secondary">Use the CLI</a>
   </div>
+  <LandingCliStrip />
 </section>
 
 <section class="faq-section">

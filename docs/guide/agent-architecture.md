@@ -2,6 +2,7 @@
 import AgentYamlHero from '../.vitepress/components/AgentYamlHero.vue'
 import RoundOutputTree from '../.vitepress/components/RoundOutputTree.vue'
 import AgentModesCompare from '../.vitepress/components/AgentModesCompare.vue'
+import CliRunHero from '../.vitepress/components/CliRunHero.vue'
 </script>
 
 # Workflow Agents: How They Work
@@ -17,7 +18,7 @@ If you want a snappier turnaround (e.g. quick polishes, small corrections), pick
 The `settings.agentCategory` key decides which of these two modes an agent runs in:
 
 <AgentModesCompare />
-<p class="hero-caption">Workflow agents reason once and write a versioned, diffable file; tool-use agents converse and call tools turn by turn—it is the first thing to pick for any task.</p>
+<p class="hero-caption">Workflow agents reason once and write a versioned, diffable file; tool-use agents converse and call tools turn by turn—it is the first thing to pick for any task. The split maps one-to-one onto the CLI's two entry points: <code>texra run polish …</code> for workflow agents, <code>texra chat --agent research</code> for tool-use agents.</p>
 
 ## Agent Definition Files (`.yaml`)
 
@@ -74,6 +75,20 @@ sequenceDiagram
 2.  **Prompt Construction:** It combines the agent's `systemPrompt`, `userPrefix` (filled with your files and instruction), and `userRequest` templates into a full prompt for the LLM.
 3.  **LLM Interaction (Round 0):** TeXRA sends the prompt to the selected LLM API. The LLM generates a response, typically including reasoning (`<scratchpad>`) and the final answer wrapped in XML tags (e.g., `<document>...</document>`).
 4.  **Processing:** TeXRA saves the raw LLM response (often as an `.xml` file internally, e.g., `r{round}/output.xml`). It then parses this file, extracts the content from the primary XML tag (defined by `settings.documentTag`), and saves _that extracted content_ to the final output file in task storage (e.g., `r{round}/output.tex`, so Round 0 is `r0/output.tex`, the first reflection is `r1/output.tex`, and so on). You can monitor this in the [ProgressBoard](./progress-board.md). For LaTeX files, TeXRA can also automatically generate a `latexdiff` file comparing the output to the input, enhancing observability. See the [LaTeX Diff guide](./latex-diff.md) for details.
+
+Clicking **Execute** is not the only way in — the same
+load-definition → prompt → rounds → save-to-run-storage pipeline runs
+headlessly from the terminal:
+
+<CliRunHero
+  command="texra run polish --input paper.tex --output paper.polished.tex"
+  :rounds="[
+    { label: 'r0 — draft revision', state: 'done' },
+    { label: 'r1 — reflection pass', state: 'done' },
+  ]"
+  :outputs="['paper.polished.tex']"
+  note="Same agent definition, same rounds, same run storage — no UI attached."
+/>
 
 Each round lands in its own folder under task storage:
 
