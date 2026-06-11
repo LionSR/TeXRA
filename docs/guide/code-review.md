@@ -142,8 +142,32 @@ jobs:
             echo "::notice::Skipping TeXRA review: no model provider key is configured."
           fi
 
-      - name: Checkout pull request
+      # Conflicted PRs have no merge preview to review; skip quietly
+      # instead of failing at checkout.
+      - name: Check pull request merge ref
         if: steps.keys.outputs.present == 'true'
+        id: merge-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          ref="pull/${PR_NUMBER}/merge"
+          if ! matches="$(gh api "repos/${REPOSITORY}/git/matching-refs/${ref}" --jq 'length')"; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping TeXRA review: could not confirm that refs/${ref} is available."
+            exit 0
+          fi
+
+          if [ "$matches" != "0" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping TeXRA review: refs/${ref} is not available."
+          fi
+
+      - name: Checkout pull request
+        if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
         uses: actions/checkout@v6
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
@@ -151,7 +175,7 @@ jobs:
           persist-credentials: false
 
       - name: TeXRA review
-        if: steps.keys.outputs.present == 'true'
+        if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
         uses: texra-ai/texra-action/review@v1
         with:
           approval-policy: never
@@ -184,6 +208,9 @@ What each part does, in plain words:
   nothing else.
 - **Check provider key** — if no key secret is configured (which is also the
   case for PRs from forks), the run skips quietly instead of failing.
+- **Check pull request merge ref** — if the PR has a merge conflict, GitHub
+  can't produce a merge preview, so there is nothing to review; the run skips
+  quietly instead of failing at checkout.
 - **Checkout pull request** — fetches the PR's merge result with full history
   (`fetch-depth: 0`), which the action needs to compute the diff.
 - **TeXRA review** — the actual reviewer, delegated to the external
@@ -203,6 +230,11 @@ behavior to change only when you decide, pin a reviewed release commit instead
 — `uses: texra-ai/texra-action/review@<full-commit-sha>` — and bump that pin
 deliberately when adopting a new release.
 :::
+
+This is the same workflow the TeXRA repository runs on its own pull requests,
+with two documented differences: TeXRA pins the action to a release commit (the
+tip above) and adds a custom prompt (see
+[Writing your own review prompt](#writing-your-own-review-prompt)).
 
 ### 4. Open a pull request and watch it run
 
@@ -285,7 +317,7 @@ they're merged.
 
    ```yaml
    - name: Checkout trusted review prompt
-     if: steps.keys.outputs.present == 'true'
+     if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
      uses: actions/checkout@v6
      with:
        ref: ${{ github.event.pull_request.base.sha }}
@@ -353,8 +385,8 @@ Work down this checklist — each item maps to a quiet skip:
    for conflicted PRs, so there is nothing to review; resolve the conflict and
    push.
 5. **Is `TEXRA_REVIEW_ENABLED` set to `false`?** Unset it or set it to `true`.
-6. **Does the PR author have write access?** With `require-write-access:
-'true'`, PRs from non-writers (and non-allow-listed bots) are skipped.
+6. **Does the PR author have write access?** With `require-write-access`
+   enabled, PRs from non-writers (and non-allow-listed bots) are skipped.
 
 In every case the **Actions** tab shows the run (or its absence) and a notice
 explaining the skip.
