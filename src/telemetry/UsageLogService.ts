@@ -105,7 +105,7 @@ class UsageLogServiceImpl {
   private async flushQueuedBatch(): Promise<boolean> {
     let entries: UsageLogEntry[] = [];
     try {
-      const token = await SupabaseClient.getAccessToken();
+      const token = await SupabaseClient.getRelayAccessToken();
       if (!token) {
         logger.debug(CHANNEL, 'Skipping flush - user not authenticated');
         return false;

@@ -13,6 +13,7 @@ import {
   type OAuthProvider,
 } from './sharedConfig';
 export {
+  DEVICE_AUTH_BASE_URL,
   FREE_TIER,
   GITHUB_TOKEN_EXCHANGE_URL,
   GITHUB_TOKEN_REFRESH_URL,

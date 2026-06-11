@@ -25,15 +25,21 @@ import { CLI_OAUTH_PROVIDER_INPUTS } from '../runtime/oauthProviderDisplay';
 import {
   formatCliManualAuthUrlMessage,
   getCliAuthProfile,
+  getCliSessionAccessToken,
+  getCliSessionTier,
+  relayTokenStillActiveNotice,
   signInCliSupabase,
+  signInCliSupabaseDeviceCode,
   signOutCliSupabase,
   type CliAuthProfile,
 } from '../runtime/supabaseAuth';
+import { formatCliDeviceAuthMessage } from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
+import { authTokenCommand } from './relayTokens';
 import type { CliContext } from '../runtime/cliContext';
 
 type LoginCommandArgs = Record<string, unknown>;
@@ -63,6 +69,7 @@ export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
     providerExplicit: provider.explicit,
     noBrowser:
       readBooleanArg(args, 'no-browser', 'noBrowser') || args.browser === false,
+    device: readBooleanArg(args, 'device', 'device'),
     selectAccount: readBooleanArg(args, 'select-account', 'selectAccount'),
     loginHint: readStringArg(args, 'login-hint', 'loginHint'),
   };
@@ -73,20 +80,64 @@ export function shouldPromptForLoginProvider(
     CliContext,
     'mode' | 'outputFormat' | 'stdoutIsTty' | 'termIsDumb'
   >,
-  init: Pick<CliLoginInit, 'providerExplicit' | 'noBrowser'>,
+  init: Pick<CliLoginInit, 'providerExplicit' | 'noBrowser' | 'device'>,
 ): boolean {
+  // Device-code logins pick the provider on the browser verification page,
+  // so a terminal-side provider prompt would be redundant.
   return (
     !init.providerExplicit &&
     !init.noBrowser &&
+    !init.device &&
     context.outputFormat === 'text' &&
     interactiveTerminalFailure(context) === undefined
   );
+}
+
+async function runDeviceLogin(context: CliContext): Promise<number> {
+  await initCliPlatform({ ...context, quietLogs: true });
+  // Human-facing progress goes to stdout only in text mode so the JSON/NDJSON
+  // result stream stays machine-readable (same convention as --no-browser).
+  const writeProgress =
+    context.outputFormat === 'text' ? writeTextStdout : writeTextStderr;
+  let session: SupabaseSession;
+  try {
+    session = await signInCliSupabaseDeviceCode({
+      onDeviceCode: (authorization) => {
+        writeProgress(formatCliDeviceAuthMessage(authorization));
+        writeProgress(
+          'Waiting for you to approve in the browser… (Ctrl-C cancels)',
+        );
+      },
+    });
+  } catch (error) {
+    writeErrorStderr(error);
+    return CliExitCode.ModelOrNetworkError;
+  }
+  emitLoginResult(context, session);
+  return CliExitCode.Success;
+}
+
+function emitLoginResult(context: CliContext, session: SupabaseSession): void {
+  const expiresAt = new Date(session.expiresAt).toISOString();
+  emitCliResult(context, {
+    json: { authenticated: true, account: session.account, expiresAt },
+    ndjson: {
+      kind: 'auth',
+      authenticated: true,
+      account: session.account,
+      expiresAt,
+    },
+    text: `Signed in as ${session.account.label}.`,
+  });
 }
 
 async function runLogin(
   context: CliContext,
   init: CliLoginInit,
 ): Promise<number> {
+  if (init.device) {
+    return runDeviceLogin(context);
+  }
   if (!isCliLoginProvider(init.provider)) {
     writeTextStderr(unsupportedLoginProviderMessage(init.provider));
     return CliExitCode.Usage;
@@ -118,17 +169,7 @@ async function runLogin(
     return CliExitCode.ModelOrNetworkError;
   }
 
-  const expiresAt = new Date(session.expiresAt).toISOString();
-  emitCliResult(context, {
-    json: { authenticated: true, account: session.account, expiresAt },
-    ndjson: {
-      kind: 'auth',
-      authenticated: true,
-      account: session.account,
-      expiresAt,
-    },
-    text: `Signed in as ${session.account.label}.`,
-  });
+  emitLoginResult(context, session);
   return CliExitCode.Success;
 }
 
@@ -149,6 +190,11 @@ export const loginCommand = defineCliCommand({
       type: 'boolean',
       description:
         'Print the loopback sign-in URL instead of opening a browser',
+    },
+    device: {
+      type: 'boolean',
+      description:
+        'Sign in with a device code from a browser on any device (for SSH, WSL2, and containers)',
     },
     'select-account': {
       type: 'boolean',
@@ -175,14 +221,21 @@ async function runLoginCommand(
   }
 
   const { promptForLoginProvider } = await import('./loginProviderPicker');
-  const provider = await promptForLoginProvider(
+  const choice = await promptForLoginProvider(
     context.stdoutColorEnabled ?? context.colorEnabled,
   );
-  if (!provider) {
+  if (!choice) {
     writeTextStderr('Cancelled. No sign-in started.');
     return CliExitCode.Success;
   }
-  return runLogin(context, { ...init, provider, providerExplicit: true });
+  if (choice === 'device') {
+    return runDeviceLogin(context);
+  }
+  return runLogin(context, {
+    ...init,
+    provider: choice,
+    providerExplicit: true,
+  });
 }
 
 export const logoutCommand = defineCliCommand({
@@ -199,10 +252,14 @@ export const logoutCommand = defineCliCommand({
       return CliExitCode.ModelOrNetworkError;
     }
 
+    // Sign-out only clears the stored session; a configured TEXRA_RELAY_TOKEN
+    // keeps authenticating relay calls, so report it instead of a clean exit.
+    const relayNotice = relayTokenStillActiveNotice();
+    const relayTokenConfigured = relayNotice !== undefined;
     emitCliResult(context, {
-      json: { authenticated: false },
-      ndjson: { kind: 'auth', authenticated: false },
-      text: 'Signed out.',
+      json: { authenticated: false, relayTokenConfigured },
+      ndjson: { kind: 'auth', authenticated: false, relayTokenConfigured },
+      text: relayNotice ? `Signed out.\n${relayNotice}` : 'Signed out.',
     });
     return CliExitCode.Success;
   },
@@ -226,9 +283,12 @@ const authStatusCommand = defineCliCommand({
     emitCliResult(context, {
       json: profile,
       ndjson: { kind: 'auth-status', ...profile },
-      text: profile.authenticated
-        ? `Signed in as ${profile.accountLabel || 'unknown'} (${profile.tier ?? 'unknown'}).`
-        : 'Not signed in.',
+      text: [
+        profile.authenticated
+          ? `Signed in as ${profile.accountLabel || 'unknown'} (${profile.tier ?? 'unknown'}).`
+          : 'Not signed in.',
+        ...(profile.note ? [profile.note] : []),
+      ].join('\n'),
     });
     return CliExitCode.Success;
   },
@@ -260,14 +320,27 @@ const usageCommand = defineCliCommand({
     try {
       await initCliPlatform({ ...context, quietLogs: true });
       const profile = await getCliAuthProfile();
-      if (!profile.authenticated) {
-        writeTextStderr('Not signed in. Run `texra login` first.');
+      // Usage reads usage_logs via PostgREST, which needs a GoTrue session —
+      // a relay-scoped CI token cannot read it. Gate on the session itself so
+      // a developer with both an env token and an interactive sign-in still
+      // gets their usage.
+      const sessionToken = await getCliSessionAccessToken();
+      if (!sessionToken) {
+        writeTextStderr(
+          profile.credentialSource === 'relayToken'
+            ? '`texra auth usage` requires an interactive TeXRA session (a CI relay token cannot read usage). Run `texra login`, or inspect relay spending from the account dashboard.'
+            : 'Not signed in. Run `texra login` first.',
+        );
         return CliExitCode.ModelOrNetworkError;
       }
-      summary = await fetchRelayUsageSummary({
-        tier: profile.tier ?? 'free',
-        month,
-      });
+      // The usage rows belong to the session account, so the spending limit
+      // must use that account's tier — profile.tier may describe a configured
+      // env token's account instead.
+      const tier =
+        profile.credentialSource === 'relayToken'
+          ? await getCliSessionTier()
+          : (profile.tier ?? 'free');
+      summary = await fetchRelayUsageSummary({ tier, month });
     } catch (error) {
       writeErrorStderr(error);
       return CliExitCode.ModelOrNetworkError;
@@ -295,6 +368,7 @@ const AUTH_SUBCOMMANDS = {
   logout: logoutCommand,
   status: authStatusCommand,
   usage: usageCommand,
+  token: authTokenCommand,
 } as const;
 
 export const AUTH_SUBCOMMAND_NAMES = Object.keys(AUTH_SUBCOMMANDS);

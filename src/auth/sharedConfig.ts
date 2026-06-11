@@ -44,6 +44,21 @@ export const GITHUB_TOKEN_EXCHANGE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/func
 export const GITHUB_TOKEN_REFRESH_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-github/refresh`;
 
 /**
+ * Base URL for the device-code (RFC 8628 style) sign-in edge function.
+ * Used by headless terminals where a loopback OAuth callback can't work.
+ */
+export const DEVICE_AUTH_BASE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-device`;
+
+/**
+ * Base URL for the CI relay token management edge function
+ * (texra setup-token / texra auth token).
+ */
+export const RELAY_TOKENS_BASE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/relay-tokens`;
+
+/** Public URL of the relay's tier-config endpoint. */
+export const RELAY_TIER_CONFIG_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/relay/tier-config`;
+
+/**
  * Supported OAuth providers for TeXRA authentication.
  * Users can choose between GitHub and Google during sign-in.
  */

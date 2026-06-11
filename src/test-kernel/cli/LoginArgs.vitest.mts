@@ -46,6 +46,7 @@ describe('CLI login arguments (texra login)', () => {
       provider: 'github',
       providerExplicit: true,
       noBrowser: true,
+      device: false,
       selectAccount: true,
       loginHint: 'octocat',
     });
@@ -63,9 +64,18 @@ describe('CLI login arguments (texra login)', () => {
       provider: 'google',
       providerExplicit: true,
       noBrowser: true,
+      device: false,
       selectAccount: true,
       loginHint: 'person@example.com',
     });
+  });
+
+  it('reads the --device flag', () => {
+    expect(loginInitFromArgs({ device: true })).toMatchObject({
+      device: true,
+      providerExplicit: false,
+    });
+    expect(loginInitFromArgs({})).toMatchObject({ device: false });
   });
 
   it('treats citty negated browser output as --no-browser', () => {
@@ -78,6 +88,7 @@ describe('CLI login arguments (texra login)', () => {
     expect(parseChatLoginSlashArgs('')).toEqual({
       provider: 'github',
       noBrowser: false,
+      device: false,
       selectAccount: false,
       loginHint: undefined,
     });
@@ -86,20 +97,27 @@ describe('CLI login arguments (texra login)', () => {
     ).toEqual({
       provider: 'google',
       noBrowser: true,
+      device: false,
       selectAccount: true,
       loginHint: undefined,
     });
     expect(parseChatLoginSlashArgs('--login-hint user@example.edu')).toEqual({
       provider: 'github',
       noBrowser: false,
+      device: false,
       selectAccount: false,
       loginHint: 'user@example.edu',
     });
     expect(parseChatLoginSlashArgs('github --login-hint=octocat')).toEqual({
       provider: 'github',
       noBrowser: false,
+      device: false,
       selectAccount: false,
       loginHint: 'octocat',
+    });
+    expect(parseChatLoginSlashArgs('--device')).toMatchObject({
+      device: true,
+      noBrowser: false,
     });
   });
 
@@ -145,30 +163,41 @@ describe('CLI login arguments (texra login)', () => {
       shouldPromptForLoginProvider(interactiveText, {
         providerExplicit: false,
         noBrowser: false,
+        device: false,
       }),
     ).toBe(true);
     expect(
       shouldPromptForLoginProvider(interactiveText, {
         providerExplicit: true,
         noBrowser: false,
+        device: false,
       }),
     ).toBe(false);
     expect(
       shouldPromptForLoginProvider(interactiveText, {
         providerExplicit: false,
         noBrowser: true,
+        device: false,
+      }),
+    ).toBe(false);
+    // Device logins pick the provider in the browser, never in the terminal.
+    expect(
+      shouldPromptForLoginProvider(interactiveText, {
+        providerExplicit: false,
+        noBrowser: false,
+        device: true,
       }),
     ).toBe(false);
     expect(
       shouldPromptForLoginProvider(
         { ...interactiveText, outputFormat: 'json' },
-        { providerExplicit: false, noBrowser: false },
+        { providerExplicit: false, noBrowser: false, device: false },
       ),
     ).toBe(false);
     expect(
       shouldPromptForLoginProvider(
         { ...interactiveText, mode: 'headless' },
-        { providerExplicit: false, noBrowser: false },
+        { providerExplicit: false, noBrowser: false, device: false },
       ),
     ).toBe(false);
   });
