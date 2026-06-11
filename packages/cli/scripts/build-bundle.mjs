@@ -62,6 +62,8 @@ await build({
   },
   outfile,
   minify: true,
+  // sdkErrorUtils relies on SDK error class/prototype names after bundling.
+  keepNames: true,
   sourcemap: false,
   legalComments: 'none',
   // The React Compiler runs as a Babel pre-pass scoped to .tsx files under

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.38.8] - 2026-06-11
+
+### CLI
+
+#### Bug Fixes
+
+- **Accurate provider error reporting in the published CLI** — the CLI bundle now preserves class names through minification, so provider error recognition (HTTP error classification, provider detection, abort handling) works the same as in the extension and desktop builds instead of degrading to generic error messages.
+
 ## [0.38.7] - 2026-06-11
 
 ### Shared (all surfaces)
