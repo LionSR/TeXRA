@@ -176,15 +176,21 @@ export function buildUntrackedFileDiff(
   return `${header}--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +1,${shown.length} @@\n${body}${truncatedNotice}\n`;
 }
 
+/**
+ * Collect pseudo-diffs for untracked files. Returns null when the listing
+ * command itself fails — silently treating that as "no untracked files"
+ * would drop exactly the content (secrets, artifacts) the review exists
+ * to catch. An empty listing (no untracked files) is a normal result.
+ */
 async function collectUntrackedDiffs(
   repoRoot: string,
-): Promise<{ diff: string; files: string[] }> {
+): Promise<{ diff: string; files: string[] } | null> {
   const listing = await git(repoRoot, [
     'ls-files',
     '--others',
     '--exclude-standard',
   ]);
-  if (!listing) return { diff: '', files: [] };
+  if (listing === null) return null;
 
   const untracked = listing.split('\n').filter(Boolean);
   const included = untracked.slice(0, MAX_UNTRACKED_FILES);
@@ -280,6 +286,12 @@ export async function collectReviewDiff(
   // text would reject every finding as outside the change set.
   if (diffText === null || nameOnly === null) {
     return { ok: false, reason: `git diff against ${baseRef} failed.` };
+  }
+  if (untracked === null) {
+    return {
+      ok: false,
+      reason: 'Listing untracked files failed (git ls-files).',
+    };
   }
 
   const changedFiles = nameOnly.split('\n').filter(Boolean);
