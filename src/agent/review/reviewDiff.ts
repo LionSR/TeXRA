@@ -136,18 +136,23 @@ async function resolveOnBaseBranch(
   branch: string,
 ): Promise<Pick<ReviewDiff, 'baseRef' | 'baseDescription'>> {
   const treeClean = (await git(cwd, ['diff', '--quiet', 'HEAD'])) !== null;
-  if (
-    treeClean &&
-    (await git(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD^']))
-  ) {
+  if (!treeClean) {
+    return {
+      baseRef: 'HEAD',
+      baseDescription: `last commit on ${branch} (uncommitted changes)`,
+    };
+  }
+  if (await git(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD^'])) {
     return {
       baseRef: 'HEAD^',
       baseDescription: `previous commit on ${branch} (latest commit)`,
     };
   }
+  // Clean tree on the branch's initial commit: nothing to review; the
+  // empty HEAD diff reports that without claiming uncommitted changes.
   return {
     baseRef: 'HEAD',
-    baseDescription: `last commit on ${branch} (uncommitted changes)`,
+    baseDescription: `last commit on ${branch}`,
   };
 }
 

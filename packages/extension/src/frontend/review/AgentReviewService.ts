@@ -514,8 +514,17 @@ class AgentReviewServiceImpl {
   }
 }
 
+/**
+ * Dismissal/dedup key. NUL-delimited — unlike "::", a NUL byte cannot
+ * appear in a POSIX path component or a trimmed title, so distinct
+ * issues can never collide.
+ */
 function fingerprint(issue: ReviewIssue): string {
-  return `${issue.file}::${issue.startLine}-${issue.endLine}::${issue.title.toLowerCase()}`;
+  return [
+    issue.file,
+    `${issue.startLine}-${issue.endLine}`,
+    issue.title.toLowerCase(),
+  ].join('\0');
 }
 
 /** Singleton service backing the Agent Review view, diagnostics, and commands. */
