@@ -137,8 +137,13 @@ export async function maybeRunCliOnboarding(
         () => false,
       )
     : false;
+  const hasPriorInstall =
+    needsFirstRunBackfill &&
+    globalState.get<string | undefined>(GlobalStateKey.LAST_KNOWN_VERSION) !==
+      undefined;
   await backfillFirstRunDone(globalState, {
     hasCredential,
+    hasPriorInstall,
     hasRunHistory,
   }).catch(() => {});
   if (!hasCredential && getFirstRunDone(globalState)) {

@@ -73,6 +73,19 @@ describe('maybeRunCliOnboarding gate', () => {
     expect(mocks.hasCliCredentialForApiMode).toHaveBeenCalledWith(undefined);
   });
 
+  it('marks prior installs with credentials as first-run done', async () => {
+    mocks.state.set(GlobalStateKey.LAST_KNOWN_VERSION, '1.2.3');
+    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
+
+    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
+      configured: false,
+      declined: false,
+    });
+    expect(mocks.state.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE)).toBe(
+      true,
+    );
+  });
+
   it('checks credentials for the explicitly requested API mode', async () => {
     mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
     await expect(
