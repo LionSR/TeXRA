@@ -38,6 +38,7 @@ import {
 import { getAuthStatus } from '@auth/authCommands';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
+import { hasAnyUsableSetupCredential } from '@commands/setup';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
@@ -254,8 +255,9 @@ export async function activate(context: vscode.ExtensionContext) {
   ) {
     await (async () => {
       const [hasCredential, hasRunHistory] = await Promise.all([
-        // Includes the server-side-key (relay sign-in) fallback.
-        SecretManager.anyApiKeyExists().catch(() => false),
+        // Same non-blank provider-key/server-side-key check used by the
+        // funnel and setup launch preflight.
+        hasAnyUsableSetupCredential().catch(() => false),
         // Run history lives in per-execution KV dirs under TASK_RUNS_DIR (the
         // legacy AGENT_HISTORY workspace key is migrated away and cleared, so
         // it is not a reliable signal). Any entry there means prior runs.
