@@ -116,6 +116,29 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(await realpath(result.value.repoRoot)).toBe(await realpath(repo));
   });
 
+  it('caps oversized untracked files at a bounded prefix with a truncation marker', async () => {
+    await git('checkout', '-b', 'feature');
+    // Larger than MAX_UNTRACKED_FILE_BYTES (200 KB); only a prefix may load.
+    await writeFile(
+      path.join(repo, 'big.txt'),
+      `start-of-big-file\n${'x'.repeat(300 * 1024)}\n`,
+    );
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: true,
+      includeSubmodules: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.diff).toContain('+start-of-big-file');
+    // The 200 KB per-file prefix exceeds the overall diff cap, so the
+    // global truncation applies and the result stays bounded.
+    expect(result.value.truncated).toBe(true);
+    expect(result.value.diff).toContain('[... diff truncated for review]');
+    expect(result.value.diff.length).toBeLessThan(200 * 1024);
+  });
+
   it('resolves the repository root when run from a subdirectory', async () => {
     await git('checkout', '-b', 'feature');
     await mkdir(path.join(repo, 'sub'));

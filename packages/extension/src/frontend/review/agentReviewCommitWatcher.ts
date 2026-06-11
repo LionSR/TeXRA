@@ -46,6 +46,8 @@ function watchRepository(
   let lastName = repository.state.HEAD?.name;
   let lastCommit = repository.state.HEAD?.commit;
   let debounce: NodeJS.Timeout | undefined;
+  /** Oldest un-reviewed base while commits coalesce in the debounce window. */
+  let pendingBaseRef: string | undefined;
 
   const subscription = repository.state.onDidChange(() => {
     const head = repository.state.HEAD;
@@ -60,6 +62,7 @@ function watchRepository(
       // undefined), which is not a user checkout.
       if (debounce) clearTimeout(debounce);
       debounce = undefined;
+      pendingBaseRef = undefined;
       if (lastName !== undefined) {
         AgentReviewService.clear();
       }
@@ -82,13 +85,19 @@ function watchRepository(
     if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
 
     if (debounce) clearTimeout(debounce);
+    // Rapid commits (amend, rebase replays) coalesce into one review; keep
+    // the OLDEST pending base so the combined run still covers every commit
+    // since the last completed review.
+    pendingBaseRef ??= previousCommit;
+    const baseRef = pendingBaseRef;
     debounce = setTimeout(() => {
+      pendingBaseRef = undefined;
       logger.info(
         CHANNEL,
         `Commit detected on ${name ?? 'HEAD'}; starting agent review`,
       );
       void AgentReviewService.runReview('commit', {
-        baseRef: previousCommit,
+        baseRef,
         baseDescription: `previous commit on ${name ?? 'HEAD'}`,
       });
     }, COMMIT_DEBOUNCE_MS);

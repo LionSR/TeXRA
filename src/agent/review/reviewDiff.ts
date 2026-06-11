@@ -10,7 +10,7 @@
  */
 
 // Standard library imports
-import { readFile } from 'node:fs/promises';
+import { open, type FileHandle } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Local imports
@@ -184,6 +184,29 @@ export function buildUntrackedFileDiff(
 }
 
 /**
+ * Read at most `maxBytes` from the start of a file. Untracked entries can be
+ * multi-gigabyte artifacts (databases, caches, build outputs) — exactly the
+ * accidental commits this feature exists to catch — so only the capped
+ * prefix that can ever be rendered is loaded, never the whole file.
+ */
+async function readFilePrefix(
+  filePath: string,
+  maxBytes: number,
+): Promise<Buffer | undefined> {
+  let handle: FileHandle | undefined;
+  try {
+    handle = await open(filePath, 'r');
+    const buffer = Buffer.alloc(maxBytes);
+    const { bytesRead } = await handle.read(buffer, 0, maxBytes, 0);
+    return buffer.subarray(0, bytesRead);
+  } catch {
+    return undefined; // Vanished or unreadable; skip.
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+/**
  * Collect pseudo-diffs for untracked files. Returns null when the listing
  * command itself fails — silently treating that as "no untracked files"
  * would drop exactly the content (secrets, artifacts) the review exists
@@ -203,11 +226,13 @@ async function collectUntrackedDiffs(
   const included = untracked.slice(0, MAX_UNTRACKED_FILES);
   const contents = await Promise.all(
     included.map(async (file) => {
-      try {
-        return { file, content: await readFile(path.join(repoRoot, file)) };
-      } catch {
-        return undefined; // Vanished or unreadable; skip.
-      }
+      // One byte beyond the cap so buildUntrackedFileDiff still detects
+      // and marks truncation for oversized files.
+      const content = await readFilePrefix(
+        path.join(repoRoot, file),
+        MAX_UNTRACKED_FILE_BYTES + 1,
+      );
+      return content && { file, content };
     }),
   );
 
