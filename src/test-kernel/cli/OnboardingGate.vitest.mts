@@ -86,16 +86,15 @@ describe('maybeRunCliOnboarding gate', () => {
     );
   });
 
-  it('recognizes a pure-CLI relay veteran by the persisted API-mode key', async () => {
-    // The CLI never writes LAST_KNOWN_VERSION (only the desktop does); a
-    // credentialed veteran who only ever used the CLI is recognizable by the
-    // API-mode preference the relay/keys flows persist.
+  it('does not treat the API-mode preference as a prior-install signal', async () => {
+    // initCliPlatform writes this key during startup, including first launch,
+    // so its presence cannot distinguish veterans from fresh installs.
     mocks.state.set('texra.useIncludedModelAccess', true);
     mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
 
     await maybeRunCliOnboarding(INTERACTIVE);
     expect(mocks.state.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE)).toBe(
-      true,
+      false,
     );
   });
 

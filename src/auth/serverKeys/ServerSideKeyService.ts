@@ -43,12 +43,7 @@ const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
   glm: '/api/paas/v4',
 };
 
-/**
- * Global state key for the "use included model access" preference. Exported
- * because its mere presence doubles as a prior-install signal for the
- * onboarding backfill in the CLI/desktop shared store (the CLI has no
- * version stamp): the key is written whenever an API mode was ever chosen.
- */
+/** Global state key for the "use included model access" preference. */
 export const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 
 const SERVICE_EVENT = 'event';
