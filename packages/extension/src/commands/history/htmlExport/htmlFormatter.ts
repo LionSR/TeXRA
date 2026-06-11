@@ -26,6 +26,7 @@ import {
   type PreparedNode,
 } from '@shared/htmlExport/buildExportTemplate';
 import { renderTemplateToHtml } from '@shared/htmlExport/ssrRender';
+import { tryParseUrl } from '@utils/core';
 
 import {
   extractMeta,
@@ -74,12 +75,8 @@ function safeUrl(raw: string): string | null {
   if (trimmed === '') return null;
   if (trimmed.startsWith('#')) return trimmed;
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
-  let url: URL;
-  try {
-    url = new URL(trimmed);
-  } catch {
-    return null;
-  }
+  const url = tryParseUrl(trimmed);
+  if (!url) return null;
   return SAFE_URL_SCHEMES.has(url.protocol) ? trimmed : null;
 }
 

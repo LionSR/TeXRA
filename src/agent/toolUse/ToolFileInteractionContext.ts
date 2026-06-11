@@ -41,16 +41,12 @@ export interface CurrentToolContexts {
 
 const contextStackScope = new AsyncLocalStorage<readonly ToolCallContext[]>();
 
-export function withToolFileInteractionContext<T>(
+export async function withToolFileInteractionContext<T>(
   context: ToolCallContext,
   run: () => Promise<T> | T,
 ): Promise<T> {
-  try {
-    const parentStack = contextStackScope.getStore() ?? [];
-    return contextStackScope.run([...parentStack, context], async () => run());
-  } catch (error) {
-    return Promise.reject(error);
-  }
+  const parentStack = contextStackScope.getStore() ?? [];
+  return contextStackScope.run([...parentStack, context], async () => run());
 }
 
 export function getCurrentToolCallContext(): ToolCallContext | undefined {

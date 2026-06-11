@@ -42,6 +42,15 @@ const WS_KEEPALIVE_INTERVAL_MS = 30_000;
 /** WebSocket readyState value for an open connection. */
 const WS_OPEN = 1;
 
+/** Close a socket during cleanup; an already-closed socket must not mask the original failure path. */
+function closeQuietly(connection: ResponsesWS): void {
+  try {
+    connection.close();
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Collaborators the transport borrows from the owning handler. */
 export interface OpenAIResponseWebSocketTransportDeps {
   logger: AgentTrace;
@@ -138,20 +147,12 @@ export class OpenAIResponseWebSocketTransport {
       };
       const onError = (err: Error): void => {
         cleanup();
-        try {
-          ws.close();
-        } catch {
-          /* ignore */
-        }
+        closeQuietly(ws);
         reject(err);
       };
       const onAbort = (): void => {
         cleanup();
-        try {
-          ws.close();
-        } catch {
-          /* ignore */
-        }
+        closeQuietly(ws);
         reject(new DOMException('The operation was aborted', 'AbortError'));
       };
 
@@ -360,11 +361,7 @@ export class OpenAIResponseWebSocketTransport {
     this.stopWsKeepalive();
     const wsConnection = this.wsConnection;
     if (wsConnection) {
-      try {
-        wsConnection.close();
-      } catch {
-        // Cleanup must not mask the original failure path.
-      }
+      closeQuietly(wsConnection);
       this.wsConnection = null;
       this.wsConnectionCreatedAt = 0;
       this.logger.debug('WebSocket connection closed');

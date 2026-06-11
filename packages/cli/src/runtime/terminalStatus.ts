@@ -100,12 +100,10 @@ export function terminalStatusExitCode(
 export async function readCliTerminalStatus(
   result: ExecuteAgentResult,
 ): Promise<ExecutionStatus> {
-  try {
-    const meta = await getExecutionStore(result.executionId).readMeta();
-    return cliTerminalStatus(result, meta?.terminalStatus);
-  } catch {
-    return cliTerminalStatus(result);
-  }
+  const meta = await getExecutionStore(result.executionId)
+    .readMeta()
+    .catch(() => undefined);
+  return cliTerminalStatus(result, meta?.terminalStatus);
 }
 
 export type { OutputFileSummary };
