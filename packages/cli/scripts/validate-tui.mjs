@@ -2289,7 +2289,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
     expect: [
       'Split theorem into algebraic and analytic checks',
-      'Route proof obligations',
+      'Coordinate a small math proof through nested CLI work.',
     ],
   },
   {
@@ -2303,7 +2303,7 @@ const SCENARIOS = [
     expect: ['idle', '[Ctrl-C]exit'],
     unexpect: [
       'Split theorem into algebraic and analytic checks',
-      'Route proof obligations',
+      'Coordinate a small math proof through nested CLI work.',
     ],
   },
   {

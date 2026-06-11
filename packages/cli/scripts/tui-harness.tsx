@@ -28,6 +28,7 @@ import {
   type ExecutionId,
   type ExternalInquiryThreadId,
   type NormalizedToolUse,
+  type PlanApprovalPermission,
   type RetryPermission,
   type StreamTabId,
   type UserQuestionPermission,
@@ -734,28 +735,17 @@ function makeRetryApprovalPayload(): RetryPermission {
   };
 }
 
-function makePlanApprovalPayload() {
+function makePlanApprovalPayload(): PlanApprovalPermission {
   return {
     approvalId: 'harness-plan-approval',
     streamId: STREAM_ID,
     goalEnabled: PLAN_APPROVAL_GOAL,
     plan: {
-      summary: 'Coordinate a short math proof through CLI chat.',
-      steps: [
-        {
-          title: 'Split the finite and symbolic cases',
-          description:
-            'Separate the bounded search from the algebraic simplification.',
-          files: ['proof.md'],
-          status: TODO_STATUS.PENDING,
-        },
-        {
-          title: 'Ask a checker to verify the enumeration',
-          description: 'Use a delegated agent before writing the final answer.',
-          files: [],
-          status: TODO_STATUS.PENDING,
-        },
-      ],
+      objective: [
+        'Coordinate a short math proof through CLI chat.',
+        'Split the finite and symbolic cases.',
+        'Ask a checker to verify the enumeration before writing the final answer.',
+      ].join('\n'),
     },
   };
 }
@@ -1089,21 +1079,11 @@ if (SHOW_TODOS) {
       },
     ],
     plan: {
-      summary: 'Coordinate a small math proof through nested CLI work.',
-      steps: [
-        {
-          title: 'Route proof obligations',
-          description: 'Choose the right specialist for each proof branch.',
-          files: [],
-          status: TODO_STATUS.COMPLETED,
-        },
-        {
-          title: 'Check formalizable parts',
-          description: 'Have a subagent inspect the Lean-style finite case.',
-          files: [],
-          status: TODO_STATUS.IN_PROGRESS,
-        },
-      ],
+      objective: [
+        'Coordinate a small math proof through nested CLI work.',
+        'Route proof obligations to the right specialist.',
+        'Have a subagent inspect the Lean-style finite case.',
+      ].join('\n'),
     },
   }));
 }
