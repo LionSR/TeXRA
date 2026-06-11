@@ -17,7 +17,7 @@ import { UsageLogService } from '@telemetry/UsageLogService';
 import { backfillFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { loadAgents, setAgentDirectories } from '@agent/index';
-import { clearStoreCache } from '@agent/storage';
+import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
@@ -261,10 +261,9 @@ export async function activate(context: vscode.ExtensionContext) {
         // Same non-blank provider-key/server-side-key check used by the
         // funnel and setup launch preflight.
         hasAnyUsableSetupCredential().catch(() => false),
-        // Run history lives in per-execution KV dirs under TASK_RUNS_DIR (the
-        // legacy AGENT_HISTORY workspace key is migrated away and cleared, so
-        // it is not a reliable signal). Any entry there means prior runs.
-        StorageFS.readDir(TASK_RUNS_DIR).then(
+        // listExecutions() owns legacy migration and filters invalid storage
+        // entries, so extension and CLI backfill classify history identically.
+        listExecutions().then(
           (entries) => entries.length > 0,
           () => false,
         ),
