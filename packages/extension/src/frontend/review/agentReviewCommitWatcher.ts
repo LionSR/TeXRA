@@ -40,8 +40,12 @@ function isWorkspaceRepository(repository: GitRepository): boolean {
 function watchRepository(
   repository: GitRepository,
   context: vscode.ExtensionContext,
+  watchedRoots: Set<string>,
 ): void {
   if (!isWorkspaceRepository(repository)) return;
+  const repoRoot = repository.rootUri.fsPath;
+  if (watchedRoots.has(repoRoot)) return;
+  watchedRoots.add(repoRoot);
 
   let lastName = repository.state.HEAD?.name;
   let lastCommit = repository.state.HEAD?.commit;
@@ -105,10 +109,12 @@ function watchRepository(
     }, COMMIT_DEBOUNCE_MS);
   });
 
-  context.subscriptions.push(subscription, {
+  context.subscriptions.push({
     dispose: () => {
+      subscription.dispose();
       if (debounce) clearTimeout(debounce);
       pendingBaseRef = undefined;
+      watchedRoots.delete(repoRoot);
     },
   });
 }
@@ -121,12 +127,13 @@ export function registerAgentReviewCommitWatcher(
     const git = await getGitAPI();
     if (!git) return;
 
+    const watchedRoots = new Set<string>();
     for (const repository of git.repositories) {
-      watchRepository(repository, context);
+      watchRepository(repository, context, watchedRoots);
     }
     context.subscriptions.push(
       git.onDidOpenRepository((repository) =>
-        watchRepository(repository, context),
+        watchRepository(repository, context, watchedRoots),
       ),
     );
   })().catch((err: unknown) => {
