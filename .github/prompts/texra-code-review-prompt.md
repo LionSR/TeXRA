@@ -56,10 +56,24 @@ prefixed builtin imports, `.toSorted()` over spread-then-sort, `for...of`
 (with `.entries()`) over index loops, `.findLast()`/`.toReversed()` over
 backwards loops. Flag only regressions newly introduced by this pull request,
 not pre-existing code, and respect the documented exceptions (variable-stride
-token consumers, queues appended mid-iteration, `charCodeAt` hash loops). Prefer
-inline comments for local, actionable issues on changed diff lines; put broader
-mathematical, physical, or scientific-computing concerns in the review body.
-Use the commentable line anchors file when choosing JSON `comments` line
+token consumers, queues appended mid-iteration, `charCodeAt` hash loops).
+
+A second convention worth enforcing on changed lines is the repository's
+anti-indirection rules in `CLAUDE.md` ("Flattening Abstraction Layers",
+"Discouraged Factory Patterns"). Flag pass-through layers this pull request
+newly introduces — wrapper functions that only forward to a single callee,
+two-layer factories called from one place, trivial identity factories that just
+spread an object, and re-export shims — and recommend inlining them at the call
+site or importing the source directly. Restrict this to indirection the pull
+request adds; do not flag pre-existing layers, and do not treat genuinely
+load-bearing thin layers as pass-throughs: dependency-injection seams,
+multi-caller DRY helpers, and the prescribed PocketFlow
+`Node.exec() -> createFlow() -> flow.run()` shape are thin by design, not
+redundant.
+
+Prefer inline comments for local, actionable issues on changed diff lines; put
+broader mathematical, physical, or scientific-computing concerns in the review
+body. Use the commentable line anchors file when choosing JSON `comments` line
 numbers.
 
 When a previous TeXRA thread has been addressed by the current pull request
