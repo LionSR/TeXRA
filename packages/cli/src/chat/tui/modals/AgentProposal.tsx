@@ -8,6 +8,7 @@ import {
 } from '@shared/schemas';
 
 import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
+import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
   boundedScrollableLines,
@@ -47,32 +48,17 @@ export function agentProposalInstructionRowsBudget({
   readonly metadataRows: number;
   readonly title: string;
 }): number {
-  if (availableRows === undefined)
-    return DEFAULT_AGENT_PROPOSAL_INSTRUCTION_ROWS;
-
-  const titleWidth = Math.max(
-    MIN_AGENT_PROPOSAL_WIDTH,
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
-  const titleRows = wrapAnsiToWidth(title, titleWidth).split('\n').length;
-  const spaciousRows =
-    availableRows -
-    titleRows -
-    metadataRows -
-    AGENT_PROPOSAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE;
-  if (spaciousRows > COMPACT_AGENT_PROPOSAL_INSTRUCTION_ROWS) {
-    return spaciousRows;
-  }
-
-  const compactRows =
-    availableRows -
-    titleRows -
-    metadataRows -
-    AGENT_PROPOSAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE;
-  return Math.max(
-    1,
-    Math.min(COMPACT_AGENT_PROPOSAL_INSTRUCTION_ROWS, compactRows),
-  );
+  return confirmCardContentRowsBudget({
+    availableRows,
+    columns,
+    title,
+    minContentWidth: MIN_AGENT_PROPOSAL_WIDTH,
+    defaultRows: DEFAULT_AGENT_PROPOSAL_INSTRUCTION_ROWS,
+    compactMaxRows: COMPACT_AGENT_PROPOSAL_INSTRUCTION_ROWS,
+    spaciousFixedRows: AGENT_PROPOSAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
+    compactFixedRows: AGENT_PROPOSAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE,
+    extraFixedRows: metadataRows,
+  });
 }
 
 export function agentProposalInstructionDisplayLines({
