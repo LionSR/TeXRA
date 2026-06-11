@@ -85,6 +85,7 @@ with your own provider API keys — whichever you prefer.
 texra login                 # pick GitHub or Google, then sign in via browser
 texra login github          # choose the OAuth provider explicitly
 texra login --no-browser    # print the loopback sign-in URL
+texra login --device        # device code: approve from a browser on any device
 ```
 
 When run interactively, a bare `texra login` asks which provider to use instead of
@@ -96,6 +97,12 @@ use.
 browser that can reach the terminal session; SSH and container sessions may need
 callback port forwarding.
 
+`--device` needs no callback at all: the CLI prints a short code and a
+verification URL, you open the URL in a browser on **any** device (your laptop,
+even your phone), sign in, and approve the code. This is the recommended path on
+SSH, WSL2, and containers — the interactive pickers offer it automatically when
+they detect a remote session.
+
 ```bash
 texra auth                  # same as `texra auth status`
 texra auth status           # who am I signed in as?
@@ -105,6 +112,24 @@ texra logout
 
 `texra auth` on its own reports your account status and accepts the same flags
 as `texra auth status`, such as `--output-format json`.
+
+**CI pipelines.** Headless pipelines can't sign in interactively. Mint a
+long-lived relay token once, store it as a CI secret, and set
+`TEXRA_RELAY_TOKEN` in the pipeline environment:
+
+```bash
+texra setup-token --name "release pipeline" --expires 90
+texra setup-token --print-env >> "$GITHUB_ENV"   # GitHub Actions: env line only
+texra auth token list                            # audit your tokens
+texra auth token revoke <id>                     # rotate / kill a leaked token
+```
+
+CI tokens are scoped to relay model calls only — they cannot manage your
+account or mint more tokens. They default to a 30-day expiry (cap 365), are
+stored server-side only as hashes (the plaintext is shown exactly once at mint
+time), and their usage counts toward the same monthly relay quota as your
+interactive use. With `TEXRA_RELAY_TOKEN` set, `texra run …` needs no other
+credentials.
 
 **Bring your own provider keys.** Set the right environment variable for the
 provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,

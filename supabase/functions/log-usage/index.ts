@@ -5,7 +5,8 @@
  * via the public.usage_logs_upsert RPC, which aggregates per-stream so the
  * table grows by run rather than by round.
  *
- * Authentication: JWT token in Authorization header (Bearer {jwt})
+ * Authentication: JWT token in Authorization header (Bearer {jwt}), or a
+ * CI relay token minted by `texra setup-token` (prefix `texra_relay_`)
  *
  * Endpoints:
  * - POST /log-usage - Log a batch of usage entries
@@ -17,15 +18,16 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
+import { bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
+import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
 import { versionedJsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const LOG_USAGE_VERSION = '1.2.1';
+const LOG_USAGE_VERSION = '1.3.0';
 
 // =============================================================================
 // Schemas
@@ -126,18 +128,20 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // 1. Extract and validate JWT
+    // 1. Extract and validate the credential
     const jwtToken = bearerToken(req);
     if (!jwtToken) {
       return errorResponse(req, 'Missing authorization token', 401);
     }
 
-    // 2. Validate user with Supabase
-    const auth = await authenticateJwt(jwtToken);
-    if (!auth) {
-      return errorResponse(req, 'Invalid or expired token', 401);
+    // 2. Validate user with Supabase. CI relay tokens (texra setup-token)
+    // are accepted too so headless pipeline usage still feeds the spending
+    // accounting the relay enforces.
+    const credential = await resolveRelayCredential(jwtToken, adminClient);
+    if (!credential.ok) {
+      return errorResponse(req, credential.message, credential.status);
     }
-    const { user } = auth;
+    const userId = credential.userId;
 
     // 3. Parse request body
     let body: unknown;
@@ -176,7 +180,7 @@ Deno.serve(async (req: Request) => {
     const { data: existingBatch } = await adminClient
       .from('usage_logs')
       .select('id')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('batch_id', batch.batchId)
       .limit(1);
 
@@ -189,7 +193,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const rows = validEntries.map((entry) => ({
-      user_id: user.id,
+      user_id: userId,
       logged_at: entry.timestamp,
       model: entry.model,
       provider: entry.provider,

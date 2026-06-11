@@ -8,6 +8,7 @@ export interface CliLoginInit {
   readonly provider: string;
   readonly providerExplicit: boolean;
   readonly noBrowser: boolean;
+  readonly device: boolean;
   readonly selectAccount: boolean;
   readonly loginHint?: string;
 }
@@ -15,6 +16,7 @@ export interface CliLoginInit {
 export interface CliLoginSlashArgs {
   readonly provider: OAuthProvider;
   readonly noBrowser: boolean;
+  readonly device: boolean;
   readonly selectAccount: boolean;
   readonly loginHint?: string;
 }
@@ -57,6 +59,7 @@ export function parseChatLoginSlashArgs(
   let provider: string = DEFAULT_OAUTH_PROVIDER;
   let providerSet = false;
   let noBrowser = false;
+  let device = false;
   let selectAccount = false;
   let loginHint: string | undefined;
 
@@ -64,6 +67,10 @@ export function parseChatLoginSlashArgs(
     const token = tokens[index];
     if (token === '--no-browser') {
       noBrowser = true;
+      continue;
+    }
+    if (token === '--device') {
+      device = true;
       continue;
     }
     if (token === '--select-account') {
@@ -89,5 +96,5 @@ export function parseChatLoginSlashArgs(
   }
 
   if (!isCliLoginProvider(provider)) return undefined;
-  return { provider, noBrowser, selectAccount, loginHint };
+  return { provider, noBrowser, device, selectAccount, loginHint };
 }

@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import { platform } from '@platform/platform';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { type OAuthProvider } from '@auth/sharedConfig';
+import { type SupabaseSession } from '@auth/SupabaseSession';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -33,11 +34,17 @@ import { type CliApiMode } from '../runtime/apiAccessMode';
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
+import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import {
   CLI_MANUAL_AUTH_REMOTE_HINT,
   CLI_MANUAL_AUTH_URL_PROMPT,
   signInCliSupabase,
+  signInCliSupabaseDeviceCode,
 } from '../runtime/supabaseAuth';
+import {
+  CLI_DEVICE_AUTH_URL_PROMPT,
+  type DeviceAuthorization,
+} from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { saveProviderApiKey } from './applyOnboardingResult';
@@ -190,6 +197,7 @@ type Screen =
   | 'picker'
   | 'relay-provider'
   | 'relay-progress'
+  | 'relay-device-progress'
   | 'key-provider'
   | 'key-entry';
 
@@ -247,27 +255,34 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
           setRelayProvider(provider);
           setScreen('relay-progress');
         }}
+        onDeviceCode={() => {
+          setError(undefined);
+          setScreen('relay-device-progress');
+        }}
         onCancel={() => setScreen('picker')}
       />
     );
   }
 
-  if (screen === 'relay-progress') {
-    return (
+  if (screen === 'relay-progress' || screen === 'relay-device-progress') {
+    const onSuccess = (label: string): void =>
+      finish({
+        configured: true,
+        declined: false,
+        summary: `Signed in as ${label}. Included relay access is active.`,
+      });
+    const onError = (message: string): void => {
+      setError(message);
+      setScreen('relay-provider');
+    };
+    return screen === 'relay-device-progress' ? (
+      <RelayDeviceProgressStep onSuccess={onSuccess} onError={onError} />
+    ) : (
       <RelayProgressStep
         provider={relayProvider}
         noBrowser={noBrowser}
-        onSuccess={(label) =>
-          finish({
-            configured: true,
-            declined: false,
-            summary: `Signed in as ${label}. Included relay access is active.`,
-          })
-        }
-        onError={(message) => {
-          setError(message);
-          setScreen('relay-provider');
-        }}
+        onSuccess={onSuccess}
+        onError={onError}
       />
     );
   }
@@ -445,14 +460,16 @@ function RelayProviderStep(props: {
   readonly error?: string;
   readonly onToggleNoBrowser: () => void;
   readonly onSelect: (provider: OAuthProvider) => void;
+  readonly onDeviceCode: () => void;
   readonly onCancel: () => void;
 }): React.JSX.Element {
-  // `n` toggles no-browser. The Select child ignores `n` (no row 22), so the
-  // two active useInput handlers never collide on it.
+  // `n` toggles no-browser and `d` starts device-code sign-in. The Select
+  // child ignores both letters, so the two active useInput handlers never
+  // collide on them.
   useInput((input, key) => {
-    if (!key.ctrl && !key.meta && input.toLowerCase() === 'n') {
-      props.onToggleNoBrowser();
-    }
+    if (key.ctrl || key.meta) return;
+    if (input.toLowerCase() === 'n') props.onToggleNoBrowser();
+    if (input.toLowerCase() === 'd') props.onDeviceCode();
   });
 
   return (
@@ -461,13 +478,16 @@ function RelayProviderStep(props: {
       subtitle={
         props.noBrowser
           ? 'No-browser mode: we print the sign-in URL instead of opening it.'
-          : 'Choose a provider to sign in with:'
+          : isLikelyRemoteSession()
+            ? 'Remote session detected — press d for device-code sign-in (no callback port needed).'
+            : 'Choose a provider to sign in with:'
       }
       error={props.error}
       hints={[
         { key: '↑/↓', action: 'navigate' },
         { key: `1-${CLI_OAUTH_PROVIDER_ITEMS.length}/Enter`, action: 'select' },
         { key: 'n', action: 'no-browser' },
+        { key: 'd', action: 'device code' },
         { key: 'Esc', action: 'back' },
       ]}
     >
@@ -481,43 +501,44 @@ function RelayProviderStep(props: {
   );
 }
 
-function RelayProgressStep(props: {
-  readonly provider: OAuthProvider;
-  readonly noBrowser: boolean;
+interface RelayProgressCallbacks {
   readonly onSuccess: (accountLabel: string) => void;
   readonly onError: (message: string) => void;
-}): React.JSX.Element {
-  const { provider, noBrowser, onSuccess, onError } = props;
-  const [url, setUrl] = useState<string | undefined>(undefined);
+}
 
-  // Start the sign-in exactly once on mount. Empty deps is deliberate (not the
-  // captured props): re-running would open a second browser + loopback server,
-  // and a deps-triggered cleanup would flip `cancelled` and orphan the in-flight
-  // login (eternal spinner). The captured callbacks only invoke stable state
-  // setters / app.exit, so the mount-time closure stays correct. `cancelled`
-  // guards against the real unmount (the user navigating away).
+/**
+ * Run a sign-in exactly once on mount. Empty deps is deliberate (not the
+ * captured props): re-running would open a second browser + loopback server
+ * (or request a second device code), and a deps-triggered cleanup would flip
+ * `cancelled` and orphan the in-flight login (eternal spinner). The captured
+ * callbacks only invoke stable state setters / app.exit, so the mount-time
+ * closure stays correct. `cancelled` guards against the real unmount (the
+ * user navigating away); progress callbacks receive it to drop late updates.
+ */
+function useSignInOnMount(
+  signIn: (isCancelled: () => boolean) => Promise<SupabaseSession>,
+  callbacks: RelayProgressCallbacks,
+): void {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const session = await signInCliSupabase({
-          provider,
-          openBrowser: !noBrowser,
-          manualBrowserHint: 'texra login --no-browser',
-          onAuthUrl: (authUrl) => {
-            if (!cancelled) setUrl(authUrl);
-          },
-        });
-        if (!cancelled) onSuccess(session.account.label);
+        const session = await signIn(() => cancelled);
+        if (!cancelled) callbacks.onSuccess(session.account.label);
       } catch (loginError: unknown) {
-        if (!cancelled) onError(toErrorMessage(loginError));
+        if (!cancelled) callbacks.onError(toErrorMessage(loginError));
       }
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+}
 
+function RelayProgressFrame(props: {
+  readonly spinnerLabel: string;
+  readonly children: React.ReactNode;
+}): React.JSX.Element {
   return (
     <Box
       borderStyle="round"
@@ -529,26 +550,92 @@ function RelayProgressStep(props: {
         Sign in · included relay
       </Text>
       <Box marginTop={1} flexDirection="column">
-        <Text>
-          {noBrowser
-            ? CLI_MANUAL_AUTH_URL_PROMPT
-            : `Opening your browser to sign in with ${provider}…`}
-        </Text>
-        {url ? (
-          <Text color="cyan">{url}</Text>
-        ) : (
-          <Text dimColor>
-            {noBrowser
-              ? 'Preparing the sign-in URL…'
-              : "If it doesn't open, the URL will appear here."}
-          </Text>
-        )}
-        {noBrowser ? <Text dimColor>{CLI_MANUAL_AUTH_REMOTE_HINT}</Text> : null}
+        {props.children}
       </Box>
       <Box marginTop={1}>
-        <Spinner label="Waiting for you to finish in the browser… (Ctrl-C cancels)" />
+        <Spinner label={props.spinnerLabel} />
       </Box>
     </Box>
+  );
+}
+
+function RelayProgressStep(
+  props: RelayProgressCallbacks & {
+    readonly provider: OAuthProvider;
+    readonly noBrowser: boolean;
+  },
+): React.JSX.Element {
+  const { provider, noBrowser } = props;
+  const [url, setUrl] = useState<string | undefined>(undefined);
+
+  useSignInOnMount(
+    (isCancelled) =>
+      signInCliSupabase({
+        provider,
+        openBrowser: !noBrowser,
+        manualBrowserHint: 'texra login --no-browser',
+        onAuthUrl: (authUrl) => {
+          if (!isCancelled()) setUrl(authUrl);
+        },
+      }),
+    props,
+  );
+
+  return (
+    <RelayProgressFrame spinnerLabel="Waiting for you to finish in the browser… (Ctrl-C cancels)">
+      <Text>
+        {noBrowser
+          ? CLI_MANUAL_AUTH_URL_PROMPT
+          : `Opening your browser to sign in with ${provider}…`}
+      </Text>
+      {url ? (
+        <Text color="cyan">{url}</Text>
+      ) : (
+        <Text dimColor>
+          {noBrowser
+            ? 'Preparing the sign-in URL…'
+            : "If it doesn't open, the URL will appear here."}
+        </Text>
+      )}
+      {noBrowser ? <Text dimColor>{CLI_MANUAL_AUTH_REMOTE_HINT}</Text> : null}
+    </RelayProgressFrame>
+  );
+}
+
+function RelayDeviceProgressStep(
+  props: RelayProgressCallbacks,
+): React.JSX.Element {
+  const [deviceAuth, setDeviceAuth] = useState<DeviceAuthorization | undefined>(
+    undefined,
+  );
+
+  useSignInOnMount(
+    (isCancelled) =>
+      signInCliSupabaseDeviceCode({
+        onDeviceCode: (authorization) => {
+          if (!isCancelled()) setDeviceAuth(authorization);
+        },
+      }),
+    props,
+  );
+
+  return (
+    <RelayProgressFrame spinnerLabel="Waiting for you to approve in the browser… (Ctrl-C cancels)">
+      <Text>{CLI_DEVICE_AUTH_URL_PROMPT}</Text>
+      {deviceAuth ? (
+        <>
+          <Text color="cyan">{deviceAuth.verification_uri}</Text>
+          <Text>
+            and enter this code:{' '}
+            <Text bold color="cyan">
+              {deviceAuth.user_code}
+            </Text>
+          </Text>
+        </>
+      ) : (
+        <Text dimColor>Requesting a sign-in code…</Text>
+      )}
+    </RelayProgressFrame>
   );
 }
 
