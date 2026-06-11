@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty';
 
-import { SETUP_AGENT_NAME } from '../onboarding/setupContinuation';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';

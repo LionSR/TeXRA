@@ -30,6 +30,9 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { agentKey } from '@shared/schemas/agent';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { createRecordingHost } from '../progressTestUtils';
 
@@ -41,18 +44,34 @@ vi.mock('@agent/storage', () => ({
   writeTerminalStatus: storageMocks.writeTerminalStatus,
 }));
 
+async function initLifecycleTestPlatform(firstRunDone: boolean) {
+  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+    import('@platform/platform'),
+    import('@test/support/FakePlatform'),
+  ]);
+  const fake = createFakePlatform({
+    globalState: {
+      [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: firstRunDone,
+    },
+  });
+  initPlatform(fake);
+  return fake;
+}
+
 function createLifecycleContext({
   executionId,
   streamId,
   streamStatus,
+  agent = 'test-agent',
 }: {
   executionId: ExecutionId;
   streamId: StreamTabId;
   streamStatus: StreamStatusRegistry;
+  agent?: string;
 }): AgentLaunchContext {
   const explicit = createRecordingHost();
   const config = AgentConfigSchema.parse({
-    agent: 'test-agent',
+    agent,
     model: 'test-model',
     agentCategory: AgentCategory.ToolUse,
   });
@@ -120,6 +139,62 @@ function createLifecycleContext({
 }
 
 describe('runFlowWithLifecycle', () => {
+  it('does not complete first-run onboarding for qualified setup sessions', async () => {
+    const fake = await initLifecycleTestPlatform(false);
+    const executionId = 'execution-lifecycle-setup-agent' as ExecutionId;
+    const streamId = 'stream-lifecycle-setup-agent' as StreamTabId;
+    const streamStatus = new StreamStatusRegistry();
+    const ctx = createLifecycleContext({
+      executionId,
+      streamId,
+      streamStatus,
+      agent: agentKey('builtInToolUse', SETUP_AGENT_NAME),
+    });
+
+    try {
+      await runFlowWithLifecycle(ctx, async () => ({
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.COMPLETED,
+        executionId,
+        streamId,
+      }));
+
+      expect(
+        fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
+      ).toBe(false);
+    } finally {
+      streamStatus.clear(streamId, { emit: false });
+    }
+  });
+
+  it('completes first-run onboarding for non-setup completed sessions', async () => {
+    const fake = await initLifecycleTestPlatform(false);
+    const executionId = 'execution-lifecycle-non-setup-agent' as ExecutionId;
+    const streamId = 'stream-lifecycle-non-setup-agent' as StreamTabId;
+    const streamStatus = new StreamStatusRegistry();
+    const ctx = createLifecycleContext({
+      executionId,
+      streamId,
+      streamStatus,
+      agent: 'assistant',
+    });
+
+    try {
+      await runFlowWithLifecycle(ctx, async () => ({
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.COMPLETED,
+        executionId,
+        streamId,
+      }));
+
+      expect(
+        fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
+      ).toBe(true);
+    } finally {
+      streamStatus.clear(streamId, { emit: false });
+    }
+  });
+
   it('finalizes the stream status owner from the launch context', async () => {
     const executionId = 'execution-lifecycle-status-owner' as ExecutionId;
     const streamId = 'stream-lifecycle-status-owner' as StreamTabId;

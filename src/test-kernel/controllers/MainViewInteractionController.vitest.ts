@@ -180,12 +180,6 @@ describe('MainViewInteractionController', () => {
     );
     assert.deepEqual(
       controller.getDismissConfigUpdate({
-        command: MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER,
-      }),
-      { key: 'ui.showGettingStartedBanner', value: false },
-    );
-    assert.deepEqual(
-      controller.getDismissConfigUpdate({
         command: MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER,
       }),
       { key: 'ui.showOrchestratorBanner', value: false },

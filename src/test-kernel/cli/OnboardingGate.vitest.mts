@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   hasCliCredentialForApiMode: vi.fn(),
-  declined: false,
+  state: new Map<string, unknown>(),
 }));
 
 vi.mock('@cli/runtime/credentialStatus', () => ({
@@ -17,17 +17,18 @@ vi.mock('@cli/runtime/credentialStatus', () => ({
 vi.mock('@platform/platform', () => ({
   platform: () => ({
     globalState: {
-      get: (_key: string, defaultValue?: unknown) =>
-        mocks.declined ? true : defaultValue,
-      update: async () => {},
+      get: (key: string, defaultValue?: unknown) =>
+        mocks.state.has(key) ? mocks.state.get(key) : defaultValue,
+      update: async (key: string, value: unknown) => {
+        mocks.state.set(key, value);
+      },
     },
   }),
 }));
 
-import {
-  firstRunSetupAgentOverride,
-  SETUP_AGENT_NAME,
-} from '@cli/onboarding/setupContinuation';
+import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const { maybeRunCliOnboarding } = await import('@cli/onboarding/runOnboarding');
 
@@ -42,7 +43,7 @@ describe('maybeRunCliOnboarding gate', () => {
 
   beforeEach(() => {
     mocks.hasCliCredentialForApiMode.mockReset().mockResolvedValue(false);
-    mocks.declined = false;
+    mocks.state.clear();
     originalIsTty = process.stdout.isTTY;
     Object.defineProperty(process.stdout, 'isTTY', {
       value: true,
@@ -78,12 +79,24 @@ describe('maybeRunCliOnboarding gate', () => {
   });
 
   it('skips when onboarding was previously declined', async () => {
-    mocks.declined = true;
+    mocks.state.set(GlobalStateKey.ONBOARDING_DECLINED, true);
     await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
       configured: false,
       declined: false,
     });
-    expect(mocks.hasCliCredentialForApiMode).not.toHaveBeenCalled();
+    expect(mocks.hasCliCredentialForApiMode).toHaveBeenCalledWith(undefined);
+  });
+
+  it('clears a stale declined flag when credentials now exist', async () => {
+    mocks.state.set(GlobalStateKey.ONBOARDING_DECLINED, true);
+    mocks.state.set(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, false);
+    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
+
+    await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
+      configured: true,
+      declined: false,
+    });
+    expect(mocks.state.get(GlobalStateKey.ONBOARDING_DECLINED)).toBe(false);
   });
 
   it('skips on a dumb terminal before checking credentials', async () => {

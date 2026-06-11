@@ -16,6 +16,8 @@ import { projectRunOutcome } from '@common/constants/streamStatus';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import { RUN_OUTCOME, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { agentName } from '@shared/schemas/agent';
 
 import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
 import {
@@ -49,7 +51,7 @@ export async function runFlowWithLifecycle(
   options?: RunFlowLifecycleOptions,
 ): Promise<AgentFlowResult> {
   const { streamId } = ctx;
-  const agentName = ctx.config.agent;
+  const agentIdentifier = ctx.config.agent;
   const category =
     ctx.setting.agentCategory === AgentCategory.ToolUse
       ? 'toolUse'
@@ -59,7 +61,7 @@ export async function runFlowWithLifecycle(
     ctx.executionId,
     parentStreamId,
     streamId,
-    agentName,
+    agentIdentifier,
     category,
     ctx.runtimeHost,
     ctx.coordinators,
@@ -86,7 +88,10 @@ export async function runFlowWithLifecycle(
     // real run completes. The setup conversation itself doesn't count, but the
     // demo it delegates does (subagent runs land here too). Best-effort: a
     // state write failure must never affect the run.
-    if (result.outcome === RUN_OUTCOME.COMPLETED && agentName !== 'setup') {
+    if (
+      result.outcome === RUN_OUTCOME.COMPLETED &&
+      agentName(agentIdentifier) !== SETUP_AGENT_NAME
+    ) {
       try {
         if (!getFirstRunDone(platform().globalState)) {
           await setFirstRunDone(platform().globalState, true);
@@ -116,7 +121,7 @@ export async function runFlowWithLifecycle(
       projection.executionStatus,
     ).catch(() => {});
     const sdkMsg = getSdkErrorMessage(err);
-    const errorMsg = `Error executing agent ${agentName}: ${sdkMsg}`;
+    const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
 
     // Root-agent failures are surfaced in the stream log. Subagent failures
     // are delivered to the orchestrator below, so avoid adding a second

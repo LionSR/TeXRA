@@ -302,10 +302,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.applyConfigUpdate(
           this.interactionController.getDismissConfigUpdate(m),
         ),
-      [MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER]: (m) =>
-        this.applyConfigUpdate(
-          this.interactionController.getDismissConfigUpdate(m),
-        ),
       [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: (m) =>
         this.applyConfigUpdate(
           this.interactionController.getDismissConfigUpdate(m),

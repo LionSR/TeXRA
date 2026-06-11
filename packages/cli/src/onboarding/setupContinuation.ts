@@ -6,8 +6,7 @@
 // Ink-free test kernel can cover it — callers read `firstRunDone` from
 // platform global state and pass it in.
 
-/** Bundled tool-use agent that runs the agent-led setup conversation. */
-export const SETUP_AGENT_NAME = 'setup';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 
 export interface FirstRunSetupContinuationInputs {
   /** The first-run picker just configured a credential in this process. */

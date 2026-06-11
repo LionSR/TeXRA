@@ -1503,6 +1503,8 @@ export class MainApp extends MainAppBase {
   }
 
   private handleComponentDismissGettingStarted(): void {
+    // Session-only dismissal; the host setting still gates whether FileManager
+    // shows the empty-folder banner in the first place.
     this.gettingStartedDismissed.set(true);
   }
 

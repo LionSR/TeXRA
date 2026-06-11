@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import { platform } from '@platform/platform';
 import {
   backfillFirstRunDone,
+  getFirstRunDone,
   getOnboardingDeclined,
   setOnboardingDeclined,
 } from '@controllers/onboarding/onboardingFunnel';
@@ -61,7 +62,12 @@ import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 import { saveProviderApiKey } from './applyOnboardingResult';
 
 export interface CliOnboardingResult {
-  /** True when the user finished a sign-in or saved a key this run. */
+  /**
+   * True when the caller should continue into the setup agent. Usually this
+   * means the picker configured a credential in this process; it also covers
+   * the stale-skip case where a credential now exists and firstRunDone is still
+   * false.
+   */
   readonly configured: boolean;
   /** True when the picker was shown and the user chose "Skip for now" this run.
    *  Lets `chat` exit cleanly (the skip summary already printed) instead of
@@ -110,22 +116,30 @@ export async function maybeRunCliOnboarding(
   if (interactiveTerminalFailure(context) || !process.stdout.isTTY) {
     return NO_ONBOARDING_RESULT;
   }
-  if (getOnboardingDeclined(platform().globalState)) {
-    return NO_ONBOARDING_RESULT;
-  }
+  const globalState = platform().globalState;
   const hasCredential = await hasCliCredentialForApiMode(context.apiMode).catch(
     () => false,
   );
   // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI upgrader
   // who already has a credential never enters State 1. hasRunHistory is false
   // by design — listing CLI run history is expensive and the credential check
-  // covers upgraders. One-shot, best-effort, and must not change the gate
-  // below: whether the picker shows is decided exactly as before.
-  await backfillFirstRunDone(platform().globalState, {
+  // covers upgraders. One-shot and best-effort: if a credential appears after a
+  // previous skip, the stale skip is cleared below and the setup agent gets one
+  // chance to run.
+  await backfillFirstRunDone(globalState, {
     hasCredential,
     hasRunHistory: false,
   }).catch(() => {});
   if (hasCredential) {
+    if (getOnboardingDeclined(globalState)) {
+      await setOnboardingDeclined(globalState, false).catch(() => {});
+    }
+    return {
+      configured: !getFirstRunDone(globalState),
+      declined: false,
+    };
+  }
+  if (getOnboardingDeclined(globalState)) {
     return NO_ONBOARDING_RESULT;
   }
   return runOnboardingFlow({
