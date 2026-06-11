@@ -26,6 +26,7 @@ import {
   formatCliManualAuthUrlMessage,
   getCliAuthProfile,
   getCliSessionAccessToken,
+  getCliSessionTier,
   relayTokenStillActiveNotice,
   signInCliSupabase,
   signInCliSupabaseDeviceCode,
@@ -332,10 +333,14 @@ const usageCommand = defineCliCommand({
         );
         return CliExitCode.ModelOrNetworkError;
       }
-      summary = await fetchRelayUsageSummary({
-        tier: profile.tier ?? 'free',
-        month,
-      });
+      // The usage rows belong to the session account, so the spending limit
+      // must use that account's tier — profile.tier may describe a configured
+      // env token's account instead.
+      const tier =
+        profile.credentialSource === 'relayToken'
+          ? await getCliSessionTier()
+          : (profile.tier ?? 'free');
+      summary = await fetchRelayUsageSummary({ tier, month });
     } catch (error) {
       writeErrorStderr(error);
       return CliExitCode.ModelOrNetworkError;

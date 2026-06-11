@@ -255,11 +255,10 @@ export class SupabaseClient {
    * Tier is reserved for future API key access levels.
    */
   static async getUserAuthContext(): Promise<UserAuthContext> {
-    const defaultContext: UserAuthContext = { permissions: [], tier: 'free' };
-
-    // CI relay tokens are not GoTrue sessions, so the profiles query below
-    // can't run. The relay's tier-config endpoint resolves the token to its
-    // owning user's tier — the only profile surface a relay-scoped token has.
+    // CI relay tokens are not GoTrue sessions, so the session profile query
+    // can't run on them. The relay's tier-config endpoint resolves the token
+    // to its owning user's tier — the only profile surface a relay-scoped
+    // token has.
     const relayToken = getConfiguredRelayToken();
     if (relayToken) {
       const status = await fetchRelayTokenStatus(relayToken);
@@ -272,6 +271,18 @@ export class SupabaseClient {
         };
       }
     }
+
+    return this.getSessionAuthContext();
+  }
+
+  /**
+   * Authorization context from the stored GoTrue session only, ignoring any
+   * configured CI relay token. Use when the operation itself runs on the
+   * session (e.g. PostgREST usage reads), so its tier describes the account
+   * whose data is being read rather than the relay credential.
+   */
+  static async getSessionAuthContext(): Promise<UserAuthContext> {
+    const defaultContext: UserAuthContext = { permissions: [], tier: 'free' };
 
     const tokens = await this.getSessionTokens();
     if (!tokens) return defaultContext;

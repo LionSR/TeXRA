@@ -5,6 +5,8 @@
 // code from a browser on any device. Session storage and relay-cache
 // invalidation live with the other sign-in flows in `supabaseAuth.ts`.
 
+import { setTimeout as sleepMs } from 'node:timers/promises';
+
 import { z } from 'zod';
 
 import { DEVICE_AUTH_BASE_URL } from '@auth/sharedConfig';
@@ -94,9 +96,7 @@ export async function pollForDeviceSession(
   hooks: DeviceAuthPollHooks = {},
 ): Promise<GitHubTokenExchangeResponse> {
   const now = hooks.now ?? Date.now;
-  const sleep =
-    hooks.sleep ??
-    ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const sleep = hooks.sleep ?? ((ms: number) => sleepMs(ms));
   const deadline = now() + authorization.expires_in * 1000;
   let intervalSeconds = authorization.interval;
   let transientFailures = 0;

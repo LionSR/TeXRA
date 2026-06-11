@@ -231,6 +231,16 @@ export async function getCliSessionAccessToken(): Promise<string | null> {
   return getCliSupabaseAuthCoordinator().ensureFreshToken();
 }
 
+/**
+ * Tier of the stored session's account, ignoring any configured
+ * TEXRA_RELAY_TOKEN. Usage reads run on the session JWT, so their spending
+ * limit must use this tier — `getCliAuthProfile().tier` may describe the
+ * env token's account instead.
+ */
+export async function getCliSessionTier(): Promise<string> {
+  return (await SupabaseClient.getSessionAuthContext()).tier;
+}
+
 export async function getCliAuthProfile(): Promise<CliAuthProfile> {
   initializeCliSupabaseAuth();
 
