@@ -6,6 +6,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import { SortableController } from '@shared/controllers';
 import { designTokens } from '@shared/styles';
@@ -166,7 +167,6 @@ export class FileSelectGroup extends LitElement {
           size="small"
           type="button"
           aria-label="Tool configuration options"
-          title="Tool configuration options"
         >
           ${waIcon('tools')}
         </wa-button>
@@ -179,6 +179,7 @@ export class FileSelectGroup extends LitElement {
           Attach TeX Count
         </wa-dropdown-item>
       </wa-dropdown>
+      <wa-tooltip for="toggleToolConfig">Tool configuration options</wa-tooltip>
     `;
   }
 
@@ -203,7 +204,6 @@ export class FileSelectGroup extends LitElement {
           size="small"
           type="button"
           aria-label="Auto-extract options"
-          title="Auto-extract options"
         >
           ${waIcon('wand')}
         </wa-button>
@@ -229,6 +229,7 @@ export class FileSelectGroup extends LitElement {
           Compile Input PDF
         </wa-dropdown-item>
       </wa-dropdown>
+      <wa-tooltip for="toggleAutoExtract">Auto-extract options</wa-tooltip>
     `;
   }
 
@@ -303,7 +304,8 @@ export class FileSelectGroup extends LitElement {
             <span class="file-select-icon" aria-hidden="true">
               ${waIcon(config.icon as TeXRAIconName)}
             </span>
-            <label title=${config.tooltip}>${config.label}</label>
+            <label id="${this.listId}Label">${config.label}</label>
+            <wa-tooltip for="${this.listId}Label">${config.tooltip}</wa-tooltip>
             ${config.toolConfig === 'tool'
               ? this.renderToolConfigMenu()
               : nothing}
@@ -323,7 +325,7 @@ export class FileSelectGroup extends LitElement {
               )}FilesButton`,
               icon: 'folder-opened',
               label: config.addOpenedLabel,
-              title: config.addOpenedLabel,
+              tooltip: config.addOpenedLabel,
               onClick: this.handleAddOpenedFiles,
             })}
             ${renderIconActionButton({
@@ -332,7 +334,7 @@ export class FileSelectGroup extends LitElement {
               )}FilesButton`,
               icon: 'trash',
               label: config.emptyListLabel,
-              title: config.emptyListLabel,
+              tooltip: config.emptyListLabel,
               onClick: this.handleEmptyFiles,
             })}
             ${renderIconActionButton({
@@ -341,7 +343,7 @@ export class FileSelectGroup extends LitElement {
               )}FilesButton`,
               icon: 'add',
               label: config.selectListLabel,
-              title: config.selectListLabel,
+              tooltip: config.selectListLabel,
               onClick: this.handleSelectMultipleFiles,
             })}
           </div>
