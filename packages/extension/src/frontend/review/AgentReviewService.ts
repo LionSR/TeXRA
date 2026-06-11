@@ -1,10 +1,11 @@
 /**
  * Agent review state for the VS Code extension.
  *
- * A review runs as a full `changeReviewer` tool-use agent session (launched
- * via `runAgent`, so the run outcome is observable): the service collects
- * the diff against the main branch, hands it to the agent, and receives
- * findings live through the `report_review_issue` tool sink. Issues are published as diagnostics
+ * A review runs as a full `changeReviewer` tool-use agent session via
+ * `runAgent`, so the run outcome is observable: the service collects the
+ * diff against the main branch, hands it to the agent, and receives findings
+ * live through the `report_review_issue` tool sink. Issues are published as
+ * diagnostics
  * (Problems panel + editor squiggles) and drive the Agent Review tree view;
  * "Fix with Agent" hands them to the file-editing `coder` agent.
  */

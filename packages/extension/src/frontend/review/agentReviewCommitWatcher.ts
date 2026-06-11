@@ -90,7 +90,9 @@ function watchRepository(
     // since the last completed review.
     pendingBaseRef ??= previousCommit;
     const baseRef = pendingBaseRef;
+    if (!baseRef) return;
     debounce = setTimeout(() => {
+      debounce = undefined;
       pendingBaseRef = undefined;
       logger.info(
         CHANNEL,
@@ -106,6 +108,7 @@ function watchRepository(
   context.subscriptions.push(subscription, {
     dispose: () => {
       if (debounce) clearTimeout(debounce);
+      pendingBaseRef = undefined;
     },
   });
 }

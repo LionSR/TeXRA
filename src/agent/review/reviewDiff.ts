@@ -8,12 +8,11 @@
  *
  * Host-neutral: shells out to git via the shared exec wrapper; no vscode.
  */
-
 // Standard library imports
-import { open, type FileHandle } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Local imports
+import { platform } from '@platform/platform';
 import { executeCommand } from '@utils/system/execUtils';
 
 import { normalizeReviewFilePath } from './reviewIssues';
@@ -74,7 +73,7 @@ async function git(cwd: string, args: string[]): Promise<string | null> {
 }
 
 /** True when the content looks binary (NUL byte in the leading bytes). */
-function isProbablyBinary(content: Buffer): boolean {
+function isProbablyBinary(content: Uint8Array): boolean {
   return content.subarray(0, 8000).includes(0);
 }
 
@@ -164,14 +163,15 @@ async function resolveOnBaseBranch(
  */
 export function buildUntrackedFileDiff(
   relativePath: string,
-  content: Buffer,
+  content: Uint8Array,
 ): string {
   const header = `diff --git a/${relativePath} b/${relativePath}\nnew file (untracked)\n`;
   if (isProbablyBinary(content)) {
     return `${header}Binary file ${relativePath} added\n`;
   }
 
-  const text = content.subarray(0, MAX_UNTRACKED_FILE_BYTES).toString('utf8');
+  const shownBytes = Buffer.from(content.subarray(0, MAX_UNTRACKED_FILE_BYTES));
+  const text = shownBytes.toString('utf8');
   const lines = text.split('\n');
   // Drop the empty trailing element from a final newline.
   if (lines.at(-1) === '') lines.pop();
@@ -186,29 +186,6 @@ export function buildUntrackedFileDiff(
       ? `\n[... ${relativePath} truncated]`
       : '';
   return `${header}--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +1,${shown.length} @@\n${body}${truncatedNotice}\n`;
-}
-
-/**
- * Read at most `maxBytes` from the start of a file. Untracked entries can be
- * multi-gigabyte artifacts (databases, caches, build outputs) — exactly the
- * accidental commits this feature exists to catch — so only the capped
- * prefix that can ever be rendered is loaded, never the whole file.
- */
-async function readFilePrefix(
-  filePath: string,
-  maxBytes: number,
-): Promise<Buffer | undefined> {
-  let handle: FileHandle | undefined;
-  try {
-    handle = await open(filePath, 'r');
-    const buffer = Buffer.alloc(maxBytes);
-    const { bytesRead } = await handle.read(buffer, 0, maxBytes, 0);
-    return buffer.subarray(0, bytesRead);
-  } catch {
-    return undefined; // Vanished or unreadable; skip.
-  } finally {
-    await handle?.close().catch(() => {});
-  }
 }
 
 /**
@@ -233,11 +210,16 @@ async function collectUntrackedDiffs(
     included.map(async (file) => {
       // One byte beyond the cap so buildUntrackedFileDiff still detects
       // and marks truncation for oversized files.
-      const content = await readFilePrefix(
-        path.join(repoRoot, file),
-        MAX_UNTRACKED_FILE_BYTES + 1,
-      );
-      return content && { file, content };
+      try {
+        const content = await platform().fs.readFileChunk(
+          path.join(repoRoot, file),
+          0,
+          MAX_UNTRACKED_FILE_BYTES + 1,
+        );
+        return { file, content };
+      } catch {
+        return undefined; // Vanished or unreadable; skip.
+      }
     }),
   );
 

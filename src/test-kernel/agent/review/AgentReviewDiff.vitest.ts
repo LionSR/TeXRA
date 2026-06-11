@@ -4,15 +4,27 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   buildUntrackedFileDiff,
   collectReviewDiff,
   isPathInChangeSet,
 } from '@agent/review/reviewDiff';
 import { executeCommand } from '@utils/system/execUtils';
+
+beforeAll(async () => {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(
+    createFakePlatform(
+      { workspacePath: process.cwd() },
+      { fs: nodeFilesystem },
+    ),
+  );
+});
 
 describe('isPathInChangeSet', () => {
   it('matches exact files and paths under changed directories', () => {
