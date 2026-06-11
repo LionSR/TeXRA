@@ -81,7 +81,7 @@ export const DEFAULT_CORE_SETTINGS = {
     compactionThresholdPercent: 75,
     gpt5ReasoningSummary: false,
     retry: {
-      maxAttempts: 0,
+      maxAttempts: 2,
       backoffMs: 1000,
     },
   },

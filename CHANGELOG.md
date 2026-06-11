@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [0.38.8] - 2026-06-11
 
+### Shared (all surfaces)
+
+#### Improvements
+
+- **One retry owner for model calls** — provider SDKs no longer run their own hidden retries underneath TeXRA's retry loop (the Anthropic and OpenAI SDKs silently retried twice inside each visible attempt, and the OpenRouter SDK's default backoff could stretch a single visible attempt by up to an hour on server errors). `texra.model.retry.maxAttempts` now means exactly what it says, every retry is visible, and errors that should not be retried — like a monthly spending limit — stop immediately instead of being silently retried first. To keep resilience against transient errors, the default for `texra.model.retry.maxAttempts` is now 2 (previously 0, which in practice relied on the SDKs' hidden retries).
+
 ### CLI
 
 #### Bug Fixes

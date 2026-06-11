@@ -853,7 +853,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const apiKey = await this.getApiKey();
     const baseURL = this.getBaseUrl();
     this.logger.debug(`Using ${providerName} API key. Base URL: ${baseURL}`);
-    return new OpenAI({ apiKey, baseURL });
+    // Disable SDK-level retries so that only the flow-level retry loop
+    // (RetryState.getNodeRetryConfig) manages the user's retry budget.
+    return new OpenAI({ apiKey, baseURL, maxRetries: 0 });
   }
 
   /** Returns OpenAI client with configured API key. */

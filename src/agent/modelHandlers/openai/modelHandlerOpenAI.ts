@@ -307,7 +307,9 @@ export class ModelHandlerOpenAI<
     const baseURL = this.getBaseUrl();
     this.logger.debug(`Using ${providerName} API key. Base URL: ${baseURL}`);
     // there is a time out parameter that can be set; default is 10 minutes
-    return new OpenAI({ apiKey, baseURL });
+    // Disable SDK-level retries so that only the flow-level retry loop
+    // (RetryState.getNodeRetryConfig) manages the user's retry budget.
+    return new OpenAI({ apiKey, baseURL, maxRetries: 0 });
   }
 
   /** Returns OpenAI client with configured API key. */

@@ -136,6 +136,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     return new OpenRouter({
       apiKey,
       appTitle: 'TeXRA.ai',
+      // Disable SDK-level retries so that only the flow-level retry loop
+      // (RetryState.getNodeRetryConfig) manages the user's retry budget.
+      // The SDK's default backoff strategy can otherwise stretch a single
+      // visible attempt by up to an hour on 5xx responses.
+      retryConfig: { strategy: 'none' },
       ...(baseUrl ? { serverURL: baseUrl } : {}),
     });
   }

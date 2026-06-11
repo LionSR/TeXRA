@@ -261,7 +261,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
 
     // For relay auth: credential is the user's JWT, SDK sends it via x-api-key header
-    return new Anthropic({ apiKey: credential, baseURL: baseUrl });
+    return new Anthropic({
+      apiKey: credential,
+      baseURL: baseUrl,
+      // Disable SDK-level retries so that only the flow-level retry loop
+      // (RetryState.getNodeRetryConfig) manages the user's retry budget.
+      maxRetries: 0,
+    });
   }
 
   /**

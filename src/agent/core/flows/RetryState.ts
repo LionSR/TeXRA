@@ -24,7 +24,7 @@ export interface RetryState {
 
 /** Returns maxRetries (1 initial + N auto-retries) and wait (seconds between retries). */
 function getNodeRetryConfig(): { maxRetries: number; wait: number } {
-  const maxAutoAttempts = getConfig<number>('texra.model.retry.maxAttempts', 1);
+  const maxAutoAttempts = getConfig<number>('texra.model.retry.maxAttempts', 2);
   const backoffMs = getConfig<number>('texra.model.retry.backoffMs', 1000);
 
   return {
