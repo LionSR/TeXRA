@@ -17,6 +17,7 @@ import { SUPABASE_CUSTOM_DOMAIN } from '../sharedConfig';
 import { getTierService } from '../tier';
 import {
   ServerSideKeyService,
+  USE_INCLUDED_ACCESS_KEY,
   type AuthProvider,
   type ServerSideKeyServiceInit,
 } from './ServerSideKeyService';
@@ -25,7 +26,7 @@ import {
 export { SERVER_SIDE_PROVIDERS, type ServerSideProvider } from './types';
 
 // Service class
-export { ServerSideKeyService, type AuthProvider };
+export { ServerSideKeyService, USE_INCLUDED_ACCESS_KEY, type AuthProvider };
 
 // ==========================================================================
 // Singleton Instance

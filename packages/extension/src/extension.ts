@@ -25,6 +25,7 @@ import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
   getServerSideKeyService,
   initializeServerSideKeyAccess,
+  USE_INCLUDED_ACCESS_KEY,
 } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
@@ -256,7 +257,8 @@ export async function activate(context: vscode.ExtensionContext) {
     await (async () => {
       const hasPriorInstall =
         context.globalState.get<string>(GlobalStateKey.LAST_KNOWN_VERSION) !==
-        undefined;
+          undefined ||
+        context.globalState.get<unknown>(USE_INCLUDED_ACCESS_KEY) !== undefined;
       const [hasCredential, hasRunHistory] = await Promise.all([
         // Same non-blank provider-key/server-side-key check used by the
         // funnel and setup launch preflight.

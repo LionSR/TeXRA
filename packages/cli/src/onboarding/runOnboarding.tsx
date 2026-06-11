@@ -27,7 +27,7 @@ import { listExecutions } from '@agent/storage';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { type OAuthProvider } from '@auth/sharedConfig';
 import { type SupabaseSession } from '@auth/SupabaseSession';
-import { USE_INCLUDED_ACCESS_KEY } from '@auth/serverKeys/ServerSideKeyService';
+import { USE_INCLUDED_ACCESS_KEY } from '@auth/serverKeys';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
