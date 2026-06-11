@@ -26,7 +26,9 @@ function normalizeWorkPlanSnapshot(input: unknown): unknown {
   const plan = parsePlan(record.plan);
   const planSummary = plan
     ? planSummaryLine(plan.objective)
-    : isNonEmptyString(record.planSummary) ? record.planSummary : null;
+    : isNonEmptyString(record.planSummary)
+      ? record.planSummary
+      : null;
 
   return {
     todos: record.todos,
