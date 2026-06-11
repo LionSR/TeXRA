@@ -27,6 +27,7 @@ import {
   type AgentReviewNode,
 } from '@frontend/review/AgentReviewTreeProvider';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { setReportReviewIssueSink } from '@tools/ReportReviewIssueTool';
 
 const CHANNEL = 'AgentReview';
 
@@ -71,6 +72,11 @@ export function registerAgentReviewCommands(
   context: vscode.ExtensionContext,
 ): void {
   AgentReviewService.initialize(context);
+  // Findings from the changeReviewer tool-use session flow in through the
+  // report_review_issue tool and land in the panel + diagnostics live.
+  setReportReviewIssueSink((report) =>
+    AgentReviewService.addIssueReport(report),
+  );
 
   const treeProvider = new AgentReviewTreeProvider();
   const treeView = vscode.window.createTreeView(AGENT_REVIEW_VIEW_ID, {

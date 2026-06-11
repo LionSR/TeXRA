@@ -16,6 +16,8 @@ import * as path from 'node:path';
 // Local imports
 import { executeCommand } from '@utils/system/execUtils';
 
+import { normalizeReviewFilePath } from './reviewIssues';
+
 const CHANNEL = 'AgentReview';
 const GIT_TIMEOUT_MS = 30_000;
 
@@ -29,12 +31,15 @@ const MAX_UNTRACKED_FILE_BYTES = 200 * 1024;
 const MAX_REVIEW_DIFF_CHARS = 160_000;
 
 export interface CollectReviewDiffOptions {
+  /** Any path inside the repository; the diff always covers the whole repo. */
   cwd: string;
   includeUntracked: boolean;
   includeSubmodules: boolean;
 }
 
 export interface ReviewDiff {
+  /** Absolute path of the repository root all paths are relative to. */
+  repoRoot: string;
   /** Ref or commit the working tree was diffed against. */
   baseRef: string;
   /** Human-readable description of the base, for prompts and the UI. */
@@ -61,6 +66,28 @@ async function git(cwd: string, args: string[]): Promise<string | null> {
   return result.success ? (result.stdout ?? '') : null;
 }
 
+/** True when the content looks binary (NUL byte in the leading bytes). */
+function isProbablyBinary(content: Buffer): boolean {
+  return content.subarray(0, 8000).includes(0);
+}
+
+/**
+ * True when `file` belongs to the collected change set. Prefix matches keep
+ * issues inside changed submodules, whose diff entries name the submodule
+ * directory rather than the inner file — this matcher lives next to the
+ * diff collection so that knowledge stays in one module.
+ */
+export function isPathInChangeSet(
+  changedFiles: readonly string[],
+  file: string,
+): boolean {
+  const known = changedFiles.map(normalizeReviewFilePath);
+  const candidate = normalizeReviewFilePath(file);
+  return known.some(
+    (entry) => entry === candidate || candidate.startsWith(`${entry}/`),
+  );
+}
+
 interface BaseBranch {
   /** Full ref usable as a diff base (e.g. "origin/main" or "main"). */
   ref: string;
@@ -80,18 +107,41 @@ async function detectBaseBranch(cwd: string): Promise<BaseBranch | null> {
     const ref = originHead.trim();
     return { ref, shortName: ref.replace(/^origin\//, '') };
   }
-  for (const candidate of BASE_BRANCH_CANDIDATES) {
-    const verified = await git(cwd, [
-      'rev-parse',
-      '--verify',
-      '--quiet',
-      `refs/heads/${candidate}`,
-    ]);
-    if (verified) {
-      return { ref: candidate, shortName: candidate };
-    }
+  const verified = await Promise.all(
+    BASE_BRANCH_CANDIDATES.map((candidate) =>
+      git(cwd, ['rev-parse', '--verify', '--quiet', `refs/heads/${candidate}`]),
+    ),
+  );
+  const index = verified.findIndex((sha) => sha !== null);
+  if (index === -1) return null;
+  const candidate = BASE_BRANCH_CANDIDATES[index];
+  return { ref: candidate, shortName: candidate };
+}
+
+/**
+ * Pick the diff base when the main branch itself is checked out: the
+ * uncommitted changes when the tree is dirty, otherwise the latest commit —
+ * so a run-on-commit review right after `git commit` still has something
+ * to look at.
+ */
+async function resolveOnBaseBranch(
+  cwd: string,
+  branch: string,
+): Promise<Pick<ReviewDiff, 'baseRef' | 'baseDescription'>> {
+  const treeClean = (await git(cwd, ['diff', '--quiet', 'HEAD'])) !== null;
+  if (
+    treeClean &&
+    (await git(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD^']))
+  ) {
+    return {
+      baseRef: 'HEAD^',
+      baseDescription: `previous commit on ${branch} (latest commit)`,
+    };
   }
-  return null;
+  return {
+    baseRef: 'HEAD',
+    baseDescription: `last commit on ${branch} (uncommitted changes)`,
+  };
 }
 
 /**
@@ -105,8 +155,7 @@ export function buildUntrackedFileDiff(
   content: Buffer,
 ): string {
   const header = `diff --git a/${relativePath} b/${relativePath}\nnew file (untracked)\n`;
-  const probe = content.subarray(0, 8000);
-  if (probe.includes(0)) {
+  if (isProbablyBinary(content)) {
     return `${header}Binary file ${relativePath} added\n`;
   }
 
@@ -128,9 +177,9 @@ export function buildUntrackedFileDiff(
 }
 
 async function collectUntrackedDiffs(
-  cwd: string,
+  repoRoot: string,
 ): Promise<{ diff: string; files: string[] }> {
-  const listing = await git(cwd, [
+  const listing = await git(repoRoot, [
     'ls-files',
     '--others',
     '--exclude-standard',
@@ -139,17 +188,22 @@ async function collectUntrackedDiffs(
 
   const untracked = listing.split('\n').filter(Boolean);
   const included = untracked.slice(0, MAX_UNTRACKED_FILES);
+  const contents = await Promise.all(
+    included.map(async (file) => {
+      try {
+        return { file, content: await readFile(path.join(repoRoot, file)) };
+      } catch {
+        return undefined; // Vanished or unreadable; skip.
+      }
+    }),
+  );
+
   const sections: string[] = [];
   const files: string[] = [];
-  for (const file of included) {
-    let content: Buffer;
-    try {
-      content = await readFile(path.join(cwd, file));
-    } catch {
-      continue; // Vanished or unreadable; skip.
-    }
-    sections.push(buildUntrackedFileDiff(file, content));
-    files.push(file);
+  for (const entry of contents) {
+    if (!entry) continue;
+    sections.push(buildUntrackedFileDiff(entry.file, entry.content));
+    files.push(entry.file);
   }
   if (untracked.length > included.length) {
     sections.push(
@@ -161,19 +215,27 @@ async function collectUntrackedDiffs(
 
 /**
  * Collect the reviewable diff: working tree against the merge-base with the
- * main branch, or against HEAD (uncommitted changes only) when the main
- * branch is checked out.
+ * main branch. When the main branch itself is checked out, falls back to the
+ * uncommitted changes, or to the latest commit when the tree is clean.
+ *
+ * All paths in the result are relative to {@link ReviewDiff.repoRoot}, which
+ * may be above `options.cwd` when the workspace is a repository subfolder.
  */
 export async function collectReviewDiff(
   options: CollectReviewDiffOptions,
 ): Promise<CollectReviewDiffResult> {
-  const { cwd, includeUntracked, includeSubmodules } = options;
+  const { includeUntracked, includeSubmodules } = options;
 
-  if (!(await git(cwd, ['rev-parse', '--is-inside-work-tree']))) {
+  // `git diff <commit>` always emits repo-relative paths; resolve the root
+  // so file reads and editor locations agree with them.
+  const repoRoot = (
+    await git(options.cwd, ['rev-parse', '--show-toplevel'])
+  )?.trim();
+  if (!repoRoot) {
     return { ok: false, reason: 'The workspace is not a git repository.' };
   }
 
-  const base = await detectBaseBranch(cwd);
+  const base = await detectBaseBranch(repoRoot);
   if (!base) {
     return {
       ok: false,
@@ -181,15 +243,18 @@ export async function collectReviewDiff(
     };
   }
 
-  const head = (await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim();
+  const head = (
+    await git(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD'])
+  )?.trim();
   let baseRef: string;
   let baseDescription: string;
   if (head === base.shortName) {
-    // Already on the main branch: review the uncommitted changes.
-    baseRef = 'HEAD';
-    baseDescription = `last commit on ${base.shortName} (uncommitted changes)`;
+    ({ baseRef, baseDescription } = await resolveOnBaseBranch(
+      repoRoot,
+      base.shortName,
+    ));
   } else {
-    const mergeBase = await git(cwd, ['merge-base', 'HEAD', base.ref]);
+    const mergeBase = await git(repoRoot, ['merge-base', 'HEAD', base.ref]);
     if (!mergeBase) {
       return {
         ok: false,
@@ -203,33 +268,22 @@ export async function collectReviewDiff(
   const submoduleFlag = includeSubmodules
     ? '--submodule=diff'
     : '--ignore-submodules=all';
-  const diffText = await git(cwd, [
-    'diff',
-    '--no-color',
-    submoduleFlag,
-    baseRef,
-    '--',
+  const [diffText, nameOnly, untracked] = await Promise.all([
+    git(repoRoot, ['diff', '--no-color', submoduleFlag, baseRef, '--']),
+    git(repoRoot, ['diff', '--name-only', submoduleFlag, baseRef, '--']),
+    includeUntracked
+      ? collectUntrackedDiffs(repoRoot)
+      : Promise.resolve({ diff: '', files: [] }),
   ]);
   if (diffText === null) {
     return { ok: false, reason: `git diff against ${baseRef} failed.` };
   }
 
-  const nameOnly = await git(cwd, [
-    'diff',
-    '--name-only',
-    submoduleFlag,
-    baseRef,
-    '--',
-  ]);
   const changedFiles = (nameOnly ?? '').split('\n').filter(Boolean);
-
   let combined = diffText;
-  if (includeUntracked) {
-    const untracked = await collectUntrackedDiffs(cwd);
-    if (untracked.diff) {
-      combined = combined ? `${combined}\n${untracked.diff}` : untracked.diff;
-      changedFiles.push(...untracked.files);
-    }
+  if (untracked.diff) {
+    combined = combined ? `${combined}\n${untracked.diff}` : untracked.diff;
+    changedFiles.push(...untracked.files);
   }
 
   let truncated = false;
@@ -241,6 +295,7 @@ export async function collectReviewDiff(
   return {
     ok: true,
     value: {
+      repoRoot,
       baseRef,
       baseDescription,
       diff: combined.trim() ? combined : '',

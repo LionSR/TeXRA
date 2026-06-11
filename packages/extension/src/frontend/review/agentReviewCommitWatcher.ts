@@ -8,11 +8,15 @@
  * branch resets the baseline without reviewing.
  */
 
+// Standard library imports
+import * as path from 'node:path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports
 import { toErrorMessage } from '@common/errors';
+import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
@@ -22,37 +26,15 @@ import { AgentReviewService } from './AgentReviewService';
 const CHANNEL = 'AgentReview';
 const COMMIT_DEBOUNCE_MS = 1500;
 
-/** Minimal types for the vscode.git extension public API (version 1). */
-interface GitBranchInfo {
-  readonly name?: string;
-  readonly commit?: string;
-}
-
-interface GitRepositoryState {
-  readonly HEAD: GitBranchInfo | undefined;
-  readonly onDidChange: vscode.Event<void>;
-}
-
-interface GitRepository {
-  readonly rootUri: vscode.Uri;
-  readonly state: GitRepositoryState;
-}
-
-interface GitAPI {
-  readonly repositories: GitRepository[];
-  readonly onDidOpenRepository: vscode.Event<GitRepository>;
-}
-
-interface GitExtension {
-  getAPI(version: 1): GitAPI;
-}
-
 /** True when the workspace root lives inside the repository. */
 function isWorkspaceRepository(repository: GitRepository): boolean {
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) return false;
-  const repoRoot = repository.rootUri.fsPath;
-  return workspacePath === repoRoot || workspacePath.startsWith(`${repoRoot}/`);
+  const relative = path.relative(repository.rootUri.fsPath, workspacePath);
+  return (
+    relative === '' ||
+    (!relative.startsWith('..') && !path.isAbsolute(relative))
+  );
 }
 
 function watchRepository(
@@ -107,13 +89,8 @@ export function registerAgentReviewCommitWatcher(
   context: vscode.ExtensionContext,
 ): void {
   void (async () => {
-    const extension =
-      vscode.extensions.getExtension<GitExtension>('vscode.git');
-    if (!extension) return;
-    const exports = extension.isActive
-      ? extension.exports
-      : await extension.activate();
-    const git = exports.getAPI(1);
+    const git = await getGitAPI();
+    if (!git) return;
 
     for (const repository of git.repositories) {
       watchRepository(repository, context);

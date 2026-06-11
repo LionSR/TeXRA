@@ -1,5 +1,5 @@
 // Standard library imports
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
@@ -10,8 +10,20 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildUntrackedFileDiff,
   collectReviewDiff,
+  isPathInChangeSet,
 } from '@agent/review/reviewDiff';
 import { executeCommand } from '@utils/system/execUtils';
+
+describe('isPathInChangeSet', () => {
+  it('matches exact files and paths under changed directories', () => {
+    const changed = ['src/x.ts', 'vendor'];
+    expect(isPathInChangeSet(changed, 'src/x.ts')).toBe(true);
+    expect(isPathInChangeSet(changed, 'b/src/x.ts')).toBe(true);
+    expect(isPathInChangeSet(changed, 'vendor/lib.c')).toBe(true);
+    expect(isPathInChangeSet(changed, 'unrelated.ts')).toBe(false);
+    expect(isPathInChangeSet(changed, 'vendored.ts')).toBe(false);
+  });
+});
 
 describe('buildUntrackedFileDiff', () => {
   it('renders text content as an added-lines pseudo-diff', () => {
@@ -93,6 +105,23 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(result.value.diff).toContain('+untracked content');
     expect(result.value.changedFiles).toEqual(['paper.tex', 'scratch.txt']);
     expect(result.value.truncated).toBe(false);
+    expect(await realpath(result.value.repoRoot)).toBe(await realpath(repo));
+  });
+
+  it('resolves the repository root when run from a subdirectory', async () => {
+    await git('checkout', '-b', 'feature');
+    await mkdir(path.join(repo, 'sub'));
+    await writeFile(path.join(repo, 'sub', 'note.txt'), 'untracked content\n');
+
+    const result = await collectReviewDiff({
+      cwd: path.join(repo, 'sub'),
+      includeUntracked: true,
+      includeSubmodules: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(await realpath(result.value.repoRoot)).toBe(await realpath(repo));
+    expect(result.value.changedFiles).toEqual(['sub/note.txt']);
   });
 
   it('omits untracked files when disabled', async () => {
@@ -122,6 +151,33 @@ describe('collectReviewDiff (real git repository)', () => {
     if (!result.ok) return;
     expect(result.value.baseDescription).toContain('uncommitted changes');
     expect(result.value.diff).toContain('+edited on main');
+  });
+
+  it('reviews the latest commit when on main with a clean tree', async () => {
+    await writeFile(path.join(repo, 'paper.tex'), 'committed on main\n');
+    await git('commit', '-am', 'second');
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: false,
+      includeSubmodules: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.baseDescription).toContain('latest commit');
+    expect(result.value.diff).toContain('+committed on main');
+    expect(result.value.diff).toContain('-original line');
+  });
+
+  it('reports no changes on main with a clean tree and no parent commit', async () => {
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: false,
+      includeSubmodules: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.diff).toBe('');
   });
 
   it('fails with a reason outside a git repository', async () => {

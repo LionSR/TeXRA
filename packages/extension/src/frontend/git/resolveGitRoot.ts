@@ -4,18 +4,8 @@ import * as path from 'node:path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-/** Minimal types for the vscode.git extension public API (version 1). */
-interface GitRepository {
-  readonly rootUri: vscode.Uri;
-}
-
-interface GitAPI {
-  getRepository(uri: vscode.Uri): GitRepository | null;
-}
-
-interface GitExtension {
-  getAPI(version: 1): GitAPI;
-}
+// Local imports
+import { getGitAPI } from './gitExtensionTypes';
 
 function hasFileType(stat: vscode.FileStat, type: vscode.FileType): boolean {
   return (stat.type & type) !== 0;
@@ -51,14 +41,8 @@ export async function resolveGitCommonRoot(
   workspacePath: string,
 ): Promise<string | undefined> {
   try {
-    const ext = vscode.extensions.getExtension<GitExtension>('vscode.git');
-    if (!ext) {
-      return undefined;
-    }
-
-    const exports = ext.isActive ? ext.exports : await ext.activate();
-    const git = exports.getAPI(1);
-    const repo = git.getRepository(vscode.Uri.file(workspacePath));
+    const git = await getGitAPI();
+    const repo = git?.getRepository(vscode.Uri.file(workspacePath));
     if (!repo) {
       return undefined;
     }

@@ -1,11 +1,12 @@
 /**
- * Agent review state for the VS Code extension: holds the issues found by
- * the latest run, publishes them as diagnostics (Problems panel + editor
- * squiggles), and launches the fixing tool-use agent.
+ * Agent review state for the VS Code extension.
  *
- * The host-neutral engine lives in `@agent/review`; this service owns the
- * VS Code-facing side — configuration, progress UI, diagnostics, and the
- * change event the tree view and code actions subscribe to.
+ * A review runs as a full `changeReviewer` tool-use agent session (launched
+ * through `texra.execute`): the service collects the diff against the main
+ * branch, hands it to the agent, and receives findings live through the
+ * `report_review_issue` tool sink. Issues are published as diagnostics
+ * (Problems panel + editor squiggles) and drive the Agent Review tree view;
+ * "Fix with Agent" hands them to the file-editing `coder` agent.
  */
 
 // Standard library imports
@@ -15,17 +16,17 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  runAgentReview,
-  type AgentReviewOutcome,
-} from '@agent/review/runAgentReview';
+import { collectReviewDiff, isPathInChangeSet } from '@agent/review/reviewDiff';
 import {
   buildFixInstruction,
+  buildReviewInstruction,
+  createReviewIssue,
   type ReviewApproach,
   type ReviewIssue,
+  type ReviewIssueReport,
   type ReviewSeverity,
 } from '@agent/review/reviewIssues';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { toErrorMessage } from '@common/errors';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
@@ -34,8 +35,12 @@ import { getConfig } from '@utils/config/configUtils';
 const CHANNEL = 'AgentReview';
 const COLLECTION_NAME = 'texra-agent-review';
 const SOURCE_LABEL = 'TeXRA Agent Review';
+/** Tool-use agent that performs the review and reports issues via the tool sink. */
+const REVIEW_AGENT = 'changeReviewer';
 /** Tool-use agent used for "Fix with Agent" — a general surgical editor. */
 const FIX_AGENT = 'coder';
+/** Hard cap so a runaway reviewer session cannot flood the panel. */
+const MAX_ISSUES_PER_REVIEW = 25;
 
 export const AGENT_REVIEW_VIEW_ID = 'texra.agentReviewView';
 
@@ -48,13 +53,20 @@ interface AgentReviewStateSnapshot {
   summary: string | undefined;
 }
 
+/** Context of the in-flight review session that issue reports are checked against. */
+interface ActiveReview {
+  repoRoot: string;
+  baseDescription: string;
+  changedFiles: string[];
+}
+
 const SEVERITY_MAP: Record<ReviewSeverity, vscode.DiagnosticSeverity> = {
   critical: vscode.DiagnosticSeverity.Error,
   warning: vscode.DiagnosticSeverity.Warning,
   info: vscode.DiagnosticSeverity.Information,
 };
 
-/** Editor range for an issue (model lines are 1-based). */
+/** Editor range for an issue (issue lines are 1-based). */
 export function issueRange(issue: ReviewIssue): vscode.Range {
   const startLine = Math.max(0, issue.startLine - 1);
   const endLine = Math.max(startLine, issue.endLine - 1);
@@ -72,9 +84,12 @@ class AgentReviewServiceImpl {
   private readonly dismissed = new Set<string>();
   private running = false;
   private summary: string | undefined;
-  /** Workspace root the current issues were reviewed in. */
+  /** Repository root the current issues' paths are relative to. */
   private reviewRoot: string | undefined;
   private baseDescription = 'main branch';
+  private activeReview: ActiveReview | undefined;
+  /** A commit arrived while a review was running; run once more afterwards. */
+  private pendingCommitReview = false;
 
   initialize(context: vscode.ExtensionContext): void {
     this.collection =
@@ -106,13 +121,19 @@ class AgentReviewServiceImpl {
     );
   }
 
-  /** Run a review of the working tree against the main branch. */
+  /**
+   * Run a review of the working tree against the main branch as a
+   * `changeReviewer` tool-use session. Issues stream in through
+   * {@link addIssueReport} while the session runs.
+   */
   async runReview(trigger: AgentReviewTrigger): Promise<void> {
     if (this.running) {
       if (trigger === 'manual') {
         void vscode.window.showInformationMessage(
           'An agent review is already running.',
         );
+      } else {
+        this.pendingCommitReview = true;
       }
       return;
     }
@@ -132,81 +153,170 @@ class AgentReviewServiceImpl {
     this.emitter.fire();
 
     try {
-      const outcome = await vscode.window.withProgress(
+      await vscode.window.withProgress(
         {
           location: { viewId: AGENT_REVIEW_VIEW_ID },
           title: 'Agent review',
         },
-        () =>
-          runAgentReview({
-            cwd,
-            includeUntracked: getConfig<boolean>(
-              'agentReview.includeUntrackedFiles',
-              true,
-            ),
-            includeSubmodules: getConfig<boolean>(
-              'agentReview.includeSubmodules',
-              true,
-            ),
-            approach: getConfig<ReviewApproach>(
-              'agentReview.approach',
-              'quick',
-            ),
-            modelOverride:
-              getConfig<string>('agentReview.model', '').trim() || undefined,
-          }),
+        () => this.executeReview(cwd, trigger),
       );
-      this.reviewRoot = cwd;
-      this.applyOutcome(outcome, trigger);
     } finally {
+      this.activeReview = undefined;
       this.running = false;
       await this.syncContextKeys();
       this.emitter.fire();
+      if (this.pendingCommitReview) {
+        this.pendingCommitReview = false;
+        void this.runReview('commit');
+      }
     }
   }
 
-  private applyOutcome(
-    outcome: AgentReviewOutcome,
+  private async executeReview(
+    cwd: string,
     trigger: AgentReviewTrigger,
-  ): void {
-    switch (outcome.status) {
-      case 'ok': {
-        this.baseDescription = outcome.baseDescription;
-        this.issues = outcome.issues.filter(
-          (issue) => !this.dismissed.has(fingerprint(issue)),
-        );
-        const count = this.issues.length;
-        this.summary =
-          count === 0
-            ? `No issues found (diff with ${outcome.baseDescription})`
-            : `Found ${count} potential issue${count === 1 ? '' : 's'} (diff with ${outcome.baseDescription})${outcome.truncated ? ' · diff truncated' : ''}`;
-        logger.info(
+  ): Promise<void> {
+    const collected = await collectReviewDiff({
+      cwd,
+      includeUntracked: getConfig<boolean>(
+        'agentReview.includeUntrackedFiles',
+        true,
+      ),
+      includeSubmodules: getConfig<boolean>(
+        'agentReview.includeSubmodules',
+        true,
+      ),
+    });
+    if (!collected.ok) {
+      this.summary = `Review failed: ${collected.reason}`;
+      if (trigger === 'manual') {
+        void showLoggedErrorMessage(
           CHANNEL,
-          `Agent review (${trigger}) with ${outcome.modelName}: ${count} issue(s) across ${outcome.changedFileCount} changed file(s)`,
+          'Agent review failed',
+          collected.reason,
         );
-        break;
+      } else {
+        logger.warn(CHANNEL, `Agent review failed: ${collected.reason}`);
       }
-      case 'no-changes': {
-        this.issues = [];
-        this.summary = `No changes to review (working tree matches ${outcome.baseDescription})`;
-        break;
-      }
-      case 'error': {
-        // Keep any previous issues; a failed re-run shouldn't erase results.
-        this.summary = `Review failed: ${outcome.reason}`;
-        if (trigger === 'manual') {
-          void showLoggedErrorMessage(
-            CHANNEL,
-            'Agent review failed',
-            outcome.reason,
-          );
-        } else {
-          logger.warn(CHANNEL, `Agent review failed: ${outcome.reason}`);
-        }
-        break;
-      }
+      return;
     }
+
+    const { repoRoot, baseDescription, diff, changedFiles, truncated } =
+      collected.value;
+    this.baseDescription = baseDescription;
+    if (!diff) {
+      this.issues = [];
+      this.summary = `No changes to review (working tree matches ${baseDescription})`;
+      this.updateDiagnostics();
+      return;
+    }
+
+    // Start a fresh collection; the reviewer session reports into it live.
+    this.reviewRoot = repoRoot;
+    this.issues = [];
     this.updateDiagnostics();
+    this.activeReview = { repoRoot, baseDescription, changedFiles };
+    this.emitter.fire();
+
+    const instruction = buildReviewInstruction({
+      baseDescription,
+      changedFiles,
+      diff,
+      truncated,
+      approach: getConfig<ReviewApproach>('agentReview.approach', 'quick'),
+    });
+    const config: Record<string, unknown> = {
+      agent: REVIEW_AGENT,
+      instruction,
+      displayInstruction: `Agent review: diff with ${baseDescription} (${changedFiles.length} file${changedFiles.length === 1 ? '' : 's'})`,
+    };
+    const model = getConfig<string>('agentReview.model', '').trim();
+    if (model) config.model = model;
+
+    try {
+      // Resolves when the reviewer agent finishes its turn; the run itself
+      // is visible as a regular tool-use session in the progress view.
+      await vscode.commands.executeCommand('texra.execute', config);
+    } catch (err) {
+      // Run-lifecycle failures are already logged and surfaced; keep the
+      // panel state honest without a second notification.
+      this.summary = `Review failed: ${toErrorMessage(err)}`;
+      logger.warn(
+        CHANNEL,
+        `Agent review session failed: ${toErrorMessage(err)}`,
+      );
+      return;
+    }
+
+    const count = this.issues.length;
+    this.summary =
+      count === 0
+        ? `No issues found (diff with ${baseDescription})`
+        : `Found ${count} potential issue${count === 1 ? '' : 's'} (diff with ${baseDescription})${truncated ? ' · diff truncated' : ''}`;
+    logger.info(
+      CHANNEL,
+      `Agent review (${trigger}): ${count} issue(s) across ${changedFiles.length} changed file(s)`,
+    );
+  }
+
+  /**
+   * Sink for the `report_review_issue` tool: validate a finding from the
+   * reviewer session and publish it. Rejections return a reason so the
+   * agent can correct itself (wrong file, duplicate, dismissed, no session).
+   */
+  addIssueReport(report: ReviewIssueReport): {
+    accepted: boolean;
+    reason?: string;
+  } {
+    const active = this.activeReview;
+    if (!active) {
+      return {
+        accepted: false,
+        reason:
+          'No agent review session is collecting issues. Findings can only be reported from a review started via "Run Agent Review".',
+      };
+    }
+    if (this.issues.length >= MAX_ISSUES_PER_REVIEW) {
+      return {
+        accepted: false,
+        reason: `The issue limit (${MAX_ISSUES_PER_REVIEW}) for this review was reached; stop reporting and summarize.`,
+      };
+    }
+
+    const issue = createReviewIssue({
+      ...report,
+      file: path.isAbsolute(report.file)
+        ? path.relative(active.repoRoot, report.file)
+        : report.file,
+    });
+    if (!isPathInChangeSet(active.changedFiles, issue.file)) {
+      return {
+        accepted: false,
+        reason: `${issue.file} is not part of the reviewed change set; attribute the issue to one of the changed files.`,
+      };
+    }
+    if (this.dismissed.has(fingerprint(issue))) {
+      return {
+        accepted: false,
+        reason:
+          'The user previously dismissed this issue; do not re-report it.',
+      };
+    }
+    if (
+      this.issues.some(
+        (existing) =>
+          existing.file === issue.file &&
+          existing.title.toLowerCase() === issue.title.toLowerCase(),
+      )
+    ) {
+      return { accepted: false, reason: 'This issue was already reported.' };
+    }
+
+    this.issues = [...this.issues, issue];
+    this.updateDiagnostics();
+    void this.syncContextKeys();
+    this.emitter.fire();
+    return { accepted: true };
   }
 
   dismissIssue(id: string): void {
@@ -245,11 +355,19 @@ class AgentReviewServiceImpl {
     }
 
     const instruction = buildFixInstruction(targets, this.baseDescription);
-    await safeExecuteCommand(
-      'texra.execute',
-      [{ agent: FIX_AGENT, instruction }],
-      CHANNEL,
-    );
+    try {
+      await vscode.commands.executeCommand('texra.execute', {
+        agent: FIX_AGENT,
+        instruction,
+      });
+    } catch (err) {
+      await showLoggedErrorMessage(
+        CHANNEL,
+        'Could not launch the fix agent',
+        err,
+      );
+      return;
+    }
     void vscode.window.showInformationMessage(
       `Launched the ${FIX_AGENT} agent to fix ${targets.length} review issue${targets.length === 1 ? '' : 's'}. Run the review again once it finishes.`,
     );
