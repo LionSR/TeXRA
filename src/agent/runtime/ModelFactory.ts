@@ -11,7 +11,7 @@ import { isGpt5ModelName } from '@model/modelNames';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-import { LEVEL_TO_EFFORT } from './reasoningEffort';
+import { LEVEL_TO_EFFORT } from '@agent/modelHandlers/support/reasoningEffort';
 
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
