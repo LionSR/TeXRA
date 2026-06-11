@@ -2,6 +2,7 @@
 import LeanToolsHero from '../.vitepress/components/LeanToolsHero.vue';
 import LeanProofHero from '../.vitepress/components/LeanProofHero.vue';
 import LeanProjectCommands from '../.vitepress/components/LeanProjectCommands.vue';
+import CliLeanHero from '../.vitepress/components/CliLeanHero.vue';
 </script>
 
 # Lean 4 Proofs
@@ -39,6 +40,10 @@ There's no Lean 4 extension to lean on, so TeXRA spawns its own server (`lake en
    lake --version
    ```
 3. Open a folder containing a `lakefile.lean` or `lakefile.toml`.
+
+<CliLeanHero />
+
+<p class="hero-caption">No extension underneath: the CLI talks to Lake directly, and the same <code>lean_*</code> tools run against its own server process.</p>
 
 If you don't have elan yet, see the [Lean community install guide](https://leanprover-community.github.io/install/).
 

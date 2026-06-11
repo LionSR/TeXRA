@@ -1,5 +1,6 @@
 <script setup>
 import StorageLifecycleFlow from '../.vitepress/components/StorageLifecycleFlow.vue';
+import CliStorageHero from '../.vitepress/components/CliStorageHero.vue';
 </script>
 
 # File Management
@@ -212,7 +213,9 @@ editor.
 To browse the whole run folder, use the
 <wa-icon library="texra" name="folder-opened"></wa-icon> **Open in task storage** toolbar
 button. This reveals the task-run storage folder with generated files, compile
-logs, mirrored LaTeX dependencies, and intermediate artifacts.
+logs, mirrored LaTeX dependencies, and intermediate artifacts. (From a
+terminal, `texra history show <id>` lists the same stored artifacts — see the
+card below.)
 
 ### Task Run Storage
 
@@ -229,6 +232,13 @@ files. Three commands then move that run's artifacts to three different places:
 <StorageLifecycleFlow />
 
 <p class="hero-caption">Accept copies reviewed outputs into the workspace, Pack archives the run into History, and Clean deletes the run folder — your input files are never touched.</p>
+
+The CLI follows the same storage-first lifecycle — its run store lives at
+`.texra/runs/<run-id>/`, and `--output` plays the role of **Accept**:
+
+<CliStorageHero />
+
+<p class="hero-caption">Three beats of the same lifecycle: storage-first output, <code>--output</code> as Accept, and <code>history show</code> to browse a run's stored files.</p>
 
 The folder also stores intermediate artifacts such as optional
 debug JSON files written when `texra.debug.saveDebugObjects` is enabled.

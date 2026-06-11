@@ -2,6 +2,7 @@
 
 <script setup>
 import RemoteAgentsProfile from '../.vitepress/components/RemoteAgentsProfile.vue';
+import CliRemoteHero from '../.vitepress/components/CliRemoteHero.vue';
 </script>
 
 Remote agents are cloud-hosted AI agents maintained by the TeXRA team that extend your extension's capabilities with specialized functionality. They're automatically updated with the latest improvements and optimizations without requiring extension updates.
@@ -81,6 +82,12 @@ In the agent dropdown, your local agents sit above a **Remote** group whose entr
 />
 
 <p class="hero-caption">The agent dropdown: remote agents (<code>search</code>, <code>discuss</code>, <code>simplifier</code>) carry a cloud marker that sets them apart from local agents like <code>polish</code> and <code>correct</code>.</p>
+
+None of this is VS Code-only — the whole loop works from a terminal too:
+
+<CliRemoteHero />
+
+<p class="hero-caption">Sign in once and remote agents resolve by name everywhere: <code>agents show</code> reports <code>source: remote</code>, and <code>texra chat --agent search</code> runs it like any local agent.</p>
 
 ## Researcher Access Program
 

@@ -2,6 +2,7 @@
 import ModelPickerHero from '../.vitepress/components/ModelPickerHero.vue';
 import ProviderConfigRow from '../.vitepress/components/ProviderConfigRow.vue';
 import ModelChoiceMatrix from '../.vitepress/components/ModelChoiceMatrix.vue';
+import CliModelsHero from '../.vitepress/components/CliModelsHero.vue';
 </script>
 
 # AI Models
@@ -130,7 +131,11 @@ Choose which models appear in the extension picker from the **Dashboard → Mode
 
 In the CLI TUI, use `/model` after a chat starts to switch among models that are runnable in the active API mode. Startup also asks for a model when the launcher flow needs one after the agent or team choice.
 
-For headless CLI runs, list what's available with `texra models list` (or `texra models show <id>` for details), then pick a default for your project by setting the `model` key in `.texra/config.json`, or override per run with `--model <id>`.
+For headless CLI runs, list what's available with `texra models list` (or `texra models show <id>` for details), then pick a default for your project by setting the `model` key in `.texra/config.json`, or override per run with `--model <id>`:
+
+<CliModelsHero />
+
+<p class="hero-caption">The id column is exactly what <code>--model</code> takes — the same short ids used in the tables above; <code>--all</code> includes models your current access mode can't run, with the reason.</p>
 
 ## Using OpenRouter
 

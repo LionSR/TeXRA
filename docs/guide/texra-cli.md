@@ -2,6 +2,8 @@
 import CliChatHero from '../.vitepress/components/CliChatHero.vue';
 import CliAuthModesHero from '../.vitepress/components/CliAuthModesHero.vue';
 import CliToolsListHero from '../.vitepress/components/CliToolsListHero.vue';
+import CliRunHero from '../.vitepress/components/CliRunHero.vue';
+import CliMultiAgentHero from '../.vitepress/components/CliMultiAgentHero.vue';
 import ConfigPrecedenceStack from '../.vitepress/components/ConfigPrecedenceStack.vue';
 </script>
 
@@ -40,6 +42,17 @@ Run a workflow agent from a project directory:
 ```bash
 texra run polish --input paper.tex --output paper.polished.tex --print
 ```
+
+<CliRunHero
+  command="texra run polish --input paper.tex --output paper.polished.tex --print"
+  :rounds="[
+    { label: 'r0 — draft revision', state: 'done' },
+    { label: 'r1 — critique and revise', state: 'done' },
+  ]"
+  :outputs="['paper.polished.tex']"
+/>
+
+<p class="hero-caption">Command in, rounds stream as progress, and the printed path is the success signal: the copied <code>--output</code> destination, or the generated file in run storage when no copy was requested.</p>
 
 Pass read-only context files with repeated `--context` flags. The agent can
 read these files through `{{ ALL_CONTEXTS }}`, but it should only emit revised
@@ -191,6 +204,10 @@ to `coder`, `codeReviewer`, `testEngineer`, `codeSimplifier`, and
 `progressCheck`. Pass `--input` and `--context` files as with `texra run`;
 read-only context files are included in the instruction the team receives.
 
+<CliMultiAgentHero />
+
+<p class="hero-caption">The lead delegates while child agents stream below it as numbered subagent rows — each one a focusable stream with its own scoped transcript.</p>
+
 In an interactive team session, focusing a subagent shows only its own
 transcript — scroll back through its earlier output with normal terminal
 scrolling and search. Each subagent keeps its own scoped history that persists
@@ -260,16 +277,19 @@ texra history show <id>
 texra history delete <id>
 ```
 
-Resume a stored execution configuration headlessly:
+Reopen a stored tool-use session in the interactive chat, on the saved agent
+and model:
 
 ```bash
 texra resume <id>
 texra --resume <id>
 ```
 
-The interactive chat also accepts `/resume`. With no id it prints recent
-executions; with an id it starts from the stored execution configuration. A
-missing or malformed id exits with code 2 in headless commands.
+Resume is interactive-only — a resumed session waits for your next message, so
+without a terminal it exits with a usage error that points scripting at
+`texra run`. The interactive chat also accepts `/resume`: with no id it prints
+recent executions, with an id it continues the stored session. A missing or
+malformed id exits with code 2.
 
 ## Tools and Integrations
 
@@ -290,7 +310,7 @@ detection result.
 
 <CliToolsListHero />
 
-<p class="hero-caption"><code>tools list</code> reports five fields per integration: a status dot marks enabled vs disabled, and a check or cross marks whether the backing tool was detected on this machine.</p>
+<p class="hero-caption"><code>tools list</code> reports six columns per integration: a status dot marks the enabled state, a check or cross marks whether the backing tool was detected on this machine, and the note carries the registered install command when something is missing.</p>
 
 Use `--output-format json` or `--output-format ndjson` for
 scripts. `tools install <id>` prints the install guide and registered command;

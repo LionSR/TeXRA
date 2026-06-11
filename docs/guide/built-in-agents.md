@@ -1,6 +1,7 @@
 <script setup>
 import DropdownMenu from '../.vitepress/components/DropdownMenu.vue';
 import AgentModeShapes from '../.vitepress/components/AgentModeShapes.vue';
+import CliAgentsListHero from '../.vitepress/components/CliAgentsListHero.vue';
 </script>
 
 # Built-in Agent Reference
@@ -46,6 +47,12 @@ TeXRA ships with built-in agents for common research tasks—polishing prose, fi
 />
 
 <p class="hero-caption">The agent picker, split by the two agent classes — <code>tool-use</code> (left) and <code>workflow</code> (right) — with the selected agent (<code>polish</code>) highlighted.</p>
+
+The same catalog is enumerable from any terminal:
+
+<CliAgentsListHero />
+
+<p class="hero-caption">One <code>category &nbsp;name&nbsp; description</code> row per agent — tab-separated, stable for scripts; <code>--category workflow</code> filters, <code>--all</code> includes hidden agents.</p>
 
 ## Quick Reference
 
