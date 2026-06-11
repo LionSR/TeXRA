@@ -20,7 +20,7 @@
   ],
   "author": "TeXRA Team",
   "license": "MIT",
-  "description": "Documentation for TeXRA - AI-powered academic research assistant",
+  "description": "Documentation for TeXRA - an AI theorist for VS Code and the terminal",
   "devDependencies": {
     "@awesome.me/webawesome": "^3.6.0",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",

@@ -1,6 +1,6 @@
 # TeXRA
 
-A LaTeX research assistant for VS Code and the terminal. Multi-agent
+An AI theorist for VS Code and the terminal. Multi-agent
 workflows for writing, reviewing, formalizing, and rendering academic
 work — with every change returned as a diff you approve.
 

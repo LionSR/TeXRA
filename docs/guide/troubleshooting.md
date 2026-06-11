@@ -6,7 +6,7 @@ import ToolPathSearchOrder from '../.vitepress/components/ToolPathSearchOrder.vu
 
 # Troubleshooting
 
-Even the best research assistants (human or AI) have off days. This guide helps you diagnose and resolve common issues you might encounter when using TeXRA. We've organized troubleshooting tips by category to help you quickly find solutions to specific problems.
+Even the best theorists (human or AI) have off days. This guide helps you diagnose and resolve common issues you might encounter when using TeXRA. We've organized troubleshooting tips by category to help you quickly find solutions to specific problems.
 
 ::: tip CLI users
 Most steps below describe the VS Code extension, but the underlying causes

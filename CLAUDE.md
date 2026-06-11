@@ -8,7 +8,7 @@ For `/review` or any code review on this repo, load [.claude/skills/code-review/
 
 ## Project Overview
 
-TeXRA is a VS Code extension that serves as an AI-powered LaTeX research assistant. It uses Large Language Models to help academics with writing, research, and document processing.
+TeXRA is a VS Code extension that serves as an AI theorist. It uses Large Language Models to help academics with writing, research, and document processing.
 
 ## Development Commands
 
