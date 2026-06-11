@@ -79,7 +79,7 @@ async function resumeFromSnapshot(
         ? [{ text: followUp, origin: 'user' as const }, ...queuedFollowUps]
         : queuedFollowUps;
     for (const item of requeued) {
-      ToolUseFollowUpQueue.enqueue(streamId, item);
+      ToolUseFollowUpQueue.enqueue(streamId, item, { force: true });
     }
     if (requeued.length > 0) {
       runtimeHost.emit('updateQueuedFollowUps', { streamId });
