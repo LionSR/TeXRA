@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -70,7 +69,10 @@ describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
     // manual sync: drift would make minted tokens silently stop
     // authenticating.
     const denoSource = readFileSync(
-      resolve(process.cwd(), 'supabase/functions/_shared/relayCiToken.ts'),
+      new URL(
+        '../../../supabase/functions/_shared/relayCiToken.ts',
+        import.meta.url,
+      ),
       'utf8',
     );
     expect(denoSource).toContain(
