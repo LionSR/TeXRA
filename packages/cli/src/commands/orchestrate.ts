@@ -107,7 +107,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // first run the picker hands straight to a chat session owned by the setup
   // agent instead of the launcher. Existing users (firstRunDone backfilled or
   // earned) and users who pinned an agent via env land on the launcher as
-  // before.
+  // before. `orchestrate` has no `--agent` flag here; the env override is the
+  // only explicit agent pin this entry point honors.
   const setupAgentOverride = firstRunSetupAgentOverride({
     onboardingConfigured: onboarding.configured,
     firstRunDone: getFirstRunDone(platform().globalState),

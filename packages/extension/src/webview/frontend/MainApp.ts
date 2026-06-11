@@ -100,6 +100,8 @@ import { mainViewStyles } from './styles';
 
 registerTeXRAWebAwesomeIcons();
 
+type WebviewOnboardingFunnelState = OnboardingFunnelState | 'pending';
+
 // Helper type for extracting specific message type from union
 type MainViewMessageFor<C extends MainViewMessage['command']> = Extract<
   MainViewMessage,
@@ -187,11 +189,11 @@ export class MainApp extends MainAppBase {
   private readonly gettingStartedDismissed = signal(false);
   private readonly sessionHintDismissed = signal(true);
   private readonly loginBannerVisible = signal(false);
-  // Onboarding funnel (PRD: agent-native onboarding). Defaults to 'done' so
-  // existing users never flash the welcome card before the host's first
-  // SET_ONBOARDING_FUNNEL push arrives.
+  // Onboarding funnel (PRD: agent-native onboarding). The host owns the real
+  // state; 'pending' only suppresses first-paint launcher/welcome flashes until
+  // SET_ONBOARDING_FUNNEL arrives.
   private readonly onboardingFunnelState =
-    signal<OnboardingFunnelState>('done');
+    signal<WebviewOnboardingFunnelState>('pending');
   private readonly instructionPlaceholder = signal(
     ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
   );
@@ -1779,7 +1781,17 @@ export class MainApp extends MainAppBase {
       `;
     }
 
-    if (this.onboardingFunnelState.get() === 'needs-credential') {
+    const onboardingState = this.onboardingFunnelState.get();
+    if (onboardingState === 'pending') {
+      return html`
+        <div class="content-wrapper">
+          ${this.renderViewHeader()}
+          <div class="main-content"></div>
+        </div>
+      `;
+    }
+
+    if (onboardingState === 'needs-credential') {
       // State 0 (PRD: agent-native onboarding): without a credential the
       // agent/model pickers, Files, and LaTeX Diffs are meaningless, and the
       // welcome card replaces the login/API-key/getting-started banners.

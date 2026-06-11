@@ -105,6 +105,8 @@ function resolvePresetAgentKeys(
     const entry = entries.find((candidate) => candidate.name === name);
     if (entry) return agentKey(entry.source, entry.name);
     unresolved.push(name);
+    // Keep unresolved names so relay-only team members survive until sign-in
+    // loads the source that can resolve them.
     return name;
   });
   return { keys, unresolved };
