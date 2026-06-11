@@ -17,7 +17,7 @@ import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import { RUN_OUTCOME, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { agentName } from '@shared/schemas/agent';
+import { agentName as baseAgentName } from '@shared/schemas/agent';
 
 import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
 import {
@@ -90,7 +90,7 @@ export async function runFlowWithLifecycle(
     // state write failure must never affect the run.
     if (
       result.outcome === RUN_OUTCOME.COMPLETED &&
-      agentName(agentIdentifier) !== SETUP_AGENT_NAME
+      baseAgentName(agentIdentifier) !== SETUP_AGENT_NAME
     ) {
       try {
         if (!getFirstRunDone(platform().globalState)) {
@@ -128,7 +128,7 @@ export async function runFlowWithLifecycle(
     // wrapper error that makes a child failure look like the parent failed.
     if (kind !== 'abort' && !options?.isSubagent) {
       logSdkError(ctx.logger, errorMsg, err, {
-        operation: `execute ${agentName}`,
+        operation: `execute ${agentIdentifier}`,
       });
     }
 
@@ -177,7 +177,7 @@ export async function runFlowWithLifecycle(
         await options.onError?.(err, result);
       } catch (deliveryError) {
         logger.warn(
-          `Failed to deliver subagent error for ${agentName}: ${getSdkErrorMessage(deliveryError)}`,
+          `Failed to deliver subagent error for ${agentIdentifier}: ${getSdkErrorMessage(deliveryError)}`,
         );
       }
       executionRegistry.untrack(ctx.executionId);
