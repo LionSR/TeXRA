@@ -14,8 +14,10 @@ import {
 } from '@platform/interfaces/lifecycle';
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { backfillFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
+import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { loadAgents, setAgentDirectories } from '@agent/index';
-import { clearStoreCache } from '@agent/storage';
+import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
@@ -36,6 +38,7 @@ import {
 import { getAuthStatus } from '@auth/authCommands';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
+import { hasAnyUsableSetupCredential } from '@commands/setup';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
@@ -78,6 +81,7 @@ import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
@@ -239,6 +243,44 @@ export async function activate(context: vscode.ExtensionContext) {
   // LAST_KNOWN_VERSION, so upgrading users are not affected.
   await initializeToolDefaults();
 
+  // Onboarding-funnel backfill (PRD: agent-native onboarding): upgraders who
+  // already have a credential or run history must never see the welcome card
+  // or the setup auto-start, so firstRunDone is backfilled once when the flag
+  // first appears. Awaited: the main view's funnel derivation reads this flag
+  // at webview-ready, and awaiting here closes the only read-before-backfill
+  // window. One-shot in practice — once the key exists the probes are skipped.
+  if (
+    context.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE) ===
+    undefined
+  ) {
+    await (async () => {
+      const hasPriorInstall =
+        context.globalState.get<string>(GlobalStateKey.LAST_KNOWN_VERSION) !==
+        undefined;
+      const [hasCredential, hasRunHistory] = await Promise.all([
+        // Same non-blank provider-key/server-side-key check used by the
+        // funnel and setup launch preflight.
+        hasAnyUsableSetupCredential().catch(() => false),
+        // listExecutions() owns legacy migration and filters invalid storage
+        // entries, so extension and CLI backfill classify history identically.
+        listExecutions().then(
+          (entries) => entries.length > 0,
+          () => false,
+        ),
+      ]);
+      await backfillFirstRunDone(context.globalState, {
+        hasCredential,
+        hasPriorInstall,
+        hasRunHistory,
+      });
+    })().catch((err) =>
+      logger.warn(
+        'extension',
+        `Onboarding firstRunDone backfill failed: ${toErrorMessage(err)}`,
+      ),
+    );
+  }
+
   // The following startup steps touch independent state, so they run
   // concurrently to shorten activation. Within the agent branch the order
   // still matters: copyDefaultAgents populates the built-in directories,
@@ -251,12 +293,30 @@ export async function activate(context: vscode.ExtensionContext) {
     (async () => {
       await copyDefaultAgents(context);
       await registerAgentDirectoryRoots(context);
-      loadAgents().catch((err) => {
-        logger.error(
-          'extension',
-          `Failed to initialize agent index: ${toErrorMessage(err)}`,
-        );
-      });
+      loadAgents()
+        .then(() =>
+          // Seed a never-configured workspace's roster from the user-level
+          // default team (written by the setup agent's apply_team). This
+          // replaces install-detection heuristics per the agent-native
+          // onboarding PRD: absent a default team, visibility stays
+          // `undefined → show all`, unchanged. Needs the registry, hence
+          // sequenced after the agent scan.
+          seedRosterFromDefaultTeam({
+            globalState: context.globalState,
+            workspaceState: workspaceSM,
+          }).catch((err) => {
+            logger.warn(
+              'extension',
+              `Default-team roster seeding failed: ${toErrorMessage(err)}`,
+            );
+          }),
+        )
+        .catch((err) => {
+          logger.error(
+            'extension',
+            `Failed to initialize agent index: ${toErrorMessage(err)}`,
+          );
+        });
     })(),
     (async () => {
       try {
@@ -633,10 +693,17 @@ export async function activate(context: vscode.ExtensionContext) {
     // (`getActiveSidebarView()`) so it doesn't need a closure into
     // `activate()`.
     vscode.commands.registerCommand('texra.showMainView', showMainView),
-    vscode.commands.registerCommand(
-      'texra.refreshApiKeyStatus',
-      refreshApiKeyStatus,
-    ),
+    vscode.commands.registerCommand('texra.refreshApiKeyStatus', async () => {
+      await refreshApiKeyStatus();
+      // Credential facts changed (set/unset API key from any entry point —
+      // palette, walkthrough, welcome card), so the onboarding funnel must
+      // recompute too: the State 0 card has no other signal when a key is
+      // added outside the main view's own round-trip.
+      const mainViewProvider = getMainViewProvider();
+      if (mainViewProvider) {
+        await mainViewProvider.refreshOnboardingFunnel().catch(() => {});
+      }
+    }),
   );
 
   const mainViewProvider = getMainViewProvider();

@@ -1,1 +1,5 @@
-export { runSetupAssistant } from './setupAssistantCommand';
+export {
+  hasAnyUsableSetupCredential,
+  launchSetupAssistant,
+  runSetupAssistant,
+} from './setupAssistantCommand';

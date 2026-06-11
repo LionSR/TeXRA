@@ -1,0 +1,179 @@
+/**
+ * Host-neutral onboarding funnel (PRD: agent-native onboarding).
+ *
+ * The funnel state is derived, never a mode the user (or code) sets:
+ *
+ *   0 — needs-credential  no usable credential, not previously declined
+ *   1 — setup             credential present, first run not yet completed
+ *   2 — done              a run has completed (or the user opted out)
+ *
+ * All inputs are user-scoped (global state / secrets), never
+ * workspace-scoped: onboarding is a fact about the user, and a fresh
+ * workspace must never demote a veteran back to State 0/1. Each host
+ * (extension, CLI, desktop) computes `hasCredential` with its own credential
+ * sources and reads the flags below from its `platform().globalState`.
+ */
+
+import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+
+import type { OnboardingFunnelState } from '@shared/schemas/onboarding';
+import type { PlatformSecrets } from '@platform/secrets';
+import type { StateStore } from '@platform/interfaces/state';
+
+export type { OnboardingFunnelState };
+
+export interface OnboardingFunnelInputs {
+  /** A usable credential exists (relay sign-in or any provider API key). */
+  hasCredential: boolean;
+  /** The user saw the State 0 picker and chose "Skip for now". */
+  declined: boolean;
+  /** A run has completed (or the setup agent handed off). */
+  firstRunDone: boolean;
+}
+
+export function deriveOnboardingFunnelState(
+  inputs: OnboardingFunnelInputs,
+): OnboardingFunnelState {
+  if (inputs.firstRunDone) return 'done';
+  if (inputs.hasCredential) return 'setup';
+  // A deliberate skip suppresses State 0 on subsequent launches; the user
+  // gets the normal product until a credential appears (which re-enters the
+  // funnel at State 1 because configuring a credential clears the flag).
+  return inputs.declined ? 'done' : 'needs-credential';
+}
+
+/** What a host should do after recomputing the funnel. */
+export interface OnboardingFunnelTransition {
+  /** The newly derived funnel state (push to the webview). */
+  state: OnboardingFunnelState;
+  /** Select the setup agent in the launcher (entering State 1). */
+  selectSetupAgent: boolean;
+  /**
+   * Auto-start the setup conversation — only on the in-session
+   * State 0 → 1 transition (a credential landed while the welcome card was
+   * up), never on plain activation in State 1. Hosts additionally guard
+   * with a per-session "already kicked off" flag.
+   */
+  kickoffSetup: boolean;
+  /** Configuring a credential clears a previous skip (PRD edge case). */
+  clearDeclined: boolean;
+}
+
+/**
+ * Pure transition planner for hosts that recompute the funnel in-session
+ * (webview ready, credential-changed events, skip). `previous` is the state
+ * from the host's last computation, or `undefined` on the first one.
+ */
+export function planOnboardingFunnelTransition(
+  previous: OnboardingFunnelState | undefined,
+  inputs: OnboardingFunnelInputs,
+): OnboardingFunnelTransition {
+  const state = deriveOnboardingFunnelState(inputs);
+  return {
+    state,
+    // Entering State 1 (from ready, State 0, or a declined "done") selects
+    // the setup agent; a refresh already in State 1 must not stomp a user
+    // who deliberately switched agents mid-session.
+    selectSetupAgent: state === 'setup' && previous !== 'setup',
+    // 'setup' already implies !firstRunDone (see deriveOnboardingFunnelState),
+    // so the transition alone gates the one-time auto-kickoff.
+    kickoffSetup: previous === 'needs-credential' && state === 'setup',
+    clearDeclined: inputs.declined && inputs.hasCredential,
+  };
+}
+
+// ============================================================
+// User-scoped flags
+// ============================================================
+
+export function getOnboardingDeclined(state: StateStore): boolean {
+  return state.get<boolean>(GlobalStateKey.ONBOARDING_DECLINED, false) === true;
+}
+
+export async function setOnboardingDeclined(
+  state: StateStore,
+  declined: boolean,
+): Promise<void> {
+  await state.update(GlobalStateKey.ONBOARDING_DECLINED, declined);
+}
+
+export function getFirstRunDone(state: StateStore): boolean {
+  return (
+    state.get<boolean>(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, false) === true
+  );
+}
+
+export async function setFirstRunDone(
+  state: StateStore,
+  done: boolean,
+): Promise<void> {
+  await state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, done);
+}
+
+/** User-level default team id, written by the setup agent's `apply_team`. */
+export function getDefaultTeamId(state: StateStore): string | undefined {
+  const value = state.get<string>(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID);
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+export async function setDefaultTeamId(
+  state: StateStore,
+  teamId: string,
+): Promise<void> {
+  await state.update(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID, teamId);
+}
+
+export function readOnboardingFlags(
+  state: StateStore,
+): Pick<OnboardingFunnelInputs, 'declined' | 'firstRunDone'> {
+  return {
+    declined: getOnboardingDeclined(state),
+    firstRunDone: getFirstRunDone(state),
+  };
+}
+
+/**
+ * One-shot migration: upgraders keep their normal product. A prior install
+ * with a credential, or any install with run history, never sees the welcome
+ * card or the setup auto-start. Writes the key on first call (true or false)
+ * so the backfill never re-evaluates — a fresh install that gains a credential
+ * minutes later must still enter State 1.
+ */
+export async function backfillFirstRunDone(
+  state: StateStore,
+  signals: {
+    hasCredential: boolean;
+    hasPriorInstall?: boolean;
+    hasRunHistory: boolean;
+  },
+): Promise<void> {
+  const existing = state.get<boolean | undefined>(
+    GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+  );
+  if (existing !== undefined) return;
+  await setFirstRunDone(
+    state,
+    signals.hasRunHistory ||
+      (signals.hasPriorInstall === true && signals.hasCredential),
+  );
+}
+
+// ============================================================
+// Credential presence (shared building block)
+// ============================================================
+
+/**
+ * True when any provider has a usable API key (secret or env var). Relay
+ * sign-in checks stay host-specific; hosts OR this with their own check.
+ */
+export async function hasAnyProviderApiKey(
+  secrets: PlatformSecrets,
+): Promise<boolean> {
+  for (const provider of API_PROVIDERS) {
+    // Sequential by design: stop at the first key found.
+    const key = await lookupApiKey(secrets, provider);
+    if (typeof key === 'string' && key.trim().length > 0) return true;
+  }
+  return false;
+}

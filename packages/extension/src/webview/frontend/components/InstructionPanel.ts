@@ -22,6 +22,7 @@ import { selectStyles } from '@shared/styles/selectStyles';
 
 // Local imports - shared utils
 import {
+  BROWSE_ALL_AGENTS_OPTION_VALUE,
   renderAgentOptions,
   renderModelOptions,
 } from '@shared/utils/selectTemplates';
@@ -182,6 +183,16 @@ export class InstructionPanel extends LitElement {
     if (!select) return;
     const sessionType = select.dataset.sessionType as SessionType;
     const value = typeof select.value === 'string' ? select.value : '';
+    if (value === BROWSE_ALL_AGENTS_OPTION_VALUE) {
+      // Not a real agent: keep the current selection and open the catalog.
+      const session = this.sessionData;
+      select.value =
+        (sessionType === SESSION_TYPES.WORKFLOW
+          ? session?.workflowAgent
+          : session?.toolUseAgent) ?? '';
+      this.dispatchEvent(MainViewEvents.browseAllAgents());
+      return;
+    }
     this.dispatchEvent(MainViewEvents.agentChange({ sessionType, value }));
   }
 
@@ -422,7 +433,9 @@ export class InstructionPanel extends LitElement {
                     @focus=${this.handleAgentFocus}
                     @change=${this.handleAgentChange}
                   >
-                    ${renderAgentOptions(agent.options, agent.value)}
+                    ${renderAgentOptions(agent.options, agent.value, {
+                      includeBrowseAll: true,
+                    })}
                   </wa-select>
                 `;
               })()}

@@ -2,10 +2,25 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { refresh, computeAgentOptionsData } from '@agent/index';
+import {
+  planOnboardingFunnelTransition,
+  readOnboardingFlags,
+  setOnboardingDeclined,
+  type OnboardingFunnelState,
+} from '@controllers/onboarding/onboardingFunnel';
+import {
+  refresh,
+  computeAgentOptionsData,
+  createKey,
+  getAgent,
+} from '@agent/index';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - common
+import {
+  hasAnyUsableSetupCredential,
+  launchSetupAssistant,
+} from '@commands/setup';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -48,6 +63,15 @@ export class MainViewProvider
   private _progressViewProvider?: ProgressViewProvider;
   private _progressContentProvider?: BundledViewContentProvider;
 
+  /** Last computed funnel state, so credential hooks can detect the
+   *  in-session State 0 → 1 transition. Session-scoped by design. */
+  private onboardingFunnelState: OnboardingFunnelState | undefined;
+  /** The setup conversation auto-starts at most once per session. */
+  private setupKickoffStarted = false;
+  /** A State 1 entry observed with no view keeps its setup-agent selection
+   *  pending until a launcher exists to receive it. */
+  private pendingSetupAgentSelection = false;
+
   // Debounced refresh for agent option changes
   private debouncedRefreshAgentOptions = debounce(
     this.refreshAgentOptions.bind(this),
@@ -56,7 +80,9 @@ export class MainViewProvider
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
-    this.messageHandler = new MainViewMessageHandler(context);
+    this.messageHandler = new MainViewMessageHandler(context, {
+      refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
+    });
     this.contentProvider = new BundledViewContentProvider(
       context,
       'MainView',
@@ -117,14 +143,84 @@ export class MainViewProvider
    * Called when auth state changes (login/logout affects both).
    */
   async refreshOptionsAndView() {
-    const view = this.getMainModeView();
-    if (!view) return;
-
     await refresh();
-    await this.messageHandler.handleMessage(
-      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
-      view,
+    const view = this.getMainModeView();
+    if (view) {
+      await this.messageHandler.handleMessage(
+        { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
+        view,
+      );
+      return;
+    }
+    await this.refreshOnboardingFunnel();
+  }
+
+  /**
+   * Single derivation point for the onboarding funnel on this host (PRD:
+   * agent-native onboarding). Recomputes the user-scoped funnel state,
+   * pushes it to the webview when the main tab is visible, and acts on the
+   * State 0 → 1 transition: clear a stale skip, select the setup agent, and
+   * start setup once.
+   * Invoked by the message handler on webview ready — which credential-changed
+   * hooks replay via refreshOptionsAndView — and after welcome-card actions.
+   */
+  async refreshOnboardingFunnel(): Promise<void> {
+    const view = this.getMainModeView();
+
+    // Same usable-credential check the setup command uses: non-blank provider
+    // key or server-side key access.
+    const hasCredential = await hasAnyUsableSetupCredential().catch(
+      () => false,
     );
+    const transition = planOnboardingFunnelTransition(
+      this.onboardingFunnelState,
+      { hasCredential, ...readOnboardingFlags(this.context.globalState) },
+    );
+    this.onboardingFunnelState = transition.state;
+
+    if (view) {
+      view.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+        state: transition.state,
+      });
+    }
+
+    if (transition.clearDeclined) {
+      await setOnboardingDeclined(this.context.globalState, false);
+    }
+    // An off-view advance consumes the transition (previous latches to
+    // 'setup'), so remember the selection until a view exists to receive it —
+    // otherwise a credential arriving while the panel is hidden would leave
+    // the dropdown on the old agent when the launcher reopens.
+    if (transition.selectSetupAgent && !view) {
+      this.pendingSetupAgentSelection = true;
+    }
+    if (
+      view &&
+      (transition.selectSetupAgent ||
+        (this.pendingSetupAgentSelection && transition.state === 'setup'))
+    ) {
+      this.pendingSetupAgentSelection = false;
+      // Resolve the qualified registry key so the dropdown matches by value;
+      // the plain name still resolves by label if the registry isn't loaded.
+      const entry = getAgent('setup', true);
+      view.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
+        agentId: entry ? createKey(entry.source, entry.name) : 'setup',
+        sessionType: 'toolUse',
+      });
+    }
+    if (transition.kickoffSetup && !this.setupKickoffStarted) {
+      this.setupKickoffStarted = true;
+      // Fire-and-forget: the setup agent run owns its own progress UI. If
+      // preflight declines to start, allow a later credential/config change
+      // to try again in this session.
+      void launchSetupAssistant().then((result) => {
+        if (result === 'not-started') {
+          this.setupKickoffStarted = false;
+        }
+      });
+    }
   }
 
   /**

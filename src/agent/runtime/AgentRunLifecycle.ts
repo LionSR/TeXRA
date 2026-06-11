@@ -1,3 +1,8 @@
+import {
+  getFirstRunDone,
+  setFirstRunDone,
+} from '@controllers/onboarding/onboardingFunnel';
+import { platform } from '@platform/platform';
 import { writeTerminalStatus } from '@agent/storage';
 import { logSdkError } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -10,7 +15,9 @@ import {
 import { projectRunOutcome } from '@common/constants/streamStatus';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { RUN_OUTCOME, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { agentName as baseAgentName } from '@shared/schemas/agent';
 
 import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
 import {
@@ -44,7 +51,7 @@ export async function runFlowWithLifecycle(
   options?: RunFlowLifecycleOptions,
 ): Promise<AgentFlowResult> {
   const { streamId } = ctx;
-  const agentName = ctx.config.agent;
+  const agentIdentifier = ctx.config.agent;
   const category =
     ctx.setting.agentCategory === AgentCategory.ToolUse
       ? 'toolUse'
@@ -54,7 +61,7 @@ export async function runFlowWithLifecycle(
     ctx.executionId,
     parentStreamId,
     streamId,
-    agentName,
+    agentIdentifier,
     category,
     ctx.runtimeHost,
     ctx.coordinators,
@@ -77,6 +84,23 @@ export async function runFlowWithLifecycle(
       projection.executionStatus,
     ).catch(() => {});
 
+    // Onboarding funnel (PRD: agent-native onboarding): State 1 ends when any
+    // real run completes. The setup conversation itself doesn't count, but the
+    // demo it delegates does (subagent runs land here too). Best-effort: a
+    // state write failure must never affect the run.
+    if (
+      result.outcome === RUN_OUTCOME.COMPLETED &&
+      baseAgentName(agentIdentifier) !== SETUP_AGENT_NAME
+    ) {
+      try {
+        if (!getFirstRunDone(platform().globalState)) {
+          await setFirstRunDone(platform().globalState, true);
+        }
+      } catch {
+        // Ignore: the flag is a UX nicety, never run-critical.
+      }
+    }
+
     executionRegistry.untrack(ctx.executionId);
     ctx.parentStage.end(projection.endGroupStatus);
 
@@ -97,14 +121,14 @@ export async function runFlowWithLifecycle(
       projection.executionStatus,
     ).catch(() => {});
     const sdkMsg = getSdkErrorMessage(err);
-    const errorMsg = `Error executing agent ${agentName}: ${sdkMsg}`;
+    const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
 
     // Root-agent failures are surfaced in the stream log. Subagent failures
     // are delivered to the orchestrator below, so avoid adding a second
     // wrapper error that makes a child failure look like the parent failed.
     if (kind !== 'abort' && !options?.isSubagent) {
       logSdkError(ctx.logger, errorMsg, err, {
-        operation: `execute ${agentName}`,
+        operation: `execute ${agentIdentifier}`,
       });
     }
 
@@ -153,7 +177,7 @@ export async function runFlowWithLifecycle(
         await options.onError?.(err, result);
       } catch (deliveryError) {
         logger.warn(
-          `Failed to deliver subagent error for ${agentName}: ${getSdkErrorMessage(deliveryError)}`,
+          `Failed to deliver subagent error for ${agentIdentifier}: ${getSdkErrorMessage(deliveryError)}`,
         );
       }
       executionRegistry.untrack(ctx.executionId);

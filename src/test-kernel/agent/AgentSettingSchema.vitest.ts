@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AgentCategory,
+  AgentDefinitionSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 
@@ -14,5 +15,23 @@ describe('AgentSettingSchema', () => {
 
     expect(setting.agentCategory).toBe(AgentCategory.Workflow);
     expect(Object.hasOwn(setting, 'outputExt')).toBe(false);
+  });
+});
+
+describe('AgentDefinitionSchema', () => {
+  it('trims displayName and rejects blank labels', () => {
+    expect(
+      AgentDefinitionSchema.parse({
+        name: 'assistant',
+        displayName: '  Assistant  ',
+      }).displayName,
+    ).toBe('Assistant');
+
+    expect(() =>
+      AgentDefinitionSchema.parse({
+        name: 'assistant',
+        displayName: '   ',
+      }),
+    ).toThrow();
   });
 });

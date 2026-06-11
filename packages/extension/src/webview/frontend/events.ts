@@ -85,6 +85,13 @@ export const MainViewEvents = {
 
   dismissLogin: () => createEvent('dismiss-login', undefined),
 
+  // Onboarding welcome card events (State 0 of the onboarding funnel)
+  welcomeSignIn: () => createEvent('welcome-sign-in', undefined),
+
+  welcomeApiKey: () => createEvent('welcome-api-key', undefined),
+
+  welcomeSkip: () => createEvent('welcome-skip', undefined),
+
   dismissGettingStarted: () =>
     createEvent('dismiss-getting-started', undefined),
 
@@ -115,6 +122,8 @@ export const MainViewEvents = {
   execute: () => createEvent('execute', undefined),
 
   agentSettings: () => createEvent('agent-settings', undefined),
+
+  browseAllAgents: () => createEvent('browse-all-agents', undefined),
 
   modelSettings: () => createEvent('model-settings', undefined),
 

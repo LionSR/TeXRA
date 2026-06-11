@@ -88,6 +88,7 @@ async function scanYaml(
 
     return {
       name,
+      displayName: validated.displayName,
       source,
       path: yamlPath,
       category,

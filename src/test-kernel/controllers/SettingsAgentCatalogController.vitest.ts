@@ -158,7 +158,9 @@ describe('SettingsAgentCatalogController', () => {
       preset,
     });
     assert.deepEqual(enabled.workflow, ['remote:writer']);
-    assert.deepEqual(enabled.toolUse, ['builtInToolUse:review']);
+    // Unresolved names are kept bare so the agent joins the roster the
+    // moment it appears (sign-in, install) — never silently dropped.
+    assert.deepEqual(enabled.toolUse, ['builtInToolUse:review', 'missing']);
   });
 
   it('reports unknown presets without writing enabled agent state', async () => {
