@@ -93,6 +93,8 @@ class AgentReviewServiceImpl {
   private reviewRoot: string | undefined;
   private baseDescription = 'main branch';
   private activeReview: ActiveReview | undefined;
+  /** Bumped per review run and by `clear()`; stale runs check it before applying results. */
+  private reviewGeneration = 0;
   /** A commit arrived while a review was running; run once more afterwards. */
   private pendingCommitReview = false;
 
@@ -232,6 +234,9 @@ class AgentReviewServiceImpl {
     this.issues = [];
     this.updateDiagnostics();
     this.activeReview = { repoRoot, baseDescription, changedFiles };
+    // `clear()` bumps the generation while a session runs (e.g. on branch
+    // checkout); a superseded session's outcome must not touch the panel.
+    const generation = ++this.reviewGeneration;
     this.emitter.fire();
 
     const instruction = buildReviewInstruction({
@@ -264,6 +269,7 @@ class AgentReviewServiceImpl {
       );
       outcome = result.outcome;
     } catch (err) {
+      if (generation !== this.reviewGeneration) return;
       // Run-lifecycle failures are already logged and surfaced; keep the
       // panel state honest without a second notification.
       const restored = this.restorePreviousResults(previous);
@@ -271,6 +277,14 @@ class AgentReviewServiceImpl {
       logger.warn(
         CHANNEL,
         `Agent review session failed: ${toErrorMessage(err)}`,
+      );
+      return;
+    }
+
+    if (generation !== this.reviewGeneration) {
+      logger.info(
+        CHANNEL,
+        'Agent review results were cleared while the session ran; discarding its outcome',
       );
       return;
     }
@@ -387,11 +401,17 @@ class AgentReviewServiceImpl {
     this.emitter.fire();
   }
 
-  /** Clear results and forget dismissals. */
+  /**
+   * Clear results and forget dismissals. A reviewer session still running
+   * is detached from the panel: its future reports are rejected (no active
+   * collector) and its outcome is discarded (stale generation).
+   */
   clear(): void {
     this.issues = [];
     this.dismissed.clear();
     this.summary = undefined;
+    this.activeReview = undefined;
+    this.reviewGeneration++;
     this.updateDiagnostics();
     void this.syncContextKeys();
     this.emitter.fire();
