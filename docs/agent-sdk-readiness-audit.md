@@ -1645,9 +1645,10 @@ candidates the ledger has adjudicated repeatedly. Re-confirmed with current line
   single-call factory helpers — inline them."** **Re-confirmed §2.4/§14 _keep_:** named
   result-mappers that keep the dispatch loop readable are endorsed, and `buildTerminalFlowResult`
   has multiple callers, so inlining would _duplicate_ the mapping.
-- **"`helperModelName.ts` is a single-call helper — inline."** **Keep:** it has two external
-  importers (`optionsLoader.ts`, `mergeCommands.ts`) plus the internal `helperModel.ts` caller —
-  exactly why §16 extracted it from `helperModel.ts` and removed the dead re-export.
+- **"`helperModelName.ts` is a single-call helper — inline."** **Keep:** it has three external
+  importers (`optionsLoader.ts`, `mergeCommands.ts`, `desktopProgressFileActions.ts`) plus the
+  internal `helperModel.ts` caller — exactly why §16 extracted it from `helperModel.ts` and removed
+  the dead re-export.
 
 (The other agents, fed the audit context, re-confirmed the standing model-handler / logger /
 platform verdicts: `IModelHandler` is not a duplicate of `ModelHandler`, the thin
