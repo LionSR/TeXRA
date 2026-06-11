@@ -115,11 +115,14 @@ async function requireSessionAccessToken(
     return null;
   }
 
-  writeTextStdout('Not signed in — starting device-code sign-in first.');
+  // Sign-in progress is diagnostics, not the command's result: keep it on
+  // stderr so stdout stays reserved for the deliverable (the env line /
+  // minted-token output) even if the TTY gate above ever changes.
+  writeTextStderr('Not signed in — starting device-code sign-in first.');
   await signInCliSupabaseDeviceCode({
     onDeviceCode: (authorization) => {
-      writeTextStdout(formatCliDeviceAuthMessage(authorization));
-      writeTextStdout(
+      writeTextStderr(formatCliDeviceAuthMessage(authorization));
+      writeTextStderr(
         'Waiting for you to approve in the browser… (Ctrl-C cancels)',
       );
     },

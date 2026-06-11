@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -59,6 +62,20 @@ function singleFetch(response: Response): {
 describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
   afterEach(() => {
     resetRelayTokenTierCacheForTests();
+  });
+
+  it('keeps the token prefix in sync with the Deno edge module', () => {
+    // Deno edge functions cannot import src/auth, so the prefix is defined
+    // twice (see the CROSS-REFERENCE comments on both constants). Guard the
+    // manual sync: drift would make minted tokens silently stop
+    // authenticating.
+    const denoSource = readFileSync(
+      resolve(process.cwd(), 'supabase/functions/_shared/relayCiToken.ts'),
+      'utf8',
+    );
+    expect(denoSource).toContain(
+      `export const RELAY_CI_TOKEN_PREFIX = '${RELAY_CI_TOKEN_PREFIX}';`,
+    );
   });
 
   it('reads only well-formed tokens from the environment', () => {
