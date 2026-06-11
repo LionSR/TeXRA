@@ -17,7 +17,10 @@ import {
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - common
-import { runSetupAssistant } from '@commands/setup';
+import {
+  hasAnyUsableSetupCredential,
+  launchSetupAssistant,
+} from '@commands/setup';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -29,7 +32,6 @@ import { consumePendingState } from '@common/state';
 import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
 
 import { agentDirectories } from '@frontend/agents';
-import { SecretManager } from '@frontend/secretManager';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -165,8 +167,9 @@ export class MainViewProvider
   async refreshOnboardingFunnel(): Promise<void> {
     const view = this.getMainModeView();
 
-    // Includes the server-side-key (relay sign-in) check.
-    const hasCredential = await SecretManager.anyApiKeyExists().catch(
+    // Same usable-credential check the setup command uses: non-blank provider
+    // key or server-side key access.
+    const hasCredential = await hasAnyUsableSetupCredential().catch(
       () => false,
     );
     const transition = planOnboardingFunnelTransition(
@@ -209,9 +212,14 @@ export class MainViewProvider
     }
     if (transition.kickoffSetup && !this.setupKickoffStarted) {
       this.setupKickoffStarted = true;
-      // Fire-and-forget: the setup agent run owns its own progress UI and
-      // error surfacing.
-      void runSetupAssistant();
+      // Fire-and-forget: the setup agent run owns its own progress UI. If
+      // preflight declines to start, allow a later credential/config change
+      // to try again in this session.
+      void launchSetupAssistant().then((result) => {
+        if (result === 'not-started') {
+          this.setupKickoffStarted = false;
+        }
+      });
     }
   }
 

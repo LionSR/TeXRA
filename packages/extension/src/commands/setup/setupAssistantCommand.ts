@@ -186,12 +186,12 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
  * the setup agent. Direct uses of `SecretManager.anyApiKeyExists` would
  * report a blank `PROVIDER_API_KEY=""` env var as present, which then
  * fails in `resolveLaunchModel` with a confusing "No model is available"
- * modal. `hasAnyUsableCredential()` mirrors the adapter-level check:
+ * modal. `hasAnyUsableSetupCredential()` mirrors the adapter-level check:
  * at least one provider with a non-blank key, or valid server-side
  * access. Keeps preflight and launch agreed on what "has a credential"
  * means.
  */
-async function hasAnyUsableCredential(): Promise<boolean> {
+export async function hasAnyUsableSetupCredential(): Promise<boolean> {
   for (const provider of SecretManager.API_PROVIDERS) {
     if (await SecretManager.hasUsableApiKey(provider)) return true;
   }
@@ -199,7 +199,7 @@ async function hasAnyUsableCredential(): Promise<boolean> {
 }
 
 async function ensureCredentialOrPrompt(): Promise<boolean> {
-  if (await hasAnyUsableCredential()) return true;
+  if (await hasAnyUsableSetupCredential()) return true;
 
   const picks = [
     {
@@ -229,12 +229,12 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
 
   if (picked.id === 'signIn') {
     await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
-    return hasAnyUsableCredential();
+    return hasAnyUsableSetupCredential();
   }
 
   if (picked.id === 'apiKey') {
     await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
-    return hasAnyUsableCredential();
+    return hasAnyUsableSetupCredential();
   }
 
   // walkthrough
@@ -276,7 +276,12 @@ async function ensureRoutingConfigured(): Promise<boolean> {
   return false;
 }
 
-export async function runSetupAssistant(): Promise<void> {
+export type SetupAssistantLaunchResult =
+  | 'launched'
+  | 'already-running'
+  | 'not-started';
+
+export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult> {
   try {
     // Every setup entry point funnels through here (command, status pill,
     // walkthrough, onboarding auto-kickoff), so one guard covers them all:
@@ -292,7 +297,7 @@ export async function runSetupAssistant(): Promise<void> {
         'The setup assistant is already running — follow it in the Progress view.',
       );
       await vscode.commands.executeCommand('texra.showProgressView');
-      return;
+      return 'already-running';
     }
 
     const proceed = await ensureCredentialOrPrompt();
@@ -300,14 +305,14 @@ export async function runSetupAssistant(): Promise<void> {
       void vscode.window.showInformationMessage(
         'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in or set an API key.',
       );
-      return;
+      return 'not-started';
     }
 
     if (!(await ensureRoutingConfigured())) {
       void vscode.window.showInformationMessage(
         'Setup assistant cancelled. Resolve the "Use OpenRouter" configuration (add an OpenRouter key or disable the setting in Dashboard → Models), then run `TeXRA: Run Setup Assistant` again.',
       );
-      return;
+      return 'not-started';
     }
 
     const resolution = await resolveLaunchModel();
@@ -326,7 +331,7 @@ export async function runSetupAssistant(): Promise<void> {
       } else if (choice === 'Open Models tab') {
         await vscode.commands.executeCommand('texra.showModels');
       }
-      return;
+      return 'not-started';
     }
 
     const config = AgentConfigSchema.parse({
@@ -358,10 +363,16 @@ export async function runSetupAssistant(): Promise<void> {
     } else {
       await launch();
     }
+    return 'launched';
   } catch (error) {
     logger.error(CHANNEL, 'Setup assistant failed to launch.', { data: error });
     void vscode.window.showErrorMessage(
       `Failed to launch setup assistant: ${toErrorMessage(error)}`,
     );
+    return 'not-started';
   }
+}
+
+export async function runSetupAssistant(): Promise<void> {
+  await launchSetupAssistant();
 }
