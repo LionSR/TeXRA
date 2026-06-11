@@ -124,6 +124,28 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 
 <p class="hero-caption">Pick a model by intent: each use case maps to a short list of recommended model ids.</p>
 
+## Setting API Keys
+
+Using your own provider API key? TeXRA stores keys securely using VS Code's secret storage — they are never written to settings files.
+
+1.  **Open the Settings Dashboard**: Click the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel, or run **TeXRA: Show Settings Dashboard** from the Command Palette.
+2.  **Go to the Models tab**: The **API Configuration** table lists every provider with its current key status (`Set`, `Env`, or `Not set`).
+3.  **Set the key**: Find your provider's row and click the <wa-icon library="texra" name="key"></wa-icon> **Set API key** button, then paste your key. Don't have one yet? Click the <wa-icon library="texra" name="arrow-up-right-from-square"></wa-icon> **Get** button to open the provider's API key page.
+
+The Status column shows `Set` once the key is stored. To replace a key, set it again; to remove one, click the <wa-icon library="texra" name="trash"></wa-icon> trash icon. Repeat for each provider you plan to use.
+
+<ApiKeysHero />
+
+<p class="hero-caption">The Models tab's API Configuration table: each provider shows its key status and Set / Get / Remove actions.</p>
+
+::: tip Per-provider settings
+Expand a provider's row (click the chevron) to toggle streaming or, for providers that support it, point requests at a custom endpoint.
+:::
+
+You can also place a `.env` file in your workspace with variables like `OPENAI_API_KEY`. TeXRA loads this automatically so you don't need to enter keys every time.
+
+Prefer not to manage keys at all? Researcher Access is free for academics — no API key needed. See [Quick Start → Sign in or add a key](./quick-start.md#sign-in-or-add-a-key).
+
 ## Customizing the Model List
 
 Choose which models appear in the extension picker from the **Dashboard → Models** tab — toggle them on or off per provider, no JSON required (the choice is saved in the extension).

@@ -11,6 +11,23 @@ side-by-side for the extension and the CLI.
 
 If you don't have TeXRA yet, see [Installation](./installation.md).
 
+::: tip Fresh install?
+On a fresh install, the setup assistant offers to run exactly this flow
+conversationally — it checks your environment, asks what you're working
+on, and runs this same polish demo, ending at the diff. This page is the
+manual mirror of that conversation.
+:::
+
+## Step 0: sign in or add a key
+
+A credential is the one step no agent can do for you. Two ways in:
+
+- **Sign in — free for academics** — Researcher Access: no API key
+  needed (recommended). In VS Code, run **TeXRA: Sign In** from the
+  command palette; in the terminal, run `texra login`.
+- **Use your own provider API key** — Anthropic, OpenAI, Google, and
+  more. See [Quick start → Sign in or add a key](./quick-start.md#sign-in-or-add-a-key).
+
 ## What you'll do
 
 1. Get a sample `.tex` file.

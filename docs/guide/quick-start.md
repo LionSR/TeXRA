@@ -5,7 +5,9 @@ import OutputArtifactsTree from '../.vitepress/components/OutputArtifactsTree.vu
 
 # Quick Start Guide
 
-You have a paper draft and a deadline. Let's get TeXRA working for you in under five minutes.
+You have a paper draft and a deadline. Let's get TeXRA working for you in under five minutes. On a fresh install, the **setup assistant** offers to run this whole loop for you in one conversation; this page is the reference for the Launcher you'll drive every day after.
+
+The whole story in one line: **Setup is the doorman, polish is the demo, the orchestrator is the habit.**
 
 <QuickStartHero />
 
@@ -21,7 +23,7 @@ TeXRA sits inside VS Code and helps you polish writing, fix errors, create figur
 4. Click Execute
 5. Review the diff
 
-> 💡 **Tip:** Inside VS Code you can open the **Run your first TeXRA workflow** walkthrough from the Get Started page (or by running `TeXRA: Open Getting Started Walkthrough`). It mirrors this guide step-by-step and links directly to the relevant commands.
+> 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page (or by running `TeXRA: Open Getting Started Walkthrough`). It tells the same story in three beats — sign in or add a key, the setup assistant takes it from here, meet the orchestrator — and links directly to the relevant commands.
 
 ::: tip Prefer the terminal?
 This guide walks through the VS Code extension. If you installed the
@@ -31,25 +33,16 @@ interactive session with `texra chat`, or run a single agent with
 available.
 :::
 
-## Set Up API Keys
+## Sign in or add a key
 
-Before you can use TeXRA's AI features, you need to provide API keys for the services you intend to use (like Anthropic, OpenAI, Google, etc.). TeXRA stores these keys securely using VS Code's secret storage.
+A credential is the one step no agent can do for you. On a fresh install, the **Welcome to TeXRA** card in the TeXRA panel offers the same two choices, in the same order:
 
-1.  **Open the Settings Dashboard**: Click the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel, or run **TeXRA: Show Settings Dashboard** from the Command Palette.
-2.  **Go to the Models tab**: The **API Configuration** table lists every provider with its current key status (`Set`, `Env`, or `Not set`).
-3.  **Set the key**: Find your provider's row and click the <wa-icon library="texra" name="key"></wa-icon> **Set API key** button, then paste your key. Don't have one yet? Click the <wa-icon library="texra" name="arrow-up-right-from-square"></wa-icon> **Get** button to open the provider's API key page.
+1. **Sign in — free for academics** — Researcher Access: no API key needed (recommended). Run **TeXRA: Sign In** from the Command Palette, or pick the sign-in option on the welcome card. Signing in also unlocks remote agents, including the orchestrator.
+2. **Use your own provider API key** — Anthropic, OpenAI, Google, and more. Open the Dashboard's **Models** tab (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and set your provider's key in the **API Configuration** table, or place a `.env` file in your workspace with variables like `OPENAI_API_KEY`.
 
-The Status column shows `Set` once the key is stored. To replace a key, set it again; to remove one, click the <wa-icon library="texra" name="trash"></wa-icon> trash icon. Repeat for each provider you plan to use.
+The full per-provider key reference — the API Configuration table, Set / Get / Remove actions, and per-provider toggles — lives in [Models → Setting API Keys](./models.md#setting-api-keys).
 
-<ApiKeysHero />
-
-<p class="hero-caption">The Models tab's API Configuration table: each provider shows its key status and Set / Get / Remove actions.</p>
-
-::: tip Per-provider settings
-Expand a provider's row (click the chevron) to toggle streaming or, for providers that support it, point requests at a custom endpoint.
-:::
-
-You can also place a `.env` file in your workspace with variables like `OPENAI_API_KEY`. TeXRA loads this automatically so you don't need to enter keys every time.
+Once a credential is in place, the setup assistant takes it from here: one conversation that checks your environment, applies a team for your field, and runs your first polish, ending at a diff. [First run](./first-run.md) is the manual mirror of that conversation.
 
 ## Basic Workflow
 
