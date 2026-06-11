@@ -11,15 +11,16 @@ export { debounce } from 'perfect-debounce';
 export { default as delay } from 'delay';
 
 /**
- * Reject with `new Error(message)` if `promise` doesn't settle within `ms`.
- * Backed by `p-timeout`, which clears its timer once the race settles, so a
- * long timeout never keeps the process alive after the underlying promise
- * finishes.
+ * Reject with a `TimeoutError` carrying `message` if `promise` doesn't settle
+ * within `ms`. Backed by `p-timeout`, which builds the error lazily (no Error
+ * allocation when the promise wins the race) and clears its timer once the
+ * race settles, so a long timeout never keeps the process alive after the
+ * underlying promise finishes.
  */
 export async function withTimeout<T>(
   promise: Promise<T>,
   ms: number,
   message: string,
 ): Promise<T> {
-  return pTimeout(promise, { milliseconds: ms, message: new Error(message) });
+  return pTimeout(promise, { milliseconds: ms, message });
 }

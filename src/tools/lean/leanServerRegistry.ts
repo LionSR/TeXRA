@@ -130,16 +130,12 @@ export function clearLeanServerRegistry(): void {
   notify();
 }
 
-export function formatUptime(ms: number): string {
-  return formatCompactDuration(ms);
-}
-
 function statusTail(info: LeanServerInfo, now: number): string {
   switch (info.status) {
     case 'error':
       return ` — error: ${info.errorMessage ?? 'unknown'}`;
     case 'running':
-      return ` — uptime ${formatUptime(now - info.startedAt)}`;
+      return ` — uptime ${formatCompactDuration(now - info.startedAt)}`;
     case 'starting':
       return ' — starting…';
     case 'stopped':

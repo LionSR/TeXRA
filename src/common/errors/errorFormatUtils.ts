@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 import { toErrorMessage } from './errorMessage';
 
 const MAX_ERROR_LENGTH = 500;
@@ -11,9 +9,4 @@ export function formatError(prefix: string, err: unknown): string {
     return `${prefix}: ${detail.slice(0, MAX_ERROR_LENGTH)}...`;
   }
   return `${prefix}: ${detail}`;
-}
-
-/** Format a Zod validation error into a human-readable string. */
-export function formatZodError(error: z.ZodError): string {
-  return z.prettifyError(error);
 }
