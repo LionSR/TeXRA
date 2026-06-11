@@ -6,14 +6,27 @@ import type { OAuthProvider } from '@auth/sharedConfig';
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { KeyHints } from '../chat/tui/ui/KeyHints';
-import { Select } from '../chat/tui/ui/Select';
+import { Select, type SelectItem } from '../chat/tui/ui/Select';
+import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
 
+/** Browser-based provider sign-in, or the device-code flow for remote shells. */
+export type LoginPickerChoice = OAuthProvider | 'device';
+
+const LOGIN_PICKER_ITEMS: readonly SelectItem<LoginPickerChoice>[] = [
+  ...CLI_OAUTH_PROVIDER_ITEMS,
+  {
+    value: 'device',
+    label: 'Device code',
+    description: 'sign in from a browser on any device (SSH-friendly)',
+  },
+];
+
 function LoginProviderPicker(props: {
-  readonly onSelect: (provider: OAuthProvider | undefined) => void;
+  readonly onSelect: (provider: LoginPickerChoice | undefined) => void;
 }): React.JSX.Element {
   const app = useApp();
-  const finish = (provider: OAuthProvider | undefined): void => {
+  const finish = (provider: LoginPickerChoice | undefined): void => {
     props.onSelect(provider);
     app.exit();
   };
@@ -28,11 +41,19 @@ function LoginProviderPicker(props: {
       <Text bold color="cyan">
         TeXRA login
       </Text>
-      <Text dimColor>Choose a provider to sign in with:</Text>
+      <Text dimColor>Choose how to sign in:</Text>
+      {isLikelyRemoteSession() ? (
+        <Text dimColor>
+          Remote session detected — the device code option works without a
+          callback port.
+        </Text>
+      ) : null}
       <Box marginTop={1} flexDirection="column">
-        <Select<OAuthProvider>
-          items={CLI_OAUTH_PROVIDER_ITEMS}
-          activeValue={DEFAULT_OAUTH_PROVIDER}
+        <Select<LoginPickerChoice>
+          items={LOGIN_PICKER_ITEMS}
+          activeValue={
+            isLikelyRemoteSession() ? 'device' : DEFAULT_OAUTH_PROVIDER
+          }
           onSelect={finish}
           onCancel={() => finish(undefined)}
         />
@@ -42,7 +63,7 @@ function LoginProviderPicker(props: {
           hints={[
             { key: '↑/↓', action: 'navigate' },
             {
-              key: `1-${CLI_OAUTH_PROVIDER_ITEMS.length}/Enter`,
+              key: `1-${LOGIN_PICKER_ITEMS.length}/Enter`,
               action: 'select',
             },
             { key: 'Esc', action: 'cancel' },
@@ -56,8 +77,8 @@ function LoginProviderPicker(props: {
 
 export async function promptForLoginProvider(
   colorEnabled = true,
-): Promise<OAuthProvider | undefined> {
-  let selected: OAuthProvider | undefined;
+): Promise<LoginPickerChoice | undefined> {
+  let selected: LoginPickerChoice | undefined;
   const instance = render(
     <LoginProviderPicker
       onSelect={(provider) => {

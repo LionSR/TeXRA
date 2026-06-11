@@ -35,7 +35,7 @@ describe('UsageLogService', () => {
   });
 
   it('drains entries queued while another flush is in flight', async () => {
-    vi.spyOn(SupabaseClient, 'getAccessToken').mockResolvedValue('token');
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
 
     let releaseFirstFetch: (() => void) | undefined;
     const firstFetchReleased = new Promise<void>((resolve) => {
@@ -72,7 +72,7 @@ describe('UsageLogService', () => {
   });
 
   it('keeps queued entries when setup fails before dequeue', async () => {
-    vi.spyOn(SupabaseClient, 'getAccessToken')
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken')
       .mockRejectedValueOnce(new Error('auth unavailable'))
       .mockResolvedValue('token');
 
@@ -97,7 +97,7 @@ describe('UsageLogService', () => {
   });
 
   it('requeues entries when send fails after dequeue', async () => {
-    vi.spyOn(SupabaseClient, 'getAccessToken').mockResolvedValue('token');
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
 
     const batches: unknown[] = [];
     const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
