@@ -115,7 +115,7 @@ export abstract class RetryableInvocationNode<
     this._hasAttemptedTokenRefresh = true;
     services.logger.debug('Relay 401, refreshing token before retry loop');
 
-    const refreshed = await SupabaseClient.getAccessToken(true);
+    const refreshed = await SupabaseClient.getRelayAccessToken(true);
     if (!refreshed) {
       services.logger.debug('Token refresh failed, skipping auto-retries');
       this._persistent401Error = ensureError(originalError);

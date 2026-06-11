@@ -8,7 +8,12 @@ import {
   type CliApiMode,
 } from './apiAccessMode';
 import { fetchRelayUsageSummary, type RelayUsageSummary } from './relayUsage';
-import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
+import {
+  getCliAuthProfile,
+  getCliSessionAccessToken,
+  getCliSessionTier,
+  type CliAuthProfile,
+} from './supabaseAuth';
 
 function formatPercent(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '0%';
@@ -102,16 +107,38 @@ export async function loadCliApiStatusLines(
     if (shadowWarning) lines.push(shadowWarning);
   }
 
+  if (profile.note) lines.push(profile.note);
+
   if (profile.tier) lines.push(`tier: ${profile.tier}`);
   if (profile.authenticated && profile.tier) {
-    try {
+    // Usage reads usage_logs via PostgREST with a session token; a
+    // relay-scoped CI token cannot read it. Explain the limitation (same as
+    // `texra auth usage`) instead of surfacing a generic fetch error — but a
+    // session alongside the env token can still read its own usage.
+    const canReadUsage =
+      profile.credentialSource !== 'relayToken' ||
+      (await getCliSessionAccessToken()) !== null;
+    if (!canReadUsage) {
       lines.push(
-        formatRelayUsageStatus(
-          await fetchRelayUsageSummary({ tier: profile.tier }),
-        ),
+        'relay usage: not available with a CI relay token (run `texra login` to view usage)',
       );
-    } catch (error: unknown) {
-      lines.push(`relay usage: unavailable (${toErrorMessage(error)})`);
+    } else {
+      try {
+        // The usage rows belong to the session account, so the spending
+        // limit must use that account's tier — profile.tier may describe a
+        // configured env token's account instead.
+        const usageTier =
+          profile.credentialSource === 'relayToken'
+            ? await getCliSessionTier()
+            : profile.tier;
+        lines.push(
+          formatRelayUsageStatus(
+            await fetchRelayUsageSummary({ tier: usageTier }),
+          ),
+        );
+      } catch (error: unknown) {
+        lines.push(`relay usage: unavailable (${toErrorMessage(error)})`);
+      }
     }
   }
 
