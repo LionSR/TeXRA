@@ -1,5 +1,7 @@
 import { defineCommand } from 'citty';
 
+import { SETUP_AGENT_NAME } from '../onboarding/setupContinuation';
+import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -31,9 +33,25 @@ async function runSetup(context: CliContext): Promise<number> {
   }
 
   await initCliPlatform({ ...context, quietLogs: true });
-  const { runCliOnboarding } = await import('../onboarding/runOnboarding');
-  await runCliOnboarding(context.stdoutColorEnabled ?? context.colorEnabled);
-  return CliExitCode.Success;
+  // State 0 first (docs/prd/agent-native-onboarding.md): a credential is the
+  // one step no agent can do for the user. With a credential already in place
+  // the picker is skipped — credentials-only (re)configuration is
+  // `texra login`'s job under the new vocabulary.
+  if (!(await hasCliCredentialForApiMode(undefined).catch(() => false))) {
+    const { runCliOnboarding } = await import('../onboarding/runOnboarding');
+    const result = await runCliOnboarding(
+      context.stdoutColorEnabled ?? context.colorEnabled,
+    );
+    // Skipped or abandoned the picker: exit cleanly (the skip summary already
+    // printed) — there is no credential for the setup agent to run on.
+    if (!result.configured) return CliExitCode.Success;
+  }
+  // Credential present (pre-existing or just configured): the setup agent owns
+  // the session — environment checks, agent roster, first task. Same chat
+  // startup path as `texra chat`, with the agent pinned.
+  const { runChat } = await import('../chat/tui/runChatTui');
+  const result = await runChat(context, { agentOverride: SETUP_AGENT_NAME });
+  return result.exitCode;
 }
 
 export const setupCommand = withUsageSections(
@@ -41,7 +59,7 @@ export const setupCommand = withUsageSections(
     meta: {
       name: 'setup',
       description:
-        'Set up TeXRA access: sign in for included relay, or add a provider API key',
+        'Guided setup with the setup agent: environment, agent roster, and your first task (sign-in or API key first if needed)',
     },
     args: {
       ...INTERACTIVE_GLOBAL_ARGS,
@@ -56,9 +74,18 @@ export const setupCommand = withUsageSections(
     {
       title: 'EXAMPLES',
       rows: [
-        ['texra setup', 'choose sign-in or a provider API key'],
-        ['texra login', 'sign in for included relay access'],
+        ['texra setup', 'agent-led setup: environment, roster, first task'],
+        ['texra login', 'sign in for included relay access (credentials only)'],
         ['texra auth status', 'show TeXRA sign-in status'],
+      ],
+    },
+    {
+      title: 'NOTES',
+      rows: [
+        [
+          'texra setup',
+          "previously only the credential picker — that's `texra login` now",
+        ],
       ],
     },
   ],

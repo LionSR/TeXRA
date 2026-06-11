@@ -24,6 +24,11 @@ vi.mock('@platform/platform', () => ({
   }),
 }));
 
+import {
+  firstRunSetupAgentOverride,
+  SETUP_AGENT_NAME,
+} from '@cli/onboarding/setupContinuation';
+
 const { maybeRunCliOnboarding } = await import('@cli/onboarding/runOnboarding');
 
 const INTERACTIVE = {
@@ -101,5 +106,57 @@ describe('maybeRunCliOnboarding gate', () => {
       }),
     ).resolves.toEqual({ configured: false, declined: false });
     expect(mocks.hasCliCredentialForApiMode).not.toHaveBeenCalled();
+  });
+});
+
+// State 1 continuation (docs/prd/agent-native-onboarding.md): after the gate
+// configures a credential on a true first run, chat/orchestrate start the
+// session with the setup agent instead of the default agent / launcher.
+describe('firstRunSetupAgentOverride', () => {
+  it('hands the session to the setup agent on a true first run', () => {
+    expect(
+      firstRunSetupAgentOverride({
+        onboardingConfigured: true,
+        firstRunDone: false,
+      }),
+    ).toBe(SETUP_AGENT_NAME);
+  });
+
+  it('does nothing when onboarding did not just configure a credential', () => {
+    expect(
+      firstRunSetupAgentOverride({
+        onboardingConfigured: false,
+        firstRunDone: false,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('does nothing once the first run is done (backfilled or earned)', () => {
+    expect(
+      firstRunSetupAgentOverride({
+        onboardingConfigured: true,
+        firstRunDone: true,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('never displaces an agent the user pinned themselves', () => {
+    expect(
+      firstRunSetupAgentOverride({
+        onboardingConfigured: true,
+        firstRunDone: false,
+        pinnedAgent: 'research',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('ignores a blank pinned agent', () => {
+    expect(
+      firstRunSetupAgentOverride({
+        onboardingConfigured: true,
+        firstRunDone: false,
+        pinnedAgent: '   ',
+      }),
+    ).toBe(SETUP_AGENT_NAME);
   });
 });

@@ -14,6 +14,8 @@ import {
 } from '@platform/interfaces/lifecycle';
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { backfillFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
+import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
@@ -78,6 +80,7 @@ import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
@@ -239,6 +242,40 @@ export async function activate(context: vscode.ExtensionContext) {
   // LAST_KNOWN_VERSION, so upgrading users are not affected.
   await initializeToolDefaults();
 
+  // Onboarding-funnel backfill (PRD: agent-native onboarding): upgraders who
+  // already have a credential or run history must never see the welcome card
+  // or the setup auto-start, so firstRunDone is backfilled once when the flag
+  // first appears. Awaited: the main view's funnel derivation reads this flag
+  // at webview-ready, and awaiting here closes the only read-before-backfill
+  // window. One-shot in practice — once the key exists the probes are skipped.
+  if (
+    context.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE) ===
+    undefined
+  ) {
+    await (async () => {
+      const [hasCredential, hasRunHistory] = await Promise.all([
+        // Includes the server-side-key (relay sign-in) fallback.
+        SecretManager.anyApiKeyExists().catch(() => false),
+        // Run history lives in per-execution KV dirs under TASK_RUNS_DIR (the
+        // legacy AGENT_HISTORY workspace key is migrated away and cleared, so
+        // it is not a reliable signal). Any entry there means prior runs.
+        StorageFS.readDir(TASK_RUNS_DIR).then(
+          (entries) => entries.length > 0,
+          () => false,
+        ),
+      ]);
+      await backfillFirstRunDone(context.globalState, {
+        hasCredential,
+        hasRunHistory,
+      });
+    })().catch((err) =>
+      logger.warn(
+        'extension',
+        `Onboarding firstRunDone backfill failed: ${toErrorMessage(err)}`,
+      ),
+    );
+  }
+
   // The following startup steps touch independent state, so they run
   // concurrently to shorten activation. Within the agent branch the order
   // still matters: copyDefaultAgents populates the built-in directories,
@@ -251,12 +288,30 @@ export async function activate(context: vscode.ExtensionContext) {
     (async () => {
       await copyDefaultAgents(context);
       await registerAgentDirectoryRoots(context);
-      loadAgents().catch((err) => {
-        logger.error(
-          'extension',
-          `Failed to initialize agent index: ${toErrorMessage(err)}`,
-        );
-      });
+      loadAgents()
+        .then(() =>
+          // Seed a never-configured workspace's roster from the user-level
+          // default team (written by the setup agent's apply_team). This
+          // replaces install-detection heuristics per the agent-native
+          // onboarding PRD: absent a default team, visibility stays
+          // `undefined → show all`, unchanged. Needs the registry, hence
+          // sequenced after the agent scan.
+          seedRosterFromDefaultTeam({
+            globalState: context.globalState,
+            workspaceState: workspaceSM,
+          }).catch((err) => {
+            logger.warn(
+              'extension',
+              `Default-team roster seeding failed: ${toErrorMessage(err)}`,
+            );
+          }),
+        )
+        .catch((err) => {
+          logger.error(
+            'extension',
+            `Failed to initialize agent index: ${toErrorMessage(err)}`,
+          );
+        });
     })(),
     (async () => {
       try {

@@ -23,8 +23,10 @@ export const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
  * Preferred agents present in the workspace are sorted to the top of the
  * dropdown (in the order listed here); all others follow alphabetically.
  * Remote orchestrators come first because they need sign-in, then bundled
- * orchestrators such as `engineer`, then `research`/`review` as local
- * general-purpose fallbacks. This keeps signed-out users in presets like
+ * orchestrators such as `engineer`, then `assistant` — the general-purpose
+ * default for users without sign-in (State 2 of
+ * docs/prd/agent-native-onboarding.md) — then `research`/`review` as
+ * task-flavored fallbacks. This keeps signed-out users in presets like
  * Physicist/Mathematician from landing on task-specific agents (e.g.
  * `presenter`) by alphabetical accident.
  */
@@ -59,6 +61,7 @@ export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [
 export const PREFERRED_TOOL_USE_AGENTS = [
   ...REMOTE_ORCHESTRATOR_AGENT_NAMES,
   ...BUNDLED_ORCHESTRATOR_AGENT_NAMES,
+  'assistant',
   'research',
   'review',
 ] as const;

@@ -41,6 +41,75 @@ export type SettingsAgentPresetApplyResult =
   | { ok: true; preset: AgentModePreset }
   | { ok: false; reason: 'unknownPreset' };
 
+/**
+ * Minimal catalog surface needed to apply a preset roster. Structurally a
+ * subset of {@link SettingsAgentCatalogState}, so the controller's state port
+ * satisfies it directly.
+ */
+export interface PresetRosterState {
+  getAgents(category: AgentCategory): { name: string; source: AgentSource }[];
+  setEnabledAgentKeys(
+    category: AgentCategory,
+    enabledKeys: string[],
+  ): Promise<void>;
+}
+
+/**
+ * Resolve a preset's agent names against the live catalog and write both
+ * workspace roster keys. Single application path shared by the Settings
+ * "apply team" action, the setup agent's `apply_team` tool, and default-team
+ * seeding of fresh workspaces — so the paths can't drift.
+ *
+ * Resolved names are written as `source:name` keys. Names that don't resolve
+ * right now (relay-served orchestrators while signed out, agents not yet
+ * installed) are kept as bare names: visibility filtering matches by name, so
+ * the agent joins the roster the moment it appears (e.g. after sign-in)
+ * instead of being silently dropped. Returns the written keys per category
+ * plus the names that didn't resolve.
+ */
+export async function applyPresetRoster(
+  state: PresetRosterState,
+  preset: AgentModePreset,
+): Promise<{
+  workflowKeys: string[];
+  toolUseKeys: string[];
+  unresolvedNames: string[];
+}> {
+  const workflow = resolvePresetAgentKeys(
+    state,
+    'workflow',
+    preset.workflowAgents,
+  );
+  const toolUse = resolvePresetAgentKeys(
+    state,
+    'toolUse',
+    preset.toolUseAgents,
+  );
+  await state.setEnabledAgentKeys('workflow', workflow.keys);
+  await state.setEnabledAgentKeys('toolUse', toolUse.keys);
+  return {
+    workflowKeys: workflow.keys,
+    toolUseKeys: toolUse.keys,
+    unresolvedNames: [...workflow.unresolved, ...toolUse.unresolved],
+  };
+}
+
+function resolvePresetAgentKeys(
+  state: PresetRosterState,
+  category: AgentCategory,
+  names: string[],
+): { keys: string[]; unresolved: string[] } {
+  const entries = state.getAgents(category);
+  const unresolved: string[] = [];
+  const keys = names.map((name) => {
+    const entry = entries.find((candidate) => candidate.name === name);
+    if (entry) return agentKey(entry.source, entry.name);
+    unresolved.push(name);
+    return name;
+  });
+  return { keys, unresolved };
+}
+
 export class SettingsAgentCatalogController {
   constructor(private readonly deps: SettingsAgentCatalogControllerDeps) {}
 
@@ -70,14 +139,7 @@ export class SettingsAgentCatalogController {
     const preset = this.getPreset(presetId);
     if (!preset) return { ok: false, reason: 'unknownPreset' };
 
-    await this.deps.state.setEnabledAgentKeys(
-      'workflow',
-      this.resolveAgentKeys('workflow', new Set(preset.workflowAgents)),
-    );
-    await this.deps.state.setEnabledAgentKeys(
-      'toolUse',
-      this.resolveAgentKeys('toolUse', new Set(preset.toolUseAgents)),
-    );
+    await applyPresetRoster(this.deps.state, preset);
 
     return { ok: true, preset };
   }
@@ -153,15 +215,5 @@ export class SettingsAgentCatalogController {
       AGENT_MODE_PRESETS.find((preset) => preset.id === presetId) ??
       this.getCustomPreset(presetId)
     );
-  }
-
-  private resolveAgentKeys(
-    category: AgentCategory,
-    names: Set<string>,
-  ): string[] {
-    return this.deps.state
-      .getAgents(category)
-      .filter((entry) => names.has(entry.name))
-      .map((entry) => agentKey(entry.source, entry.name));
   }
 }

@@ -17,6 +17,11 @@ import { Spinner } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
 import { platform } from '@platform/platform';
+import {
+  backfillFirstRunDone,
+  getOnboardingDeclined,
+  setOnboardingDeclined,
+} from '@controllers/onboarding/onboardingFunnel';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { type OAuthProvider } from '@auth/sharedConfig';
 import { type SupabaseSession } from '@auth/SupabaseSession';
@@ -24,6 +29,12 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 
+import {
+  ONBOARDING_CARD_TITLE,
+  ONBOARDING_CHOICE_API_KEY,
+  ONBOARDING_CHOICE_SIGN_IN,
+  ONBOARDING_CHOICE_SKIP_LABEL,
+} from '@shared/copy/onboarding';
 import { assertNever } from '../chat/tui/assertNever';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
@@ -46,17 +57,6 @@ import {
   type DeviceAuthorization,
 } from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
-
-import {
-  getOnboardingDeclined,
-  setOnboardingDeclined,
-} from '@controllers/onboarding/onboardingFunnel';
-import {
-  ONBOARDING_CARD_TITLE,
-  ONBOARDING_CHOICE_API_KEY,
-  ONBOARDING_CHOICE_SIGN_IN,
-  ONBOARDING_CHOICE_SKIP_LABEL,
-} from '@shared/copy/onboarding';
 
 import { saveProviderApiKey } from './applyOnboardingResult';
 
@@ -113,7 +113,19 @@ export async function maybeRunCliOnboarding(
   if (getOnboardingDeclined(platform().globalState)) {
     return NO_ONBOARDING_RESULT;
   }
-  if (await hasCliCredentialForApiMode(context.apiMode).catch(() => false)) {
+  const hasCredential = await hasCliCredentialForApiMode(context.apiMode).catch(
+    () => false,
+  );
+  // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI upgrader
+  // who already has a credential never enters State 1. hasRunHistory is false
+  // by design — listing CLI run history is expensive and the credential check
+  // covers upgraders. One-shot, best-effort, and must not change the gate
+  // below: whether the picker shows is decided exactly as before.
+  await backfillFirstRunDone(platform().globalState, {
+    hasCredential,
+    hasRunHistory: false,
+  }).catch(() => {});
+  if (hasCredential) {
     return NO_ONBOARDING_RESULT;
   }
   return runOnboardingFlow({
@@ -124,9 +136,11 @@ export async function maybeRunCliOnboarding(
 }
 
 /**
- * `texra setup`: always show the picker for re-configuration, bypassing the
- * has-credentials / declined gate. Still TTY-only — the command rejects
- * headless before calling this.
+ * `texra setup`'s State 0 step: show the picker unconditionally — the command
+ * only calls this after checking that no usable credential exists, and then
+ * continues into the setup-agent chat once one is configured. Credentials-only
+ * (re)configuration is `texra login`'s job. Still TTY-only — the command
+ * rejects headless before calling this.
  */
 export async function runCliOnboarding(
   colorEnabled = true,
@@ -189,14 +203,9 @@ async function runOnboardingFlow(options: {
     await setOnboardingDeclined(platform().globalState, false).catch(() => {});
   }
   if (resolution.summary) writeTextStdout(resolution.summary);
-  // Standalone `texra setup` ends here, so tell the user where to go next
-  // (matches `texra init`). The first-run gate skips this: orchestrate/chat
-  // continue into the launcher in the same process.
-  if (resolution.configured && !options.firstRun) {
-    writeTextStdout(
-      'Next: run `texra` for the launcher, or `texra chat` to start.',
-    );
-  }
+  // No "what next" hint after configuring: every caller continues in the same
+  // process — orchestrate/chat into their session, `texra setup` into the
+  // setup-agent chat.
   return { configured: resolution.configured, declined: resolution.declined };
 }
 

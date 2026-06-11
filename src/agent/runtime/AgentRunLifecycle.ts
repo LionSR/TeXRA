@@ -1,3 +1,8 @@
+import {
+  getFirstRunDone,
+  setFirstRunDone,
+} from '@controllers/onboarding/onboardingFunnel';
+import { platform } from '@platform/platform';
 import { writeTerminalStatus } from '@agent/storage';
 import { logSdkError } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -10,7 +15,7 @@ import {
 import { projectRunOutcome } from '@common/constants/streamStatus';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { RUN_OUTCOME, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
 import {
@@ -76,6 +81,20 @@ export async function runFlowWithLifecycle(
       ctx.executionId,
       projection.executionStatus,
     ).catch(() => {});
+
+    // Onboarding funnel (PRD: agent-native onboarding): State 1 ends when any
+    // real run completes. The setup conversation itself doesn't count, but the
+    // demo it delegates does (subagent runs land here too). Best-effort: a
+    // state write failure must never affect the run.
+    if (result.outcome === RUN_OUTCOME.COMPLETED && agentName !== 'setup') {
+      try {
+        if (!getFirstRunDone(platform().globalState)) {
+          await setFirstRunDone(platform().globalState, true);
+        }
+      } catch {
+        // Ignore: the flag is a UX nicety, never run-critical.
+      }
+    }
 
     executionRegistry.untrack(ctx.executionId);
     ctx.parentStage.end(projection.endGroupStatus);
