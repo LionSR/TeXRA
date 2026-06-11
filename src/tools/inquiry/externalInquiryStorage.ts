@@ -193,15 +193,12 @@ async function hydrateAnswersFromDisk(
 async function readThreadManifest(
   threadId: ExternalInquiryThreadId,
 ): Promise<ExternalInquiryThreadManifest | null> {
-  try {
-    const raw = await GlobalStorageFS.readJson<unknown>(
-      threadManifestPath(threadId),
-    );
-    const result = ExternalInquiryThreadManifestSchema.safeParse(raw);
-    return result.success ? result.data : null;
-  } catch {
-    return null;
-  }
+  // An unreadable manifest fails schema validation below, yielding null.
+  const raw = await GlobalStorageFS.readJson<unknown>(
+    threadManifestPath(threadId),
+  ).catch(() => undefined);
+  const result = ExternalInquiryThreadManifestSchema.safeParse(raw);
+  return result.success ? result.data : null;
 }
 
 async function writeThreadManifest(
@@ -606,12 +603,10 @@ function manifestToSummary(
 }
 
 async function listAllManifests(): Promise<ExternalInquiryThreadManifest[]> {
-  let entries: [string, number][] = [];
-  try {
-    entries = await GlobalStorageFS.readDir(THREADS_DIR);
-  } catch {
-    return [];
-  }
+  // A missing/unreadable threads directory means no threads.
+  const entries = await GlobalStorageFS.readDir(THREADS_DIR).catch(
+    (): [string, number][] => [],
+  );
 
   const reads = entries.flatMap(([name, type]) => {
     if (!isDirectory(type)) return [];

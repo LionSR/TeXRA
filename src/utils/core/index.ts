@@ -22,3 +22,4 @@ export {
 } from './typeGuards';
 export { debounce, delay, withTimeout } from './async';
 export { clamp, clampIndex } from './math';
+export { tryParseUrl } from './urlCore';

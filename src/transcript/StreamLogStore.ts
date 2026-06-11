@@ -217,11 +217,10 @@ export class StreamLogStore {
       }
     })();
     this.pendingLoads.set(streamId, work);
-    try {
-      await work;
-    } finally {
-      this.pendingLoads.delete(streamId);
-    }
+    // `work` traps every failure internally (the catch above marks
+    // loadFailed), so it never rejects and the cleanup always runs.
+    await work;
+    this.pendingLoads.delete(streamId);
   }
 
   append(streamId: StreamTabId, entry: StreamLogAppendInput): StreamLogEntry {

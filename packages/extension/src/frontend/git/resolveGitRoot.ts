@@ -64,12 +64,8 @@ export async function resolveGitCommonRoot(
     }
 
     const gitEntryUri = vscode.Uri.joinPath(repo.rootUri, '.git');
-    let stat: vscode.FileStat;
-    try {
-      stat = await vscode.workspace.fs.stat(gitEntryUri);
-    } catch {
-      return undefined;
-    }
+    // A stat failure is handled by the function-level catch below.
+    const stat = await vscode.workspace.fs.stat(gitEntryUri);
 
     if (hasFileType(stat, vscode.FileType.Directory)) {
       return repo.rootUri.fsPath;
