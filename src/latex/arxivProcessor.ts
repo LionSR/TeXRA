@@ -5,6 +5,7 @@ import { createGunzip } from 'node:zlib';
 import axios from 'axios';
 import { StatusCodes } from 'http-status-codes';
 import * as arxivIdentifiers from 'identifiers-arxiv';
+import pRetry, { AbortError } from 'p-retry';
 import * as tar from 'tar';
 
 import { toErrorMessage } from '@common/errors';
@@ -87,11 +88,12 @@ class ArxivSourceProcessor {
   /**
    * Determine file extension from content-type header.
    * Handles tar, gzip, and tex content types.
-   * Throws if the response is a PDF (no LaTeX source available).
+   * Throws if the response is a PDF (no LaTeX source available) — an
+   * `AbortError` so the download retry loop treats it as permanent.
    */
   private getExtensionFromContentType(contentType: string): string {
     if (contentType.includes('pdf')) {
-      throw new Error(PDF_ONLY_SUBMISSION_ERROR);
+      throw new AbortError(PDF_ONLY_SUBMISSION_ERROR);
     }
 
     const isTar = contentType.includes('tar');
@@ -138,10 +140,34 @@ class ArxivSourceProcessor {
     return id ? id.replaceAll('/', '_') : input;
   }
 
+  /**
+   * Download `url` to disk, retrying transient network / server (5xx)
+   * failures with exponential backoff. Permanent failures — any 4xx status
+   * or a PDF-only submission — abort the retry loop immediately.
+   */
   public async downloadFile(
     url: string,
     destBasePath: string,
     timeout = 30000,
+  ): Promise<string> {
+    return pRetry(() => this.downloadFileOnce(url, destBasePath, timeout), {
+      retries: 2,
+      minTimeout: 1000,
+      // Jitter the backoff so concurrent clients don't retry in lockstep.
+      randomize: true,
+      onFailedAttempt: ({ error, retriesLeft }) => {
+        logger.debug(
+          this.channel,
+          `Download attempt failed (${retriesLeft} retries left): ${toErrorMessage(error)}`,
+        );
+      },
+    });
+  }
+
+  private async downloadFileOnce(
+    url: string,
+    destBasePath: string,
+    timeout: number,
   ): Promise<string> {
     let destPath = destBasePath;
     let shouldCleanup = true;
@@ -153,11 +179,15 @@ class ArxivSourceProcessor {
       });
 
       if (response.status === StatusCodes.NOT_FOUND) {
-        throw new Error('Source not available for this arXiv ID');
+        throw new AbortError('Source not available for this arXiv ID');
       }
 
       if (response.status !== StatusCodes.OK) {
-        throw new Error(`Failed to download: HTTP ${response.status}`);
+        const message = `Failed to download: HTTP ${response.status}`;
+        // 4xx is permanent and won't change on retry; only retry 5xx.
+        throw response.status < StatusCodes.INTERNAL_SERVER_ERROR
+          ? new AbortError(message)
+          : new Error(message);
       }
 
       // Extract filename from Content-Disposition header if available
@@ -187,7 +217,8 @@ class ArxivSourceProcessor {
       return destPath;
     } finally {
       if (shouldCleanup) {
-        void this.cleanUpBestEffort(destPath, 'partial download');
+        // Await so a retry attempt can't race this delete on the same path.
+        await this.cleanUpBestEffort(destPath, 'partial download');
       }
     }
   }

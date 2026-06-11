@@ -83,3 +83,19 @@ export function formatDuration(durationMs: number): string {
   const wholeSeconds = Math.floor(durationMs / 1000) * 1000;
   return prettyMilliseconds(wholeSeconds, { secondsDecimalDigits: 0 });
 }
+
+/**
+ * Compact duration capped at two units (`45s`, `3m 5s`, `1h 1m`).
+ *
+ * Backed by `pretty-ms` with whole-second flooring like {@link formatDuration},
+ * but renders zero / negative / sub-second durations as `0s` (used by elapsed
+ * displays that start from zero, e.g. Goal timings and Lean server uptime).
+ */
+export function formatCompactDuration(durationMs: number): string {
+  const wholeSeconds = Math.floor(Math.max(0, durationMs) / 1000) * 1000;
+  if (wholeSeconds === 0) return '0s';
+  return prettyMilliseconds(wholeSeconds, {
+    secondsDecimalDigits: 0,
+    unitCount: 2,
+  });
+}
