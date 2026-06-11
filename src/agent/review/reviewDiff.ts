@@ -289,7 +289,7 @@ export async function collectReviewDiff(
     if (!base) {
       return {
         ok: false,
-        reason: `Could not find the repository's main branch (looked for origin/HEAD and local ${BASE_BRANCH_CANDIDATES.join('/')}).`,
+        reason: `Could not find the repository's main branch (looked for origin/HEAD plus local and origin remote-tracking ${BASE_BRANCH_CANDIDATES.join('/')}).`,
       };
     }
 
