@@ -688,10 +688,16 @@ export async function activate(context: vscode.ExtensionContext) {
     // (`getActiveSidebarView()`) so it doesn't need a closure into
     // `activate()`.
     vscode.commands.registerCommand('texra.showMainView', showMainView),
-    vscode.commands.registerCommand(
-      'texra.refreshApiKeyStatus',
-      refreshApiKeyStatus,
-    ),
+    vscode.commands.registerCommand('texra.refreshApiKeyStatus', async () => {
+      await refreshApiKeyStatus();
+      // Credential facts changed (set/unset API key from any entry point —
+      // palette, walkthrough, welcome card), so the onboarding funnel must
+      // recompute too: the State 0 card has no other signal when a key is
+      // added outside the main view's own round-trip.
+      await getMainViewProvider()
+        ?.refreshOnboardingFunnel()
+        .catch(() => {});
+    }),
   );
 
   const mainViewProvider = getMainViewProvider();
