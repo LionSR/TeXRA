@@ -10,8 +10,8 @@
 
 import { z } from 'zod';
 
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { tryParseUrl } from '@utils/core';
 
 // SDK type imports - using native types for better type safety
 // Consumers should import SDK types directly from the respective SDKs:
@@ -491,15 +491,10 @@ export function extractOpenAIWebSearchResults(
  * Extract domain from URL.
  */
 export function extractDomain(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch (err) {
-    // Contract: return '' for unparseable URLs. Log so malformed source data
-    // isn't silently rendered as an empty domain.
-    logger.debug(
-      'ServerTools',
-      `extractDomain: unparseable URL "${url}": ${toErrorMessage(err)}`,
-    );
-    return '';
-  }
+  const parsed = tryParseUrl(url);
+  if (parsed) return parsed.hostname;
+  // Contract: return '' for unparseable URLs. Log so malformed source data
+  // isn't silently rendered as an empty domain.
+  logger.debug('ServerTools', `extractDomain: unparseable URL "${url}"`);
+  return '';
 }
