@@ -133,8 +133,11 @@ class AgentReviewServiceImpl {
 
   getIssuesForUri(uri: vscode.Uri): ReviewIssue[] {
     if (!this.reviewRoot) return [];
+    // Compare through Uri.file so both sides get the same normalization —
+    // on Windows, git reports an upper-case drive letter while uri.fsPath
+    // lower-cases it, and a raw path comparison would never match.
     return this.issues.filter(
-      (issue) => path.resolve(this.issuePath(issue)) === uri.fsPath,
+      (issue) => vscode.Uri.file(this.issuePath(issue)).fsPath === uri.fsPath,
     );
   }
 
