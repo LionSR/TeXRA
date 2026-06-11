@@ -3,6 +3,7 @@ import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { platform } from '@platform/platform';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { toErrorMessage } from '@common/errors/errorMessage';
 
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
 import {
@@ -151,11 +152,17 @@ async function runInit(
   // default team (written by the setup agent's apply_team) — the CLI
   // counterpart of the extension's activation-time seeding. The registry is
   // already loaded by gatherOptions (includeRemote: false). Best-effort:
-  // a seeding failure must not fail `texra init`.
+  // a seeding failure must not fail `texra init`, but say so on stderr
+  // (the extension counterpart logs a warning) so a missing roster is
+  // explainable when troubleshooting.
   await seedRosterFromDefaultTeam({
     globalState: platform().globalState,
     workspaceState: platform().workspaceState,
-  }).catch(() => {});
+  }).catch((error: unknown) => {
+    writeTextStderr(
+      `Note: couldn't seed the agent roster from your default team (${toErrorMessage(error)}). Pick agents in Settings or re-run the setup agent.`,
+    );
+  });
 
   if (gitignore) {
     const outcome = await ensureTexraGitignored(context.cwd);

@@ -20,7 +20,8 @@ import {
 } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
 
-async function runSetup(context: CliContext): Promise<number> {
+/** Exported for the test kernel — the command's `run` is the only other caller. */
+export async function runSetup(context: CliContext): Promise<number> {
   const terminalFailure = interactiveTerminalFailure(context);
   if (terminalFailure) {
     writeTextStderr(
