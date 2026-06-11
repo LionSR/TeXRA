@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
-import { formatError, formatZodError, toErrorMessage } from '@common/errors';
+import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import type { z } from 'zod';
 
 export { isFileNotFoundError, toErrorMessage } from '@common/errors';
 
@@ -21,7 +21,7 @@ export async function parseWithErrorDisplay<T>(
     const prefix = context ? `Invalid ${context}` : 'Invalid input';
     await showLoggedMessage(
       channel,
-      `${prefix}: ${formatZodError(result.error)}`,
+      `${prefix}: ${z.prettifyError(result.error)}`,
     );
     return null;
   }

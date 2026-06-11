@@ -126,14 +126,6 @@ export function formatZodIssuesForDiagnostics(
   });
 }
 
-/** Format Zod issues as a human-readable error message for ToolResult.error. */
-export function formatZodIssuesAsMessage(issues: ZodIssue[]): string {
-  const lines = issues.map((i) =>
-    i.path.length ? `- ${i.path.join('.')}: ${i.message}` : `- ${i.message}`,
-  );
-  return `Invalid input:\n${lines.join('\n')}`;
-}
-
 export interface DiagnosticsPayload {
   path: string;
   command: 'list' | 'count';
