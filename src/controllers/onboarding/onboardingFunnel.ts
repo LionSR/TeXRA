@@ -134,21 +134,29 @@ export function readOnboardingFlags(
 }
 
 /**
- * One-shot migration: upgraders keep their normal product. A user who already
- * has a credential or run history when the flag first appears never sees the
- * welcome card or the setup auto-start. Writes the key on first call (true or
- * false) so the backfill never re-evaluates — a fresh install that gains a
- * credential minutes later must still enter State 1.
+ * One-shot migration: upgraders keep their normal product. A prior install
+ * with a credential, or any install with run history, never sees the welcome
+ * card or the setup auto-start. Writes the key on first call (true or false)
+ * so the backfill never re-evaluates — a fresh install that gains a credential
+ * minutes later must still enter State 1.
  */
 export async function backfillFirstRunDone(
   state: StateStore,
-  signals: { hasCredential: boolean; hasRunHistory: boolean },
+  signals: {
+    hasCredential: boolean;
+    hasPriorInstall?: boolean;
+    hasRunHistory: boolean;
+  },
 ): Promise<void> {
   const existing = state.get<boolean | undefined>(
     GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
   );
   if (existing !== undefined) return;
-  await setFirstRunDone(state, signals.hasCredential || signals.hasRunHistory);
+  await setFirstRunDone(
+    state,
+    signals.hasRunHistory ||
+      (signals.hasPriorInstall === true && signals.hasCredential),
+  );
 }
 
 // ============================================================

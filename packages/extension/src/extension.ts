@@ -254,6 +254,9 @@ export async function activate(context: vscode.ExtensionContext) {
     undefined
   ) {
     await (async () => {
+      const hasPriorInstall =
+        context.globalState.get<string>(GlobalStateKey.LAST_KNOWN_VERSION) !==
+        undefined;
       const [hasCredential, hasRunHistory] = await Promise.all([
         // Same non-blank provider-key/server-side-key check used by the
         // funnel and setup launch preflight.
@@ -268,6 +271,7 @@ export async function activate(context: vscode.ExtensionContext) {
       ]);
       await backfillFirstRunDone(context.globalState, {
         hasCredential,
+        hasPriorInstall,
         hasRunHistory,
       });
     })().catch((err) =>

@@ -246,13 +246,23 @@ describe('onboarding flags', () => {
 });
 
 describe('backfillFirstRunDone', () => {
-  it('marks upgraders with a credential as done', async () => {
+  it('marks prior installs with a credential as done', async () => {
+    const state = fakeStateStore();
+    await backfillFirstRunDone(state, {
+      hasCredential: true,
+      hasPriorInstall: true,
+      hasRunHistory: false,
+    });
+    expect(getFirstRunDone(state)).toBe(true);
+  });
+
+  it('does not mark fresh credential-only installs as done', async () => {
     const state = fakeStateStore();
     await backfillFirstRunDone(state, {
       hasCredential: true,
       hasRunHistory: false,
     });
-    expect(getFirstRunDone(state)).toBe(true);
+    expect(getFirstRunDone(state)).toBe(false);
   });
 
   it('marks upgraders with run history as done', async () => {

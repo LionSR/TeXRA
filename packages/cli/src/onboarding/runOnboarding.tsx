@@ -122,21 +122,21 @@ export async function maybeRunCliOnboarding(
   const hasCredential = await hasCliCredentialForApiMode(context.apiMode).catch(
     () => false,
   );
-  // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI upgrader
-  // who already has a credential or execution history never enters State 0/1.
+  // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
+  // with execution history never enters State 0/1. Credential presence alone
+  // does not prove this is an upgrader: fresh installs can inherit env keys.
   // One-shot and best-effort: if a credential appears after a previous skip,
   // the stale skip is cleared below so a later sign-out re-enters State 0.
   const needsFirstRunBackfill =
     globalState.get<boolean | undefined>(
       GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
     ) === undefined;
-  const hasRunHistory =
-    needsFirstRunBackfill && !hasCredential
-      ? await listExecutions().then(
-          (entries) => entries.length > 0,
-          () => false,
-        )
-      : false;
+  const hasRunHistory = needsFirstRunBackfill
+    ? await listExecutions().then(
+        (entries) => entries.length > 0,
+        () => false,
+      )
+    : false;
   await backfillFirstRunDone(globalState, {
     hasCredential,
     hasRunHistory,
