@@ -275,11 +275,14 @@ export async function collectReviewDiff(
       ? collectUntrackedDiffs(repoRoot)
       : Promise.resolve({ diff: '', files: [] }),
   ]);
-  if (diffText === null) {
+  // A failed name-only diff must fail the collection too: issue reports are
+  // validated against `changedFiles`, so an empty list alongside real diff
+  // text would reject every finding as outside the change set.
+  if (diffText === null || nameOnly === null) {
     return { ok: false, reason: `git diff against ${baseRef} failed.` };
   }
 
-  const changedFiles = (nameOnly ?? '').split('\n').filter(Boolean);
+  const changedFiles = nameOnly.split('\n').filter(Boolean);
   let combined = diffText;
   if (untracked.diff) {
     combined = combined ? `${combined}\n${untracked.diff}` : untracked.diff;
