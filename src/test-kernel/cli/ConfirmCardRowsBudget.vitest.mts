@@ -26,21 +26,21 @@ describe('confirmCardContentRowsBudget', () => {
 
   it('grants the spacious budget when rows are plentiful', () => {
     // 30 - spaciousFixedRows(7) - titleRows(1) = 22
-    expect(
-      confirmCardContentRowsBudget({ ...BASE, availableRows: 30 }),
-    ).toBe(22);
+    expect(confirmCardContentRowsBudget({ ...BASE, availableRows: 30 })).toBe(
+      22,
+    );
   });
 
   it('switches from spacious to compact at the compactMaxRows cutoff', () => {
     // availableRows 12: spacious = 12 - 7 - 1 = 4 > compactMaxRows(3) → 4
-    expect(
-      confirmCardContentRowsBudget({ ...BASE, availableRows: 12 }),
-    ).toBe(4);
+    expect(confirmCardContentRowsBudget({ ...BASE, availableRows: 12 })).toBe(
+      4,
+    );
     // availableRows 11: spacious = 11 - 7 - 1 = 3, not > 3 → compact path
     //   clamp(11 - 5 - 1, 1, 3) = clamp(5, 1, 3) = 3
-    expect(
-      confirmCardContentRowsBudget({ ...BASE, availableRows: 11 }),
-    ).toBe(3);
+    expect(confirmCardContentRowsBudget({ ...BASE, availableRows: 11 })).toBe(
+      3,
+    );
   });
 
   it('clamps the compact budget to at least one row when space is tiny', () => {
