@@ -47,11 +47,18 @@ import {
 } from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
-import { saveProviderApiKey } from './applyOnboardingResult';
 import {
   getOnboardingDeclined,
   setOnboardingDeclined,
-} from './onboardingState';
+} from '@controllers/onboarding/onboardingFunnel';
+import {
+  ONBOARDING_CARD_TITLE,
+  ONBOARDING_CHOICE_API_KEY,
+  ONBOARDING_CHOICE_SIGN_IN,
+  ONBOARDING_CHOICE_SKIP_LABEL,
+} from '@shared/copy/onboarding';
+
+import { saveProviderApiKey } from './applyOnboardingResult';
 
 export interface CliOnboardingResult {
   /** True when the user finished a sign-in or saved a key this run. */
@@ -387,19 +394,19 @@ type OnboardingPickerItem = SelectItem<OnboardingChoice>;
 
 const RELAY_PICKER_ITEM: OnboardingPickerItem = {
   value: 'relay',
-  label: 'Included relay access',
-  description: 'sign in, no API key needed (recommended)',
+  label: ONBOARDING_CHOICE_SIGN_IN.label,
+  description: ONBOARDING_CHOICE_SIGN_IN.description,
 };
 
 const KEY_PICKER_ITEM: OnboardingPickerItem = {
   value: 'key',
-  label: 'Provider API key',
-  description: 'paste Anthropic / OpenAI / Google',
+  label: ONBOARDING_CHOICE_API_KEY.label,
+  description: ONBOARDING_CHOICE_API_KEY.description,
 };
 
 const SKIP_PICKER_ITEM: OnboardingPickerItem = {
   value: 'skip',
-  label: 'Skip for now',
+  label: ONBOARDING_CHOICE_SKIP_LABEL,
   description: 'set up later: texra login / texra setup',
 };
 
@@ -433,7 +440,7 @@ function PickerStep(props: {
 }): React.JSX.Element {
   return (
     <OnboardingFrame
-      title="Welcome to TeXRA"
+      title={ONBOARDING_CARD_TITLE}
       subtitle={props.subtitle}
       hints={[
         { key: '↑/↓', action: 'navigate' },

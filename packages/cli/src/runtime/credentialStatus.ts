@@ -6,7 +6,7 @@
 // provider key does not suppress included-relay sign-in setup, and vice versa.
 
 import { platform } from '@platform/platform';
-import { API_PROVIDERS, apiKeyExists } from '@model/apiProviders';
+import { hasAnyProviderApiKey } from '@controllers/onboarding/onboardingFunnel';
 
 import { getCliAuthProvider } from './supabaseAuth';
 import type { CliApiMode } from './apiAccessMode';
@@ -17,15 +17,6 @@ async function hasIncludedRelaySignIn(): Promise<boolean> {
     .catch(() => false);
 }
 
-async function hasProviderApiKey(): Promise<boolean> {
-  const secrets = platform().secrets;
-  for (const provider of API_PROVIDERS) {
-    // Sequential by design: stop at the first key found.
-    if (await apiKeyExists(secrets, provider)) return true;
-  }
-  return false;
-}
-
 export async function hasCliCredentialForApiMode(
   apiMode: CliApiMode | undefined,
 ): Promise<boolean> {
@@ -33,8 +24,11 @@ export async function hasCliCredentialForApiMode(
     case 'included':
       return hasIncludedRelaySignIn();
     case 'personal':
-      return hasProviderApiKey();
+      return hasAnyProviderApiKey(platform().secrets);
     default:
-      return (await hasIncludedRelaySignIn()) || (await hasProviderApiKey());
+      return (
+        (await hasIncludedRelaySignIn()) ||
+        (await hasAnyProviderApiKey(platform().secrets))
+      );
   }
 }
