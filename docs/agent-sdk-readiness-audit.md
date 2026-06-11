@@ -1581,7 +1581,7 @@ it adding a wrapper, barrel, or run-entry indirection:
   (`agentRegistry.ts:477`) still sits beside the SDK-exported core — a minor residual, downgraded
   from the §16 finding to optional polish.
 - **`5cf2297` "extract provider helpers."** New `modelHandlers/{google/googleMessageHelpers,
-  openai/openAIChatHelpers,openrouter/openRouterStreaming}.ts` carve message/stream glue out of
+openai/openAIChatHelpers,openrouter/openRouterStreaming}.ts` carve message/stream glue out of
   the three provider handlers. Each has its parent handler as sole caller — but these are
   monolith-reducing _moves_ (logic relocated out of 1.4–1.7k-line files), not single-use
   forwarders, so they are not a §-anti-shim concern.
