@@ -180,6 +180,14 @@ class AgentReviewServiceImpl {
         },
         () => this.executeReview(cwd, trigger, options),
       );
+    } catch (err) {
+      // Backstop for anything executeReview's own handling missed — the
+      // summary must never stay stuck on "Reviewing changes…".
+      this.summary = `Review failed: ${toErrorMessage(err)}`;
+      logger.warn(
+        CHANNEL,
+        `Agent review failed unexpectedly: ${toErrorMessage(err)}`,
+      );
     } finally {
       this.activeReview = undefined;
       this.running = false;
@@ -259,23 +267,27 @@ class AgentReviewServiceImpl {
     this.activeReview = { repoRoot, baseDescription, changedFiles };
     this.emitter.fire();
 
-    const instruction = buildReviewInstruction({
-      baseDescription,
-      changedFiles,
-      diff,
-      truncated,
-      approach: getConfig<ReviewApproach>('agentReview.approach', 'quick'),
-    });
-    const model = getConfig<string>('agentReview.model', '').trim();
-    const config = AgentConfigSchema.parse({
-      agent: REVIEW_AGENT,
-      instruction,
-      displayInstruction: `Agent review: diff with ${baseDescription} (${changedFiles.length} file${changedFiles.length === 1 ? '' : 's'})`,
-      ...(model ? { model } : {}),
-    });
-
     let outcome: RunOutcome;
     try {
+      // Everything from here until the session ends sits inside one
+      // try/catch: the panel was already cleared above, so any setup
+      // failure (config parsing included) must restore the snapshot
+      // rather than leave the panel empty.
+      const instruction = buildReviewInstruction({
+        baseDescription,
+        changedFiles,
+        diff,
+        truncated,
+        approach: getConfig<ReviewApproach>('agentReview.approach', 'quick'),
+      });
+      const model = getConfig<string>('agentReview.model', '').trim();
+      const config = AgentConfigSchema.parse({
+        agent: REVIEW_AGENT,
+        instruction,
+        displayInstruction: `Agent review: diff with ${baseDescription} (${changedFiles.length} file${changedFiles.length === 1 ? '' : 's'})`,
+        ...(model ? { model } : {}),
+      });
+
       // Run the reviewer session directly (the `texra.execute` path minus
       // its fire-and-forget error swallowing) so the panel can distinguish
       // a completed review from a failed or cancelled one. The run itself
