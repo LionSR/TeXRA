@@ -368,6 +368,43 @@ export const commandCatalog = [
     category: 'TeXRA',
     icon: '$(gear)',
   },
+  {
+    id: 'texra.agentReview.run',
+    title: 'Run Agent Review',
+    category: 'TeXRA',
+    icon: '$(refresh)',
+  },
+  {
+    id: 'texra.agentReview.fixAllIssues',
+    title: 'Fix All Agent Review Issues',
+    shortTitle: 'Fix All Issues',
+    category: 'TeXRA',
+    icon: '$(tools)',
+  },
+  {
+    id: 'texra.agentReview.fixIssue',
+    title: 'Fix with Agent',
+    category: 'TeXRA',
+    icon: '$(wand)',
+  },
+  {
+    id: 'texra.agentReview.dismissIssue',
+    title: 'Dismiss Agent Review Issue',
+    shortTitle: 'Dismiss',
+    category: 'TeXRA',
+    icon: '$(close)',
+  },
+  {
+    id: 'texra.agentReview.openIssue',
+    title: 'Open Agent Review Issue',
+    category: 'TeXRA',
+  },
+  {
+    id: 'texra.agentReview.clear',
+    title: 'Clear Agent Review Results',
+    category: 'TeXRA',
+    icon: '$(clear-all)',
+  },
 ] as const satisfies readonly CommandCatalogEntry[];
 
 export type CommandId = (typeof commandCatalog)[number]['id'];
