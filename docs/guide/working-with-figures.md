@@ -3,15 +3,17 @@
 <script setup>
 import MediaSectionPanel from '../.vitepress/components/MediaSectionPanel.vue';
 import AutoExtractMenu from '../.vitepress/components/AutoExtractMenu.vue';
+import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 </script>
 
 TeXRA lets AI agents analyse, reference, and generate figures inside your documents — from `.png` screenshots to embedded TikZ diagrams and PDFs.
 
 ::: tip CLI
 This page covers the VS Code **Media** selector. From the [`texra` CLI](./texra-cli.md),
-pass image and PDF files to an agent with `--input` / `--context` (a
-vision-capable model reads them directly), or describe the figure to a tool-use
-agent in `texra chat`.
+figures referenced by your input documents are auto-extracted and attached for
+vision-capable models on workflow runs — or work with a figure conversationally
+in `texra chat`. (`--context` files are read as text, so they're for `.tex` and
+`.bib` sources, not images.)
 :::
 
 ## <wa-icon library="texra" name="rocket"></wa-icon> Quick Task: Add a Figure Caption
@@ -21,6 +23,21 @@ agent in `texra chat`.
 3. Select your figure in the **Media** (<wa-icon library="texra" name="file-media"></wa-icon>) section.
 4. Type the instruction: "Write a detailed caption for this figure."
 5. Click Execute (<wa-icon library="texra" name="play"></wa-icon>).
+
+In the terminal, the same five steps collapse to one command. Pick a
+vision-capable model, and the figures your document references are
+auto-extracted and attached for it:
+
+<CliRunHero
+  command='texra run polish --input draft.tex --model sonnet46T --instruction "Write a detailed caption for the pipeline figure."'
+  :rounds="[
+    { label: 'r0 — draft revision', state: 'done' },
+    { label: 'r1 — critique and revise', state: 'done' },
+  ]"
+  :outputs="['.texra/runs/b81d4f29e6a3/r1/draft.tex']"
+/>
+
+<p class="hero-caption">No media picker needed: on a vision model, round 0 extracts the figures referenced by <code>draft.tex</code> and sends them alongside the text.</p>
 
 ## <wa-icon library="texra" name="file-media"></wa-icon> The Media Section
 

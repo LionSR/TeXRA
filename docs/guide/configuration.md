@@ -5,6 +5,7 @@ import DashboardTabsCard from '../.vitepress/components/DashboardTabsCard.vue';
 import InstructionHeaderCard from '../.vitepress/components/InstructionHeaderCard.vue';
 import AgentOutputToolbarCard from '../.vitepress/components/AgentOutputToolbarCard.vue';
 import GitTabCard from '../.vitepress/components/GitTabCard.vue';
+import CliInitHero from '../.vitepress/components/CliInitHero.vue';
 </script>
 
 TeXRA provides extensive configuration options that allow you to customize its behavior to match your workflow (don't worry, the defaults are sensible!). This guide explains the available settings and how to adjust them for optimal performance.
@@ -45,6 +46,10 @@ The Dashboard tabs are the recommended way to manage agents, models, tools, and 
 Most configuration happens in the **Dashboard** (above) — open it with `TeXRA: Show Settings Dashboard`. The CLI keeps project defaults in a per-project `.texra/config.json` (`texra init` scaffolds one).
 
 Many `texra.*` keys share the same **name** across the VS Code extension and the CLI's `.texra/config.json` (most of the file-, LaTeX-, and model-connection settings below), so the same documentation applies to both. They don't share storage, though — the extension persists settings in VS Code's config/global state, while the CLI reads `.texra/config.json`. Some keys are extension-only (for example the LaTeX formatter and extension model visibility settings); the CLI warns on any key it doesn't recognize.
+
+<CliInitHero />
+
+<p class="hero-caption"><code>texra init</code> scaffolds the workspace file with sensible defaults, and <code>texra doctor</code> confirms exactly which config file a run will load — no guessing about what applies.</p>
 
 VS Code's built-in Settings UI remains available for power users — open it with `Ctrl+,` (`Cmd+,` on macOS), search for "TeXRA", and edit in the UI or the JSON. It's no longer the primary path, so reach for the Dashboard or CLI config first.
 
@@ -322,6 +327,11 @@ For project-specific configurations in the VS Code extension, use workspace sett
 ```
 
 For personal preferences that apply to all projects, use user settings.
+
+When several levels set the same option, the CLI resolves them in a fixed
+order — an explicit flag always wins, then environment variables, then the
+project file, then built-in defaults. See the
+[precedence figure on the CLI page](./texra-cli.md#workspace-defaults).
 
 ### OS-Specific Configuration
 

@@ -4,6 +4,7 @@
 import ToolCategoriesHero from '../.vitepress/components/ToolCategoriesHero.vue';
 import AgentAnatomyHero from '../.vitepress/components/AgentAnatomyHero.vue';
 import OutputMappingHero from '../.vitepress/components/OutputMappingHero.vue';
+import CliAgentShowHero from '../.vitepress/components/CliAgentShowHero.vue';
 </script>
 
 Every lab has its own writing style, formatting quirks, and recurring tasks. Maybe your group always needs a "rewrite the abstract for a Nature-style letter" pass, or you want an agent that converts your internal notes into arXiv-ready LaTeX. Custom agents let you encode these workflows once and reuse them with a single click.
@@ -261,6 +262,13 @@ See [Handling Multiple Files](./multiple-output.md) for more details.
 1. Save your `.yaml` file.
 2. Reload the VS Code window (Command Palette → `Developer: Reload Window`).
 3. Your new custom agent should now appear in the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>) of the TeXRA UI.
+
+From a terminal the iteration loop is faster — no window reload needed.
+Verify the agent registered, then smoke-test it in one go:
+
+<CliAgentShowHero />
+
+<p class="hero-caption"><code>agents show</code> confirms the registration — <code>source: custom</code> plus the file it loaded — and a one-shot <code>texra run</code> proves the prompts work before you polish the YAML further.</p>
 
 ### <wa-icon library="texra" name="shield"></wa-icon> Strict XML Extraction
 
