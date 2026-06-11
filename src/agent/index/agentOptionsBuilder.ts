@@ -16,7 +16,7 @@ export function entryToOptionData(entry: AgentEntry): AgentOptionData {
   const key = createKey(entry.source, entry.name);
   return {
     value: key,
-    label: entry.name,
+    label: entry.displayName ?? entry.name,
     isToolUse: entry.category === AgentCategory.ToolUse,
     isOrchestrator: hasDelegationTool(entry.tools),
     isRemote: entry.source === 'remote',

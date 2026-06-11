@@ -69,6 +69,7 @@ import {
   ReadConfigTool,
   UpdateConfigTool,
   SendToTerminalTool,
+  ApplyTeamTool,
 } from './setup';
 
 /** Singleton IToolRegistry instance for the default tools. */
@@ -141,6 +142,7 @@ function createDefaultTools() {
     read_config: new ReadConfigTool(),
     update_config: new UpdateConfigTool(),
     send_to_terminal: new SendToTerminalTool(),
+    apply_team: new ApplyTeamTool(),
   } satisfies Record<string, ITool>;
 }
 

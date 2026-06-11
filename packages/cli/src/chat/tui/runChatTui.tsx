@@ -15,7 +15,8 @@ import {
   getDefaultStreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
-import { tryPlatform } from '@platform/platform';
+import { platform, tryPlatform } from '@platform/platform';
+import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { getAgent, loadAgents } from '@agent/index';
 import { registerExecution, writeTerminalStatus } from '@agent/storage';
 import {
@@ -45,6 +46,7 @@ import {
   type CliApiMode,
 } from '@cli/runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
+import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -81,7 +83,6 @@ import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
 } from '@cli/schemas/cliSettings';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import {
   explainNonResumable,
@@ -104,6 +105,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
@@ -1002,9 +1004,21 @@ export async function runChat(
   }
   const apiMode = effectiveCliApiMode(context);
   const initialResume = init.initialResume;
+  // State 1 continuation (docs/prd/agent-native-onboarding.md): on a true
+  // first run the post-picker session starts with the setup agent. Threaded
+  // through the same override slot resolveChatDefaults already honors, and
+  // only when the user didn't pin an agent (--agent, resume, or env) — an
+  // explicit choice always wins.
+  const explicitAgent =
+    initialResume?.resolution.config.agent ?? init.agentOverride;
+  const setupAgentOverride = firstRunSetupAgentOverride({
+    onboardingConfigured: onboarding.configured,
+    firstRunDone: getFirstRunDone(platform().globalState),
+    pinnedAgent: explicitAgent ?? context.envAgent,
+  });
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
-    agentOverride: initialResume?.resolution.config.agent ?? init.agentOverride,
+    agentOverride: explicitAgent ?? setupAgentOverride,
     modelOverride: initialResume?.resolution.config.model ?? init.modelOverride,
     envAgent: context.envAgent,
     envModel: context.envModel,

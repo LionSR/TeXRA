@@ -1,4 +1,5 @@
 name: creator
+displayName: Creator — build new TeXRA agents
 description: Designs, writes, and tests new TeXRA agents through conversation.
 
 settings:

@@ -11,6 +11,7 @@ import {
 } from '@shared/utils/dispatcher';
 
 import { commandOnly } from '../messageFactories';
+import { OnboardingFunnelStateSchema } from '../onboarding';
 import { AgentOptionDataSchema, ModelOptionDataSchema } from './state';
 
 const FileListSchema = z.array(z.string());
@@ -141,6 +142,12 @@ export const SetSelectedAgentMessageSchema = z.object({
   sessionType: z.string().nullish(),
 });
 
+/** Host → webview push of the derived onboarding-funnel state. */
+export const SetOnboardingFunnelMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL),
+  state: OnboardingFunnelStateSchema,
+});
+
 export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetModelOptionsMessageSchema,
   SetAgentOptionsMessageSchema,
@@ -175,6 +182,7 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   ShowLoginBannerMessageSchema,
   commandOnly(MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER),
   SetSelectedAgentMessageSchema,
+  SetOnboardingFunnelMessageSchema,
 ]);
 
 export type MainViewMessage = z.infer<typeof MainViewMessageSchema>;

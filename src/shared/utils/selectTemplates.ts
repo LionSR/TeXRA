@@ -8,7 +8,15 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
+import { agentName } from '@shared/schemas/agent';
 import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
+
+/**
+ * Sentinel option value for the launcher dropdown's "Browse all agents…"
+ * tail item. Never a real agent selection — handlers must intercept it
+ * and open Settings → Agents instead.
+ */
+export const BROWSE_ALL_AGENTS_OPTION_VALUE = '__browse-all-agents__';
 
 function buildAgentTooltip(opt: AgentOptionData): string {
   const { properties } = AGENT_DECORATORS;
@@ -22,6 +30,10 @@ function buildAgentTooltip(opt: AgentOptionData): string {
   if (opt.isCustom) hints.push(properties.custom.hint);
   if (opt.description) hints.push(opt.description);
   if (opt.isToolUse) hints.push('Can execute tools and code');
+  // When a displayName label hides the canonical identifier, surface it
+  // so power users can still see the name used in configs and commands.
+  const rawName = agentName(opt.value);
+  if (opt.label !== rawName) hints.push(`Agent id: ${rawName}`);
 
   return hints.join('\n');
 }
@@ -54,6 +66,7 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
 export function renderAgentOptions(
   options: AgentOptionData[],
   _selectedValue: string,
+  { includeBrowseAll = false }: { includeBrowseAll?: boolean } = {},
 ): TemplateResult {
   return html`
     ${repeat(
@@ -61,6 +74,16 @@ export function renderAgentOptions(
       (opt) => opt.value,
       (opt) => renderAgentOption(opt),
     )}
+    ${includeBrowseAll
+      ? html`
+          <wa-option
+            value=${BROWSE_ALL_AGENTS_OPTION_VALUE}
+            title="Open Settings → Agents to browse the full catalog"
+          >
+            Browse all agents…
+          </wa-option>
+        `
+      : nothing}
   `;
 }
 
