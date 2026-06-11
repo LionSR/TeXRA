@@ -75,7 +75,8 @@ function watchRepository(
     // extension lazily populating its state on workspace open, so it never
     // triggers. This also skips a repo's very first commit — acceptable, as
     // that commit has no base to diff against anyway.
-    const hadCommit = lastCommit !== undefined;
+    const previousCommit = lastCommit;
+    const hadCommit = previousCommit !== undefined;
     lastCommit = commit;
     if (!hadCommit) return;
     if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
@@ -86,7 +87,10 @@ function watchRepository(
         CHANNEL,
         `Commit detected on ${name ?? 'HEAD'}; starting agent review`,
       );
-      void AgentReviewService.runReview('commit');
+      void AgentReviewService.runReview('commit', {
+        baseRef: previousCommit,
+        baseDescription: `previous commit on ${name ?? 'HEAD'}`,
+      });
     }, COMMIT_DEBOUNCE_MS);
   });
 

@@ -70,6 +70,14 @@ describe('collectReviewDiff (real git repository)', () => {
     );
   }
 
+  async function gitOutput(...args: string[]): Promise<string> {
+    const result = await executeCommand(['git', ...args], { cwd: repo });
+    expect(result.success, `git ${args.join(' ')}: ${result.stderr}`).toBe(
+      true,
+    );
+    return (result.stdout ?? '').trim();
+  }
+
   beforeEach(async () => {
     repo = await mkdtemp(path.join(tmpdir(), 'texra-review-'));
     await git('init', '-b', 'main');
@@ -167,6 +175,32 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(result.value.baseDescription).toContain('latest commit');
     expect(result.value.diff).toContain('+committed on main');
     expect(result.value.diff).toContain('-original line');
+  });
+
+  it('uses an explicit base ref for commit-triggered reviews', async () => {
+    await writeFile(path.join(repo, 'notes.txt'), 'notes before\n');
+    await git('add', '.');
+    await git('commit', '-m', 'add notes');
+    const previousHead = await gitOutput('rev-parse', 'HEAD');
+
+    await writeFile(path.join(repo, 'paper.tex'), 'committed on main\n');
+    await git('commit', '-am', 'second');
+    await writeFile(path.join(repo, 'notes.txt'), 'dirty after commit\n');
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: false,
+      includeSubmodules: true,
+      baseRef: previousHead,
+      baseDescription: 'previous commit on main',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.baseRef).toBe(previousHead);
+    expect(result.value.baseDescription).toBe('previous commit on main');
+    expect(result.value.diff).toContain('+committed on main');
+    expect(result.value.diff).toContain('+dirty after commit');
+    expect(result.value.changedFiles).toEqual(['notes.txt', 'paper.tex']);
   });
 
   it('reports no changes on main with a clean tree and no parent commit', async () => {

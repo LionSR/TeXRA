@@ -35,6 +35,13 @@ export interface CollectReviewDiffOptions {
   cwd: string;
   includeUntracked: boolean;
   includeSubmodules: boolean;
+  /**
+   * Explicit base for commit-triggered reviews. When omitted, the collector
+   * reviews the current working tree against the main branch.
+   */
+  baseRef?: string;
+  /** User-facing label for {@link baseRef}. */
+  baseDescription?: string;
 }
 
 export interface ReviewDiff {
@@ -220,9 +227,9 @@ async function collectUntrackedDiffs(
 }
 
 /**
- * Collect the reviewable diff: working tree against the merge-base with the
- * main branch. When the main branch itself is checked out, falls back to the
- * uncommitted changes, or to the latest commit when the tree is clean.
+ * Collect the reviewable diff. By default this compares the working tree
+ * against the merge-base with the main branch. Commit-triggered callers can
+ * pass an explicit base ref when they already know the previous HEAD.
  *
  * All paths in the result are relative to {@link ReviewDiff.repoRoot}, which
  * may be above `options.cwd` when the workspace is a repository subfolder.
@@ -241,34 +248,39 @@ export async function collectReviewDiff(
     return { ok: false, reason: 'The workspace is not a git repository.' };
   }
 
-  const base = await detectBaseBranch(repoRoot);
-  if (!base) {
-    return {
-      ok: false,
-      reason: `Could not find the repository's main branch (looked for origin/HEAD and local ${BASE_BRANCH_CANDIDATES.join('/')}).`,
-    };
-  }
-
-  const head = (
-    await git(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD'])
-  )?.trim();
   let baseRef: string;
   let baseDescription: string;
-  if (head === base.shortName) {
-    ({ baseRef, baseDescription } = await resolveOnBaseBranch(
-      repoRoot,
-      base.shortName,
-    ));
+  if (options.baseRef) {
+    baseRef = options.baseRef;
+    baseDescription = options.baseDescription ?? options.baseRef;
   } else {
-    const mergeBase = await git(repoRoot, ['merge-base', 'HEAD', base.ref]);
-    if (!mergeBase) {
+    const base = await detectBaseBranch(repoRoot);
+    if (!base) {
       return {
         ok: false,
-        reason: `Could not determine the merge base between HEAD and ${base.ref}.`,
+        reason: `Could not find the repository's main branch (looked for origin/HEAD and local ${BASE_BRANCH_CANDIDATES.join('/')}).`,
       };
     }
-    baseRef = mergeBase.trim();
-    baseDescription = `main branch (${base.ref})`;
+
+    const head = (
+      await git(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD'])
+    )?.trim();
+    if (head === base.shortName) {
+      ({ baseRef, baseDescription } = await resolveOnBaseBranch(
+        repoRoot,
+        base.shortName,
+      ));
+    } else {
+      const mergeBase = await git(repoRoot, ['merge-base', 'HEAD', base.ref]);
+      if (!mergeBase) {
+        return {
+          ok: false,
+          reason: `Could not determine the merge base between HEAD and ${base.ref}.`,
+        };
+      }
+      baseRef = mergeBase.trim();
+      baseDescription = `main branch (${base.ref})`;
+    }
   }
 
   const submoduleFlag = includeSubmodules

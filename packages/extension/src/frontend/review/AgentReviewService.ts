@@ -51,6 +51,11 @@ export const AGENT_REVIEW_VIEW_ID = 'texra.agentReviewView';
 
 type AgentReviewTrigger = 'manual' | 'commit';
 
+interface AgentReviewRunOptions {
+  baseRef?: string;
+  baseDescription?: string;
+}
+
 interface AgentReviewStateSnapshot {
   running: boolean;
   issues: readonly ReviewIssue[];
@@ -96,7 +101,7 @@ class AgentReviewServiceImpl {
   /** Bumped per review run and by `clear()`; stale runs check it before applying results. */
   private reviewGeneration = 0;
   /** A commit arrived while a review was running; run once more afterwards. */
-  private pendingCommitReview = false;
+  private pendingCommitReview: AgentReviewRunOptions | undefined;
 
   initialize(context: vscode.ExtensionContext): void {
     this.collection =
@@ -133,14 +138,17 @@ class AgentReviewServiceImpl {
    * `changeReviewer` tool-use session. Issues stream in through
    * {@link addIssueReport} while the session runs.
    */
-  async runReview(trigger: AgentReviewTrigger): Promise<void> {
+  async runReview(
+    trigger: AgentReviewTrigger,
+    options: AgentReviewRunOptions = {},
+  ): Promise<void> {
     if (this.running) {
       if (trigger === 'manual') {
         void vscode.window.showInformationMessage(
           'An agent review is already running.',
         );
       } else {
-        this.pendingCommitReview = true;
+        this.pendingCommitReview ??= options;
       }
       return;
     }
@@ -165,16 +173,17 @@ class AgentReviewServiceImpl {
           location: { viewId: AGENT_REVIEW_VIEW_ID },
           title: 'Agent review',
         },
-        () => this.executeReview(cwd, trigger),
+        () => this.executeReview(cwd, trigger, options),
       );
     } finally {
       this.activeReview = undefined;
       this.running = false;
       await this.syncContextKeys();
       this.emitter.fire();
-      if (this.pendingCommitReview) {
-        this.pendingCommitReview = false;
-        void this.runReview('commit');
+      const pending = this.pendingCommitReview;
+      this.pendingCommitReview = undefined;
+      if (pending) {
+        void this.runReview('commit', pending);
       }
     }
   }
@@ -182,6 +191,7 @@ class AgentReviewServiceImpl {
   private async executeReview(
     cwd: string,
     trigger: AgentReviewTrigger,
+    options: AgentReviewRunOptions,
   ): Promise<void> {
     const collected = await collectReviewDiff({
       cwd,
@@ -193,6 +203,8 @@ class AgentReviewServiceImpl {
         'agentReview.includeSubmodules',
         true,
       ),
+      baseRef: options.baseRef,
+      baseDescription: options.baseDescription,
     });
     if (!collected.ok) {
       // Issues from the previous run stay available rather than vanishing on
@@ -415,6 +427,7 @@ class AgentReviewServiceImpl {
     this.dismissed.clear();
     this.summary = undefined;
     this.activeReview = undefined;
+    this.pendingCommitReview = undefined;
     this.reviewGeneration++;
     this.updateDiagnostics();
     void this.syncContextKeys();
