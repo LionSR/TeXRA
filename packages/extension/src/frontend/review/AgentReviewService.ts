@@ -205,8 +205,8 @@ class AgentReviewServiceImpl {
 
     const { repoRoot, baseDescription, diff, changedFiles, truncated } =
       collected.value;
-    this.baseDescription = baseDescription;
     if (!diff) {
+      this.baseDescription = baseDescription;
       this.issues = [];
       this.summary = `No changes to review (working tree matches ${baseDescription})`;
       this.updateDiagnostics();
@@ -214,10 +214,16 @@ class AgentReviewServiceImpl {
     }
 
     // Start a fresh collection; the reviewer session reports into it live.
-    // Snapshot the previous results so a session that fails before reporting
-    // anything restores them instead of leaving the panel empty.
-    const previousIssues = this.issues;
+    // Snapshot the previous results (issues plus the root/base they belong
+    // to) so a session that fails before reporting anything restores them
+    // intact instead of leaving the panel empty.
+    const previous = {
+      issues: this.issues,
+      reviewRoot: this.reviewRoot,
+      baseDescription: this.baseDescription,
+    };
     this.reviewRoot = repoRoot;
+    this.baseDescription = baseDescription;
     this.issues = [];
     this.updateDiagnostics();
     this.activeReview = { repoRoot, baseDescription, changedFiles };
@@ -245,9 +251,11 @@ class AgentReviewServiceImpl {
     } catch (err) {
       // Run-lifecycle failures are already logged and surfaced; keep the
       // panel state honest without a second notification.
-      const restored = this.issues.length === 0 && previousIssues.length > 0;
+      const restored = this.issues.length === 0 && previous.issues.length > 0;
       if (restored) {
-        this.issues = previousIssues;
+        this.issues = previous.issues;
+        this.reviewRoot = previous.reviewRoot;
+        this.baseDescription = previous.baseDescription;
         this.updateDiagnostics();
       }
       this.summary = `Review failed: ${toErrorMessage(err)}${restored ? ' · showing previous results' : ''}`;
