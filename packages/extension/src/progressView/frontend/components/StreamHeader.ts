@@ -183,7 +183,8 @@ export class StreamHeader extends LitElement {
       }
 
       /* Status indicator overrides - base styles from statusIndicatorStyles.
-         The hover label is a native <wa-tooltip> wrapping this dot. */
+         The hover label is a native <wa-tooltip> anchored to this dot via
+         its "for" attribute. */
       .status-indicator {
         width: var(--wa-space-xs);
         height: var(--wa-space-xs);
@@ -311,14 +312,15 @@ export class StreamHeader extends LitElement {
                 ${this.stream.label || this.stream.name}
               </span>
             </div>
-            <wa-tooltip content=${statusLabel}>
-              <span
-                id=${ELEMENT_IDS.STATUS_INDICATOR}
-                class=${classMap({
-                  'status-indicator': true,
-                  [`is-${status}`]: Boolean(status),
-                })}
-              ></span>
+            <span
+              id=${ELEMENT_IDS.STATUS_INDICATOR}
+              class=${classMap({
+                'status-indicator': true,
+                [`is-${status}`]: Boolean(status),
+              })}
+            ></span>
+            <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
+              ${statusLabel}
             </wa-tooltip>
             ${this.renderGoalChip()} ${this.renderProgressBadge()}
           </div>
