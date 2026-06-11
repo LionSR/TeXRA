@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { clamp } from '@utils/core';
 
 import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
+import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import {
   buildHunks,
   COMPACT_DIFF_DISPLAY_LINES,
@@ -25,6 +25,7 @@ const EDIT_APPROVAL_FEEDBACK_MARGIN_ROWS = 1;
 const EDIT_APPROVAL_FEEDBACK_PREFIX_COLUMNS = 2;
 export const COMPACT_EDIT_APPROVAL_MAX_ROWS = 9;
 const MIN_EDIT_DIFF_WIDTH = 20;
+const DEFAULT_EDIT_DIFF_ROWS = 30;
 const EDIT_APPROVAL_FEEDBACK_PLACEHOLDER = 'Why reject?';
 
 export interface EditApprovalProps {
@@ -48,13 +49,6 @@ export function editApprovalDiffRowsBudget({
   readonly feedbackValue?: string;
   readonly title: string;
 }): number {
-  if (availableRows === undefined) return 30;
-
-  const titleWidth = Math.max(
-    MIN_EDIT_DIFF_WIDTH,
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
-  const titleRows = wrapAnsiToWidth(title, titleWidth).split('\n').length;
   const feedbackRows =
     feedbackMode === true
       ? editApprovalFeedbackRows({
@@ -63,21 +57,17 @@ export function editApprovalDiffRowsBudget({
           value: feedbackValue,
         })
       : 0;
-  const spaciousDiffRows =
-    availableRows -
-    EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE -
-    titleRows -
-    feedbackRows;
-  if (spaciousDiffRows > COMPACT_DIFF_DISPLAY_LINES) {
-    return spaciousDiffRows;
-  }
-
-  const compactDiffRows =
-    availableRows -
-    EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE -
-    titleRows -
-    feedbackRows;
-  return clamp(compactDiffRows, 1, COMPACT_DIFF_DISPLAY_LINES);
+  return confirmCardContentRowsBudget({
+    availableRows,
+    columns,
+    title,
+    minContentWidth: MIN_EDIT_DIFF_WIDTH,
+    defaultRows: DEFAULT_EDIT_DIFF_ROWS,
+    compactMaxRows: COMPACT_DIFF_DISPLAY_LINES,
+    spaciousFixedRows: EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
+    compactFixedRows: EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE,
+    extraFixedRows: feedbackRows,
+  });
 }
 
 export function editApprovalFeedbackRows({
