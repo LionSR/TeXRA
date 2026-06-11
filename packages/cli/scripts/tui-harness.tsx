@@ -59,7 +59,10 @@ import {
 } from '../src/chat/tui/state/cliState';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
-import { tuiOutputStreamForColor } from '../src/chat/tui/render/noColorOutput';
+import {
+  installTuiStdoutListenerLimit,
+  tuiOutputStreamForColor,
+} from '../src/chat/tui/render/noColorOutput';
 import {
   enqueueApproval,
   type ApprovalDecision,
@@ -1533,6 +1536,9 @@ function handleHarnessCtrlC(): void {
   void exitHarness(0);
 }
 
+const restoreStdoutListenerLimit = installTuiStdoutListenerLimit(
+  process.stdout,
+);
 const ink = render(
   <App
     onSubmit={handleHarnessSubmit}
@@ -1561,6 +1567,7 @@ async function exitHarness(exitCode: number): Promise<void> {
   try {
     await tryPlatform()?.lifecycle.runShutdown();
   } finally {
+    restoreStdoutListenerLimit();
     process.exit(exitCode);
   }
 }
