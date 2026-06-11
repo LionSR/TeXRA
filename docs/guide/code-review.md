@@ -39,8 +39,8 @@ If you haven't used GitHub Actions before, here is the whole picture:
   installs the [TeXRA CLI](./texra-cli.md), feeds it the pull request diff plus
   any files the model wants to read, and posts the result back as a normal
   GitHub review.
-- **The model call uses *your* API key**, stored as an encrypted repository
-  *secret*. The diff travels directly from GitHub's runner to your model
+- **The model call uses _your_ API key**, stored as an encrypted repository
+  _secret_. The diff travels directly from GitHub's runner to your model
   provider (Anthropic, OpenAI, Google, …). There is no TeXRA server in the
   middle, and no TeXRA account or sign-in is needed.
 - **Cost:** each review is one ordinary API call billed to your key by the
@@ -74,7 +74,7 @@ and xAI keys.
 
 ### 2. Save the key as a repository secret
 
-A *secret* is an encrypted value that only your repo's Actions runs can read —
+A _secret_ is an encrypted value that only your repo's Actions runs can read —
 it never appears in logs or in the repo itself.
 
 1. Open your repository on GitHub.
@@ -133,7 +133,7 @@ jobs:
       - name: Check provider key
         id: keys
         env:
-          KEYS: "${{ secrets.ANTHROPIC_API_KEY }}${{ secrets.DEEPSEEK_API_KEY }}${{ secrets.OPENAI_API_KEY }}${{ secrets.GOOGLE_API_KEY }}${{ secrets.OPENROUTER_API_KEY }}${{ secrets.XAI_API_KEY }}"
+          KEYS: '${{ secrets.ANTHROPIC_API_KEY }}${{ secrets.DEEPSEEK_API_KEY }}${{ secrets.OPENAI_API_KEY }}${{ secrets.GOOGLE_API_KEY }}${{ secrets.OPENROUTER_API_KEY }}${{ secrets.XAI_API_KEY }}'
         run: |
           if [ -n "$KEYS" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
@@ -271,7 +271,7 @@ There is one security rule to understand first: **read the prompt from the
 trusted base branch, not from the PR being reviewed.** The prompt is the
 reviewer's instructions. If the workflow read it from the PR's own checkout, any
 PR could rewrite the instructions — for example to "approve everything" — before
-being reviewed. The pattern below checks the prompt out from the PR's *base*
+being reviewed. The pattern below checks the prompt out from the PR's _base_
 commit, so a PR can propose prompt changes but they only take effect after
 they're merged.
 
@@ -354,7 +354,7 @@ Work down this checklist — each item maps to a quiet skip:
    push.
 5. **Is `TEXRA_REVIEW_ENABLED` set to `false`?** Unset it or set it to `true`.
 6. **Does the PR author have write access?** With `require-write-access:
-   'true'`, PRs from non-writers (and non-allow-listed bots) are skipped.
+'true'`, PRs from non-writers (and non-allow-listed bots) are skipped.
 
 In every case the **Actions** tab shows the run (or its absence) and a notice
 explaining the skip.
