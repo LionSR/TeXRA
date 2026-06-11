@@ -217,8 +217,9 @@ What each part does, in plain words:
   [`texra-ai/texra-action`](https://github.com/texra-ai/texra-action). The
   unset inputs are harmless: secrets and variables you haven't created simply
   come through empty and the action falls back to its defaults. This means
-  every later customization on this page is just "add a secret or variable" —
-  no workflow edits.
+  most later customizations on this page are just "add a secret or variable" —
+  only a [custom review prompt](#writing-your-own-review-prompt) needs
+  workflow edits.
 - **`require-write-access` / `allow-bots`** — only review PRs authored by
   people with write access to the repo (plus bots you explicitly allow, like
   Dependabot). Since the job runs with your API key, this keeps strangers from
