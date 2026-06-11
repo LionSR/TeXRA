@@ -57,7 +57,6 @@ type OpenInstallGuideMessage = Extract<
 type DismissBannerMessage = Extract<
   MainViewInboundMessage,
   | { command: typeof MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER }
-  | { command: typeof MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER }
   | { command: typeof MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER }
 >;
 
@@ -72,8 +71,6 @@ const API_KEY_GUIDE_URL =
 
 const DISMISS_CONFIG_KEYS: Record<DismissBannerMessage['command'], string> = {
   [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: 'ui.showLoginBanner',
-  [MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER]:
-    'ui.showGettingStartedBanner',
   [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: 'ui.showOrchestratorBanner',
 };
 

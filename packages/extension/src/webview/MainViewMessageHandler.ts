@@ -5,6 +5,7 @@ import {
   type MainViewCommandPlan,
 } from '@controllers/mainView/MainViewInteractionController';
 import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
+import { setOnboardingDeclined } from '@controllers/onboarding/onboardingFunnel';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler } from '@common/webview';
@@ -30,6 +31,15 @@ import { InstructionManager } from './managers/InstructionManager';
 import type { CommandMessage } from './managers/executionHandlers';
 import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
 
+export interface MainViewOnboardingHooks {
+  /**
+   * Recompute and re-push the onboarding funnel (owned by
+   * MainViewProvider). Called on webview ready and after welcome-card
+   * actions that change the funnel inputs (skip, API-key entry).
+   */
+  refreshOnboardingFunnel(): Promise<void>;
+}
+
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
   private readonly fileManager: FileManager;
@@ -38,7 +48,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly interactionController: MainViewInteractionController;
   private readonly startupController: MainViewStartupController;
 
-  constructor(context: vscode.ExtensionContext) {
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly onboarding?: MainViewOnboardingHooks,
+  ) {
     super('MainView', { trackActiveView: true });
     this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
@@ -214,8 +227,13 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.STOP_RECORDING]: () =>
         this.recordingManager.stop(webviewView),
 
-      [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: () =>
-        safeExecuteCommand('texra.setApiKey'),
+      [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () => {
+        await safeExecuteCommand('texra.setApiKey');
+        // SecretManager has no key-changed event, so the set-key flow's
+        // completion is the explicit refresh point for the onboarding
+        // funnel (welcome card → API-key entry → State 1).
+        await this.onboarding?.refreshOnboardingFunnel();
+      },
       [MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY]: (m) => {
         return this.runCommandPlan(
           this.interactionController.getSetProviderApiKeyCommand(m),
@@ -284,14 +302,17 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.applyConfigUpdate(
           this.interactionController.getDismissConfigUpdate(m),
         ),
-      [MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER]: (m) =>
-        this.applyConfigUpdate(
-          this.interactionController.getDismissConfigUpdate(m),
-        ),
       [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: (m) =>
         this.applyConfigUpdate(
           this.interactionController.getDismissConfigUpdate(m),
         ),
+      [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP]: async () => {
+        // Persist the user-scoped declined flag (same flag the CLI picker
+        // writes), then re-derive so the card disappears and the normal
+        // launcher renders.
+        await setOnboardingDeclined(this.context.globalState, true);
+        await this.onboarding?.refreshOnboardingFunnel();
+      },
 
       [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: (m) =>
         this.diffManager.handleRequestRecentCommits(m),
@@ -382,5 +403,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         error,
       );
     }
+
+    // Onboarding funnel push (PRD: agent-native onboarding). Runs on every
+    // ready — including the replays MainViewProvider.refreshOptionsAndView
+    // issues from its credential-changed hooks — so the provider sees the
+    // in-session State 0 → 1 transition.
+    await this.onboarding?.refreshOnboardingFunnel();
   }
 }

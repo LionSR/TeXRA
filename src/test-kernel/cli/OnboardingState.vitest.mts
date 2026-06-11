@@ -3,12 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { maskDisplayValue } from '@cli/chat/tui/input/textInputEditing';
 import { formatApiKeyShadowWarning } from '@cli/runtime/apiStatus';
 import { maybeRunCliOnboarding } from '@cli/onboarding/runOnboarding';
+import { describeSavedKeyLocation } from '@cli/onboarding/onboardingState';
 import {
-  ONBOARDING_DECLINED_KEY,
-  describeSavedKeyLocation,
   getOnboardingDeclined,
   setOnboardingDeclined,
-} from '@cli/onboarding/onboardingState';
+} from '@controllers/onboarding/onboardingFunnel';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+
+const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
 
 import type { StateStore } from '@platform/interfaces/state';
 

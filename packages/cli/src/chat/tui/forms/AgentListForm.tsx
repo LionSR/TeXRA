@@ -67,12 +67,16 @@ export function currentVisibleAgent(
 ): AgentIdentity | undefined {
   const current = currentAgent.trim();
   const currentName = agentName(current);
-  return agents.find(
-    (agent) =>
+  return agents.find((agent) => {
+    const valueName = agentName(agent.value);
+    return (
       agent.value === current ||
+      valueName === current ||
+      valueName === currentName ||
       agent.label === current ||
-      agent.label === currentName,
-  );
+      agent.label === currentName
+    );
+  });
 }
 
 export function hiddenCurrentAgentHint(

@@ -34,6 +34,10 @@ const views = [
     },
     fixtureMessages: [
       {
+        command: 'setOnboardingFunnel',
+        state: 'done',
+      },
+      {
         command: 'setSelectedAgent',
         sessionType: 'workflow',
         agentId: 'correct',

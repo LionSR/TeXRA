@@ -1218,12 +1218,25 @@ describe('desktop settings IPC', () => {
     await flushAsyncWork();
 
     expect(loadCount).toBeGreaterThanOrEqual(1);
+    // Catalog-resolved names become source-qualified keys; the rest of the
+    // preset's roster is kept as bare names so those agents join the roster
+    // the moment they appear (sign-in, install) — see applyPresetRoster.
     expect(workspaceState.values.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
-      ['builtInWorkflow:criticize', 'custom:generic'],
+      ['builtInWorkflow:criticize', 'custom:generic', 'devise', 'apply'],
     );
     expect(
       workspaceState.values.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
-    ).toEqual(['builtInToolUse:orchestrator', 'custom:research']);
+    ).toEqual([
+      'builtInToolUse:orchestrator',
+      'custom:research',
+      'numerics',
+      'review',
+      'search',
+      'presenter',
+      'simplifier',
+      'latexFixer',
+      'progressCheck',
+    ]);
     expect(errorMessages).toEqual([]);
     expect(infoMessages).toEqual(['Applied "Physicist" team']);
 
