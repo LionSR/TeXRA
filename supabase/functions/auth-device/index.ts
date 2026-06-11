@@ -351,7 +351,11 @@ app.post('/token', async (c) => {
       );
     }
 
-    // Approved: mint a native session, then burn the row (single use).
+    // Approved: look up the owner (row intact, so a transient lookup
+    // failure stays retryable), then atomically claim the row before
+    // minting. The conditional delete lets exactly one poll win a race —
+    // any concurrent poll sees no claimed row and gets invalid_grant, so a
+    // single approval can never mint two sessions.
     const { data: userData, error: userError } =
       await supabase.auth.admin.getUserById(row.user_id);
     const email = userData?.user?.email;
@@ -364,24 +368,37 @@ app.post('/token', async (c) => {
       return errorResponse(c, 'Failed to create session', 500);
     }
 
+    const { data: claimed, error: claimError } = await supabase
+      .from('device_auth_requests')
+      .delete()
+      .eq('id', row.id)
+      .eq('status', 'approved')
+      .select('id');
+    if (claimError) {
+      console.error('[DEVICE] claim failed:', claimError.message);
+      return errorResponse(c, 'Internal server error', 500);
+    }
+    if (!claimed?.length) {
+      // Another poll already redeemed this device code.
+      return errorResponse(c, 'invalid_grant', 400);
+    }
+
     const session = await mintGoTrueSession(
       supabase,
       c.get('authClient'),
       email,
     );
     if (!session) {
-      // Leave the row approved so a transient mint failure can be retried
-      // on the next poll until the code expires.
+      // The claim is already burned — device codes are strictly single-use,
+      // so a mint failure here ends the flow and the user re-runs login.
       return errorResponse(c, 'Failed to create session', 500);
     }
     if (session.user.id !== row.user_id) {
       console.error(
         `[DEVICE] session user mismatch: approved ${row.user_id}, minted ${session.user.id}`,
       );
-      await deleteRow();
       return errorResponse(c, 'Failed to create session', 500);
     }
-    await deleteRow();
 
     console.log(`[DEVICE] token issued for user ${row.user_id}`);
     return versionedJsonResponse(
