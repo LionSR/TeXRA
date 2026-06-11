@@ -355,6 +355,43 @@
           "command": "texra.showSettingsView",
           "icon": "$(gear)",
           "title": "Show Settings"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.agentReview.run",
+          "icon": "$(refresh)",
+          "title": "Run Agent Review"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.agentReview.fixAllIssues",
+          "icon": "$(tools)",
+          "shortTitle": "Fix All Issues",
+          "title": "Fix All Agent Review Issues"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.agentReview.fixIssue",
+          "icon": "$(wand)",
+          "title": "Fix with Agent"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.agentReview.dismissIssue",
+          "icon": "$(close)",
+          "shortTitle": "Dismiss",
+          "title": "Dismiss Agent Review Issue"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.agentReview.openIssue",
+          "title": "Open Agent Review Issue"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.agentReview.clear",
+          "icon": "$(clear-all)",
+          "title": "Clear Agent Review Results"
         }
       ],
       "configuration": [
@@ -869,6 +906,51 @@
         },
         {
           "properties": {
+            "texra.agentReview.approach": {
+              "default": "quick",
+              "description": "Choose between quick or more thorough, higher-cost analysis.",
+              "enum": ["quick", "thorough"],
+              "enumDescriptions": [
+                "The reviewer verifies only its strongest suspicions with tools — fast and cheap.",
+                "The reviewer reads every changed file in full, checks callers, and pulls diagnostics before reporting — deeper, higher-cost analysis."
+              ],
+              "order": 4,
+              "scope": "resource",
+              "type": "string"
+            },
+            "texra.agentReview.includeSubmodules": {
+              "default": true,
+              "description": "Include changes from Git submodules in the review.",
+              "order": 2,
+              "scope": "resource",
+              "type": "boolean"
+            },
+            "texra.agentReview.includeUntrackedFiles": {
+              "default": true,
+              "description": "Include untracked files (new files not yet added to Git) in the review.",
+              "order": 3,
+              "scope": "resource",
+              "type": "boolean"
+            },
+            "texra.agentReview.model": {
+              "default": "",
+              "description": "Model id for the review session (e.g. a stronger model for thorough reviews). Leave empty to use the default agent model.",
+              "order": 5,
+              "scope": "resource",
+              "type": "string"
+            },
+            "texra.agentReview.runOnCommit": {
+              "default": false,
+              "description": "Automatically review your changes for issues after each commit.",
+              "order": 1,
+              "scope": "resource",
+              "type": "boolean"
+            }
+          },
+          "title": "Agent Review"
+        },
+        {
+          "properties": {
             "texra.audio.soxPath": {
               "default": "",
               "description": "Path to the SoX executable. Overrides automatic detection.",
@@ -1019,6 +1101,30 @@
       ],
       "menus": {
         "commandPalette": [
+          {
+            "command": "texra.agentReview.run",
+            "when": "texra.activated"
+          },
+          {
+            "command": "texra.agentReview.fixAllIssues",
+            "when": "texra.activated && texra.agentReview.hasIssues"
+          },
+          {
+            "command": "texra.agentReview.clear",
+            "when": "texra.activated && texra.agentReview.hasIssues"
+          },
+          {
+            "command": "texra.agentReview.fixIssue",
+            "when": "false"
+          },
+          {
+            "command": "texra.agentReview.dismissIssue",
+            "when": "false"
+          },
+          {
+            "command": "texra.agentReview.openIssue",
+            "when": "false"
+          },
           {
             "command": "texra.createSampleProject",
             "when": "texra.activated"
@@ -1296,6 +1402,18 @@
             "when": "texra.activated && resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/"
           }
         ],
+        "view/item/context": [
+          {
+            "command": "texra.agentReview.fixIssue",
+            "group": "inline@1",
+            "when": "view == texra.agentReviewView && viewItem == texraReviewIssue"
+          },
+          {
+            "command": "texra.agentReview.dismissIssue",
+            "group": "inline@2",
+            "when": "view == texra.agentReviewView && viewItem == texraReviewIssue"
+          }
+        ],
         "view/title": [
           {
             "command": "texra.indentTeX",
@@ -1326,6 +1444,20 @@
             "command": "texra.showDashboard",
             "group": "navigation@1",
             "when": "texra.activated && view == texra.mainView && texra.activeView != 'progress'"
+          },
+          {
+            "command": "texra.agentReview.run",
+            "group": "navigation@1",
+            "when": "texra.activated && view == texra.agentReviewView"
+          },
+          {
+            "command": "texra.agentReview.fixAllIssues",
+            "group": "navigation@2",
+            "when": "texra.activated && view == texra.agentReviewView && texra.agentReview.hasIssues"
+          },
+          {
+            "command": "texra.agentReview.clear",
+            "when": "texra.activated && view == texra.agentReviewView && texra.agentReview.hasIssues"
           }
         ]
       },
@@ -1336,6 +1468,13 @@
             "id": "texra.mainView",
             "name": "TeXRA",
             "type": "webview"
+          },
+          {
+            "contextualTitle": "Agent Review",
+            "id": "texra.agentReviewView",
+            "name": "Agent Review",
+            "type": "tree",
+            "visibility": "collapsed"
           }
         ]
       },
@@ -1348,6 +1487,13 @@
           }
         ]
       },
+      "viewsWelcome": [
+        {
+          "contents": "Review your working-tree changes against the main branch with an AI agent. Issues also appear in the Problems panel with quick fixes.\n[Run Agent Review](command:texra.agentReview.run)",
+          "view": "texra.agentReviewView",
+          "when": "texra.activated && !texra.agentReview.running"
+        }
+      ],
       "walkthroughs": [
         {
           "description": "Get TeXRA up and running in a few minutes. Connect your account, pick your field, and run your first paper through the orchestrator.",

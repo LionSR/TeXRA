@@ -556,6 +556,54 @@
         }
       },
       {
+        "title": "Agent Review",
+        "properties": {
+          "texra.agentReview.runOnCommit": {
+            "type": "boolean",
+            "default": false,
+            "description": "Automatically review your changes for issues after each commit.",
+            "scope": "resource",
+            "order": 1
+          },
+          "texra.agentReview.includeSubmodules": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include changes from Git submodules in the review.",
+            "scope": "resource",
+            "order": 2
+          },
+          "texra.agentReview.includeUntrackedFiles": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include untracked files (new files not yet added to Git) in the review.",
+            "scope": "resource",
+            "order": 3
+          },
+          "texra.agentReview.approach": {
+            "type": "string",
+            "enum": [
+              "quick",
+              "thorough"
+            ],
+            "enumDescriptions": [
+              "The reviewer verifies only its strongest suspicions with tools — fast and cheap.",
+              "The reviewer reads every changed file in full, checks callers, and pulls diagnostics before reporting — deeper, higher-cost analysis."
+            ],
+            "default": "quick",
+            "description": "Choose between quick or more thorough, higher-cost analysis.",
+            "scope": "resource",
+            "order": 4
+          },
+          "texra.agentReview.model": {
+            "type": "string",
+            "default": "",
+            "description": "Model id for the review session (e.g. a stronger model for thorough reviews). Leave empty to use the default agent model.",
+            "scope": "resource",
+            "order": 5
+          }
+        }
+      },
+      {
         "title": "Audio",
         "properties": {
           "texra.audio.soxPath": {
@@ -990,6 +1038,43 @@
         "title": "Show Settings",
         "category": "TeXRA",
         "icon": "$(gear)"
+      },
+      {
+        "command": "texra.agentReview.run",
+        "title": "Run Agent Review",
+        "category": "TeXRA",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "texra.agentReview.fixAllIssues",
+        "title": "Fix All Agent Review Issues",
+        "shortTitle": "Fix All Issues",
+        "category": "TeXRA",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "texra.agentReview.fixIssue",
+        "title": "Fix with Agent",
+        "category": "TeXRA",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "texra.agentReview.dismissIssue",
+        "title": "Dismiss Agent Review Issue",
+        "shortTitle": "Dismiss",
+        "category": "TeXRA",
+        "icon": "$(close)"
+      },
+      {
+        "command": "texra.agentReview.openIssue",
+        "title": "Open Agent Review Issue",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.agentReview.clear",
+        "title": "Clear Agent Review Results",
+        "category": "TeXRA",
+        "icon": "$(clear-all)"
       }
     ],
     "walkthroughs": [
@@ -1145,9 +1230,23 @@
           "id": "texra.mainView",
           "name": "TeXRA",
           "contextualTitle": "TeXRA"
+        },
+        {
+          "type": "tree",
+          "id": "texra.agentReviewView",
+          "name": "Agent Review",
+          "contextualTitle": "Agent Review",
+          "visibility": "collapsed"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "texra.agentReviewView",
+        "contents": "Review your working-tree changes against the main branch with an AI agent. Issues also appear in the Problems panel with quick fixes.\n[Run Agent Review](command:texra.agentReview.run)",
+        "when": "texra.activated && !texra.agentReview.running"
+      }
+    ],
     "menus": {
       "editor/title": [
         {
@@ -1211,6 +1310,32 @@
           "command": "texra.showDashboard",
           "when": "texra.activated && view == texra.mainView && texra.activeView != 'progress'",
           "group": "navigation@1"
+        },
+        {
+          "command": "texra.agentReview.run",
+          "when": "texra.activated && view == texra.agentReviewView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "texra.agentReview.fixAllIssues",
+          "when": "texra.activated && view == texra.agentReviewView && texra.agentReview.hasIssues",
+          "group": "navigation@2"
+        },
+        {
+          "command": "texra.agentReview.clear",
+          "when": "texra.activated && view == texra.agentReviewView && texra.agentReview.hasIssues"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "texra.agentReview.fixIssue",
+          "when": "view == texra.agentReviewView && viewItem == texraReviewIssue",
+          "group": "inline@1"
+        },
+        {
+          "command": "texra.agentReview.dismissIssue",
+          "when": "view == texra.agentReviewView && viewItem == texraReviewIssue",
+          "group": "inline@2"
         }
       ],
       "editor/context": [
@@ -1238,6 +1363,30 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "texra.agentReview.run",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.agentReview.fixAllIssues",
+          "when": "texra.activated && texra.agentReview.hasIssues"
+        },
+        {
+          "command": "texra.agentReview.clear",
+          "when": "texra.activated && texra.agentReview.hasIssues"
+        },
+        {
+          "command": "texra.agentReview.fixIssue",
+          "when": "false"
+        },
+        {
+          "command": "texra.agentReview.dismissIssue",
+          "when": "false"
+        },
+        {
+          "command": "texra.agentReview.openIssue",
+          "when": "false"
+        },
         {
           "command": "texra.createSampleProject",
           "when": "texra.activated"
