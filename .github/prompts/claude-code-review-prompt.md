@@ -17,6 +17,15 @@ schema correctness, PocketFlow invariants, webview lifecycle issues,
 configuration and storage correctness, and CI/toolchain hygiene. Do not run
 `npm test`, and do not ask the author to add speculative abstractions.
 
+Conversely, flag pass-through layers this pull request newly introduces — wrapper
+functions that only forward to a single callee, single-use two-layer factories,
+trivial identity factories that just spread an object, and re-export shims — per
+CLAUDE.md's "Flattening Abstraction Layers" and "Discouraged Factory Patterns",
+and recommend inlining them. Limit this to indirection the PR adds; respect
+load-bearing thin layers (dependency-injection seams, multi-caller DRY helpers,
+the prescribed PocketFlow `Node.exec() -> createFlow() -> flow.run()` shape),
+which are thin by design rather than redundant.
+
 Before posting new feedback, read existing inline review threads and PR comments.
 Avoid re-raising issues that are already discussed, acknowledged, or fixed. On
 `synchronize` events, resolve previous unresolved bot review threads only when
