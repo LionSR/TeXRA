@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { DispatcherFn, HandlerRegistry } from '@shared/utils/dispatcher';
 
@@ -22,10 +21,6 @@ function isCommandMessage(
     typeof (message as Record<string, unknown>).command === 'string'
   );
 }
-
-export type MessageHandler<
-  T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
-> = (message: unknown, webviewView: T) => Promise<void> | void;
 
 /**
  * Configuration options for BaseViewMessageHandler.
@@ -54,7 +49,6 @@ export abstract class BaseViewMessageHandler<
 > {
   protected readonly logger: typeof logger;
   protected readonly channel: string;
-  protected readonly handlers: Record<string, MessageHandler<T>>;
   private readonly _options: MessageHandlerOptions;
 
   /**
@@ -71,7 +65,6 @@ export abstract class BaseViewMessageHandler<
     this.channel = `${viewName}MessageHandler`;
     this._options = options ?? {};
     logger.initialize(this.channel);
-    this.handlers = this.createHandlers();
   }
 
   /**
@@ -157,16 +150,10 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
-   * Provide command handlers for legacy dispatch pattern.
-   * Schema-driven handlers can skip this (default returns empty).
-   */
-  protected createHandlers(): Record<string, MessageHandler<T>> {
-    return {};
-  }
-
-  /**
-   * Standard message handling with consistent error handling and logging.
-   * When trackActiveView is enabled, automatically updates the active view reference.
+   * Fallback for messages not handled by schema-driven dispatch: validates
+   * the envelope and warns. Subclasses route real traffic through
+   * {@link dispatchInbound}; MainView calls this for unmatched commands.
+   * When trackActiveView is enabled, updates the active view reference.
    */
   public async handleMessage(message: unknown, webviewView: T): Promise<void> {
     // Track active view when option is enabled
@@ -182,28 +169,7 @@ export abstract class BaseViewMessageHandler<
       return;
     }
 
-    this.logger.debug(this.channel, `Received message: ${message.command}`);
-
-    const handler = this.handlers[message.command];
-    if (!handler) {
-      this.logger.warn(this.channel, `Unknown command: ${message.command}`);
-      return;
-    }
-
-    try {
-      await handler(message, webviewView);
-    } catch (error) {
-      this.logger.error(
-        this.channel,
-        `Error handling command ${message.command}: ${toErrorMessage(error)}`,
-      );
-
-      // Optionally notify the webview of the error
-      webviewView.webview.postMessage({
-        command: COMMON_COMMANDS.ERROR,
-        message: `Failed to handle command: ${message.command}`,
-      });
-    }
+    this.logger.warn(this.channel, `Unknown command: ${message.command}`);
   }
 
   /**

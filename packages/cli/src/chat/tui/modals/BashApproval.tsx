@@ -2,9 +2,9 @@ import { useMemo } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import type { BashPermission } from '@shared/schemas';
-import { clamp } from '@utils/core';
 
 import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
+import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
   boundedScrollableLines,
@@ -40,26 +40,16 @@ export function bashApprovalCommandRowsBudget({
   readonly columns: number;
   readonly title?: string;
 }): number {
-  if (availableRows === undefined) return DEFAULT_BASH_COMMAND_ROWS;
-
-  const titleWidth = Math.max(
-    MIN_BASH_COMMAND_WIDTH,
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
-  const titleRows = wrapAnsiToWidth(title, titleWidth).split('\n').length;
-  const spaciousRows =
-    availableRows -
-    BASH_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE -
-    titleRows;
-  if (spaciousRows > COMPACT_BASH_COMMAND_ROWS) {
-    return spaciousRows;
-  }
-
-  const compactRows =
-    availableRows -
-    BASH_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE -
-    titleRows;
-  return clamp(compactRows, 1, COMPACT_BASH_COMMAND_ROWS);
+  return confirmCardContentRowsBudget({
+    availableRows,
+    columns,
+    title,
+    minContentWidth: MIN_BASH_COMMAND_WIDTH,
+    defaultRows: DEFAULT_BASH_COMMAND_ROWS,
+    compactMaxRows: COMPACT_BASH_COMMAND_ROWS,
+    spaciousFixedRows: BASH_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
+    compactFixedRows: BASH_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE,
+  });
 }
 
 export function bashCommandDisplayLines({
