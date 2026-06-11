@@ -72,6 +72,10 @@ export const MAIN_VIEW_COMMANDS = {
   SHOW_ORCHESTRATOR_BANNER: 'showOrchestratorBanner',
   HIDE_ORCHESTRATOR_BANNER: 'hideOrchestratorBanner',
 
+  // Onboarding funnel (PRD: agent-native onboarding)
+  ONBOARDING_SKIP: 'onboardingSkip',
+  SET_ONBOARDING_FUNNEL: 'setOnboardingFunnel',
+
   // Extension response events
   INSTRUCTION_TEXT_POLISHED: 'instructionTextPolished',
   INSTRUCTION_TEXT_POLISH_ERROR: 'instructionTextPolishError',

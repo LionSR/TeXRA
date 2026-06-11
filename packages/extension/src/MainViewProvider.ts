@@ -2,10 +2,22 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { refresh, computeAgentOptionsData } from '@agent/index';
+import {
+  planOnboardingFunnelTransition,
+  readOnboardingFlags,
+  setOnboardingDeclined,
+  type OnboardingFunnelState,
+} from '@controllers/onboarding/onboardingFunnel';
+import {
+  refresh,
+  computeAgentOptionsData,
+  createKey,
+  getAgent,
+} from '@agent/index';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - common
+import { runSetupAssistant } from '@commands/setup';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -17,6 +29,7 @@ import { consumePendingState } from '@common/state';
 import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
 
 import { agentDirectories } from '@frontend/agents';
+import { SecretManager } from '@frontend/secretManager';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -48,6 +61,12 @@ export class MainViewProvider
   private _progressViewProvider?: ProgressViewProvider;
   private _progressContentProvider?: BundledViewContentProvider;
 
+  /** Last computed funnel state, so credential hooks can detect the
+   *  in-session State 0 → 1 transition. Session-scoped by design. */
+  private onboardingFunnelState: OnboardingFunnelState | undefined;
+  /** The setup conversation auto-starts at most once per session. */
+  private setupKickoffStarted = false;
+
   // Debounced refresh for agent option changes
   private debouncedRefreshAgentOptions = debounce(
     this.refreshAgentOptions.bind(this),
@@ -56,7 +75,9 @@ export class MainViewProvider
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
-    this.messageHandler = new MainViewMessageHandler(context);
+    this.messageHandler = new MainViewMessageHandler(context, {
+      refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
+    });
     this.contentProvider = new BundledViewContentProvider(
       context,
       'MainView',
@@ -125,6 +146,55 @@ export class MainViewProvider
       { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
       view,
     );
+  }
+
+  /**
+   * Single derivation point for the onboarding funnel on this host (PRD:
+   * agent-native onboarding). Recomputes the user-scoped funnel state,
+   * pushes it to the webview, and acts on the State 0 → 1 transition:
+   * clear a stale skip, select the setup agent, and kick the conversation
+   * off once. Invoked by the message handler on webview ready — which the
+   * credential-changed hooks replay via refreshOptionsAndView — and after
+   * the welcome-card actions (skip / API-key entry).
+   */
+  async refreshOnboardingFunnel(): Promise<void> {
+    const view = this.getMainModeView();
+    if (!view) return;
+
+    // Includes the server-side-key (relay sign-in) check.
+    const hasCredential = await SecretManager.anyApiKeyExists().catch(
+      () => false,
+    );
+    const transition = planOnboardingFunnelTransition(
+      this.onboardingFunnelState,
+      { hasCredential, ...readOnboardingFlags(this.context.globalState) },
+    );
+    this.onboardingFunnelState = transition.state;
+
+    view.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      state: transition.state,
+    });
+
+    if (transition.clearDeclined) {
+      await setOnboardingDeclined(this.context.globalState, false);
+    }
+    if (transition.selectSetupAgent) {
+      // Resolve the qualified registry key so the dropdown matches by value;
+      // the plain name still resolves by label if the registry isn't loaded.
+      const entry = getAgent('setup', true);
+      view.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
+        agentId: entry ? createKey(entry.source, entry.name) : 'setup',
+        sessionType: 'toolUse',
+      });
+    }
+    if (transition.kickoffSetup && !this.setupKickoffStarted) {
+      this.setupKickoffStarted = true;
+      // Fire-and-forget: the setup agent run owns its own progress UI and
+      // error surfacing; the funnel push above must not wait on it.
+      void runSetupAssistant();
+    }
   }
 
   /**

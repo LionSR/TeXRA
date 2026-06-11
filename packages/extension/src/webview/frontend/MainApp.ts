@@ -7,6 +7,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
+import { PREFERRED_TOOL_USE_AGENTS } from '@agent/index/agentRegistryConstants';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -43,12 +44,14 @@ import {
   type ModelChangeDetail,
   type MultipleFilesActionDetail,
   type MultipleFilesTypeActionDetail,
+  type OnboardingFunnelState,
   type ReorderFilesDetail,
   type RemoveFileDetail,
   type SessionTypeChangeDetail,
   dispatchMainView,
   type MainViewHandlerRegistry,
 } from '@shared/schemas';
+// Constants-only module: safe for the webview bundle (no platform imports).
 import {
   registerTeXRAWebAwesomeIcons,
   TEXRA_ICON_LIBRARY,
@@ -63,6 +66,7 @@ import './components/FileSelectGroup';
 import './components/BannerGroup';
 import './components/LatexDiffsSection';
 import './components/InstructionPanel';
+import './components/OnboardingWelcomeCard';
 import {
   ELEMENT_IDS,
   DOCUMENT_FILE_TYPES,
@@ -178,8 +182,16 @@ export class MainApp extends MainAppBase {
     visible: false,
   });
   private readonly gettingStartedVisible = signal(false);
+  // Session-only: the host re-sends SHOW_GETTING_STARTED_BANNER on file
+  // refreshes, so dismissal is tracked separately and never persisted.
+  private readonly gettingStartedDismissed = signal(false);
   private readonly sessionHintDismissed = signal(true);
   private readonly loginBannerVisible = signal(false);
+  // Onboarding funnel (PRD: agent-native onboarding). Defaults to 'done' so
+  // existing users never flash the welcome card before the host's first
+  // SET_ONBOARDING_FUNNEL push arrives.
+  private readonly onboardingFunnelState =
+    signal<OnboardingFunnelState>('done');
   private readonly instructionPlaceholder = signal(
     ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
   );
@@ -322,6 +334,10 @@ export class MainApp extends MainAppBase {
 
     [MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]: (data) =>
       this.handleSetSelectedAgent(data),
+
+    [MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL]: (data) => {
+      this.onboardingFunnelState.set(data.state);
+    },
   };
 
   override connectedCallback(): void {
@@ -570,26 +586,42 @@ export class MainApp extends MainAppBase {
         this.validateAgentSelection(
           optionsData.toolUse,
           this.toolUseAgent.get(),
+          // State 2 sanity (PRD: agent-native onboarding): a persisted agent
+          // that no longer resolves (e.g. BYOK user with the sign-in-only
+          // 'orchestrator' default) falls back along the preferred list
+          // instead of leaving the dropdown with no selection.
+          PREFERRED_TOOL_USE_AGENTS,
         ),
       );
     }
   }
 
   /**
-   * No silent fallback — if the agent is gone, keeps the stale value
-   * so the dropdown shows no selection and execution errors explicitly.
+   * Exact value match first, then plain-name match (source changes and
+   * plain-name defaults), then the caller's preferred fallback list. With no
+   * fallback list (workflow), an unresolvable agent keeps the stale value so
+   * the dropdown shows no selection and execution errors explicitly.
    */
   private validateAgentSelection(
     options: AgentOptionData[],
     currentValue: string,
+    preferredFallback: readonly string[] = [],
   ): string {
     if (options.some((opt) => opt.value === currentValue)) {
       return currentValue;
     }
-    // Match by name: handles source changes and plain-name defaults
+    // Match by name: handles source changes and plain-name defaults. Option
+    // values are "source:name" keys; labels may be display names, so match
+    // the value-derived name as well as the label.
     const name = agentName(currentValue);
-    const byName = options.find((opt) => opt.label === name);
+    const byName = options.find(
+      (opt) => agentName(opt.value) === name || opt.label === name,
+    );
     if (byName) return byName.value;
+    for (const preferred of preferredFallback) {
+      const match = options.find((opt) => agentName(opt.value) === preferred);
+      if (match) return match.value;
+    }
     // No match — keep stale value so the UI shows no selection.
     // Execution will error with "unknown agent" if the user proceeds.
     return currentValue;
@@ -1450,14 +1482,28 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER);
   }
 
+  // Welcome-card choices reuse the existing host flows: sign-in invokes
+  // texra.auth.signIn (SIGN_IN_FROM_BANNER), API key invokes texra.setApiKey
+  // (OPEN_SET_API_KEY); only skip is onboarding-specific (declined flag).
+  private handleWelcomeSignIn(): void {
+    postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER);
+  }
+
+  private handleWelcomeApiKey(): void {
+    postMessage(MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY);
+  }
+
+  private handleWelcomeSkip(): void {
+    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SKIP);
+  }
+
   private handleComponentDismissLogin(): void {
     postMessage(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER);
     this.loginBannerVisible.set(false);
   }
 
   private handleComponentDismissGettingStarted(): void {
-    postMessage(MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER);
-    this.gettingStartedVisible.set(false);
+    this.gettingStartedDismissed.set(true);
   }
 
   private handleComponentDismissSessionHint(): void {
@@ -1592,6 +1638,12 @@ export class MainApp extends MainAppBase {
     this.handleAgentConfigAction('edit');
   }
 
+  private handleComponentBrowseAllAgents(): void {
+    postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS, {
+      sessionType: this.sessionType.get(),
+    });
+  }
+
   private handleComponentModelSettings(): void {
     postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS);
   }
@@ -1648,12 +1700,96 @@ export class MainApp extends MainAppBase {
     return merged;
   }
 
+  /** Launcher/Progress tabs plus header actions (hidden on the desktop host). */
+  private renderViewHeader(): TemplateResult | typeof nothing {
+    if (this.isDesktopHost) return nothing;
+    return html`
+      <div class="view-header">
+        <wa-tab-group
+          class="view-tabs"
+          active="launcher"
+          without-scroll-controls
+          @wa-tab-show=${this.onViewTabShow}
+        >
+          <wa-tab panel="launcher">
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="pencil"
+              variant="solid"
+            ></wa-icon>
+            Launcher
+          </wa-tab>
+          <wa-tab panel="progress">
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="robot"
+              variant="solid"
+            ></wa-icon>
+            Progress
+          </wa-tab>
+          <wa-tab-panel name="launcher"></wa-tab-panel>
+          <wa-tab-panel name="progress"></wa-tab-panel>
+        </wa-tab-group>
+        <wa-button
+          id="openDashboardButton"
+          class="header-action"
+          aria-label="Open dashboard"
+          appearance="plain"
+          size="small"
+          @click=${this.onOpenDashboard}
+        >
+          <wa-icon
+            library=${TEXRA_ICON_LIBRARY}
+            name="gear"
+            variant="solid"
+          ></wa-icon>
+        </wa-button>
+        <wa-tooltip for="openDashboardButton"> Open dashboard </wa-tooltip>
+        <wa-button
+          id="popOutProgressButton"
+          class="header-action"
+          aria-label="Open progress sessions in editor"
+          appearance="plain"
+          size="small"
+          @click=${this.onPopOutProgress}
+        >
+          <wa-icon
+            library=${TEXRA_ICON_LIBRARY}
+            name="picture-in-picture"
+            variant="solid"
+          ></wa-icon>
+        </wa-button>
+        <wa-tooltip for="popOutProgressButton">
+          Open progress sessions in editor
+        </wa-tooltip>
+      </div>
+    `;
+  }
+
   render(): TemplateResult {
     if (ENABLE_MOCKS_GALLERY && this.mocksGalleryLoaded) {
       return html`
         <div class="content-wrapper">
           <div class="main-content">
             <texra-mocks-gallery></texra-mocks-gallery>
+          </div>
+        </div>
+      `;
+    }
+
+    if (this.onboardingFunnelState.get() === 'needs-credential') {
+      // State 0 (PRD: agent-native onboarding): without a credential the
+      // agent/model pickers, Files, and LaTeX Diffs are meaningless, and the
+      // welcome card replaces the login/API-key/getting-started banners.
+      return html`
+        <div class="content-wrapper">
+          ${this.renderViewHeader()}
+          <div class="main-content">
+            <onboarding-welcome-card
+              @welcome-sign-in=${this.handleWelcomeSignIn}
+              @welcome-api-key=${this.handleWelcomeApiKey}
+              @welcome-skip=${this.handleWelcomeSkip}
+            ></onboarding-welcome-card>
           </div>
         </div>
       `;
@@ -1677,71 +1813,7 @@ export class MainApp extends MainAppBase {
 
     return html`
       <div class="content-wrapper">
-        ${this.isDesktopHost
-          ? nothing
-          : html`
-              <div class="view-header">
-                <wa-tab-group
-                  class="view-tabs"
-                  active="launcher"
-                  without-scroll-controls
-                  @wa-tab-show=${this.onViewTabShow}
-                >
-                  <wa-tab panel="launcher">
-                    <wa-icon
-                      library=${TEXRA_ICON_LIBRARY}
-                      name="pencil"
-                      variant="solid"
-                    ></wa-icon>
-                    Launcher
-                  </wa-tab>
-                  <wa-tab panel="progress">
-                    <wa-icon
-                      library=${TEXRA_ICON_LIBRARY}
-                      name="robot"
-                      variant="solid"
-                    ></wa-icon>
-                    Progress
-                  </wa-tab>
-                  <wa-tab-panel name="launcher"></wa-tab-panel>
-                  <wa-tab-panel name="progress"></wa-tab-panel>
-                </wa-tab-group>
-                <wa-button
-                  id="openDashboardButton"
-                  class="header-action"
-                  aria-label="Open dashboard"
-                  appearance="plain"
-                  size="small"
-                  @click=${this.onOpenDashboard}
-                >
-                  <wa-icon
-                    library=${TEXRA_ICON_LIBRARY}
-                    name="gear"
-                    variant="solid"
-                  ></wa-icon>
-                </wa-button>
-                <wa-tooltip for="openDashboardButton">
-                  Open dashboard
-                </wa-tooltip>
-                <wa-button
-                  id="popOutProgressButton"
-                  class="header-action"
-                  aria-label="Open progress sessions in editor"
-                  appearance="plain"
-                  size="small"
-                  @click=${this.onPopOutProgress}
-                >
-                  <wa-icon
-                    library=${TEXRA_ICON_LIBRARY}
-                    name="picture-in-picture"
-                    variant="solid"
-                  ></wa-icon>
-                </wa-button>
-                <wa-tooltip for="popOutProgressButton">
-                  Open progress sessions in editor
-                </wa-tooltip>
-              </div>
-            `}
+        ${this.renderViewHeader()}
 
         <div class="main-content">
           <instruction-panel
@@ -1754,6 +1826,7 @@ export class MainApp extends MainAppBase {
             @panel-action=${this.handleComponentPanelAction}
             @execute=${this.handleComponentExecute}
             @agent-settings=${this.handleComponentAgentSettings}
+            @browse-all-agents=${this.handleComponentBrowseAllAgents}
             @model-settings=${this.handleComponentModelSettings}
             @focus-instruction=${this.handleComponentFocusInstruction}
             @dismiss-session-hint=${this.handleComponentDismissSessionHint}
@@ -1774,7 +1847,8 @@ export class MainApp extends MainAppBase {
               visible: db.visible,
               missingTools: db.missingTools,
             }}
-            .gettingStartedVisible=${this.gettingStartedVisible.get()}
+            .gettingStartedVisible=${this.gettingStartedVisible.get() &&
+            !this.gettingStartedDismissed.get()}
             .loginBannerVisible=${this.loginBannerVisible.get()}
             @api-key-action=${this.handleComponentApiKeyAction}
             @agent-config-action=${this.handleComponentAgentConfigAction}

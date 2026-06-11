@@ -5,6 +5,7 @@ import {
   deriveOnboardingFunnelState,
   getDefaultTeamId,
   getFirstRunDone,
+  planOnboardingFunnelTransition,
   readOnboardingFlags,
   setDefaultTeamId,
   setFirstRunDone,
@@ -72,6 +73,113 @@ describe('deriveOnboardingFunnelState', () => {
         firstRunDone: true,
       }),
     ).toBe('done');
+  });
+});
+
+describe('planOnboardingFunnelTransition', () => {
+  it('in-session State 0 → 1: selects the setup agent, kicks off, clears the skip', () => {
+    expect(
+      planOnboardingFunnelTransition('needs-credential', {
+        hasCredential: true,
+        declined: false,
+        firstRunDone: false,
+      }),
+    ).toEqual({
+      state: 'setup',
+      selectSetupAgent: true,
+      kickoffSetup: true,
+      clearDeclined: false,
+    });
+  });
+
+  it('plain activation in State 1 (previous undefined): selects but never auto-runs', () => {
+    expect(
+      planOnboardingFunnelTransition(undefined, {
+        hasCredential: true,
+        declined: false,
+        firstRunDone: false,
+      }),
+    ).toEqual({
+      state: 'setup',
+      selectSetupAgent: true,
+      kickoffSetup: false,
+      clearDeclined: false,
+    });
+  });
+
+  it('a refresh already in State 1 never re-selects (user agent switches survive)', () => {
+    expect(
+      planOnboardingFunnelTransition('setup', {
+        hasCredential: true,
+        declined: false,
+        firstRunDone: false,
+      }),
+    ).toEqual({
+      state: 'setup',
+      selectSetupAgent: false,
+      kickoffSetup: false,
+      clearDeclined: false,
+    });
+  });
+
+  it('skipped user who later configures a credential: re-enters State 1, clears the skip, no auto-run', () => {
+    expect(
+      planOnboardingFunnelTransition('done', {
+        hasCredential: true,
+        declined: true,
+        firstRunDone: false,
+      }),
+    ).toEqual({
+      state: 'setup',
+      selectSetupAgent: true,
+      kickoffSetup: false,
+      clearDeclined: true,
+    });
+  });
+
+  it('first run already done: credential arrival lands in State 2 with no setup actions', () => {
+    expect(
+      planOnboardingFunnelTransition('needs-credential', {
+        hasCredential: true,
+        declined: false,
+        firstRunDone: true,
+      }),
+    ).toEqual({
+      state: 'done',
+      selectSetupAgent: false,
+      kickoffSetup: false,
+      clearDeclined: false,
+    });
+  });
+
+  it('State 0 holds while no credential exists', () => {
+    expect(
+      planOnboardingFunnelTransition('needs-credential', {
+        hasCredential: false,
+        declined: false,
+        firstRunDone: false,
+      }),
+    ).toEqual({
+      state: 'needs-credential',
+      selectSetupAgent: false,
+      kickoffSetup: false,
+      clearDeclined: false,
+    });
+  });
+
+  it('skip while in State 0: moves to done without setup actions', () => {
+    expect(
+      planOnboardingFunnelTransition('needs-credential', {
+        hasCredential: false,
+        declined: true,
+        firstRunDone: false,
+      }),
+    ).toEqual({
+      state: 'done',
+      selectSetupAgent: false,
+      kickoffSetup: false,
+      clearDeclined: false,
+    });
   });
 });
 

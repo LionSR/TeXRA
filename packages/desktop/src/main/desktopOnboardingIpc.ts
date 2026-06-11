@@ -1,4 +1,6 @@
 import { platform } from '@platform/platform';
+import { setOnboardingDeclined } from '@controllers/onboarding/onboardingFunnel';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 import {
   buildDesktopOnboardingSetStateMessage,
   DESKTOP_ONBOARDING_COMMANDS,
@@ -39,6 +41,13 @@ export function createDesktopOnboardingIpc(
     {
       [DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE]: () => postCurrentState(),
       [DESKTOP_ONBOARDING_COMMANDS.DISMISS]: () => dismiss(),
+      // Welcome-card skip (PRD: agent-native onboarding). Host-neutral
+      // declined flag — the same one the CLI picker persists. The desktop
+      // does not push SET_ONBOARDING_FUNNEL yet (the card stays hidden via
+      // the webview's 'done' default), but the flag write keeps the skip
+      // semantics consistent once it does.
+      [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP]: () =>
+        setOnboardingDeclined(state, true),
     },
     { onAsyncError: options.onAsyncError },
   );

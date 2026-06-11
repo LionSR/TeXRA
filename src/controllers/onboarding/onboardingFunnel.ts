@@ -17,10 +17,11 @@
 import { API_PROVIDERS, apiKeyExists } from '@model/apiProviders';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
+import type { OnboardingFunnelState } from '@shared/schemas/onboarding';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { StateStore } from '@platform/interfaces/state';
 
-export type OnboardingFunnelState = 'needs-credential' | 'setup' | 'done';
+export type { OnboardingFunnelState };
 
 export interface OnboardingFunnelInputs {
   /** A usable credential exists (relay sign-in or any provider API key). */
@@ -39,6 +40,47 @@ export function deriveOnboardingFunnelState(
   // gets the normal product until a credential appears (which re-enters the
   // funnel at State 1 because configuring a credential clears the flag).
   return inputs.declined ? 'done' : 'needs-credential';
+}
+
+/** What a host should do after recomputing the funnel. */
+export interface OnboardingFunnelTransition {
+  /** The newly derived funnel state (push to the webview). */
+  state: OnboardingFunnelState;
+  /** Select the setup agent in the launcher (entering State 1). */
+  selectSetupAgent: boolean;
+  /**
+   * Auto-start the setup conversation — only on the in-session
+   * State 0 → 1 transition (a credential landed while the welcome card was
+   * up), never on plain activation in State 1. Hosts additionally guard
+   * with a per-session "already kicked off" flag.
+   */
+  kickoffSetup: boolean;
+  /** Configuring a credential clears a previous skip (PRD edge case). */
+  clearDeclined: boolean;
+}
+
+/**
+ * Pure transition planner for hosts that recompute the funnel in-session
+ * (webview ready, credential-changed events, skip). `previous` is the state
+ * from the host's last computation, or `undefined` on the first one.
+ */
+export function planOnboardingFunnelTransition(
+  previous: OnboardingFunnelState | undefined,
+  inputs: OnboardingFunnelInputs,
+): OnboardingFunnelTransition {
+  const state = deriveOnboardingFunnelState(inputs);
+  return {
+    state,
+    // Entering State 1 (from ready, State 0, or a declined "done") selects
+    // the setup agent; a refresh already in State 1 must not stomp a user
+    // who deliberately switched agents mid-session.
+    selectSetupAgent: state === 'setup' && previous !== 'setup',
+    kickoffSetup:
+      previous === 'needs-credential' &&
+      state === 'setup' &&
+      !inputs.firstRunDone,
+    clearDeclined: inputs.declined && inputs.hasCredential,
+  };
 }
 
 // ============================================================
