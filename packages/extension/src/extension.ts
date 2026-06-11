@@ -696,9 +696,10 @@ export async function activate(context: vscode.ExtensionContext) {
       // palette, walkthrough, welcome card), so the onboarding funnel must
       // recompute too: the State 0 card has no other signal when a key is
       // added outside the main view's own round-trip.
-      await getMainViewProvider()
-        ?.refreshOnboardingFunnel()
-        .catch(() => {});
+      const mainViewProvider = getMainViewProvider();
+      if (mainViewProvider) {
+        await mainViewProvider.refreshOnboardingFunnel().catch(() => {});
+      }
     }),
   );
 
