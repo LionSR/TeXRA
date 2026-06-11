@@ -375,8 +375,8 @@ your API budget. Bots you trust can be allow-listed by name via `allow-bots`
 Work down this checklist — each item maps to a quiet skip:
 
 1. **Is the workflow on the default branch?** PRs only trigger it once
-   `.github/workflows/texra-code-review.yml` exists on `main` (or the PR
-   itself contains it).
+   `.github/workflows/texra-code-review.yml` exists on your default branch
+   (usually `main`), or the PR itself contains it.
 2. **Is the PR from a fork?** Fork PRs are skipped — secrets aren't shared
    with forks (see the warning above).
 3. **Is the secret named exactly right?** A typo like `ANTHROPIC_KEY` means no
