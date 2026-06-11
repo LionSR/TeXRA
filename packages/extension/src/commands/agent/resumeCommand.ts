@@ -18,7 +18,6 @@ import { getToolUsePersistenceEnabled } from '@utils/config';
 
 export const ResumeAgentResultSchema = z.object({
   success: z.boolean(),
-  lostFollowUps: z.int().nonnegative().optional(),
 });
 
 export type ResumeAgentResult = z.infer<typeof ResumeAgentResultSchema>;
@@ -72,25 +71,28 @@ async function resumeFromSnapshot(
 
     return { success: true };
   } catch (error) {
-    const lostFollowUps =
-      queuedFollowUps.length > 0
-        ? queuedFollowUps
-        : ToolUseFollowUpQueue.drainItems(streamId);
-    const lostCount = lostFollowUps.length;
+    // Re-enqueue the drained follow-ups (and the explicit one, ahead of
+    // them) so a later resume picks them up instead of dropping them —
+    // matching the desktop bridge's failure path.
+    const requeued: readonly FollowUpQueueInput[] =
+      followUp !== undefined
+        ? [{ text: followUp, origin: 'user' as const }, ...queuedFollowUps]
+        : queuedFollowUps;
+    for (const item of requeued) {
+      ToolUseFollowUpQueue.enqueue(streamId, item);
+    }
+    if (requeued.length > 0) {
+      runtimeHost.emit('updateQueuedFollowUps', { streamId });
+    }
 
     const baseMessage = logErrorMessage(
       CHANNEL,
       'Failed to resume tool-use session',
       error,
     );
-    let lostSuffix = '';
-    if (lostCount > 0) {
-      const label = lostCount === 1 ? 'follow-up was' : 'follow-ups were';
-      lostSuffix = ` ${lostCount} queued ${label} lost.`;
-    }
-    await vscode.window.showWarningMessage(`${baseMessage}${lostSuffix}`);
+    await vscode.window.showWarningMessage(baseMessage);
 
-    return { success: false, lostFollowUps: lostCount };
+    return { success: false };
   } finally {
     const status = StreamStatusService.get(streamId);
     if (status === STREAM_STATUS.RESUMING) {
