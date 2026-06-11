@@ -145,13 +145,17 @@ export async function maybeRunCliOnboarding(
     return NO_ONBOARDING_RESULT;
   }
   if (hasCredential) {
+    // A credential clears a stale skip (the PRD's "configuring a credential
+    // clears the flag"), but an already-credentialed launch is NOT a
+    // post-picker continuation: `configured` stays false so the setup agent
+    // only takes the session right after the picker actually configured a
+    // credential in this process. Anything looser hijacks every launch into
+    // setup until firstRunDone flips, with no exit path if the setup
+    // conversation never completes a run.
     if (getOnboardingDeclined(globalState)) {
       await setOnboardingDeclined(globalState, false).catch(() => {});
     }
-    return {
-      configured: !getFirstRunDone(globalState),
-      declined: false,
-    };
+    return NO_ONBOARDING_RESULT;
   }
   if (getOnboardingDeclined(globalState)) {
     return NO_ONBOARDING_RESULT;

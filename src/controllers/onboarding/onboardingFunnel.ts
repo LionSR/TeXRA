@@ -76,10 +76,9 @@ export function planOnboardingFunnelTransition(
     // the setup agent; a refresh already in State 1 must not stomp a user
     // who deliberately switched agents mid-session.
     selectSetupAgent: state === 'setup' && previous !== 'setup',
-    kickoffSetup:
-      previous === 'needs-credential' &&
-      state === 'setup' &&
-      !inputs.firstRunDone,
+    // 'setup' already implies !firstRunDone (see deriveOnboardingFunnelState),
+    // so the transition alone gates the one-time auto-kickoff.
+    kickoffSetup: previous === 'needs-credential' && state === 'setup',
     clearDeclined: inputs.declined && inputs.hasCredential,
   };
 }

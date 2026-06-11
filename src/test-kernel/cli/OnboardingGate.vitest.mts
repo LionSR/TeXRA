@@ -98,8 +98,11 @@ describe('maybeRunCliOnboarding gate', () => {
     mocks.state.set(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, false);
     mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
 
+    // `configured` stays false: only the picker actually configuring a
+    // credential in this process is a post-picker continuation. A pre-existing
+    // credential must not route every launch into the setup agent.
     await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
-      configured: true,
+      configured: false,
       declined: false,
     });
     expect(mocks.state.get(GlobalStateKey.ONBOARDING_DECLINED)).toBe(false);

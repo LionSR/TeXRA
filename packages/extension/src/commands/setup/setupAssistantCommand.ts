@@ -9,6 +9,7 @@ import {
   DEFAULT_AGENT_MODEL,
 } from '@agent/core/definition/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
@@ -17,6 +18,8 @@ import { GlobalStateKey, globalSM } from '@common/state';
 import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as logger from '@logger/logUtils';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { agentName } from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
@@ -275,6 +278,23 @@ async function ensureRoutingConfigured(): Promise<boolean> {
 
 export async function runSetupAssistant(): Promise<void> {
   try {
+    // Every setup entry point funnels through here (command, status pill,
+    // walkthrough, onboarding auto-kickoff), so one guard covers them all:
+    // a second concurrent setup conversation would race the first one's
+    // installs and config writes. The launcher's manual Execute path is
+    // deliberately not gated — an explicit user action wins.
+    if (
+      executionRegistry
+        .getAgentHandles()
+        .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
+    ) {
+      void vscode.window.showInformationMessage(
+        'The setup assistant is already running — follow it in the Progress view.',
+      );
+      await vscode.commands.executeCommand('texra.showProgressView');
+      return;
+    }
+
     const proceed = await ensureCredentialOrPrompt();
     if (!proceed) {
       void vscode.window.showInformationMessage(
