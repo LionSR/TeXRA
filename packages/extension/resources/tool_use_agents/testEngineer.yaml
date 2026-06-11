@@ -1,4 +1,5 @@
 name: testEngineer
+displayName: Test Engineer — write & maintain tests
 description: Writes and maintains tests — pins down existing behaviour, covers new code and edge cases, and keeps the suite fast and reliable.
 
 settings:

@@ -1,4 +1,5 @@
 name: latexFixer
+displayName: LaTeX Fixer — fix compile errors
 description: Diagnoses and fixes LaTeX compilation errors, warnings, and bad boxes.
 
 settings:
