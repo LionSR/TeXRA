@@ -18,6 +18,7 @@ import {
   mintRelayToken,
   revokeRelayToken,
 } from '@cli/runtime/relayTokensClient';
+import { relayTokenStillActiveNotice } from '@cli/runtime/supabaseAuth';
 
 const TOKEN = `${RELAY_CI_TOKEN_PREFIX}abcdefghijklmnopqrstuvwxyz0123456789abcdEFG`;
 
@@ -86,6 +87,16 @@ describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
   it('falls back to free tier when the lookup fails', async () => {
     const { fetchImpl } = singleFetch(jsonResponse({ error: 'nope' }, 401));
     expect(await fetchRelayTokenTier(TOKEN, fetchImpl)).toBe('free');
+  });
+
+  it('warns on logout that a configured relay token stays active', () => {
+    expect(relayTokenStillActiveNotice({})).toBeUndefined();
+    const notice = relayTokenStillActiveNotice({
+      [RELAY_TOKEN_ENV_VAR]: TOKEN,
+    });
+    expect(notice).toContain(RELAY_TOKEN_ENV_VAR);
+    expect(notice).toContain('stays active');
+    expect(notice).toContain('texra auth token revoke');
   });
 });
 

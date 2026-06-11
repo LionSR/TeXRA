@@ -202,6 +202,19 @@ export async function signOutCliSupabase(): Promise<void> {
 }
 
 /**
+ * Notice appended to sign-out output when TEXRA_RELAY_TOKEN is configured.
+ * Sign-out only clears the stored GoTrue session — the CLI cannot unset the
+ * parent shell's environment, so relay access stays active until the user
+ * removes the variable themselves. Say so instead of reporting a clean exit.
+ */
+export function relayTokenStillActiveNotice(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  if (!getConfiguredRelayToken(env)) return undefined;
+  return `Note: ${RELAY_TOKEN_ENV_VAR} is still set in this environment, so included relay access stays active. Unset it (and revoke the token with \`texra auth token revoke\` if it leaked) to fully sign out.`;
+}
+
+/**
  * Fresh access token for the stored CLI session, bypassing any configured
  * TEXRA_RELAY_TOKEN. Token management (texra setup-token) must authenticate
  * with a real user session — a CI token cannot mint or revoke tokens.

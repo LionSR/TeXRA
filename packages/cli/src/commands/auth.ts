@@ -25,6 +25,7 @@ import { CLI_OAUTH_PROVIDER_INPUTS } from '../runtime/oauthProviderDisplay';
 import {
   formatCliManualAuthUrlMessage,
   getCliAuthProfile,
+  relayTokenStillActiveNotice,
   signInCliSupabase,
   signInCliSupabaseDeviceCode,
   signOutCliSupabase,
@@ -249,10 +250,14 @@ export const logoutCommand = defineCliCommand({
       return CliExitCode.ModelOrNetworkError;
     }
 
+    // Sign-out only clears the stored session; a configured TEXRA_RELAY_TOKEN
+    // keeps authenticating relay calls, so report it instead of a clean exit.
+    const relayNotice = relayTokenStillActiveNotice();
+    const relayTokenConfigured = relayNotice !== undefined;
     emitCliResult(context, {
-      json: { authenticated: false },
-      ndjson: { kind: 'auth', authenticated: false },
-      text: 'Signed out.',
+      json: { authenticated: false, relayTokenConfigured },
+      ndjson: { kind: 'auth', authenticated: false, relayTokenConfigured },
+      text: relayNotice ? `Signed out.\n${relayNotice}` : 'Signed out.',
     });
     return CliExitCode.Success;
   },

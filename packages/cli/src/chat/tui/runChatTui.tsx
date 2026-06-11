@@ -64,6 +64,7 @@ import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
 import {
   formatCliManualAuthUrlMessage,
   signInCliSupabase,
+  relayTokenStillActiveNotice,
   signInCliSupabaseDeviceCode,
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
@@ -716,9 +717,13 @@ async function logoutFromChat(): Promise<void> {
   try {
     await signOutCliSupabase();
     setCliSessionApiMode('personal');
+    // Sign-out only clears the stored session; a configured TEXRA_RELAY_TOKEN
+    // keeps authenticating relay calls, so report it instead of a clean exit.
+    const relayNotice = relayTokenStillActiveNotice();
     appendLocalAssistantTranscript(
       [
         'Signed out.',
+        ...(relayNotice ? [relayNotice] : []),
         ...(await loadCliApiStatusLines({ apiMode: 'personal' })),
       ].join('\n'),
     );

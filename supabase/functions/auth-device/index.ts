@@ -169,15 +169,6 @@ function verificationUri(c: Context): string {
   return `${new URL(c.req.url).origin}/functions/v1/auth-device/verify`;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
 // =============================================================================
 // Routes
 // =============================================================================
