@@ -188,7 +188,9 @@ class AgentReviewServiceImpl {
       ),
     });
     if (!collected.ok) {
-      this.summary = `Review failed: ${collected.reason}`;
+      // Issues from the previous run stay available rather than vanishing on
+      // a transient failure; the summary marks them as previous results.
+      this.summary = `Review failed: ${collected.reason}${this.issues.length > 0 ? ' · showing previous results' : ''}`;
       if (trigger === 'manual') {
         void showLoggedErrorMessage(
           CHANNEL,

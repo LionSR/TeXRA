@@ -62,6 +62,10 @@ function watchRepository(
       lastCommit = commit;
       return;
     }
+    // An undefined→commit transition is indistinguishable from the git
+    // extension lazily populating its state on workspace open, so it never
+    // triggers. This also skips a repo's very first commit — acceptable, as
+    // that commit has no base to diff against anyway.
     const hadCommit = lastCommit !== undefined;
     lastCommit = commit;
     if (!hadCommit) return;
