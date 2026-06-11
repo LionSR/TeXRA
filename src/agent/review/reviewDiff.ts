@@ -189,8 +189,11 @@ export function buildUntrackedFileDiff(
     return `${header}Binary file ${relativePath} added\n`;
   }
 
-  const shownBytes = Buffer.from(content.subarray(0, MAX_UNTRACKED_FILE_BYTES));
-  const text = shownBytes.toString('utf8');
+  // TextDecoder (not Buffer) keeps this module runnable on any modern
+  // runtime, matching the host-neutral contract in the file header.
+  const text = new TextDecoder().decode(
+    content.subarray(0, MAX_UNTRACKED_FILE_BYTES),
+  );
   const lines = text.split('\n');
   // Drop the empty trailing element from a final newline.
   if (lines.at(-1) === '') lines.pop();
