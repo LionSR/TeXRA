@@ -61,9 +61,9 @@ function renderWelcomeHtml(): string {
 </head>
 <body>
   <p>
-    <strong>Welcome to TeXRA</strong> — an AI theorist for your LaTeX work. It
-    coordinates specialized agents to edit manuscripts, derive results, draw
-    figures, and verify proofs.
+    <strong>Welcome to TeXRA</strong> — an AI theorist. It coordinates
+    specialized agents to edit manuscripts, derive results, draw figures,
+    and verify proofs.
   </p>
   <p><strong>To get started:</strong></p>
   <ol>
