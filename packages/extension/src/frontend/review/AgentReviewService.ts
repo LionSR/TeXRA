@@ -16,6 +16,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { collectReviewDiff, isPathInChangeSet } from '@agent/review/reviewDiff';
 import {
   buildFixInstruction,
@@ -26,9 +27,13 @@ import {
   type ReviewIssueReport,
   type ReviewSeverity,
 } from '@agent/review/reviewIssues';
+import { runAgent } from '@agent/runtime/runAgent';
 import { toErrorMessage } from '@common/errors';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
+import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
+import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -236,33 +241,50 @@ class AgentReviewServiceImpl {
       truncated,
       approach: getConfig<ReviewApproach>('agentReview.approach', 'quick'),
     });
-    const config: Record<string, unknown> = {
+    const model = getConfig<string>('agentReview.model', '').trim();
+    const config = AgentConfigSchema.parse({
       agent: REVIEW_AGENT,
       instruction,
       displayInstruction: `Agent review: diff with ${baseDescription} (${changedFiles.length} file${changedFiles.length === 1 ? '' : 's'})`,
-    };
-    const model = getConfig<string>('agentReview.model', '').trim();
-    if (model) config.model = model;
+      ...(model ? { model } : {}),
+    });
 
+    let outcome: RunOutcome;
     try {
-      // Resolves when the reviewer agent finishes its turn; the run itself
+      // Run the reviewer session directly (the `texra.execute` path minus
+      // its fire-and-forget error swallowing) so the panel can distinguish
+      // a completed review from a failed or cancelled one. The run itself
       // is visible as a regular tool-use session in the progress view.
-      await vscode.commands.executeCommand('texra.execute', config);
+      const result = await runAgent(
+        { config },
+        {
+          runtimeHost: extensionAgentRuntimeHost,
+          openWorkflowOutput: openFinalOutputIfAvailable,
+        },
+      );
+      outcome = result.outcome;
     } catch (err) {
       // Run-lifecycle failures are already logged and surfaced; keep the
       // panel state honest without a second notification.
-      const restored = this.issues.length === 0 && previous.issues.length > 0;
-      if (restored) {
-        this.issues = previous.issues;
-        this.reviewRoot = previous.reviewRoot;
-        this.baseDescription = previous.baseDescription;
-        this.updateDiagnostics();
-      }
+      const restored = this.restorePreviousResults(previous);
       this.summary = `Review failed: ${toErrorMessage(err)}${restored ? ' · showing previous results' : ''}`;
       logger.warn(
         CHANNEL,
         `Agent review session failed: ${toErrorMessage(err)}`,
       );
+      return;
+    }
+
+    if (outcome !== RUN_OUTCOME.COMPLETED) {
+      const verb = outcome === RUN_OUTCOME.CANCELLED ? 'cancelled' : 'failed';
+      const restored = this.restorePreviousResults(previous);
+      const suffix = restored
+        ? ' · showing previous results'
+        : this.issues.length > 0
+          ? ` · showing the ${this.issues.length} issue${this.issues.length === 1 ? '' : 's'} reported before the session ended`
+          : '';
+      this.summary = `Review ${verb}${suffix}`;
+      logger.warn(CHANNEL, `Agent review session ${verb}`);
       return;
     }
 
@@ -275,6 +297,24 @@ class AgentReviewServiceImpl {
       CHANNEL,
       `Agent review (${trigger}): ${count} issue(s) across ${changedFiles.length} changed file(s)`,
     );
+  }
+
+  /**
+   * Roll back to the snapshot taken before a review session started, when
+   * the session ended without reporting anything. Returns true when the
+   * previous issues (and the root/base they belong to) were restored.
+   */
+  private restorePreviousResults(previous: {
+    issues: ReviewIssue[];
+    reviewRoot: string | undefined;
+    baseDescription: string;
+  }): boolean {
+    if (this.issues.length > 0 || previous.issues.length === 0) return false;
+    this.issues = previous.issues;
+    this.reviewRoot = previous.reviewRoot;
+    this.baseDescription = previous.baseDescription;
+    this.updateDiagnostics();
+    return true;
   }
 
   /**

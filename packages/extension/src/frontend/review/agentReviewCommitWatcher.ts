@@ -54,9 +54,15 @@ function watchRepository(
 
     if (name !== lastName) {
       // Branch switch (or detach): re-baseline without reviewing, and drop
-      // any review still pending from a commit on the previous branch.
+      // any review still pending from a commit on the previous branch. A
+      // checkout also invalidates the reviewed change set, so stale results
+      // are cleared — except on the initial state population (lastName
+      // undefined), which is not a user checkout.
       if (debounce) clearTimeout(debounce);
       debounce = undefined;
+      if (lastName !== undefined) {
+        AgentReviewService.clear();
+      }
       lastName = name;
       lastCommit = commit;
       return;
