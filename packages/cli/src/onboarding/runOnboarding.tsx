@@ -65,10 +65,10 @@ import { saveProviderApiKey } from './applyOnboardingResult';
 
 export interface CliOnboardingResult {
   /**
-   * True when the caller should continue into the setup agent. Usually this
-   * means the picker configured a credential in this process; it also covers
-   * the stale-skip case where a credential now exists and firstRunDone is still
-   * false.
+   * True only when the picker configured a credential in this process —
+   * the signal for the post-picker setup-agent continuation. A launch that
+   * merely finds a pre-existing credential reports false (a stale skip is
+   * handled by clearing the declined flag, never through this field).
    */
   readonly configured: boolean;
   /** True when the picker was shown and the user chose "Skip for now" this run.
@@ -125,7 +125,7 @@ export async function maybeRunCliOnboarding(
   // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI upgrader
   // who already has a credential or execution history never enters State 0/1.
   // One-shot and best-effort: if a credential appears after a previous skip,
-  // the stale skip is cleared below and the setup agent gets one chance to run.
+  // the stale skip is cleared below so a later sign-out re-enters State 0.
   const needsFirstRunBackfill =
     globalState.get<boolean | undefined>(
       GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,

@@ -66,6 +66,9 @@ export class MainViewProvider
   private onboardingFunnelState: OnboardingFunnelState | undefined;
   /** The setup conversation auto-starts at most once per session. */
   private setupKickoffStarted = false;
+  /** A State 1 entry observed with no view keeps its setup-agent selection
+   *  pending until a launcher exists to receive it. */
+  private pendingSetupAgentSelection = false;
 
   // Debounced refresh for agent option changes
   private debouncedRefreshAgentOptions = debounce(
@@ -182,7 +185,19 @@ export class MainViewProvider
     if (transition.clearDeclined) {
       await setOnboardingDeclined(this.context.globalState, false);
     }
-    if (view && transition.selectSetupAgent) {
+    // An off-view advance consumes the transition (previous latches to
+    // 'setup'), so remember the selection until a view exists to receive it —
+    // otherwise a credential arriving while the panel is hidden would leave
+    // the dropdown on the old agent when the launcher reopens.
+    if (transition.selectSetupAgent && !view) {
+      this.pendingSetupAgentSelection = true;
+    }
+    if (
+      view &&
+      (transition.selectSetupAgent ||
+        (this.pendingSetupAgentSelection && transition.state === 'setup'))
+    ) {
+      this.pendingSetupAgentSelection = false;
       // Resolve the qualified registry key so the dropdown matches by value;
       // the plain name still resolves by label if the registry isn't loaded.
       const entry = getAgent('setup', true);
