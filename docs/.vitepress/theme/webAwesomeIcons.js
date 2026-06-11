@@ -97,6 +97,7 @@ import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
 import { faPictureInPicture } from '@fortawesome/free-solid-svg-icons/faPictureInPicture';
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
+import { faPlusMinus } from '@fortawesome/free-solid-svg-icons/faPlusMinus';
 import { faReply } from '@fortawesome/free-solid-svg-icons/faReply';
 import { faRightFromBracket } from '@fortawesome/free-solid-svg-icons/faRightFromBracket';
 import { faRightToBracket } from '@fortawesome/free-solid-svg-icons/faRightToBracket';
@@ -226,6 +227,7 @@ const icons = {
   'picture-in-picture': faPictureInPicture,
   play: faPlay,
   plus: faPlus,
+  'plus-minus': faPlusMinus,
   reply: faReply,
   'right-from-bracket': faRightFromBracket,
   'right-to-bracket': faRightToBracket,
@@ -285,8 +287,8 @@ const CODICON_ALIASES = {
   'device-camera-video': 'video',
   diff: 'code-compare',
   'diff-added': 'plus',
-  'diff-multiple': 'code-compare',
-  'diff-single': 'code-compare',
+  'diff-multiple': 'plus-minus',
+  'diff-single': 'plus-minus',
   discard: 'arrow-rotate-left',
   edit: 'pencil',
   error: 'circle-exclamation',

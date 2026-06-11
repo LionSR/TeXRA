@@ -46,6 +46,7 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 type SessionHintKey = SessionType | 'orchestrator';
@@ -151,9 +152,10 @@ export class InstructionPanel extends LitElement {
             <span class="session-hint-time">${copy.time}</span>
           </span>
           ${renderIconActionButton({
+            id: 'dismissSessionHintButton',
             icon: 'close',
             label: 'Dismiss this reminder',
-            title: 'Dismiss this reminder',
+            tooltip: 'Dismiss this reminder',
             className: 'session-hint-dismiss',
             onClick: this.handleDismissSessionHint,
           })}
@@ -294,20 +296,26 @@ export class InstructionPanel extends LitElement {
                 @change=${this.handleSessionTypeChange}
               >
                 <wa-radio
+                  id="sessionTypeToolUse"
                   value="toolUse"
                   data-session-type="toolUse"
-                  title=${getSessionTitle(SESSION_TYPES.TOOL_USE)}
                 >
                   Interactive
                 </wa-radio>
                 <wa-radio
+                  id="sessionTypeWorkflow"
                   value="workflow"
                   data-session-type="workflow"
-                  title=${getSessionTitle(SESSION_TYPES.WORKFLOW)}
                 >
                   Workflow
                 </wa-radio>
               </wa-radio-group>
+              <wa-tooltip for="sessionTypeToolUse">
+                ${getSessionTitle(SESSION_TYPES.TOOL_USE)}
+              </wa-tooltip>
+              <wa-tooltip for="sessionTypeWorkflow">
+                ${getSessionTitle(SESSION_TYPES.WORKFLOW)}
+              </wa-tooltip>
             </div>
           </div>
           <div
@@ -320,7 +328,7 @@ export class InstructionPanel extends LitElement {
                     id: 'packButton',
                     icon: 'archive',
                     label: 'Pack output to History',
-                    title:
+                    tooltip:
                       'Pack the output for this agent into the History folder',
                     action: 'pack',
                   })}
@@ -328,7 +336,7 @@ export class InstructionPanel extends LitElement {
                     id: 'cleanButton',
                     icon: 'trash',
                     label: 'Clean output',
-                    title: 'Clean the output for this agent',
+                    tooltip: 'Clean the output for this agent',
                     action: 'clean',
                   })}
                 `
@@ -337,7 +345,7 @@ export class InstructionPanel extends LitElement {
               id: 'magicPolishButton',
               icon: 'sparkle',
               label: 'Polish instruction',
-              title: 'Polish instruction text with AI',
+              tooltip: 'Polish instruction text with AI',
               busy: session.isPolishing,
               action: 'polish',
             })}
@@ -345,7 +353,7 @@ export class InstructionPanel extends LitElement {
               id: 'recordInstructionButton',
               icon: session.isRecording ? 'stop-circle' : 'mic',
               label: 'Record instruction',
-              title: session.isRecording
+              tooltip: session.isRecording
                 ? 'Stop recording'
                 : 'Record instruction with microphone',
               className: session.isRecording ? 'recording' : '',
@@ -355,7 +363,7 @@ export class InstructionPanel extends LitElement {
               id: 'eraseInstructionButton',
               icon: 'clear-all',
               label: 'Erase instruction',
-              title: 'Erase instruction',
+              tooltip: 'Erase instruction',
               action: 'erase',
             })}
           </div>
@@ -379,7 +387,7 @@ export class InstructionPanel extends LitElement {
                 id: 'agentSettingsButton',
                 icon: 'sparkle',
                 label: 'Agent settings',
-                title: 'Agent settings',
+                tooltip: 'Agent settings',
                 className: 'settings-button',
                 onClick: this.handleAgentSettings,
               })}
@@ -426,7 +434,7 @@ export class InstructionPanel extends LitElement {
                 id: 'modelSettingsButton',
                 icon: 'robot',
                 label: 'Model settings',
-                title: 'Model settings',
+                tooltip: 'Model settings',
                 className: 'settings-button',
                 onClick: this.handleModelSettings,
               })}
@@ -451,7 +459,6 @@ export class InstructionPanel extends LitElement {
           <wa-button
             id="executeButton"
             class="execute-button"
-            title="Execute (${this.executeShortcutLabel})"
             appearance="filled"
             variant="brand"
             @click=${this.handleExecute}
@@ -459,6 +466,9 @@ export class InstructionPanel extends LitElement {
             <wa-icon slot="start" library="texra" name="play"></wa-icon>
             <span class="execute-button__label">Run</span>
           </wa-button>
+          <wa-tooltip for="executeButton">
+            Execute (${this.executeShortcutLabel})
+          </wa-tooltip>
         </div>
       </div>
     `;

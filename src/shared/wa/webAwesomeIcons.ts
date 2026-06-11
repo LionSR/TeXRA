@@ -80,13 +80,13 @@ import { faMagnifyingGlassChart } from '@fortawesome/free-solid-svg-icons/faMagn
 import { faMicrophone } from '@fortawesome/free-solid-svg-icons/faMicrophone';
 import { faMinus } from '@fortawesome/free-solid-svg-icons/faMinus';
 import { faNoteSticky } from '@fortawesome/free-solid-svg-icons/faNoteSticky';
-import { faNotEqual } from '@fortawesome/free-solid-svg-icons/faNotEqual';
 import { faPalette } from '@fortawesome/free-solid-svg-icons/faPalette';
 import { faPaperPlane } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
 import { faPictureInPicture } from '@fortawesome/free-solid-svg-icons/faPictureInPicture';
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
+import { faPlusMinus } from '@fortawesome/free-solid-svg-icons/faPlusMinus';
 import { faReply } from '@fortawesome/free-solid-svg-icons/faReply';
 import { faRightFromBracket } from '@fortawesome/free-solid-svg-icons/faRightFromBracket';
 import { faRightToBracket } from '@fortawesome/free-solid-svg-icons/faRightToBracket';
@@ -220,13 +220,13 @@ const icons = {
   microphone: faMicrophone,
   minus: faMinus,
   'note-sticky': faNoteSticky,
-  'not-equal': faNotEqual,
   palette: faPalette,
   'paper-plane': faPaperPlane,
   pencil: faPencil,
   'picture-in-picture': faPictureInPicture,
   play: faPlay,
   plus: faPlus,
+  'plus-minus': faPlusMinus,
   reply: faReply,
   'right-from-bracket': faRightFromBracket,
   'right-to-bracket': faRightToBracket,
@@ -282,8 +282,10 @@ const CODICON_ALIASES = {
   'device-camera-video': 'video',
   diff: 'code-compare',
   'diff-added': 'plus',
-  'diff-multiple': 'not-equal',
-  'diff-single': 'not-equal',
+  // latexdiff marks additions/deletions — ± reads as that markup, where the
+  // previous not-equal (≠) glyph read as a math comparison.
+  'diff-multiple': 'plus-minus',
+  'diff-single': 'plus-minus',
   discard: 'arrow-rotate-left',
   edit: 'pencil',
   error: 'circle-exclamation',
