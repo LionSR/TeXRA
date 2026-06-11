@@ -25,6 +25,7 @@ import { CLI_OAUTH_PROVIDER_INPUTS } from '../runtime/oauthProviderDisplay';
 import {
   formatCliManualAuthUrlMessage,
   getCliAuthProfile,
+  getCliSessionAccessToken,
   relayTokenStillActiveNotice,
   signInCliSupabase,
   signInCliSupabaseDeviceCode,
@@ -318,13 +319,16 @@ const usageCommand = defineCliCommand({
     try {
       await initCliPlatform({ ...context, quietLogs: true });
       const profile = await getCliAuthProfile();
-      if (!profile.authenticated) {
-        writeTextStderr('Not signed in. Run `texra login` first.');
-        return CliExitCode.ModelOrNetworkError;
-      }
-      if (profile.credentialSource === 'relayToken') {
+      // Usage reads usage_logs via PostgREST, which needs a GoTrue session —
+      // a relay-scoped CI token cannot read it. Gate on the session itself so
+      // a developer with both an env token and an interactive sign-in still
+      // gets their usage.
+      const sessionToken = await getCliSessionAccessToken();
+      if (!sessionToken) {
         writeTextStderr(
-          '`texra auth usage` requires an interactive TeXRA session. Run `texra login`, or inspect relay spending from the account dashboard.',
+          profile.credentialSource === 'relayToken'
+            ? '`texra auth usage` requires an interactive TeXRA session (a CI relay token cannot read usage). Run `texra login`, or inspect relay spending from the account dashboard.'
+            : 'Not signed in. Run `texra login` first.',
         );
         return CliExitCode.ModelOrNetworkError;
       }

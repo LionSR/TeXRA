@@ -4,7 +4,7 @@ import {
   RELAY_CI_TOKEN_PREFIX,
   RELAY_TOKEN_ENV_VAR,
   fetchRelayTokenStatus,
-  fetchRelayTokenTier,
+  getCachedRelayTokenState,
   getConfiguredRelayToken,
   resetRelayTokenTierCacheForTests,
 } from '@auth/relayToken';
@@ -74,50 +74,63 @@ describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
     ).toBe(TOKEN);
   });
 
-  it('resolves the owning tier via tier-config and caches it', async () => {
+  it('resolves the owning tier via tier-config and caches the result', async () => {
     const { fetchImpl, calls } = singleFetch(
       jsonResponse({ userStatus: { tier: 'Ultra', isExpired: false } }),
     );
-    expect(await fetchRelayTokenTier(TOKEN, fetchImpl)).toBe('Ultra');
-    expect(await fetchRelayTokenTier(TOKEN, fetchImpl)).toBe('Ultra');
+    expect(await fetchRelayTokenStatus(TOKEN, fetchImpl)).toEqual({
+      state: 'valid',
+      tier: 'Ultra',
+    });
+    expect(await fetchRelayTokenStatus(TOKEN, fetchImpl)).toEqual({
+      state: 'valid',
+      tier: 'Ultra',
+    });
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toMatch(/\/relay\/tier-config$/);
     expect(calls[0].headers.get('Authorization')).toBe(`Bearer ${TOKEN}`);
-  });
-
-  it('falls back to free tier when the lookup fails', async () => {
-    const { fetchImpl } = singleFetch(jsonResponse({ error: 'nope' }, 401));
-    expect(await fetchRelayTokenTier(TOKEN, fetchImpl)).toBe('free');
+    expect(getCachedRelayTokenState(TOKEN)).toBe('valid');
   });
 
   it('distinguishes a rejected token from an unverifiable one', async () => {
+    // Settled (valid/invalid) results cache per token, so each sub-case
+    // probes a distinct token value.
+
     // Server answered without userStatus: the credential was not recognized
     // (tier-config falls back to the public config for bad credentials).
     const publicConfig = singleFetch(jsonResponse({ tiers: {} }));
-    expect(await fetchRelayTokenStatus(TOKEN, publicConfig.fetchImpl)).toEqual({
-      state: 'invalid',
-    });
+    expect(
+      await fetchRelayTokenStatus(`${TOKEN}1`, publicConfig.fetchImpl),
+    ).toEqual({ state: 'invalid' });
     const unauthorized = singleFetch(jsonResponse({ error: 'nope' }, 401));
-    expect(await fetchRelayTokenStatus(TOKEN, unauthorized.fetchImpl)).toEqual({
-      state: 'invalid',
-    });
+    expect(
+      await fetchRelayTokenStatus(`${TOKEN}2`, unauthorized.fetchImpl),
+    ).toEqual({ state: 'invalid' });
 
-    // The check itself failed: the token may still be fine.
+    // The check itself failed: the token may still be fine, so the result
+    // is not cached and synchronous checks see no settled state.
     const offline = ((): Promise<Response> =>
       Promise.reject(new Error('socket hang up'))) as unknown as typeof fetch;
-    expect(await fetchRelayTokenStatus(TOKEN, offline)).toEqual({
+    expect(await fetchRelayTokenStatus(`${TOKEN}3`, offline)).toEqual({
       state: 'unknown',
     });
+    expect(getCachedRelayTokenState(`${TOKEN}3`)).toBeUndefined();
     const serverError = singleFetch(jsonResponse({ error: 'boom' }, 503));
-    expect(await fetchRelayTokenStatus(TOKEN, serverError.fetchImpl)).toEqual({
-      state: 'unknown',
-    });
+    expect(
+      await fetchRelayTokenStatus(`${TOKEN}4`, serverError.fetchImpl),
+    ).toEqual({ state: 'unknown' });
+  });
 
-    const valid = singleFetch(jsonResponse({ userStatus: { tier: 'Max' } }));
-    expect(await fetchRelayTokenStatus(TOKEN, valid.fetchImpl)).toEqual({
-      state: 'valid',
-      tier: 'Max',
+  it('caches a rejection so synchronous credential checks can see it', async () => {
+    const { fetchImpl, calls } = singleFetch(jsonResponse({ tiers: {} }));
+    expect(await fetchRelayTokenStatus(TOKEN, fetchImpl)).toEqual({
+      state: 'invalid',
     });
+    expect(await fetchRelayTokenStatus(TOKEN, fetchImpl)).toEqual({
+      state: 'invalid',
+    });
+    expect(calls).toHaveLength(1);
+    expect(getCachedRelayTokenState(TOKEN)).toBe('invalid');
   });
 
   it('warns on logout that a configured relay token stays active', () => {

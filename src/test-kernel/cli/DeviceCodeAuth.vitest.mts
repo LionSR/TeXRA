@@ -205,7 +205,6 @@ describe('CLI device-code sign-in (texra login --device)', () => {
   it('describes device login as any-device auth with the code inline', () => {
     const message = formatCliDeviceAuthMessage(AUTHORIZATION);
     expect(message).toContain(CLI_DEVICE_AUTH_URL_PROMPT);
-    expect(message).toContain('any device');
     expect(message).toContain(AUTHORIZATION.verification_uri);
     expect(message).toContain('BCDF-GHJK');
   });

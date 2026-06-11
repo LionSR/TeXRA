@@ -65,26 +65,72 @@ export type RelayTokenStatus =
   | { readonly state: 'invalid' }
   | { readonly state: 'unknown' };
 
-let cachedTier: { token: string; tier: UserTier; timestamp: number } | null =
-  null;
+/** Settled (non-`unknown`) statuses are cached; `unknown` is always re-probed. */
+type SettledRelayTokenStatus = Exclude<RelayTokenStatus, { state: 'unknown' }>;
 
-/** Reset the tier cache between unit tests. */
+let cachedStatus: {
+  token: string;
+  result: SettledRelayTokenStatus;
+  timestamp: number;
+} | null = null;
+
+/** Reset the status cache between unit tests. */
 export function resetRelayTokenTierCacheForTests(): void {
-  cachedTier = null;
+  cachedStatus = null;
 }
 
-/** Check the validity and tier of a CI relay token (valid results cached). */
+/**
+ * Last settled status of a token, without any network I/O. Lets synchronous
+ * credential checks (SupabaseClient.isAuthenticated / getRelayAccessToken)
+ * agree with the async surfaces that probed the server, while staying
+ * deterministic and offline-safe when nothing has probed yet.
+ */
+export function getCachedRelayTokenState(
+  token: string,
+): SettledRelayTokenStatus['state'] | undefined {
+  if (
+    cachedStatus &&
+    cachedStatus.token === token &&
+    Date.now() - cachedStatus.timestamp < SERVER_SIDE_CACHE_TTL_MS
+  ) {
+    return cachedStatus.result.state;
+  }
+  return undefined;
+}
+
+/**
+ * Record that the relay rejected this token with a 401 — authoritative
+ * evidence equivalent to a probed `invalid`, so every credential check
+ * (auth status, isAuthenticated, relay-call fallback) agrees immediately
+ * instead of waiting out the cache TTL.
+ */
+export function markRelayTokenRejected(token: string): void {
+  cachedStatus = { token, result: { state: 'invalid' }, timestamp: Date.now() };
+}
+
+/** Check the validity and tier of a CI relay token (settled results cached). */
 export async function fetchRelayTokenStatus(
   token: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<RelayTokenStatus> {
   if (
-    cachedTier &&
-    cachedTier.token === token &&
-    Date.now() - cachedTier.timestamp < SERVER_SIDE_CACHE_TTL_MS
+    cachedStatus &&
+    cachedStatus.token === token &&
+    Date.now() - cachedStatus.timestamp < SERVER_SIDE_CACHE_TTL_MS
   ) {
-    return { state: 'valid', tier: cachedTier.tier };
+    return cachedStatus.result;
   }
+  const result = await probeRelayTokenStatus(token, fetchImpl);
+  if (result.state !== 'unknown') {
+    cachedStatus = { token, result, timestamp: Date.now() };
+  }
+  return result;
+}
+
+async function probeRelayTokenStatus(
+  token: string,
+  fetchImpl: typeof fetch,
+): Promise<RelayTokenStatus> {
   try {
     const response = await fetchWithTimeout(
       RELAY_TIER_CONFIG_URL,
@@ -102,23 +148,8 @@ export async function fetchRelayTokenStatus(
     // tier-config returns the public config without userStatus when the
     // presented credential is not recognized (expired, revoked, malformed).
     if (!parsed.data.userStatus) return { state: 'invalid' };
-    const tier = parsed.data.userStatus.tier;
-    cachedTier = { token, tier, timestamp: Date.now() };
-    return { state: 'valid', tier };
+    return { state: 'valid', tier: parsed.data.userStatus.tier };
   } catch {
     return { state: 'unknown' };
   }
-}
-
-/**
- * Tier of the user owning a CI relay token, for model gating. Falls back to
- * 'free' whenever the token can't be verified so gating stays conservative
- * rather than blocking startup.
- */
-export async function fetchRelayTokenTier(
-  token: string,
-  fetchImpl: typeof fetch = fetch,
-): Promise<UserTier> {
-  const status = await fetchRelayTokenStatus(token, fetchImpl);
-  return status.state === 'valid' ? status.tier : 'free';
 }

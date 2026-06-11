@@ -241,28 +241,37 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
   // state the relay will 401. When the check itself fails (offline), stay
   // optimistic but say the token could not be verified.
   const relayToken = getConfiguredRelayToken();
+  let rejectedTokenNote: string | undefined;
   if (relayToken) {
     const status = await fetchRelayTokenStatus(relayToken);
     if (status.state === 'invalid') {
+      // A rejected token behaves as if unset: fall through to the stored
+      // session (which may still be valid), keeping a note that explains
+      // why relay calls won't use the configured token.
+      rejectedTokenNote = `${RELAY_TOKEN_ENV_VAR} is set but the server rejected it (expired or revoked). Mint a new token with \`texra setup-token\`.`;
+    } else {
       return {
-        authenticated: false,
+        authenticated: true,
         credentialSource: 'relayToken',
-        note: `${RELAY_TOKEN_ENV_VAR} is set but the server rejected it (expired or revoked). Mint a new token with \`texra setup-token\`.`,
+        accountLabel: `CI relay token (${RELAY_TOKEN_ENV_VAR})`,
+        tier: status.state === 'valid' ? status.tier : 'free',
+        ...(status.state === 'unknown' && {
+          note: 'Could not verify the CI relay token right now (network error).',
+        }),
       };
     }
-    return {
-      authenticated: true,
-      credentialSource: 'relayToken',
-      accountLabel: `CI relay token (${RELAY_TOKEN_ENV_VAR})`,
-      tier: status.state === 'valid' ? status.tier : 'free',
-      ...(status.state === 'unknown' && {
-        note: 'Could not verify the CI relay token right now (network error).',
-      }),
-    };
   }
 
   const authenticated = await SupabaseClient.isAuthenticated();
-  if (!authenticated) return { authenticated: false };
+  if (!authenticated) {
+    return {
+      authenticated: false,
+      ...(rejectedTokenNote && {
+        credentialSource: 'relayToken' as const,
+        note: rejectedTokenNote,
+      }),
+    };
+  }
 
   const session = await getCliSupabaseAuthCoordinator().loadSession();
   let tier = 'free';
@@ -277,5 +286,6 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
     accountLabel: session?.account.label,
     tier,
     expiresAt: session ? new Date(session.expiresAt).toISOString() : undefined,
+    ...(rejectedTokenNote && { note: rejectedTokenNote }),
   };
 }

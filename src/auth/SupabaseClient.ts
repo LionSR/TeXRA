@@ -11,7 +11,12 @@ import {
   UserAuthContextSchema,
   TOKEN_REFRESH_THRESHOLD_MS,
 } from './config';
-import { fetchRelayTokenTier, getConfiguredRelayToken } from './relayToken';
+import {
+  fetchRelayTokenStatus,
+  getCachedRelayTokenState,
+  getConfiguredRelayToken,
+  markRelayTokenRejected,
+} from './relayToken';
 import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
 
 /**
@@ -176,7 +181,22 @@ export class SupabaseClient {
     forceRefresh?: boolean,
   ): Promise<string | null> {
     const relayToken = getConfiguredRelayToken();
-    if (relayToken) return relayToken;
+    if (relayToken) {
+      if (forceRefresh) {
+        // forceRefresh is only set by the relay-401 recovery path, and with
+        // a CI token configured that token was the presented credential — so
+        // the 401 is authoritative evidence it was rejected. A static token
+        // cannot be refreshed; record the rejection (all credential checks
+        // then agree) and fall back to the session, which can be.
+        markRelayTokenRejected(relayToken);
+      } else if (getCachedRelayTokenState(relayToken) !== 'invalid') {
+        // Skip a token the server has already rejected (status observed by
+        // an earlier async check) — a stored session may still authenticate
+        // the call. Cache-only on purpose: this sits on the model-call path
+        // and must not add a probe of its own.
+        return relayToken;
+      }
+    }
     return this.getAccessToken(forceRefresh);
   }
 
@@ -242,7 +262,15 @@ export class SupabaseClient {
     // owning user's tier — the only profile surface a relay-scoped token has.
     const relayToken = getConfiguredRelayToken();
     if (relayToken) {
-      return { permissions: [], tier: await fetchRelayTokenTier(relayToken) };
+      const status = await fetchRelayTokenStatus(relayToken);
+      // A rejected token behaves as if unset (a stored session may still
+      // provide the context); an unverifiable one gates conservatively.
+      if (status.state !== 'invalid') {
+        return {
+          permissions: [],
+          tier: status.state === 'valid' ? status.tier : 'free',
+        };
+      }
     }
 
     const tokens = await this.getSessionTokens();
@@ -292,7 +320,14 @@ export class SupabaseClient {
    * Check if user is authenticated.
    */
   static async isAuthenticated(): Promise<boolean> {
-    if (getConfiguredRelayToken()) return true;
+    // A configured CI relay token counts unless the server has already
+    // rejected it (status observed by an earlier async check); a known-bad
+    // token falls through to the stored session. Cache-only on purpose so
+    // this stays cheap and offline-safe.
+    const relayToken = getConfiguredRelayToken();
+    if (relayToken && getCachedRelayTokenState(relayToken) !== 'invalid') {
+      return true;
+    }
     const token = await this.getAccessToken();
     return token !== null;
   }
