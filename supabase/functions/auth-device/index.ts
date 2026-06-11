@@ -459,7 +459,9 @@ function verifyPageHtml(
   // Static page: sign in with the normal Supabase OAuth web flow (redirecting
   // back here, keeping ?device_code= through the round trip), then approve or
   // deny the code with the signed-in user's JWT. Supabase owns ?code= for the
-  // OAuth PKCE callback, so the device user code must use a distinct query key.
+  // OAuth PKCE callback, so the device user code must use a distinct query
+  // key. Despite the name, ?device_code= carries the short DISPLAY code the
+  // user enters (XXXX-XXXX), never the high-entropy device-code secret.
   return `<!doctype html>
 <html lang="en">
 <head>

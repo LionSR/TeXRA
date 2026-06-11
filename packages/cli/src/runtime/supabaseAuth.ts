@@ -13,7 +13,7 @@ import {
 import { type OAuthProvider } from '@auth/sharedConfig';
 import {
   RELAY_TOKEN_ENV_VAR,
-  fetchRelayTokenTier,
+  fetchRelayTokenStatus,
   getConfiguredRelayToken,
 } from '@auth/relayToken';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -49,6 +49,8 @@ export interface CliAuthProfile {
   accountLabel?: string;
   tier?: string;
   expiresAt?: string;
+  /** Extra status context, e.g. a rejected or unverifiable CI relay token. */
+  note?: string;
 }
 
 export interface CliLoginOptions {
@@ -197,7 +199,13 @@ export async function signOutCliSupabase(): Promise<void> {
   const authCoordinator = getCliSupabaseAuthCoordinator();
   await authCoordinator.clearSession();
   const serverSideKeyService = getServerSideKeyService();
-  await serverSideKeyService.setUseIncludedModelAccess(false);
+  // A configured TEXRA_RELAY_TOKEN keeps authenticating relay calls after
+  // the session is gone (see relayTokenStillActiveNotice), so leave included
+  // access enabled — disabling it would contradict the credential that
+  // remains and silently break relay access for CI environments.
+  if (!getConfiguredRelayToken()) {
+    await serverSideKeyService.setUseIncludedModelAccess(false);
+  }
   serverSideKeyService.clearAllCaches({ resetQuotaFlip: true });
 }
 
@@ -228,14 +236,28 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
 
   // A configured CI relay token authenticates relay calls without a session;
   // report it as the active credential so `texra auth status` / `texra
-  // doctor` explain where access is coming from.
+  // doctor` explain where access is coming from. Verify it first: a token
+  // the server has rejected (expired, revoked) must not report a signed-in
+  // state the relay will 401. When the check itself fails (offline), stay
+  // optimistic but say the token could not be verified.
   const relayToken = getConfiguredRelayToken();
   if (relayToken) {
+    const status = await fetchRelayTokenStatus(relayToken);
+    if (status.state === 'invalid') {
+      return {
+        authenticated: false,
+        credentialSource: 'relayToken',
+        note: `${RELAY_TOKEN_ENV_VAR} is set but the server rejected it (expired or revoked). Mint a new token with \`texra setup-token\`.`,
+      };
+    }
     return {
       authenticated: true,
       credentialSource: 'relayToken',
       accountLabel: `CI relay token (${RELAY_TOKEN_ENV_VAR})`,
-      tier: await fetchRelayTokenTier(relayToken),
+      tier: status.state === 'valid' ? status.tier : 'free',
+      ...(status.state === 'unknown' && {
+        note: 'Could not verify the CI relay token right now (network error).',
+      }),
     };
   }
 

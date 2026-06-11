@@ -281,9 +281,12 @@ const authStatusCommand = defineCliCommand({
     emitCliResult(context, {
       json: profile,
       ndjson: { kind: 'auth-status', ...profile },
-      text: profile.authenticated
-        ? `Signed in as ${profile.accountLabel || 'unknown'} (${profile.tier ?? 'unknown'}).`
-        : 'Not signed in.',
+      text: [
+        profile.authenticated
+          ? `Signed in as ${profile.accountLabel || 'unknown'} (${profile.tier ?? 'unknown'}).`
+          : 'Not signed in.',
+        ...(profile.note ? [profile.note] : []),
+      ].join('\n'),
     });
     return CliExitCode.Success;
   },

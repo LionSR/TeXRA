@@ -21,7 +21,14 @@ import { fetchWithTimeout } from './fetchWithTimeout';
 
 export const RELAY_TOKEN_ENV_VAR = 'TEXRA_RELAY_TOKEN';
 
-/** Token format minted by the relay-tokens edge function. */
+/**
+ * Token format minted by the relay-tokens edge function.
+ *
+ * CROSS-REFERENCE: this exact prefix is duplicated in
+ * supabase/functions/_shared/relayCiToken.ts — Deno edge functions cannot
+ * import this source file, so the two definitions must be kept in sync
+ * manually or minted tokens silently stop authenticating.
+ */
 export const RELAY_CI_TOKEN_PREFIX = 'texra_relay_';
 
 const TIER_FETCH_TIMEOUT_MS = 30000;
@@ -46,6 +53,18 @@ const TierConfigUserStatusSchema = z.object({
     .nullish(),
 });
 
+/**
+ * Validity of a configured CI relay token as observed via the relay's
+ * tier-config endpoint — the only profile surface a relay-scoped token can
+ * reach. `invalid` means the server answered and did not recognize the
+ * credential (expired, revoked, or never minted); `unknown` means the check
+ * itself failed (offline, 5xx) and the token may still be fine.
+ */
+export type RelayTokenStatus =
+  | { readonly state: 'valid'; readonly tier: UserTier }
+  | { readonly state: 'invalid' }
+  | { readonly state: 'unknown' };
+
 let cachedTier: { token: string; tier: UserTier; timestamp: number } | null =
   null;
 
@@ -54,22 +73,17 @@ export function resetRelayTokenTierCacheForTests(): void {
   cachedTier = null;
 }
 
-/**
- * Resolve the tier of the user owning a CI relay token via the relay's
- * tier-config endpoint (the only profile surface a relay-scoped token can
- * reach). Falls back to 'free' on any failure so model gating stays
- * conservative rather than blocking startup.
- */
-export async function fetchRelayTokenTier(
+/** Check the validity and tier of a CI relay token (valid results cached). */
+export async function fetchRelayTokenStatus(
   token: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<UserTier> {
+): Promise<RelayTokenStatus> {
   if (
     cachedTier &&
     cachedTier.token === token &&
     Date.now() - cachedTier.timestamp < SERVER_SIDE_CACHE_TTL_MS
   ) {
-    return cachedTier.tier;
+    return { state: 'valid', tier: cachedTier.tier };
   }
   try {
     const response = await fetchWithTimeout(
@@ -79,14 +93,32 @@ export async function fetchRelayTokenTier(
       'Tier lookup timed out',
       fetchImpl,
     );
-    if (!response.ok) return 'free';
+    if (response.status === 401 || response.status === 403) {
+      return { state: 'invalid' };
+    }
+    if (!response.ok) return { state: 'unknown' };
     const parsed = TierConfigUserStatusSchema.safeParse(await response.json());
-    const tier = parsed.success
-      ? (parsed.data.userStatus?.tier ?? 'free')
-      : 'free';
+    if (!parsed.success) return { state: 'unknown' };
+    // tier-config returns the public config without userStatus when the
+    // presented credential is not recognized (expired, revoked, malformed).
+    if (!parsed.data.userStatus) return { state: 'invalid' };
+    const tier = parsed.data.userStatus.tier;
     cachedTier = { token, tier, timestamp: Date.now() };
-    return tier;
+    return { state: 'valid', tier };
   } catch {
-    return 'free';
+    return { state: 'unknown' };
   }
+}
+
+/**
+ * Tier of the user owning a CI relay token, for model gating. Falls back to
+ * 'free' whenever the token can't be verified so gating stays conservative
+ * rather than blocking startup.
+ */
+export async function fetchRelayTokenTier(
+  token: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<UserTier> {
+  const status = await fetchRelayTokenStatus(token, fetchImpl);
+  return status.state === 'valid' ? status.tier : 'free';
 }

@@ -716,15 +716,17 @@ async function loginFromChat(input: string): Promise<void> {
 async function logoutFromChat(): Promise<void> {
   try {
     await signOutCliSupabase();
-    setCliSessionApiMode('personal');
     // Sign-out only clears the stored session; a configured TEXRA_RELAY_TOKEN
-    // keeps authenticating relay calls, so report it instead of a clean exit.
+    // keeps authenticating relay calls, so report it — and keep the session
+    // in included mode so the notice matches what actually happens.
     const relayNotice = relayTokenStillActiveNotice();
+    const apiMode = relayNotice ? 'included' : 'personal';
+    setCliSessionApiMode(apiMode);
     appendLocalAssistantTranscript(
       [
         'Signed out.',
         ...(relayNotice ? [relayNotice] : []),
-        ...(await loadCliApiStatusLines({ apiMode: 'personal' })),
+        ...(await loadCliApiStatusLines({ apiMode })),
       ].join('\n'),
     );
   } catch (error: unknown) {

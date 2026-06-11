@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   RELAY_CI_TOKEN_PREFIX,
   RELAY_TOKEN_ENV_VAR,
+  fetchRelayTokenStatus,
   fetchRelayTokenTier,
   getConfiguredRelayToken,
   resetRelayTokenTierCacheForTests,
@@ -87,6 +88,36 @@ describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
   it('falls back to free tier when the lookup fails', async () => {
     const { fetchImpl } = singleFetch(jsonResponse({ error: 'nope' }, 401));
     expect(await fetchRelayTokenTier(TOKEN, fetchImpl)).toBe('free');
+  });
+
+  it('distinguishes a rejected token from an unverifiable one', async () => {
+    // Server answered without userStatus: the credential was not recognized
+    // (tier-config falls back to the public config for bad credentials).
+    const publicConfig = singleFetch(jsonResponse({ tiers: {} }));
+    expect(await fetchRelayTokenStatus(TOKEN, publicConfig.fetchImpl)).toEqual({
+      state: 'invalid',
+    });
+    const unauthorized = singleFetch(jsonResponse({ error: 'nope' }, 401));
+    expect(await fetchRelayTokenStatus(TOKEN, unauthorized.fetchImpl)).toEqual({
+      state: 'invalid',
+    });
+
+    // The check itself failed: the token may still be fine.
+    const offline = ((): Promise<Response> =>
+      Promise.reject(new Error('socket hang up'))) as unknown as typeof fetch;
+    expect(await fetchRelayTokenStatus(TOKEN, offline)).toEqual({
+      state: 'unknown',
+    });
+    const serverError = singleFetch(jsonResponse({ error: 'boom' }, 503));
+    expect(await fetchRelayTokenStatus(TOKEN, serverError.fetchImpl)).toEqual({
+      state: 'unknown',
+    });
+
+    const valid = singleFetch(jsonResponse({ userStatus: { tier: 'Max' } }));
+    expect(await fetchRelayTokenStatus(TOKEN, valid.fetchImpl)).toEqual({
+      state: 'valid',
+      tier: 'Max',
+    });
   });
 
   it('warns on logout that a configured relay token stays active', () => {

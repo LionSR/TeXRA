@@ -11,6 +11,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { authenticateJwt } from './auth.ts';
 
+/**
+ * CROSS-REFERENCE: this exact prefix is duplicated in src/auth/relayToken.ts
+ * — Deno edge functions cannot share source with the clients, so the two
+ * definitions must be kept in sync manually or minted tokens silently stop
+ * authenticating.
+ */
 export const RELAY_CI_TOKEN_PREFIX = 'texra_relay_';
 
 /** Refresh last_used_at at most this often to avoid per-request writes. */
