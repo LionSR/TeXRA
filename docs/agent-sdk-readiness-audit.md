@@ -1602,8 +1602,10 @@ openai/openAIChatHelpers,openrouter/openRouterStreaming}.ts` carve message/strea
   thesis: an agent identity change landed as a YAML/prompt + alias-migration concern (`bda1dc5`,
   `073097c`, `2403176`), zero new agent-type code.
 - **Guardrails intact:** `git diff --name-status` over the audited dirs shows **no new
-  `index.ts` barrel and no new run-entry wrapper**; `@texra/core` is still the curated 13-export
-  barrel (no `corePackageReady` stub); `src/agent`/`src/model`/`src/latex`/`src/tools` remain
+  `index.ts` barrel and no new run-entry wrapper**; `@texra/core` is still the curated host-neutral
+  barrel (8 labeled sections, ~40 symbols over 12 `export` statements, no `corePackageReady` stub —
+  the bare "13-export" count carried since §14 was stale and is dropped here for the stable
+  section-based descriptor §9 used); `src/agent`/`src/model`/`src/latex`/`src/tools` remain
   **`vscode`-free** (grep clean).
 
 ### Step-7 plumbing advanced again by the drift (no action; ledger update)
