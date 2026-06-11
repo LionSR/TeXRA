@@ -285,6 +285,10 @@ class AgentReviewServiceImpl {
         agent: REVIEW_AGENT,
         instruction,
         displayInstruction: `Agent review: diff with ${baseDescription} (${changedFiles.length} file${changedFiles.length === 1 ? '' : 's'})`,
+        // The instruction's paths are repo-relative; anchor the session's
+        // tool calls (read_file, grep, bash) to the repository root, which
+        // may sit above the opened workspace folder.
+        workingDirectory: repoRoot,
         ...(model ? { model } : {}),
       });
 
@@ -476,6 +480,8 @@ class AgentReviewServiceImpl {
       await vscode.commands.executeCommand('texra.execute', {
         agent: FIX_AGENT,
         instruction,
+        // Issue paths are relative to the reviewed repository root.
+        ...(this.reviewRoot ? { workingDirectory: this.reviewRoot } : {}),
       });
     } catch (err) {
       await showLoggedErrorMessage(
