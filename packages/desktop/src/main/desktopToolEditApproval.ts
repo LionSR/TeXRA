@@ -27,6 +27,7 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 export interface DesktopToolEditApprovalOptions {
   runtimeHost: AgentRuntimeHost;
@@ -252,7 +253,10 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     requestId: string,
     entry: DesktopPendingToolEditApproval,
   ): Promise<void> {
-    const appliedContent = await readFile(entry.proposedUri.fsPath, 'utf8');
+    // Normalize: this read bypasses BaseFS so may contain CRLF.
+    const appliedContent = normalizeLineEndings(
+      await readFile(entry.proposedUri.fsPath, 'utf8'),
+    );
     this.settle(requestId, { accepted: true, appliedContent });
   }
 
