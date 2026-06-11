@@ -18,7 +18,7 @@ import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceSt
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
-import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
+import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import {
   getSdkErrorMessage,
   isMissingFinishReasonError,
