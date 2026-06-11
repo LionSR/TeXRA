@@ -18,7 +18,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
-import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
+import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import {
   detectStatusCode,
   getSdkErrorMessage,

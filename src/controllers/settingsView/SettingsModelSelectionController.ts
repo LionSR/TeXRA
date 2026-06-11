@@ -6,7 +6,7 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import { LEVEL_TO_EFFORT } from '@agent/runtime/reasoningEffort';
+import { LEVEL_TO_EFFORT } from '@agent/modelHandlers/support/reasoningEffort';
 import { FREE_TIER, MAX_TIER } from '@auth/sharedConfig';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { isGpt5ModelName } from '@model/modelNames';
