@@ -340,11 +340,11 @@ async function includedAccessRequiresLogin(
   options: CliModelAccessListOptions,
 ): Promise<boolean> {
   if (options.apiMode !== 'included') return false;
-  try {
-    return !(await getCliAuthProvider().isAuthenticated());
-  } catch {
-    return true;
-  }
+  // An auth-state read failure means we can't prove a session, so require login.
+  const authenticated = await getCliAuthProvider()
+    .isAuthenticated()
+    .catch(() => false);
+  return !authenticated;
 }
 
 export async function getCliModelAccessList(

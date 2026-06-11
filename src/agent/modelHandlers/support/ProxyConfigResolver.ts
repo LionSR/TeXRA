@@ -1,6 +1,7 @@
 import { ModelProvider } from 'llm-zoo';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
+import { tryParseUrl } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import {
   getProviderEndpoint,
@@ -22,12 +23,9 @@ function normalizeUrl(input: string): string {
   if (!input) return '';
 
   const withProtocol = input.includes('://') ? input : `https://${input}`;
-  try {
-    const { host, pathname } = new URL(withProtocol);
-    return `${host}${pathname}`.replace(/\/+$/, '');
-  } catch {
-    return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-  }
+  const parsed = tryParseUrl(withProtocol);
+  if (!parsed) return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '');
 }
 
 const PROXY_PATHS: Partial<Record<ModelProvider, string>> = {

@@ -62,43 +62,37 @@ async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
 }
 
 async function loadUserDefaults(): Promise<PartialDefaults> {
-  try {
-    return defaultsFromConfigValues(
-      parseCliConfigValues(
-        await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME),
-      ),
-    );
-  } catch {
-    return {};
-  }
+  // A missing or corrupt user config means no user defaults:
+  // parseCliConfigValues maps the undefined fallback to {}.
+  const raw: unknown = await GlobalStorageFS.readJson(
+    TEXRA_CONFIG_FILE_NAME,
+  ).catch(() => undefined);
+  return defaultsFromConfigValues(parseCliConfigValues(raw));
 }
 
 async function loadHistoryDefaults(): Promise<PartialDefaults> {
-  try {
-    const entries = await listExecutions();
-    const candidates = entries
-      .filter(
-        (entry) =>
-          entry.agentConfig?.agentCategory === AgentCategory.ToolUse &&
-          // A multi-agent team run's root is an orchestrator agent, not a
-          // sensible default for a plain single-agent chat session.
-          !entry.agentConfig?.cliMultiAgentPresetId,
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-      );
-    const mostRecent = candidates[0];
-    if (!mostRecent?.agentConfig) return {};
-    return {
-      model: resolveConfiguredModel(
-        parseCliConfigValues({ model: mostRecent.agentConfig.model }),
-        'chat',
-      ),
-    };
-  } catch {
-    return {};
-  }
+  // An unreadable history listing means no history defaults.
+  const entries = await listExecutions().catch(() => []);
+  const candidates = entries
+    .filter(
+      (entry) =>
+        entry.agentConfig?.agentCategory === AgentCategory.ToolUse &&
+        // A multi-agent team run's root is an orchestrator agent, not a
+        // sensible default for a plain single-agent chat session.
+        !entry.agentConfig?.cliMultiAgentPresetId,
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
+  const mostRecent = candidates[0];
+  if (!mostRecent?.agentConfig) return {};
+  return {
+    model: resolveConfiguredModel(
+      parseCliConfigValues({ model: mostRecent.agentConfig.model }),
+      'chat',
+    ),
+  };
 }
 
 function deriveSource(sources: {
