@@ -7,6 +7,7 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -73,7 +74,9 @@ interface DesktopOnboardingIpcModule {
       onAsyncError?: (error: unknown) => void;
     },
   ): {
-    handleMessage(message: { command: string }): boolean;
+    handleMessage(
+      message: { command: string } & Record<string, unknown>,
+    ): boolean;
   };
 }
 
@@ -419,6 +422,18 @@ describe('desktop IPC adapters', () => {
     );
 
     expect(
+      onboarding.handleMessage({
+        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'main',
+      }),
+    ).toBe(false);
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      state: 'done',
+    });
+    postToRenderer.mockClear();
+
+    expect(
       onboarding.handleMessage({ command: 'desktop:requestOnboarding' }),
     ).toBe(true);
     expect(postToRenderer).toHaveBeenLastCalledWith({
@@ -450,6 +465,21 @@ describe('desktop IPC adapters', () => {
     expect(
       onboarding.handleMessage({ command: 'desktop:showOnboarding' }),
     ).toBe(false);
+
+    postToRenderer.mockClear();
+    expect(
+      onboarding.handleMessage({ command: MAIN_VIEW_COMMANDS.ONBOARDING_SKIP }),
+    ).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(update).toHaveBeenLastCalledWith(
+      GlobalStateKey.ONBOARDING_DECLINED,
+      true,
+    );
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      state: 'done',
+    });
   });
 
   it('serves desktop log snapshots and copy/export actions', async () => {
