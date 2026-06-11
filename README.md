@@ -9,7 +9,7 @@
 [![npm version](https://img.shields.io/npm/v/@texra-ai/cli?label=%40texra-ai%2Fcli)](https://www.npmjs.com/package/@texra-ai/cli)
 [![CLI downloads](https://img.shields.io/npm/dm/@texra-ai/cli?label=CLI%20downloads)](https://www.npmjs.com/package/@texra-ai/cli)
 
-A LaTeX research assistant for VS Code and the terminal. Multi-agent
+An AI theorist for VS Code and the terminal. Multi-agent
 workflows for writing, reviewing, formalizing, and rendering academic
 work — with every change returned as a diff you approve.
 

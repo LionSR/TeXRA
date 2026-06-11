@@ -1,4 +1,4 @@
-# Launching TeXRA: The AI Research Assistant That Understands LaTeX
+# Launching TeXRA: Your 24/7 AI Theorist
 
 **TL;DR**: We built specialized AI agents that live in VS Code and understand research workflows. TeXRA handles the LaTeX grunt work—notation fixes, TikZ compilation, parallel drafts, paper-to-slides conversion—while you stay in control.
 
