@@ -1,13 +1,9 @@
 import { z } from 'zod';
 
-import { isObject } from '@utils/core';
+import { isNonEmptyString, isObject } from '@utils/core';
 
 import { PlanSchema, type Plan } from './plan';
 import { TodoItemSchema } from './todo';
-
-function nonEmptyString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value : null;
-}
 
 function parsePlan(value: unknown): Plan | null {
   const result = PlanSchema.safeParse(value);
@@ -30,7 +26,7 @@ function normalizeWorkPlanSnapshot(input: unknown): unknown {
   const plan = parsePlan(record.plan);
   const planSummary = plan
     ? planSummaryLine(plan.objective)
-    : nonEmptyString(record.planSummary);
+    : isNonEmptyString(record.planSummary) ? record.planSummary : null;
 
   return {
     todos: record.todos,

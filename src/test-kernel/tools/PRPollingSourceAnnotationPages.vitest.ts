@@ -7,6 +7,9 @@ import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 // Local imports - tools
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 
+// Local imports - test support
+import { mockGitHubClient } from '../support/githubClientMock';
+
 interface AnnotationFetchSource {
   fetchAnnotations(
     owner: string,
@@ -67,28 +70,7 @@ async function createHarness(): Promise<{
 }> {
   vi.resetModules();
   const ghGet = vi.fn();
-  vi.doMock('@tools/github/githubClient', () => {
-    class GitHubAuthError extends Error {}
-    class GitHubRateLimitError extends Error {
-      constructor(public readonly resetAt: number) {
-        super('GitHub rate limit exceeded');
-      }
-    }
-    class GitHubPermanentError extends Error {
-      constructor(
-        public readonly status: number,
-        message: string,
-      ) {
-        super(message);
-      }
-    }
-    return {
-      ghGet,
-      GitHubAuthError,
-      GitHubRateLimitError,
-      GitHubPermanentError,
-    };
-  });
+  mockGitHubClient(ghGet);
   const { PRPollingSource } = await import('@tools/github/PRPollingSource');
   return {
     ghGet,
