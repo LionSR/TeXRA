@@ -170,6 +170,26 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(result.value.diff).toContain('+changed line');
   });
 
+  it('lists renamed files as concrete old and new paths', async () => {
+    await git('checkout', '-b', 'feature');
+    await git('mv', 'paper.tex', 'renamed.tex');
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: false,
+      includeSubmodules: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.changedFiles.toSorted()).toEqual([
+      'paper.tex',
+      'renamed.tex',
+    ]);
+    expect(isPathInChangeSet(result.value.changedFiles, 'renamed.tex')).toBe(
+      true,
+    );
+  });
+
   it('resolves the repository root when run from a subdirectory', async () => {
     await git('checkout', '-b', 'feature');
     await mkdir(path.join(repo, 'sub'));

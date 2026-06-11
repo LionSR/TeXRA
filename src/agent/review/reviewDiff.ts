@@ -317,9 +317,24 @@ export async function collectReviewDiff(
   const submoduleFlag = includeSubmodules
     ? '--submodule=diff'
     : '--ignore-submodules=all';
+  const renameFlag = '--no-renames';
   const [diffText, nameOnly, untracked] = await Promise.all([
-    git(repoRoot, ['diff', '--no-color', submoduleFlag, baseRef, '--']),
-    git(repoRoot, ['diff', '--name-only', submoduleFlag, baseRef, '--']),
+    git(repoRoot, [
+      'diff',
+      '--no-color',
+      renameFlag,
+      submoduleFlag,
+      baseRef,
+      '--',
+    ]),
+    git(repoRoot, [
+      'diff',
+      '--name-only',
+      renameFlag,
+      submoduleFlag,
+      baseRef,
+      '--',
+    ]),
     includeUntracked
       ? collectUntrackedDiffs(repoRoot)
       : Promise.resolve({ diff: '', files: [] }),
