@@ -14,7 +14,7 @@
  * sources and reads the flags below from its `platform().globalState`.
  */
 
-import { API_PROVIDERS, apiKeyExists } from '@model/apiProviders';
+import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import type { OnboardingFunnelState } from '@shared/schemas/onboarding';
@@ -172,7 +172,8 @@ export async function hasAnyProviderApiKey(
 ): Promise<boolean> {
   for (const provider of API_PROVIDERS) {
     // Sequential by design: stop at the first key found.
-    if (await apiKeyExists(secrets, provider)) return true;
+    const key = await lookupApiKey(secrets, provider);
+    if (typeof key === 'string' && key.trim().length > 0) return true;
   }
   return false;
 }
