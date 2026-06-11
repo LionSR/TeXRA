@@ -53,7 +53,10 @@ function watchRepository(
     const commit = head?.commit;
 
     if (name !== lastName) {
-      // Branch switch (or detach): re-baseline without reviewing.
+      // Branch switch (or detach): re-baseline without reviewing, and drop
+      // any review still pending from a commit on the previous branch.
+      if (debounce) clearTimeout(debounce);
+      debounce = undefined;
       lastName = name;
       lastCommit = commit;
       return;
