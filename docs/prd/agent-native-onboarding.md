@@ -107,6 +107,14 @@ surface) built from the pieces the CLI already has
 `firstRunDone` global flag set when any run completes or the setup
 agent hands off.
 
+**All three inputs are user-scoped** (global state / secrets — where
+the CLI already keeps credentials and the declined flag), never
+workspace-scoped. This is what keeps a veteran who opens a brand-new
+folder in State 2: onboarding is a fact about the _user_, and a fresh
+workspace must never demote them to State 0/1. Workspace facts (empty
+folder, no roster keys) shape only the project-bootstrap affordance
+below, never the funnel.
+
 ### State 0 — one card, two choices
 
 The extension/desktop launcher renders a single welcome card — a port
@@ -163,23 +171,48 @@ five walkthrough links, and a settings tab:
   just selected needs a key you don't have." The login banner survives
   only as a low-key upsell for BYOK users.
 
+### State 2 in a fresh folder — project bootstrap, not onboarding
+
+A user who finished setup and opens a new, empty folder is the
+_returning user_ case, and it must feel like starting a project, not
+starting over:
+
+- **No welcome card, no setup auto-start** — funnel state is
+  user-scoped (above), so they are in State 2 regardless of the
+  folder.
+- **Extension:** the `GettingStartedBanner` is demoted from a headed
+  five-link list to one slim, dismissible row, shown only when the
+  workspace has no LaTeX files (its existing trigger): _"Empty folder
+  — Sample project · Pull from Overleaf · Grab from arXiv — or just
+  ask below."_ The links are the existing commands; "ask below" works
+  because the default agent can do the same things conversationally.
+- **CLI:** `texra init` already is the per-project bootstrap (writes
+  the workspace config, picks default agent/model). The empty-dir
+  chat greeting mentions it; nothing new is built.
+- **Roster in the new workspace:** seeded from the user-level default
+  team (next section), so their discipline choice follows them into
+  every new project instead of resetting to a generic set.
+
 ---
 
 ## Dropdown hygiene (ships with the funnel, useful without it)
 
-1. **Curated starter roster, written as state.** On fresh install
-   (no `ENABLED_AGENTS`/`ENABLED_TOOL_USE_AGENTS` keys _and_ no run
-   history), activation writes a starter set into those keys:
-   - workflow: `correct`, `polish`
-   - tool-use: `chat`, `research`, `review`, `latexFixer`, `setup`
-     (plus the orchestrator entry once signed in)
+1. **Default team seeds new workspaces.** One user-scoped key —
+   the same `defaultTeamId` concept as the launcher PRD — written when
+   the setup agent's `apply_team` runs (a generic "starter" team if
+   the user skips the discipline question: workflow `correct`,
+   `polish`; tool-use `chat`, `research`, `review`, `latexFixer`,
+   `setup`, plus the orchestrator entry once signed in). When a
+   workspace has no `ENABLED_AGENTS`/`ENABLED_TOOL_USE_AGENTS` keys,
+   activation seeds them from the default team; **absent a default
+   team, behavior is unchanged** (`undefined → show all`).
 
-   `filterVisible`'s `undefined → show all` semantics are untouched,
-   so existing users see zero change, and Settings → Agents already
-   shows everything else as unchecked — discoverable and reversible
-   with shipped UI. The setup agent's `apply_team` overwrites this
-   roster when the user picks a discipline (acceptable: at that moment
-   nothing is hand-configured).
+   This replaces install-detection heuristics entirely: pre-existing
+   users have no default team, so no workspace ever shows them a
+   shrunken dropdown; post-setup users get their chosen roster in
+   every fresh folder. `filterVisible` semantics are untouched, and
+   Settings → Agents already shows non-roster agents as unchecked —
+   discoverable and reversible with shipped UI.
 
 2. **Human display names.** Optional `displayName:` on agent YAMLs
    (parsed in `agentYamlScanner.ts`, fallback to `name`), e.g.
@@ -256,10 +289,13 @@ mirrors it; this PRD's State 0 wording is the canonical text.
 
 - **Existing users:** upgraders keep `undefined → show all` visibility
   and never see the welcome card (they have credentials and/or run
-  history). Nobody's dropdown shrinks.
-- **Fresh-install detection:** absence of both enabled-agents state
-  keys _and_ run history. False negatives are harmless (user keeps
-  today's behavior).
+  history; `firstRunDone` is backfilled at migration when either
+  exists). Nobody's dropdown shrinks: roster seeding requires a
+  default team, which only setup writes.
+- **Finished setup, fresh folder:** State 2 (funnel state is
+  user-scoped); slim bootstrap row + default-team roster seeding (see
+  "State 2 in a fresh folder"). Never the welcome card or setup
+  auto-start.
 - **Skip:** the declined flag suppresses State 0 on subsequent
   launches (CLI behavior today, extended to the extension card's
   dismiss). `texra login` / the card-reachable settings remain the
@@ -280,29 +316,30 @@ mirrors it; this PRD's State 0 wording is the canonical text.
 
 ## Implementation surface
 
-| Concern                                  | Files                                                                                                                                                                     |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Funnel state derivation (host-neutral)   | new `src/controllers/onboarding/` module; lift `packages/cli/src/onboarding/onboardingState.ts` + `packages/cli/src/runtime/credentialStatus.ts` logic behind `@platform` |
-| Shared copy                              | new `src/shared/copy/onboarding.ts`; consume in `runOnboarding.tsx`, new welcome card, walkthrough source                                                                 |
-| Welcome card (extension/desktop)         | new component in `packages/extension/src/webview/frontend/components/`; visibility wiring in `BannerGroup.ts` / `MainApp.ts`                                              |
-| State 0 → 1 handoff                      | extension credential-changed event → select `setup` + kickoff; CLI post-picker continuation in `chat.ts` / `orchestrate.ts`                                               |
-| `apply_team` tool                        | new tool in `src/tools/`; preset application path exists in `SettingsAgentCatalogController.ts`                                                                           |
-| Starter roster + fresh-install detection | `agentRegistryConstants.ts` (`STARTER_AGENTS`), activation in `packages/extension/src/extension.ts` and CLI init                                                          |
-| `displayName`                            | `agentYamlScanner.ts`, `agentOptionsBuilder.ts`, `selectTemplates.ts`, agent YAMLs                                                                                        |
-| "Browse all agents…" tail item           | `selectTemplates.ts`, `InstructionPanel.ts`                                                                                                                               |
-| State 2 defaults                         | `agentRegistryConstants.ts` preferred lists (orchestrator/chat already first); default-selection logic in launcher controller                                             |
-| Vocabulary (`texra setup`)               | `packages/cli/src/commands/setup.ts`                                                                                                                                      |
-| Walkthrough rewrite                      | `packages/extension/resources/walkthroughs/getting-started.md`                                                                                                            |
-| Docs site                                | `docs/guide/quick-start.md`, `docs/guide/first-run.md`, `docs/guide/configuration.md`                                                                                     |
+| Concern                                                               | Files                                                                                                                                                                                |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Funnel state derivation (host-neutral)                                | new `src/controllers/onboarding/` module; lift `packages/cli/src/onboarding/onboardingState.ts` + `packages/cli/src/runtime/credentialStatus.ts` logic behind `@platform`            |
+| Shared copy                                                           | new `src/shared/copy/onboarding.ts`; consume in `runOnboarding.tsx`, new welcome card, walkthrough source                                                                            |
+| Welcome card (extension/desktop)                                      | new component in `packages/extension/src/webview/frontend/components/`; visibility wiring in `BannerGroup.ts` / `MainApp.ts`                                                         |
+| State 0 → 1 handoff                                                   | extension credential-changed event → select `setup` + kickoff; CLI post-picker continuation in `chat.ts` / `orchestrate.ts`                                                          |
+| `apply_team` tool (writes workspace roster + user-level default team) | new tool in `src/tools/`; preset application path exists in `SettingsAgentCatalogController.ts`                                                                                      |
+| Default-team seeding of fresh workspaces                              | user-scoped `defaultTeamId` key (shared with launcher PRD), starter team in `agentRegistryConstants.ts`, seeding at activation in `packages/extension/src/extension.ts` and CLI init |
+| Project-bootstrap row (empty folder, State 2)                         | `GettingStartedBanner.ts` slimmed; trigger condition unchanged                                                                                                                       |
+| `displayName`                                                         | `agentYamlScanner.ts`, `agentOptionsBuilder.ts`, `selectTemplates.ts`, agent YAMLs                                                                                                   |
+| "Browse all agents…" tail item                                        | `selectTemplates.ts`, `InstructionPanel.ts`                                                                                                                                          |
+| State 2 defaults                                                      | `agentRegistryConstants.ts` preferred lists (orchestrator/chat already first); default-selection logic in launcher controller                                                        |
+| Vocabulary (`texra setup`)                                            | `packages/cli/src/commands/setup.ts`                                                                                                                                                 |
+| Walkthrough rewrite                                                   | `packages/extension/resources/walkthroughs/getting-started.md`                                                                                                                       |
+| Docs site                                                             | `docs/guide/quick-start.md`, `docs/guide/first-run.md`, `docs/guide/configuration.md`                                                                                                |
 
 ### Suggested shipping order
 
-1. **Hygiene** (independent, zero-risk): starter roster,
-   `displayName`, "Browse all agents…".
+1. **Hygiene** (independent, zero-risk): `displayName`, "Browse all
+   agents…", slimmed bootstrap row.
 2. **State 0 on the extension**: shared copy module + welcome card
    replacing three banners; CLI unchanged.
 3. **State 1**: auto-start setup on credential arrival (both hosts),
-   `apply_team` tool, setup-prompt additions, `texra setup`
-   vocabulary fix.
+   `apply_team` tool + default-team seeding of fresh workspaces,
+   setup-prompt additions, `texra setup` vocabulary fix.
 4. **Narrative**: walkthrough rewrite + docs-site edits (can trail by
    a release, but must land before marketing the flow).
