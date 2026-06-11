@@ -291,6 +291,10 @@ class AgentReviewServiceImpl {
 
     if (outcome !== RUN_OUTCOME.COMPLETED) {
       const verb = outcome === RUN_OUTCOME.CANCELLED ? 'cancelled' : 'failed';
+      // Partial findings from the interrupted session win over the pre-run
+      // snapshot — they were just verified against the current change set,
+      // while the snapshot describes an older tree. The snapshot is only
+      // restored when the session reported nothing at all.
       const restored = this.restorePreviousResults(previous);
       const suffix = restored
         ? ' · showing previous results'
