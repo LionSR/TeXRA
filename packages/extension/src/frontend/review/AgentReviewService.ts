@@ -90,7 +90,7 @@ class AgentReviewServiceImpl {
   readonly onDidChange = this.emitter.event;
 
   private issues: ReviewIssue[] = [];
-  /** `file::title` fingerprints of dismissed issues, kept for the session so re-reviews don't resurrect them. */
+  /** Fingerprints of dismissed issues, kept for the session so re-reviews don't resurrect them. */
   private readonly dismissed = new Set<string>();
   private running = false;
   private summary: string | undefined;
@@ -193,6 +193,10 @@ class AgentReviewServiceImpl {
     trigger: AgentReviewTrigger,
     options: AgentReviewRunOptions,
   ): Promise<void> {
+    // `clear()` bumps the generation. Capture this before the async diff
+    // collection so a clear/checkout during collection cannot resurrect a
+    // review after the panel was intentionally reset.
+    const generation = ++this.reviewGeneration;
     const collected = await collectReviewDiff({
       cwd,
       includeUntracked: getConfig<boolean>(
@@ -206,6 +210,8 @@ class AgentReviewServiceImpl {
       baseRef: options.baseRef,
       baseDescription: options.baseDescription,
     });
+    if (generation !== this.reviewGeneration) return;
+
     if (!collected.ok) {
       // Issues from the previous run stay available rather than vanishing on
       // a transient failure; the summary marks them as previous results.
@@ -246,9 +252,6 @@ class AgentReviewServiceImpl {
     this.issues = [];
     this.updateDiagnostics();
     this.activeReview = { repoRoot, baseDescription, changedFiles };
-    // `clear()` bumps the generation while a session runs (e.g. on branch
-    // checkout); a superseded session's outcome must not touch the panel.
-    const generation = ++this.reviewGeneration;
     this.emitter.fire();
 
     const instruction = buildReviewInstruction({
@@ -394,6 +397,8 @@ class AgentReviewServiceImpl {
       this.issues.some(
         (existing) =>
           existing.file === issue.file &&
+          existing.startLine === issue.startLine &&
+          existing.endLine === issue.endLine &&
           existing.title.toLowerCase() === issue.title.toLowerCase(),
       )
     ) {
@@ -510,7 +515,7 @@ class AgentReviewServiceImpl {
 }
 
 function fingerprint(issue: ReviewIssue): string {
-  return `${issue.file}::${issue.title.toLowerCase()}`;
+  return `${issue.file}::${issue.startLine}-${issue.endLine}::${issue.title.toLowerCase()}`;
 }
 
 /** Singleton service backing the Agent Review view, diagnostics, and commands. */
