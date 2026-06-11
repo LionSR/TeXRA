@@ -158,7 +158,7 @@ export class MainViewProvider
    * agent-native onboarding). Recomputes the user-scoped funnel state,
    * pushes it to the webview when the main tab is visible, and acts on the
    * State 0 → 1 transition: clear a stale skip, select the setup agent, and
-   * start setup only when there is no visible launcher for the user to run.
+   * start setup once.
    * Invoked by the message handler on webview ready — which credential-changed
    * hooks replay via refreshOptionsAndView — and after welcome-card actions.
    */
@@ -207,10 +207,10 @@ export class MainViewProvider
         sessionType: 'toolUse',
       });
     }
-    if (transition.kickoffSetup && !view && !this.setupKickoffStarted) {
+    if (transition.kickoffSetup && !this.setupKickoffStarted) {
       this.setupKickoffStarted = true;
-      // Fire-and-forget: when no launcher is visible, the setup agent run owns
-      // its own progress UI and error surfacing.
+      // Fire-and-forget: the setup agent run owns its own progress UI and
+      // error surfacing.
       void runSetupAssistant();
     }
   }
