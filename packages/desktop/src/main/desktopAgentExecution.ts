@@ -1048,7 +1048,7 @@ export class DesktopProgressBridge {
           });
         } catch (error) {
           for (const item of queuedFollowUps) {
-            ToolUseFollowUpQueue.enqueue(streamId, item);
+            ToolUseFollowUpQueue.enqueue(streamId, item, { force: true });
           }
           if (queuedFollowUps.length > 0) {
             this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
