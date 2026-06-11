@@ -5,6 +5,7 @@ import { createGunzip } from 'node:zlib';
 import axios from 'axios';
 import { StatusCodes } from 'http-status-codes';
 import * as arxivIdentifiers from 'identifiers-arxiv';
+import pRetry, { AbortError } from 'p-retry';
 import * as tar from 'tar';
 
 import { toErrorMessage } from '@common/errors';
@@ -138,10 +139,32 @@ class ArxivSourceProcessor {
     return id ? id.replaceAll('/', '_') : input;
   }
 
+  /**
+   * Download `url` to disk, retrying transient network / server failures with
+   * exponential backoff. A 404 means the paper has no downloadable source, so
+   * it aborts the retry loop immediately.
+   */
   public async downloadFile(
     url: string,
     destBasePath: string,
     timeout = 30000,
+  ): Promise<string> {
+    return pRetry(() => this.downloadFileOnce(url, destBasePath, timeout), {
+      retries: 2,
+      minTimeout: 1000,
+      onFailedAttempt: ({ error, retriesLeft }) => {
+        logger.debug(
+          this.channel,
+          `Download attempt failed (${retriesLeft} retries left): ${toErrorMessage(error)}`,
+        );
+      },
+    });
+  }
+
+  private async downloadFileOnce(
+    url: string,
+    destBasePath: string,
+    timeout: number,
   ): Promise<string> {
     let destPath = destBasePath;
     let shouldCleanup = true;
@@ -153,7 +176,7 @@ class ArxivSourceProcessor {
       });
 
       if (response.status === StatusCodes.NOT_FOUND) {
-        throw new Error('Source not available for this arXiv ID');
+        throw new AbortError('Source not available for this arXiv ID');
       }
 
       if (response.status !== StatusCodes.OK) {

@@ -1,5 +1,5 @@
 // Third-party imports
-import { ZodError, type ZodType } from 'zod';
+import { z, ZodError, type ZodType } from 'zod';
 
 // Local imports - core tool types (single source of truth)
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -7,7 +7,6 @@ import { toErrorMessage } from '@common/errors';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-  formatZodIssuesAsMessage,
   formatZodIssuesForDiagnostics,
   type ToolResult,
 } from '@tools/result';
@@ -58,7 +57,7 @@ export abstract class BaseTool<T> implements ITool {
     } catch (err) {
       if (err instanceof ZodError) {
         return {
-          error: formatZodIssuesAsMessage(err.issues),
+          error: `Invalid input:\n${z.prettifyError(err)}`,
           isError: true,
           diagnostics: {
             type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,

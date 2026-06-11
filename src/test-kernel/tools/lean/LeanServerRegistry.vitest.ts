@@ -116,9 +116,9 @@ describe('formatUptime', () => {
     [0, '0s'],
     [1500, '1s'],
     [59_000, '59s'],
-    [60_000, '1m 0s'],
+    [60_000, '1m'],
     [185_000, '3m 5s'],
-    [3_600_000, '1h 0m'],
+    [3_600_000, '1h'],
     [3_660_000, '1h 1m'],
   ])('renders %i ms as %s', (ms, label) => {
     expect(formatUptime(ms)).toBe(label);

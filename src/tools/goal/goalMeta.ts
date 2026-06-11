@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
+import { formatCompactDuration } from '@utils/core/stringCore';
 
 export const GOAL_FEATURE_FLAG_KEY = 'texra.goal.enabled' as const;
 
@@ -66,17 +67,10 @@ export function goalDurationMs(goal: { createdAt: string }): number {
 }
 
 /**
- * Hour-aware duration formatter for Goal timings. Lives here (not in
- * `@utils/core/stringCore`) so it's importable from webview frontends via
- * `@shared/schemas`, keeping the tool view and the settings tab in sync.
+ * Hour-aware duration formatter for Goal timings. Re-exported here so it's
+ * importable from webview frontends via `@shared/schemas`, keeping the tool
+ * view and the settings tab in sync.
  */
 export function formatGoalTime(ms: number): string {
-  if (ms <= 0) return '0s';
-  const totalSec = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSec / 3600);
-  const min = Math.floor((totalSec % 3600) / 60);
-  const sec = totalSec % 60;
-  if (hours > 0) return `${hours}h ${min}m`;
-  if (min > 0) return `${min}m ${sec}s`;
-  return `${sec}s`;
+  return formatCompactDuration(ms);
 }
