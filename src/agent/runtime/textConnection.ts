@@ -114,6 +114,8 @@ export async function bestConnectionMethod(
     const prompt = buildPrompt(str1, str2);
     const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt41']);
     const baseURL = handler.getBaseUrl() ?? undefined;
+    // Standalone one-shot client outside the RetryState flow loop — SDK-level
+    // retries stay enabled here because they are this call's only retry layer.
     const client = new OpenAI({ apiKey: openaiApiKey, baseURL });
 
     const completion = await client.chat.completions.create({
@@ -161,6 +163,8 @@ export async function bestConnectionMethodAnthropic(
     const prompt = buildPrompt(str1, str2);
     const handler = new ModelHandlerAnthropic(MODEL_CONFIGS['sonnet37']);
     const baseURL = handler.getBaseUrl() ?? undefined;
+    // Standalone one-shot client outside the RetryState flow loop — SDK-level
+    // retries stay enabled here because they are this call's only retry layer.
     const client = new Anthropic({ apiKey: anthropicApiKey, baseURL });
 
     const choices = await Promise.all(
