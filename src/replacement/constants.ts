@@ -1,6 +1,6 @@
 // Shared constants for replacement engine
 
-import { escapeRegExp } from '@utils/core/stringCore';
+import escapeRegExp from 'escape-string-regexp';
 
 // Greek letters used for pattern generation
 // prettier-ignore
