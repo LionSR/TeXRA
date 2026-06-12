@@ -469,6 +469,28 @@ const SCENARIOS = [
     unexpect: ['/\u0015/model', '/model - error'],
   },
   {
+    name: 'slash-palette-esc-retypes-command',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT,
+    },
+    keys: ['/', `${ESC}/agent\r`],
+    settleMs: ASYNC_FORM_SETTLE_MS,
+    expect: [
+      '/agent',
+      'Tool-use and delegating agents',
+      'texra chat --agent=<name>',
+    ],
+    unexpect: ['//agent', 'Harness received: //agent', '/agent - error'],
+  },
+  {
+    name: 'slash-palette-csi-escape-ignored',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/', `${ESC}[13:2u`],
+    expect: ['│ › /'],
+    unexpect: ['[13:2u', 'Harness received'],
+  },
+  {
     name: 'plain-submit',
     cols: 120,
     env: { HARNESS_ENTRIES: '2' },

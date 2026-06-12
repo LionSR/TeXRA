@@ -23,7 +23,10 @@ import {
   type SlashPickIntent,
 } from '../commands/slashRegistry';
 import { cliState } from '../state/cliState';
+import type { CursorEdit } from '../input/textInputEditing';
 import type { InputHistory } from '../history/inputHistory';
+
+const CSI_SEQUENCE_TAIL_RE = /^\[[0-?]*[ -/]*[@-~]$/u;
 
 export interface InputBarProps {
   /** Forwarded to BaseTextInput; called only on real (non-paste) Enter.
@@ -127,6 +130,24 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     setValue('');
     attachmentsRef.current.clear();
   }, [setValue]);
+  const clearDraftEdit = useCallback<CursorEdit>(() => {
+    clearDraft();
+    return { value: '', cursor: 0 };
+  }, [clearDraft]);
+  const replaceSlashTriggerInput = useCallback(
+    (input: string, value: string, cursor: number) => {
+      if (value === '/' && cursor === 1 && input.startsWith('/')) {
+        return { value: '', cursor: 0 };
+      }
+      return undefined;
+    },
+    [],
+  );
+  const dropSlashPaletteControlTail = useCallback(
+    (input: string, value: string, cursor: number) =>
+      value === '/' && cursor === 1 && CSI_SEQUENCE_TAIL_RE.test(input),
+    [],
+  );
   const replaceDraft = useCallback(
     (next: string) => {
       setValue(next);
@@ -341,6 +362,14 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
             onHistoryUp={showPalette ? undefined : () => browseHistory(-1)}
             onHistoryDown={showPalette ? undefined : () => browseHistory(1)}
             imagePasteQueue={imagePasteQueue}
+            readLatestValue={() => draftValueRef.current}
+            prepareInputChunk={
+              showPalette ? replaceSlashTriggerInput : undefined
+            }
+            shouldDropInputChunk={
+              showPalette ? dropSlashPaletteControlTail : undefined
+            }
+            escapeEdit={showPalette ? clearDraftEdit : undefined}
             transformPaste={transformPaste}
             onImagePaste={onImagePaste}
             onImagePasteError={(error) =>
