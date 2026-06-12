@@ -7,6 +7,7 @@ import {
   type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
+import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { formatDuration } from '@utils/core';
 
 // Local imports - CLI state
@@ -77,6 +78,12 @@ export type PickerKeyAction =
 
 function compactParts(parts: readonly (string | null | undefined)[]): string {
   return parts.filter((part): part is string => Boolean(part)).join(' · ');
+}
+
+function childStatusDescription(
+  status: string | undefined,
+): string | undefined {
+  return formatStreamStatusLabel(status, { style: 'cliCompact' });
 }
 
 function hasLiveChildElapsed(
@@ -164,7 +171,10 @@ function buildSubagentItem(
     kind: 'subagent',
     label,
     command,
-    description: compactParts([child.status, elapsed ?? undefined]),
+    description: compactParts([
+      childStatusDescription(child.status),
+      elapsed ?? undefined,
+    ]),
     status: child.status,
     elapsed,
     killable,
@@ -187,7 +197,11 @@ function buildProcessItem(
     kind: 'process',
     label,
     command: label,
-    description: compactParts([child.status, elapsed ?? undefined, lastLine]),
+    description: compactParts([
+      childStatusDescription(child.status),
+      elapsed ?? undefined,
+      lastLine,
+    ]),
     status: child.status,
     elapsed,
     killable: true,
