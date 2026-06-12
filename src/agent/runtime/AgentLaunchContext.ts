@@ -109,7 +109,7 @@ const STATUS_MESSAGES: Record<string, string> = {
  *
  * Centralises the mapping so new per-run flags (e.g. `stopAfterCycle`,
  * `approvalPromptsUnavailable`) live in one place and are never silently
- * dropped. Two field renames are unavoidable given the interfaces were
+ * dropped. Three field renames are unavoidable given the interfaces were
  * designed independently:
  *  - `AgentCore.logger`   → `RunContext.trace`
  *  - `AgentConfig.agent`  → `RunContext.agentName`
