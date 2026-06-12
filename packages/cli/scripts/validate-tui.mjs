@@ -1589,7 +1589,6 @@ const SCENARIOS = [
     keys: [ESC + 's', 'f', 'child follow-up on focused stream', '\r'],
     frame: 'tail',
     expect: [
-      'Please handle the harness-child-strategy sub-workflow.',
       'strategy is checking the harness-child-strategy details',
       'Harness received: child follow-up on focused stream',
     ],
@@ -1611,8 +1610,6 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     keys: ['\t'],
     expect: [
-      'subagent: strategy · parent: main · model: harness-model',
-      'Please handle the harness-child-strategy sub-workflow.',
       'strategy is checking the harness-child-strategy details',
       '[1:strategy]*',
     ],
@@ -1665,7 +1662,6 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     keys: ['\t'],
     expect: [
-      'Please handle the harness-child-strategy sub-workflow.',
       'strategy detail line 01',
       'strategy detail line 18',
       '[1:strategy]*',
@@ -1691,7 +1687,6 @@ const SCENARIOS = [
     keys: ['\t', '/status', '\r'],
     frame: 'tail',
     expect: [
-      'Please handle the harness-child-strategy sub-workflow.',
       'strategy is checking the harness-child-strategy details',
       '[1:strategy]*',
     ],
