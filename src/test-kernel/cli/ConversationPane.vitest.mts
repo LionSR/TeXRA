@@ -54,6 +54,7 @@ const SESSION_META = {
   modelSource: 'builtin',
   cwd: '/tmp/project',
   apiMode: 'personal',
+  approvalPolicy: 'ask',
   canDelegate: false,
   version: '0.38.0',
 } as const;

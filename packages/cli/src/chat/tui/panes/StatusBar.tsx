@@ -6,6 +6,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import stringWidth from 'string-width';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
+import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
   LIVE_ELAPSED_STREAM_STATUSES,
   STREAM_STATUS,
@@ -80,6 +81,7 @@ export interface StatusBarDisplayInput {
   readonly hasMultipleStreams: boolean;
   readonly model: string;
   readonly apiMode: string;
+  readonly approvalPolicy?: CliApprovalPolicy;
   readonly shortcutModifierLabel?: string;
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
    *  active; otherwise the universal Ctrl-J is the only reliable binding. */
@@ -179,6 +181,7 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   round: 30,
   usage: 40,
   queuedFollowUp: 50,
+  approvalPolicy: 55,
   approvalDepth: 60,
   rootActive: 65,
   elapsed: 70,
@@ -567,6 +570,30 @@ function rootActiveSegment(
     : undefined;
 }
 
+function approvalPolicySegment(
+  policy: CliApprovalPolicy | undefined,
+): StatusBarSegment | undefined {
+  switch (policy) {
+    case undefined:
+    case 'ask':
+      return undefined;
+    case 'never':
+      return {
+        text: 'deny',
+        color: 'yellow',
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
+      };
+    case 'yolo':
+      return {
+        text: 'yolo',
+        color: 'red',
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
+      };
+    default:
+      return policy satisfies never;
+  }
+}
+
 interface StatusBarVisibleStream {
   readonly status: StreamStatus | undefined;
 }
@@ -668,6 +695,8 @@ export function buildStatusBarDisplay(
   if (rootActive) left.push(rootActive);
 
   left.push({ text: input.apiMode, color: 'dim' });
+  const policy = approvalPolicySegment(input.approvalPolicy);
+  if (policy) left.push(policy);
 
   const round = roundSegment(input.conversation);
   if (round) left.push(round);
@@ -805,6 +834,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
+    approvalPolicy: sessionMeta.approvalPolicy,
     shiftEnterNewline: caps.kittyKeyboard,
     transcriptAvailable: props.transcriptAvailable,
     width: columns,
