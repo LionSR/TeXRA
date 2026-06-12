@@ -50,6 +50,27 @@ describe('RunContext', () => {
     expect(resolved).toBe(runtimeHost);
   });
 
+  it('reads the current model from a live provider', () => {
+    let currentModel: string | undefined = 'deepseekT';
+    const context = createRunContext({
+      runtimeHost: createRuntimeHost(),
+      model: 'fallback-model',
+      getModel: () => currentModel,
+    });
+
+    expect(context.model).toBe('deepseekT');
+
+    currentModel = 'sonnet46T';
+
+    const resolved = withRunContext(context, () => useRunContext().model);
+
+    expect(resolved).toBe('sonnet46T');
+
+    currentModel = undefined;
+
+    expect(context.model).toBe('fallback-model');
+  });
+
   it('requires an active context for owned runtime state', () => {
     expect(() => useRunContext()).toThrow(/outside withRunContext/);
   });
