@@ -102,8 +102,11 @@ mockups, never `run-123` or named ids.
 - `texra agents show <name>` → `name:`, `category:`, `source:`, `path:` lines
 - `texra history list [-n N]` → `<id>\t<timestamp>\t<agent>\t<status>\t<input>`
 - `texra history show <id>` → details + `Files (N):` listing with sizes
-- `texra models list` → `<value>\t<label>\t<status>` (e.g. `fable5  Claude
-Fable 5  available`); `texra models show <id>` → detail lines
+- `texra models list` → `<value>\t<label>\t<status>` where status is the
+  lowercased availability label for the current api mode (e.g. `fable5  Claude
+Fable 5  included access`; personal mode prints `api key set` /
+  `openrouter key`; `--all` adds `login required` / `not included`);
+  `texra models show <id>` → detail lines
 - `texra memory list` → `Memories (N):` header then `/memories/<file>` rows
   with pinned state + size; `texra memory show memories/<file>` previews one
 - `texra tools list` → SIX columns `ID NAME CATEGORY ENABLED DETECTED NOTE`,

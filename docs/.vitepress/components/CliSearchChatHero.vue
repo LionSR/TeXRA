@@ -61,7 +61,7 @@
 
     <template #hint>
       <span class="csr-diamond">◆</span>
-      <span class="csr-seg">working</span>
+      <span class="csr-seg">running</span>
       <span class="csr-seg">relay</span>
       <span class="csr-seg-dim"
         >every row a real lookup — arXiv + Crossref</span

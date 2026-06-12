@@ -51,6 +51,9 @@ const files = [
       <span class="mk-term-cmd">texra history show 9f3a6c81d24e</span>
     </div>
     <div class="csh-files">
+      <div class="csh-elide">
+        … Execution / Status / Agent / Model details …
+      </div>
       <div class="csh-files-head">Files (2):</div>
       <div v-for="f in files" :key="f.path" class="csh-file">
         <span class="csh-size">{{ f.size }}</span>
@@ -84,6 +87,11 @@ const files = [
   margin-top: var(--mk-space-5);
   padding-left: var(--mk-space-16);
   font-size: var(--mk-fs-72);
+}
+.csh-elide {
+  color: var(--mk-text-faint);
+  font-style: italic;
+  font-size: var(--mk-fs-70);
 }
 .csh-files-head {
   color: var(--mk-text-dim);
