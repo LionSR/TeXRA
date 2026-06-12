@@ -90,7 +90,7 @@ export interface OnboardingGateContext {
 const SKIP_SUMMARY =
   "Setup skipped — run `texra login` or `texra setup` when you're ready.";
 
-// Fits the current 29-column onboarding action labels without truncation.
+// Fits the current 30-column onboarding action labels without truncation.
 const ONBOARDING_SELECT_LABEL_MAX_COLS = 34;
 
 /** Gate returned without showing the picker (or before any choice is made). */
