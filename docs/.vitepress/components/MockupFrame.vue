@@ -60,8 +60,12 @@ const LOGO = withBase('/logo-icon-board.svg');
   background: var(--editor-bg);
   border: 1px solid var(--mk-border-strong);
   border-radius: var(--mk-radius-window);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
   position: relative;
+  container: mockup-frame / inline-size;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.04) inset,
     0 24px 60px -20px rgba(0, 0, 0, 0.55),
@@ -102,11 +106,14 @@ const LOGO = withBase('/logo-icon-board.svg');
 .win-body {
   display: flex;
   min-height: var(--mk-size-470);
+  min-width: 0;
+  max-width: 100%;
 }
 .win-content {
   display: flex;
   flex: 1;
   min-width: 0;
+  max-width: 100%;
 }
 
 /* Activity bar */
@@ -179,6 +186,41 @@ const LOGO = withBase('/logo-icon-board.svg');
     height: var(--mk-size-40);
     border-right: none;
     border-bottom: 1px solid var(--mk-border-strong);
+  }
+  .activity-item--active::before {
+    left: 0;
+    top: auto;
+    bottom: 0;
+    right: 0;
+    width: auto;
+    height: var(--mk-space-2);
+  }
+  .win-title {
+    margin-right: 0;
+  }
+}
+
+@container mockup-frame (max-width: 640px) {
+  .win-body {
+    flex-direction: column;
+  }
+  .win-content {
+    flex-direction: column;
+  }
+  .activity-bar {
+    flex-direction: row;
+    width: auto;
+    justify-content: flex-start;
+    gap: var(--mk-space-8);
+    padding: 0 var(--mk-space-10);
+    height: var(--mk-size-40);
+    border-right: none;
+    border-bottom: 1px solid var(--mk-border-strong);
+    overflow: hidden;
+  }
+  .activity-item {
+    width: var(--mk-size-36);
+    flex: 0 1 var(--mk-size-36);
   }
   .activity-item--active::before {
     left: 0;
