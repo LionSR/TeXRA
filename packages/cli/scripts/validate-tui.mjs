@@ -80,6 +80,7 @@ const LONG_BASH_APPROVAL_COMMAND = [
 ].join('\n');
 const LONG_EXTERNAL_INQUIRY_ANSWER =
   'Independent check agrees: there are 22 non-degenerate triples in the displayed list, plus exactly 61 degenerate triples of the form (0,b,b), and the bounded search over integer pairs proves completeness.';
+const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
 const ASYNC_FORM_SETTLE_MS = 12000;
 const VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT = [
   'research',
@@ -1127,6 +1128,7 @@ const SCENARIOS = [
     bootExpect: '[Ctrl-C]',
     expect: [
       'Spawn review?',
+      FULL_WIDTH_AGENT_PROPOSAL_BORDER_80,
       'Category: tool-use agent',
       'Review the mathematical proof',
       'more rows',
