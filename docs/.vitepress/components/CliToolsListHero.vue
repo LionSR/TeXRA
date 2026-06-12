@@ -36,7 +36,7 @@ const rows = [
     category: 'ai-agents',
     enabled: 'no',
     detected: 'yes',
-    note: 'Zotero must be running with Better BibTeX installed.',
+    note: 'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
   },
   {
     id: 'wolfram',
@@ -52,7 +52,7 @@ const rows = [
     category: 'lean',
     enabled: '-',
     detected: 'yes',
-    note: 'VS Code build: requires the leanprover.lean4 extension. CLI / desktop builds: requires `lake` on PATH',
+    note: 'VS Code build: requires the leanprover.lean4 extension. CLI / desktop builds: requires `lake` on PATH; each Lake project root gets its own language server, surfaced below.',
   },
 ];
 </script>
