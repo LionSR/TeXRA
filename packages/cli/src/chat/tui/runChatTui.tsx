@@ -405,6 +405,7 @@ export function chatTuiCanSelectModel(input: {
 export type ChatTuiSigintAction =
   | 'clean-exit'
   | 'force-exit'
+  | 'preserve-exit'
   | 'interrupt-and-arm-exit';
 
 export function chatTuiSigintAction(input: {
@@ -416,9 +417,9 @@ export function chatTuiSigintAction(input: {
   if (input.canStopActiveRun) return 'interrupt-and-arm-exit';
   // Resumable-idle (interruptible but not actively running): exit WITHOUT
   // interrupting so the suspended tool-use flow record survives for resume —
-  // interrupting would clear it in runToolUseFlow's finally. force-exit calls
-  // process.exit, leaving the suspended flow on disk for `texra --resume`.
-  if (input.canInterruptActiveRun) return 'force-exit';
+  // interrupting would clear it in runToolUseFlow's finally. preserve-exit
+  // calls process.exit, leaving the suspended flow on disk for `texra --resume`.
+  if (input.canInterruptActiveRun) return 'preserve-exit';
   return 'clean-exit';
 }
 
@@ -1813,12 +1814,17 @@ export async function runChat(
         requestInputExit();
         return;
       case 'force-exit':
-        // exitArmed OR resumable-idle: exit WITHOUT interrupting. For an
-        // idle/WAITING session this preserves the suspended tool-use flow
-        // record (executions/<id>/flow-*.json) so `texra --resume` can
-        // continue it — interrupting would clear it in runToolUseFlow's
-        // finally. exitNow() calls process.exit, leaving the flow on disk.
-        exitNow(130);
+        exitNow(CliExitCode.Interrupted);
+        return;
+      case 'preserve-exit':
+        // Resumable-idle: exit WITHOUT interrupting. This preserves the
+        // suspended tool-use flow record (executions/<id>/flow-*.json) so
+        // `texra --resume` can continue it. Preserve the session's current
+        // terminal status too; an intentional idle exit after a successful turn
+        // should not report SIGINT/130.
+        //
+        // exitNow() calls process.exit, leaving the flow on disk.
+        exitNow(session.runExitCode);
         return;
       case 'interrupt-and-arm-exit':
         session.stopRequested = true;
