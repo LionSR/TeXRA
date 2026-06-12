@@ -2,9 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   appendCliApiSwitchHint,
+  approvalPromptAllowed,
   formatAgentProposalApprovalSummary,
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
+  hasCliApprovalDenied,
+  humanInputDenialFeedback,
   immediateDecisionForApproval,
   installCliApprovalHandlers,
   isCliApiSwitchableRetry,
@@ -75,6 +78,42 @@ describe('immediateDecisionForApproval', () => {
         context({ mode: 'headless' }),
       ),
     ).toMatchObject({ accepted: false });
+  });
+});
+
+describe('human input approval policy', () => {
+  it('allows prompts only for interactive ask mode', () => {
+    expect(approvalPromptAllowed(context())).toBe(true);
+    expect(approvalPromptAllowed(context({ approvalPolicy: 'yolo' }))).toBe(
+      false,
+    );
+    expect(approvalPromptAllowed(context({ approvalPolicy: 'never' }))).toBe(
+      false,
+    );
+    expect(approvalPromptAllowed(context({ mode: 'headless' }))).toBe(false);
+  });
+
+  it('uses yolo-specific human-input feedback without marking approval denied', () => {
+    const ctx = context({ approvalPolicy: 'yolo' });
+
+    expect(
+      humanInputDenialFeedback(
+        ctx,
+        'User question requires human input; yolo mode cannot synthesize an answer.',
+      ),
+    ).toBe(
+      'User question requires human input; yolo mode cannot synthesize an answer.',
+    );
+    expect(hasCliApprovalDenied(ctx)).toBe(false);
+  });
+
+  it('uses approval denial feedback and marks denied outside yolo mode', () => {
+    const ctx = context({ approvalPolicy: 'never' });
+
+    expect(humanInputDenialFeedback(ctx, 'unused yolo message')).toBe(
+      'Denied by CLI approval policy.',
+    );
+    expect(hasCliApprovalDenied(ctx)).toBe(true);
   });
 });
 
