@@ -305,7 +305,7 @@ const SCENARIOS = [
       'no runnable team root',
       '2/7 tool-use agents',
       'Team Physicist',
-      'Team Computer Scientist…',
+      'Team Computer Scientist',
       'Help',
       'Team setup: run texra multi-agent inspect <preset>.',
       'Relay teams may unlock more agents after texra login.',
