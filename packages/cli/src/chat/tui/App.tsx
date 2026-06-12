@@ -886,7 +886,12 @@ export function App(props: AppProps): React.JSX.Element {
       pendingEscapeInterruptTimer.current !== undefined;
     if (pendingEscapeInterrupt) {
       clearPendingEscapeInterrupt();
-      if (!key.ctrl && !isEscapeInput(input, key) && input.length > 0) {
+      if (
+        !key.ctrl &&
+        !key.tab &&
+        !isEscapeInput(input, key) &&
+        input.length > 0
+      ) {
         if (handleMetaShortcut(input)) return;
         triggerEscapeInterrupt(escapeInterruptStateRef.current);
         return;

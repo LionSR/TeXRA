@@ -2250,6 +2250,32 @@ const SCENARIOS = [
     unexpect: ['Tasks and sub-workflows', '◆ running', '2 sub 1 proc'],
   },
   {
+    name: 'focused-stopped-subagent-esc-tab-focus',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [
+      ESC + 'p',
+      'k',
+      ESC + 's',
+      DOWN,
+      DOWN,
+      'f',
+      { input: ESC, delayMs: 40 },
+      '\t',
+    ],
+    frame: 'tail',
+    expect: ['[main]*', '◆ running', '2 sub 1 proc'],
+    unexpect: [
+      'Harness interrupt requested.',
+      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
+      '[3:strategy](stopped)',
+    ],
+  },
+  {
     name: 'focused-stopped-subagent-submit',
     cols: 120,
     env: {
