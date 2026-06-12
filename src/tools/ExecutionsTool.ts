@@ -32,7 +32,11 @@ import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptio
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
-import { EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS } from '@shared/constants/toolDefaults';
+import {
+  EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+  EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
+  EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
+} from '@shared/constants/toolDefaults';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { requireRunStream } from '@tools/contextHelpers';
 import { AbsoluteFS, StorageFS } from '@utils/files';
@@ -120,11 +124,12 @@ const ExecutionsToolInputSchema = z.strictObject({
   /** Max seconds to wait (action="wait" only). Default: 300. */
   timeout: z
     .number()
-    .min(60)
-    .max(1800)
+    .finite()
+    .min(EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS)
+    .max(EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS)
     .nullish()
     .describe(
-      'Max seconds to wait for a status change (action="wait" only). Default: 300, max: 1800.',
+      `Max seconds to wait for a status change (action="wait" only). Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
     ),
 
   /** Zero-based offset for paginating the /executions listing (action="view" only). */
@@ -148,6 +153,36 @@ const ExecutionsToolInputSchema = z.strictObject({
 });
 
 export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
+
+const normalizeWaitTimeout = (timeout: number | null | undefined): number =>
+  Math.min(
+    Math.max(
+      timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+      EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
+    ),
+    EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
+  );
+
+const normalizeExecutionsToolInput = (input: unknown): unknown => {
+  if (input == null || typeof input !== 'object' || Array.isArray(input)) {
+    return input;
+  }
+
+  const record = input as Record<string, unknown>;
+  if (
+    typeof record.timeout !== 'number' ||
+    !Number.isFinite(record.timeout) ||
+    (record.timeout >= EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS &&
+      record.timeout <= EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS)
+  ) {
+    return input;
+  }
+
+  return {
+    ...record,
+    timeout: normalizeWaitTimeout(record.timeout),
+  };
+};
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
@@ -176,6 +211,10 @@ Use action: "kill" on /executions/{id} to terminate a running execution.
 Use action: "subscribe" on /executions/{id} to receive future status, progress, and termination events as <execution-activity> follow-ups (auto-disposes when the execution finishes or this stream is released). Use action: "unsubscribe" on /executions/{id} to stop them.`,
   schema: ExecutionsToolInputSchema,
 }) {
+  override validate(input: unknown): ExecutionsToolInput {
+    return ExecutionsToolInputSchema.parse(normalizeExecutionsToolInput(input));
+  }
+
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
     const segments = getPathSegments(input.path);
     const [namespace, id, resource, ...rest] = segments;
@@ -195,7 +234,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       }
       if (input.action === 'wait')
         await this.waitForAnyChange(
-          input.timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+          normalizeWaitTimeout(input.timeout),
           input.ids,
         );
       return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
@@ -218,7 +257,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       if (input.action === 'wait')
         await this.waitForChange(
           executionId,
-          input.timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+          normalizeWaitTimeout(input.timeout),
         );
       return this.showSummary(executionId);
     }
