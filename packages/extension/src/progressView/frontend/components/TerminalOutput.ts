@@ -4,6 +4,7 @@ import { customElement, property, query } from 'lit/decorators.js';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
+import { clamp } from '@utils/core';
 
 const DEFAULT_THEME = {
   background: '#1e1e1e',
@@ -187,7 +188,7 @@ export class TerminalOutput extends LitElement {
     // Size rows to content instead of filling the container
     const buffer = this.terminal.buffer.active;
     const contentRows = buffer.baseY + buffer.cursorY + 1;
-    const rows = Math.max(1, Math.min(contentRows, MAX_VISIBLE_ROWS));
+    const rows = clamp(contentRows, 1, MAX_VISIBLE_ROWS);
 
     if (cols !== this.terminal.cols || rows !== this.terminal.rows) {
       this.terminal.resize(cols, rows);
