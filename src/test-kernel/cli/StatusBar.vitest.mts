@@ -1211,6 +1211,31 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
+  it('uses the provided command name in the armed-exit resume command', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: true,
+      pendingExitResumeId: 'abc123',
+      commandName: 'texra-local',
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: PERSONAL_API_MODE_LABEL,
+      shortcutModifierLabel: 'Alt',
+    });
+
+    expect(display.bindings).toBe(
+      'Resume this session with: texra-local --resume abc123',
+    );
+  });
+
   it('warns that queued follow-ups are discarded while exit is armed', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,

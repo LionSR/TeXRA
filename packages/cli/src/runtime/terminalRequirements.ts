@@ -14,13 +14,14 @@ export function interactiveTerminalFailure(
 
 export function dumbTerminalMessage(
   command: string,
-  options: { nonInteractiveFallback?: string } = {},
+  options: { commandName?: string; nonInteractiveFallback?: string } = {},
 ): string {
+  const commandName = options.commandName || 'texra';
   const fallback =
     options.nonInteractiveFallback == null
       ? ''
       : ` For non-interactive runs, use ${options.nonInteractiveFallback}.`;
-  return `texra ${command} needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with \`TERM=xterm-256color\`.${fallback}`;
+  return `${commandName} ${command} needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with \`TERM=xterm-256color\`.${fallback}`;
 }
 
 export function formatInteractiveTerminalFailure(
@@ -28,7 +29,10 @@ export function formatInteractiveTerminalFailure(
   options: {
     readonly headlessMessage: string;
     readonly dumbTerminalCommand: string;
-    readonly dumbTerminalOptions?: { readonly nonInteractiveFallback?: string };
+    readonly dumbTerminalOptions?: {
+      readonly commandName?: string;
+      readonly nonInteractiveFallback?: string;
+    };
   },
 ): string {
   if (reason === 'headless') return options.headlessMessage;

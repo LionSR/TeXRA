@@ -50,6 +50,7 @@ export interface CliContext {
   readonly stderrColorEnabled?: boolean;
   /** Back-compat alias for `stderrColorEnabled`. */
   readonly colorEnabled: boolean;
+  readonly commandName?: string;
   readonly version: string;
   readonly resourcesPath: string;
   readonly cliConfig?: CliConfigValues;
@@ -182,6 +183,12 @@ export function isTexraCliEntrypointPath(entrypointPath: string): boolean {
     name === 'texra.mjs' ||
     name === 'texra.ts'
   );
+}
+
+export function resolveCliCommandName(entrypointPath: string): string {
+  return path.basename(entrypointPath).toLowerCase() === 'texra-local'
+    ? 'texra-local'
+    : 'texra';
 }
 
 interface CliPackageManifest {
@@ -435,6 +442,7 @@ export async function buildCliContext(
     stdoutColorEnabled,
     stderrColorEnabled,
     colorEnabled: stderrColorEnabled,
+    commandName: resolveCliCommandName(readCliEntrypointPath()),
     version: await readCliVersion(),
     resourcesPath: resolveCliResourcesPath(),
     cliConfig: loadedConfig.values,

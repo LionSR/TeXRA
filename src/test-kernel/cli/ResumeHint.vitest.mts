@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collectResumeUsage,
   collectResumeTargets,
+  formatResumeCommand,
   formatResumeHint,
   formatResumeUsage,
   type ResumeUsageStats,
@@ -125,6 +126,13 @@ describe('collectResumeTargets', () => {
 });
 
 describe('formatResumeHint', () => {
+  it('formats resume commands with a local launcher when provided', () => {
+    expect(formatResumeCommand(undefined, 'root')).toBe('texra --resume root');
+    expect(formatResumeCommand('texra-local', 'root')).toBe(
+      'texra-local --resume root',
+    );
+  });
+
   it('renders one resume line per target', () => {
     expect(
       formatResumeHint([
@@ -136,6 +144,25 @@ describe('formatResumeHint', () => {
         'Resume this session with:',
         '  texra --resume root  (main)',
         '  texra --resume rev  (reviewer)',
+      ].join('\n'),
+    );
+  });
+
+  it('uses the provided command name for every resume target', () => {
+    expect(
+      formatResumeHint(
+        [
+          { executionId: 'root', label: 'main', isRoot: true },
+          { executionId: 'rev', label: 'reviewer', isRoot: false },
+        ],
+        undefined,
+        'texra-local',
+      ),
+    ).toBe(
+      [
+        'Resume this session with:',
+        '  texra-local --resume root  (main)',
+        '  texra-local --resume rev  (reviewer)',
       ].join('\n'),
     );
   });

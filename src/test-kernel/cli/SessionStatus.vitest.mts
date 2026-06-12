@@ -103,6 +103,21 @@ describe('CLI session status formatter', () => {
     expect(status).toContain('resume later with: texra --resume abc123');
   });
 
+  it('uses the provided command name in the resume status line', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'harness-model',
+      api: 'personal',
+      approval: 'ask',
+      status: 'running',
+      sessionId: 'abc123',
+      commandName: 'texra-local',
+      queuedFollowUpMessages: [],
+    });
+
+    expect(status).toContain('resume later with: texra-local --resume abc123');
+  });
+
   it('omits session lines before the first run starts', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
