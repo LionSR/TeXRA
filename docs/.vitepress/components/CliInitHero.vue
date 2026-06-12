@@ -18,12 +18,11 @@
     <!-- Beat 1: scaffold workspace defaults -->
     <div class="mk-term-prompt">
       <span class="mk-term-sigil">$</span>
-      <span class="mk-term-cmd"
-        >texra init
-        <span class="cih-hint-flags"
-          >(--yes accepts defaults, --gitignore ignores .texra/)</span
-        ></span
-      >
+      <span class="mk-term-cmd">texra init</span>
+    </div>
+    <div class="cih-hint-flags">
+      --yes accepts defaults non-interactively; --gitignore adds .texra/ to
+      .gitignore
     </div>
     <div class="cih-block">
       <div class="cih-wrote">Wrote .texra/config.json</div>
@@ -53,8 +52,12 @@
 /* Card shell, body, and prompt come from TermWindow + the shared .mk-term-*
    classes in theme/mockup.css. */
 .cih-hint-flags {
+  margin-top: var(--mk-space-3);
+  padding-left: var(--mk-space-16);
   color: var(--mk-text-faint);
+  font-family: var(--vp-font-family-base);
   font-size: var(--mk-fs-70);
+  font-style: italic;
 }
 .cih-block {
   margin-top: var(--mk-space-5);

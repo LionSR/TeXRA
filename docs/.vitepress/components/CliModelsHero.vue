@@ -4,22 +4,26 @@
 // `<value>\t<label>\t<status>` row per model for the current api mode
 // (packages/cli/src/runtime/modelAccess.ts); `models show <id>` prints
 // `id:` / `label:` / `provider:` / `status:` detail lines
-// (formatCliModelDetails). Short ids and labels match the page's own model
-// tables — the id column is exactly what `--model` takes.
+// (formatCliModelDetails). Short ids are exactly what `--model` takes; labels
+// are the literal llm-zoo MODEL_CONFIGS labels the command prints; the status
+// column is the lowercased availability label for the current api mode —
+// 'included access' when signed in to the relay, 'api key set' /
+// 'openrouter key' in personal mode ('login required' / 'not included'
+// appear under --all). Snapshot shows a signed-in relay session.
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
 const rows = [
-  { id: 'fable5', label: 'Claude Fable 5', status: 'available' },
-  { id: 'opus48T', label: 'Claude Opus 4.8 (thinking)', status: 'available' },
+  { id: 'fable5', label: 'Claude Fable 5', status: 'included access' },
+  { id: 'opus48T', label: 'Opus 4.8 (Thinking)', status: 'included access' },
   {
     id: 'sonnet46T',
-    label: 'Claude Sonnet 4.6 (thinking)',
-    status: 'available',
+    label: 'Sonnet 4.6 (Thinking)',
+    status: 'included access',
   },
   {
     id: 'deepseekT',
-    label: 'DeepSeek V4 Flash (thinking)',
-    status: 'available',
+    label: 'DeepSeek V4 Flash (Thinking)',
+    status: 'included access',
   },
 ];
 </script>
@@ -50,7 +54,7 @@ const rows = [
         <div><span class="cmo-k">id:</span> fable5</div>
         <div><span class="cmo-k">label:</span> Claude Fable 5</div>
         <div><span class="cmo-k">provider:</span> anthropic</div>
-        <div><span class="cmo-k">status:</span> available</div>
+        <div><span class="cmo-k">status:</span> included access</div>
       </div>
     </div>
   </TermWindow>

@@ -7,10 +7,12 @@
 // enabled-vs-detected distinction are concrete at a glance.
 //
 // Built on the <TermWindow> primitive; the shared --mk-* tokens resolve here
-// and the card flips with the docs light / dark theme. Integration ids, names,
-// categories, and the claude-agent install command match
-// src/tools/externalToolDefs.ts verbatim; the enabled / detection mix is a
-// believable static snapshot showing all three states.
+// and the card flips with the docs light / dark theme. Ids, names, categories,
+// and notes match src/tools/externalToolDefs.ts + noteForTool (statusLabel ??
+// authNote ?? configNotes ?? installCommand): the undetected claude-agent row
+// shows its install command, codex shows its authNote, wolfram/lean4 their
+// configNotes. ENABLED prints '-' for non-toggleable tools (wolfram, lean4),
+// exactly as formatCliBoolean does.
 const rows = [
   {
     id: 'codex',
@@ -18,7 +20,7 @@ const rows = [
     category: 'ai-agents',
     enabled: 'yes',
     detected: 'yes',
-    note: '',
+    note: 'Uses ChatGPT subscription (free with Plus/Pro)',
   },
   {
     id: 'claude-agent',
@@ -29,28 +31,28 @@ const rows = [
     note: 'npm install -g @anthropic-ai/claude-code',
   },
   {
+    id: 'zotero',
+    name: 'Zotero Integration',
+    category: 'ai-agents',
+    enabled: 'no',
+    detected: 'yes',
+    note: 'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
+  },
+  {
     id: 'wolfram',
     name: 'Wolfram Language',
     category: 'computation',
-    enabled: 'yes',
+    enabled: '-',
     detected: 'no',
-    note: '',
+    note: 'Requires the free Wolfram Engine (provides wolframscript).',
   },
   {
     id: 'lean4',
-    name: 'Lean 4',
+    name: 'Lean 4 Proof Assistant',
     category: 'lean',
-    enabled: 'no',
+    enabled: '-',
     detected: 'yes',
-    note: '',
-  },
-  {
-    id: 'texcount',
-    name: 'TeXcount',
-    category: 'latex',
-    enabled: 'yes',
-    detected: 'yes',
-    note: '',
+    note: 'VS Code build: requires the leanprover.lean4 extension. CLI / desktop builds: requires `lake` on PATH; each Lake project root gets its own language server, surfaced below.',
   },
 ];
 </script>
@@ -81,6 +83,7 @@ const rows = [
         <span class="ctl-c ctl-c--cat">{{ r.category }}</span>
         <span class="ctl-c ctl-c--enabled">
           <span
+            v-if="r.enabled !== '-'"
             class="ctl-dot"
             :class="r.enabled === 'yes' ? 'ctl-dot--on' : 'ctl-dot--off'"
           ></span>
