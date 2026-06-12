@@ -22,6 +22,7 @@ import {
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
+  EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
 } from '@shared/constants/toolDefaults';
 import { isObject } from '@utils/core';
 import {
@@ -63,7 +64,10 @@ export const EXECUTIONS_DEFAULT_ACTION = 'view';
 
 export function getExecutionsWaitTimeoutSeconds(timeout: unknown): number {
   return typeof timeout === 'number' && Number.isFinite(timeout)
-    ? Math.min(timeout, EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS)
+    ? Math.min(
+        Math.max(timeout, EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS),
+        EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
+      )
     : EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS;
 }
 

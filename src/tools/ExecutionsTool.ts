@@ -35,6 +35,7 @@ import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
+  EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
 } from '@shared/constants/toolDefaults';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { requireRunStream } from '@tools/contextHelpers';
@@ -124,7 +125,7 @@ const ExecutionsToolInputSchema = z.strictObject({
   timeout: z
     .number()
     .finite()
-    .min(60)
+    .min(EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS)
     .max(EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS)
     .nullish()
     .describe(
@@ -155,7 +156,10 @@ export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 
 const normalizeWaitTimeout = (timeout: number | null | undefined): number =>
   Math.min(
-    timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+    Math.max(
+      timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+      EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
+    ),
     EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
   );
 
@@ -168,14 +172,15 @@ const normalizeExecutionsToolInput = (input: unknown): unknown => {
   if (
     typeof record.timeout !== 'number' ||
     !Number.isFinite(record.timeout) ||
-    record.timeout <= EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS
+    (record.timeout >= EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS &&
+      record.timeout <= EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS)
   ) {
     return input;
   }
 
   return {
     ...record,
-    timeout: EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
+    timeout: normalizeWaitTimeout(record.timeout),
   };
 };
 

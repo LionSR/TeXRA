@@ -69,6 +69,18 @@ describe('ExecutionsTool', () => {
     expect(result.output).toBe('No execution history found.');
   });
 
+  it('raises sub-minimum wait timeouts instead of rejecting the tool call', async () => {
+    const result = await new ExecutionsTool().call({
+      path: '/executions',
+      action: 'wait',
+      timeout: 30,
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.output).toBe('No execution history found.');
+  });
+
   it('rejects non-finite wait timeouts', async () => {
     const result = await new ExecutionsTool().call({
       path: '/executions',

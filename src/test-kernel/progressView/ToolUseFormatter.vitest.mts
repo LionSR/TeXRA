@@ -98,6 +98,9 @@ describe('tool-use formatter', () => {
     };
 
     expect(getToolTimeoutMs('executions', input)).toBe(1_800_000);
+    expect(getToolTimeoutMs('executions', { ...input, timeout: 30 })).toBe(
+      60_000,
+    );
 
     const container = document.createElement('div');
     render(formatToolUseTemplate(message), container);
