@@ -10,6 +10,8 @@ interface MultiAgentInstructionPreset {
 
 const COMPLETENESS_GUIDANCE =
   'Before claiming a result is complete, check the full domain stated by the user, including sign choices, zero and boundary cases, and symmetry branches.';
+const TERMINAL_RUN_GUIDANCE =
+  'This CLI team run exits after your final response. Do not end by asking the user whether to perform more work; either complete the requested work now or state the exact artifacts and next command/action for a future run.';
 
 export function formatMultiAgentRunInstruction(
   preset: MultiAgentInstructionPreset,
@@ -25,6 +27,7 @@ export function formatMultiAgentRunInstruction(
     preset.description,
     'Use the visible workflow and tool-use agents as the team available for delegation.',
     COMPLETENESS_GUIDANCE,
+    TERMINAL_RUN_GUIDANCE,
   ];
   const approvalInstruction = formatUnavailableApprovalInstruction(
     init.approvalContext,
