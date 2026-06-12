@@ -6,6 +6,7 @@ import {
   formatAgentProposalApprovalSummary,
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
+  handleCliApprovalEvent,
   hasCliApprovalDenied,
   humanInputDenialFeedback,
   immediateDecisionForApproval,
@@ -114,6 +115,59 @@ describe('human input approval policy', () => {
       'Denied by CLI approval policy.',
     );
     expect(hasCliApprovalDenied(ctx)).toBe(true);
+  });
+});
+
+describe('approval prompt hooks', () => {
+  const proposal: ProgressEventPayloads['showAgentProposal'] = {
+    proposalId: 'proposal-1',
+    streamId: 'root@deepseekT#abc',
+    agent: 'review',
+    model: 'deepseekT',
+    instruction: 'Please check this proof.',
+    memories: [],
+    agentCategory: AgentCategory.ToolUse,
+  };
+
+  it('runs the before-prompt hook for interactive approval events', async () => {
+    const events: string[] = [];
+    const handled = handleCliApprovalEvent(
+      'showAgentProposal',
+      proposal,
+      context({
+        approvalPrompt: async () => {
+          events.push('prompt');
+          return 'n no review needed';
+        },
+      }),
+      {
+        beforePrompt: () => {
+          events.push('before');
+        },
+      },
+    );
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(handled).toBe(true);
+    expect(events).toEqual(['before', 'prompt']);
+  });
+
+  it('does not run the before-prompt hook for auto-approved events', () => {
+    const events: string[] = [];
+    const handled = handleCliApprovalEvent(
+      'showAgentProposal',
+      proposal,
+      context({ approvalPolicy: 'yolo' }),
+      {
+        beforePrompt: () => {
+          events.push('before');
+        },
+      },
+    );
+
+    expect(handled).toBe(true);
+    expect(events).toEqual([]);
   });
 });
 
