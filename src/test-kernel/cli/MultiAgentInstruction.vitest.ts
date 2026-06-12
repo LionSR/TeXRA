@@ -6,6 +6,8 @@ import { formatCliRunFileInstruction } from '@cli/commands/_helpers/runFileInstr
 import { formatToolUseAgentRunInstruction } from '@cli/commands/_helpers/toolUseRunInstruction';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 
+const workingDirectory = '/tmp/texra-workspace';
+
 const preset = {
   id: 'mathematician',
   name: 'Mathematician',
@@ -111,6 +113,7 @@ describe('formatMultiAgentRunInstruction', () => {
           contextFiles: [],
           instruction: 'Solve x^2 - 2y^2 = 1 for integer x and 0 < y < 20.',
           approvalContext: { mode, approvalPolicy },
+          workingDirectory,
         });
 
         expect(instruction).toContain(
@@ -123,12 +126,31 @@ describe('formatMultiAgentRunInstruction', () => {
     }
   });
 
+  it('anchors the team on the CLI workspace root', () => {
+    const instruction = formatMultiAgentRunInstruction(preset, {
+      inputFiles: ['problem.md'],
+      contextFiles: [],
+      instruction: '',
+      approvalContext: { mode: 'headless', approvalPolicy: 'yolo' },
+      workingDirectory,
+    });
+
+    expect(instruction).toContain(
+      `Workspace root for this run: ${JSON.stringify(workingDirectory)}`,
+    );
+    expect(instruction).toContain(
+      'Resolve relative file paths against this directory',
+    );
+    expect(instruction).toContain('instead of inventing container roots');
+  });
+
   it('warns the orchestrator when approval policy never denies tools', () => {
     const instruction = formatMultiAgentRunInstruction(preset, {
       inputFiles: ['problem.md'],
       contextFiles: [],
       instruction: 'Solve the problem.',
       approvalContext: { mode: 'headless', approvalPolicy: 'never' },
+      workingDirectory,
     });
 
     expect(instruction).toContain('Approval policy for this run is "never"');
@@ -144,6 +166,7 @@ describe('formatMultiAgentRunInstruction', () => {
       contextFiles: [],
       instruction: 'Solve x^2 - 2y^2 = 1 for integer x and 0 < y < 20.',
       approvalContext: { mode: 'headless', approvalPolicy: 'yolo' },
+      workingDirectory,
     });
 
     expect(instruction).toContain(
@@ -158,6 +181,7 @@ describe('formatMultiAgentRunInstruction', () => {
       contextFiles: [],
       instruction: 'Solve the problem.',
       approvalContext: { mode: 'headless', approvalPolicy: 'yolo' },
+      workingDirectory,
     });
 
     expect(instruction).not.toContain('were attached to this run');
@@ -169,6 +193,7 @@ describe('formatMultiAgentRunInstruction', () => {
       contextFiles: [],
       instruction: '',
       approvalContext: { mode: 'headless', approvalPolicy: 'yolo' },
+      workingDirectory,
     });
 
     expect(instruction).toContain('Primary user input files:');
@@ -185,6 +210,7 @@ describe('formatMultiAgentRunInstruction', () => {
       contextFiles: ['notes.md'],
       instruction: 'Solve the problem.',
       approvalContext: { mode: 'headless', approvalPolicy: 'yolo' },
+      workingDirectory,
     });
 
     expect(instruction).toContain('Primary user input files:');
@@ -201,6 +227,7 @@ describe('formatMultiAgentRunInstruction', () => {
       contextFiles: [],
       instruction: '',
       approvalContext: { mode: 'headless', approvalPolicy: 'yolo' },
+      workingDirectory,
     });
 
     expect(instruction).toContain(
@@ -217,6 +244,7 @@ describe('formatMultiAgentRunInstruction', () => {
       contextFiles: [],
       instruction: 'Solve the problem.',
       approvalContext: { mode: 'headless', approvalPolicy: 'ask' },
+      workingDirectory,
     });
 
     expect(instruction).toContain('headless run with approval policy "ask"');
@@ -230,6 +258,7 @@ describe('formatMultiAgentRunInstruction', () => {
       contextFiles: [],
       instruction: '',
       approvalContext: { mode: 'headless', approvalPolicy: 'yolo' },
+      workingDirectory,
     });
 
     expect(instruction).not.toContain('approval prompts cannot be answered');
