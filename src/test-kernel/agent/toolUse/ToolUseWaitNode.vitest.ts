@@ -330,6 +330,8 @@ describe('ToolUseWaitNode', () => {
       ],
     );
     const info = vi.fn();
+    const runtimeHost = { emit: vi.fn() };
+    const streamStatus = new StreamStatusRegistry();
     const services = {
       checkInterruption: () => false,
       logger: { error: vi.fn(), info },
@@ -338,7 +340,7 @@ describe('ToolUseWaitNode', () => {
         createUserFollowUpMessages,
         extractAssistantText: () => undefined,
       },
-      runtimeHost: { emit: vi.fn() },
+      runtimeHost,
       session: {
         hasQueuedFollowUp: () => true,
         waitForFollowUp: async () => ({
@@ -355,7 +357,7 @@ describe('ToolUseWaitNode', () => {
           synthetic: false,
         }),
       },
-      streamStatus: new StreamStatusRegistry(),
+      streamStatus,
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
     const node = new ToolUseWaitNode().setServices(services);
@@ -365,6 +367,13 @@ describe('ToolUseWaitNode', () => {
     const transition = await node.post(shared, prep, exec);
 
     expect(transition).toBe(FlowTransition.CONTINUE);
+    expect(runtimeHost.emit).toHaveBeenCalledWith(
+      'updateStreamStatus',
+      expect.objectContaining({ status: STREAM_STATUS.RUNNING }),
+    );
+    expect(runtimeHost.emit.mock.invocationCallOrder[0]).toBeLessThan(
+      info.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
     expect(createUserFollowUpMessages).toHaveBeenNthCalledWith(
       1,
       [],

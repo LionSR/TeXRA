@@ -4,10 +4,10 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   boundedAssistantDisplayLines,
   compactPrefixedDisplayRows,
-  isInquiryContinuationText,
 } from '@cli/chat/tui/panes/TranscriptEntry';
 import { formatRenderError } from '@cli/chat/tui/panes/EntryErrorBoundary';
 import {
+  isInquiryContinuationText,
   splitTranscriptEntries,
   terminalVisibleTranscriptText,
   trimAssistantTranscriptLead,
@@ -368,10 +368,10 @@ describe('CLI conversation transcript splitting', () => {
     ).toBe('  ef  ');
   });
 
-  it('does not reserve a spacer row after finalized user turns', () => {
+  it('budgets live user prompt bands with their margin rows', () => {
     const user = entry('u1', 'user', 'why do you write as a latex?', true);
 
-    expect(estimateTranscriptEntryRows(user, 80)).toBe(1);
+    expect(estimateTranscriptEntryRows(user, 80)).toBe(3);
   });
 
   it('does not render empty assistant placeholders between user and tool rows', () => {
@@ -418,6 +418,79 @@ describe('CLI conversation transcript splitting', () => {
     ).toEqual(['› what is this repo about', '● Bash (ls)']);
   });
 
+  it('keeps a live prompt out of static scrollback until a continuation exists', () => {
+    const user = entry('u1', 'user', 'what is this repo about', true);
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        STREAM_ID,
+        sliceWithEntries(STREAM_ID, [user], {
+          status: STREAM_STATUS.RUNNING,
+        }),
+      ],
+    ]);
+
+    const split = splitTranscriptEntries([user], STREAM_STATUS.RUNNING);
+    expect(split.finalized).toEqual([]);
+    expect(split.pending.map((item) => item.id)).toEqual(['u1']);
+
+    const staticItems = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: [],
+      streams,
+      meta: SESSION_META,
+    });
+    expect(staticItems.map((item) => item.id)).toEqual(['session-header']);
+  });
+
+  it('prints a deferred live prompt compactly once a tool continuation exists', () => {
+    const user = entry('u1', 'user', 'what is this repo about', true);
+    const tool = toolEntry('t1', 'in_progress');
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        STREAM_ID,
+        sliceWithEntries(STREAM_ID, [user, tool], {
+          status: STREAM_STATUS.RUNNING,
+        }),
+      ],
+    ]);
+
+    const split = splitTranscriptEntries([user, tool], STREAM_STATUS.RUNNING);
+    expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
+    expect(split.pending.map((item) => item.id)).toEqual(['t1']);
+
+    const staticItems = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: [],
+      streams,
+      meta: SESSION_META,
+    });
+    expect(staticItems.map((item) => item.id)).toEqual([
+      'session-header',
+      'u1',
+    ]);
+    expect(staticItems[1]).toMatchObject({
+      kind: 'entry',
+      userBottomMarginRows: 0,
+    });
+  });
+
+  it('keeps inquiry continuations on the finalized transcript path', () => {
+    const continuation = entry(
+      'u1',
+      'user',
+      '[inquiry] ei_123 answered.\nQ: Can this be simplified?\nA: Yes.',
+      true,
+    );
+    const assistant = entry('a1', 'assistant', 'working', false);
+
+    const split = splitTranscriptEntries(
+      [continuation, assistant],
+      STREAM_STATUS.RUNNING,
+    );
+    expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
+    expect(split.pending.map((item) => item.id)).toEqual(['a1']);
+  });
+
   it('does not reserve rows for zero-width assistant placeholders before tools', () => {
     const user = entry('u1', 'user', 'what is this repo about', true);
     const invisibleAssistant = entry(
@@ -450,7 +523,7 @@ describe('CLI conversation transcript splitting', () => {
     ).toEqual(['› what is this repo about', '● Bash (ls)']);
   });
 
-  it('wraps live user rows at the padded width with no margin rows', () => {
+  it('wraps live user rows at the padded width with user band margins', () => {
     const continuation = entry(
       'u1',
       'user',
@@ -461,9 +534,9 @@ describe('CLI conversation transcript splitting', () => {
 
     // 77 chars exceeds the padded wrap width (80 - 4 = 76) by one, so the
     // row estimate must reflect the gutter + prefix geometry, not the
-    // terminal width.
+    // terminal width, and normal user prompts include the band margins.
     const long = entry('u2', 'user', 'x'.repeat(77), true);
-    expect(estimateTranscriptEntryRows(long, 80)).toBe(2);
+    expect(estimateTranscriptEntryRows(long, 80)).toBe(4);
   });
 
   it('appends only finalized entries to terminal scrollback items', () => {
