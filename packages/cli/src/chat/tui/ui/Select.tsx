@@ -32,6 +32,7 @@ export interface SelectProps<T> {
   readonly onCancel: () => void;
   /** Focus the Nth item on mount (defaults to the active value's index, or 0). */
   readonly initialIndex?: number;
+  readonly labelMaxCols?: number;
   readonly maxVisibleItems?: number;
   readonly showOverflow?: boolean;
 }
@@ -306,7 +307,10 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
               </Text>
               <Text color={focused ? 'cyan' : undefined}>{shortcut} </Text>
             </Box>
-            <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>
+            <Box
+              flexShrink={0}
+              maxWidth={props.labelMaxCols ?? SELECT_LABEL_MAX_COLS}
+            >
               <Text
                 color={focused ? 'cyan' : undefined}
                 dimColor={item.disabled}
