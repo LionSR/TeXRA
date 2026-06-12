@@ -1,11 +1,12 @@
 import { formatCliRunFileInstruction } from './runFileInstruction';
+import { TERMINAL_RUN_GUIDANCE } from './terminalRunInstruction';
 
 export function formatToolUseAgentRunInstruction(init: {
   readonly inputFiles: readonly string[];
   readonly contextFiles: readonly string[];
   readonly instruction: string;
 }): string {
-  const parts: string[] = [];
+  const parts = [TERMINAL_RUN_GUIDANCE];
   const fileInstruction = formatCliRunFileInstruction({
     inputFiles: init.inputFiles,
     contextFiles: init.contextFiles,

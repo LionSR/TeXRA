@@ -248,6 +248,9 @@ describe('formatToolUseAgentRunInstruction', () => {
     expect(instruction).toContain('Primary user input files:');
     expect(instruction).toContain('- "problem.md"');
     expect(instruction).toContain(
+      'This CLI run exits after your final response.',
+    );
+    expect(instruction).toContain(
       "Treat these files as the user's task source.",
     );
     expect(instruction).toContain('Additional user instruction:');
@@ -261,7 +264,13 @@ describe('formatToolUseAgentRunInstruction', () => {
       instruction: 'Assess the proof.',
     });
 
-    expect(instruction).toBe('User instruction:\n\nAssess the proof.');
+    expect(instruction).toContain(
+      'This CLI run exits after your final response.',
+    );
+    expect(instruction).toContain(
+      'Do not end by asking the user whether to perform more work',
+    );
+    expect(instruction).toContain('User instruction:\n\nAssess the proof.');
   });
 
   it('includes read-only context files without changing input wording', () => {
@@ -272,6 +281,9 @@ describe('formatToolUseAgentRunInstruction', () => {
     });
 
     expect(instruction).toContain('Primary user input files:');
+    expect(instruction).toContain(
+      'This CLI run exits after your final response.',
+    );
     expect(instruction).toContain('Read-only context files:');
     expect(instruction).toContain('- "notes.md"');
     expect(instruction).toContain('Use these files as supporting context');
