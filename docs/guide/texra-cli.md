@@ -176,6 +176,8 @@ Code extension.
 texra chat                          # default chat agent and model
 texra chat --agent research         # pick a tool-use agent for the session
 texra chat --model deepseekT        # override the session model
+# headless tool-use run for scripts and CI
+texra agents run review --input main.tex --instruction "Check the proof." --print
 ```
 
 Slash commands inside the session: `/tools` lists and toggles integrations,
@@ -184,7 +186,11 @@ another model from the same provider mid-session (the change applies
 immediately and persists on resume), `/skills` lists available skills and
 applies one to your next request, and `/resume` restores a stored execution.
 Chat requires an interactive terminal — for scripted, non-TTY runs use
-`texra run` with `--print` or `--output-format json|ndjson`.
+`texra agents run <agent>` with `--print` or
+`--output-format json|ndjson`. It accepts workspace `--input` and `--context`
+files plus an `--instruction` prompt for the tool-use agent. Use `texra run`
+for workflow agents that take input files and produce document-oriented
+outputs.
 
 ## Multi-Agent Teams
 
