@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SkillSource } from '@skills/loadSkills';
 
 const mocks = vi.hoisted(() => ({
@@ -84,7 +85,7 @@ vi.mock('@platform/defaults/nodeWorkspace', () => ({
 
 vi.mock('@cli/runtime/cliStateStores', () => ({
   createCliStateStores: vi.fn().mockResolvedValue({
-    globalState: { update: vi.fn() },
+    globalState: { get: vi.fn(), update: vi.fn() },
     workspaceState: {},
     storage: { getGlobalStoragePath: () => '/tmp/texra-global' },
   }),
@@ -115,8 +116,10 @@ describe('CLI platform init', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.shutdownHandlers.length = 0;
+    mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({
       globalState: {
+        get: vi.fn(),
         update: vi.fn(),
       },
     });
@@ -128,7 +131,12 @@ describe('CLI platform init', () => {
 
   it('wires usage logging on first platform init', async () => {
     // tryPlatform() === undefined drives the once-per-process first-init block.
-    mocks.tryPlatform.mockReturnValue(undefined);
+    const globalState = {
+      get: vi.fn(),
+      update: vi.fn(),
+    };
+    mocks.tryPlatform.mockReturnValue({ globalState });
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
     mocks.authProvider.isAuthenticated.mockResolvedValue(false);
 
     await initCliPlatform(
@@ -145,6 +153,44 @@ describe('CLI platform init', () => {
     expect(vi.mocked(UsageLogService.dispose)).not.toHaveBeenCalled();
     for (const handler of mocks.shutdownHandlers) await handler();
     expect(vi.mocked(UsageLogService.dispose)).toHaveBeenCalled();
+  });
+
+  it('bootstraps bundled agents with the CLI version store', async () => {
+    const globalState = {
+      get: vi.fn().mockReturnValue('1.2.2'),
+      update: vi.fn().mockResolvedValue(undefined),
+    };
+    mocks.tryPlatform.mockReturnValue({ globalState });
+    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(false);
+
+    await initCliPlatform(
+      cliContext({
+        resourcesPath: '/tmp/resources-versioned',
+        version: '1.2.3',
+      }),
+    );
+
+    expect(mocks.bootstrapPlatformAgentDirectories).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: 'cli',
+        resourcesPath: '/tmp/resources-versioned',
+        currentVersion: '1.2.3',
+      }),
+    );
+
+    const options =
+      mocks.bootstrapPlatformAgentDirectories.mock.calls.at(-1)?.[0];
+    expect(options?.versionStore.get()).toBe('1.2.2');
+
+    await options?.versionStore.update('1.2.3');
+    expect(globalState.update).toHaveBeenCalledWith(
+      GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
+      '1.2.3',
+    );
+    expect(globalState.update).not.toHaveBeenCalledWith(
+      GlobalStateKey.LAST_KNOWN_VERSION,
+      expect.anything(),
+    );
   });
 
   it('surfaces included-access auth probe failures by default', async () => {
