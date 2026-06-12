@@ -86,7 +86,7 @@ This repository is a pnpm workspace. Repo-root `src/` contains shared core logic
   - `common/state/` - State managers including `pendingStateManager`
   - `common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), command constants
 - `src/utils/` is reserved for utilities used by both the extension host and webviews. If a helper is specific to one side, place it under `frontend/` or `common/` instead of `utils/`.
-  - `utils/core/` - Async utilities (`debounce`, `withTimeout`, `delay`)
+  - `utils/core/` - Async utilities (`debounce`, `delay`)
   - `utils/files/` - Filesystem utilities, rules, and vars
   - `utils/config/` - Settings helpers (`getConfig`, `updateConfig`, `watchConfig`)
   - `utils/system/` - Shell command execution (`execUtils`)

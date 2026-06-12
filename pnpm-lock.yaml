@@ -200,6 +200,9 @@ importers:
       perfect-debounce:
         specifier: ^2.1.0
         version: 2.1.0
+      pluralize:
+        specifier: ^8.0.0
+        version: 8.0.0
       postal-mime:
         specifier: ^2.7.4
         version: 2.7.4
@@ -218,6 +221,9 @@ importers:
       signal-polyfill:
         specifier: ^0.2.2
         version: 0.2.2
+      slash:
+        specifier: ^5.1.0
+        version: 5.1.0
       sortablejs:
         specifier: ^1.15.7
         version: 1.15.7
@@ -291,6 +297,9 @@ importers:
       '@types/nunjucks':
         specifier: ^3.2.6
         version: 3.2.6
+      '@types/pluralize':
+        specifier: ^0.0.33
+        version: 0.0.33
       '@types/shell-quote':
         specifier: ^1.7.5
         version: 1.7.5
@@ -2523,6 +2532,9 @@ packages:
 
   '@types/pg@8.15.6':
     resolution: {integrity: sha512-NoaMtzhxOrubeL/7UZuNTrejB4MPAJ0RpxZqXQf2qXuVlTPuG6Y8p4u9dKRaue4yjmC7ZhzVO2/Yyyn25znrPQ==}
+
+  '@types/pluralize@0.0.33':
+    resolution: {integrity: sha512-JOqsl+ZoCpP4e8TDke9W79FDcSgPAR0l6pixx2JHkhnRjvShyYiAYw2LVsnA7K08Y6DeOnaU6ujmENO4os/cYg==}
 
   '@types/react@19.2.17':
     resolution: {integrity: sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw==}
@@ -8019,6 +8031,8 @@ snapshots:
       '@types/node': 22.19.17
       pg-protocol: 1.13.0
       pg-types: 2.2.0
+
+  '@types/pluralize@0.0.33': {}
 
   '@types/react@19.2.17':
     dependencies:

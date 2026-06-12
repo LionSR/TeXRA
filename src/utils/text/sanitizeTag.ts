@@ -12,7 +12,7 @@
  * structurally intact.
  */
 
-import { escapeRegExp } from '@utils/core/stringCore';
+import escapeRegExp from 'escape-string-regexp';
 
 const VALID_TAG_NAME = /^[a-z][a-z0-9-]*$/i;
 

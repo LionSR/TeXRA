@@ -28,7 +28,7 @@ import { isTimeoutErrorCode } from '@tools/timeouts';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { CROSSREF_CONSTANTS, crossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
-import { withTimeout } from '@utils/core';
+import pTimeout from 'p-timeout';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - zotero
@@ -226,11 +226,10 @@ async function resolveDOI(
     await waitForRateLimit('crossref', CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS);
 
     // The CrossrefClient has no timeout support, so we race against one.
-    const response = await withTimeout(
-      crossrefClient.work(doi),
-      CROSSREF_RESOLVE_TIMEOUT_MS,
-      'Crossref lookup timed out',
-    );
+    const response = await pTimeout(crossrefClient.work(doi), {
+      milliseconds: CROSSREF_RESOLVE_TIMEOUT_MS,
+      message: 'Crossref lookup timed out',
+    });
 
     if (!response.ok || !response.content?.message) return null;
 
