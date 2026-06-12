@@ -71,11 +71,12 @@ export function sessionHeaderIdentityLine(
     readonly streams?: ReadonlyMap<StreamTabId, StreamSlice>;
   } = {},
 ): string {
-  const model = meta.model || '—';
   const parentStream = context.parentStream;
   const parentStreamId =
     context.streamId && parentStream?.get(context.streamId);
   if (context.streamId && parentStreamId && parentStream && context.streams) {
+    const slice = context.streams.get(context.streamId);
+    const model = slice?.model || meta.model || '—';
     const view = streamViewForId({
       activeStreamId: context.streamId,
       parentStream,
@@ -84,10 +85,12 @@ export function sessionHeaderIdentityLine(
     });
     return `subagent: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
   }
+  const model = meta.model || '—';
+  const agent = meta.agent || 'chat';
   if (meta.teamName) {
-    return `team: ${meta.teamName} · root: ${meta.agent || 'chat'} · model: ${model}`;
+    return `team: ${meta.teamName} · root: ${agent} · model: ${model}`;
   }
-  return `agent: ${meta.agent || 'chat'} · model: ${model}`;
+  return `agent: ${agent} · model: ${model}`;
 }
 
 function SessionHeaderBlock({
@@ -153,6 +156,22 @@ const SESSION_HEADER_ID = 'session-header';
 const FULL_SESSION_HEADER_ROWS = 4;
 const COMPACT_SESSION_HEADER_ROWS = 1;
 
+function childHeaderIdentityPending({
+  parentStream,
+  scrollbackStreamId,
+  streams,
+}: {
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly scrollbackStreamId: StreamTabId | undefined;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+}): boolean {
+  return (
+    scrollbackStreamId !== undefined &&
+    parentStream.has(scrollbackStreamId) &&
+    !streams.get(scrollbackStreamId)?.model
+  );
+}
+
 function staticTranscriptItemRowCount(
   item: StaticTranscriptItem,
   width?: number,
@@ -208,6 +227,11 @@ export function appendStaticTranscriptItems({
   // Copied lazily: this runs on every stream-sync tick and most ticks append
   // nothing.
   let nextItems: StaticTranscriptItem[] | undefined;
+  const shouldWaitForChildIdentity =
+    !seen.has(SESSION_HEADER_ID) &&
+    childHeaderIdentityPending({ parentStream, scrollbackStreamId, streams });
+  if (shouldWaitForChildIdentity) return currentItems;
+
   if (!seen.has(SESSION_HEADER_ID)) {
     const header: StaticTranscriptItem = {
       id: SESSION_HEADER_ID,
