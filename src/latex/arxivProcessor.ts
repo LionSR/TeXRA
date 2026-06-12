@@ -234,7 +234,10 @@ class ArxivSourceProcessor {
     try {
       const extraction = tar.x({ file: tarPath, cwd: destDir });
       if (options.timeout) {
-        await pTimeout(extraction, { milliseconds: options.timeout, message: 'Extraction timed out' });
+        await pTimeout(extraction, {
+          milliseconds: options.timeout,
+          message: 'Extraction timed out',
+        });
       } else {
         await extraction;
       }

@@ -311,7 +311,10 @@ export class LeanSession {
           }),
           childError,
         ]),
-        { milliseconds: HANDSHAKE_TIMEOUT_MS, message: 'Lean LSP initialize timeout' },
+        {
+          milliseconds: HANDSHAKE_TIMEOUT_MS,
+          message: 'Lean LSP initialize timeout',
+        },
       );
       rpc.notify('initialized', {});
       updateLeanServer(this.id, { status: 'running' });
