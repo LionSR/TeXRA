@@ -2,9 +2,6 @@
 // Bundles scripts/tui-harness.tsx into dist/bin/tui-harness.js for PTY tests.
 import { chmod } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
-import { reactCompilerPlugin } from './reactCompilerPlugin.mjs';
-import { esmCjsGlobalsBanner } from '../../../scripts/esm-cjs-globals-banner.mjs';
 
 const reactDevtoolsStub = fileURLToPath(
   new URL('./react-devtools-core-stub.mjs', import.meta.url),
@@ -12,22 +9,39 @@ const reactDevtoolsStub = fileURLToPath(
 
 const outfile = 'dist/bin/tui-harness.js';
 
-await build({
-  entryPoints: ['scripts/tui-harness.tsx'],
-  bundle: true,
-  platform: 'node',
-  format: 'esm',
-  target: 'node20',
-  external: ['fsevents'],
-  jsx: 'automatic',
-  loader: { '.tsx': 'tsx', '.ts': 'ts' },
-  alias: { 'react-devtools-core': reactDevtoolsStub },
-  outfile,
-  banner: {
-    js: esmCjsGlobalsBanner,
-  },
-  plugins: [reactCompilerPlugin()],
-  logLevel: 'info',
-});
+try {
+  const [{ build }, { reactCompilerPlugin }, { esmCjsGlobalsBanner }] =
+    await Promise.all([
+      import('esbuild'),
+      import('./reactCompilerPlugin.mjs'),
+      import('../../../scripts/esm-cjs-globals-banner.mjs'),
+    ]);
 
-await chmod(outfile, 0o755);
+  await build({
+    entryPoints: ['scripts/tui-harness.tsx'],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node20',
+    external: ['fsevents'],
+    jsx: 'automatic',
+    loader: { '.tsx': 'tsx', '.ts': 'ts' },
+    alias: { 'react-devtools-core': reactDevtoolsStub },
+    outfile,
+    banner: {
+      js: esmCjsGlobalsBanner,
+    },
+    plugins: [reactCompilerPlugin()],
+    logLevel: 'info',
+  });
+
+  await chmod(outfile, 0o755);
+} catch (err) {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error('[build-harness] failed to build TUI harness.');
+  console.error(
+    '[build-harness] If dependencies are missing, run `corepack pnpm install` from the repo root.',
+  );
+  console.error(`[build-harness] ${message}`);
+  process.exit(1);
+}
