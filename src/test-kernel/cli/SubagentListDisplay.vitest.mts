@@ -8,6 +8,7 @@ import {
   compactChildRowText,
   compactRows,
 } from '@cli/chat/tui/panes/SubagentList';
+import { STREAM_STATUS } from '@shared/schemas';
 import type { ActiveChildInfo } from '@shared/schemas';
 
 describe('CLI SubagentList display model', () => {
@@ -106,5 +107,18 @@ describe('CLI SubagentList display model', () => {
     ).toBe(
       'latex build running · 19sec · main.tex: Proof sketch needs one missing reference',
     );
+  });
+
+  it('uses CLI-facing labels for child stream statuses', () => {
+    expect(
+      compactChildRowText({
+        child: {
+          executionId: 'review',
+          agentName: 'review',
+          status: STREAM_STATUS.WAITING,
+        },
+        nowMs: Date.now(),
+      }),
+    ).toBe('review idle');
   });
 });
