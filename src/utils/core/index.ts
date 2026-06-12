@@ -20,6 +20,6 @@ export {
   filterNotNullish,
   ensureArray,
 } from './typeGuards';
-export { debounce, delay, withTimeout } from './async';
+export { debounce, delay } from './async';
 export { clamp, clampIndex, roundTo } from './math';
 export { tryParseUrl } from './urlCore';

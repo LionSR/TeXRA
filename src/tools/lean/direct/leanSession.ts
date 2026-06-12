@@ -17,7 +17,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { toErrorMessage } from '@common/errors';
 import { debug, info, warn } from '@logger/logUtils';
-import { withTimeout } from '@utils/core';
+import pTimeout from 'p-timeout';
 import {
   registerLeanServer,
   unregisterLeanServer,
@@ -99,11 +99,10 @@ export class LeanSession {
     unregisterLeanServer(this.id);
     if (!rpc || !child) return;
     try {
-      await withTimeout(
-        rpc.request('shutdown'),
-        SHUTDOWN_TIMEOUT_MS,
-        'Lean LSP shutdown timeout',
-      ).catch(() => undefined);
+      await pTimeout(rpc.request('shutdown'), {
+        milliseconds: SHUTDOWN_TIMEOUT_MS,
+        message: 'Lean LSP shutdown timeout',
+      }).catch(() => undefined);
       rpc.notify('exit');
     } finally {
       rpc.dispose('LeanSession.dispose');
@@ -292,7 +291,7 @@ export class LeanSession {
     updateLeanServer(this.id, { pid: child.pid });
 
     try {
-      await withTimeout(
+      await pTimeout(
         Promise.race([
           rpc.request('initialize', {
             processId: process.pid,
@@ -312,8 +311,10 @@ export class LeanSession {
           }),
           childError,
         ]),
-        HANDSHAKE_TIMEOUT_MS,
-        'Lean LSP initialize timeout',
+        {
+          milliseconds: HANDSHAKE_TIMEOUT_MS,
+          message: 'Lean LSP initialize timeout',
+        },
       );
       rpc.notify('initialized', {});
       updateLeanServer(this.id, { status: 'running' });

@@ -134,7 +134,7 @@ export class LsTool extends defineTool({
 
     return makeResult(
       formatted,
-      `Listed ${count} ${pluralize(count, 'entry', 'entries')} in ${display}`,
+      `Listed ${count} ${pluralize(count, 'entry')} in ${display}`,
     );
   }
 }

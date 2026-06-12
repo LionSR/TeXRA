@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { splitContentLines } from '@utils/text/stringUtils';
+import { pluralize, splitContentLines } from '@utils/text/stringUtils';
 
 describe('splitContentLines', () => {
   it('normalizes CRLF and drops the phantom line after a trailing newline', () => {
@@ -17,5 +17,19 @@ describe('splitContentLines', () => {
 
   it('returns no lines for empty input', () => {
     expect(splitContentLines('')).toEqual([]);
+  });
+});
+
+describe('pluralize', () => {
+  it('uses the singular form for one item', () => {
+    expect(pluralize(1, 'entry')).toBe('entry');
+  });
+
+  it('uses library-backed pluralization when no override is provided', () => {
+    expect(pluralize(2, 'entry')).toBe('entries');
+  });
+
+  it('honors explicit plural overrides', () => {
+    expect(pluralize(2, 'person', 'people')).toBe('people');
   });
 });
