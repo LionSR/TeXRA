@@ -46,12 +46,6 @@ const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
 };
 
 /**
- * Tools whose `timeout` input field is in seconds (converted to ms for display).
- * Most tools use milliseconds directly.
- */
-const TIMEOUT_IN_SECONDS = new Set(['executions']);
-
-/**
  * Tools where the timeout only applies to a specific action value.
  * For these tools, only show the timer limit when that action is used.
  */
@@ -95,9 +89,7 @@ export function getToolTimeoutMs(
   }
 
   if (typeof input.timeout === 'number') {
-    return TIMEOUT_IN_SECONDS.has(toolName)
-      ? input.timeout * 1000
-      : input.timeout;
+    return input.timeout;
   }
   return defaultTimeout;
 }
