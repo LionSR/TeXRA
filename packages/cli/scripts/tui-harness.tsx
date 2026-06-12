@@ -110,6 +110,13 @@ const SHOW_USER_QUESTION = process.env.HARNESS_USER_QUESTION === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
 const PLAN_APPROVAL_GOAL = process.env.HARNESS_PLAN_APPROVAL_GOAL === '1';
+const PLAN_APPROVAL_OBJECTIVE =
+  process.env.HARNESS_PLAN_APPROVAL_OBJECTIVE ??
+  [
+    'Coordinate a short math proof through CLI chat.',
+    'Split the finite and symbolic cases.',
+    'Ask a checker to verify the enumeration before writing the final answer.',
+  ].join('\n');
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
 const SHOW_ASSISTANT_TOOL_PREAMBLE =
@@ -746,11 +753,7 @@ function makePlanApprovalPayload(): PlanApprovalPermission {
     streamId: STREAM_ID,
     goalEnabled: PLAN_APPROVAL_GOAL,
     plan: {
-      objective: [
-        'Coordinate a short math proof through CLI chat.',
-        'Split the finite and symbolic cases.',
-        'Ask a checker to verify the enumeration before writing the final answer.',
-      ].join('\n'),
+      objective: PLAN_APPROVAL_OBJECTIVE,
     },
   };
 }
