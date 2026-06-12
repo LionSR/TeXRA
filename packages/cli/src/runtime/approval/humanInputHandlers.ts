@@ -7,6 +7,7 @@ import { type CliContext } from '../cliContext';
 import { parseUserQuestionAnswer } from '../userQuestionAnswer';
 
 import {
+  type CliApprovalPromptHooks,
   approvalPromptAllowed,
   humanInputDenialFeedback,
   markApprovalDenied,
@@ -17,6 +18,7 @@ import { formatUserQuestionPrompt } from './approvalSummaries';
 export function handleExternalInquiry(
   payload: ProgressEventPayloads['showExternalInquiry'],
   context: CliContext,
+  hooks: CliApprovalPromptHooks = {},
 ): void {
   const threadId = payload.threadId;
   if (!threadId) {
@@ -36,6 +38,7 @@ export function handleExternalInquiry(
   void (async () => {
     let answer: string;
     try {
+      hooks.beforePrompt?.();
       answer = await queueCliApprovalQuestion(context, {
         kind: 'externalInquiry',
         summary: `External inquiry requested:\n${payload.question}`,
@@ -71,6 +74,7 @@ export function handleExternalInquiry(
 export function handleUserQuestion(
   payload: ProgressEventPayloads['showUserQuestion'],
   context: CliContext,
+  hooks: CliApprovalPromptHooks = {},
 ): void {
   if (!approvalPromptAllowed(context)) {
     const feedback = humanInputDenialFeedback(
@@ -89,6 +93,7 @@ export function handleUserQuestion(
     const answers: Record<string, string | string[]> = {};
     try {
       for (const question of payload.questions) {
+        hooks.beforePrompt?.();
         const answer = await queueCliApprovalQuestion(context, {
           kind: 'approval',
           summary: payload.context

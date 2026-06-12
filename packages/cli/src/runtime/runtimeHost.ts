@@ -31,7 +31,13 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
 
   return {
     emit(event, payload) {
-      if (handleCliApprovalEvent(event, payload, context)) return;
+      if (
+        handleCliApprovalEvent(event, payload, context, {
+          beforePrompt: () => runProgress?.preserve(),
+        })
+      ) {
+        return;
+      }
 
       if (context.outputFormat === 'ndjson') {
         writeNdjsonStdout({
