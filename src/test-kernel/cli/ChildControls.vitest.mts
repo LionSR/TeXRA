@@ -45,7 +45,11 @@ import type {
 } from '@cli/chat/tui/state/cliState';
 
 // Local imports - shared schemas
-import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  TOOL_USE_STATUS,
+  type NormalizedToolUse,
+} from '@shared/schemas';
 
 function tail(stdout: string, stderr = ''): ProcessOutputTail {
   return { stdout, stderr };
@@ -315,6 +319,49 @@ describe('CLI child execution controls', () => {
       },
     ]);
     expect(childElapsed(state.activeProcesses[0], 62_000)).toBe('1s');
+  });
+
+  it('uses CLI-facing labels in picker descriptions', () => {
+    const state = slice({
+      activeSubagents: [
+        {
+          executionId: 'agent-1',
+          agentName: 'review',
+          childStreamId: 'child-a',
+          status: STREAM_STATUS.WAITING,
+          elapsed: '20s',
+        },
+      ],
+      activeProcesses: [
+        {
+          executionId: 'proc-1',
+          agentName: 'bash',
+          status: STREAM_STATUS.WAITING,
+          elapsed: '3s',
+        },
+      ],
+      processOutput: new Map([['proc-1', tail('last line')]]),
+    });
+
+    expect(buildChildControlItems(state, 'subagents')).toMatchObject([
+      {
+        executionId: 'agent-1',
+        description: 'idle · 20s',
+        statusLabel: 'idle',
+      },
+    ]);
+    expect(buildChildControlItems(state, 'tasks')).toMatchObject([
+      {
+        executionId: 'agent-1',
+        description: 'idle · 20s',
+        statusLabel: 'idle',
+      },
+      {
+        executionId: 'proc-1',
+        description: 'idle · 3s · last line',
+        statusLabel: 'idle',
+      },
+    ]);
   });
 
   it('keys live child elapsed timers by active execution identity', () => {
@@ -839,7 +886,7 @@ describe('CLI child execution controls', () => {
         childStreamId: 'review-stream',
         kind: 'subagent',
         label: 'review',
-        status: 'stopped',
+        statusLabel: 'stopped',
         killable: false,
       },
     ]);
