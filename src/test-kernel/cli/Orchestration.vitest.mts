@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
+  orchestrationBlockRowCost,
   orchestrationFooterHints,
   orchestrationKeyHints,
   orchestrationModelAccessView,
+  orchestrationWrappedLineRows,
 } from '@cli/orchestration/runOrchestrationTui';
 import { buildCliOrchestrationItems } from '@cli/runtime/orchestration';
 
@@ -132,6 +134,16 @@ describe('CLI orchestration items', () => {
       key: 'q/Esc',
       action: 'exit',
     });
+  });
+
+  it('budgets wrapped launcher status rows instead of assuming one row per line', () => {
+    const accountHint =
+      'actions: `texra login --select-account` changes account; `--api-mode personal` uses provider keys';
+
+    expect(orchestrationWrappedLineRows(accountHint, 52)).toBeGreaterThan(1);
+    expect(orchestrationBlockRowCost([accountHint], 52)).toBe(
+      1 + orchestrationWrappedLineRows(accountHint, 52),
+    );
   });
 
   it('starts with new chat and keeps help as the final active item', () => {
