@@ -15,6 +15,10 @@ const RENDER_TIMEOUT_MS = readPositiveNumber(
   process.env.TEXRA_WEBVIEW_SMOKE_TIMEOUT_MS,
   10_000,
 );
+const DEFAULT_VIEWPORT = {
+  width: 1280,
+  height: 900,
+};
 
 function normalizeConsoleMessage(levelOrDetails, message) {
   if (typeof levelOrDetails === 'object' && levelOrDetails !== null) {
@@ -330,8 +334,8 @@ async function applyViewFixture(window, view) {
 
 function createSmokeWindow(errors) {
   const window = new BrowserWindow({
-    width: 1280,
-    height: 900,
+    width: DEFAULT_VIEWPORT.width,
+    height: DEFAULT_VIEWPORT.height,
     show: false,
     webPreferences: {
       backgroundThrottling: false,
@@ -360,8 +364,110 @@ function createSmokeWindow(errors) {
   return window;
 }
 
+async function assertToolEditApprovalLayout(window, view) {
+  return window.webContents.executeJavaScript(
+    `
+      (async () => {
+        function findDeep(selector, root = document) {
+          const direct = root.querySelector?.(selector);
+          if (direct) return direct;
+          for (const element of root.querySelectorAll?.('*') ?? []) {
+            const found = element.shadowRoot ? findDeep(selector, element.shadowRoot) : null;
+            if (found) return found;
+          }
+          return null;
+        }
+
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        const panel = findDeep('tool-edit-request-panel');
+        const section = findDeep('.approval-requests');
+        const card = findDeep('.approval-request');
+        const actions = findDeep('.approval-request__actions');
+        const approveButton = findDeep('wa-button[data-action="approve"]');
+        const rejectButton = findDeep('wa-button[data-action="reject"]');
+
+        const missing = [
+          ['tool-edit-request-panel', panel],
+          ['.approval-requests', section],
+          ['.approval-request', card],
+          ['.approval-request__actions', actions],
+          ['approve button', approveButton],
+          ['reject button', rejectButton],
+        ]
+          .filter(([, element]) => !element)
+          .map(([label]) => label);
+        if (missing.length > 0) {
+          throw new Error(\`${view.name} missing approval layout elements: \${missing.join(', ')}\`);
+        }
+
+        const viewportWidth = document.documentElement.clientWidth;
+        const maxRight = viewportWidth + 1;
+        const sectionRect = section.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+        const actionsRect = actions.getBoundingClientRect();
+        const approveRect = approveButton.getBoundingClientRect();
+        const rejectRect = rejectButton.getBoundingClientRect();
+
+        const overflow = [
+          ['approval section', sectionRect],
+          ['approval card', cardRect],
+          ['approval actions', actionsRect],
+          ['approve button', approveRect],
+          ['reject button', rejectRect],
+        ].filter(([, rect]) => rect.left < -1 || rect.right > maxRight);
+        if (overflow.length > 0) {
+          throw new Error(
+            \`${view.name} approval layout overflowed viewport \${viewportWidth}px: \${overflow
+              .map(([label, rect]) => \`\${label} [\${rect.left.toFixed(1)}, \${rect.right.toFixed(1)}]\`)
+              .join('; ')}\`,
+          );
+        }
+
+        const compactButtonMaxWidth = 120;
+        if (approveRect.width > compactButtonMaxWidth || rejectRect.width > compactButtonMaxWidth) {
+          throw new Error(
+            \`${view.name} approval buttons are too wide: approve=\${approveRect.width.toFixed(
+              1,
+            )}px reject=\${rejectRect.width.toFixed(1)}px\`,
+          );
+        }
+
+        return {
+          approveWidth: approveRect.width,
+          cardRight: cardRect.right,
+          rejectWidth: rejectRect.width,
+          viewportWidth,
+        };
+      })();
+    `,
+    true,
+  );
+}
+
+async function assertViewSpecificLayout(window, view) {
+  const assertions = Array.isArray(view.assertions) ? view.assertions : [];
+  for (const assertion of assertions) {
+    switch (assertion) {
+      case 'toolEditApprovalLayout': {
+        const result = await assertToolEditApprovalLayout(window, view);
+        console.log(
+          `Verified ${view.name} tool edit approval layout: ${JSON.stringify(
+            result,
+          )}`,
+        );
+        break;
+      }
+      default:
+        throw new Error(`Unknown webview smoke assertion: ${assertion}`);
+    }
+  }
+}
+
 async function smokeView(window, view, outputDir, errors) {
   errors.length = 0;
+  const viewport = view.viewport ?? DEFAULT_VIEWPORT;
+  window.setBounds({ width: viewport.width, height: viewport.height });
   await window.loadFile(view.htmlPath);
   let result;
   try {
@@ -387,6 +493,7 @@ async function smokeView(window, view, outputDir, errors) {
   }
   await assertWebviewRuntime(window, view);
   const fixtureResult = await applyViewFixture(window, view);
+  await assertViewSpecificLayout(window, view);
 
   const screenshotPath = path.join(outputDir, `${view.name}.png`);
   const image = await window.webContents.capturePage();
