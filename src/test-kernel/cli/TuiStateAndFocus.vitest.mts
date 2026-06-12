@@ -91,6 +91,7 @@ import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   AgentCategory,
+  DEFAULT_TOOL_CONFIG,
   MESSAGE_TYPES,
   STREAM_STATUS,
   type StorageKey,
@@ -2537,6 +2538,37 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
 
     expect(cliState.activeStreamId.get()).toBe(root);
     expect(cliState.streams.get().has(child1)).toBe(true);
+  });
+
+  it('captures per-stream model identity from task state', () => {
+    const wrapped = wrapRuntimeHost(makeHost());
+
+    wrapped.emit('setTaskState', {
+      streamId: child1,
+      executionId: 'exec-search',
+      taskState: {
+        agentConfig: {
+          agent: 'search',
+          agentCategory: AgentCategory.ToolUse,
+          model: 'kimi26T',
+          instruction: 'Check the enumeration independently.',
+          inputFiles: [],
+          contextFiles: [],
+          mediaFiles: [],
+          outputFiles: [],
+          editedFile: null,
+          editedFiles: [],
+          toolConfig: DEFAULT_TOOL_CONFIG,
+          memories: [],
+          workingDirectory: undefined,
+        },
+      },
+    });
+
+    expect(cliState.streams.get().get(child1)).toMatchObject({
+      model: 'kimi26T',
+      category: AgentCategory.ToolUse,
+    });
   });
 
   it('refreshes queued follow-up display when an active follow-up is sent', () => {

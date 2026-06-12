@@ -75,9 +75,11 @@ export interface BypassState {
 
 export interface StreamSlice {
   readonly streamId: StreamTabId;
+  /** Model identity captured from setTaskState for this specific stream. */
+  readonly model?: string | undefined;
   /** Agent category for this stream (`toolUse` / `workflow` / …), captured
-   *  from `setActiveStream`. Lets the exit hint list only resumable tool-use
-   *  subagents (workflows don't resume). Undefined until the stream activates. */
+   *  from `setTaskState` or `setActiveStream`. Lets the exit hint list only
+   *  resumable tool-use subagents (workflows don't resume). */
   readonly category: AgentCategory | undefined;
   readonly status: StreamStatus | undefined;
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
@@ -222,6 +224,7 @@ export const NO_BYPASS: BypassState = {
 function emptySlice(streamId: StreamTabId): StreamSlice {
   return {
     streamId,
+    model: undefined,
     category: undefined,
     status: undefined,
     runStartedAt: undefined,
