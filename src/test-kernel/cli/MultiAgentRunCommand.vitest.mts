@@ -246,7 +246,7 @@ describe('CLI multi-agent run command', () => {
     expect(request?.config.instruction).toContain('Primary user input files:');
     expect(request?.config.instruction).toContain('- "problem.tex"');
     expect(request?.config.instruction).toContain(
-      'This CLI team run exits after your final response.',
+      'This CLI run exits after your final response.',
     );
     expect(request?.config.instruction).toContain(
       'Do not end by asking the user whether to perform more work',
