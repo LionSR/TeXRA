@@ -203,7 +203,13 @@ export class ProgressBoardLayoutMock extends LitElement {
 
       .board {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(200px, 240px);
+        grid-template-columns: minmax(0, 1fr) minmax(
+            56px,
+            clamp(56px, 30%, 240px)
+          );
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
         min-height: 360px;
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--wa-border-radius-m);
@@ -238,6 +244,10 @@ export class ProgressBoardLayoutMock extends LitElement {
 
       task-group-list {
         height: 100%;
+      }
+
+      stream-tabs {
+        min-width: 0;
       }
 
       .files-block {
