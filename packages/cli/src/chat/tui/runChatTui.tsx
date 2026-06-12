@@ -128,7 +128,10 @@ import {
 } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
-import { tuiOutputStreamForColor } from './render/noColorOutput';
+import {
+  installTuiStdoutListenerLimit,
+  tuiOutputStreamForColor,
+} from './render/noColorOutput';
 import { formatCliSessionStatus } from './sessionStatus';
 import { clearApprovals } from './state/approvalQueue';
 import { cliState, patchStream, resetCliState } from './state/cliState';
@@ -1121,6 +1124,10 @@ export async function runChat(
   const snapshotStore = new StreamSnapshotStore();
 
   const disposers: Array<() => void> = [];
+  // Ink registers one stdout "resize" listener per mounted useWindowSize()
+  // hook. The chat TUI can legitimately mount more than Node's default ten
+  // while approvals, status, stream tabs, and child-stream views are visible.
+  disposers.push(installTuiStdoutListenerLimit(process.stdout));
   // Crash safety: if the process dies outside the orderly teardown below
   // (uncaught exception, stray process.exit), still restore the terminal so
   // the user's shell isn't left in raw/kitty/mouse mode with a hidden cursor.
