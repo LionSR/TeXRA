@@ -139,9 +139,8 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   /* Per-panel basis tunes how many action buttons fit per row before wrapping.
-     Default 8rem (retry / inquiry / question); approval / bash / plan want
-     wider rows, the workflow proposal narrower. */
-  .approval-request__actions,
+     Default 8rem (retry / inquiry / question); bash / plan want wider rows,
+     the workflow proposal narrower. Tool edit approvals stay compact below. */
   .bash-approval-request__actions,
   .plan-approval-request__actions {
     --action-button-basis: 12rem;
@@ -151,9 +150,18 @@ export const requestPanelStyles: CSSResult = css`
     --action-button-basis: 6rem;
   }
 
+  .approval-request__actions wa-button[data-action] {
+    flex: 0 0 auto;
+    min-width: 6.5rem;
+  }
+
   :is(${ACTIONS}) wa-button[data-action]::part(base) {
     justify-content: flex-start;
     gap: ${sp.small};
+  }
+
+  .approval-request__actions wa-button[data-action]::part(base) {
+    justify-content: center;
   }
 
   /* Shared action button colors */
