@@ -581,6 +581,32 @@ describe('CLI run progress renderer', () => {
     expect(output).toContain('polish paper.tex · 0s');
   });
 
+  it('preserves the live progress line before approval prompts', async () => {
+    const output = await captureStreamWrites(process.stderr, async () => {
+      const host = createCliRuntimeHost(
+        context({
+          approvalPolicy: 'ask',
+          approvalPrompt: async () => 'n no review needed',
+        }),
+      );
+
+      host.emit('setTaskState', workflowTaskState());
+      host.emit('showAgentProposal', {
+        proposalId: 'proposal-1',
+        streamId: 'stream-1',
+        agent: 'review',
+        model: 'deepseekT',
+        instruction: 'Please check this proof.',
+        memories: [],
+        agentCategory: AgentCategory.ToolUse,
+      });
+      await Promise.resolve();
+      await host.close();
+    });
+
+    expect(output).toContain('\r\x1b[2Kpolish paper.tex · 0s\n');
+  });
+
   it('writes human progress to stderr without polluting json stdout', async () => {
     let stderr = '';
     const stdout = await captureStreamWrites(process.stdout, async () => {
