@@ -106,16 +106,11 @@ function applyToState<K extends ProgressEvent>(
       const p = payload as ProgressEventPayloads['setTaskState'];
       const config = p.taskState.agentConfig;
       patchStream(p.streamId, (s) => {
-        if (
-          s.agentName === config.agent &&
-          s.model === config.model &&
-          s.category === config.agentCategory
-        ) {
+        if (s.model === config.model && s.category === config.agentCategory) {
           return s;
         }
         return {
           ...s,
-          agentName: config.agent,
           model: config.model,
           category: config.agentCategory,
         };

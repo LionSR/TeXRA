@@ -757,7 +757,6 @@ describe('CLI conversation transcript splitting', () => {
       [
         ROOT,
         sliceWithEntries(ROOT, [], {
-          agentName: 'previous-agent',
           model: 'previous-model',
         }),
       ],
@@ -785,7 +784,6 @@ describe('CLI conversation transcript splitting', () => {
       [
         ROOT,
         sliceWithEntries(ROOT, [entry('u1', 'user', 'send scouts', true)], {
-          agentName: 'assistant',
           model: 'deepseekT',
           activeSubagents: [
             {
@@ -800,7 +798,6 @@ describe('CLI conversation transcript splitting', () => {
       [
         CHILD,
         sliceWithEntries(CHILD, [entry('a1', 'assistant', 'ok', true)], {
-          agentName: 'search',
           model: 'kimi26T',
         }),
       ],
@@ -826,6 +823,47 @@ describe('CLI conversation transcript splitting', () => {
       kind: 'header',
       identityLine: 'subagent: search · parent: main · model: kimi26T',
     });
+  });
+
+  it('waits for child task state before printing a focused subagent header', () => {
+    const ROOT = 'root-stream' as StreamTabId;
+    const CHILD = 'search-stream' as StreamTabId;
+    const parentStream = new Map<StreamTabId, StreamTabId>([[CHILD, ROOT]]);
+    const childEntry = entry('a1', 'assistant', 'checking', true);
+    const streamsWithoutChildModel = new Map<StreamTabId, StreamSlice>([
+      [ROOT, sliceWithEntries(ROOT, [])],
+      [CHILD, sliceWithEntries(CHILD, [childEntry])],
+    ]);
+
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: CHILD,
+        currentItems: [],
+        streams: streamsWithoutChildModel,
+        meta: SESSION_META,
+        parentStream,
+      }),
+    ).toEqual([]);
+
+    const streamsWithChildModel = new Map<StreamTabId, StreamSlice>([
+      [ROOT, sliceWithEntries(ROOT, [])],
+      [
+        CHILD,
+        sliceWithEntries(CHILD, [childEntry], {
+          model: 'kimi26T',
+        }),
+      ],
+    ]);
+
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: CHILD,
+        currentItems: [],
+        streams: streamsWithChildModel,
+        meta: SESSION_META,
+        parentStream,
+      }).map((item) => item.id),
+    ).toEqual(['session-header', 'a1']);
   });
 
   it('only feeds the root scrollback stream, not background subagents', () => {
@@ -1098,7 +1136,6 @@ function sliceWithEntries(
 ): StreamSlice {
   return {
     streamId,
-    agentName: undefined,
     model: undefined,
     category: undefined,
     status: undefined,

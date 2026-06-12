@@ -2338,7 +2338,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     expect(cliState.streams.get().has(child1)).toBe(true);
   });
 
-  it('captures per-stream agent and model identity from task state', () => {
+  it('captures per-stream model identity from task state', () => {
     const wrapped = wrapRuntimeHost(makeHost());
 
     wrapped.emit('setTaskState', {
@@ -2364,7 +2364,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     });
 
     expect(cliState.streams.get().get(child1)).toMatchObject({
-      agentName: 'search',
       model: 'kimi26T',
       category: AgentCategory.ToolUse,
     });
