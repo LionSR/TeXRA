@@ -5,6 +5,7 @@ import type { PlanApprovalPermission } from '@shared/schemas';
 
 import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
+import { fillRows } from '../render/terminalText';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface PlanApprovalProps {
@@ -39,16 +40,21 @@ export function renderCompactPlanLine(
 export function planApprovalDisplayLines({
   objective,
   width,
+  padLines = false,
 }: {
   readonly objective: string;
   readonly width: number;
+  readonly padLines?: boolean;
 }): string[] {
   const contentWidth = Math.max(MIN_PLAN_APPROVAL_CONTENT_WIDTH, width);
   return objective.split('\n').flatMap((line) => {
-    if (line.length === 0) return [''];
-    return wrapAnsiToWidth(line, contentWidth)
+    if (line.length === 0) return [padLines ? fillRows('', contentWidth) : ''];
+    const wrapped = wrapAnsiToWidth(line, contentWidth)
       .split('\n')
       .map((part, index) => (index === 0 ? part : part.trimStart()));
+    return padLines
+      ? wrapped.map((part) => fillRows(part, contentWidth))
+      : wrapped;
   });
 }
 
@@ -63,8 +69,9 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
       planApprovalDisplayLines({
         objective: props.payload.plan.objective,
         width: contentWidth,
+        padLines: !compact,
       }),
-    [contentWidth, props.payload.plan.objective],
+    [compact, contentWidth, props.payload.plan.objective],
   );
   const compactBodyRows = compact
     ? Math.max(0, (props.availableRows ?? 1) - 1)
