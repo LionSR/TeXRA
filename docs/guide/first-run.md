@@ -94,7 +94,7 @@ texra run polish \
   ]"
 />
 
-<p class="hero-caption">What you should see while it runs: Round 0 has written the first revision, Round 1 is critiquing and revising it. When the run completes, the path to the final document prints on stdout.</p>
+<p class="hero-caption">Mid-run: Round 0 has written the first revision, Round 1 is critiquing and revising it — the live status line on stderr tracks the current round. When the run completes, the path to the final document prints on stdout.</p>
 
 The run streams reasoning, tool calls, and the assembled output.
 When it completes, polish has written one folder per round under

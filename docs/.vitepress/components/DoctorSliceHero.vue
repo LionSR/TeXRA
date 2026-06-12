@@ -34,7 +34,7 @@ defineProps({
       </li>
     </ul>
     <div class="dsh-more">
-      … plus Node, auth, model access, and storage checks
+      … plus Node.js, workspace dirs, auth, model access, and config checks
     </div>
   </TermWindow>
 </template>
