@@ -46,6 +46,24 @@ describe('cleanSessionDescription', () => {
     assert.equal(cleanSessionDescription('   '), '');
   });
 
+  it('rejects full-sentence helper responses instead of persisting stale prose', () => {
+    assert.equal(
+      cleanSessionDescription(
+        'Since the system environment for this run does not provide delegation tools, I cannot delegate.',
+      ),
+      '',
+    );
+  });
+
+  it('keeps compact labels within the description word budget', () => {
+    assert.equal(
+      cleanSessionDescription(
+        'Checking concise proof with one delegated review subagent',
+      ),
+      'Checking concise proof with one delegated review subagent',
+    );
+  });
+
   it('truncates with ellipsis at 80 characters', () => {
     const long = 'a'.repeat(120);
     const result = cleanSessionDescription(long);

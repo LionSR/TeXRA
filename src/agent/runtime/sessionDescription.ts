@@ -20,6 +20,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'SessionDescription';
 const MAX_DESCRIPTION_LENGTH = 80;
+const MAX_DESCRIPTION_WORDS = 12;
 
 /**
  * Normalize a model-generated session description: collapse newlines,
@@ -35,6 +36,7 @@ export function cleanSessionDescription(text: string): string {
     .replaceAll(/[.!?…]+$/g, '')
     .trim();
   if (!cleaned) return '';
+  if (cleaned.split(/\s+/).length > MAX_DESCRIPTION_WORDS) return '';
   return truncateWithEllipsis(cleaned, MAX_DESCRIPTION_LENGTH);
 }
 
