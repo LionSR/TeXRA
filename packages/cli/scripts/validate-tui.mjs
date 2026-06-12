@@ -55,6 +55,14 @@ const UP = ESC + '[A';
 const DOWN = ESC + '[B';
 const PAGE_DOWN = ESC + '[6~';
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*m`, 'g');
+const shortcutModifierLabel = process.platform === 'darwin' ? 'Esc' : 'Alt';
+const metaChordLabel = (key) =>
+  `${shortcutModifierLabel}${shortcutModifierLabel === 'Esc' ? ' ' : '-'}${key}`;
+const STOPPED_SUBAGENT_INPUT_MESSAGE_START =
+  'Subagent is no longer accepting follow-ups; press Tab to switch streams';
+const STOPPED_SUBAGENT_PICKER_MESSAGE = `${metaChordLabel('s')} to choose another`;
+const STOPPED_SUBAGENT_TASKS_MESSAGE = `${metaChordLabel('p')} to review tasks.`;
+const STOPPED_SUBAGENT_INPUT_MESSAGE = `${STOPPED_SUBAGENT_INPUT_MESSAGE_START} or ${STOPPED_SUBAGENT_PICKER_MESSAGE}, or ${STOPPED_SUBAGENT_TASKS_MESSAGE}`;
 const LONG_BASH_APPROVAL_COMMAND = [
   "python3 << 'EOF'",
   'solutions = []',
@@ -2213,9 +2221,61 @@ const SCENARIOS = [
       '[3:strategy](stopped)',
       '◆ stopped',
       'root active',
+      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
       '[Ctrl-C]stop root',
     ],
+    expectCollapsed: [STOPPED_SUBAGENT_INPUT_MESSAGE],
     unexpect: ['◆ running', '2 sub 1 proc'],
+  },
+  {
+    name: 'focused-stopped-subagent-esc-s-picker',
+    platforms: ['darwin'],
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [
+      ESC + 'p',
+      'k',
+      ESC + 's',
+      DOWN,
+      DOWN,
+      'f',
+      { input: ESC, delayMs: 40 },
+      's',
+    ],
+    frame: 'tail',
+    expect: ['Subagents', 'strategy', '3. strategy — stopped', 'root active'],
+    unexpect: ['Tasks and sub-workflows', '◆ running', '2 sub 1 proc'],
+  },
+  {
+    name: 'focused-stopped-subagent-esc-tab-focus',
+    platforms: ['darwin'],
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [
+      ESC + 'p',
+      'k',
+      ESC + 's',
+      DOWN,
+      DOWN,
+      'f',
+      { input: ESC, delayMs: 40 },
+      '\t',
+    ],
+    frame: 'tail',
+    expect: ['[main]*', '◆ running', '2 sub 1 proc'],
+    unexpect: [
+      'Harness interrupt requested.',
+      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
+      '[3:strategy](stopped)',
+    ],
   },
   {
     name: 'focused-stopped-subagent-submit',
@@ -2241,9 +2301,11 @@ const SCENARIOS = [
       '[3:strategy](stopped)',
       '◆ stopped',
       'root active',
-      'The selected subagent is no longer accepting follow-ups.',
+      STOPPED_SUBAGENT_INPUT_MESSAGE_START,
     ],
+    expectCollapsed: [STOPPED_SUBAGENT_INPUT_MESSAGE],
     unexpect: [
+      'The selected subagent is no longer accepting follow-ups.',
       'Harness received: can you still receive this?',
       '◆ running',
       '2 sub 1 proc',
@@ -2569,7 +2631,17 @@ function scenarioFrame(scenario, fullFrame, rows) {
 }
 
 function expectedFrameTextVisible(scenario, frame) {
-  return (scenario.expect ?? []).every((text) => frame.includes(text));
+  const collapsedFrame = collapseFrameText(frame);
+  return (
+    (scenario.expect ?? []).every((text) => frame.includes(text)) &&
+    (scenario.expectCollapsed ?? []).every((text) =>
+      collapsedFrame.includes(text),
+    )
+  );
+}
+
+function collapseFrameText(frame) {
+  return frame.replaceAll(/[│╭╮╰╯─]/g, ' ').replaceAll(/\s+/g, ' ');
 }
 
 const FAKE_CLIPBOARD_COMMANDS_BY_PLATFORM = {
@@ -2812,6 +2884,19 @@ function writeSnapshotReport(results) {
 }
 
 async function runScenario(scenario) {
+  if (scenario.platforms && !scenario.platforms.includes(process.platform)) {
+    const skipReason = `scenario is only supported on ${scenario.platforms.join(', ')}`;
+    return {
+      name: scenario.name,
+      ok: true,
+      skipped: true,
+      skipReason,
+      failures: [],
+      frame: skipReason,
+      rows: scenarioRows(scenario),
+    };
+  }
+
   const fakeClipboard = scenario.fakeClipboard ? makeFakeClipboard() : null;
   if (scenario.fakeClipboard && !fakeClipboard) {
     const skipReason = `fake clipboard is not supported on ${process.platform}`;
@@ -2909,8 +2994,9 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
   }
 
   for (const key of scenario.keys ?? []) {
-    child.write(key);
-    await sleep(500);
+    const input = typeof key === 'string' ? key : key.input;
+    child.write(input);
+    await sleep(Number(key.delayMs ?? scenario.keyDelayMs ?? 500));
   }
   for (const resize of scenario.resizes ?? []) {
     child.resize(Number(resize.cols ?? cols), Number(resize.rows ?? rows));
@@ -2953,12 +3039,18 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
     } catch {}
   }
 
+  const collapsedFrame = collapseFrameText(frame);
   const missing = (scenario.expect ?? []).filter((t) => !frame.includes(t));
+  const missingCollapsed = (scenario.expectCollapsed ?? []).filter(
+    (t) => !collapsedFrame.includes(t),
+  );
   const present = (scenario.unexpect ?? []).filter((t) => frame.includes(t));
   const failures = [];
   if (!booted) failures.push('input prompt never rendered (boot timeout)');
   for (const t of missing)
     failures.push(`expected text missing: ${JSON.stringify(t)}`);
+  for (const t of missingCollapsed)
+    failures.push(`expected collapsed text missing: ${JSON.stringify(t)}`);
   for (const t of present)
     failures.push(`unexpected text present: ${JSON.stringify(t)}`);
   for (const check of scenario.maxOccurrences ?? []) {

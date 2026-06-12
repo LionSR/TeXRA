@@ -25,11 +25,15 @@ import {
   approvalForegroundMaxRows,
   approvalVisibleForActiveStream,
   childControlForegroundMaxRows,
+  digitFromMetaShortcut,
+  focusedChildInputDisabledMessage,
   foregroundEscapeAction,
   foregroundSurfaceKind,
+  shouldDeferEscapeInterruptForMetaChord,
   shouldShowTipRow,
   shouldShowTodosPlanPanel,
   staticTranscriptRowBudget,
+  triggerEscapeInterrupt,
 } from '@cli/chat/tui/App';
 import type { PendingApproval } from '@cli/chat/tui/state/approvalQueue';
 import {
@@ -756,6 +760,86 @@ describe('CLI TUI row allocation', () => {
     ).toBe(false);
   });
 
+  it('defers Escape interrupt only when stopped child Esc chords are visible', () => {
+    expect(
+      shouldDeferEscapeInterruptForMetaChord({
+        childInputDisabled: true,
+        shortcutModifierLabel: 'Esc',
+        subagentControlsAvailable: true,
+        taskControlsAvailable: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldDeferEscapeInterruptForMetaChord({
+        childInputDisabled: true,
+        shortcutModifierLabel: 'Esc',
+        subagentControlsAvailable: false,
+        taskControlsAvailable: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldDeferEscapeInterruptForMetaChord({
+        childInputDisabled: false,
+        shortcutModifierLabel: 'Esc',
+        subagentControlsAvailable: true,
+        taskControlsAvailable: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldDeferEscapeInterruptForMetaChord({
+        childInputDisabled: true,
+        shortcutModifierLabel: 'Alt',
+        subagentControlsAvailable: true,
+        taskControlsAvailable: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldDeferEscapeInterruptForMetaChord({
+        childInputDisabled: true,
+        shortcutModifierLabel: 'Esc',
+        subagentControlsAvailable: false,
+        taskControlsAvailable: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('parses stripped meta shortcut digits', () => {
+    expect(digitFromMetaShortcut('1')).toBe(1);
+    expect(digitFromMetaShortcut('9')).toBe(9);
+    expect(digitFromMetaShortcut('0')).toBeUndefined();
+    expect(digitFromMetaShortcut('10')).toBeUndefined();
+    expect(digitFromMetaShortcut('p')).toBeUndefined();
+  });
+
+  it('runs Escape interrupt from the supplied current state', () => {
+    let interrupts = 0;
+    expect(
+      triggerEscapeInterrupt({
+        inputDisabled: false,
+        reverseSearchOpen: false,
+        slashPaletteOpen: false,
+        canInterruptActiveRun: () => true,
+        onInterruptActive: () => {
+          interrupts += 1;
+        },
+      }),
+    ).toBe(true);
+    expect(interrupts).toBe(1);
+
+    expect(
+      triggerEscapeInterrupt({
+        inputDisabled: false,
+        reverseSearchOpen: false,
+        slashPaletteOpen: false,
+        canInterruptActiveRun: () => false,
+        onInterruptActive: () => {
+          interrupts += 1;
+        },
+      }),
+    ).toBe(false);
+    expect(interrupts).toBe(1);
+  });
+
   it('keeps user-opened foreground surfaces ahead of new approvals', () => {
     expect(
       foregroundSurfaceKind({
@@ -1306,6 +1390,93 @@ describe('CLI TUI row allocation', () => {
       kind: 'reject',
       streamId: child1,
     });
+  });
+
+  it('explains disabled input when a focused child stream cannot accept follow-ups', () => {
+    setParentStream(child1, root);
+
+    expect(
+      focusedChildInputDisabledMessage({
+        activeStreamId: root,
+        parentStream: cliState.parentStream.get(),
+        status: STREAM_STATUS.STOPPED,
+      }),
+    ).toBeUndefined();
+
+    expect(
+      focusedChildInputDisabledMessage({
+        activeStreamId: child1,
+        parentStream: cliState.parentStream.get(),
+        status: undefined,
+      }),
+    ).toBeUndefined();
+
+    expect(
+      focusedChildInputDisabledMessage({
+        activeStreamId: child1,
+        parentStream: cliState.parentStream.get(),
+        status: STREAM_STATUS.RUNNING,
+      }),
+    ).toBeUndefined();
+
+    expect(
+      focusedChildInputDisabledMessage({
+        activeStreamId: child1,
+        parentStream: cliState.parentStream.get(),
+        shortcutModifierLabel: 'Esc',
+        status: STREAM_STATUS.STOPPED,
+      }),
+    ).toBe(
+      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Esc s to choose another.',
+    );
+
+    expect(
+      focusedChildInputDisabledMessage({
+        activeStreamId: child1,
+        parentStream: cliState.parentStream.get(),
+        shortcutModifierLabel: 'Alt',
+        status: STREAM_STATUS.STOPPED,
+      }),
+    ).toBe(
+      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Alt-s to choose another.',
+    );
+
+    expect(
+      focusedChildInputDisabledMessage({
+        activeStreamId: child1,
+        parentStream: cliState.parentStream.get(),
+        shortcutModifierLabel: 'Esc',
+        status: STREAM_STATUS.STOPPED,
+        subagentControlsAvailable: false,
+      }),
+    ).toBe(
+      'Subagent is no longer accepting follow-ups; press Tab to switch streams.',
+    );
+
+    expect(
+      focusedChildInputDisabledMessage({
+        activeStreamId: child1,
+        parentStream: cliState.parentStream.get(),
+        shortcutModifierLabel: 'Esc',
+        status: STREAM_STATUS.STOPPED,
+        subagentControlsAvailable: false,
+        taskControlsAvailable: true,
+      }),
+    ).toBe(
+      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Esc p to review tasks.',
+    );
+
+    expect(
+      focusedChildInputDisabledMessage({
+        activeStreamId: child1,
+        parentStream: cliState.parentStream.get(),
+        shortcutModifierLabel: 'Esc',
+        status: STREAM_STATUS.STOPPED,
+        taskControlsAvailable: true,
+      }),
+    ).toBe(
+      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Esc s to choose another, or Esc p to review tasks.',
+    );
   });
 
   it('mirrors running child status events into focused child routing', () => {
