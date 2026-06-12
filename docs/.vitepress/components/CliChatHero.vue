@@ -19,7 +19,8 @@ const calls = [
     state: 'done',
     tool: 'read_file',
     preview: 'sections/intro.tex',
-    output: 'In this paper we present a novel… +41 lines (ctrl + t to view)',
+    output: 'In this paper we present a novel approach to',
+    more: '… +41 lines (ctrl + t to view transcript)',
   },
   {
     state: 'running',
@@ -76,6 +77,9 @@ const calls = [
           <span class="cc-corner">⎿</span>
           <span class="cc-out-text">{{ c.output }}</span>
         </div>
+        <div v-if="c.more" class="cc-out cc-out--more">
+          <span class="cc-out-text">{{ c.more }}</span>
+        </div>
       </li>
     </ul>
 
@@ -100,11 +104,11 @@ const calls = [
     <!-- Status-bar strip: ◆ status · elapsed · api mode · round · tokens -->
     <template #hint>
       <span class="cc-diamond">◆</span>
-      <span class="cc-status">working</span>
+      <span class="cc-status">running</span>
       <span class="cc-seg">8s</span>
       <span class="cc-seg">relay</span>
       <span class="cc-seg">r1</span>
-      <span class="cc-seg">12.3k/200k (6%)</span>
+      <span class="cc-seg">12.3k/1M (1%)</span>
       <span class="cc-bindings"
         >[/model]models&ensp;[/api]api&ensp;[Ctrl-C]stop</span
       >
@@ -214,6 +218,10 @@ const calls = [
 }
 .cc-out-text {
   min-width: 0;
+}
+/* Elision marker line: continuation under the corner glyph's column. */
+.cc-out--more {
+  padding-left: var(--mk-space-26);
 }
 
 /* Diff bands: full-width colored rows, no strikethrough */
