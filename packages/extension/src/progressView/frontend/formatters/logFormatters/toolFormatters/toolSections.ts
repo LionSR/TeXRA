@@ -58,6 +58,7 @@ import { codexToolRenderers } from '../codexToolTemplates';
 import {
   buildToolSection,
   getOutputEdits,
+  getExecutionsWaitTimeoutSeconds,
   isMcpTextBlock,
   EXECUTIONS_DEFAULT_ACTION,
 } from './helpers';
@@ -220,7 +221,7 @@ function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
   }
 
   if (action === 'wait') {
-    const timeout = execInput.timeout ?? 300;
+    const timeout = getExecutionsWaitTimeoutSeconds(execInput.timeout);
     sections.push(
       buildToolUseSection('Action:', wrapInPre(`wait (timeout: ${timeout}s)`)),
     );

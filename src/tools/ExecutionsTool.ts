@@ -123,6 +123,7 @@ const ExecutionsToolInputSchema = z.strictObject({
   /** Max seconds to wait (action="wait" only). Default: 300. */
   timeout: z
     .number()
+    .finite()
     .min(60)
     .max(EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS)
     .nullish()
@@ -166,6 +167,7 @@ const normalizeExecutionsToolInput = (input: unknown): unknown => {
   const record = input as Record<string, unknown>;
   if (
     typeof record.timeout !== 'number' ||
+    !Number.isFinite(record.timeout) ||
     record.timeout <= EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS
   ) {
     return input;

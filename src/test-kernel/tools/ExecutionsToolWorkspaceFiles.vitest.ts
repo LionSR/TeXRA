@@ -69,6 +69,17 @@ describe('ExecutionsTool', () => {
     expect(result.output).toBe('No execution history found.');
   });
 
+  it('rejects non-finite wait timeouts', async () => {
+    const result = await new ExecutionsTool().call({
+      path: '/executions',
+      action: 'wait',
+      timeout: Number.NaN,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.error).toContain('Invalid input');
+  });
+
   it('lists and reads persisted workspace files for tool-use executions', async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), 'texra-exec-files-'));
     try {

@@ -21,6 +21,7 @@ import type { LogMessageData } from '@shared/schemas';
 import {
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+  EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
 } from '@shared/constants/toolDefaults';
 import { isObject } from '@utils/core';
 import {
@@ -60,6 +61,12 @@ const TIMEOUT_GATED_BY_ACTION: Record<string, string> = {
 /** Default action for the executions tool when the model omits it. */
 export const EXECUTIONS_DEFAULT_ACTION = 'view';
 
+export function getExecutionsWaitTimeoutSeconds(timeout: unknown): number {
+  return typeof timeout === 'number' && Number.isFinite(timeout)
+    ? Math.min(timeout, EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS)
+    : EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS;
+}
+
 /**
  * Extract the effective timeout for a tool call from its input.
  * Returns undefined for tools without a configurable timeout.
@@ -78,6 +85,10 @@ export function getToolTimeoutMs(
 
   // Background tools return immediately — timeout timer is misleading
   if (input.run_in_background === true) return undefined;
+
+  if (toolName === 'executions') {
+    return getExecutionsWaitTimeoutSeconds(input.timeout) * 1000;
+  }
 
   if (typeof input.timeout === 'number') {
     return TIMEOUT_IN_SECONDS.has(toolName)
