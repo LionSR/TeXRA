@@ -751,6 +751,33 @@ describe('CLI conversation transcript splitting', () => {
     );
   });
 
+  it('keeps session metadata authoritative for root stream identity', () => {
+    const ROOT = 'root-stream' as StreamTabId;
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        ROOT,
+        sliceWithEntries(ROOT, [], {
+          agentName: 'previous-agent',
+          model: 'previous-model',
+        }),
+      ],
+    ]);
+
+    expect(
+      sessionHeaderIdentityLine(
+        {
+          ...SESSION_META,
+          agent: 'current-agent',
+          model: 'current-model',
+        },
+        {
+          streamId: ROOT,
+          streams,
+        },
+      ),
+    ).toBe('agent: current-agent · model: current-model');
+  });
+
   it('labels focused subagent scrollback with the child stream identity', () => {
     const ROOT = 'root-stream' as StreamTabId;
     const CHILD = 'search-stream' as StreamTabId;
@@ -758,6 +785,8 @@ describe('CLI conversation transcript splitting', () => {
       [
         ROOT,
         sliceWithEntries(ROOT, [entry('u1', 'user', 'send scouts', true)], {
+          agentName: 'assistant',
+          model: 'deepseekT',
           activeSubagents: [
             {
               executionId: 'ei_search',
@@ -768,7 +797,13 @@ describe('CLI conversation transcript splitting', () => {
           ],
         }),
       ],
-      [CHILD, sliceWithEntries(CHILD, [entry('a1', 'assistant', 'ok', true)])],
+      [
+        CHILD,
+        sliceWithEntries(CHILD, [entry('a1', 'assistant', 'ok', true)], {
+          agentName: 'search',
+          model: 'kimi26T',
+        }),
+      ],
     ]);
 
     expect(
@@ -777,7 +812,7 @@ describe('CLI conversation transcript splitting', () => {
         streamId: CHILD,
         streams,
       }),
-    ).toBe('subagent: search · parent: main · model: deepseekT');
+    ).toBe('subagent: search · parent: main · model: kimi26T');
 
     expect(
       appendStaticTranscriptItems({
@@ -789,7 +824,7 @@ describe('CLI conversation transcript splitting', () => {
       })[0],
     ).toMatchObject({
       kind: 'header',
-      identityLine: 'subagent: search · parent: main · model: deepseekT',
+      identityLine: 'subagent: search · parent: main · model: kimi26T',
     });
   });
 
@@ -1063,6 +1098,8 @@ function sliceWithEntries(
 ): StreamSlice {
   return {
     streamId,
+    agentName: undefined,
+    model: undefined,
     category: undefined,
     status: undefined,
     runStartedAt: undefined,

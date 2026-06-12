@@ -36,6 +36,7 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Subagent headers show the subagent model** — focusing a subagent in the CLI now shows that subagent's own model in the scrollback header instead of reusing the parent chat model.
 - **Terminal always restored on exit** — a crash or unexpected exit can no longer leave your shell stuck in raw mode with a hidden cursor or mouse reporting left on.
 - **Stopping honors your subagent preference** — stopping an orchestrator now respects the "Keep agents running if I stop the orchestrator" setting instead of always interrupting running subagents.
 

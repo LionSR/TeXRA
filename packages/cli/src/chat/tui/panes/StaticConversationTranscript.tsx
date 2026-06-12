@@ -71,11 +71,12 @@ export function sessionHeaderIdentityLine(
     readonly streams?: ReadonlyMap<StreamTabId, StreamSlice>;
   } = {},
 ): string {
-  const model = meta.model || '—';
   const parentStream = context.parentStream;
   const parentStreamId =
     context.streamId && parentStream?.get(context.streamId);
   if (context.streamId && parentStreamId && parentStream && context.streams) {
+    const slice = context.streams.get(context.streamId);
+    const model = slice?.model || meta.model || '—';
     const view = streamViewForId({
       activeStreamId: context.streamId,
       parentStream,
@@ -84,10 +85,12 @@ export function sessionHeaderIdentityLine(
     });
     return `subagent: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
   }
+  const model = meta.model || '—';
+  const agent = meta.agent || 'chat';
   if (meta.teamName) {
-    return `team: ${meta.teamName} · root: ${meta.agent || 'chat'} · model: ${model}`;
+    return `team: ${meta.teamName} · root: ${agent} · model: ${model}`;
   }
-  return `agent: ${meta.agent || 'chat'} · model: ${model}`;
+  return `agent: ${agent} · model: ${model}`;
 }
 
 function SessionHeaderBlock({
