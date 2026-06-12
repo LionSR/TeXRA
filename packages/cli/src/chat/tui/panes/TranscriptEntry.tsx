@@ -11,6 +11,7 @@ import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { fillRows } from '../render/terminalText';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
+import { isInquiryContinuationText } from './transcriptEntries';
 import { ToolUseRow } from './ToolUseRow';
 import { toolUseDisplayLines } from './toolRenderers';
 import type {
@@ -18,16 +19,10 @@ import type {
   ConversationEntry,
 } from '../state/cliState';
 
-const INQUIRY_CONTINUATION_RE =
-  /^\[inquiry\]\s+\S+\s+(?:answered|dropped by user)\.(?:\n|$)/;
 export const USER_ENTRY_MARGIN_TOP_ROWS = 1;
 export const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 export const ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS = 0;
 export const PROCESS_ENTRY_MARGIN_BOTTOM_ROWS = 1;
-
-export function isInquiryContinuationText(text: string): boolean {
-  return INQUIRY_CONTINUATION_RE.test(text);
-}
 
 function prefixedWrappedLines(
   text: string,
@@ -92,10 +87,16 @@ function boundedDisplayRows({
 function UserEntryRow({
   entry,
   colorEnabled,
+  marginTopRows = USER_ENTRY_MARGIN_TOP_ROWS,
+  marginBottomRows = USER_ENTRY_MARGIN_BOTTOM_ROWS,
+  maxRows,
   width,
 }: {
   readonly entry: ConversationEntry;
   readonly colorEnabled?: boolean;
+  readonly marginTopRows?: number;
+  readonly marginBottomRows?: number;
+  readonly maxRows?: number;
   readonly width?: number;
 }): React.JSX.Element {
   // Mark a user turn with a reverse-video band (theme-adaptive via reverse
@@ -108,14 +109,11 @@ function UserEntryRow({
   // their wrapped-line count.
   const cols = Math.max(1, Math.floor(width ?? 80) - 2);
   return (
-    <Box
-      marginTop={USER_ENTRY_MARGIN_TOP_ROWS}
-      marginBottom={USER_ENTRY_MARGIN_BOTTOM_ROWS}
-      paddingX={1}
-    >
+    <Box marginTop={marginTopRows} marginBottom={marginBottomRows} paddingX={1}>
       <Text inverse={colorEnabled !== false}>
         {compactPrefixedDisplayRows({
           fillWidth: true,
+          maxRows,
           text: entry.text,
           width: cols,
         })}
@@ -128,16 +126,20 @@ function InquiryContinuationRow({
   entry,
   fillWidth,
   colorEnabled,
+  maxRows,
   width,
 }: {
   readonly entry: ConversationEntry;
   readonly fillWidth?: boolean;
   readonly colorEnabled?: boolean;
+  readonly maxRows?: number;
   readonly width?: number;
 }): React.JSX.Element {
   // Same one-column gutter as the user band so both `› ` chevrons align.
   const cols = Math.max(1, Math.floor(width ?? 80) - 2);
-  const lines = prefixedWrappedLines(entry.text, cols);
+  const wrappedLines = prefixedWrappedLines(entry.text, cols);
+  const lines =
+    maxRows === undefined ? wrappedLines : boundedLines(wrappedLines, maxRows);
   const displayLines =
     fillWidth === true ? fillRows(lines.join('\n'), cols).split('\n') : lines;
   return (
@@ -222,11 +224,13 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   width,
   colorEnabled,
   fillWidth,
+  userBottomMarginRows,
 }: {
   readonly entry: ConversationEntry;
   readonly width?: number;
   readonly colorEnabled?: boolean;
   readonly fillWidth?: boolean;
+  readonly userBottomMarginRows?: number;
 }): React.JSX.Element {
   switch (entry.role) {
     case 'user':
@@ -241,7 +245,12 @@ export const TranscriptEntry = memo(function TranscriptEntry({
         );
       }
       return (
-        <UserEntryRow entry={entry} colorEnabled={colorEnabled} width={width} />
+        <UserEntryRow
+          entry={entry}
+          colorEnabled={colorEnabled}
+          marginBottomRows={userBottomMarginRows}
+          width={width}
+        />
       );
     case 'error': {
       const cols = Math.max(1, Math.floor(width ?? 80) - 2);
@@ -379,6 +388,34 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
           })}
         </Text>
       </Box>
+    );
+  }
+  if (entry.role === 'user') {
+    if (isInquiryContinuationText(entry.text)) {
+      return (
+        <InquiryContinuationRow
+          entry={entry}
+          fillWidth
+          colorEnabled={colorEnabled}
+          maxRows={rows}
+          width={width}
+        />
+      );
+    }
+
+    const includeMargins = rows >= 3;
+    const marginRows = includeMargins
+      ? USER_ENTRY_MARGIN_TOP_ROWS + USER_ENTRY_MARGIN_BOTTOM_ROWS
+      : 0;
+    return (
+      <UserEntryRow
+        entry={entry}
+        colorEnabled={colorEnabled}
+        marginTopRows={includeMargins ? USER_ENTRY_MARGIN_TOP_ROWS : 0}
+        marginBottomRows={includeMargins ? USER_ENTRY_MARGIN_BOTTOM_ROWS : 0}
+        maxRows={Math.max(1, rows - marginRows)}
+        width={width}
+      />
     );
   }
   if (entry.role === 'tool' && entry.toolUse) {

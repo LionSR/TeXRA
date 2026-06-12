@@ -6,9 +6,14 @@ import {
   ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS,
   LIVE_TAIL_ROWS,
   PROCESS_ENTRY_MARGIN_BOTTOM_ROWS,
+  USER_ENTRY_MARGIN_BOTTOM_ROWS,
+  USER_ENTRY_MARGIN_TOP_ROWS,
   tailWindow,
 } from './TranscriptEntry';
-import { isRenderableTranscriptEntry } from './transcriptEntries';
+import {
+  isInquiryContinuationText,
+  isRenderableTranscriptEntry,
+} from './transcriptEntries';
 import { toolUseDisplayLines } from './toolRenderers';
 import type { ConversationEntry } from '../state/cliState';
 
@@ -62,10 +67,13 @@ export function estimateTranscriptEntryRows(
   }
   if (entry.role === 'user' || entry.role === 'error') {
     // Both roles render inside a paddingX={1} box plus a 2-col prefix
-    // (`› ` / `! `), so text wraps to `width - 4`. The static band's margins
-    // are not budgeted here: the live pane paints these rows through the
-    // margin-less bounded renderer.
-    return estimateWrappedRows(entry.text, Math.max(1, width - 4));
+    // (`› ` / `! `), so text wraps to `width - 4`.
+    const textRows = estimateWrappedRows(entry.text, Math.max(1, width - 4));
+    const marginRows =
+      entry.role === 'user' && !isInquiryContinuationText(entry.text)
+        ? USER_ENTRY_MARGIN_TOP_ROWS + USER_ENTRY_MARGIN_BOTTOM_ROWS
+        : 0;
+    return textRows + marginRows;
   }
 
   return estimateWrappedRows(entry.text, width) + 1;
