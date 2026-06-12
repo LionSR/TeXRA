@@ -12,6 +12,7 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { toErrorMessage } from '@common/errors';
 import { isInFlightStatus } from '@common/constants/streamStatus';
+import { clamp } from '@utils/core';
 import { createChannelTrace } from '@logger';
 import {
   AgentCategoryFilterSchema,
@@ -428,7 +429,7 @@ export class ProgressViewState {
         const timestamp =
           firstTimestamp == null
             ? baseTimestamp
-            : Math.max(0, Math.min(baseTimestamp, firstTimestamp - 1));
+            : clamp(baseTimestamp, 0, firstTimestamp - 1);
 
         this.streamLogs.append(streamId, {
           id: `legacy-instruction:${streamId}:${timestamp}`,

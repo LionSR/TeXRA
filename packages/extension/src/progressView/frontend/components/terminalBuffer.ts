@@ -18,8 +18,7 @@ export function processTerminalText(text: string): string {
   // the line from that column onward instead of preserving the stale tail characters.
 
   const preprocessed = text
-    .split(ERASE_SENTINEL)
-    .join('')
+    .replaceAll(ERASE_SENTINEL, '')
     .replaceAll(ANSI_ERASE_LINE_PATTERN, ERASE_SENTINEL);
   return stripAnsi(preprocessed)
     .replaceAll('\r\n', '\n')
@@ -28,17 +27,14 @@ export function processTerminalText(text: string): string {
       const segs = line.split('\r');
       // On a fresh line (no preceding \r), \x1b[K has nothing to clear; text after
       // the erase point is still written at the cursor, so just strip the markers.
-      let current = segs[0]!.split(ERASE_SENTINEL).join('');
+      let current = segs[0]!.replaceAll(ERASE_SENTINEL, '');
 
       for (const seg of segs.slice(1)) {
         const eraseAt = seg.indexOf(ERASE_SENTINEL);
         if (eraseAt >= 0) {
           // \r overlays the prefix up to the erase point; \x1b[K clears from there to EOL.
           const pre = seg.slice(0, eraseAt);
-          const post = seg
-            .slice(eraseAt + 1)
-            .split(ERASE_SENTINEL)
-            .join('');
+          const post = seg.slice(eraseAt + 1).replaceAll(ERASE_SENTINEL, '');
           current = pre + post;
         } else {
           // \r moves cursor to column 0 without clearing; shorter writes preserve the tail
@@ -46,7 +42,7 @@ export function processTerminalText(text: string): string {
             seg.length < current.length ? seg + current.slice(seg.length) : seg;
         }
       }
-      return current.split(ERASE_SENTINEL).join('');
+      return current.replaceAll(ERASE_SENTINEL, '');
     })
     .join('\n');
 }

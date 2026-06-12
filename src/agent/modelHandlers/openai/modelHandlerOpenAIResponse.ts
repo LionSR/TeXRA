@@ -36,7 +36,7 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { delay, filterNotNullish } from '@utils/core';
+import { clamp, delay, filterNotNullish, roundTo } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import {
   getWebSocketEnabled,
@@ -802,8 +802,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           tokensBefore,
           tokensAfter,
           contextWindow,
-          utilizationBefore: Number(utilizationBefore.toFixed(1)),
-          utilizationAfter: Number(utilizationAfter.toFixed(1)),
+          utilizationBefore: roundTo(utilizationBefore, 1),
+          utilizationAfter: roundTo(utilizationAfter, 1),
           details: `OpenAI Responses API compaction: ${compactedResponse.output.length} items`,
         },
       );
@@ -1301,7 +1301,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (inputEstimate > 0) {
           const buffer = this.getTokenSafetyBuffer();
           const available = this.config.contextWindow - inputEstimate - buffer;
-          const capped = Math.min(maxOutputTokens, Math.max(0, available));
+          const capped = clamp(available, 0, maxOutputTokens);
           if (capped !== maxOutputTokens) {
             this.logger.debug(
               `Fallback: max_output_tokens ${maxOutputTokens} → ${capped} (estimate: ${inputEstimate})`,
