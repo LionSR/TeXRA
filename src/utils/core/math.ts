@@ -14,3 +14,11 @@ export function clampIndex(index: number, length: number): number {
   if (length <= 0) return 0;
   return clamp(index, 0, length - 1);
 }
+
+/**
+ * Round `value` to `decimals` decimal places, returning a number.
+ * Equivalent to `Number(value.toFixed(decimals))` but expresses intent clearly.
+ */
+export function roundTo(value: number, decimals: number): number {
+  return Number(value.toFixed(decimals));
+}

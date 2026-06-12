@@ -1,3 +1,4 @@
+import { clamp } from '@utils/core';
 import {
   hiddenRowsText,
   moreRowsText,
@@ -173,7 +174,7 @@ export function boundedScrollableLines<K extends string>({
 
   if (maxDisplayLines <= compactRows) {
     const contentRows = Math.max(1, maxDisplayLines - 1);
-    const offset = Math.max(0, Math.min(scrollOffset, maxOffset));
+    const offset = clamp(scrollOffset, 0, maxOffset);
 
     if (maxDisplayLines === 1) {
       return [
