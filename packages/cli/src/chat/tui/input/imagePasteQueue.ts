@@ -1,9 +1,12 @@
-import { withTimeout } from '@utils/core';
+import pTimeout from 'p-timeout';
 
 const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 
 export function withImagePasteTimeout<T>(promise: Promise<T>): Promise<T> {
-  return withTimeout(promise, IMAGE_PASTE_TIMEOUT_MS, 'Image paste timed out.');
+  return pTimeout(promise, {
+    milliseconds: IMAGE_PASTE_TIMEOUT_MS,
+    message: 'Image paste timed out.',
+  });
 }
 
 export class ImagePasteQueue {

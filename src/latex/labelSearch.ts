@@ -1,5 +1,5 @@
 // Local imports - utilities
-import { escapeRegExp } from '@utils/core/stringCore';
+import escapeRegExp from 'escape-string-regexp';
 
 /** Build a regex matching `\label{<label>}` for a literal label string. */
 function buildLabelPattern(label: string): RegExp {
