@@ -43,7 +43,7 @@ const config = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
 
-describe('ExecutionsTool workspace files', () => {
+describe('ExecutionsTool', () => {
   beforeEach(async () => {
     const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
       await Promise.all([
@@ -55,6 +55,18 @@ describe('ExecutionsTool workspace files', () => {
     vi.clearAllMocks();
     mocks.listExecutions.mockResolvedValue([]);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
+  });
+
+  it('caps oversized wait timeouts instead of rejecting the tool call', async () => {
+    const result = await new ExecutionsTool().call({
+      path: '/executions',
+      action: 'wait',
+      timeout: 3600,
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.output).toBe('No execution history found.');
   });
 
   it('lists and reads persisted workspace files for tool-use executions', async () => {
