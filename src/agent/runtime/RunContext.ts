@@ -18,10 +18,10 @@ export interface RunCoordinators {
  * Ambient per-run context stored in an {@link AsyncLocalStorage} scope.
  *
  * Tools and utilities that cannot take explicit parameters reach host services
- * via `tryUseRunContext()`. The canonical source of truth for all of these
- * fields is {@link AgentLaunchContext} / {@link AgentCore}; the values here
- * are projected once by `agentContextToRunContext` in `AgentLaunchContext.ts`
- * at the moment `withExecutionRunContext` is entered.
+ * via `tryUseRunContext()`. The canonical source of truth for these fields is
+ * {@link AgentLaunchContext} / {@link AgentCore}; the ambient context exposes
+ * the subset that tool-side code needs without importing the full launch
+ * context.
  *
  * **Field naming mismatches with AgentCore** (unavoidable — interfaces were
  * designed independently):
@@ -29,11 +29,9 @@ export interface RunCoordinators {
  *   - `AgentConfig.agent` → `RunContext.agentName`
  *   - `AgentConfig.model` → `RunContext.model`
  *
- * **Staleness**: `model` is snapshotted at run start. After a mid-session
- * model switch (`onModelChanged` in `executeAgent`), `RunContext.model` lags
- * behind `AgentLaunchContext.config.model`. Tools that delegate subagents
- * and inherit the parent model (e.g. `delegate_agent`) will use the stale
- * value. This is a known limitation of the snapshot approach.
+ * `model` is a live property when the context is projected from an
+ * {@link AgentLaunchContext}, so mid-session model switches are visible to
+ * delegation tools that inherit the parent model.
  */
 export interface RunContext {
   readonly runtimeHost: AgentRuntimeHost;
@@ -49,10 +47,7 @@ export interface RunContext {
    */
   readonly trace: AgentTrace;
   readonly coordinators?: RunCoordinators;
-  /**
-   * Model short name snapshotted at run start (e.g. "opus46T"). May be stale
-   * after `onModelChanged` — see interface-level note above.
-   */
+  /** Current model short name for this run (e.g. "opus46T"). */
   readonly model?: string;
   /** Agent name (e.g. "orchestrator", "search-agent"). */
   readonly agentName?: string;
@@ -79,7 +74,10 @@ export interface CreateRunContextOptions {
    */
   trace?: AgentTrace;
   coordinators?: RunCoordinators;
+  /** Static model fallback for manually-created run contexts. */
   model?: string;
+  /** Live model provider for contexts backed by mutable launch state. */
+  getModel?: () => string | undefined;
   agentName?: string;
   workingDirectory?: string;
   delegationDepth?: number;
@@ -94,19 +92,25 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
-  return Object.freeze({
+  const { getModel, model } = options;
+
+  const context: RunContext = {
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
     trace: options.trace ?? noopTrace,
     coordinators: options.coordinators,
-    model: options.model,
+    get model() {
+      return getModel?.() ?? model;
+    },
     agentName: options.agentName,
     workingDirectory: options.workingDirectory,
     delegationDepth: options.delegationDepth,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     stopAfterCycle: options.stopAfterCycle,
-  });
+  };
+
+  return Object.freeze(context);
 }
 
 /**
