@@ -303,12 +303,13 @@ export async function runMultiAgentPreset(
   const { plan, remoteAgentLoadAttempted } =
     await loadCliMultiAgentRunPlan(init);
   if (remoteAgentLoadAttempted) {
+    const inspectAdvice = `Run \`texra multi-agent inspect ${plan.preset.id}\` to view the resolved team.`;
     // Otherwise the silent second load makes runs behave differently from a
     // signed-out shell with no visible reason.
     writeTextStderr(
       cliMultiAgentPlanHasGaps(plan)
-        ? `Preset ${plan.preset.id} referenced agents not available locally; a remote agent load did not fill all the gaps.`
-        : `Preset ${plan.preset.id} referenced agents not available locally; loaded remote agents to fill the gaps.`,
+        ? `Preset ${plan.preset.id} attempted to load relay-served agents before launch, but some team members are still unavailable. ${inspectAdvice}`
+        : `Preset ${plan.preset.id} loaded relay-served agents before launch. ${inspectAdvice}`,
     );
   }
   if (plan.missingAgentOverride) {
