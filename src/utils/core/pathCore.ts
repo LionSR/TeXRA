@@ -7,12 +7,12 @@ import * as path from 'node:path';
 
 import slash from 'slash';
 
-/** Convert a path to POSIX style (forward slashes). */
+/** Convert a path to POSIX style (forward slashes, collapsed separators). */
 export function toPosixPath(relativePath: string): string {
   if (!relativePath || relativePath === '.') {
     return '.';
   }
-  return slash(relativePath.trim());
+  return slash(relativePath.trim()).split('/').filter(Boolean).join('/');
 }
 
 /** Get path segments as an array. */

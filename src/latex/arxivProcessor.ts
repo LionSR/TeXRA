@@ -10,7 +10,7 @@ import * as tar from 'tar';
 
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { withTimeout } from '@utils/core';
+import pTimeout from 'p-timeout';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
@@ -234,7 +234,7 @@ class ArxivSourceProcessor {
     try {
       const extraction = tar.x({ file: tarPath, cwd: destDir });
       if (options.timeout) {
-        await withTimeout(extraction, options.timeout, 'Extraction timed out');
+        await pTimeout(extraction, { milliseconds: options.timeout, message: 'Extraction timed out' });
       } else {
         await extraction;
       }

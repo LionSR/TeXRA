@@ -14,7 +14,6 @@
  * For guaranteed string conversion, use `toErrorMessage()` from `@common/errors`.
  */
 
-import escapeStringRegexp from 'escape-string-regexp';
 import prettyMilliseconds from 'pretty-ms';
 import { serializeError, type ErrorObject } from 'serialize-error';
 
@@ -41,13 +40,6 @@ export function isNonEmptyString(value: unknown): value is string {
 export function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
-
-/**
- * Escape regular-expression metacharacters in a literal string so it can be
- * embedded inside a dynamic RegExp without special interpretation.
- * Backed by `escape-string-regexp`.
- */
-export const escapeRegExp = escapeStringRegexp;
 
 /**
  * Extract error message from Error objects or strings.

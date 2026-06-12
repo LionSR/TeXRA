@@ -17,7 +17,7 @@
  */
 
 import { getCleanAgentName } from '@shared/schemas/agent';
-import { escapeRegExp } from '@utils/core/stringCore';
+import escapeRegExp from 'escape-string-regexp';
 
 // ---------------------------------------------------------------------------
 // Current layout (re-exported from the shared leaf module)

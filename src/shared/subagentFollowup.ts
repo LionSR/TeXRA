@@ -12,7 +12,7 @@
 // NO host imports (no vscode, no Ink/React) so both @shared (webview) and the
 // CLI can consume it.
 
-import { escapeRegExp } from '@utils/core/stringCore';
+import escapeRegExp from 'escape-string-regexp';
 
 const SUBAGENT_TAG_RE = /^<subagent-(?:progress|result|error)\b/;
 const EMPTY_FOLLOW_UP_SUMMARY = '(empty follow-up)';
