@@ -5,19 +5,14 @@
 // Standard library imports
 import * as path from 'node:path';
 
-const PATH_SEPARATORS = /[\\/]/;
+import slash from 'slash';
 
 /** Convert a path to POSIX style (forward slashes). */
 export function toPosixPath(relativePath: string): string {
   if (!relativePath || relativePath === '.') {
     return '.';
   }
-  return relativePath
-    .trim()
-    .replaceAll('\\', '/')
-    .split(PATH_SEPARATORS)
-    .filter(Boolean)
-    .join('/');
+  return slash(relativePath.trim());
 }
 
 /** Get path segments as an array. */

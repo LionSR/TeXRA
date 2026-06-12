@@ -1,3 +1,5 @@
+import _pluralize from 'pluralize';
+
 /** Normalize CRLF line endings to LF. */
 export function normalizeLineEndings(text: string): string {
   return text.replaceAll('\r\n', '\n');
@@ -7,16 +9,14 @@ export function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-/**
- * Pluralize a word based on count.
- * Returns the singular form for count === 1, plural form otherwise.
- */
+/** Return the singular or plural form of `singular` based on `count`. */
 export function pluralize(
   count: number,
   singular: string,
   plural?: string,
 ): string {
-  return count === 1 ? singular : (plural ?? `${singular}s`);
+  if (plural !== undefined) return count === 1 ? singular : plural;
+  return _pluralize(singular, count);
 }
 
 /**

@@ -68,7 +68,7 @@ export class ZoteroExportTool extends defineTool({
     }
 
     return {
-      summary: `Exported ${citekeys.length} ${pluralize(citekeys.length, 'entry', 'entries')} as ${translator}`,
+      summary: `Exported ${citekeys.length} ${pluralize(citekeys.length, 'entry')} as ${translator}`,
       output: result.trim(),
     };
   }
