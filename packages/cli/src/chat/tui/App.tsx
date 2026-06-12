@@ -48,7 +48,6 @@ import {
   rewriteKittyEnterInput,
 } from './input/inputKeys';
 import {
-  hasChildControlItems,
   numericFocusTargetForActiveStream,
   resolveChildControlDisplayTargets,
   type ChildControlMode,
@@ -696,8 +695,8 @@ export function App(props: AppProps): React.JSX.Element {
         rows,
         tipVisible: tipRowVisible,
       });
-  const hasSubagentPanel =
-    !foregroundOpen && hasChildControlItems(activeSlice, 'tasks');
+  const subagentPanelTarget = childControlTargets.tasks;
+  const hasSubagentPanel = !foregroundOpen && subagentPanelTarget.hasItems;
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
     foregroundOpen,
     hasPlan: activeSlice?.plan != null,
@@ -743,7 +742,9 @@ export function App(props: AppProps): React.JSX.Element {
   // reservation would leave a dead gap above the input whenever the lists are
   // shorter than the cap.
   const subagentContentRows =
-    hasSubagentPanel && activeSlice ? subagentPanelRowCount(activeSlice) : 0;
+    hasSubagentPanel && subagentPanelTarget.slice
+      ? subagentPanelRowCount(subagentPanelTarget.slice)
+      : 0;
   const todosPlanContentRows =
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
@@ -1012,7 +1013,10 @@ export function App(props: AppProps): React.JSX.Element {
         </Box>
         {bottomPanelBudget > 0 ? (
           <Box flexDirection="column" overflowY="hidden">
-            <SubagentList maxRows={subagentRows} />
+            <SubagentList
+              maxRows={subagentRows}
+              slice={subagentPanelTarget.slice}
+            />
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>
         ) : null}
