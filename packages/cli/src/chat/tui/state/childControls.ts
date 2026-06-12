@@ -34,7 +34,7 @@ export interface ChildControlItem {
   readonly label: string;
   readonly command: string;
   readonly description: string;
-  readonly status?: string;
+  readonly statusLabel?: string;
   readonly elapsed?: string | null;
   readonly killable: boolean;
   readonly tailLines: readonly string[];
@@ -165,17 +165,15 @@ function buildSubagentItem(
   const label = childLabel(child);
   const command = streamDescription(child, streamsById) ?? label;
   const elapsed = childElapsed(child, nowMs);
+  const statusLabel = childStatusDescription(child.status);
   return {
     executionId: child.executionId,
     childStreamId: child.childStreamId,
     kind: 'subagent',
     label,
     command,
-    description: compactParts([
-      childStatusDescription(child.status),
-      elapsed ?? undefined,
-    ]),
-    status: child.status,
+    description: compactParts([statusLabel, elapsed ?? undefined]),
+    statusLabel,
     elapsed,
     killable,
     tailLines: streamTranscriptLines(child, streamsById),
@@ -191,18 +189,15 @@ function buildProcessItem(
   const lastLine = tailLines.at(-1);
   const label = childLabel(child);
   const elapsed = childElapsed(child, nowMs);
+  const statusLabel = childStatusDescription(child.status);
   return {
     executionId: child.executionId,
     childStreamId: child.childStreamId,
     kind: 'process',
     label,
     command: label,
-    description: compactParts([
-      childStatusDescription(child.status),
-      elapsed ?? undefined,
-      lastLine,
-    ]),
-    status: child.status,
+    description: compactParts([statusLabel, elapsed ?? undefined, lastLine]),
+    statusLabel,
     elapsed,
     killable: true,
     tailLines,

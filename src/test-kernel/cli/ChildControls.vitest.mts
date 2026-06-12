@@ -347,16 +347,19 @@ describe('CLI child execution controls', () => {
       {
         executionId: 'agent-1',
         description: 'idle · 20s',
+        statusLabel: 'idle',
       },
     ]);
     expect(buildChildControlItems(state, 'tasks')).toMatchObject([
       {
         executionId: 'agent-1',
         description: 'idle · 20s',
+        statusLabel: 'idle',
       },
       {
         executionId: 'proc-1',
         description: 'idle · 3s · last line',
+        statusLabel: 'idle',
       },
     ]);
   });
@@ -883,7 +886,7 @@ describe('CLI child execution controls', () => {
         childStreamId: 'review-stream',
         kind: 'subagent',
         label: 'review',
-        status: 'stopped',
+        statusLabel: 'stopped',
         killable: false,
       },
     ]);
