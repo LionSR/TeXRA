@@ -7,6 +7,7 @@
 import { Box, Text } from 'ink';
 
 import type { ActiveChildInfo } from '@shared/schemas';
+import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
 import {
   childElapsed,
@@ -33,6 +34,10 @@ export interface ChildRow {
 
 const TAIL_LINES = 4;
 
+function childStatusLabel(status: string | undefined): string | undefined {
+  return formatStreamStatusLabel(status, { style: 'cli' });
+}
+
 export function compactChildRowText({
   child,
   nowMs,
@@ -45,8 +50,9 @@ export function compactChildRowText({
   const tailSummary = processTailLines(tail).at(-1);
   const elapsed = childElapsed(child, nowMs);
   const label = child.agentName || child.toolName || child.executionId;
+  const statusLabel = childStatusLabel(child.status);
   return [
-    `${label}${child.status ? ` ${child.status}` : ''}`,
+    `${label}${statusLabel ? ` ${statusLabel}` : ''}`,
     elapsed,
     tailSummary,
   ]
@@ -66,6 +72,7 @@ function Row({
   const tailLines = compact ? [] : processTailLines(tail).slice(-TAIL_LINES);
   const elapsed = childElapsed(child, nowMs);
   const label = child.agentName || child.toolName || child.executionId;
+  const statusLabel = childStatusLabel(child.status);
   return (
     <Box
       flexDirection="column"
@@ -84,7 +91,7 @@ function Row({
         ) : (
           <>
             <Text>{label}</Text>
-            {child.status ? <Text dimColor>{` ${child.status}`}</Text> : null}
+            {statusLabel ? <Text dimColor>{` ${statusLabel}`}</Text> : null}
             {elapsed ? <Text dimColor>{` · ${elapsed}`}</Text> : null}
           </>
         )}
