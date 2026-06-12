@@ -137,6 +137,19 @@ const memoriesField = z
 
 const WORKTREE_DISABLED_MESSAGE =
   "git worktree support is disabled in this workspace. Omit working_directory, or enable 'Allow agents to work in git worktrees' on the Multi-Agent settings tab.";
+const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
+  'Delegated task handoff:',
+  '- Your final response is delivered verbatim to the parent orchestrator.',
+  '- Include the substantive result requested: answer, findings, evidence/checks, and unresolved caveats.',
+  '- Do not finish with only status/process notes such as "done", "complete", or "no files were edited"; if no files were edited, state that after the task result.',
+].join('\n');
+
+function withToolUseSubagentHandoffInstruction(instruction: string): string {
+  const trimmed = instruction.trimEnd();
+  return trimmed
+    ? `${trimmed}\n\n${TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION}`
+    : TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION;
+}
 
 function ensureWorkingDirectoryExists(dir: string): void {
   try {
@@ -1105,7 +1118,7 @@ Git worktree support: ${
       agentCategory: AgentCategory.ToolUse,
       agent: agentName,
       model,
-      instruction: input.instruction,
+      instruction: withToolUseSubagentHandoffInstruction(input.instruction),
       memories: input.memories,
       workingDirectory: input.working_directory,
     } satisfies ToolUseAgentProposal);
