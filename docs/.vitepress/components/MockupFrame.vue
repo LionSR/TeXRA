@@ -22,23 +22,23 @@ const LOGO = withBase('/logo-icon-board.svg');
       <span class="win-title">{{ title }}</span>
     </div>
     <div class="win-body">
-      <nav class="act">
-        <span class="act-i"
+      <nav class="activity-bar">
+        <span class="activity-item"
           ><wa-icon library="texra" name="files"></wa-icon
         ></span>
-        <span class="act-i"
+        <span class="activity-item"
           ><wa-icon library="texra" name="search"></wa-icon
         ></span>
-        <span class="act-i"
+        <span class="activity-item"
           ><wa-icon library="texra" name="source-control"></wa-icon
         ></span>
-        <span class="act-i"
+        <span class="activity-item"
           ><wa-icon library="texra" name="debug-alt"></wa-icon
         ></span>
-        <span class="act-i act-on"
-          ><img class="act-logo" :src="LOGO" alt="TeXRA"
+        <span class="activity-item activity-item--active"
+          ><img class="activity-logo" :src="LOGO" alt="TeXRA"
         /></span>
-        <span class="act-i act-bottom"
+        <span class="activity-item activity-bottom"
           ><wa-icon library="texra" name="settings-gear"></wa-icon
         ></span>
       </nav>
@@ -110,7 +110,7 @@ const LOGO = withBase('/logo-icon-board.svg');
 }
 
 /* Activity bar */
-.act {
+.activity-bar {
   flex-shrink: 0;
   width: var(--mk-size-46);
   background: var(--mk-bg-raised);
@@ -121,7 +121,7 @@ const LOGO = withBase('/logo-icon-board.svg');
   padding: var(--mk-space-10) 0;
   gap: var(--mk-space-16);
 }
-.act-i {
+.activity-item {
   color: var(--mk-text-faint);
   width: 100%;
   display: flex;
@@ -131,10 +131,10 @@ const LOGO = withBase('/logo-icon-board.svg');
   padding: var(--mk-space-2) 0;
   font-size: var(--mk-space-20);
 }
-.act-on {
+.activity-item--active {
   color: var(--mk-text);
 }
-.act-on::before {
+.activity-item--active::before {
   content: '';
   position: absolute;
   left: 0;
@@ -143,12 +143,12 @@ const LOGO = withBase('/logo-icon-board.svg');
   width: var(--mk-space-2);
   background: var(--mk-accent);
 }
-.act-logo {
+.activity-logo {
   width: var(--mk-size-23);
   height: var(--mk-size-23);
   display: block;
 }
-.act-bottom {
+.activity-bottom {
   margin-top: auto;
 }
 
@@ -159,7 +159,7 @@ const LOGO = withBase('/logo-icon-board.svg');
   .win-content {
     flex-direction: column;
   }
-  .act {
+  .activity-bar {
     flex-direction: row;
     width: auto;
     justify-content: flex-start;
@@ -169,7 +169,7 @@ const LOGO = withBase('/logo-icon-board.svg');
     border-right: none;
     border-bottom: 1px solid var(--mk-border-strong);
   }
-  .act-on::before {
+  .activity-item--active::before {
     left: -2px;
     top: auto;
     bottom: 0;
