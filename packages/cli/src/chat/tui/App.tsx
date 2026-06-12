@@ -598,13 +598,21 @@ export function App(props: AppProps): React.JSX.Element {
     canInterruptActiveRun: props.canInterruptActiveRun,
     onInterruptActive: props.onInterruptActive,
   });
-  escapeInterruptStateRef.current = {
-    inputDisabled: appInputDisabled,
+  useLayoutEffect(() => {
+    escapeInterruptStateRef.current = {
+      inputDisabled: appInputDisabled,
+      reverseSearchOpen,
+      slashPaletteOpen,
+      canInterruptActiveRun: props.canInterruptActiveRun,
+      onInterruptActive: props.onInterruptActive,
+    };
+  }, [
+    appInputDisabled,
+    props.canInterruptActiveRun,
+    props.onInterruptActive,
     reverseSearchOpen,
     slashPaletteOpen,
-    canInterruptActiveRun: props.canInterruptActiveRun,
-    onInterruptActive: props.onInterruptActive,
-  };
+  ]);
   const inputBarVisible = !foregroundOpen;
   const viewportKey = transcriptViewportKey({
     activeStreamId,
