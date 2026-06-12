@@ -527,6 +527,7 @@ export interface AppProps {
   readonly canInterruptActiveRun: () => boolean;
   readonly canStopActiveRun?: () => boolean;
   readonly colorEnabled?: boolean;
+  readonly commandName?: string;
   readonly onInterruptActive: () => void;
   readonly onTranscriptViewportChange?: (
     change: TranscriptViewportChange,
@@ -1044,6 +1045,7 @@ export function App(props: AppProps): React.JSX.Element {
         <StatusBar
           agentSelectionAvailable={agentSelectionAvailable}
           canStopActiveRun={canStopActiveRun}
+          commandName={props.commandName}
           foregroundEscapeAction={foregroundEscapeAction({
             activeFormEscapeAction: activeForm?.escapeAction,
             foregroundKind,

@@ -30,6 +30,15 @@ export type ResumeUsageStats = TokenUsageStats & {
   readonly reasoningTokens?: number;
 };
 
+const DEFAULT_RESUME_COMMAND_NAME = 'texra';
+
+export function formatResumeCommand(
+  commandName: string | undefined,
+  executionId: string,
+): string {
+  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} --resume ${executionId}`;
+}
+
 function formatInteger(value: number): string {
   return new Intl.NumberFormat('en-US').format(value);
 }
@@ -126,13 +135,16 @@ export function collectResumeTargets({
 export function formatResumeHint(
   targets: readonly ResumeTarget[],
   usage?: ResumeUsageStats,
+  commandName?: string,
 ): string | undefined {
   if (targets.length === 0) return undefined;
   const lines = [formatResumeUsage(usage), 'Resume this session with:'].filter(
     (line): line is string => Boolean(line),
   );
   for (const target of targets) {
-    lines.push(`  texra --resume ${target.executionId}  (${target.label})`);
+    lines.push(
+      `  ${formatResumeCommand(commandName, target.executionId)}  (${target.label})`,
+    );
   }
   return lines.join('\n');
 }

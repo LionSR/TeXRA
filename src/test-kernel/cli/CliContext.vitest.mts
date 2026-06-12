@@ -12,6 +12,7 @@ import {
   readCliEnv,
   readCliVersion,
   resolveCliCwd,
+  resolveCliCommandName,
   resolveStreamColor,
   type CliAmbientState,
 } from '@cli/runtime/cliContext';
@@ -62,6 +63,14 @@ describe('CLI entrypoint detection', () => {
       isTexraCliEntrypointPath('/repo/packages/cli/src/bin/texra.ts'),
     ).toBe(true);
     expect(isTexraCliEntrypointPath('/usr/local/bin/vitest')).toBe(false);
+  });
+
+  it('uses the local launcher name in user-facing command hints', () => {
+    expect(resolveCliCommandName('/usr/local/bin/texra')).toBe('texra');
+    expect(resolveCliCommandName('/tmp/bin/texra-local')).toBe('texra-local');
+    expect(resolveCliCommandName('/repo/packages/cli/dist/bin/texra.js')).toBe(
+      'texra',
+    );
   });
 });
 
