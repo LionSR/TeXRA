@@ -11,10 +11,17 @@ import {
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
-import { BoundedTranscriptEntry, LiveTranscriptEntry } from './TranscriptEntry';
+import {
+  BoundedTranscriptEntry,
+  LiveTranscriptEntry,
+  TranscriptEntry,
+} from './TranscriptEntry';
 import { ToolUseRow } from './ToolUseRow';
 import { splitTranscriptEntries } from './transcriptEntries';
-import { selectTranscriptEntriesForViewport } from './transcriptViewport';
+import {
+  estimateTranscriptEntryRows,
+  selectTranscriptEntriesForViewport,
+} from './transcriptViewport';
 
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 const MIN_PENDING_ROWS = 1;
@@ -74,6 +81,26 @@ function renderConversationPaneEntry({
     }
     if (entry.role === 'assistant') {
       return <LiveTranscriptEntry entry={entry} width={width} />;
+    }
+    if (entry.role === 'user') {
+      return (
+        <TranscriptEntry
+          colorEnabled={colorEnabled}
+          entry={entry}
+          fillWidth
+          width={width}
+        />
+      );
+    }
+    if (entry.role === 'error') {
+      return (
+        <BoundedTranscriptEntry
+          colorEnabled={colorEnabled}
+          entry={entry}
+          maxRows={estimateTranscriptEntryRows(entry, width)}
+          width={width}
+        />
+      );
     }
     return null;
   })();

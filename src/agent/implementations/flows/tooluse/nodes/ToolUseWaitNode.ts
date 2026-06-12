@@ -176,6 +176,10 @@ export class ToolUseWaitNode<C> extends Node<
       shared.deliveredToOrchestrator = true;
     }
 
+    streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
+      runtimeHost,
+    });
+
     // Synthesized continuations don't come from the user queue, so they
     // must not emit updateQueuedFollowUps via the consume callback. They
     // also don't need to be replayed in the chat log. Keep any prior
@@ -188,9 +192,6 @@ export class ToolUseWaitNode<C> extends Node<
         logUserMessage(logger, followUp.displayText ?? followUp.text);
       }
     }
-    streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
-      runtimeHost,
-    });
 
     for (const followUp of execRes.followUps) {
       shared.messages = await appendFollowUpAsUserMessage(
