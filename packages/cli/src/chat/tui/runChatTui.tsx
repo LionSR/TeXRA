@@ -111,7 +111,7 @@ import { escapeText } from '@shared/utils/xmlEscape';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 import { generateExecutionId } from '@utils/core/executionId';
 
-import { App } from './App';
+import { App, focusedChildInputDisabledMessage } from './App';
 import { assertNever } from './assertNever';
 import { formatApprovalPolicyForCli as formatApprovalPolicy } from './forms/ApprovalPolicyForm';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
@@ -134,6 +134,7 @@ import {
 } from './render/noColorOutput';
 import { formatCliSessionStatus } from './sessionStatus';
 import { clearApprovals } from './state/approvalQueue';
+import { resolveChildControlDisplayTargets } from './state/childControls';
 import { cliState, patchStream, resetCliState } from './state/cliState';
 import {
   collectResumeTargets,
@@ -462,6 +463,26 @@ export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpR
     return { kind: 'reject', streamId: scope.streamId };
   }
   return { kind: 'accept', streamId: scope.streamId };
+}
+
+function stoppedFocusedChildFollowUpMessage(streamId: StreamTabId): string {
+  const parentStream = cliState.parentStream.get();
+  const streams = cliState.streams.get();
+  const controls = resolveChildControlDisplayTargets({
+    activeStreamId: streamId,
+    parentStream,
+    streams,
+  });
+
+  return (
+    focusedChildInputDisabledMessage({
+      activeStreamId: streamId,
+      parentStream,
+      status: streamStatusFromState(streamId),
+      subagentControlsAvailable: controls.subagents.hasItems,
+      taskControlsAvailable: controls.tasks.hasItems,
+    }) ?? 'The selected subagent is no longer accepting follow-ups.'
+  );
 }
 
 interface SlashCommandContext {
@@ -1567,7 +1588,7 @@ export async function runChat(
     const focusedChildRoute = chatTuiFocusedChildFollowUpRoute();
     if (focusedChildRoute.kind === 'reject') {
       appendLocalAssistantTranscript(
-        'The selected subagent is no longer accepting follow-ups.',
+        stoppedFocusedChildFollowUpMessage(focusedChildRoute.streamId),
         focusedChildRoute.streamId,
       );
       return;
@@ -1628,7 +1649,7 @@ export async function runChat(
             session.stopRequested = true;
           } else {
             appendLocalAssistantTranscript(
-              'The selected subagent is no longer accepting follow-ups.',
+              stoppedFocusedChildFollowUpMessage(followUpTarget),
               followUpTarget,
             );
           }

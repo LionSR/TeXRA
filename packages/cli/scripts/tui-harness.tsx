@@ -36,11 +36,12 @@ import {
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { getDefaultStreamLogStore } from '@transcript';
 
-import { App } from '../src/chat/tui/App';
+import { App, focusedChildInputDisabledMessage } from '../src/chat/tui/App';
 import {
   transcriptViewportRepaintOptions,
   type TranscriptViewportChange,
 } from '../src/chat/tui/state/transcriptViewportMode';
+import { resolveChildControlDisplayTargets } from '../src/chat/tui/state/childControls';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
 import {
   findSlashCommand,
@@ -1287,6 +1288,26 @@ function harnessRejectsChildSubmit(childStreamId: StreamTabId): boolean {
   return status !== undefined && !isInFlightStatus(status);
 }
 
+function harnessStoppedChildMessage(childStreamId: StreamTabId): string {
+  const parentStream = cliState.parentStream.get();
+  const streams = cliState.streams.get();
+  const controls = resolveChildControlDisplayTargets({
+    activeStreamId: childStreamId,
+    parentStream,
+    streams,
+  });
+
+  return (
+    focusedChildInputDisabledMessage({
+      activeStreamId: childStreamId,
+      parentStream,
+      status: streamStatusFromState(childStreamId),
+      subagentControlsAvailable: controls.subagents.hasItems,
+      taskControlsAvailable: controls.tasks.hasItems,
+    }) ?? 'The selected subagent is no longer accepting follow-ups.'
+  );
+}
+
 function formatHarnessSlashHelp(): string {
   return listSlashCommands()
     .map((command) => `/${command.name} - ${command.description}`)
@@ -1413,7 +1434,7 @@ function handleHarnessSubmit(line: string): void {
   const childStreamId = harnessActiveChildStreamId();
   if (childStreamId && harnessRejectsChildSubmit(childStreamId)) {
     appendHarnessAssistantTranscript(
-      'The selected subagent is no longer accepting follow-ups.',
+      harnessStoppedChildMessage(childStreamId),
       childStreamId,
     );
     return;
