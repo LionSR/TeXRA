@@ -138,7 +138,7 @@ describe('formatToolEditApprovalSummary', () => {
       context({
         approvalPrompt: async (request) => {
           promptSummary = request.summary;
-          return 'n';
+          return 'n needs revision';
         },
       }),
     );
@@ -154,6 +154,59 @@ describe('formatToolEditApprovalSummary', () => {
     expect(promptSummary).toContain('Tool edit requested by write_file');
     expect(promptSummary).toContain('+\\section{Proof}');
     expect(promptSummary).toContain('+A concise proof.');
+  });
+
+  it('passes one-line rejection feedback to the tool result', async () => {
+    installCliApprovalHandlers(
+      context({
+        approvalPrompt: async () => 'n proof misses the p = 5 case',
+      }),
+    );
+
+    const result = await requestToolEditApproval({
+      path: '/tmp/new-proof.tex',
+      originalContent: '',
+      proposedContent: '\\section{Proof}\nA concise proof.\n',
+      sourceTool: 'write_file',
+    });
+
+    expect(result).toMatchObject({
+      accepted: false,
+      userMessage: 'proof misses the p = 5 case',
+    });
+  });
+
+  it('prompts for rejection feedback after an explicit no', async () => {
+    const prompts: string[] = [];
+    const summaries: string[] = [];
+    const answers = ['n', 'use the workspace-local file path'];
+    installCliApprovalHandlers(
+      context({
+        approvalPrompt: async (request) => {
+          prompts.push(request.prompt);
+          summaries.push(request.summary);
+          return answers.shift() ?? '';
+        },
+      }),
+    );
+
+    const result = await requestToolEditApproval({
+      path: '/tmp/new-proof.tex',
+      originalContent: '',
+      proposedContent: '\\section{Proof}\nA concise proof.\n',
+      sourceTool: 'write_file',
+    });
+
+    expect(prompts).toEqual([
+      'Approve? [y/N, or n <feedback>] ',
+      'Rejection feedback (optional, Enter to skip): ',
+    ]);
+    expect(summaries[0]).toContain('Tool edit requested by write_file');
+    expect(summaries[1]).toBe('');
+    expect(result).toMatchObject({
+      accepted: false,
+      userMessage: 'use the workspace-local file path',
+    });
   });
 
   it('bounds long diff lines before prompting', () => {

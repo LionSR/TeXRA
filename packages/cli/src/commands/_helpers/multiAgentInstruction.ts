@@ -19,11 +19,13 @@ export function formatMultiAgentRunInstruction(
     readonly contextFiles: readonly string[];
     readonly instruction: string;
     readonly approvalContext: ApprovalInstructionContext;
+    readonly workingDirectory: string;
   },
 ): string {
   const parts = [
     `Run the "${preset.name}" multi-agent team preset.`,
     preset.description,
+    `Workspace root for this run: ${JSON.stringify(init.workingDirectory)}. Resolve relative file paths against this directory, and tell delegated agents to use these same relative paths instead of inventing container roots such as /workspace.`,
     'Use the visible workflow and tool-use agents as the team available for delegation.',
     COMPLETENESS_GUIDANCE,
     TERMINAL_RUN_GUIDANCE,
