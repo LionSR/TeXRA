@@ -10,6 +10,8 @@ import {
 
 import type { ConversationEntry } from '../state/cliState';
 
+const INQUIRY_CONTINUATION_RE =
+  /^\[inquiry\]\s+\S+\s+(?:answered|dropped by user)\.(?:\n|$)/;
 const INVISIBLE_TRANSCRIPT_CHARS = new Set([
   '\u200B',
   '\u200C',
@@ -27,6 +29,10 @@ export function terminalVisibleTranscriptText(text: string): string {
     if (!isInvisibleTranscriptChar(char)) out += char;
   }
   return out;
+}
+
+export function isInquiryContinuationText(text: string): boolean {
+  return INQUIRY_CONTINUATION_RE.test(text);
 }
 
 export function trimAssistantTranscriptLead(text: string): string {
@@ -73,6 +79,36 @@ export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
   }
 }
 
+export function nextRenderableTranscriptEntry(
+  entries: readonly ConversationEntry[],
+  index: number,
+): ConversationEntry | undefined {
+  for (let i = index + 1; i < entries.length; i += 1) {
+    const entry = entries[i];
+    if (entry && isRenderableTranscriptEntry(entry)) return entry;
+  }
+  return undefined;
+}
+
+export function userPromptAwaitsLiveContinuation(
+  entries: readonly ConversationEntry[],
+  index: number,
+  status: StreamStatus | undefined,
+): boolean {
+  const entry = entries[index];
+  if (
+    entry?.role !== 'user' ||
+    isInquiryContinuationText(entry.text) ||
+    !isRenderableTranscriptEntry(entry) ||
+    status === undefined ||
+    !LIVE_ELAPSED_STREAM_STATUSES.has(status)
+  ) {
+    return false;
+  }
+  const nextEntry = nextRenderableTranscriptEntry(entries, index);
+  return nextEntry === undefined;
+}
+
 export function splitTranscriptEntries(
   entries: readonly ConversationEntry[],
   status: StreamStatus | undefined,
@@ -92,8 +128,12 @@ export function splitTranscriptEntries(
     status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status);
   const finalized: ConversationEntry[] = [];
   const pending: ConversationEntry[] = [];
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
     if (!isRenderableTranscriptEntry(entry)) continue;
+    if (userPromptAwaitsLiveContinuation(entries, index, status)) {
+      pending.push(entry);
+      continue;
+    }
     if (entry.finalized) {
       finalized.push(entry);
       continue;
