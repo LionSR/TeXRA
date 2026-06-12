@@ -16,6 +16,7 @@ import {
   scrollPageRows,
   type ScrollableDisplayLine,
 } from '../render/scrollBounds';
+import { fillRows } from '../render/terminalText';
 import { KeyHints } from '../ui/KeyHints';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ApprovalDecision } from '../state/approvalQueue';
@@ -259,7 +260,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       >
         {displayLines.map((line, index) => (
           <Text key={index} dimColor={line.kind === 'overflow'}>
-            {line.text}
+            {fillRows(line.text, instructionWidth)}
           </Text>
         ))}
       </Box>
