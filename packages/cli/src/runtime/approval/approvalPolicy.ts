@@ -80,7 +80,43 @@ async function askCliApprovalQuestion(
   if (context.approvalPrompt) {
     return context.approvalPrompt(request);
   }
-  return askCliQuestion(`${request.summary}\n${request.prompt}`);
+  return askCliQuestion(
+    request.summary ? `${request.summary}\n${request.prompt}` : request.prompt,
+  );
+}
+
+interface ParsedApprovalAnswer {
+  readonly accepted: boolean;
+  readonly feedback?: string;
+  readonly shouldPromptForFeedback: boolean;
+}
+
+function parseApprovalAnswer(answer: string): ParsedApprovalAnswer {
+  const trimmed = answer.trim();
+  const normalized = trimmed.toLowerCase();
+  if (normalized === 'y' || normalized === 'yes') {
+    return { accepted: true, shouldPromptForFeedback: false };
+  }
+
+  if (normalized === '') {
+    return { accepted: false, shouldPromptForFeedback: false };
+  }
+
+  const rejectMatch = /^(?:n|no)(?:\s+(.+))?$/i.exec(trimmed);
+  if (rejectMatch) {
+    const feedback = rejectMatch[1]?.trim();
+    return {
+      accepted: false,
+      ...(feedback ? { feedback } : {}),
+      shouldPromptForFeedback: feedback == null,
+    };
+  }
+
+  return {
+    accepted: false,
+    feedback: trimmed,
+    shouldPromptForFeedback: false,
+  };
 }
 
 /**
@@ -148,19 +184,35 @@ export async function askApproval(
     answer = await queueCliApprovalQuestion(context, {
       kind: 'approval',
       summary,
-      prompt: 'Approve? [y/N] ',
+      prompt: 'Approve? [y/N, or n <feedback>] ',
     });
   } catch {
     markApprovalDenied(context);
     return { accepted: false, userMessage: 'CLI approval prompt failed.' };
   }
 
-  const normalized = answer.trim().toLowerCase();
-  const accepted = normalized === 'y' || normalized === 'yes';
+  const parsed = parseApprovalAnswer(answer);
+  let feedback = parsed.feedback;
+  if (!parsed.accepted && parsed.shouldPromptForFeedback) {
+    try {
+      const feedbackAnswer = await queueCliApprovalQuestion(context, {
+        kind: 'approval',
+        summary: '',
+        prompt: 'Rejection feedback (optional, Enter to skip): ',
+      });
+      feedback = feedbackAnswer.trim() || undefined;
+    } catch {
+      feedback = undefined;
+    }
+  }
+
+  const accepted = parsed.accepted;
   if (!accepted) markApprovalDenied(context);
   return {
     accepted,
-    userMessage: accepted ? undefined : 'Rejected from CLI approval prompt.',
+    userMessage: accepted
+      ? undefined
+      : feedback || 'Rejected from CLI approval prompt.',
   };
 }
 
