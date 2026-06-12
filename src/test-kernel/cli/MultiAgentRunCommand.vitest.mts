@@ -310,6 +310,30 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(2);
   });
 
+  it('reports resolved remote agent loads without implying final missing agents', async () => {
+    const remoteLoadMessage =
+      'Preset mathematician loaded relay-served agents before launch. Run `texra multi-agent inspect mathematician` to view the resolved team.';
+    mocks.cliMultiAgentPlanHasGaps
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false);
+    mocks.isAuthenticated.mockResolvedValueOnce(true);
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(cliContext(), {
+      preset: 'mathematician',
+      inputFiles: ['problem.tex'],
+      contextFiles: [],
+      model: 'deepseekT',
+      instruction: 'Solve the problem with the team.',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(remoteLoadMessage);
+    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
+      expect.stringContaining('not available locally'),
+    );
+  });
+
   it('warns when approval policy never blocks team delegation', async () => {
     const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 
