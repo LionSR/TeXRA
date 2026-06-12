@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Select } from '../chat/tui/ui/Select';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
+import { wrapAnsiToWidth } from '../chat/tui/render/ansiWrap';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { formatCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import {
@@ -97,9 +98,29 @@ export function orchestrationFooterHints(
   return hints;
 }
 
-/** Rows a marginTop=1 block of lines occupies (the lines plus the margin). */
-function blockRowCost(lines: readonly string[]): number {
-  return lines.length === 0 ? 0 : lines.length + 1;
+export function orchestrationWrappedLineRows(
+  line: string,
+  columns: number,
+): number {
+  return Math.max(
+    1,
+    wrapAnsiToWidth(line, Math.max(1, columns)).split('\n').length,
+  );
+}
+
+/** Rows a marginTop=1 block of lines occupies (wrapped lines plus the margin). */
+export function orchestrationBlockRowCost(
+  lines: readonly string[],
+  columns: number,
+): number {
+  if (lines.length === 0) return 0;
+  return (
+    1 +
+    lines.reduce(
+      (rows, line) => rows + orchestrationWrappedLineRows(line, columns),
+      0,
+    )
+  );
 }
 
 function modelPickKeyHints(): readonly KeyHint[] {
@@ -114,7 +135,7 @@ export function OrchestrationApp(
   props: OrchestrationAppProps,
 ): React.JSX.Element {
   const app = useApp();
-  const { rows } = useWindowSize();
+  const { columns, rows } = useWindowSize();
   const { items, modelItems } = orchestrationModelAccessView(
     props.items,
     props.models,
@@ -129,12 +150,13 @@ export function OrchestrationApp(
     undefined,
   );
   const footerHints = pending ? [] : listFooterHints;
+  const textColumns = Math.max(1, columns - 2);
   const maxVisibleItems = Math.max(
     4,
     rows -
       8 -
-      blockRowCost(pending ? [] : statusLines) -
-      blockRowCost(footerHints),
+      orchestrationBlockRowCost(pending ? [] : statusLines, textColumns) -
+      orchestrationBlockRowCost(footerHints, textColumns),
   );
 
   const finish = (action: CliOrchestrationAction): void => {
@@ -198,7 +220,7 @@ export function OrchestrationApp(
       {statusLines.length > 0 ? (
         <Box marginTop={1} flexDirection="column">
           {statusLines.map((line, index) => (
-            <Text key={`${index}:${line}`} dimColor wrap="truncate-end">
+            <Text key={`${index}:${line}`} dimColor wrap="wrap">
               {line}
             </Text>
           ))}
@@ -216,7 +238,7 @@ export function OrchestrationApp(
       {footerHints.length > 0 ? (
         <Box marginTop={1} flexDirection="column">
           {footerHints.map((hint) => (
-            <Text key={hint} dimColor wrap="truncate-end">
+            <Text key={hint} dimColor wrap="wrap">
               {hint}
             </Text>
           ))}
