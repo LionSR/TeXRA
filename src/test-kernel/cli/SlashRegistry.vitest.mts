@@ -167,6 +167,7 @@ describe('slashRegistry', () => {
       modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
+      approvalPolicy: 'ask',
       canDelegate: false,
       version: 'test',
     });
@@ -203,6 +204,7 @@ describe('slashRegistry', () => {
       modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
+      approvalPolicy: 'ask',
       canDelegate: false,
       version: 'test',
     });
@@ -233,6 +235,7 @@ describe('slashRegistry', () => {
       modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
+      approvalPolicy: 'ask',
       canDelegate: false,
       version: 'test',
     });
@@ -261,6 +264,7 @@ describe('slashRegistry', () => {
       modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
+      approvalPolicy: 'ask',
       canDelegate: false,
       version: 'test',
     });
@@ -294,6 +298,7 @@ describe('slashRegistry', () => {
       modelSource: 'override',
       cwd: '/tmp/workspace',
       apiMode: 'personal',
+      approvalPolicy: 'ask',
       canDelegate: false,
       version: 'test',
     });
@@ -380,6 +385,7 @@ describe('slashRegistry', () => {
       modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
+      approvalPolicy: 'ask',
       canDelegate: false,
       version: 'test',
     });
@@ -415,6 +421,7 @@ describe('slashRegistry', () => {
       modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
+      approvalPolicy: 'ask',
       canDelegate: false,
       version: 'test',
     });
