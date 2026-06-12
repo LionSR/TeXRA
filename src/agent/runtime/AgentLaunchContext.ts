@@ -113,15 +113,10 @@ const STATUS_MESSAGES: Record<string, string> = {
  * designed independently:
  *  - `AgentCore.logger`   → `RunContext.trace`
  *  - `AgentConfig.agent`  → `RunContext.agentName`
- *  - `AgentConfig.model`  → `RunContext.model`  (snapshotted — see note below)
+ *  - `AgentConfig.model`  → `RunContext.model`
  *
- * NOTE — `RunContext.model` staleness: `model` is snapshotted here at the
- * start of execution. If the agent switches models mid-session via
- * `onModelChanged` (which updates `AgentLaunchContext.config.model`), the
- * ambient `RunContext.model` seen by tools via `tryUseRunContext()` will lag
- * behind. Code that delegates subagents and needs the current model should
- * prefer `AgentLaunchContext.config.model` via explicit context; the ALS
- * value is a best-effort hint.
+ * `RunContext.model` reads through `getModel` so tools observe model switches
+ * applied to `AgentLaunchContext.config.model` during an interactive session.
  */
 function agentContextToRunContext(
   ctx: AgentLaunchContext,
@@ -132,7 +127,7 @@ function agentContextToRunContext(
     executionId: ctx.executionId,
     trace: ctx.logger,
     coordinators: ctx.coordinators,
-    model: ctx.config.model,
+    getModel: () => ctx.config.model,
     agentName: ctx.config.agent,
     workingDirectory: ctx.workingDirectory,
     delegationDepth: ctx.delegationDepth,

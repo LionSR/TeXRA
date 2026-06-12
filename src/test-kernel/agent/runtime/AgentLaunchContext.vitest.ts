@@ -2,7 +2,13 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { getAgentPath } from '@agent/runtime/AgentLaunchContext';
+import { noopTrace } from '@agent/trace';
+import {
+  getAgentPath,
+  withExecutionRunContext,
+  type AgentLaunchContext,
+} from '@agent/runtime/AgentLaunchContext';
+import { useRunContext } from '@agent/runtime/RunContext';
 
 import { createRecordingHost } from '../progressTestUtils';
 
@@ -22,5 +28,25 @@ describe('AgentLaunchContext', () => {
         },
       },
     ]);
+  });
+
+  it('projects model changes into the active run context', async () => {
+    const explicit = createRecordingHost();
+    const ctx = {
+      runtimeHost: explicit.host,
+      logger: noopTrace,
+      config: {
+        agent: 'chat',
+        model: 'deepseekT',
+      },
+    } as unknown as AgentLaunchContext;
+
+    await withExecutionRunContext(ctx, async () => {
+      expect(useRunContext().model).toBe('deepseekT');
+
+      ctx.config.model = 'sonnet46T';
+
+      expect(useRunContext().model).toBe('sonnet46T');
+    });
   });
 });
