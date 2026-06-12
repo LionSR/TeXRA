@@ -365,6 +365,7 @@ export async function runMultiAgentPreset(
         contextFiles,
         instruction,
         approvalContext: runContext,
+        workingDirectory: runContext.cwd,
       }),
       workingDirectory: runContext.cwd,
       agentCategory: AgentCategory.ToolUse,
