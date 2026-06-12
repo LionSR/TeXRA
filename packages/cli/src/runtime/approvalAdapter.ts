@@ -35,8 +35,10 @@ import {
 export {
   type ApprovalDecision,
   appendCliApiSwitchHint,
+  approvalPromptAllowed,
   denyMessage,
   hasCliApprovalDenied,
+  humanInputDenialFeedback,
   immediateDecision,
   immediateDecisionForApproval,
   isCliApiSwitchableRetry,
