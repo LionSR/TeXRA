@@ -2229,6 +2229,7 @@ const SCENARIOS = [
   },
   {
     name: 'focused-stopped-subagent-esc-s-picker',
+    platforms: ['darwin'],
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -2251,6 +2252,7 @@ const SCENARIOS = [
   },
   {
     name: 'focused-stopped-subagent-esc-tab-focus',
+    platforms: ['darwin'],
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -2882,6 +2884,19 @@ function writeSnapshotReport(results) {
 }
 
 async function runScenario(scenario) {
+  if (scenario.platforms && !scenario.platforms.includes(process.platform)) {
+    const skipReason = `scenario is only supported on ${scenario.platforms.join(', ')}`;
+    return {
+      name: scenario.name,
+      ok: true,
+      skipped: true,
+      skipReason,
+      failures: [],
+      frame: skipReason,
+      rows: scenarioRows(scenario),
+    };
+  }
+
   const fakeClipboard = scenario.fakeClipboard ? makeFakeClipboard() : null;
   if (scenario.fakeClipboard && !fakeClipboard) {
     const skipReason = `fake clipboard is not supported on ${process.platform}`;
