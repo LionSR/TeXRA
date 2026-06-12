@@ -31,6 +31,8 @@ export interface InputBarProps {
   readonly onSubmit: (value: string, mediaFiles?: readonly string[]) => void;
   /** Disable the input while an approval modal is owning the screen. */
   readonly disabled?: boolean;
+  /** Inline reason shown when the disabled input remains visible. */
+  readonly disabledMessage?: string;
   /** Preserve component state while giving foreground panels the input rows. */
   readonly collapseWhenDisabled?: boolean;
   /** Prompt prefix (e.g. `>`). */
@@ -327,23 +329,27 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         <Text aria-hidden color="cyan">
           {prompt ?? '›'}{' '}
         </Text>
-        <BaseTextInput
-          value={value}
-          focus={!disabled && !reverseSearchOpen}
-          onChange={setValue}
-          // While the slash palette is open it owns ↑/↓ for row selection;
-          // history recall would clobber the draft mid-navigation.
-          onHistoryUp={showPalette ? undefined : () => browseHistory(-1)}
-          onHistoryDown={showPalette ? undefined : () => browseHistory(1)}
-          imagePasteQueue={imagePasteQueue}
-          transformPaste={transformPaste}
-          onImagePaste={onImagePaste}
-          onImagePasteError={(error) =>
-            setAttachNotice(`Image paste failed: ${toErrorMessage(error)}`)
-          }
-          onInputChunkSubmit={handleInputChunkSubmit}
-          onSubmit={showPalette ? () => undefined : handleSubmit}
-        />
+        {disabled && props.disabledMessage ? (
+          <Text dimColor>{props.disabledMessage}</Text>
+        ) : (
+          <BaseTextInput
+            value={value}
+            focus={!disabled && !reverseSearchOpen}
+            onChange={setValue}
+            // While the slash palette is open it owns ↑/↓ for row selection;
+            // history recall would clobber the draft mid-navigation.
+            onHistoryUp={showPalette ? undefined : () => browseHistory(-1)}
+            onHistoryDown={showPalette ? undefined : () => browseHistory(1)}
+            imagePasteQueue={imagePasteQueue}
+            transformPaste={transformPaste}
+            onImagePaste={onImagePaste}
+            onImagePasteError={(error) =>
+              setAttachNotice(`Image paste failed: ${toErrorMessage(error)}`)
+            }
+            onInputChunkSubmit={handleInputChunkSubmit}
+            onSubmit={showPalette ? () => undefined : handleSubmit}
+          />
+        )}
       </Box>
     </Box>
   );

@@ -5,6 +5,7 @@
 import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
+import { isInFlightStatus } from '@common/constants/streamStatus';
 import {
   LIVE_ELAPSED_STREAM_STATUSES,
   type StreamStatus,
@@ -24,7 +25,11 @@ import {
   QueuedFollowUpsPanel,
   queuedFollowUpPanelRowCount,
 } from './panes/QueuedFollowUpsPanel';
-import { StatusBar } from './panes/StatusBar';
+import {
+  defaultShortcutModifierLabel,
+  metaChordLabel,
+  StatusBar,
+} from './panes/StatusBar';
 import {
   StreamTabsStrip,
   streamTabsDisplayItems,
@@ -39,7 +44,6 @@ import {
 } from './state/approvalQueue';
 import {
   isEscapeInput,
-  metaChordDigit,
   metaChordInput,
   rewriteKittyEnterInput,
 } from './input/inputKeys';
@@ -51,7 +55,7 @@ import {
 } from './state/childControls';
 import { cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
-import { streamDisplayLabel } from './state/streamViews';
+import { activeStreamScope, streamDisplayLabel } from './state/streamViews';
 import {
   isScopedTranscriptViewport,
   transcriptViewportChange,
@@ -83,6 +87,7 @@ const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 // conversation or push the input bar off-screen.
 const BOTTOM_PANEL_MAX_ROWS = 10;
 const COMPACT_STATIC_TRANSCRIPT_MAX_ROWS = 14;
+const ESC_META_CHORD_INTERRUPT_DELAY_MS = 125;
 const COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS = 2;
 
 const PINNED_CHROME_ROWS = {
@@ -339,6 +344,52 @@ export function appEscapeInterruptActive({
   );
 }
 
+export function shouldDeferEscapeInterruptForMetaChord({
+  childInputDisabled,
+  shortcutModifierLabel,
+  subagentControlsAvailable,
+  taskControlsAvailable,
+}: {
+  readonly childInputDisabled: boolean;
+  readonly shortcutModifierLabel: string;
+  readonly subagentControlsAvailable: boolean;
+  readonly taskControlsAvailable: boolean;
+}): boolean {
+  return (
+    childInputDisabled &&
+    shortcutModifierLabel === 'Esc' &&
+    (subagentControlsAvailable || taskControlsAvailable)
+  );
+}
+
+export interface EscapeInterruptState {
+  readonly inputDisabled: boolean;
+  readonly reverseSearchOpen: boolean;
+  readonly slashPaletteOpen: boolean;
+  readonly canInterruptActiveRun: () => boolean;
+  readonly onInterruptActive: () => void;
+}
+
+export function triggerEscapeInterrupt(state: EscapeInterruptState): boolean {
+  if (
+    !appEscapeInterruptActive({
+      inputDisabled: state.inputDisabled,
+      reverseSearchOpen: state.reverseSearchOpen,
+      runPending: state.canInterruptActiveRun(),
+      slashPaletteOpen: state.slashPaletteOpen,
+    })
+  ) {
+    return false;
+  }
+
+  state.onInterruptActive();
+  return true;
+}
+
+export function digitFromMetaShortcut(value: string): number | undefined {
+  return /^[1-9]$/.test(value) ? Number.parseInt(value, 10) : undefined;
+}
+
 export type ForegroundSurfaceKind =
   | 'transcript'
   | 'childControls'
@@ -432,6 +483,45 @@ export function approvalForegroundMaxRows(
   }
 }
 
+export function focusedChildInputDisabledMessage(init: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly shortcutModifierLabel?: string;
+  readonly status: StreamStatus | undefined;
+  readonly subagentControlsAvailable?: boolean;
+  readonly taskControlsAvailable?: boolean;
+}): string | undefined {
+  const scope = activeStreamScope({
+    activeStreamId: init.activeStreamId,
+    parentStream: init.parentStream,
+  });
+  if (
+    scope.kind !== 'child' ||
+    init.status === undefined ||
+    isInFlightStatus(init.status)
+  ) {
+    return undefined;
+  }
+  const shortcutModifierLabel =
+    init.shortcutModifierLabel ?? defaultShortcutModifierLabel();
+  const alternateActions: string[] = [];
+  if (init.subagentControlsAvailable !== false) {
+    alternateActions.push(
+      `${metaChordLabel(shortcutModifierLabel, 's')} to choose another`,
+    );
+  }
+  if (init.taskControlsAvailable === true) {
+    alternateActions.push(
+      `${metaChordLabel(shortcutModifierLabel, 'p')} to review tasks`,
+    );
+  }
+  const base =
+    'Subagent is no longer accepting follow-ups; press Tab to switch streams';
+  if (alternateActions.length === 0) return `${base}.`;
+  const alternateText = alternateActions.join(', or ');
+  return `${base} or ${alternateText}.`;
+}
+
 export interface AppProps {
   readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;
   readonly onKillExecution: (executionId: string) => void;
@@ -477,6 +567,13 @@ export function App(props: AppProps): React.JSX.Element {
     activeStreamId,
     pending,
   });
+  const childControlTargets = resolveChildControlDisplayTargets({
+    activeStreamId,
+    parentStream,
+    streams,
+  });
+  const taskControlsAvailable = childControlTargets.tasks.hasItems;
+  const subagentControlsAvailable = childControlTargets.subagents.hasItems;
 
   const stdin = useStdin();
   const foregroundOpen =
@@ -484,7 +581,38 @@ export function App(props: AppProps): React.JSX.Element {
     activeForm !== undefined ||
     childControlMode !== undefined ||
     transcriptViewerOpen;
-  const inputDisabled = props.inputDisabled === true || foregroundOpen;
+  const childInputDisabledMessage = focusedChildInputDisabledMessage({
+    activeStreamId,
+    parentStream,
+    status: activeStreamId ? streams.get(activeStreamId)?.status : undefined,
+    subagentControlsAvailable,
+    taskControlsAvailable,
+  });
+  const appInputDisabled = props.inputDisabled === true || foregroundOpen;
+  const inputDisabled =
+    appInputDisabled || childInputDisabledMessage !== undefined;
+  const escapeInterruptStateRef = useRef<EscapeInterruptState>({
+    inputDisabled: appInputDisabled,
+    reverseSearchOpen,
+    slashPaletteOpen,
+    canInterruptActiveRun: props.canInterruptActiveRun,
+    onInterruptActive: props.onInterruptActive,
+  });
+  useLayoutEffect(() => {
+    escapeInterruptStateRef.current = {
+      inputDisabled: appInputDisabled,
+      reverseSearchOpen,
+      slashPaletteOpen,
+      canInterruptActiveRun: props.canInterruptActiveRun,
+      onInterruptActive: props.onInterruptActive,
+    };
+  }, [
+    appInputDisabled,
+    props.canInterruptActiveRun,
+    props.onInterruptActive,
+    reverseSearchOpen,
+    slashPaletteOpen,
+  ]);
   const inputBarVisible = !foregroundOpen;
   const viewportKey = transcriptViewportKey({
     activeStreamId,
@@ -568,13 +696,6 @@ export function App(props: AppProps): React.JSX.Element {
         rows,
         tipVisible: tipRowVisible,
       });
-  const childControlTargets = resolveChildControlDisplayTargets({
-    activeStreamId,
-    parentStream,
-    streams,
-  });
-  const taskControlsAvailable = childControlTargets.tasks.hasItems;
-  const subagentControlsAvailable = childControlTargets.subagents.hasItems;
   const hasSubagentPanel =
     !foregroundOpen && hasChildControlItems(activeSlice, 'tasks');
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
@@ -701,12 +822,82 @@ export function App(props: AppProps): React.JSX.Element {
     reverseSearchOpen,
     slashPaletteOpen,
   });
+  const pendingEscapeInterruptTimer = useRef<
+    ReturnType<typeof setTimeout> | undefined
+  >(undefined);
+
+  const clearPendingEscapeInterrupt = () => {
+    if (pendingEscapeInterruptTimer.current === undefined) return;
+    clearTimeout(pendingEscapeInterruptTimer.current);
+    pendingEscapeInterruptTimer.current = undefined;
+  };
+
+  useEffect(
+    () => () => {
+      if (pendingEscapeInterruptTimer.current !== undefined) {
+        clearTimeout(pendingEscapeInterruptTimer.current);
+        pendingEscapeInterruptTimer.current = undefined;
+      }
+    },
+    [],
+  );
+
+  const handleMetaShortcut = (value: string): boolean => {
+    const lower = value.toLowerCase();
+    if (lower === 's') {
+      if (!subagentControlsAvailable) return false;
+      setChildControlMode('subagents');
+      return true;
+    }
+    if (lower === 'p') {
+      if (!taskControlsAvailable) return false;
+      setChildControlMode('tasks');
+      return true;
+    }
+    const digit = digitFromMetaShortcut(value);
+    if (digit !== undefined) {
+      const target = numericFocusTargetForActiveStream({
+        activeStreamId,
+        parentStream,
+        streams,
+        zeroBasedIndex: digit - 1,
+      });
+      if (!target) return false;
+      cliState.activeStreamId.set(target);
+      return true;
+    }
+    return false;
+  };
+
+  const scheduleEscapeInterrupt = () => {
+    clearPendingEscapeInterrupt();
+    pendingEscapeInterruptTimer.current = setTimeout(() => {
+      pendingEscapeInterruptTimer.current = undefined;
+      triggerEscapeInterrupt(escapeInterruptStateRef.current);
+    }, ESC_META_CHORD_INTERRUPT_DELAY_MS);
+  };
 
   // Single App-level keyboard entry point. Ink broadcasts every keystroke to all
   // mounted useInput handlers, so keeping the App's shortcuts in one always-on
   // handler (gating internally) is clearer than several hooks racing on the same
   // chord. Stays mounted so Ctrl+C works even while a modal/form owns the input.
   useInput((input, key) => {
+    const pendingEscapeInterrupt =
+      pendingEscapeInterruptTimer.current !== undefined;
+    if (pendingEscapeInterrupt) {
+      clearPendingEscapeInterrupt();
+      if (
+        !key.ctrl &&
+        !key.tab &&
+        !isEscapeInput(input, key) &&
+        input.length > 0
+      ) {
+        if (handleMetaShortcut(input)) return;
+        triggerEscapeInterrupt(escapeInterruptStateRef.current);
+        return;
+      }
+    }
+
     // Ctrl+C is owned here even over foreground surfaces. We render with
     // exitOnCtrlC: false (see runChatTui), so Ink neither auto-exits nor filters
     // Ctrl+C out of useInput. The full CLI wires onCtrlC to the same SIGINT
@@ -752,25 +943,7 @@ export function App(props: AppProps): React.JSX.Element {
     // Esc/Alt chords: s → subagent controls, p → tasks, 1-9 → focus stream.
     const metaInput = metaChordInput(input, key);
     if (metaInput) {
-      const lower = metaInput.toLowerCase();
-      if (lower === 's') {
-        if (subagentControlsAvailable) setChildControlMode('subagents');
-        return;
-      }
-      if (lower === 'p') {
-        if (taskControlsAvailable) setChildControlMode('tasks');
-        return;
-      }
-      const digit = metaChordDigit(input, key);
-      if (digit !== undefined) {
-        const target = numericFocusTargetForActiveStream({
-          activeStreamId,
-          parentStream,
-          streams,
-          zeroBasedIndex: digit - 1,
-        });
-        if (target) cliState.activeStreamId.set(target);
-      }
+      handleMetaShortcut(metaInput);
       return;
     }
 
@@ -778,13 +951,24 @@ export function App(props: AppProps): React.JSX.Element {
     if (
       isEscapeInput(input, key) &&
       appEscapeInterruptActive({
-        inputDisabled,
-        reverseSearchOpen,
-        runPending: props.canInterruptActiveRun(),
-        slashPaletteOpen,
+        inputDisabled: escapeInterruptStateRef.current.inputDisabled,
+        reverseSearchOpen: escapeInterruptStateRef.current.reverseSearchOpen,
+        runPending: escapeInterruptStateRef.current.canInterruptActiveRun(),
+        slashPaletteOpen: escapeInterruptStateRef.current.slashPaletteOpen,
       })
     ) {
-      props.onInterruptActive();
+      if (
+        shouldDeferEscapeInterruptForMetaChord({
+          childInputDisabled: childInputDisabledMessage !== undefined,
+          shortcutModifierLabel: defaultShortcutModifierLabel(),
+          subagentControlsAvailable,
+          taskControlsAvailable,
+        })
+      ) {
+        scheduleEscapeInterrupt();
+        return;
+      }
+      triggerEscapeInterrupt(escapeInterruptStateRef.current);
     }
   });
 
@@ -848,6 +1032,7 @@ export function App(props: AppProps): React.JSX.Element {
         <InputBar
           onSubmit={props.onSubmit}
           collapseWhenDisabled={!inputBarVisible}
+          disabledMessage={childInputDisabledMessage}
           disabled={inputDisabled}
           history={props.history}
         />
