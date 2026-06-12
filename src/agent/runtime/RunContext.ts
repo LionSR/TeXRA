@@ -14,18 +14,45 @@ export interface RunCoordinators {
   readonly retry: RetryRequestCoordinatorImpl;
 }
 
+/**
+ * Ambient per-run context stored in an {@link AsyncLocalStorage} scope.
+ *
+ * Tools and utilities that cannot take explicit parameters reach host services
+ * via `tryUseRunContext()`. The canonical source of truth for all of these
+ * fields is {@link AgentLaunchContext} / {@link AgentCore}; the values here
+ * are projected once by `agentContextToRunContext` in `AgentLaunchContext.ts`
+ * at the moment `withExecutionRunContext` is entered.
+ *
+ * **Field naming mismatches with AgentCore** (unavoidable — interfaces were
+ * designed independently):
+ *   - `AgentCore.logger`  → `RunContext.trace`
+ *   - `AgentConfig.agent` → `RunContext.agentName`
+ *   - `AgentConfig.model` → `RunContext.model`
+ *
+ * **Staleness**: `model` is snapshotted at run start. After a mid-session
+ * model switch (`onModelChanged` in `executeAgent`), `RunContext.model` lags
+ * behind `AgentLaunchContext.config.model`. Tools that delegate subagents
+ * and inherit the parent model (e.g. `delegate_agent`) will use the stale
+ * value. This is a known limitation of the snapshot approach.
+ */
 export interface RunContext {
   readonly runtimeHost: AgentRuntimeHost;
   readonly streamId?: StreamTabId;
   readonly executionId?: ExecutionId;
   /**
-   * Discriminated-event SDK channel for this run. Subscribe with
-   * `trace.subscribe(...)` to receive every event the run emits. Defaults
-   * to `noopTrace` when callers don't provide one.
+   * Discriminated-event SDK channel for this run. Defaults to `noopTrace`
+   * when the context is created without a trace (e.g. in tests).
+   *
+   * Most tools receive the trace via explicit parameter threading rather than
+   * reading it here; this field exists for test helpers and future SDK
+   * consumers that need the trace without access to the full AgentLaunchContext.
    */
   readonly trace: AgentTrace;
   readonly coordinators?: RunCoordinators;
-  /** Model short name of the executing agent (e.g. "opus46T", "sonnet46T"). */
+  /**
+   * Model short name snapshotted at run start (e.g. "opus46T"). May be stale
+   * after `onModelChanged` — see interface-level note above.
+   */
   readonly model?: string;
   /** Agent name (e.g. "orchestrator", "search-agent"). */
   readonly agentName?: string;
@@ -85,8 +112,9 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
 /**
  * Run code with an active per-run context.
  *
- * This is the migration bridge from the older runtime-host ALS and singleton
- * coordinators toward an explicit context rooted at executeAgent().
+ * The context is populated by `withExecutionRunContext` (in
+ * `AgentLaunchContext.ts`), which projects an {@link AgentLaunchContext} into
+ * the ALS scope. Tools and utilities call `tryUseRunContext()` to read it.
  */
 export function withRunContext<T>(
   context: RunContext,
