@@ -47,6 +47,7 @@ import { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
 import {
   createRunContext,
   withRunContext,
+  type CreateRunContextOptions,
   type RunCoordinators,
 } from './RunContext';
 import {
@@ -102,11 +103,30 @@ const STATUS_MESSAGES: Record<string, string> = {
   [STREAM_STATUS.WAITING]: 'waiting for retry',
 };
 
-export async function withExecutionRunContext<T>(
+/**
+ * Project an {@link AgentLaunchContext} onto the subset of fields that belong
+ * in the ambient {@link RunContext}.
+ *
+ * Centralises the mapping so new per-run flags (e.g. `stopAfterCycle`,
+ * `approvalPromptsUnavailable`) live in one place and are never silently
+ * dropped. Three field renames are unavoidable given the interfaces were
+ * designed independently:
+ *  - `AgentCore.logger`   → `RunContext.trace`
+ *  - `AgentConfig.agent`  → `RunContext.agentName`
+ *  - `AgentConfig.model`  → `RunContext.model`  (snapshotted — see note below)
+ *
+ * NOTE — `RunContext.model` staleness: `model` is snapshotted here at the
+ * start of execution. If the agent switches models mid-session via
+ * `onModelChanged` (which updates `AgentLaunchContext.config.model`), the
+ * ambient `RunContext.model` seen by tools via `tryUseRunContext()` will lag
+ * behind. Code that delegates subagents and needs the current model should
+ * prefer `AgentLaunchContext.config.model` via explicit context; the ALS
+ * value is a best-effort hint.
+ */
+function agentContextToRunContext(
   ctx: AgentLaunchContext,
-  fn: () => T | Promise<T>,
-): Promise<T> {
-  const runContext = createRunContext({
+): CreateRunContextOptions {
+  return {
     runtimeHost: ctx.runtimeHost,
     streamId: ctx.streamId,
     executionId: ctx.executionId,
@@ -118,8 +138,17 @@ export async function withExecutionRunContext<T>(
     delegationDepth: ctx.delegationDepth,
     approvalPromptsUnavailable: ctx.approvalPromptsUnavailable,
     stopAfterCycle: ctx.stopAfterCycle,
-  });
-  return await withRunContext(runContext, fn);
+  };
+}
+
+export async function withExecutionRunContext<T>(
+  ctx: AgentLaunchContext,
+  fn: () => T | Promise<T>,
+): Promise<T> {
+  return await withRunContext(
+    createRunContext(agentContextToRunContext(ctx)),
+    fn,
+  );
 }
 
 export async function getAgentPath(
