@@ -129,7 +129,7 @@ const ExecutionsToolInputSchema = z.strictObject({
     .max(EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS)
     .nullish()
     .describe(
-      `Max seconds to wait for a status change (action="wait" only). Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}, values above ${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} are capped.`,
+      `Max seconds to wait for a status change (action="wait" only). Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
     ),
 
   /** Zero-based offset for paginating the /executions listing (action="view" only). */
