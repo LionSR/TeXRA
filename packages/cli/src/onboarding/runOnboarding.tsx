@@ -499,6 +499,7 @@ function PickerStep(props: {
     >
       <Select<OnboardingChoice>
         items={props.items}
+        labelMaxCols={34}
         onSelect={(value) => {
           if (value === 'relay') props.onRelay();
           else if (value === 'key') props.onKey();
