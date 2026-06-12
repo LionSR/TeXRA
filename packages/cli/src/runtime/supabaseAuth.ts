@@ -19,6 +19,7 @@ import {
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - CLI runtime
+import { readCliEnv } from './cliContext';
 import { getCliSecrets } from './cliSecrets';
 import { openBrowser } from './supabaseAuthBrowser';
 import { startLoopbackCallbackServer } from './supabaseAuthCallbackServer';
@@ -203,7 +204,7 @@ export async function signOutCliSupabase(): Promise<void> {
   // the session is gone (see relayTokenStillActiveNotice), so leave included
   // access enabled — disabling it would contradict the credential that
   // remains and silently break relay access for CI environments.
-  if (!getConfiguredRelayToken()) {
+  if (!getConfiguredRelayToken(readCliEnv())) {
     await serverSideKeyService.setUseIncludedModelAccess(false);
   }
   serverSideKeyService.clearAllCaches({ resetQuotaFlip: true });
@@ -216,7 +217,7 @@ export async function signOutCliSupabase(): Promise<void> {
  * removes the variable themselves. Say so instead of reporting a clean exit.
  */
 export function relayTokenStillActiveNotice(
-  env: NodeJS.ProcessEnv = process.env,
+  env: Record<string, string | undefined> = readCliEnv(),
 ): string | undefined {
   if (!getConfiguredRelayToken(env)) return undefined;
   return `Note: ${RELAY_TOKEN_ENV_VAR} is still set in this environment, so included relay access stays active. Unset it (and revoke the token with \`texra auth token revoke\` if it leaked) to fully sign out.`;
@@ -250,7 +251,7 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
   // the server has rejected (expired, revoked) must not report a signed-in
   // state the relay will 401. When the check itself fails (offline), stay
   // optimistic but say the token could not be verified.
-  const relayToken = getConfiguredRelayToken();
+  const relayToken = getConfiguredRelayToken(readCliEnv());
   let rejectedTokenNote: string | undefined;
   if (relayToken) {
     const status = await fetchRelayTokenStatus(relayToken);

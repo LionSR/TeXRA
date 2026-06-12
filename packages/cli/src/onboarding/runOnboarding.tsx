@@ -90,6 +90,9 @@ export interface OnboardingGateContext {
 const SKIP_SUMMARY =
   "Setup skipped — run `texra login` or `texra setup` when you're ready.";
 
+// Fits the current 30-column onboarding action labels without truncation.
+const ONBOARDING_SELECT_LABEL_MAX_COLS = 34;
+
 /** Gate returned without showing the picker (or before any choice is made). */
 const NO_ONBOARDING_RESULT: CliOnboardingResult = {
   configured: false,
@@ -499,6 +502,7 @@ function PickerStep(props: {
     >
       <Select<OnboardingChoice>
         items={props.items}
+        labelMaxCols={ONBOARDING_SELECT_LABEL_MAX_COLS}
         onSelect={(value) => {
           if (value === 'relay') props.onRelay();
           else if (value === 'key') props.onKey();

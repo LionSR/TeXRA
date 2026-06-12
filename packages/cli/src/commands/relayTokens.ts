@@ -107,7 +107,7 @@ async function requireSessionAccessToken(
   const canPrompt =
     context.outputFormat === 'text' &&
     interactiveTerminalFailure(context) === undefined &&
-    process.stdout.isTTY;
+    context.stdoutIsTty === true;
   if (!canPrompt) {
     writeTextStderr(
       'Not signed in. Run `texra login` first (`texra login --device` works over SSH).',
