@@ -36,4 +36,35 @@ describe('CLI plan approval layout', () => {
       lines.some((line) => line.includes('observations. Do not edit')),
     ).toBe(true);
   });
+
+  it('pads non-compact wrapped lines so shorter repaint rows clear stale tails', () => {
+    const lines = planApprovalDisplayLines({
+      objective: [
+        '## Objective',
+        'Prove that $\\sqrt{2} + \\sqrt{3}$ is irrational.',
+        '',
+        '## Approach',
+        '1. Assume, for contradiction, that $\\sqrt{2} + \\sqrt{3}$ is rational, i.e. $x = \\sqrt{2} + \\sqrt{3} \\in \\mathbb{Q}$.',
+        '2. Square both sides and isolate terms to derive a contradiction about $\\sqrt{6}$.',
+        '3. Conclude that the original number is irrational.',
+        "4. Delegate a brief independent verification to the `review` subagent to check the derivation's correctness.",
+      ].join('\n'),
+      width: 76,
+      padLines: true,
+    });
+
+    expect(
+      lines.some(
+        (line) =>
+          line.trim() ===
+          '4. Delegate a brief independent verification to the `review` subagent to',
+      ),
+    ).toBe(true);
+    const continuation = lines.find((line) =>
+      line.trim().startsWith("check the derivation's correctness."),
+    );
+    expect(continuation).toBeDefined();
+    expect(continuation).not.toContain('ification to the `review`');
+    expect(continuation?.length).toBe(76);
+  });
 });
