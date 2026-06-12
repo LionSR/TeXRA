@@ -123,7 +123,9 @@ const STATUS_MESSAGES: Record<string, string> = {
  * prefer `AgentLaunchContext.config.model` via explicit context; the ALS
  * value is a best-effort hint.
  */
-function agentContextToRunContext(ctx: AgentLaunchContext): CreateRunContextOptions {
+function agentContextToRunContext(
+  ctx: AgentLaunchContext,
+): CreateRunContextOptions {
   return {
     runtimeHost: ctx.runtimeHost,
     streamId: ctx.streamId,
@@ -143,7 +145,10 @@ export async function withExecutionRunContext<T>(
   ctx: AgentLaunchContext,
   fn: () => T | Promise<T>,
 ): Promise<T> {
-  return await withRunContext(createRunContext(agentContextToRunContext(ctx)), fn);
+  return await withRunContext(
+    createRunContext(agentContextToRunContext(ctx)),
+    fn,
+  );
 }
 
 export async function getAgentPath(
