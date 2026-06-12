@@ -51,7 +51,8 @@
       <span class="mk-term-cmd">texra tools auth codex</span>
     </div>
     <div class="ctf-block ctf-dim">
-      <div>codex login — sign in with ChatGPT account</div>
+      <div>Uses ChatGPT subscription (free with Plus/Pro)</div>
+      <div>Command: codex login</div>
     </div>
 
     <!-- Beat 4: recheck -->

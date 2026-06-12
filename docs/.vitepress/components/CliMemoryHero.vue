@@ -12,17 +12,17 @@
 const rows = [
   {
     path: '/memories/project-conventions.md',
-    desc: 'pinned; 1.2 KB; modified: 11/4/2025, 2:31 PM; by research',
+    desc: 'pinned; 1.2K; modified: 11/4/2025, 2:31:08 PM; by research',
     pinned: true,
   },
   {
     path: '/memories/notation.md',
-    desc: '0.8 KB; modified: 10/28/2025, 10:04 AM; by assistant',
+    desc: '819B; modified: 10/28/2025, 10:04:51 AM; by assistant',
     pinned: false,
   },
   {
     path: '/memories/related-work.md',
-    desc: '2.4 KB; modified: 10/21/2025, 4:48 PM; by research',
+    desc: '2.4K; modified: 10/21/2025, 4:48:27 PM; by research',
     pinned: false,
   },
 ];
@@ -54,6 +54,10 @@ const rows = [
       <span class="mk-term-cmd"
         >texra memory show memories/project-conventions.md</span
       >
+    </div>
+    <div class="cmh-meta">
+      <div>Memory: /memories/project-conventions.md</div>
+      <div>9 lines</div>
     </div>
     <div class="cmh-preview">
       <div># Project conventions</div>
@@ -103,6 +107,12 @@ const rows = [
 .cmh-show {
   margin-top: var(--mk-space-10);
   flex-wrap: wrap;
+}
+.cmh-meta {
+  margin-top: var(--mk-space-4);
+  padding-left: var(--mk-space-16);
+  color: var(--mk-text-dim);
+  font-size: var(--mk-fs-72);
 }
 .cmh-preview {
   margin-top: var(--mk-space-5);

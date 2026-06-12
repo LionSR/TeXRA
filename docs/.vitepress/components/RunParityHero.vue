@@ -81,12 +81,16 @@ const RUN_ID = '9f3a6c81d24e';
 .rph-term-body {
   font-size: var(--mk-fs-74);
 }
+/* Annotation, not terminal output: text mode prints only the path (the id is
+   inside it) — this row just names the run for the parity tie. */
 .rph-done {
   display: flex;
   align-items: center;
   gap: var(--mk-space-7);
   margin-top: var(--mk-space-8);
-  color: var(--mk-text-dim);
+  color: var(--mk-text-faint);
+  font-style: italic;
+  font-size: var(--mk-fs-72);
 }
 .rph-path {
   margin-top: var(--mk-space-5);

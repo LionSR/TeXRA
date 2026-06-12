@@ -14,7 +14,7 @@ const children = [
   {
     n: 1,
     agent: 'coder',
-    status: 'done',
+    status: 'completed',
     elapsed: '48s',
     tail: 'optimized the inner loop in scripts/simulate.py',
   },
@@ -47,28 +47,21 @@ const children = [
     <div class="cma-root">
       <wa-spinner class="cma-spin mk-spinner"></wa-spinner>
       <span class="cma-agent">engineer</span>
-      <span class="cma-status">delegating</span>
-      <span class="cma-elapsed">1m12s</span>
+      <span class="cma-status">running</span>
+      <span class="cma-elapsed">1m 12s</span>
     </div>
 
     <!-- Subagent panel rows: numbered children with status + output tail -->
     <ul class="cma-children">
       <li v-for="c in children" :key="c.n" class="cma-child">
         <div class="cma-child-row">
-          <span class="cma-n">{{ c.n }}.</span>
-          <span
-            class="cma-marker"
-            :class="
-              c.status === 'done' ? 'cma-marker--done' : 'cma-marker--run'
-            "
-            >●</span
-          >
+          <span class="cma-n">{{ c.n }}</span>
+          <span class="cma-marker">●</span>
           <span class="cma-agent">{{ c.agent }}</span>
           <span class="cma-status">{{ c.status }}</span>
           <span class="cma-elapsed">{{ c.elapsed }}</span>
         </div>
         <div class="cma-tail">
-          <span class="cma-corner">⎿</span>
           <span class="cma-tail-text">{{ c.tail }}</span>
         </div>
       </li>
@@ -132,25 +125,16 @@ const children = [
   font-size: var(--mk-fs-72);
   flex-shrink: 0;
 }
+/* Both child markers are green: childStatusColor colors running and
+   completed children alike in the real subagent panel. */
 .cma-marker {
   flex-shrink: 0;
-}
-.cma-marker--done {
   color: var(--color-success);
 }
-.cma-marker--run {
-  color: var(--mk-text-faint);
-}
 .cma-tail {
-  display: flex;
-  align-items: baseline;
-  gap: var(--mk-space-7);
   padding-left: var(--mk-space-26);
   color: var(--mk-text-faint);
   font-size: var(--mk-fs-72);
-}
-.cma-corner {
-  flex-shrink: 0;
 }
 .cma-tail-text {
   min-width: 0;

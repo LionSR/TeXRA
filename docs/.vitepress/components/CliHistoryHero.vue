@@ -2,32 +2,33 @@
 // Terminal card for `texra history list` — guide/progress-board.md's proof
 // that run history is shared across surfaces. Rows reproduce the real
 // tab-separated format (packages/cli/src/runtime/history.ts
-// formatCliHistoryText): id, timestamp, agent, status, primary input — the
-// same runs the ProgressBoard shows as streams. Ids are the compact 12-char
-// hex execution ids; `texra resume <id>` reopens a stored tool-use session in
-// the interactive chat TUI.
+// formatCliHistoryText): id, ISO timestamp, agent, status, primary input —
+// the same runs the ProgressBoard shows as streams. Ids are the compact
+// 12-char hex execution ids; status words are the real set (completed /
+// error / resumable / …); `texra resume <id>` only works on a `resumable`
+// session, which it reopens in the interactive chat TUI.
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
 const rows = [
   {
     id: '9f3a6c81d24e',
-    ts: '2025-11-04T14:31:08',
+    ts: '2025-11-04T14:31:08.412Z',
     agent: 'polish',
     status: 'completed',
     input: 'draft.tex',
   },
   {
     id: 'c4e19b07a52d',
-    ts: '2025-11-04T11:02:44',
+    ts: '2025-11-04T11:02:44.917Z',
     agent: 'research',
-    status: 'completed',
+    status: 'resumable',
     input: 'sections/intro.tex',
   },
   {
     id: 'e2c70a94b18f',
-    ts: '2025-11-03T17:45:13',
+    ts: '2025-11-03T17:45:13.208Z',
     agent: 'correct',
-    status: 'failed',
+    status: 'error',
     input: 'appendices.tex',
   },
 ];
@@ -48,7 +49,10 @@ const rows = [
         <span class="chh-agent">{{ r.agent }}</span>
         <span
           class="chh-status"
-          :class="r.status === 'failed' ? 'chh-status--bad' : ''"
+          :class="{
+            'chh-status--bad': r.status === 'error',
+            'chh-status--resume': r.status === 'resumable',
+          }"
           >{{ r.status }}</span
         >
         <span class="chh-input">{{ r.input }}</span>
@@ -98,6 +102,9 @@ const rows = [
 }
 .chh-status--bad {
   color: var(--color-error);
+}
+.chh-status--resume {
+  color: var(--mk-accent);
 }
 .chh-input {
   color: var(--mk-text);
