@@ -18,6 +18,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { platform, tryPlatform } from '@platform/platform';
 import {
   AgentCategory,
+  LIVE_ELAPSED_STREAM_STATUSES,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_STATUS,
@@ -689,12 +690,13 @@ function harnessMessageEntry(
   id: string,
   text: string,
   role: ConversationEntry['role'] = 'assistant',
+  finalized = true,
 ): ConversationEntry {
   return {
     id,
     role,
     text,
-    finalized: true,
+    finalized,
   };
 }
 
@@ -1243,6 +1245,18 @@ function appendHarnessAssistantTranscript(
   appendHarnessTranscript('assistant', text, streamId);
 }
 
+function appendHarnessChildSubmitAck(
+  text: string,
+  streamId: StreamTabId,
+): void {
+  const status = cliState.streams.get().get(streamId)?.status;
+  appendHarnessTranscript('assistant', text, streamId, {
+    finalized: !(
+      status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status)
+    ),
+  });
+}
+
 function appendHarnessUserTranscript(text: string): void {
   appendHarnessTranscript('user', text);
 }
@@ -1251,6 +1265,7 @@ function appendHarnessTranscript(
   role: ConversationEntry['role'],
   text: string,
   explicitStreamId?: StreamTabId,
+  options: { readonly finalized?: boolean } = {},
 ): void {
   const streamId = explicitStreamId ?? defaultHarnessTranscriptStreamId();
   patchStream(streamId, (slice) => ({
@@ -1261,6 +1276,7 @@ function appendHarnessTranscript(
         `harness-local-${Date.now()}-${slice.entries.length}`,
         text,
         role,
+        options.finalized,
       ),
     ],
   }));
@@ -1439,7 +1455,11 @@ function handleHarnessSubmit(line: string): void {
     );
     return;
   }
-  appendHarnessAssistantTranscript(`Harness received: ${line}`, childStreamId);
+  if (childStreamId) {
+    appendHarnessChildSubmitAck(`Harness received: ${line}`, childStreamId);
+    return;
+  }
+  appendHarnessAssistantTranscript(`Harness received: ${line}`);
 }
 
 function appendHarnessStatus(): void {
