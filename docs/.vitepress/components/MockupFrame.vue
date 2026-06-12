@@ -120,16 +120,27 @@ const LOGO = withBase('/logo-icon-board.svg');
   align-items: center;
   padding: var(--mk-space-10) 0;
   gap: var(--mk-space-16);
+  box-sizing: border-box;
 }
 .activity-item {
   color: var(--mk-text-faint);
-  width: 100%;
+  width: var(--mk-size-46);
+  height: var(--mk-size-32);
+  flex: 0 0 var(--mk-size-32);
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  padding: var(--mk-space-2) 0;
   font-size: var(--mk-space-20);
+  line-height: 1;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.activity-item > wa-icon {
+  display: block;
+  width: var(--mk-space-20);
+  height: var(--mk-space-20);
+  line-height: 1;
 }
 .activity-item--active {
   color: var(--mk-text);
@@ -138,8 +149,8 @@ const LOGO = withBase('/logo-icon-board.svg');
   content: '';
   position: absolute;
   left: 0;
-  top: -4px;
-  bottom: -4px;
+  top: 0;
+  bottom: 0;
   width: var(--mk-space-2);
   background: var(--mk-accent);
 }
@@ -170,10 +181,10 @@ const LOGO = withBase('/logo-icon-board.svg');
     border-bottom: 1px solid var(--mk-border-strong);
   }
   .activity-item--active::before {
-    left: -2px;
+    left: 0;
     top: auto;
     bottom: 0;
-    right: -2px;
+    right: 0;
     width: auto;
     height: var(--mk-space-2);
   }
