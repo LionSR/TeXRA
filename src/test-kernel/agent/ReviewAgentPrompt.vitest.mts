@@ -39,8 +39,13 @@ describe('review agent prompt', () => {
 
     expect(systemPrompt).toContain('Return the report in your final response');
     expect(systemPrompt).toContain('when the user explicitly asks');
-    expect(systemPrompt).not.toContain('use write_file to save the report');
-    expect(agent.settings.tools).not.toContain('write_file');
-    expect(agent.settings.tools).not.toContain('edit_file');
+    expect(systemPrompt).toContain(
+      'Use write_file for new workspace artifacts',
+    );
+    expect(systemPrompt).toContain(
+      'do not use bash as a workspace file-writing fallback',
+    );
+    expect(agent.settings.tools).toContain('write_file');
+    expect(agent.settings.tools).toContain('edit_file');
   });
 });

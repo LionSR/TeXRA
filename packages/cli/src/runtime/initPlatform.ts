@@ -258,14 +258,21 @@ export async function initCliPlatform(
   await setCliHelperModel(context.helperModel);
 
   if (bootstrappedResourcesPath !== context.resourcesPath) {
+    const globalState = tryPlatform()?.globalState;
+    if (!globalState) {
+      throw new Error('CLI platform global state is not initialized.');
+    }
+    const cliBundledAgentsVersionKey =
+      GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION;
     await bootstrapPlatformAgentDirectories({
       channel: 'cli',
       resourcesPath: context.resourcesPath,
-      currentVersion: undefined,
+      currentVersion: context.version,
       customDirectoryStore: { get: () => undefined },
       versionStore: {
-        get: () => undefined,
-        update: async () => {},
+        get: () => globalState.get<string>(cliBundledAgentsVersionKey),
+        update: (version) =>
+          globalState.update(cliBundledAgentsVersionKey, version),
       },
     });
     bootstrappedResourcesPath = context.resourcesPath;
