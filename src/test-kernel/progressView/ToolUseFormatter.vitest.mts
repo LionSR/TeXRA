@@ -73,4 +73,39 @@ describe('tool-use formatter', () => {
     expect(container.textContent).toContain('src/main.ts');
     expect(container.textContent).not.toContain('Failed to render');
   });
+
+  it('caps executions wait timeout displays at the tool maximum', async () => {
+    const { formatToolUseTemplate } =
+      await import('@progressView/frontend/formatters/logFormatters/toolFormatters');
+    const { getToolTimeoutMs } =
+      await import('@progressView/frontend/formatters/logFormatters/toolFormatters/helpers');
+    const { render } = await import('lit');
+    const input = {
+      path: '/executions/abc123',
+      action: 'wait',
+      timeout: 3600,
+    };
+    const message: LogMessageData = {
+      id: 'executions-timeout',
+      text: '',
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      messageType: 'toolUse',
+      data: {
+        toolName: 'executions',
+        input,
+      },
+    };
+
+    expect(getToolTimeoutMs('executions', input)).toBe(1_800_000);
+    expect(getToolTimeoutMs('executions', { ...input, timeout: 30 })).toBe(
+      60_000,
+    );
+
+    const container = document.createElement('div');
+    render(formatToolUseTemplate(message), container);
+
+    expect(container.textContent).toContain('wait (timeout: 1800s)');
+    expect(container.textContent).not.toContain('3600s');
+  });
 });
