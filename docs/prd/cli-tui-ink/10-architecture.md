@@ -161,7 +161,12 @@ Per-phase frame timings (render / diff / write / yoga-layout) and flicker contex
 
 ### Entrypoint default
 
-`texra` invoked with no subcommand defaults to `texra chat` when stdin / stdout are TTYs (the TUI path); otherwise it falls through to `--help`. Named subcommands (`texra run`, `texra config`, etc.) keep their explicit names. Wired through citty's default-subcommand mechanism, no shim. Pattern matches Claude Code's `claude` (bare command → REPL).
+`texra` invoked with no subcommand defaults to the interactive launcher
+(`texra orchestrate`) when stdin / stdout are TTYs; otherwise it falls through
+to `--help`. The launcher lets users pick a chat, resume a session, or run a
+team preset. Named subcommands (`texra chat`, `texra run`, `texra setup`,
+etc.) keep their explicit names. Wired through citty's default-subcommand
+mechanism, no shim.
 
 **Default agent + model resolution.** When `texra` starts the TUI without `--agent` / `--model` overrides, the agent and model are resolved in this order:
 
