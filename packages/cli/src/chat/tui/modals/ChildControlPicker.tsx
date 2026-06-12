@@ -780,7 +780,7 @@ function TaskDetailView({
   const metaParts = [
     item.kind === 'process' ? 'shell' : 'stream',
     item.label,
-    item.status,
+    item.statusLabel,
     item.elapsed,
   ].filter((part): part is string => Boolean(part));
   const layout = computeTaskDetailLayout({
@@ -917,7 +917,7 @@ function TaskDetailView({
         <>
           {metaLine('Type', item.kind === 'process' ? 'shell' : 'stream')}
           {metaLine('Name', item.label)}
-          {metaLine('Status', item.status)}
+          {metaLine('Status', item.statusLabel)}
           {metaLine('Runtime', item.elapsed)}
         </>
       ) : (
