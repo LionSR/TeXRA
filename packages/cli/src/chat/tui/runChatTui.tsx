@@ -466,6 +466,7 @@ export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpR
 
 interface SlashCommandContext {
   readonly session: TuiSession;
+  readonly commandName?: string;
   readonly initialAgent: string;
   readonly initialModel: string;
   readonly interruptActive: () => void;
@@ -901,6 +902,7 @@ async function handleTuiSlashCommand(
           // Only surface the resume id once a stream exists — never next to
           // a "not started" status.
           sessionId: slice ? context.session.executionId : undefined,
+          commandName: context.commandName,
           queuedFollowUpMessages:
             activeStreamId === undefined
               ? []
@@ -1072,6 +1074,7 @@ export async function runChat(
   // resumeAgentRun) are all defined before the first use.
   const slashCommandContext = (): SlashCommandContext => ({
     session,
+    commandName: context.commandName,
     initialAgent: agent,
     initialModel: model,
     interruptActive,
@@ -1651,6 +1654,7 @@ export async function runChat(
       canInterruptActiveRun={canInterruptActiveRun}
       canStopActiveRun={canStopActiveRun}
       colorEnabled={stdoutColorEnabled}
+      commandName={context.commandName}
       onInterruptActive={interruptActive}
       onTranscriptViewportChange={repaintTranscriptViewport}
       onCtrlC={() => handleSigint()}
@@ -1726,6 +1730,7 @@ export async function runChat(
         streams,
       }),
       collectResumeUsage(streams),
+      context.commandName,
     );
     if (hint) writeTextStdout(`\n${hint}`);
   };

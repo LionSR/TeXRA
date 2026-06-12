@@ -2,6 +2,7 @@ import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
 
+import { formatResumeCommand } from './state/resumeHint';
 import type { BypassState } from './state/cliState';
 
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
@@ -18,6 +19,7 @@ export interface CliSessionStatusInput {
   /** Root execution id, when a run has started. Surfaces the resume command
    *  mid-session instead of only in the exit hint. */
   readonly sessionId?: string;
+  readonly commandName?: string;
 }
 
 export function formatCliStatusLabel(status: string | undefined): string {
@@ -68,7 +70,10 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     ...(input.sessionId
       ? [
           `session: ${input.sessionId}`,
-          `resume later with: texra --resume ${input.sessionId}`,
+          `resume later with: ${formatResumeCommand(
+            input.commandName,
+            input.sessionId,
+          )}`,
         ]
       : []),
     ...queuedFollowUpStatusLines(input.queuedFollowUpMessages),
