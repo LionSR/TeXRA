@@ -15,6 +15,7 @@ import {
   verticalCursorMove,
   type CursorEdit,
   type TextEdit,
+  type TextInputChunkEdit,
 } from './textInputEditing';
 import { matchTextInputBinding } from './textInputBindings';
 import {
@@ -27,6 +28,8 @@ import {
 } from './inputKeys';
 import { ImagePasteQueue, withImagePasteTimeout } from './imagePasteQueue';
 import { textDisplayWidth } from '../render/terminalText';
+
+const ESC_SLASH_PREFIX = '\u001B/';
 
 export interface BaseTextInputProps {
   readonly value: string;
@@ -58,6 +61,21 @@ export interface BaseTextInputProps {
   readonly onImagePaste?: () => Promise<string | null>;
   readonly onImagePasteError?: (error: unknown) => void;
   readonly imagePasteQueue?: ImagePasteQueue;
+  /** Optional parent-owned value ref for same-tick programmatic draft changes. */
+  readonly readLatestValue?: () => string;
+  /** Optional parent-owned edit applied before a raw terminal chunk is handled. */
+  readonly prepareInputChunk?: (
+    input: string,
+    value: string,
+    cursor: number,
+  ) => TextEdit | undefined;
+  readonly shouldDropInputChunk?: (
+    input: string,
+    value: string,
+    cursor: number,
+  ) => boolean;
+  /** Apply an edit when Escape is received before normal text handling. */
+  readonly escapeEdit?: CursorEdit;
   /** Render the value as bullets (secret entry, e.g. an API key). Display-only:
    *  the captured value, edits, and paste are unaffected. */
   readonly masked?: boolean;
@@ -372,6 +390,40 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     [isControlled, onChange, onCursorChange],
   );
 
+  const syncLatestExternalValue = useCallback((): TextEdit => {
+    const externalValue = props.readLatestValue?.();
+    const latest = latestStateRef.current;
+    if (externalValue === undefined || externalValue === latest.value) {
+      return latest;
+    }
+    const cursor = clampCursor(latest.cursor, externalValue.length);
+    const next = { value: externalValue, cursor };
+    latestStateRef.current = next;
+    if (!isControlled) setInternalCursor(cursor);
+    onCursorChange?.(cursor);
+    return next;
+  }, [isControlled, onCursorChange, props.readLatestValue]);
+
+  const prepareInputChunkState = useCallback(
+    (input: string): TextEdit => {
+      const latest = syncLatestExternalValue();
+      const prepared = props.prepareInputChunk?.(
+        input,
+        latest.value,
+        latest.cursor,
+      );
+      if (prepared === undefined) return latest;
+      const next = {
+        value: prepared.value,
+        cursor: clampCursor(prepared.cursor, prepared.value.length),
+      };
+      latestStateRef.current = next;
+      lastEmittedValueRef.current = next.value;
+      return next;
+    },
+    [props.prepareInputChunk, syncLatestExternalValue],
+  );
+
   const insertIntoLatestDraft = useCallback(
     (text: string) => {
       const { value: v, cursor: c } = latestStateRef.current;
@@ -401,16 +453,43 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     [imagePasteQueue],
   );
 
+  const commitInputChunkEdit = useCallback(
+    (edit: TextInputChunkEdit, previous: TextEdit) => {
+      if (edit.submit) {
+        submitAfterImagePastes(onInputChunkSubmit ?? onSubmit, edit.value);
+        return;
+      }
+      if (edit.value === previous.value && edit.cursor === previous.cursor) {
+        return;
+      }
+      applyEdit(edit);
+    },
+    [applyEdit, onInputChunkSubmit, onSubmit, submitAfterImagePastes],
+  );
+
   useInput(
     (input, key) => {
       if (isEscapeInput(input, key)) {
         imagePasteQueue.cancelDeferredAction();
+        if (props.escapeEdit) {
+          applyLatestEdit(props.escapeEdit);
+        }
         return;
       }
       if (imagePasteQueue.hasDeferredAction) {
         // A visible Enter already committed this draft. Ignore later keystrokes
         // until clipboard probes settle so the deferred submit is neither
         // overwritten nor allowed to clear a newer draft.
+        return;
+      }
+      const latestBeforeInput = syncLatestExternalValue();
+      if (
+        props.shouldDropInputChunk?.(
+          input,
+          latestBeforeInput.value,
+          latestBeforeInput.cursor,
+        ) === true
+      ) {
         return;
       }
 
@@ -457,6 +536,30 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         imagePasteQueue.track(paste);
         return;
       }
+      if (
+        input.startsWith(ESC_SLASH_PREFIX) &&
+        !key.meta &&
+        props.escapeEdit
+      ) {
+        imagePasteQueue.cancelDeferredAction();
+        const latest = syncLatestExternalValue();
+        const escaped = props.escapeEdit(latest.value, latest.cursor);
+        const escapedState = {
+          value: escaped.value,
+          cursor: clampCursor(escaped.cursor, escaped.value.length),
+        };
+        latestStateRef.current = escapedState;
+        lastEmittedValueRef.current = escapedState.value;
+        commitInputChunkEdit(
+          applyTerminalInputChunk(
+            escapedState.value,
+            escapedState.cursor,
+            input.slice(1),
+          ),
+          escapedState,
+        );
+        return;
+      }
       // Drop unhandled control/meta combos; pass printable input through.
       if (
         key.meta ||
@@ -468,14 +571,11 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         return;
       }
       const { value: latestValue, cursor: latestCursor } =
-        latestStateRef.current;
-      const edit = applyTerminalInputChunk(latestValue, latestCursor, input);
-      if (edit.submit) {
-        submitAfterImagePastes(onInputChunkSubmit ?? onSubmit, edit.value);
-        return;
-      }
-      if (edit.value === latestValue && edit.cursor === latestCursor) return;
-      applyEdit(edit);
+        prepareInputChunkState(input);
+      commitInputChunkEdit(
+        applyTerminalInputChunk(latestValue, latestCursor, input),
+        { value: latestValue, cursor: latestCursor },
+      );
     },
     { isActive: focus },
   );
