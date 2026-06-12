@@ -43,7 +43,7 @@ const config = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
 
-describe('ExecutionsTool workspace files', () => {
+describe('ExecutionsTool', () => {
   beforeEach(async () => {
     const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
       await Promise.all([
@@ -55,6 +55,41 @@ describe('ExecutionsTool workspace files', () => {
     vi.clearAllMocks();
     mocks.listExecutions.mockResolvedValue([]);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
+  });
+
+  it('caps oversized wait timeouts instead of rejecting the tool call', async () => {
+    const result = await new ExecutionsTool().call({
+      path: '/executions',
+      action: 'wait',
+      timeout: 3600,
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.output).toBe('No execution history found.');
+  });
+
+  it('raises sub-minimum wait timeouts instead of rejecting the tool call', async () => {
+    const result = await new ExecutionsTool().call({
+      path: '/executions',
+      action: 'wait',
+      timeout: 30,
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.output).toBe('No execution history found.');
+  });
+
+  it('rejects non-finite wait timeouts', async () => {
+    const result = await new ExecutionsTool().call({
+      path: '/executions',
+      action: 'wait',
+      timeout: Number.NaN,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.error).toContain('Invalid input');
   });
 
   it('lists and reads persisted workspace files for tool-use executions', async () => {
