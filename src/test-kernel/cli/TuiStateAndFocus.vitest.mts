@@ -1338,13 +1338,13 @@ describe('CLI TUI row allocation', () => {
 
     expect(
       // Idle/WAITING (interruptible, not stoppable): exit WITHOUT interrupting
-      // so the suspended tool-use flow record survives for `texra --resume`.
+      // so the suspended tool-use flow record and terminal status survive.
       chatTuiSigintAction({
         exitArmed: false,
         canStopActiveRun: false,
         canInterruptActiveRun: true,
       }),
-    ).toBe('force-exit');
+    ).toBe('preserve-exit');
 
     expect(
       chatTuiSigintAction({
