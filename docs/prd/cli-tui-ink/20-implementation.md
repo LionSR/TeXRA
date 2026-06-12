@@ -40,7 +40,10 @@ The new streaming-text mode is exactly the gap created by gating chrome on `stdo
 
 ### What's preserved
 
-- `texra run`, `--print/-p`, `CI=true`, and `--output-format ndjson` — Ink chrome never loads. `NdjsonStdoutSink` and its drain/backpressure logic remain in `logSinks.ts` for the headless `--output-format ndjson` path; they are not touched by this PRD.
+- `texra run`, `texra agents run`, `--print/-p`, `CI=true`, and
+  `--output-format ndjson` — Ink chrome never loads. `NdjsonStdoutSink` and its
+  drain/backpressure logic remain in `logSinks.ts` for the headless
+  `--output-format ndjson` path; they are not touched by this PRD.
 - `--legacy-renderer` flag retains today's plain renderer (also auto-forced on `TERM=dumb` or `NO_COLOR` + narrow `COLUMNS`). The legacy renderer becomes the only consumer of `picocolors` after migration; everything else lives in Ink.
 - `--output-format json|ndjson` output byte-identical. Golden test in `packages/cli/scripts/validate-run.mjs`.
 
@@ -53,8 +56,15 @@ Every phase is independently mergeable. Each adds a `--tui` flag, default-off, u
 - Add `react@19`, `ink@6`, `@inkjs/ui`, `citty`, `picocolors`, `string-width`, `wrap-ansi`.
 - **Wire React Compiler.** Add `babel-plugin-react-compiler` and run a Babel pre-pass over `packages/cli/src/chat/tui/**/*.tsx` before esbuild. Validate output by smoke-running a hello-world `<App>` and confirming `react/compiler-runtime` is the only added import. Risk R12.
 - Migrate `cliContext.ts` arg parsing to `citty` (no UI change). Drop `ANSI_TONES` for `picocolors` in legacy renderer.
-- **Default subcommand:** wire `texra` (no args) to invoke `texra chat` when stdin / stdout are TTYs, fall through to `--help` otherwise. Citty's `defaultSubCommand` field.
-- **Default agent + model resolution.** Implement the four-step lookup (workspace → user → last-used → built-in) per [§ Entrypoint default](./10-architecture.md#entrypoint-default). `texra` with no args reaches this resolver before mounting `<App>`, so the header always shows a concrete agent + model.
+- **Default subcommand:** wire `texra` (no args) to invoke the interactive
+  launcher (`texra orchestrate`) when stdin / stdout are TTYs, falling through
+  to `--help` otherwise. Citty's `defaultSubCommand` field.
+- **Default agent + model resolution.** Implement the four-step lookup
+  (workspace → user → last-used → built-in) per
+  [§ Entrypoint default](./10-architecture.md#entrypoint-default). `texra chat`
+  reaches this resolver before mounting `<App>`, so the header always shows a
+  concrete agent + model; bare `texra` reaches it after the launcher starts a
+  new chat.
 - Verify headless tests + `validate-run.mjs` pass.
 
 ### Phase 1 — Skeleton + input + telemetry (2–3 d)

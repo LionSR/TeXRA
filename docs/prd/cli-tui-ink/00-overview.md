@@ -4,7 +4,12 @@
 
 Replace the `texra chat` plain-ANSI line renderer with an Ink-based TUI that mirrors the VS Code Progress View's component topology, reuses the workspace's existing markdown and syntax-highlighting pipelines, and lets a keyboard-only user drive multi-agent sessions with the same fidelity they get in the extension.
 
-The headless path (`texra run`, `--print/-p`, `--output-format json|ndjson`, non-TTY, CI) is preserved byte-for-byte. The new TUI runs only when the chat command is invoked on an interactive terminal; when stdout is piped while stdin/stderr remain TTYs, chrome degrades to plain streaming text rather than refusing to run — see [20-implementation.md § Headless](./20-implementation.md#13-headless--legacy-preserved).
+The headless paths (`texra run`, `texra agents run`, `--print/-p`,
+`--output-format json|ndjson`, non-TTY, CI) are preserved byte-for-byte. The new
+TUI runs only when `texra chat` or the bare interactive launcher is invoked on
+an interactive terminal; when stdout is piped while stdin/stderr remain TTYs,
+chrome degrades to plain streaming text rather than refusing to run — see
+[20-implementation.md § Headless](./20-implementation.md#13-headless--legacy-preserved).
 
 ## 2. Problem
 
