@@ -14,6 +14,10 @@ export type ApprovalDecision = SharedApprovalDecision;
 export const CLI_PERSONAL_API_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.';
 
+export interface CliApprovalPromptHooks {
+  readonly beforePrompt?: () => void;
+}
+
 const deniedApprovalContexts = new WeakSet<CliContext>();
 const cliPromptQueues = new WeakMap<CliContext, Promise<unknown>>();
 
@@ -178,9 +182,11 @@ export function immediateDecisionForApproval(
 export async function askApproval(
   context: CliContext,
   summary: string,
+  hooks: CliApprovalPromptHooks = {},
 ): Promise<ApprovalDecision> {
   let answer: string;
   try {
+    hooks.beforePrompt?.();
     answer = await queueCliApprovalQuestion(context, {
       kind: 'approval',
       summary,
@@ -195,6 +201,7 @@ export async function askApproval(
   let feedback = parsed.feedback;
   if (!parsed.accepted && parsed.shouldPromptForFeedback) {
     try {
+      hooks.beforePrompt?.();
       const feedbackAnswer = await queueCliApprovalQuestion(context, {
         kind: 'approval',
         summary: '',
