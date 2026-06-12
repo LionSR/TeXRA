@@ -106,6 +106,24 @@ describe('runResumeExecution', () => {
     );
   });
 
+  it('uses the local launcher in headless resume guidance', async () => {
+    const { runResumeExecution } = await import('@cli/commands/resume');
+
+    await expect(
+      runResumeExecution(
+        cliContext({ commandName: 'texra-local', stdoutIsTty: false }),
+        EXECUTION_ID,
+      ),
+    ).resolves.toBe(2);
+
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      expect.stringContaining(`texra-local --resume ${EXECUTION_ID}`),
+    );
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      expect.stringContaining('For scripting, use `texra-local run`.'),
+    );
+  });
+
   it('rejects resume in dumb terminals before falling through to chat', async () => {
     const { runResumeExecution } = await import('@cli/commands/resume');
 
@@ -118,6 +136,21 @@ describe('runResumeExecution', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'texra resume needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`. For non-interactive runs, use `texra run`.',
+    );
+  });
+
+  it('uses the local launcher in dumb-terminal resume guidance', async () => {
+    const { runResumeExecution } = await import('@cli/commands/resume');
+
+    await expect(
+      runResumeExecution(
+        cliContext({ commandName: 'texra-local', termIsDumb: true }),
+        EXECUTION_ID,
+      ),
+    ).resolves.toBe(2);
+
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'texra-local resume needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`. For non-interactive runs, use `texra-local run`.',
     );
   });
 

@@ -8,6 +8,7 @@ import {
   explainNonResumable,
   resolveCliResumeSnapshot,
 } from '../runtime/sessionResume';
+import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -34,15 +35,23 @@ export async function runResumeExecution(
 ): Promise<number> {
   const terminalFailure = interactiveTerminalFailure(context);
   if (terminalFailure) {
+    const commandName = context.commandName || 'texra';
+    const runCommand = `${commandName} run`;
     // A resumed tool-use session goes back to WAITING for the next message;
     // headless has no input channel to provide one, so continuing here would
     // block forever. Reject before platform/snapshot work; no terminal means no
     // interactive resume regardless of whether the id is otherwise resumable.
     writeTextStderr(
       formatInteractiveTerminalFailure(terminalFailure, {
-        headlessMessage: `Resuming continues an interactive chat session — run \`texra --resume ${id}\` in a terminal. For scripting, use \`texra run\`.`,
+        headlessMessage: `Resuming continues an interactive chat session — run \`${formatResumeCommand(
+          commandName,
+          id,
+        )}\` in a terminal. For scripting, use \`${runCommand}\`.`,
         dumbTerminalCommand: 'resume',
-        dumbTerminalOptions: { nonInteractiveFallback: '`texra run`' },
+        dumbTerminalOptions: {
+          commandName,
+          nonInteractiveFallback: `\`${runCommand}\``,
+        },
       }),
     );
     return CliExitCode.Usage;

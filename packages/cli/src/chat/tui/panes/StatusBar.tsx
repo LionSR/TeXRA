@@ -23,6 +23,7 @@ import {
   approvalQueueStatus,
   type ApprovalQueueStatusKind,
 } from '../state/approvalQueue';
+import { formatResumeCommand } from '../state/resumeHint';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
   cliState,
@@ -62,6 +63,7 @@ export interface StatusBarDisplayInput {
   readonly elapsedMs?: number;
   readonly pendingExitHint: boolean;
   readonly pendingExitResumeId: string | undefined;
+  readonly commandName?: string;
   readonly bypass: BypassState;
   readonly thinkingActive?: boolean;
   readonly queuedFollowUpMessages: readonly string[];
@@ -753,7 +755,10 @@ export function buildStatusBarDisplay(
       : undefined,
     bindings:
       input.pendingExitHint && input.pendingExitResumeId
-        ? `Resume this session with: texra --resume ${input.pendingExitResumeId}`
+        ? `Resume this session with: ${formatResumeCommand(
+            input.commandName,
+            input.pendingExitResumeId,
+          )}`
         : input.shortcutsActive === false
           ? foregroundBindingsText(
               input.ctrlCAction ?? 'exit',
@@ -781,6 +786,7 @@ export function buildStatusBarDisplay(
 export interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
   readonly canStopActiveRun?: () => boolean;
+  readonly commandName?: string;
   readonly foregroundEscapeAction?: string;
   readonly queuedFollowUpPreview?: boolean;
   readonly shortcutsActive?: boolean;
@@ -818,6 +824,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
     pendingExitHint,
     pendingExitResumeId,
+    commandName: props.commandName,
     bypass: statusSlice?.bypass ?? NO_BYPASS,
     thinkingActive: statusSlice?.thinkingActive ?? false,
     queuedFollowUpMessages: statusSlice?.queuedFollowUpMessages ?? [],
