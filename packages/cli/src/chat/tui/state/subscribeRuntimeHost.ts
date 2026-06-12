@@ -102,6 +102,21 @@ function applyToState<K extends ProgressEvent>(
       }
       return;
     }
+    case 'setTaskState': {
+      const p = payload as ProgressEventPayloads['setTaskState'];
+      const config = p.taskState.agentConfig;
+      patchStream(p.streamId, (s) => {
+        if (s.model === config.model && s.category === config.agentCategory) {
+          return s;
+        }
+        return {
+          ...s,
+          model: config.model,
+          category: config.agentCategory,
+        };
+      });
+      return;
+    }
     case 'setParentStream': {
       const p = payload as ProgressEventPayloads['setParentStream'];
       setParentStream(p.childStreamId, p.parentStreamId);
