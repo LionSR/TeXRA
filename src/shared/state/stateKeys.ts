@@ -68,6 +68,8 @@ export enum WorkspaceStateKey {
 
 export enum GlobalStateKey {
   LAST_KNOWN_VERSION = 'lastKnownVersion',
+  /** CLI-only bundled-agent sync marker; do not use as an install-age signal. */
+  CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION = 'texra.cli.bundledAgents.lastKnownVersion',
   MODEL_LIST_VERSION = 'modelListVersion',
   MEMORY_ENABLED = 'texra.memory.enabled',
 
