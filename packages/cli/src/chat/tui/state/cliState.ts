@@ -9,6 +9,7 @@ import { signal, Signal } from '@lit-labs/signals';
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliModelSelectionSource } from '@cli/runtime/modelAccess';
+import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
   STREAM_STATUS,
   type ActiveChildInfo,
@@ -57,6 +58,7 @@ export interface SessionMeta {
   readonly modelSource: CliModelSelectionSource;
   readonly cwd: string;
   readonly apiMode: CliApiMode;
+  readonly approvalPolicy: CliApprovalPolicy;
   readonly canDelegate: boolean;
   readonly teamName?: string;
   readonly version: string;
@@ -138,6 +140,7 @@ const EMPTY_SESSION_META: SessionMeta = {
   modelSource: 'builtin',
   cwd: '',
   apiMode: 'personal',
+  approvalPolicy: 'ask',
   canDelegate: false,
   version: '',
 };

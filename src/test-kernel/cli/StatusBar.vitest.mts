@@ -54,6 +54,58 @@ describe('CLI StatusBar display model', () => {
     expect(shortCliApiMode('personal')).toBe('keys');
   });
 
+  it('surfaces non-default approval policies in the durable status row', () => {
+    const input = {
+      status: STREAM_STATUS.WAITING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: PERSONAL_API_MODE_LABEL,
+      approvalPolicy: 'ask',
+      shortcutModifierLabel: 'Alt',
+    } as const;
+    const ask = buildStatusBarDisplay(input);
+
+    expect(ask.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'idle',
+      PERSONAL_API_MODE_LABEL,
+    ]);
+
+    const deny = buildStatusBarDisplay({
+      ...input,
+      approvalPolicy: 'never',
+    });
+    expect(deny.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'idle',
+      PERSONAL_API_MODE_LABEL,
+      'deny',
+    ]);
+    expect(deny.left.at(-1)).toMatchObject({ color: 'yellow' });
+
+    const yolo = buildStatusBarDisplay({
+      ...input,
+      approvalPolicy: 'yolo',
+    });
+    expect(yolo.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'idle',
+      PERSONAL_API_MODE_LABEL,
+      'yolo',
+    ]);
+    expect(yolo.left.at(-1)).toMatchObject({ color: 'red' });
+  });
+
   it('keeps queued follow-up counts in the durable left status segments', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,

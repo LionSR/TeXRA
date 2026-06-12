@@ -188,7 +188,9 @@ const SHOW_IDLE_TODOS = process.env.HARNESS_TODOS_IDLE === '1';
 const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
-let harnessApprovalPolicy: CliApprovalPolicy = 'ask';
+let harnessApprovalPolicy: CliApprovalPolicy =
+  parseHarnessApprovalPolicy(process.env.HARNESS_APPROVAL_POLICY ?? '') ??
+  'ask';
 const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
@@ -897,6 +899,7 @@ cliState.sessionMeta.set({
   model: 'harness-model',
   cwd: HARNESS_CWD,
   apiMode: HARNESS_API_MODE,
+  approvalPolicy: harnessApprovalPolicy,
   canDelegate: CAN_DELEGATE,
   teamName: TEAM_NAME,
   version: '0.0.0-harness',
@@ -1330,6 +1333,10 @@ function parseHarnessApprovalPolicy(
 
 function setHarnessApprovalPolicy(policy: CliApprovalPolicy): void {
   harnessApprovalPolicy = policy;
+  cliState.sessionMeta.set({
+    ...cliState.sessionMeta.get(),
+    approvalPolicy: policy,
+  });
   appendHarnessAssistantTranscript(
     `Approval mode set to ${formatApprovalPolicyForCli(policy)}.`,
   );
