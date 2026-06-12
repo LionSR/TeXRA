@@ -14,9 +14,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(cliRoot));
+const require = createRequire(import.meta.url);
 const binaryPath = path.join(cliRoot, 'dist/bin/texra.js');
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
@@ -599,6 +601,11 @@ async function validateOrchestrateOnboardingPickers() {
     'Sign in for included re…',
     'Use my own provider API…',
   ];
+  const truncatedOnboardingLabels = [
+    ...oldTruncatedLabels,
+    'Sign in — free for acad…',
+    'Use your own provider A…',
+  ];
 
   await validateOrchestrateOnboardingPicker({
     label: 'texra orchestrate first-run onboarding',
@@ -606,12 +613,12 @@ async function validateOrchestrateOnboardingPickers() {
     env: {},
     expected: [
       'Not signed in, and no provider API key is configured. Choose how to power model calls:',
-      'Included relay access',
-      'Provider API key',
-      'sign in, no API key needed (recommended)',
-      'paste Anthropic / OpenAI / Google',
+      'Sign in — free for academics',
+      'Use your own provider API key',
+      'Researcher Access: no API key needed (recommended)',
+      'Anthropic, OpenAI, Google, and more',
     ],
-    forbidden: oldTruncatedLabels,
+    forbidden: truncatedOnboardingLabels,
   });
   await validateOrchestrateOnboardingPicker({
     label: 'texra orchestrate included-mode onboarding',
@@ -619,13 +626,13 @@ async function validateOrchestrateOnboardingPickers() {
     env: { ANTHROPIC_API_KEY: 'texra-validation-fake-key' },
     expected: [
       'Included relay access needs sign-in for this run:',
-      'Included relay access',
-      'sign in, no API key needed (recommended)',
+      'Sign in — free for academics',
+      'Researcher Access: no API key needed (recommended)',
     ],
     forbidden: [
-      'Provider API key',
-      'paste Anthropic / OpenAI / Google',
-      ...oldTruncatedLabels,
+      'Use your own provider API key',
+      'Anthropic, OpenAI, Google, and more',
+      ...truncatedOnboardingLabels,
     ],
   });
   await validateOrchestrateOnboardingPicker({
@@ -634,13 +641,13 @@ async function validateOrchestrateOnboardingPickers() {
     env: {},
     expected: [
       'Personal API-key mode needs a provider key for this run:',
-      'Provider API key',
-      'paste Anthropic / OpenAI / Google',
+      'Use your own provider API key',
+      'Anthropic, OpenAI, Google, and more',
     ],
     forbidden: [
-      'Included relay access',
-      'sign in, no API key needed',
-      ...oldTruncatedLabels,
+      'Sign in — free for academics',
+      'Researcher Access: no API key needed',
+      ...truncatedOnboardingLabels,
     ],
   });
 }
