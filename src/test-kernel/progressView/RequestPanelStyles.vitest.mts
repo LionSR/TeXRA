@@ -32,9 +32,11 @@ describe('request panel styles', () => {
 
     expect(actionStart).toBeGreaterThanOrEqual(0);
     expect(baseStart).toBeGreaterThan(actionStart);
-    expect(actionRule).toContain('flex: 0 0 auto');
-    expect(actionRule).toContain('min-width: 6.5rem');
+    expect(actionRule).toContain('flex: 0 1 6.5rem');
+    expect(actionRule).toContain('width: 6.5rem');
+    expect(actionRule).toContain('max-width: 100%');
     expect(baseRule).toContain('justify-content: center');
+    expect(baseRule).toContain('width: 100%');
   });
 
   it('keeps retry error details headers compact', () => {
