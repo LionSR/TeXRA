@@ -1505,7 +1505,7 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     expect: [
       'strategy running',
-      'leanSolver waiting',
+      'leanSolver idle',
       'reviewer error',
       '2 sub',
       '[Tab]streams',

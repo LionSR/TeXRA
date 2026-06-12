@@ -7,6 +7,7 @@ import {
   type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
+import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { formatDuration } from '@utils/core';
 
 // Local imports - CLI state
@@ -33,7 +34,7 @@ export interface ChildControlItem {
   readonly label: string;
   readonly command: string;
   readonly description: string;
-  readonly status?: string;
+  readonly statusLabel?: string;
   readonly elapsed?: string | null;
   readonly killable: boolean;
   readonly tailLines: readonly string[];
@@ -77,6 +78,12 @@ export type PickerKeyAction =
 
 function compactParts(parts: readonly (string | null | undefined)[]): string {
   return parts.filter((part): part is string => Boolean(part)).join(' · ');
+}
+
+function childStatusDescription(
+  status: string | undefined,
+): string | undefined {
+  return formatStreamStatusLabel(status, { style: 'cliCompact' });
 }
 
 function hasLiveChildElapsed(
@@ -158,14 +165,15 @@ function buildSubagentItem(
   const label = childLabel(child);
   const command = streamDescription(child, streamsById) ?? label;
   const elapsed = childElapsed(child, nowMs);
+  const statusLabel = childStatusDescription(child.status);
   return {
     executionId: child.executionId,
     childStreamId: child.childStreamId,
     kind: 'subagent',
     label,
     command,
-    description: compactParts([child.status, elapsed ?? undefined]),
-    status: child.status,
+    description: compactParts([statusLabel, elapsed ?? undefined]),
+    statusLabel,
     elapsed,
     killable,
     tailLines: streamTranscriptLines(child, streamsById),
@@ -181,14 +189,15 @@ function buildProcessItem(
   const lastLine = tailLines.at(-1);
   const label = childLabel(child);
   const elapsed = childElapsed(child, nowMs);
+  const statusLabel = childStatusDescription(child.status);
   return {
     executionId: child.executionId,
     childStreamId: child.childStreamId,
     kind: 'process',
     label,
     command: label,
-    description: compactParts([child.status, elapsed ?? undefined, lastLine]),
-    status: child.status,
+    description: compactParts([statusLabel, elapsed ?? undefined, lastLine]),
+    statusLabel,
     elapsed,
     killable: true,
     tailLines,
