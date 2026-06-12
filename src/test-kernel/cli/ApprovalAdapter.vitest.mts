@@ -210,6 +210,33 @@ describe('formatToolEditApprovalSummary', () => {
     expect(promptSummary).toContain('+A concise proof.');
   });
 
+  it('runs the before-prompt hook for tool edit approvals', async () => {
+    const events: string[] = [];
+    installCliApprovalHandlers(
+      context({
+        approvalPrompt: async () => {
+          events.push('prompt');
+          return 'y';
+        },
+      }),
+      {
+        beforePrompt: () => {
+          events.push('before');
+        },
+      },
+    );
+
+    const result = await requestToolEditApproval({
+      path: '/tmp/new-proof.tex',
+      originalContent: '',
+      proposedContent: '\\section{Proof}\nA concise proof.\n',
+      sourceTool: 'write_file',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(events).toEqual(['before', 'prompt']);
+  });
+
   it('passes one-line rejection feedback to the tool result', async () => {
     installCliApprovalHandlers(
       context({
