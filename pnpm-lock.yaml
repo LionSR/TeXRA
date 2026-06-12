@@ -13,10 +13,10 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.170
-        version: 0.3.170(@anthropic-ai/sdk@0.103.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        version: 0.3.170(@anthropic-ai/sdk@0.104.1(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
-        specifier: ^0.103.0
-        version: 0.103.0(zod@4.4.3)
+        specifier: ^0.104.1
+        version: 0.104.1(zod@4.4.3)
       '@awesome.me/webawesome':
         specifier: ^3.8.0
         version: 3.8.0(@floating-ui/utils@0.2.11)(@types/react@19.2.17)
@@ -54,8 +54,8 @@ importers:
         specifier: ^7.1.0
         version: 7.1.0
       '@openai/codex-sdk':
-        specifier: ^0.137.0
-        version: 0.137.0
+        specifier: ^0.139.0
+        version: 0.139.0
       '@openrouter/sdk':
         specifier: ^0.12.79
         version: 0.12.79
@@ -449,13 +449,13 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.170
-        version: 0.3.170(@anthropic-ai/sdk@0.103.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        version: 0.3.170(@anthropic-ai/sdk@0.104.1(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.2.0
         version: 7.2.0
       '@openai/codex-sdk':
-        specifier: ^0.137.0
-        version: 0.137.0
+        specifier: ^0.139.0
+        version: 0.139.0
       '@sentry/electron':
         specifier: ^7.13.0
         version: 7.13.0
@@ -492,10 +492,10 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.170
-        version: 0.3.170(@anthropic-ai/sdk@0.103.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        version: 0.3.170(@anthropic-ai/sdk@0.104.1(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
-        specifier: ^0.103.0
-        version: 0.103.0(zod@4.4.3)
+        specifier: ^0.104.1
+        version: 0.104.1(zod@4.4.3)
       '@awesome.me/webawesome':
         specifier: ^3.8.0
         version: 3.8.0(@floating-ui/utils@0.2.11)(@types/react@19.2.17)
@@ -527,8 +527,8 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
       '@openai/codex-sdk':
-        specifier: ^0.137.0
-        version: 0.137.0
+        specifier: ^0.139.0
+        version: 0.139.0
       '@openrouter/sdk':
         specifier: ^0.12.79
         version: 0.12.79
@@ -820,8 +820,8 @@ packages:
       '@modelcontextprotocol/sdk': ^1.29.0
       zod: ^4.0.0
 
-  '@anthropic-ai/sdk@0.103.0':
-    resolution: {integrity: sha512-1uG7RNgoHTUxzOXqSCODKt0UTVlxWiHk/2Tt2/uQJiPW7XzBeKVuJyd3Aw6T3LPyvZV/jDTnPLX7SaM70WLLjA==}
+  '@anthropic-ai/sdk@0.104.1':
+    resolution: {integrity: sha512-gGACa/+IaiXzRRmF96aOhamoBgapKRBiFWbmmTFP8aMkpaEcuStF+Q61bjo4vPxBM7gqWJNZqsngslRdnLHv0Q==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
@@ -1589,47 +1589,47 @@ packages:
   '@octokit/types@16.0.0':
     resolution: {integrity: sha512-sKq+9r1Mm4efXW1FCk7hFSeJo4QKreL/tTbR0rz/qx/r1Oa2VV83LTA/H/MuCOX7uCIJmQVRKBcbmWoySjAnSg==}
 
-  '@openai/codex-sdk@0.137.0':
-    resolution: {integrity: sha512-KYNY7shsKYOLRNV+kjOoaBaLVHy+FUolHPFraOU4JGeyNR1pORxINTAlwHSxDcuXTibj/3OC6jMGDl7X0q4MUw==}
+  '@openai/codex-sdk@0.139.0':
+    resolution: {integrity: sha512-r4lDckaVx4mVZy1v/7ykEhkeWjVfM/4oGJfhG0AP4+zN3Sa+jcf5hdY4EHfJasofBcp0tIF/7JCKHpv534R+tw==}
     engines: {node: '>=18'}
 
-  '@openai/codex@0.137.0':
-    resolution: {integrity: sha512-1jUsCnzDBwv7Z4VFZajIlsz41fC18qg6d5qK4PEZhiUk0zJHS90/uGBA70aQPUJLTUZShvyKVAANjw6J/D9eYQ==}
+  '@openai/codex@0.139.0':
+    resolution: {integrity: sha512-wr2fRE+fzW0CjEbfFsLh1ftarVEcw0CMLWS7QyA0nyOz5qacQPVq3cq2+/U7oEbwm1TOqoi0Fm1nxniB5FkpmA==}
     engines: {node: '>=16'}
     hasBin: true
 
-  '@openai/codex@0.137.0-darwin-arm64':
-    resolution: {integrity: sha512-YjKmre7DlKslQVhSfocHscgxntZKaZc1LQySKh7q+hNL8jdK+c8nSWSePi583yKFNIxZ8Z/zCkewtjFNvOpQiQ==}
+  '@openai/codex@0.139.0-darwin-arm64':
+    resolution: {integrity: sha512-o+0ZKWwgDFMMLO7rwinzO0PQsgK+Vme1pMN2GeAxsX29ZgGZcyPICfpJbeGSUO1mb2a36Skjx6nfdRnxMY0r7w==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [darwin]
 
-  '@openai/codex@0.137.0-darwin-x64':
-    resolution: {integrity: sha512-zjzrFV80LZby9et44dan82e3cwUd46U7u1LSVXTIz5AUcY4y1KZpAeN6cSLVKMZuOHXTDpi15MUQdRwzdeqIOg==}
+  '@openai/codex@0.139.0-darwin-x64':
+    resolution: {integrity: sha512-9gkBWzu6DB2rqU4DbpxD3DE5bofGpsK46Lp0h0I+bKWc2IIcxvSi8K2utKmBLoJCbKrn4JQu7dFNGRqEfENung==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [darwin]
 
-  '@openai/codex@0.137.0-linux-arm64':
-    resolution: {integrity: sha512-R3ZZymQQA1qpp6OpowN49XJ4scHwSckq7CjVvgmLv3bIs3X+F0XXK3xPFkC9vs2mX3wPekPi3ONpxx+yPAsJ6Q==}
+  '@openai/codex@0.139.0-linux-arm64':
+    resolution: {integrity: sha512-tBQE5lZciRHeWZGuURgjP9S717MvTIpQMc593+DNxY2LQxozkngOkzFSQd1+/UmQKGrCqdFLu5irIwPXpSZyEw==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [linux]
 
-  '@openai/codex@0.137.0-linux-x64':
-    resolution: {integrity: sha512-n+26MUj8rekbEDUeYTGoD6HXuGS0MmLHn2LOn0i5qTNYIJvXV82B7cCLSTzVKF/RJxRMRl22se9Q0Z035JIVng==}
+  '@openai/codex@0.139.0-linux-x64':
+    resolution: {integrity: sha512-14UgzDS+X4crkvdt6S02A/ZZOrS8ZyWiuTRpguCtnhNamb7unSuDxy86BWgpAl3sqiTaN2CP8VLyp2ohQ8Nbzw==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [linux]
 
-  '@openai/codex@0.137.0-win32-arm64':
-    resolution: {integrity: sha512-Cofktt213TycdQ/v+nAUuwXUBzjMWfA/ZkXyqefyXxDgw0TMtaiM3cgDna3I8YdXnR0PM9AMbx4t7VloJ3ZZYQ==}
+  '@openai/codex@0.139.0-win32-arm64':
+    resolution: {integrity: sha512-nlwRjsYotH1Rtqu/Q0VwQbIeO2UX1mkHK84Ov9qn/hl29QqqoBtno0tRyqIPbkXFIVQuWiAYXlV3ugLwH5fTrQ==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [win32]
 
-  '@openai/codex@0.137.0-win32-x64':
-    resolution: {integrity: sha512-g9qZ9ERrm5OWXMWJOgojYv1kOc5jajTKq37PBMSe56aJfAr9Jk/qBvIOy7LKq3rABdXuz8k+W65PIt2E1hXilw==}
+  '@openai/codex@0.139.0-win32-x64':
+    resolution: {integrity: sha512-lQrVLNz+90wdvWVNFDvCkHQRiAK9ZllmkTka3c8eqSDqdJk35Gpgppfv9Xtw5M2ZBtTq0sBdWBiCMyzGDBSpmQ==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
@@ -6202,9 +6202,9 @@ snapshots:
   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.170':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.170(@anthropic-ai/sdk@0.103.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)':
+  '@anthropic-ai/claude-agent-sdk@0.3.170(@anthropic-ai/sdk@0.104.1(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)':
     dependencies:
-      '@anthropic-ai/sdk': 0.103.0(zod@4.4.3)
+      '@anthropic-ai/sdk': 0.104.1(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       zod: 4.4.3
     optionalDependencies:
@@ -6217,7 +6217,7 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.170
       '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.170
 
-  '@anthropic-ai/sdk@0.103.0(zod@4.4.3)':
+  '@anthropic-ai/sdk@0.104.1(zod@4.4.3)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.0.0
@@ -7110,35 +7110,35 @@ snapshots:
     dependencies:
       '@octokit/openapi-types': 27.0.0
 
-  '@openai/codex-sdk@0.137.0':
+  '@openai/codex-sdk@0.139.0':
     dependencies:
-      '@openai/codex': 0.137.0
+      '@openai/codex': 0.139.0
 
-  '@openai/codex@0.137.0':
+  '@openai/codex@0.139.0':
     optionalDependencies:
-      '@openai/codex-darwin-arm64': '@openai/codex@0.137.0-darwin-arm64'
-      '@openai/codex-darwin-x64': '@openai/codex@0.137.0-darwin-x64'
-      '@openai/codex-linux-arm64': '@openai/codex@0.137.0-linux-arm64'
-      '@openai/codex-linux-x64': '@openai/codex@0.137.0-linux-x64'
-      '@openai/codex-win32-arm64': '@openai/codex@0.137.0-win32-arm64'
-      '@openai/codex-win32-x64': '@openai/codex@0.137.0-win32-x64'
+      '@openai/codex-darwin-arm64': '@openai/codex@0.139.0-darwin-arm64'
+      '@openai/codex-darwin-x64': '@openai/codex@0.139.0-darwin-x64'
+      '@openai/codex-linux-arm64': '@openai/codex@0.139.0-linux-arm64'
+      '@openai/codex-linux-x64': '@openai/codex@0.139.0-linux-x64'
+      '@openai/codex-win32-arm64': '@openai/codex@0.139.0-win32-arm64'
+      '@openai/codex-win32-x64': '@openai/codex@0.139.0-win32-x64'
 
-  '@openai/codex@0.137.0-darwin-arm64':
+  '@openai/codex@0.139.0-darwin-arm64':
     optional: true
 
-  '@openai/codex@0.137.0-darwin-x64':
+  '@openai/codex@0.139.0-darwin-x64':
     optional: true
 
-  '@openai/codex@0.137.0-linux-arm64':
+  '@openai/codex@0.139.0-linux-arm64':
     optional: true
 
-  '@openai/codex@0.137.0-linux-x64':
+  '@openai/codex@0.139.0-linux-x64':
     optional: true
 
-  '@openai/codex@0.137.0-win32-arm64':
+  '@openai/codex@0.139.0-win32-arm64':
     optional: true
 
-  '@openai/codex@0.137.0-win32-x64':
+  '@openai/codex@0.139.0-win32-x64':
     optional: true
 
   '@openrouter/sdk@0.12.79':

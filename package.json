@@ -100,7 +100,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.170",
-    "@anthropic-ai/sdk": "^0.103.0",
+    "@anthropic-ai/sdk": "^0.104.1",
     "@awesome.me/webawesome": "^3.8.0",
     "@cantoo/pdf-lib": "^2.7.1",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
@@ -113,7 +113,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@octokit/request": "^10.0.10",
     "@octokit/request-error": "^7.1.0",
-    "@openai/codex-sdk": "^0.137.0",
+    "@openai/codex-sdk": "^0.139.0",
     "@openrouter/sdk": "^0.12.79",
     "@supabase/supabase-js": "2.108.1",
     "@xterm/addon-fit": "^0.11.0",
