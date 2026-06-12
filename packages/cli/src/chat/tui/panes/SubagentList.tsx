@@ -14,10 +14,9 @@ import {
   processTailLines,
 } from '../state/childControls';
 import { visibleSubagentRows } from '../state/childStreamMerge';
-import { cliState, type ProcessOutputTail } from '../state/cliState';
 import { useLiveNowMs } from '../state/useLiveNowMs';
-import { useSignal } from '../state/useSignal';
 import { CHILD_STATUS_MARKER, childStatusColor } from './SubagentListDisplay';
+import type { ProcessOutputTail, StreamSlice } from '../state/cliState';
 
 interface RowProps {
   readonly child: ActiveChildInfo;
@@ -150,14 +149,16 @@ export function subagentPanelRowCount(slice: {
 
 export interface SubagentListProps {
   readonly maxRows?: number;
+  readonly slice?: Pick<
+    StreamSlice,
+    'activeProcesses' | 'activeSubagents' | 'childStreams' | 'processOutput'
+  >;
 }
 
 export function SubagentList(
   props: SubagentListProps = {},
 ): React.JSX.Element | null {
-  const activeStreamId = useSignal(cliState.activeStreamId);
-  const streams = useSignal(cliState.streams);
-  const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const slice = props.slice;
   const activeProcesses = slice?.activeProcesses ?? [];
   const processOutput = slice?.processOutput;
   const subagents = slice ? visibleSubagentRows(slice) : [];
