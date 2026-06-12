@@ -1,8 +1,10 @@
-import { Box, Text } from 'ink';
+import { useMemo } from 'react';
+import { Box, Text, useWindowSize } from 'ink';
 
 import type { PlanApprovalPermission } from '@shared/schemas';
 
-import { ConfirmCard } from './ConfirmCard';
+import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
+import { wrapAnsiToWidth } from '../render/ansiWrap';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface PlanApprovalProps {
@@ -12,6 +14,7 @@ export interface PlanApprovalProps {
 }
 
 export const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
+const MIN_PLAN_APPROVAL_CONTENT_WIDTH = 20;
 
 export function isCompactPlanApprovalRows(
   availableRows: number | undefined,
@@ -33,9 +36,36 @@ export function renderCompactPlanLine(
   return `${line} · … ${hiddenLineCount} more`;
 }
 
+export function planApprovalDisplayLines({
+  objective,
+  width,
+}: {
+  readonly objective: string;
+  readonly width: number;
+}): string[] {
+  const contentWidth = Math.max(MIN_PLAN_APPROVAL_CONTENT_WIDTH, width);
+  return objective.split('\n').flatMap((line) => {
+    if (line.length === 0) return [''];
+    return wrapAnsiToWidth(line, contentWidth)
+      .split('\n')
+      .map((part, index) => (index === 0 ? part : part.trimStart()));
+  });
+}
+
 export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
-  const bodyLines = props.payload.plan.objective.split('\n');
+  const { columns } = useWindowSize();
   const compact = isCompactPlanApprovalRows(props.availableRows);
+  const contentWidth = compact
+    ? columns
+    : columns - CONFIRM_CARD_HORIZONTAL_DECORATION;
+  const bodyLines = useMemo(
+    () =>
+      planApprovalDisplayLines({
+        objective: props.payload.plan.objective,
+        width: contentWidth,
+      }),
+    [contentWidth, props.payload.plan.objective],
+  );
   const compactBodyRows = compact
     ? Math.max(0, (props.availableRows ?? 1) - 1)
     : undefined;
