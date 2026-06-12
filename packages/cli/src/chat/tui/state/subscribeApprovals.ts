@@ -15,7 +15,8 @@
 
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
-  denyMessage,
+  approvalPromptAllowed,
+  humanInputDenialFeedback,
   immediateDecision,
   immediateDecisionForApproval,
   markApprovalDenied,
@@ -153,9 +154,8 @@ function routeApproval(
       );
       return;
     case 'showExternalInquiry':
-      // External inquiry has bespoke policy semantics (legacy adapter uses
-      // `action: 'skip'` for both yolo *and* never with different feedback
-      // strings), so it bypasses the generic `routeWithPolicy` ladder.
+      // Human-input requests cannot be auto-answered in yolo mode, so they
+      // share a policy helper with the non-TUI approval path.
       handleExternalInquiry(
         payload as ProgressEventPayloads['showExternalInquiry'],
         context,
@@ -292,12 +292,11 @@ function handleExternalInquiry(
   const threadId = payload.threadId;
   if (!threadId) return;
 
-  const policy = immediateDecision(context);
-  if (policy) {
-    const feedback =
-      context.approvalPolicy === 'yolo'
-        ? 'External inquiry requires human input; yolo mode cannot synthesize an external answer.'
-        : denyMessage(context.approvalPolicy);
+  if (!approvalPromptAllowed(context)) {
+    const feedback = humanInputDenialFeedback(
+      context,
+      'External inquiry requires human input; yolo mode cannot synthesize an external answer.',
+    );
     void handleExternalInquiryAction({ action: 'drop', threadId, feedback });
     return;
   }
@@ -328,12 +327,15 @@ function handleUserQuestion(
   context: CliContext,
   host: CliRuntimeHost,
 ): void {
-  const policy = immediateDecision(context);
-  if (policy) {
+  if (!approvalPromptAllowed(context)) {
+    const feedback = humanInputDenialFeedback(
+      context,
+      'User question requires human input; yolo mode cannot synthesize an answer.',
+    );
     void handleUserQuestionAction({
       requestId: payload.requestId,
       action: 'skip',
-      feedback: userQuestionFeedback(context),
+      feedback,
     });
     return;
   }
@@ -356,11 +358,4 @@ function handleUserQuestion(
       });
     },
   );
-}
-
-function userQuestionFeedback(context: CliContext): string {
-  if (context.approvalPolicy === 'yolo') {
-    return 'User question requires human input; yolo mode cannot synthesize an answer.';
-  }
-  return denyMessage(context.approvalPolicy);
 }
