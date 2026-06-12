@@ -7,7 +7,6 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
-import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import {
   CliUsageError,
   readCliStdinText,
@@ -127,8 +126,6 @@ export async function runToolUseAgent(
       writeErrorStderr(error);
       return CliExitCode.Usage;
     }
-
-    installCliApprovalHandlers(runContext);
 
     const config: AgentConfigPayload = {
       agent: init.agent,

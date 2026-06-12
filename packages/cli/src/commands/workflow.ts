@@ -9,7 +9,6 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
-import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import {
   CliUsageError,
   readCliStdinText,
@@ -113,8 +112,6 @@ export async function runWorkflowAgent(
         'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
       );
     }
-
-    installCliApprovalHandlers(runContext);
 
     const modelOutputFile =
       init.output && path.isAbsolute(init.output)

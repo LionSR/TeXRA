@@ -10,7 +10,6 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
-import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { approvalPromptsUnavailable } from '../runtime/approvalPolicyAvailability';
 import {
   CliUsageError,
@@ -352,7 +351,6 @@ export async function runMultiAgentPreset(
         stdinInputFile,
       },
     );
-    installCliApprovalHandlers(runContext);
     writeApprovalUnavailableDelegationWarning(runContext, plan);
 
     const config: AgentConfigPayload = {
