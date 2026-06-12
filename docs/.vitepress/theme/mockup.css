@@ -267,7 +267,8 @@
 
 /* Sidebar shell (board). Width is set per hero (content differs). */
 .mockup .board {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  max-width: 100%;
   background: var(--mk-bg);
   border-right: 1px solid var(--mk-border-strong);
   display: flex;
@@ -676,8 +677,9 @@
 /* Editor body — terminal-style artifact (Wolfram / Lean / BibTeX) */
 .mockup .term {
   flex: 1;
+  min-width: 0;
   min-height: 0;
-  overflow-y: auto;
+  overflow: auto;
   margin: var(--mk-space-16);
   padding: var(--mk-space-16) var(--mk-space-18);
   background: var(--mk-bg-deep);
@@ -1201,6 +1203,14 @@
 
 /* Stack the sidebar above the editor on narrow screens. */
 @media (max-width: 820px) {
+  .mockup .board {
+    width: auto !important;
+    border-right: none;
+    border-bottom: 1px solid var(--mk-border-strong);
+  }
+}
+
+@container mockup-frame (max-width: 640px) {
   .mockup .board {
     width: auto !important;
     border-right: none;

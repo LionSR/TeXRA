@@ -259,7 +259,7 @@ const view = ref('search');
 
 <style scoped>
 .board {
-  width: var(--mk-size-256);
+  width: min(var(--mk-size-256), 100%);
 }
 /* This hero's header carries an extra Goal chip on top of the shared
    name/badge/tools, which overflows the 256px sidebar. Let it wrap to a second
@@ -270,14 +270,47 @@ const view = ref('search');
   white-space: normal;
   height: auto;
   row-gap: var(--mk-space-4);
+  min-width: 0;
+  overflow: hidden;
+}
+.stream-head .sh-name {
+  flex: 1 1 auto;
+}
+.stream-head .sh-badge {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .stream-head .sh-tools {
   margin-left: auto;
+}
+.board-tabs,
+.tcard,
+.tcard-sum,
+.tc-row,
+.todo {
+  min-width: 0;
+}
+.bt,
+.tc-v,
+.td-tx {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tc-v {
+  overflow-wrap: anywhere;
 }
 /* Three editor tabs are tight at content width — shrink them to fit. */
 .tabs .tab {
   font-size: var(--mk-fs-69);
   padding: var(--mk-space-8) var(--mk-space-8);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Orchestrator Goal chip (header) */
@@ -291,7 +324,8 @@ const view = ref('search');
   border: 1px solid color-mix(in srgb, var(--mk-accent) 30%, transparent);
   border-radius: var(--mk-radius-pill);
   padding: 1px var(--mk-space-7);
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .goal-ic {
   font-size: var(--mk-space-10);
