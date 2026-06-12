@@ -15,6 +15,11 @@ const desktopRequire = createRequire(
 );
 const nonce = 'texra-webview-smoke';
 
+const progressViewReplacements = {
+  progressBundleUri: fileUri('packages/extension/dist/progressView/bundle.js'),
+  progressStyleUri: fileUri('packages/extension/dist/progressView/index.css'),
+};
+
 const commonReplacements = {
   cspSource: 'file:',
   commonStyleUri: fileUri('packages/extension/src/common/styles/common.css'),
@@ -68,14 +73,7 @@ const views = [
     name: 'progress',
     tagName: 'progress-app',
     templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
-    replacements: {
-      progressBundleUri: fileUri(
-        'packages/extension/dist/progressView/bundle.js',
-      ),
-      progressStyleUri: fileUri(
-        'packages/extension/dist/progressView/index.css',
-      ),
-    },
+    replacements: progressViewReplacements,
   },
   {
     name: 'progress-populated',
@@ -143,14 +141,94 @@ const views = [
         updates: [],
       },
     ],
-    replacements: {
-      progressBundleUri: fileUri(
-        'packages/extension/dist/progressView/bundle.js',
-      ),
-      progressStyleUri: fileUri(
-        'packages/extension/dist/progressView/index.css',
-      ),
+    replacements: progressViewReplacements,
+  },
+  {
+    name: 'progress-approval',
+    tagName: 'progress-app',
+    templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
+    attributes: {
+      'data-desktop-view': 'progress',
     },
+    viewport: {
+      width: 420,
+      height: 700,
+    },
+    assertions: ['toolEditApprovalLayout'],
+    seedMessages: [
+      {
+        command: 'updateStreams',
+        streams: [
+          {
+            name: 'builtInToolUse:orchestrator',
+            label: 'orchestrator',
+            model: 'deepseekT',
+            modelLabel: 'DeepSeek V4 Flash',
+            agent: 'orchestrator',
+            agentCategory: 'toolUse',
+            creationTimestamp: 1_783_353_600_000,
+            description:
+              'Revise main.tex and ask before applying the proposed patch.',
+          },
+        ],
+        activeStream: 'builtInToolUse:orchestrator',
+        agentFilter: 'all',
+        streamStates: {
+          'builtInToolUse:orchestrator': {
+            kind: 'toolUse',
+            status: 'running',
+            lastTimestamp: 1_783_353_600_000,
+            conversationProgress: {
+              conversationTurns: 4,
+              toolCallCount: 12,
+            },
+            activeSubagents: [],
+            finishedSubagentCount: 0,
+            activeProcesses: [],
+            finishedProcessCount: 0,
+          },
+        },
+      },
+      {
+        command: 'updatePermission',
+        action: 'show',
+        permission: {
+          kind: 'toolEdit',
+          data: {
+            requestId: 'smoke-tool-edit-approval',
+            streamId: 'builtInToolUse:orchestrator',
+            allowBypass: true,
+            path: '/tmp/texra-smoke/main.tex',
+            relativePath: 'main.tex',
+            sourceTool: 'edit_file',
+            addedLines: 1,
+            removedLines: 1,
+            isLatex: true,
+            originalContent:
+              'The two expressions differ by a normalization factor.',
+            proposedContent:
+              'The two expressions match after rationalizing the denominator.',
+          },
+        },
+      },
+      {
+        command: 'logDelta',
+        streamId: 'builtInToolUse:orchestrator',
+        entries: [
+          {
+            seqNo: 1,
+            id: 'approval-smoke-msg-1',
+            type: 'log',
+            level: 'info',
+            timestamp: 1_783_353_600_000,
+            messageType: 'modelResponse',
+            text: 'I found a one-line correction and need approval before editing main.tex.',
+          },
+        ],
+        updates: [],
+      },
+    ],
+    replacements: progressViewReplacements,
   },
   {
     name: 'settings',
@@ -263,6 +341,8 @@ async function prepareViewHtml(view) {
     name: view.name,
     tagName: view.tagName,
     seedMessages: view.seedMessages ?? [],
+    assertions: view.assertions ?? [],
+    viewport: view.viewport,
   };
 }
 
