@@ -139,7 +139,7 @@ describe('headless delegation', () => {
       expect.objectContaining({
         agent: 'review',
         agentCategory: AgentCategory.ToolUse,
-        instruction: 'Check the proof.',
+        instruction: expect.stringContaining('Check the proof.'),
         model: 'deepseekT',
       }),
       expect.any(String),
@@ -154,6 +154,45 @@ describe('headless delegation', () => {
     expect(result.output).toContain('<response>');
     expect(result.output).toContain('The proof is correct.');
     expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
+  });
+
+  it('adds a substantive handoff requirement to tool-use subagent instructions', async () => {
+    await withRunContext(
+      createRunContext({
+        runtimeHost: runtimeHost(),
+        streamId: 'parent-stream',
+        executionId: 'parent-exec',
+        model: 'deepseekT',
+      }),
+      () =>
+        new DelegateAgentTool().call({
+          agent: 'review',
+          model: null,
+          instruction: 'Check the proof.',
+          memories: [],
+          working_directory: null,
+          execution_id: null,
+        }),
+    );
+
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instruction: expect.stringContaining(
+          'Your final response is delivered verbatim to the parent orchestrator.',
+        ),
+      }),
+      expect.any(String),
+      expect.anything(),
+    );
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instruction: expect.stringContaining(
+          'Do not finish with only status/process notes',
+        ),
+      }),
+      expect.any(String),
+      expect.anything(),
+    );
   });
 
   it('formats returned child error results as subagent errors', async () => {
