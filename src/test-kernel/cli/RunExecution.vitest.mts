@@ -5,6 +5,8 @@ import type { CliContext } from '@cli/runtime/cliContext';
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   createCliRuntimeHost: vi.fn(),
+  installCliApprovalHandlers: vi.fn(),
+  prepareInteractivePrompt: vi.fn(),
   readCliTerminalStatus: vi.fn(),
   runAgent: vi.fn(),
   writeTerminalStatus: vi.fn(),
@@ -20,6 +22,10 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@cli/runtime/runtimeHost', () => ({
   createCliRuntimeHost: mocks.createCliRuntimeHost,
+}));
+
+vi.mock('@cli/runtime/approvalAdapter', () => ({
+  installCliApprovalHandlers: mocks.installCliApprovalHandlers,
 }));
 
 vi.mock('@cli/runtime/terminalStatus', () => ({
@@ -46,8 +52,10 @@ describe('executeCliRequest', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.close.mockResolvedValue(undefined);
+    mocks.installCliApprovalHandlers.mockReturnValue(vi.fn());
     mocks.createCliRuntimeHost.mockReturnValue({
       emit: vi.fn(),
+      prepareInteractivePrompt: mocks.prepareInteractivePrompt,
       close: mocks.close,
     });
     mocks.readCliTerminalStatus.mockResolvedValue('completed');
@@ -107,6 +115,46 @@ describe('executeCliRequest', () => {
       expect.objectContaining({
         approvalPromptsUnavailable: false,
       }),
+    );
+  });
+
+  it('installs CLI approval handlers with the runtime prompt hook', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = {
+      config: {},
+      executionId: 'exec-1',
+    } as Parameters<typeof executeCliRequest>[0];
+    const context = cliContext({ mode: 'interactive', approvalPolicy: 'ask' });
+
+    await executeCliRequest(request, context);
+
+    expect(mocks.installCliApprovalHandlers).toHaveBeenCalledWith(
+      context,
+      expect.objectContaining({ beforePrompt: expect.any(Function) }),
+    );
+
+    const hooks = mocks.installCliApprovalHandlers.mock.calls[0]?.[1] as {
+      beforePrompt?: () => void;
+    };
+    hooks.beforePrompt?.();
+    expect(mocks.prepareInteractivePrompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores CLI approval handlers before closing the runtime host', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = {
+      config: {},
+      executionId: 'exec-1',
+    } as Parameters<typeof executeCliRequest>[0];
+    const uninstall = vi.fn();
+    mocks.installCliApprovalHandlers.mockReturnValue(uninstall);
+
+    await executeCliRequest(request, cliContext());
+
+    expect(uninstall).toHaveBeenCalledTimes(1);
+    expect(mocks.close).toHaveBeenCalledTimes(1);
+    expect(uninstall.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.close.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
   });
 });

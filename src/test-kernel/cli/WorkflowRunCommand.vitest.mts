@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => {
     executeCliRequest: vi.fn(),
     expandRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
-    installCliApprovalHandlers: vi.fn(),
     resolveCliAgent: vi.fn(),
     resolveCliRunModel: vi.fn(),
     stdinInputFile,
@@ -18,10 +17,6 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@agent/storage', () => ({
   writeTerminalStatus: vi.fn(),
-}));
-
-vi.mock('@cli/runtime/approvalAdapter', () => ({
-  installCliApprovalHandlers: mocks.installCliApprovalHandlers,
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({

@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => {
     formatCliMultiAgentTeamLaunchBlockMessage: vi.fn(),
     getAgentsByCategory: vi.fn(),
     initCliPlatform: vi.fn(),
-    installCliApprovalHandlers: vi.fn(),
     isAuthenticated: vi.fn(),
     loadAgents: vi.fn(),
     planCliMultiAgentPresets: vi.fn(),
@@ -36,11 +35,6 @@ vi.mock('@agent/index', () => ({
 
 vi.mock('@agent/storage', () => ({
   writeTerminalStatus: vi.fn(),
-}));
-
-vi.mock('@cli/runtime/approvalAdapter', () => ({
-  hasCliApprovalDenied: vi.fn(() => false),
-  installCliApprovalHandlers: mocks.installCliApprovalHandlers,
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({

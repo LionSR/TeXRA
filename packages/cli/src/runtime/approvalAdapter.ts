@@ -76,10 +76,13 @@ async function decideToolEdit(
 export function installCliApprovalHandlers(
   context: CliContext,
   hooks: CliApprovalPromptHooks = {},
-): void {
+): () => void {
   setToolEditApprovalHandler((request) =>
     decideToolEdit(request, context, hooks),
   );
+  return () => {
+    setToolEditApprovalHandler();
+  };
 }
 
 export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(

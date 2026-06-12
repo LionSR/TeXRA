@@ -4,6 +4,7 @@ import type { ValidatedExecutionRequest } from '@agent/core/execution/executionR
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
+import { installCliApprovalHandlers } from './approvalAdapter';
 import { createCliRuntimeHost } from './runtimeHost';
 import {
   readCliTerminalStatus,
@@ -43,6 +44,9 @@ export async function executeCliRequest(
   options: CliExecuteOptions = {},
 ): Promise<{ result: ExecuteAgentResult; terminalStatus: ExecutionStatus }> {
   const runtimeHost = createCliRuntimeHost(runContext);
+  const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
+    beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
+  });
   const invoke = (): Promise<ExecuteAgentResult> =>
     runAgent(request, {
       runtimeHost,
@@ -61,6 +65,7 @@ export async function executeCliRequest(
     }
     throw error;
   } finally {
+    uninstallApprovalHandlers();
     await runtimeHost.close();
   }
 
