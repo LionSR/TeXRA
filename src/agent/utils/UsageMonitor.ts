@@ -8,6 +8,7 @@ import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { toErrorMessage } from '@common/errors';
+import { roundTo } from '@utils/core';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,
@@ -126,10 +127,8 @@ export class UsageMonitor {
       const payload: ExtendedTokenUsageStats = {
         inputTokens: roundInputTokens,
         outputTokens: roundOutputTokens,
-        cost: Number(roundCost.toFixed(3)),
-        elapsedTime: Number(
-          (stateGlobal.totalResponseTimeMs / 1000).toFixed(1),
-        ),
+        cost: roundTo(roundCost, 3),
+        elapsedTime: roundTo(stateGlobal.totalResponseTimeMs / 1000, 1),
         ...(roundCacheReadTokens > 0 && {
           cacheReadInputTokens: roundCacheReadTokens,
         }),
@@ -140,7 +139,7 @@ export class UsageMonitor {
           cacheCreationInputTokens: roundCacheCreationTokens,
         }),
         ...(supportsCaching && {
-          percentageCached: Number(percentageCached.toFixed(2)),
+          percentageCached: roundTo(percentageCached, 2),
         }),
         ...(capabilities.supportsReasoning && {
           reasoningTokens: roundReasoningTokens,
@@ -244,7 +243,7 @@ export class UsageMonitor {
         agentCategory: this.metadata.agentCategory,
         inputTokens: cacheMissInputTokens,
         outputTokens: usage.outputTokens,
-        cost: Number(usage.cost.toFixed(6)),
+        cost: roundTo(usage.cost, 6),
         responseTimeMs: Math.round(totalResponseTimeMs),
         cachedInputTokens,
         ...(usage.cacheMissInputTokens != null && {
