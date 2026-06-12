@@ -701,6 +701,12 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'approval-policy-status-bar',
+    env: { HARNESS_APPROVAL_POLICY: 'never', HARNESS_ENTRIES: '4' },
+    expect: ['deny', '[/status]details'],
+    unexpect: ['approval: deny privileged actions'],
+  },
+  {
     name: 'tools-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/tools', '\r'],
