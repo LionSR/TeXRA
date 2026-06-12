@@ -15,6 +15,7 @@ import { createRunProgressRenderer } from './runProgressRenderer';
 import type { CliContext } from './cliContext';
 
 export type CliRuntimeHost = AgentRuntimeHost & {
+  prepareInteractivePrompt?: () => void;
   close(): Promise<void>;
 };
 
@@ -29,11 +30,16 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     return logger;
   }
 
+  function prepareInteractivePrompt(): void {
+    runProgress?.preserve();
+  }
+
   return {
+    prepareInteractivePrompt,
     emit(event, payload) {
       if (
         handleCliApprovalEvent(event, payload, context, {
-          beforePrompt: () => runProgress?.preserve(),
+          beforePrompt: prepareInteractivePrompt,
         })
       ) {
         return;
