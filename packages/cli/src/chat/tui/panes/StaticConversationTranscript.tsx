@@ -23,10 +23,14 @@ import { streamViewForId } from '../state/streamViews';
 import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
-import { isRenderableTranscriptEntry } from './transcriptEntries';
+import {
+  isInquiryContinuationText,
+  isRenderableTranscriptEntry,
+  nextRenderableTranscriptEntry,
+  userPromptAwaitsLiveContinuation,
+} from './transcriptEntries';
 import {
   ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS,
-  isInquiryContinuationText,
   PROCESS_ENTRY_MARGIN_BOTTOM_ROWS,
   TranscriptEntry,
   USER_ENTRY_MARGIN_BOTTOM_ROWS,
@@ -45,6 +49,7 @@ export type StaticTranscriptItem =
       readonly id: string;
       readonly kind: 'entry';
       readonly entry: ConversationEntry;
+      readonly userBottomMarginRows?: number;
     };
 
 interface StaticTranscriptState {
@@ -197,13 +202,31 @@ function staticTranscriptItemRowCount(
   ).length;
   let marginRows = 0;
   if (isUserBand) {
-    marginRows = USER_ENTRY_MARGIN_TOP_ROWS + USER_ENTRY_MARGIN_BOTTOM_ROWS;
+    marginRows =
+      USER_ENTRY_MARGIN_TOP_ROWS +
+      (item.userBottomMarginRows ?? USER_ENTRY_MARGIN_BOTTOM_ROWS);
   } else if (item.entry.role === 'assistant') {
     marginRows = ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS;
   } else if (item.entry.role === 'process') {
     marginRows = PROCESS_ENTRY_MARGIN_BOTTOM_ROWS;
   }
   return lines + marginRows;
+}
+
+function staticUserBottomMarginRows({
+  entry,
+  nextEntry,
+}: {
+  readonly entry: ConversationEntry;
+  readonly nextEntry: ConversationEntry | undefined;
+}): number | undefined {
+  const isUserBand =
+    entry.role === 'user' && !isInquiryContinuationText(entry.text);
+  if (!isUserBand) return undefined;
+  // Tool rows are the command execution part of the same turn; keep them
+  // attached to the prompt instead of printing a gap row.
+  if (nextEntry?.role === 'tool') return 0;
+  return USER_ENTRY_MARGIN_BOTTOM_ROWS;
 }
 
 export function appendStaticTranscriptItems({
@@ -273,12 +296,24 @@ export function appendStaticTranscriptItems({
   const slice = scrollbackStreamId
     ? streams.get(scrollbackStreamId)
     : undefined;
-  for (const entry of slice?.entries ?? []) {
+  const entries = slice?.entries ?? [];
+  for (const [index, entry] of entries.entries()) {
     if (!isRenderableTranscriptEntry(entry)) continue;
+    if (userPromptAwaitsLiveContinuation(entries, index, slice?.status)) {
+      continue;
+    }
     if (!entry.finalized) continue;
     if (seen.has(entry.id)) continue;
     nextItems ??= [...currentItems];
-    nextItems.push({ id: entry.id, kind: 'entry', entry });
+    nextItems.push({
+      id: entry.id,
+      kind: 'entry',
+      entry,
+      userBottomMarginRows: staticUserBottomMarginRows({
+        entry,
+        nextEntry: nextRenderableTranscriptEntry(entries, index),
+      }),
+    });
     seen.add(entry.id);
   }
   // Same reference when nothing was appended so the `setItems` functional
@@ -386,6 +421,7 @@ export function StaticConversationTranscript({
                 entry={item.entry}
                 width={width}
                 colorEnabled={colorEnabled}
+                userBottomMarginRows={item.userBottomMarginRows}
               />
             </EntryErrorBoundary>
           )}
