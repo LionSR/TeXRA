@@ -536,11 +536,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         imagePasteQueue.track(paste);
         return;
       }
-      if (
-        input.startsWith(ESC_SLASH_PREFIX) &&
-        !key.meta &&
-        props.escapeEdit
-      ) {
+      if (input.startsWith(ESC_SLASH_PREFIX) && !key.meta && props.escapeEdit) {
         imagePasteQueue.cancelDeferredAction();
         const latest = syncLatestExternalValue();
         const escaped = props.escapeEdit(latest.value, latest.cursor);
