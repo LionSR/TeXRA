@@ -119,6 +119,15 @@ export function _rejectAllPendingUserQuestions(): void {
   }
 }
 
+/** @internal Called by unified cleanup for unscoped (streamId-less) approvals. */
+export function _rejectUnscopedUserQuestions(): void {
+  for (const entry of pendingQuestions.values()) {
+    if (!entry.streamId && !entry.isSettled()) {
+      entry.settle({ submitted: false });
+    }
+  }
+}
+
 export class AskUserQuestionTool extends defineTool({
   name: 'ask_user_question',
   description: `Ask the user one to three short clarification questions and wait for their answers.

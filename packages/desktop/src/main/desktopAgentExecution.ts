@@ -64,6 +64,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   cleanupApprovalsForStream,
+  cleanupUnscopedApprovals,
   handleProgressViewBashApprovalAction,
 } from '@tools/approval';
 import { GoalStore, isGoalInFlight } from '@tools/goal';
@@ -957,14 +958,15 @@ export class DesktopProgressBridge {
     // another window's pending approvals (the approval controllers are
     // process-global and streamId-keyed; the coordinator half is session-owned).
     for (const streamId of streamIds) {
-      cleanupApprovalsForStream(streamId, this.session);
-    }
-    for (const streamId of streamIds) {
       this.deletedStreams.add(streamId);
-    }
-    for (const streamId of streamIds) {
+      cleanupApprovalsForStream(streamId, this.session);
       ToolUseFollowUpQueue.release(streamId);
     }
+    // Catch any pending approvals whose streamId was undefined (no concrete
+    // stream context) — the per-stream loop skips them because `undefined` ≠
+    // any StreamTabId. They are rare (every desktop agent runs in a stream),
+    // but without this they'd hang with no UI prompt left to answer.
+    cleanupUnscopedApprovals();
     await GoalStore.forgetMany([...streamIds]);
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
