@@ -14,4 +14,22 @@ describe('CLI TipRow', () => {
       'Press /agent to choose the root agent',
     );
   });
+
+  it('only shows the queued follow-up tip while a response is active', () => {
+    expect(tipRowText({ hour: 7, responseRunning: true })).toBe(
+      'Type while a response is running to queue a follow-up',
+    );
+    expect(tipRowText({ hour: 7, responseRunning: false })).toBe(
+      'Press Ctrl-R to search your input history',
+    );
+  });
+
+  it('keeps unrelated tips stable when the response state changes', () => {
+    expect(tipRowText({ hour: 9, responseRunning: true })).toBe(
+      'Use /resume to continue a previous session',
+    );
+    expect(tipRowText({ hour: 9, responseRunning: false })).toBe(
+      'Use /resume to continue a previous session',
+    );
+  });
 });
