@@ -83,4 +83,12 @@ export const SUBAGENT_DELIVERY_DECISION = {
 export type SubagentDeliveryDecision =
   (typeof SUBAGENT_DELIVERY_DECISION)[keyof typeof SUBAGENT_DELIVERY_DECISION];
 
+/**
+ * Process-shared by design (SDK Step 7d): keyed by globally-unique executionId
+ * with no cross-session sweep (`start`/`getActive`/`finish` touch one entry),
+ * so concurrent delegations from different sessions never collide or wipe each
+ * other — the same rationale as the shared `StreamStatusService`. Not composed
+ * onto `SessionHandle`: a per-session split would be net-add with zero isolation
+ * gain. Revisit only if a cross-session `clearAll`-style sweep is ever added.
+ */
 export const subagentDeliveryRegistry = new SubagentDeliveryRegistry();
