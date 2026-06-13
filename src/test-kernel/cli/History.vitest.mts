@@ -153,6 +153,45 @@ describe('CLI history runtime', () => {
     ).resolves.toBeNull();
   });
 
+  it('treats full-only conversation data as a found execution', async () => {
+    mocks.readConfig.mockResolvedValue(null);
+    mocks.readMeta.mockResolvedValue(null);
+    mocks.exists.mockResolvedValue(false);
+    mocks.readConversation.mockResolvedValue([
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            type: 'function',
+            function: { name: 'bash', arguments: '{}' },
+          },
+        ],
+      },
+    ]);
+
+    const details = await readCliHistoryDetails('dead' as ExecutionId, {
+      includeFullConversation: true,
+    });
+
+    expect(details).toMatchObject({
+      id: 'dead',
+      status: 'unknown',
+      conversationPreview: null,
+      conversation: {
+        messageCount: 1,
+        messages: [
+          {
+            index: 1,
+            role: 'assistant',
+            content: '[tool_use: bash]',
+            truncated: false,
+          },
+        ],
+      },
+    });
+  });
+
   it('loads the stored config used by resume', async () => {
     await expect(readCliHistoryConfig('a1' as ExecutionId)).resolves.toEqual(
       config,
@@ -187,12 +226,22 @@ describe('CLI history runtime', () => {
       { role: 'assistant', content: '' },
       { role: 'tool', content: 'problem.tex contents' },
       { role: 'assistant', content: 'Final proof analysis.' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            type: 'function',
+            function: { name: 'read_file', arguments: '{}' },
+          },
+        ],
+      },
     ]);
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
 
     expect(details?.conversationPreview).toEqual({
-      messageCount: 4,
+      messageCount: 5,
       messages: [
         {
           index: 4,
@@ -204,7 +253,7 @@ describe('CLI history runtime', () => {
     });
     expect(formatCliHistoryDetailsText(details!)).toContain(
       [
-        'Conversation (4 messages; showing assistant message 4):',
+        'Conversation (5 messages; showing assistant message 4):',
         '',
         '[assistant #4]',
         'Final proof analysis.',
@@ -213,6 +262,88 @@ describe('CLI history runtime', () => {
     expect(formatCliHistoryDetailsText(details!)).not.toContain(
       'problem.tex contents',
     );
+    expect(formatCliHistoryDetailsText(details!)).not.toContain(
+      '[tool_use: read_file]',
+    );
+  });
+
+  it('can show the full stored conversation for post-run inspection', async () => {
+    const longToolOutput = `${'tool-output-line\n'.repeat(320)}done`;
+    mocks.readConversation.mockResolvedValue([
+      { role: 'user', content: 'Review the proof.' },
+      { role: 'assistant', content: '' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            type: 'function',
+            function: { name: 'read_file', arguments: '{}' },
+          },
+        ],
+      },
+      { role: 'tool', content: 'problem.tex contents' },
+      { role: 'tool', content: longToolOutput },
+      { role: 'assistant', content: 'Final proof analysis.' },
+    ]);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId, {
+      includeFullConversation: true,
+    });
+    const text = formatCliHistoryDetailsText(details!);
+
+    expect(details?.conversationPreview?.messages).toEqual([
+      {
+        index: 6,
+        role: 'assistant',
+        content: 'Final proof analysis.',
+        truncated: false,
+      },
+    ]);
+    expect(details?.conversation).toEqual({
+      messageCount: 6,
+      messages: [
+        {
+          index: 1,
+          role: 'user',
+          content: 'Review the proof.',
+          truncated: false,
+        },
+        {
+          index: 3,
+          role: 'assistant',
+          content: '[tool_use: read_file]',
+          truncated: false,
+        },
+        {
+          index: 4,
+          role: 'tool',
+          content: 'problem.tex contents',
+          truncated: false,
+        },
+        {
+          index: 5,
+          role: 'tool',
+          content: longToolOutput,
+          truncated: false,
+        },
+        {
+          index: 6,
+          role: 'assistant',
+          content: 'Final proof analysis.',
+          truncated: false,
+        },
+      ],
+    });
+    expect(text).toContain(
+      'Conversation (6 messages; showing 5 non-empty messages):',
+    );
+    expect(text).toContain('[user #1]\nReview the proof.');
+    expect(text).toContain('[assistant #3]\n[tool_use: read_file]');
+    expect(text).toContain('[tool #4]\nproblem.tex contents');
+    expect(text).toContain(`[tool #5]\n${longToolOutput}`);
+    expect(text).not.toContain('...[truncated]');
+    expect(text).toContain('[assistant #6]\nFinal proof analysis.');
   });
 
   it('uses the stored report instead of duplicating conversation preview text', async () => {

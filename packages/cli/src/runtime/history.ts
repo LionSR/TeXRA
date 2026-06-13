@@ -40,6 +40,11 @@ const KV_FILES = new Set([
   'result-meta.json',
 ]);
 
+interface ConversationMessageFormatOptions {
+  readonly includeToolUseMarkers?: boolean;
+  readonly contentLimit?: number;
+}
+
 export interface CliHistoryEntry {
   readonly id: ExecutionId;
   readonly timestamp: string;
@@ -61,6 +66,7 @@ export interface CliHistoryDetails {
   readonly resultMeta: ResultMeta | null;
   readonly report: string | null;
   readonly conversationPreview: CliHistoryConversationPreview | null;
+  readonly conversation?: CliHistoryConversationPreview | null;
   readonly files: readonly CliHistoryFile[];
   readonly hasFlowRecord: boolean;
   readonly currentModel?: string;
@@ -136,6 +142,7 @@ export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
 
 export async function readCliHistoryDetails(
   id: ExecutionId,
+  options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
   const store = getExecutionStore(id);
   const [
@@ -159,6 +166,9 @@ export async function readCliHistoryDetails(
     ? await readCliToolUseResumeDataForListing(id, config)
     : undefined;
   const conversationPreview = createConversationPreview(conversation);
+  const fullConversation = options.includeFullConversation
+    ? createConversationTranscript(conversation)
+    : undefined;
   const workspaceFiles = await listWorkspaceToolFiles(
     config,
     persistedWorkspaceFilePaths,
@@ -166,7 +176,15 @@ export async function readCliHistoryDetails(
   );
   const files = mergeHistoryFiles(generatedFiles, workspaceFiles);
 
-  if (!meta && !config && !conversationPreview && !resumeData) return null;
+  if (
+    !meta &&
+    !config &&
+    !conversationPreview &&
+    !fullConversation &&
+    !resumeData
+  ) {
+    return null;
+  }
   return {
     id,
     status: resolveCliHistoryStatus({
@@ -178,6 +196,9 @@ export async function readCliHistoryDetails(
     resultMeta,
     report,
     conversationPreview,
+    ...(options.includeFullConversation
+      ? { conversation: fullConversation }
+      : {}),
     files,
     hasFlowRecord: !!resumeData,
     currentModel: resumeData?.snapshot.agentConfig.model,
@@ -307,7 +328,10 @@ export function formatCliHistoryDetailsText(
   }
   if (details.report) {
     lines.push('', 'Report:', details.report);
-  } else if (details.conversationPreview) {
+  }
+  if (details.conversation) {
+    lines.push('', formatConversationTranscript(details.conversation));
+  } else if (!details.report && details.conversationPreview) {
     lines.push('', formatConversationPreview(details.conversationPreview));
   }
   lines.push('', 'Config:', JSON.stringify(config ?? {}, null, 2));
@@ -367,41 +391,79 @@ function isHistoryKvFile(name: string): boolean {
 function createConversationPreview(
   conversation: readonly unknown[] | null,
 ): CliHistoryConversationPreview | null {
-  if (!conversation?.length) return null;
-  const messages = conversation
-    .map((message, i) => toConversationPreviewMessage(message, i + 1))
-    .filter((message) => message.content.trim().length > 0);
-  if (!messages.length) return null;
+  const transcript = buildConversationMessages(conversation, {
+    includeToolUseMarkers: false,
+    contentLimit: CONVERSATION_PREVIEW_CONTENT_LIMIT,
+  });
+  if (!transcript) return null;
 
-  const lastAssistant = messages.findLast(
+  const lastAssistant = transcript.messages.findLast(
     (message) => message.role === 'assistant',
   );
   const selected = lastAssistant
     ? [lastAssistant]
-    : messages.slice(-CONVERSATION_PREVIEW_MESSAGE_LIMIT);
+    : transcript.messages.slice(-CONVERSATION_PREVIEW_MESSAGE_LIMIT);
 
   return {
-    messageCount: conversation.length,
+    messageCount: transcript.messageCount,
     messages: selected,
+  };
+}
+
+function createConversationTranscript(
+  conversation: readonly unknown[] | null,
+): CliHistoryConversationPreview | null {
+  return buildConversationMessages(conversation, {
+    includeToolUseMarkers: true,
+  });
+}
+
+function buildConversationMessages(
+  conversation: readonly unknown[] | null,
+  options: ConversationMessageFormatOptions,
+): CliHistoryConversationPreview | null {
+  if (!conversation?.length) return null;
+  const messages = conversation
+    .map((message, i) => toConversationPreviewMessage(message, i + 1, options))
+    .filter((message) => message.content.trim().length > 0);
+  if (!messages.length) return null;
+  return {
+    messageCount: conversation.length,
+    messages,
   };
 }
 
 function toConversationPreviewMessage(
   message: unknown,
   index: number,
+  options: ConversationMessageFormatOptions,
 ): CliHistoryConversationPreviewMessage {
   const raw = isObject(message) ? message : {};
   const role = typeof raw.role === 'string' ? raw.role : 'unknown';
-  const content = formatConversationMessageContent(raw.content);
-  const truncated = content.length > CONVERSATION_PREVIEW_CONTENT_LIMIT;
+  const content = formatConversationMessage(raw, options);
+  const truncated =
+    options.contentLimit !== undefined && content.length > options.contentLimit;
   return {
     index,
     role,
     content: truncated
-      ? `${content.slice(0, CONVERSATION_PREVIEW_CONTENT_LIMIT).trimEnd()}\n...[truncated]`
+      ? `${content.slice(0, options.contentLimit).trimEnd()}\n...[truncated]`
       : content,
     truncated,
   };
+}
+
+function formatConversationMessage(
+  raw: Record<string, unknown>,
+  options: ConversationMessageFormatOptions,
+): string {
+  const parts = [
+    formatConversationMessageContent(raw.content, options),
+    ...(options.includeToolUseMarkers === true
+      ? formatTopLevelToolCalls(raw.tool_calls)
+      : []),
+  ].filter((part) => part.trim().length > 0);
+  return parts.join('\n').trim();
 }
 
 function formatConversationPreview(
@@ -411,37 +473,83 @@ function formatConversationPreview(
     preview.messages.length === 1
       ? `${preview.messages[0]?.role ?? 'message'} message ${preview.messages[0]?.index ?? '?'}`
       : `${preview.messages.length} recent messages`;
+  return formatConversationMessages(preview, shown);
+}
+
+function formatConversationTranscript(
+  transcript: CliHistoryConversationPreview,
+): string {
+  const shown =
+    transcript.messages.length === transcript.messageCount
+      ? 'all messages'
+      : `${transcript.messages.length} non-empty messages`;
+  return formatConversationMessages(transcript, shown);
+}
+
+function formatConversationMessages(
+  transcript: CliHistoryConversationPreview,
+  shown: string,
+): string {
   const lines = [
-    `Conversation (${preview.messageCount} messages; showing ${shown}):`,
+    `Conversation (${transcript.messageCount} messages; showing ${shown}):`,
   ];
-  for (const message of preview.messages) {
+  for (const message of transcript.messages) {
     lines.push('', `[${message.role} #${message.index}]`, message.content);
   }
   return lines.join('\n');
 }
 
-function formatConversationMessageContent(content: unknown): string {
+function formatConversationMessageContent(
+  content: unknown,
+  options: ConversationMessageFormatOptions,
+): string {
   if (content == null) return '';
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
-    return content.map(formatConversationContentBlock).join('\n').trim();
+    return content
+      .map((block) => formatConversationContentBlock(block, options))
+      .join('\n')
+      .trim();
   }
   return formatJsonish(content);
 }
 
-function formatConversationContentBlock(block: unknown): string {
+function formatConversationContentBlock(
+  block: unknown,
+  options: ConversationMessageFormatOptions,
+): string {
   if (typeof block === 'string') return block;
   if (!isObject(block)) return formatJsonish(block);
   if (typeof block.text === 'string') return block.text;
 
   switch (block.type) {
     case 'tool_use':
+      if (options.includeToolUseMarkers !== true) return '';
       return `[tool_use: ${String(block.name ?? 'unknown')}]`;
     case 'tool_result':
-      return `[tool_result: ${formatConversationMessageContent(block.content)}]`;
+      return `[tool_result: ${formatConversationMessageContent(block.content, options)}]`;
     default:
       return formatJsonish(block);
   }
+}
+
+function formatTopLevelToolCalls(toolCalls: unknown): string[] {
+  if (!Array.isArray(toolCalls)) return [];
+  return toolCalls.map(formatTopLevelToolCall);
+}
+
+function formatTopLevelToolCall(toolCall: unknown): string {
+  if (!isObject(toolCall)) return `[tool_use: ${formatJsonish(toolCall)}]`;
+  const nestedFunction = isObject(toolCall.function)
+    ? toolCall.function
+    : undefined;
+  const name =
+    typeof nestedFunction?.name === 'string'
+      ? nestedFunction.name
+      : typeof toolCall.name === 'string'
+        ? toolCall.name
+        : 'unknown';
+  return `[tool_use: ${name}]`;
 }
 
 function formatJsonish(value: unknown): string {

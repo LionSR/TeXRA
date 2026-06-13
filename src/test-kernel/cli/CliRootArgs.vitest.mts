@@ -1379,6 +1379,7 @@ describe('runCli usage output stream routing', () => {
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('Show one stored execution');
     expect(stdout).toContain('USAGE texra history show');
+    expect(stdout).toContain('Show the full stored conversation');
     expect(stderr).toBe('');
   });
 
