@@ -108,8 +108,8 @@ const STATUS_MESSAGES: Record<string, string> = {
  * in the ambient {@link RunContext}.
  *
  * Centralises the mapping so new per-run flags (e.g. `stopAfterCycle`,
- * `approvalPromptsUnavailable`) live in one place and are never silently
- * dropped. Three field renames are unavoidable given the interfaces were
+ * `approvalPromptsUnavailable`, `runtimeUnavailableTools`) live in one place
+ * and are never silently dropped. Three field renames are unavoidable given the interfaces were
  * designed independently:
  *  - `AgentCore.logger`   → `RunContext.trace`
  *  - `AgentConfig.agent`  → `RunContext.agentName`
@@ -132,6 +132,7 @@ function agentContextToRunContext(
     workingDirectory: ctx.workingDirectory,
     delegationDepth: ctx.delegationDepth,
     approvalPromptsUnavailable: ctx.approvalPromptsUnavailable,
+    runtimeUnavailableTools: ctx.runtimeUnavailableTools,
     stopAfterCycle: ctx.stopAfterCycle,
   };
 }

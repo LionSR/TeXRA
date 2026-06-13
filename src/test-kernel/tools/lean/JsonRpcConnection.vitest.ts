@@ -17,6 +17,7 @@ function makePair(): {
   const serverIn = new PassThrough(); // what the client writes (i.e. the server reads)
   const serverOut = new PassThrough(); // what the server writes (i.e. the client reads)
   const connection = new JsonRpcConnection(serverIn, serverOut);
+  let clientFrameBuffer = '';
 
   const serverSends = (json: unknown): void => {
     const body = Buffer.from(JSON.stringify(json), 'utf8');
@@ -28,24 +29,32 @@ function makePair(): {
   const collectClientFrames = () =>
     vi.waitFor(
       (): Array<Record<string, unknown>> => {
-        const raw = serverIn.read() as Buffer | string | null;
-        if (!raw) throw new Error('no data in serverIn yet');
-        const text = Buffer.isBuffer(raw) ? raw.toString('utf8') : raw;
+        let raw = serverIn.read() as Buffer | string | null;
+        while (raw) {
+          clientFrameBuffer += Buffer.isBuffer(raw)
+            ? raw.toString('utf8')
+            : raw;
+          raw = serverIn.read() as Buffer | string | null;
+        }
+        if (!clientFrameBuffer) throw new Error('no data in serverIn yet');
         const frames: Array<Record<string, unknown>> = [];
         let offset = 0;
-        while (offset < text.length) {
-          const headerEnd = text.indexOf('\r\n\r\n', offset);
+        while (offset < clientFrameBuffer.length) {
+          const headerEnd = clientFrameBuffer.indexOf('\r\n\r\n', offset);
           if (headerEnd < 0) break;
-          const header = text.slice(offset, headerEnd);
+          const header = clientFrameBuffer.slice(offset, headerEnd);
           const lengthMatch = header.match(/Content-Length: (\d+)/i);
           if (!lengthMatch) break;
           const length = Number.parseInt(lengthMatch[1]!, 10);
           const bodyStart = headerEnd + 4;
-          const body = text.slice(bodyStart, bodyStart + length);
+          const bodyEnd = bodyStart + length;
+          if (clientFrameBuffer.length < bodyEnd) break;
+          const body = clientFrameBuffer.slice(bodyStart, bodyEnd);
           frames.push(JSON.parse(body) as Record<string, unknown>);
-          offset = bodyStart + length;
+          offset = bodyEnd;
         }
         if (frames.length === 0) throw new Error('no complete frames yet');
+        clientFrameBuffer = clientFrameBuffer.slice(offset);
         return frames;
       },
       { timeout: 500, interval: 5 },

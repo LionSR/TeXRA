@@ -14,6 +14,7 @@ export interface RunAgentOptions {
   registerExecution?: boolean;
   stopAfterCycle?: boolean;
   approvalPromptsUnavailable?: boolean;
+  runtimeUnavailableTools?: readonly string[];
 }
 
 /**
@@ -53,6 +54,7 @@ export async function runAgent(
     enforceCategory: options.enforceCategory,
     stopAfterCycle: options.stopAfterCycle,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+    runtimeUnavailableTools: options.runtimeUnavailableTools,
   });
   if (result.category === 'workflow') {
     await options.openWorkflowOutput?.(result);
