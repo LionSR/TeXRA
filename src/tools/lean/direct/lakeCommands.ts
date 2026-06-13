@@ -15,6 +15,8 @@ import { Mutex } from 'async-mutex';
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
 const LAKE_MAX_OUTPUT_CHARS = 4 * 1024 * 1024;
 
+// Keys are resolved workspace roots — a small bounded set per process lifetime,
+// so we don't bother evicting entries after release.
 const workspaceMutexes = new Map<string, Mutex>();
 
 function getWorkspaceMutex(key: string): Mutex {

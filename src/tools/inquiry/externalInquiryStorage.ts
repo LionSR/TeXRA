@@ -148,6 +148,20 @@ function getThreadMutex(threadId: string): Mutex {
   return mutex;
 }
 
+// Thread IDs are freshly minted per thread, so the Map would otherwise grow
+// without bound. Evict after each critical section once no waiters remain.
+async function withThreadLock<T>(
+  threadId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const mutex = getThreadMutex(threadId);
+  try {
+    return await mutex.runExclusive(fn);
+  } finally {
+    if (!mutex.isLocked()) threadMutexes.delete(threadId);
+  }
+}
+
 // ============================================================================
 // Path helpers
 // ============================================================================
@@ -327,7 +341,7 @@ export async function recordOpenQuestion(params: {
   const threadId =
     params.threadId ?? (`ei_${hexId12()}` as ExternalInquiryThreadId);
 
-  return getThreadMutex(threadId).runExclusive(async () => {
+  return withThreadLock(threadId, async () => {
     const existing = await readThreadManifest(threadId);
 
     if (params.threadId && !existing) {
@@ -429,7 +443,7 @@ export async function recordAnswerForOpenTurn(params: {
   sessionLinks?: string[] | null;
   executionId?: ExecutionId;
 }): Promise<PersistedAnsweredTurn | null> {
-  return getThreadMutex(params.threadId).runExclusive(async () => {
+  return withThreadLock(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing) return null;
     if (existing.status !== 'open') return null;
@@ -499,7 +513,7 @@ export async function recordAnswerForOpenTurn(params: {
 export async function markDropped(params: {
   threadId: ExternalInquiryThreadId;
 }): Promise<ExternalInquiryThreadManifest | null> {
-  return getThreadMutex(params.threadId).runExclusive(async () => {
+  return withThreadLock(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing) return null;
     if (existing.status !== 'open') return null;
@@ -524,7 +538,7 @@ export async function persistOpenTurnDraft(params: {
   threadId: ExternalInquiryThreadId;
   draft: InquiryDraft | null;
 }): Promise<void> {
-  await getThreadMutex(params.threadId).runExclusive(async () => {
+  await withThreadLock(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing || existing.status !== 'open' || existing.turns.length === 0)
       return;
