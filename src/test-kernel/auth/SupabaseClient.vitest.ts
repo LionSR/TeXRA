@@ -22,6 +22,23 @@ function createDeferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
+async function withRelayTokenEnv(
+  token: string,
+  run: () => Promise<void>,
+): Promise<void> {
+  const previous = process.env[RELAY_TOKEN_ENV_VAR];
+  process.env[RELAY_TOKEN_ENV_VAR] = token;
+  try {
+    await run();
+  } finally {
+    if (previous === undefined) {
+      delete process.env[RELAY_TOKEN_ENV_VAR];
+    } else {
+      process.env[RELAY_TOKEN_ENV_VAR] = previous;
+    }
+  }
+}
+
 describe('SupabaseClient', () => {
   afterEach(() => {
     SupabaseClient.resetForTests();
@@ -47,8 +64,7 @@ describe('SupabaseClient', () => {
   });
 
   it('keeps session tokens separate from CI relay bearer tokens', async () => {
-    const previousRelayToken = process.env[RELAY_TOKEN_ENV_VAR];
-    process.env[RELAY_TOKEN_ENV_VAR] = `${RELAY_CI_TOKEN_PREFIX}abcdef`;
+    const relayToken = `${RELAY_CI_TOKEN_PREFIX}abcdef`;
     const provider: AuthTokenProvider = {
       whenReady: async () => {},
       ensureFreshToken: async () => 'session-token',
@@ -58,28 +74,17 @@ describe('SupabaseClient', () => {
       }),
     };
 
-    try {
+    await withRelayTokenEnv(relayToken, async () => {
       SupabaseClient.setAuthProvider(provider);
 
       assert.equal(await SupabaseClient.getAccessToken(), 'session-token');
-      assert.equal(
-        await SupabaseClient.getRelayAccessToken(),
-        `${RELAY_CI_TOKEN_PREFIX}abcdef`,
-      );
+      assert.equal(await SupabaseClient.getRelayAccessToken(), relayToken);
       assert.equal(await SupabaseClient.isAuthenticated(), true);
-    } finally {
-      if (previousRelayToken === undefined) {
-        delete process.env[RELAY_TOKEN_ENV_VAR];
-      } else {
-        process.env[RELAY_TOKEN_ENV_VAR] = previousRelayToken;
-      }
-    }
+    });
   });
 
   it('falls back to the session once the relay token is known-rejected', async () => {
-    const previousRelayToken = process.env[RELAY_TOKEN_ENV_VAR];
     const relayToken = `${RELAY_CI_TOKEN_PREFIX}rejected`;
-    process.env[RELAY_TOKEN_ENV_VAR] = relayToken;
     const provider: AuthTokenProvider = {
       whenReady: async () => {},
       ensureFreshToken: async () => 'session-token',
@@ -89,7 +94,7 @@ describe('SupabaseClient', () => {
       }),
     };
 
-    try {
+    await withRelayTokenEnv(relayToken, async () => {
       SupabaseClient.setAuthProvider(provider);
 
       // Observe the rejection (tier-config answers without userStatus for
@@ -106,26 +111,18 @@ describe('SupabaseClient', () => {
       // the stored session instead of presenting a credential that will 401.
       assert.equal(await SupabaseClient.getRelayAccessToken(), 'session-token');
       assert.equal(await SupabaseClient.isAuthenticated(), true);
-    } finally {
-      if (previousRelayToken === undefined) {
-        delete process.env[RELAY_TOKEN_ENV_VAR];
-      } else {
-        process.env[RELAY_TOKEN_ENV_VAR] = previousRelayToken;
-      }
-    }
+    });
   });
 
   it('treats a relay-401 refresh as rejection of a static CI token', async () => {
-    const previousRelayToken = process.env[RELAY_TOKEN_ENV_VAR];
     const relayToken = `${RELAY_CI_TOKEN_PREFIX}got401`;
-    process.env[RELAY_TOKEN_ENV_VAR] = relayToken;
     const provider: AuthTokenProvider = {
       whenReady: async () => {},
       ensureFreshToken: async () => 'session-token',
       getSessionTokens: async () => null,
     };
 
-    try {
+    await withRelayTokenEnv(relayToken, async () => {
       SupabaseClient.setAuthProvider(provider);
 
       // The 401-recovery path (forceRefresh) presented the CI token; a static
@@ -137,13 +134,7 @@ describe('SupabaseClient', () => {
       );
       // Subsequent relay calls keep skipping the rejected token.
       assert.equal(await SupabaseClient.getRelayAccessToken(), 'session-token');
-    } finally {
-      if (previousRelayToken === undefined) {
-        delete process.env[RELAY_TOKEN_ENV_VAR];
-      } else {
-        process.env[RELAY_TOKEN_ENV_VAR] = previousRelayToken;
-      }
-    }
+    });
   });
 
   it('returns null when the token provider throws while reading session tokens', async () => {

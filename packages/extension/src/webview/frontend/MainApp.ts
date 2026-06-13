@@ -1484,13 +1484,10 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER);
   }
 
-  // Welcome-card choices reuse the existing host flows: sign-in invokes
-  // texra.auth.signIn (SIGN_IN_FROM_BANNER), API key invokes texra.setApiKey
-  // (OPEN_SET_API_KEY); only skip is onboarding-specific (declined flag).
-  private handleWelcomeSignIn(): void {
-    postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER);
-  }
-
+  // Welcome-card choices reuse the existing host flows: sign-in reuses
+  // handleComponentSignIn (SIGN_IN_FROM_BANNER → texra.auth.signIn), API key
+  // invokes texra.setApiKey (OPEN_SET_API_KEY); only skip is onboarding-specific
+  // (declined flag).
   private handleWelcomeApiKey(): void {
     postMessage(MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY);
   }
@@ -1800,7 +1797,7 @@ export class MainApp extends MainAppBase {
           ${this.renderViewHeader()}
           <div class="main-content">
             <onboarding-welcome-card
-              @welcome-sign-in=${this.handleWelcomeSignIn}
+              @welcome-sign-in=${this.handleComponentSignIn}
               @welcome-api-key=${this.handleWelcomeApiKey}
               @welcome-skip=${this.handleWelcomeSkip}
             ></onboarding-welcome-card>

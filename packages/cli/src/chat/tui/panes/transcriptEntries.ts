@@ -83,11 +83,7 @@ export function nextRenderableTranscriptEntry(
   entries: readonly ConversationEntry[],
   index: number,
 ): ConversationEntry | undefined {
-  for (let i = index + 1; i < entries.length; i += 1) {
-    const entry = entries[i];
-    if (entry && isRenderableTranscriptEntry(entry)) return entry;
-  }
-  return undefined;
+  return entries.slice(index + 1).find(isRenderableTranscriptEntry);
 }
 
 export function userPromptAwaitsLiveContinuation(
@@ -105,8 +101,7 @@ export function userPromptAwaitsLiveContinuation(
   ) {
     return false;
   }
-  const nextEntry = nextRenderableTranscriptEntry(entries, index);
-  return nextEntry === undefined;
+  return nextRenderableTranscriptEntry(entries, index) === undefined;
 }
 
 export function splitTranscriptEntries(

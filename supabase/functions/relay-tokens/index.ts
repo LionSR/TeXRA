@@ -134,9 +134,7 @@ app.post('/mint', async (c) => {
 
     const rawExpires = body?.expires_in_days;
     const expiresInDays =
-      rawExpires === undefined || rawExpires === null
-        ? DEFAULT_EXPIRES_IN_DAYS
-        : Number(rawExpires);
+      rawExpires == null ? DEFAULT_EXPIRES_IN_DAYS : Number(rawExpires);
     if (
       !Number.isInteger(expiresInDays) ||
       expiresInDays < 1 ||

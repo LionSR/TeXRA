@@ -119,21 +119,29 @@ async function detectBaseBranch(cwd: string): Promise<BaseBranch | null> {
     return { ref, shortName: ref.replace(/^origin\//, '') };
   }
   const verified = await Promise.all(
-    BASE_BRANCH_CANDIDATES.flatMap((candidate) => [
-      git(cwd, ['rev-parse', '--verify', '--quiet', `refs/heads/${candidate}`]),
-      git(cwd, [
-        'rev-parse',
-        '--verify',
-        '--quiet',
-        `refs/remotes/origin/${candidate}`,
-      ]),
-    ]),
+    BASE_BRANCH_CANDIDATES.map(async (candidate) => {
+      const [local, origin] = await Promise.all([
+        git(cwd, [
+          'rev-parse',
+          '--verify',
+          '--quiet',
+          `refs/heads/${candidate}`,
+        ]),
+        git(cwd, [
+          'rev-parse',
+          '--verify',
+          '--quiet',
+          `refs/remotes/origin/${candidate}`,
+        ]),
+      ]);
+      return { candidate, local, origin };
+    }),
   );
-  for (const [index, candidate] of BASE_BRANCH_CANDIDATES.entries()) {
-    if (verified[index * 2] !== null) {
+  for (const { candidate, local, origin } of verified) {
+    if (local !== null) {
       return { ref: candidate, shortName: candidate };
     }
-    if (verified[index * 2 + 1] !== null) {
+    if (origin !== null) {
       return { ref: `origin/${candidate}`, shortName: candidate };
     }
   }
