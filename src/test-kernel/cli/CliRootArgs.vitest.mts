@@ -1390,6 +1390,33 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
+  it('prints recovery hints for unknown multi-agent presets', async () => {
+    const commands = [
+      ['multi-agent', 'show', 'does-not-exist'],
+      ['multi-agent', 'inspect', 'does-not-exist'],
+      [
+        'multi-agent',
+        'run',
+        'does-not-exist',
+        '--instruction',
+        'Check this derivation.',
+      ],
+    ];
+
+    for (const command of commands) {
+      stderr = '';
+      stdout = '';
+
+      const result = await runCli(command);
+
+      expect(result.exitCode).toBe(2);
+      expect(stripAnsi(stderr)).toContain(
+        'Multi-agent preset not found: does-not-exist. Use `texra multi-agent list` for available team presets, then run `texra multi-agent inspect <preset>` to check a team before launch.',
+      );
+      expect(stdout).toBe('');
+    }
+  });
+
   it('reports unknown command paths passed to help', async () => {
     const result = await runCli(['help', 'bogus']);
     expect(result.exitCode).toBe(2);
