@@ -21,5 +21,5 @@ export {
   ensureArray,
 } from './typeGuards';
 export { debounce, delay } from './async';
-export { clamp, clampIndex, roundTo } from './math';
+export { clamp, clampIndex, clampOptional, roundTo } from './math';
 export { tryParseUrl } from './urlCore';

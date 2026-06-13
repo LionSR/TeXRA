@@ -7,6 +7,21 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 /**
+ * Clamp `value` to optional bounds. Each bound is applied only when defined.
+ * Equivalent to `clamp` when both are provided and `min <= max`; a no-op when neither is.
+ */
+export function clampOptional(
+  value: number,
+  min?: number,
+  max?: number,
+): number {
+  let result = value;
+  if (min != null) result = Math.max(min, result);
+  if (max != null) result = Math.min(max, result);
+  return result;
+}
+
+/**
  * Clamp `index` into `[0, length - 1]`.
  * Returns 0 when `length <= 0` so the result is always a valid array index.
  */

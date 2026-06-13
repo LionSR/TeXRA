@@ -9,17 +9,11 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared utilities
 import { createEvent } from '@shared/utils/events';
+import { clampOptional } from '@utils/core';
 
 // Local imports - shared schemas
 import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-
-function clampSetting(value: number, min?: number, max?: number): number {
-  let result = value;
-  if (min != null) result = Math.max(min, result);
-  if (max != null) result = Math.min(max, result);
-  return result;
-}
 
 @customElement('reliability-settings-section')
 export class ReliabilitySettingsSection extends LitElement {
@@ -84,7 +78,7 @@ export class ReliabilitySettingsSection extends LitElement {
       input.value = String(setting.value);
       return;
     }
-    const value = clampSetting(parsed, setting.min, setting.max);
+    const value = clampOptional(parsed, setting.min, setting.max);
     if (value !== parsed) input.value = String(value);
     this.dispatchEvent(
       createEvent('provider-vscode-setting-set', { key: setting.key, value }),
