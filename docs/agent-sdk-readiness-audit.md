@@ -1681,8 +1681,14 @@ module-singletons now number 23 — the recorded judgment-call, not pursued.)
 - **§16 #1 (`agentRegistry` UI-altitude)** — **mostly closed** by `2f062af` (the ordering policy
   and remote-meta are now separate modules); only the thin `computeAgentOptionsData` orchestrator
   residual remains — downgraded to optional polish.
-- **§16 #2 (idempotent double `ensureAgentCategoryForSource`)** — still present
-  (`agentLoad.ts:123` + `AgentLaunchContext.ts:188`); deliberately deferred as behavior-touching.
+- **§16 #2 (idempotent double `ensureAgentCategoryForSource`)** — **resolved (2026-06-13)**.
+  The `assembleAgentLaunchContext` call was a provable no-op: `loadAgentSettingAndPrompts`
+  already applies `ensureAgentCategoryForSource` before `AgentSettingSchema.parse`, and the
+  schema prefaults `agentCategory` (to Workflow when absent), so `setting.agentCategory` is
+  always populated by then; the only mutating branch (`source === 'builtInToolUse' &&
+!agentCategory`) is therefore unreachable at that site, and remote agents (the early-return
+  path) carry `source === 'remote'` which the function ignores regardless. Removed the second
+  call + its import (`agentLoad.ts:123` remains the single, load-bearing call). Behavior-neutral.
 - **§16 #4 (`@logger`↔`@agent/trace` import cycle)** — still present (`runTrace.ts:10` ↔
   `TraceEmitter.ts:18`); `a79295f`'s layering pass did not break it. Latent, low; for the eventual
   package-extraction step.

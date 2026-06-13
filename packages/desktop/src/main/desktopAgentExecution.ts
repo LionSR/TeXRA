@@ -21,15 +21,15 @@ import {
   TaskStateSchema,
   type TaskState,
 } from '@agent/core/execution/TaskState';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { toErrorMessage } from '@common/errors';
 import {
   getFileListConfig,
@@ -187,12 +187,23 @@ export class DesktopProgressBridge {
   readonly runtimeHost: AgentRuntimeHost;
   readonly progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
 
+  /**
+   * This window's own session. Each desktop BrowserWindow gets a fresh one so
+   * its runs, interrupts, coordinator requests, and trace flushers are isolated
+   * from other windows and torn down on window close. Cross-window "is this
+   * execution running anywhere" checks use `getAllActiveExecutionIds()`.
+   */
+  private readonly session: SessionHandle = new SessionHandle();
+  /** Detaches the session→toast consumer; called on dispose. */
+  private detachResultToast: (() => void) | undefined;
+
   constructor(
     private readonly postToRenderer: (message: unknown) => boolean | void,
     private readonly options: DesktopProgressBridgeOptions = {},
   ) {
     setProgressViewBridge({ isViewVisible: () => true });
     this.backend = new ProgressBackend({
+      session: this.session,
       storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
       snapshots: options.progressSnapshotStore ?? new StreamSnapshotStore(),
       sendMessage: (message) => {
@@ -216,7 +227,7 @@ export class DesktopProgressBridge {
             // run takes the normal cancel path instead of hanging in WAITING
             // for an answer that can never arrive.
             showRetryRequest: (payload) => {
-              runCoordinatorBridge.cancelRetry(payload.streamId);
+              this.session.coordinators.cancelRetry(payload.streamId);
             },
             resolveRetryRequest: () => undefined,
             showToolEditPermission: (payload) => {
@@ -374,6 +385,13 @@ export class DesktopProgressBridge {
     this.runtimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),
     };
+    // Present terminal-error toasts from this window's run results (the run
+    // lifecycle no longer emits them directly) through the same runtimeHost
+    // path they used before — scoped to this window's session.
+    this.detachResultToast = attachTerminalResultToast(
+      this.session,
+      this.runtimeHost,
+    );
     this.toolEditApprovals = createDesktopToolEditApprovalController({
       runtimeHost: this.runtimeHost,
       openPath: options.openPath,
@@ -457,7 +475,7 @@ export class DesktopProgressBridge {
         return true;
       },
       resolveProposal: (proposalId, result) => {
-        runCoordinatorBridge.resolveProposal(proposalId, result);
+        this.session.coordinators.resolveProposal(proposalId, result);
       },
       onMissingProposal: (proposalId) => {
         this.logger.warn(
@@ -568,7 +586,7 @@ export class DesktopProgressBridge {
         handleBashApprovalAction: (message) =>
           handleProgressViewBashApprovalAction(message),
         handlePlanApprovalAction: (message) => {
-          runCoordinatorBridge.resolvePlanApproval(message.approvalId, {
+          this.session.coordinators.resolvePlanApproval(message.approvalId, {
             action: message.action,
             ...(message.action === 'reject' && {
               feedback: message.feedback,
@@ -668,6 +686,7 @@ export class DesktopProgressBridge {
   }
 
   dispose(): void {
+    this.detachResultToast?.();
     this.toolEditApprovals.dispose();
     this.unsubscribe();
     this.backend.dispose();
@@ -678,6 +697,17 @@ export class DesktopProgressBridge {
         data: error instanceof Error ? error : { error },
       });
     });
+    // Tear down this window's session last. `dispose()` drains this session's
+    // own trace flushers and unregisters its flusher set from the process-wide
+    // drain (the fire-and-forget `state.flush()` above still owns store/snapshot
+    // persistence, which dispose cannot await). Orphan policy: dispose clears
+    // this window's execution/interrupt/coordinator entries but deliberately
+    // does NOT kill in-flight runs — on macOS the process outlives the window,
+    // so a run launched here keeps executing headless until process exit
+    // (rebind-or-orphan on window reopen is deferred to a future multi-window
+    // design; cross-window history protection still holds via
+    // getAllActiveExecutionIds while the run's session is live).
+    this.session.dispose();
   }
 
   private clearDesktopSessionMaps(): void {
@@ -897,7 +927,7 @@ export class DesktopProgressBridge {
     this.removePersistedStream(streamId);
 
     // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
-    cleanupApprovalsForStream(streamId);
+    cleanupApprovalsForStream(streamId, this.session);
     ToolUseFollowUpQueue.release(streamId);
 
     this.deleteAgentProposalsForStream(streamId);
@@ -920,7 +950,7 @@ export class DesktopProgressBridge {
 
   async deleteAllStreams(): Promise<void> {
     // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
-    cleanupAllApprovals();
+    cleanupAllApprovals(this.session);
     const streamIds = new Set<StreamTabId>([
       ...this.streamLogs.keys(),
       ...this.restoredStreams.keys(),
@@ -974,8 +1004,8 @@ export class DesktopProgressBridge {
   }
 
   private stopStream(streamId: StreamTabId): void {
-    runCoordinatorBridge.clearRetryRequest(streamId);
-    executionRegistry.stopAgentStream(streamId, {
+    this.session.coordinators.clearRetryRequest(streamId);
+    this.session.executions.stopAgentStream(streamId, {
       // Read the live workspace-state value (written by the desktop settings
       // view) at stop time, matching the extension and CLI hosts.
       detachActiveChildren:
@@ -1040,6 +1070,7 @@ export class DesktopProgressBridge {
         this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
         try {
           await resumeToolUseFromSnapshot(resume.snapshot, this.runtimeHost, {
+            session: this.session,
             setupSession: (session) => {
               for (const item of queuedFollowUps) {
                 session.appendFollowUp(item);
@@ -1169,7 +1200,17 @@ export class DesktopProgressBridge {
     text: string,
     mediaFiles?: readonly string[],
   ): Promise<void> {
-    const result = await sendFollowUp(streamId, text, mediaFiles);
+    // Resolve the follow-up target against THIS window's session: the run's
+    // handle is tracked in `this.session`, but this IPC path runs outside the
+    // run ALS, so the module default (currentSession ⇒ defaultSession) would
+    // look in the wrong registry and report `no_session` for a live run.
+    const result = await sendFollowUp(
+      streamId,
+      text,
+      mediaFiles,
+      undefined,
+      this.session,
+    );
     if (result.status === 'sent' || result.status === 'queued') {
       this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
       return;
@@ -1188,6 +1229,7 @@ export class DesktopProgressBridge {
     const { runAgent } = await import('@agent/runtime/runAgent');
     await runAgent(request, {
       runtimeHost: this.runtimeHost,
+      session: this.session,
       openWorkflowOutput: async (result) => {
         // Match the extension's auto-open contract: only a completed workflow
         // opens its final output — cancelled runs may carry partial outputs

@@ -38,7 +38,7 @@ import {
   type AgentLaunchContext,
 } from './AgentLaunchContext';
 import { runFlowWithLifecycle } from './AgentRunLifecycle';
-import { executionRegistry } from './executionRegistry';
+import { currentSession, type SessionHandle } from './SessionHandle';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
@@ -158,7 +158,7 @@ function createRoundProgressCallback(
   outputPaths?: readonly string[],
 ) => void {
   return (roundIndex, totalRounds, outputPaths) => {
-    executionRegistry.updateProgress(executionId, {
+    currentSession().executions.updateProgress(executionId, {
       currentRound: roundIndex,
       totalRounds,
     });
@@ -247,6 +247,8 @@ export interface ExecuteAgentOptions {
   approvalPromptsUnavailable?: boolean;
   /** Hide tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
+  /** Session owning this run's coordination state. Defaults to the process session. */
+  session?: SessionHandle;
   /** Fires after flow completes but before executionRegistry.untrack, so follow-ups are enqueued before waiters resolve. */
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   /** Fires when a subagent fails and should report the failure to its orchestrator. */
@@ -270,6 +272,7 @@ export async function executeAgent(
     onBeforeActivation: options.onStreamResolved,
     enforceCategory: options.enforceCategory,
     suppressErrorNotification: options.isSubagent,
+    session: options.session,
   });
   ctx.delegationDepth = options.delegationDepth ?? 0;
   ctx.approvalPromptsUnavailable = options.approvalPromptsUnavailable;
@@ -423,6 +426,8 @@ export interface ResumeToolUseFromSnapshotOptions {
   readonly approvalPromptsUnavailable?: boolean;
   /** Hide tools unavailable because the current host/runtime cannot support them. */
   readonly runtimeUnavailableTools?: readonly string[];
+  /** Session owning this run's coordination state. Defaults to the process session. */
+  readonly session?: SessionHandle;
   readonly setupSession?: (session: IToolUseSession) => void;
 }
 
@@ -439,6 +444,7 @@ export async function resumeToolUseFromSnapshot(
     // resumeCommand surfaces its own warning toast on failure; skip the
     // bus-level error to avoid double-notifying.
     suppressErrorNotification: true,
+    session: options.session,
   });
   // Recover delegation depth from the persisted parent-execution chain
   // so resumed subagents remain gated by the nested-delegation policy

@@ -9,6 +9,7 @@
 import * as vscode from 'vscode';
 
 import { getProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { toErrorMessage } from '@common/errors';
 import { bus, INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import type {
@@ -20,6 +21,7 @@ import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { presentTerminalResult } from '@shared/agent/terminalResultPresentation';
 
 const CHANNEL = 'agentEventListeners';
 
@@ -149,6 +151,17 @@ export function registerAgentEventListeners(): vscode.Disposable {
     (payload) => void handleRequestEnsureProgressView(payload),
     { signal },
   );
+
+  // Terminal-error toasts now come from the run's `result` event (the lifecycle
+  // no longer emits them directly). Present them through the same handlers via
+  // the shared mapper — no bus round-trip, so the direct-handler path stays.
+  const detachResult = defaultSession().onResult((event) =>
+    presentTerminalResult(event, {
+      showInstruction: handleRequestShowInstruction,
+      showError: handleRequestShowError,
+    }),
+  );
+  signal.addEventListener('abort', detachResult, { once: true });
 
   return new vscode.Disposable(() => controller.abort());
 }

@@ -15,10 +15,8 @@ import {
   getCurrentToolContexts,
   type ToolCallContext,
 } from '@agent/toolUse/ToolFileInteractionContext';
-import {
-  interruptRegistry,
-  type IInterruptible,
-} from '@agent/runtime/InterruptRegistry';
+import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
@@ -255,8 +253,11 @@ export class BashTool extends defineTool({
     let stderrTail = '';
     let loggedChars = 0;
     let logCapReached = false;
+    // Capture the run's session inside the tool's ALS; finalizeBackground below
+    // unregisters after the process ends, possibly outside the ALS.
+    const runSession = currentSession();
     const session = new BashBackgroundSession();
-    interruptRegistry.register(childStreamId, session);
+    runSession.interrupts.register(childStreamId, session);
 
     const logChunk = (chunk: string, level: 'info' | 'warn'): void => {
       if (logCapReached) return;
@@ -300,7 +301,7 @@ export class BashTool extends defineTool({
     const finalizeBackground = (
       options?: Parameters<typeof childStream.finalize>[0],
     ): void => {
-      interruptRegistry.unregister(childStreamId);
+      runSession.interrupts.unregister(childStreamId);
       childStream.finalize(options);
     };
 
