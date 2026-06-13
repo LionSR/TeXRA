@@ -6,7 +6,6 @@ settings:
 
 patchedDependencies:
   ink@7.0.5: b41fb48a0ebb5005f770353111ec6b9c777f975899420a7e0e6098d5ef2a6f81
-  llm-zoo@1.9.1: 4fe557759c57c3d84ea01e46c04b3eb3da76720fd528434556ec6512acbb7b27
 
 importers:
 
@@ -143,7 +142,7 @@ importers:
         version: 3.3.3
       llm-zoo:
         specifier: ^1.9.1
-        version: 1.9.1(patch_hash=4fe557759c57c3d84ea01e46c04b3eb3da76720fd528434556ec6512acbb7b27)(zod@4.4.3)
+        version: 1.9.1(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.1
         version: 11.5.1
@@ -610,7 +609,7 @@ importers:
         version: 3.3.3
       llm-zoo:
         specifier: ^1.9.1
-        version: 1.9.1(patch_hash=4fe557759c57c3d84ea01e46c04b3eb3da76720fd528434556ec6512acbb7b27)(zod@4.4.3)
+        version: 1.9.1(zod@4.4.3)
       mark.js:
         specifier: ^8.11.1
         version: 8.11.1
@@ -10265,7 +10264,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@1.9.1(patch_hash=4fe557759c57c3d84ea01e46c04b3eb3da76720fd528434556ec6512acbb7b27)(zod@4.4.3):
+  llm-zoo@1.9.1(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
 
