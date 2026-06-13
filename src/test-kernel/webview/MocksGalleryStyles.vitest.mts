@@ -54,16 +54,21 @@ describe('mock gallery styles', () => {
     );
     const logStart = source.indexOf('.log-body {');
     const taskGroupStart = source.indexOf('task-group-list {');
+    const streamTabsStart = source.indexOf('stream-tabs {');
+    const filesBlockStart = source.indexOf('.files-block {');
     const hostRule = source.slice(hostStart, boardStart);
     const conversationRule = source.slice(
       conversationStart,
       conversationMediaStart,
     );
     const logRule = source.slice(logStart, taskGroupStart);
+    const streamTabsRule = source.slice(streamTabsStart, filesBlockStart);
 
     expect(hostStart).toBeGreaterThanOrEqual(0);
     expect(conversationStart).toBeGreaterThan(boardStart);
     expect(logStart).toBeGreaterThan(conversationStart);
+    expect(streamTabsStart).toBeGreaterThan(taskGroupStart);
+    expect(filesBlockStart).toBeGreaterThan(streamTabsStart);
     expect(hostRule).toContain('min-width: 0');
     expect(hostRule).toContain('max-width: 100%');
     expect(hostRule).toContain('overflow-x: hidden');
@@ -72,5 +77,8 @@ describe('mock gallery styles', () => {
     expect(conversationRule).toContain('overflow: hidden');
     expect(logRule).toContain('min-width: 0');
     expect(logRule).toContain('overflow: hidden');
+    expect(streamTabsRule).toContain('min-width: 0');
+    expect(streamTabsRule).toContain('max-width: 100%');
+    expect(streamTabsRule).toContain('overflow: hidden');
   });
 });

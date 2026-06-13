@@ -167,10 +167,10 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .approval-request__actions wa-button[data-action] {
-    flex: 0 1 auto;
-    width: auto;
+    flex: 0 0 auto;
+    width: fit-content;
     min-width: min(5.5rem, 100%);
-    max-width: fit-content;
+    max-width: min(9rem, 100%);
   }
 
   :is(${ACTIONS}) wa-button[data-action]::part(base) {
@@ -180,8 +180,9 @@ export const requestPanelStyles: CSSResult = css`
 
   .approval-request__actions wa-button[data-action]::part(base) {
     justify-content: center;
-    width: 100%;
+    width: auto;
     min-width: 0;
+    max-width: 100%;
   }
 
   /* Shared action button colors */
