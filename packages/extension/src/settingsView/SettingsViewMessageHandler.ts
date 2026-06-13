@@ -70,9 +70,11 @@ import {
   buildModelSelectionMessage,
   createModelSelectionController,
 } from '@shared/settingsView/handlers/modelSelectionHandlers';
-import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
+import {
+  buildSuperYoloMessage,
+  setNestedDelegationMaxDepth,
+} from '@shared/settingsView/handlers/superYoloHandlers';
 import { createSettingsMemoryController } from '@shared/settingsView/handlers/memoryControllerFactory';
-import { clampNestedDelegationDepth } from '@shared/constants/delegationPolicy';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -820,9 +822,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetNestedDelegationMaxDepth(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_NESTED_DELEGATION_MAX_DEPTH>,
   ): Promise<void> {
-    await workspaceSM.update(
-      WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
-      clampNestedDelegationDepth(data.value),
+    await setNestedDelegationMaxDepth(
+      { workspaceState: workspaceSM, globalState: globalSM },
+      data.value,
     );
     await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }
