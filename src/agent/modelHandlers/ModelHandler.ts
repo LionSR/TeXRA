@@ -661,7 +661,6 @@ export abstract class ModelHandler<
     return `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${endTag}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
   }
 
-
   /** Creates and configures a client instance for the specific model provider. */
   abstract getClient(): Promise<C>;
 

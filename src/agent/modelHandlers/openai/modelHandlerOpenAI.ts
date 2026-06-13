@@ -212,7 +212,10 @@ export class ModelHandlerOpenAI<
         };
         // Disable thinking for the summary call — reasoning models
         // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
-        if (this.getThinkingParameter() || this.capabilities.supportsReasoning) {
+        if (
+          this.getThinkingParameter() ||
+          this.capabilities.supportsReasoning
+        ) {
           summaryParams.thinking = { type: 'disabled' };
         }
         const summaryResponse = await client.chat.completions.create(
