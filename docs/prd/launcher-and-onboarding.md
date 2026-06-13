@@ -54,8 +54,9 @@ Concretely:
    agent is `internal: true`.
 
 3. **Teams exist but read as flat badge clouds.** The Multi-Agent settings
-   tab (`MultiAgentTab.ts:420–574`) ships four built-in teams
-   (Mathematician, Physicist, Lean Project, Computer Scientist). Each is
+   tab (`MultiAgentTab.ts`) ships five built-in teams
+   (Mathematician, Physicist, Lean Project, Computer Scientist, and
+   Software Engineer). Each is
    rendered as a card with a single row of agent badges — the lead
    orchestrator is not visually distinguished from specialists or workflow
    agents.
@@ -485,8 +486,8 @@ When the setup conversation reaches phase 8 (see "First-open flow"):
 - if the user declines without picking another team, the launcher stays
   on Onboarding with a single inline note above the team picker:
   _"You're still on Onboarding. Pick a team from the dropdown above
-  whenever you're ready — Mathematician, Physicist, Lean Project, or
-  Computer Scientist."_,
+  whenever you're ready — Mathematician, Physicist, Lean Project,
+  Computer Scientist, or Software Engineer."_,
 - the previous Onboarding state is always preserved — re-selecting
   Onboarding from the team picker re-runs the setup conversation at any
   time, including after upgrades.
@@ -560,12 +561,13 @@ TeXRA in a team. Based on what you told me, I'd start you on
 something else?"_ The recommendation is derived from what the user said
 in their intro turn:
 
-| User intent signal                                                     | Recommended team |
-| ---------------------------------------------------------------------- | ---------------- |
-| mentions "Lean", "formalization", "blueprint"                          | `lean-project`   |
-| mentions "physics", "numerics", "Wolfram", "experiment"                | `physicist`      |
-| mentions "ML", "machine learning", "transformer", "neural", "training" | `cs-ml`          |
-| anything else, including silence                                       | `mathematician`  |
+| User intent signal                                                     | Recommended team    |
+| ---------------------------------------------------------------------- | ------------------- |
+| mentions "Lean", "formalization", "blueprint"                          | `lean-project`      |
+| mentions "physics", "numerics", "Wolfram", "experiment"                | `physicist`         |
+| mentions "ML", "machine learning", "transformer", "neural", "training" | `cs-ml`             |
+| mentions "software", "code", "implementation", "debugging", "tests"    | `software-engineer` |
+| anything else, including silence                                       | `mathematician`     |
 
 If the user accepts, the agent writes `texra.launcher.selectedTeamId`
 through `update_config` (the allowlist gains this key) and confirms in
@@ -575,9 +577,9 @@ your lead, with research, review, lean, and others on the roster."_ The
 with the visual UI change so the user always sees that something
 happened.
 
-If the user declines and asks to see options, the agent lists the four
-research teams in one paragraph and waits for a choice. Three branches
-from there, all explicit:
+If the user declines and asks to see options, the agent lists the available
+built-in teams in one paragraph and waits for a choice. Three branches from
+there, all explicit:
 
 1. **User picks a team by name.** Agent writes the team via
    `update_config` and confirms with the same "Done —" sentence.
@@ -585,12 +587,13 @@ from there, all explicit:
    a team.** Agent gives one-line summaries of each team
    (Mathematician for proofs and papers, Physicist for derivations and
    numerics, Lean Project for Lean 4, Computer Scientist for CS
-   research) and asks once more. If the user is still unsure, the
+   research, Software Engineer for codebases) and asks once more. If the user
+   is still unsure, the
    agent says _"No worries — I'll leave you on Onboarding for now. You
    can pick a team any time from the Team dropdown in the launcher."_
    and stops without writing `selectedTeamId`. This branch never
    silently picks Mathematician for the user.
-3. **User explicitly declines all four.** Same closing sentence as
+3. **User explicitly declines all teams.** Same closing sentence as
    branch 2; no team is written.
 
 The agent never re-asks more than twice in phase 8. After the second
@@ -623,8 +626,8 @@ The setup agent never "completes" by leaving the user on the Onboarding
 team. Either it transitions them to a research team (phase 8) or, if
 the user explicitly declines team selection, it stays on Onboarding
 with a clear note: _"You can pick a team any time from the team
-dropdown — Mathematician, Physicist, Lean Project, or Computer Scientist
-(ML)."_
+dropdown — Mathematician, Physicist, Lean Project, Computer Scientist
+(ML), or Software Engineer."_
 
 ### `setup.yaml` changes
 
@@ -654,8 +657,8 @@ directory, auto-compile toggle, git commit depth, max image dimension.
 It gains:
 
 - `texra.launcher.selectedTeamId` — write only when the value is in
-  `{mathematician, physicist, lean-project, cs-ml, onboarding,
-custom-*}` (regex). Writes target `user`, not `workspace`, so the
+  `{mathematician, physicist, lean-project, cs-ml, software-engineer,
+onboarding, custom-*}` (regex). Writes target `user`, not `workspace`, so the
   team carries across projects.
 
 The setup agent uses this once per session, in phase 8, after the user
@@ -668,19 +671,19 @@ rewritten so the manual checklist matches the team-first story. Steps
 collapse from eleven to nine; the "Use the orchestrator" and "Pick your
 field" steps merge.
 
-| Today (step id, title)                           | After                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `setupAssistant` "Run the setup assistant agent" | unchanged — title becomes "Set up TeXRA in one conversation"                                                                                                                                                                                                                                                                                                                                                                      |
-| `sampleWorkspace` "Try the sample project"       | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `apiKeys` "Add your API key"                     | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `signIn` "Or just sign in"                       | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `stageFiles` "Pick your files"                   | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `agentModel` "Use the orchestrator"              | **merged into `pickTeam`** (below)                                                                                                                                                                                                                                                                                                                                                                                                |
-| `multiAgent` "Pick your field"                   | renamed to **`pickTeam`** "Pick a team" — completes when `selectedTeamId !== 'onboarding'`. Description: _"You'll work in a team — Mathematician, Physicist, Lean Project, or Computer Scientist. The team's lead orchestrator handles your message; the team's specialists and workflows are pre-populated for the work you do. Tweak any team in the Multi-Agent tab; tweak just-this-session in the launcher's roster strip."_ |
-| `autoExtract` "Auto-extract figures (optional)"  | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `progress` "Hit Execute!"                        | unchanged — copy updated to refer to "the team's lead" instead of "the orchestrator"                                                                                                                                                                                                                                                                                                                                              |
-| `review` "Check what it did"                     | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `housekeeping` "Clean up when you're done"       | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Today (step id, title)                           | After                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setupAssistant` "Run the setup assistant agent" | unchanged — title becomes "Set up TeXRA in one conversation"                                                                                                                                                                                                                                                                                                                                                                                         |
+| `sampleWorkspace` "Try the sample project"       | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `apiKeys` "Add your API key"                     | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `signIn` "Or just sign in"                       | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `stageFiles` "Pick your files"                   | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `agentModel` "Use the orchestrator"              | **merged into `pickTeam`** (below)                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `multiAgent` "Pick your field"                   | renamed to **`pickTeam`** "Pick a team" — completes when `selectedTeamId !== 'onboarding'`. Description: _"You'll work in a team — Mathematician, Physicist, Lean Project, Computer Scientist, or Software Engineer. The team's lead orchestrator handles your message; the team's specialists and workflows are pre-populated for the work you do. Tweak any team in the Multi-Agent tab; tweak just-this-session in the launcher's roster strip."_ |
+| `autoExtract` "Auto-extract figures (optional)"  | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `progress` "Hit Execute!"                        | unchanged — copy updated to refer to "the team's lead" instead of "the orchestrator"                                                                                                                                                                                                                                                                                                                                                                 |
+| `review` "Check what it did"                     | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `housekeeping` "Clean up when you're done"       | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 Total step count goes from 11 to 10. Step 6 (`agentModel`) is removed
 because picking a team _is_ picking a default lead orchestrator; the
@@ -768,7 +771,7 @@ source (Built-in, Setup & utility, Custom) and surfaces explicit
 Use / Edit / Duplicate / Delete actions so the Agents-tab-and-back-again
 dance disappears.
 
-The current implementation at `MultiAgentTab.ts:420–574` (preset grid +
+The current implementation in `MultiAgentTab.ts` (preset grid +
 Team Coordination toggles) is **replaced wholesale** by the layout below;
 file-line citations to the current code in this section name what is
 removed, not what stays.
@@ -788,24 +791,25 @@ removed, not what stays.
 │ │ workflow.                │ │ Wolfram-driven derivation│            │
 │ │                          │ │                          │            │
 │ │ Lead: 🎯 orchestrator    │ │ Lead: 🎯 orchestrator    │            │
-│ │ Specialists: chat,       │ │ Specialists: research,   │            │
-│ │  research, review, lean, │ │  numerics, review,       │            │
-│ │  simplifier, latexFixer, │ │  search, presenter,      │            │
-│ │  progressCheck           │ │  simplifier, latexFixer, │            │
-│ │ Workflows: correct,      │ │  progressCheck           │            │
-│ │  polish, merge, devise,  │ │ Workflows: criticize,    │            │
-│ │  apply                   │ │  generic, devise, apply  │            │
+│ │ Specialists: prover,     │ │ Specialists: research,   │            │
+│ │  lean, research,         │ │  numerics, review,       │            │
+│ │  numerics, review,       │ │  search, presenter,      │            │
+│ │  simplifier, latexFixer, │ │  simplifier, latexFixer, │            │
+│ │  progressCheck           │ │  progressCheck           │            │
+│ │ Workflows: correct,      │ │                          │            │
+│ │  polish, generic,        │ │ Workflows: criticize,    │            │
+│ │  devise, apply           │ │  generic, devise, apply  │            │
 │ │                          │ │                          │            │
 │ │  [Use]  [Duplicate]      │ │  [Use]  [Duplicate]      │            │
 │ └──────────────────────────┘ └──────────────────────────┘            │
 │ ┌──────────────────────────┐ ┌──────────────────────────┐            │
-│ │ ⚙ Lean Project           │ │ 💻 Computer Scientist │           │
-│ │ Lean 4 formalization     │ │ CS research workflow. │            │
+│ │ ⚙ Lean Project           │ │ 💻 Computer Scientist    │            │
+│ │ Lean 4 formalization     │ │ CS research workflow.    │            │
 │ │ workflow.                │ │                          │            │
 │ │ Lead: 🎯 leanOrchestrator│ │ Lead: 🎯 orchestrator    │            │
 │ │ Specialists: lean,       │ │ Specialists: research,   │            │
-│ │  leanSearch, leanBlue-   │ │  numerics, coder,        │            │
-│ │  print, leanSimplifier,  │ │  testEngineer, search,   │            │
+│ │  leanSearch, leanSimpl-  │ │  numerics, coder,        │            │
+│ │  ifier, leanBlueprint,   │ │  testEngineer, search,   │            │
 │ │  latexFixer, progress-   │ │  review, presenter,      │            │
 │ │  Check                   │ │  simplifier, latexFixer, │            │
 │ │ Workflows: (none)        │ │  progressCheck           │            │
@@ -814,6 +818,20 @@ removed, not what stays.
 │ │                          │ │  polish                  │            │
 │ │                          │ │  [Use]  [Duplicate]      │            │
 │ └──────────────────────────┘ └──────────────────────────┘            │
+│                                                                      │
+│ ┌──────────────────────────┐                                         │
+│ │ 🧰 Software Engineer      │                                         │
+│ │ Code implementation and  │                                         │
+│ │ review workflow.         │                                         │
+│ │ Lead: 🧰 engineer        │                                         │
+│ │ Specialists: coder,      │                                         │
+│ │  codeReviewer,           │                                         │
+│ │  testEngineer,           │                                         │
+│ │  codeSimplifier,         │                                         │
+│ │  progressCheck           │                                         │
+│ │ Workflows: (none)        │                                         │
+│ │  [Use]  [Duplicate]      │                                         │
+│ └──────────────────────────┘                                         │
 │                                                                      │
 │ Setup & utility                                                      │
 │ ┌──────────────────────────┐                                         │
@@ -845,7 +863,7 @@ removed, not what stays.
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-Card differences vs. the current `MultiAgentTab.ts:420–574`:
+Card differences vs. the current `MultiAgentTab.ts`:
 
 - Three explicit sub-rows on each card — **Lead**, **Specialists**,
   **Workflows** — replacing the flat badge cloud. The lead is the only
@@ -1405,15 +1423,20 @@ launcher render path.
 
 ### Built-in teams
 
-Shipped as `builtIn: true` records in code, not in workspace state:
+The canonical shipped roster lives in `AGENT_MODE_PRESETS`
+(`src/shared/schemas/agentPresets.ts`); the CLI wraps those records as
+`source: 'built-in'` at runtime. The table below is a current snapshot of
+that source plus the root selected from `BUILTIN_TEAM_ROOT_AGENT_NAMES`.
+Setup/onboarding seeding is handled separately and is not a built-in team
+card.
 
-| id              | name               | icon | lead               | specialists                                                                                                                   | workflows                                           |
-| --------------- | ------------------ | ---- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `mathematician` | Mathematician      | 🎓   | `orchestrator`     | `chat`, `research`, `review`, `lean`, `simplifier`, `latexFixer`, `progressCheck`                                             | `correct`, `polish`, `merge`, `devise`, `apply`     |
-| `physicist`     | Physicist          | ⚛    | `orchestrator`     | `research`, `numerics`, `review`, `search`, `presenter`, `simplifier`, `latexFixer`, `progressCheck`                          | `criticize`, `generic`, `devise`, `apply`           |
-| `lean-project`  | Lean Project       | ⚙    | `leanOrchestrator` | `lean`, `leanSearch`, `leanBlueprint`, `leanSimplifier`, `latexFixer`, `progressCheck`                                        | (none)                                              |
-| `cs-ml`         | Computer Scientist | 💻   | `orchestrator`     | `research`, `numerics`, `coder`, `testEngineer`, `search`, `review`, `presenter`, `simplifier`, `latexFixer`, `progressCheck` | `criticize`, `generic`, `devise`, `apply`, `polish` |
-| `onboarding`    | Onboarding         | 🛠   | `setup`            | `latexFixer`                                                                                                                  | (none)                                              |
+| id                  | name               | icon                       | lead               | specialists                                                                                                                   | workflows                                           |
+| ------------------- | ------------------ | -------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `lean-project`      | Lean Project       | `codicon-symbol-structure` | `leanOrchestrator` | `lean`, `leanSearch`, `leanSimplifier`, `leanBlueprint`, `latexFixer`, `progressCheck`                                        | (none)                                              |
+| `physicist`         | Physicist          | `codicon-symbol-operator`  | `orchestrator`     | `research`, `numerics`, `review`, `search`, `presenter`, `simplifier`, `latexFixer`, `progressCheck`                          | `criticize`, `generic`, `devise`, `apply`           |
+| `mathematician`     | Mathematician      | `codicon-symbol-number`    | `orchestrator`     | `prover`, `lean`, `research`, `numerics`, `review`, `simplifier`, `latexFixer`, `progressCheck`                               | `correct`, `polish`, `generic`, `devise`, `apply`   |
+| `cs-ml`             | Computer Scientist | `codicon-symbol-method`    | `orchestrator`     | `research`, `numerics`, `coder`, `testEngineer`, `search`, `review`, `presenter`, `simplifier`, `latexFixer`, `progressCheck` | `criticize`, `generic`, `devise`, `apply`, `polish` |
+| `software-engineer` | Software Engineer  | `codicon-tools`            | `engineer`         | `coder`, `codeReviewer`, `testEngineer`, `codeSimplifier`, `progressCheck`                                                    | (none)                                              |
 
 Each id is stable across upgrades; renaming a built-in team requires a
 migration entry that maps the old id to the new one.
@@ -1543,10 +1566,9 @@ Agent."_.
 
 ### Built-in presets in code
 
-`AGENT_MODE_PRESETS` (`src/shared/schemas/agentPresets.ts:30–102`) is
-rewritten to the new `Team[]` schema with explicit lead/default/spec/wf
-splits — see the table above. No persistent state involved; this is
-shipped code.
+`AGENT_MODE_PRESETS` (`src/shared/schemas/agentPresets.ts`) is rewritten to
+the new `Team[]` schema with explicit lead/default/spec/wf splits — see the
+table above. No persistent state involved; this is shipped code.
 
 ### Custom teams in workspace state
 
