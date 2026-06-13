@@ -703,10 +703,14 @@ export class DesktopProgressBridge {
     // persistence, which dispose cannot await). Orphan policy: dispose clears
     // this window's execution/interrupt/coordinator entries but deliberately
     // does NOT kill in-flight runs — on macOS the process outlives the window,
-    // so a run launched here keeps executing headless until process exit
-    // (rebind-or-orphan on window reopen is deferred to a future multi-window
-    // design; cross-window history protection still holds via
-    // getAllActiveExecutionIds while the run's session is live).
+    // so a run launched here keeps executing headless until process exit.
+    // KNOWN GAP (deferred to the F-1 multi-window design): once disposed, the
+    // session leaves `liveSessions`, so its still-running executions drop out of
+    // `getAllActiveExecutionIds()` and are no longer delete-protected in a
+    // later-opened window — a regression from main's never-disposed global
+    // registry. Harmless under today's single-window desktop (closing the only
+    // window leaves no UI to delete from). Rebind-or-orphan + orphaned-run
+    // delete-protection are part of that deferred work.
     this.session.dispose();
   }
 

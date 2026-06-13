@@ -57,7 +57,7 @@ import {
   StreamStatusService,
   type StreamStatusRegistry,
 } from './StreamStatusService';
-import { defaultSession, type SessionHandle } from './SessionHandle';
+import { currentSession, type SessionHandle } from './SessionHandle';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface AgentLaunchContext extends AgentCore {
@@ -73,10 +73,11 @@ export interface AgentLaunchContext extends AgentCore {
   stopAfterCycle?: boolean;
   /**
    * Session that owns this run's coordination state. Always populated by
-   * {@link buildAgentLaunchContext} (defaults to {@link defaultSession}, which
-   * wraps the process singletons by identity) — hence required here, unlike the
-   * optional {@link AgentLaunchInput.session} launch param — and projected into
-   * the ambient {@link RunContext} so run-scoped code resolves it via
+   * {@link buildAgentLaunchContext} (defaults to `currentSession()` — the
+   * parent run's session for a delegated launch, the process default for a root
+   * launch) — hence required here, unlike the optional
+   * {@link AgentLaunchInput.session} launch param — and projected into the
+   * ambient {@link RunContext} so run-scoped code resolves it via
    * `currentSession()`.
    */
   session: SessionHandle;
@@ -101,7 +102,7 @@ export interface AgentLaunchInput {
   enforceCategory?: boolean;
   /** Skip the `requestShowError` toast -- for callers that show their own UI. */
   suppressErrorNotification?: boolean;
-  /** Session owning this run's coordination state. Defaults to the process session. */
+  /** Session owning this run's coordination state. Defaults to the launcher's session (`currentSession()`). */
   session?: SessionHandle;
 }
 
@@ -260,7 +261,11 @@ async function assembleAgentLaunchContext(
     reservedStreamId ??
     getStreamTabId(config.agent, fullConfig.model, { executionId });
 
-  const session = input.session ?? defaultSession();
+  // `currentSession()` (not `defaultSession()`): a delegated launch runs inside
+  // the parent run's ALS, so it inherits the parent's session; a root launch
+  // runs outside any ALS, so it resolves to the process default. Either way the
+  // child is tracked in the same session as its launcher.
+  const session = input.session ?? currentSession();
   const runTrace = createRunTrace(streamId, undefined, session.flushers);
   onRunTraceCreated(runTrace);
   const agentLogger = runTrace.trace;

@@ -27,7 +27,6 @@ import {
   ProcessExecutionHandle,
 } from '@agent/runtime/executionRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
 
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
@@ -40,10 +39,10 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { requireRunStream } from '@tools/contextHelpers';
 import { AbsoluteFS, StorageFS } from '@utils/files';
+import { clamp } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
-import { clamp } from '@utils/core';
 import {
   formatResultCount,
   formatTimestamp,
@@ -640,7 +639,11 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       );
     }
     try {
-      executionSubscriptionBinder.bind(streamId, executionId, ctx.runtimeHost);
+      currentSession().subscriptions.bind(
+        streamId,
+        executionId,
+        ctx.runtimeHost,
+      );
     } catch (err) {
       throw new ToolError(toErrorMessage(err));
     }
@@ -657,7 +660,10 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         'unsubscribe must be called from within an agent stream.',
       );
     }
-    const removed = executionSubscriptionBinder.unbind(streamId, executionId);
+    const removed = currentSession().subscriptions.unbind(
+      streamId,
+      executionId,
+    );
     return {
       output: removed
         ? `Unsubscribed from ${executionId}.`
