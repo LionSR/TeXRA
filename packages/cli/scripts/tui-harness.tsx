@@ -12,7 +12,6 @@ import React from 'react';
 import { getAgentsByCategory, loadAgents } from '@agent/index';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { platform, tryPlatform } from '@platform/platform';
@@ -37,12 +36,11 @@ import {
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { getDefaultStreamLogStore } from '@transcript';
 
-import { App, focusedChildInputDisabledMessage } from '../src/chat/tui/App';
+import { App } from '../src/chat/tui/App';
 import {
   transcriptViewportRepaintOptions,
   type TranscriptViewportChange,
 } from '../src/chat/tui/state/transcriptViewportMode';
-import { resolveChildControlDisplayTargets } from '../src/chat/tui/state/childControls';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
 import {
   findSlashCommand,
@@ -60,6 +58,10 @@ import {
   setParentStream,
   type ConversationEntry,
 } from '../src/chat/tui/state/cliState';
+import {
+  focusedChildFollowUpRoute,
+  stoppedFocusedChildFollowUpMessage,
+} from '../src/chat/tui/state/focusedChildFollowUp';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import {
@@ -1291,39 +1293,6 @@ function defaultHarnessTranscriptStreamId(): StreamTabId {
   });
 }
 
-function harnessActiveChildStreamId(): StreamTabId | undefined {
-  const activeStreamId = cliState.activeStreamId.get();
-  if (!activeStreamId) return undefined;
-  return cliState.parentStream.get().has(activeStreamId)
-    ? activeStreamId
-    : undefined;
-}
-
-function harnessRejectsChildSubmit(childStreamId: StreamTabId): boolean {
-  const status = streamStatusFromState(childStreamId);
-  return status !== undefined && !isInFlightStatus(status);
-}
-
-function harnessStoppedChildMessage(childStreamId: StreamTabId): string {
-  const parentStream = cliState.parentStream.get();
-  const streams = cliState.streams.get();
-  const controls = resolveChildControlDisplayTargets({
-    activeStreamId: childStreamId,
-    parentStream,
-    streams,
-  });
-
-  return (
-    focusedChildInputDisabledMessage({
-      activeStreamId: childStreamId,
-      parentStream,
-      status: streamStatusFromState(childStreamId),
-      subagentControlsAvailable: controls.subagents.hasItems,
-      taskControlsAvailable: controls.tasks.hasItems,
-    }) ?? 'The selected subagent is no longer accepting follow-ups.'
-  );
-}
-
 function formatHarnessSlashHelp(): string {
   return listSlashCommands()
     .map((command) => `/${command.name} - ${command.description}`)
@@ -1447,16 +1416,28 @@ function markHarnessExecutionStopped(executionId: string): void {
 
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
-  const childStreamId = harnessActiveChildStreamId();
-  if (childStreamId && harnessRejectsChildSubmit(childStreamId)) {
+  const focusedChildRoute = focusedChildFollowUpRoute({
+    activeStreamId: cliState.activeStreamId.get(),
+    parentStream: cliState.parentStream.get(),
+    statusForStream: streamStatusFromState,
+  });
+  if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(
-      harnessStoppedChildMessage(childStreamId),
-      childStreamId,
+      stoppedFocusedChildFollowUpMessage({
+        parentStream: cliState.parentStream.get(),
+        status: streamStatusFromState(focusedChildRoute.streamId),
+        streamId: focusedChildRoute.streamId,
+        streams: cliState.streams.get(),
+      }),
+      focusedChildRoute.streamId,
     );
     return;
   }
-  if (childStreamId) {
-    appendHarnessChildSubmitAck(`Harness received: ${line}`, childStreamId);
+  if (focusedChildRoute.kind === 'accept') {
+    appendHarnessChildSubmitAck(
+      `Harness received: ${line}`,
+      focusedChildRoute.streamId,
+    );
     return;
   }
   appendHarnessAssistantTranscript(`Harness received: ${line}`);

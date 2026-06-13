@@ -93,7 +93,6 @@ import {
   formatCliMemoryList,
   formatCliMemoryPreview,
 } from '@cli/runtime/memory';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { bus } from '@eventBus/ProgressEventBus';
 import { sumUsageStats } from '@shared/schemas';
@@ -111,7 +110,7 @@ import { escapeText } from '@shared/utils/xmlEscape';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 import { generateExecutionId } from '@utils/core/executionId';
 
-import { App, focusedChildInputDisabledMessage } from './App';
+import { App } from './App';
 import { assertNever } from './assertNever';
 import { formatApprovalPolicyForCli as formatApprovalPolicy } from './forms/ApprovalPolicyForm';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
@@ -134,8 +133,12 @@ import {
 } from './render/noColorOutput';
 import { formatCliSessionStatus } from './sessionStatus';
 import { clearApprovals } from './state/approvalQueue';
-import { resolveChildControlDisplayTargets } from './state/childControls';
 import { cliState, patchStream, resetCliState } from './state/cliState';
+import {
+  focusedChildFollowUpRoute,
+  stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,
+  type FocusedChildFollowUpRoute,
+} from './state/focusedChildFollowUp';
 import {
   collectResumeTargets,
   collectResumeUsage,
@@ -149,8 +152,7 @@ import {
   onStreamStatusChange,
   streamStatusFromState,
 } from './state/streamStatus';
-import { activeStreamScope } from './state/streamViews';
-import { defaultShortcutModifierLabel } from './panes/StatusBar';
+import { defaultShortcutModifierLabel } from './shortcutLabels';
 import {
   discoverTerminalCapabilities,
   terminalCapabilities,
@@ -443,47 +445,25 @@ export function chatTuiIsResumableIdleOnExit(input: {
   return input.canInterruptActiveRun && !input.canStopActiveRun;
 }
 
-export type ChatTuiFocusedChildFollowUpRoute =
-  | { readonly kind: 'none' }
-  | { readonly kind: 'accept'; readonly streamId: StreamTabId }
-  | { readonly kind: 'reject'; readonly streamId: StreamTabId };
+export type ChatTuiFocusedChildFollowUpRoute = FocusedChildFollowUpRoute;
 
 export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpRoute {
-  const scope = activeStreamScope({
+  return focusedChildFollowUpRoute({
     activeStreamId: cliState.activeStreamId.get(),
     parentStream: cliState.parentStream.get(),
+    statusForStream: streamStatusFromState,
   });
-  if (scope.kind !== 'child') {
-    return { kind: 'none' };
-  }
-
-  const status = streamStatusFromState(scope.streamId);
-  // A focused child normally has a status. Keep the previous permissive
-  // behavior during the brief edge where parent focus arrives first.
-  if (status !== undefined && !isInFlightStatus(status)) {
-    return { kind: 'reject', streamId: scope.streamId };
-  }
-  return { kind: 'accept', streamId: scope.streamId };
 }
 
 function stoppedFocusedChildFollowUpMessage(streamId: StreamTabId): string {
   const parentStream = cliState.parentStream.get();
   const streams = cliState.streams.get();
-  const controls = resolveChildControlDisplayTargets({
-    activeStreamId: streamId,
+  return focusedChildStoppedMessage({
     parentStream,
+    status: streamStatusFromState(streamId),
+    streamId,
     streams,
   });
-
-  return (
-    focusedChildInputDisabledMessage({
-      activeStreamId: streamId,
-      parentStream,
-      status: streamStatusFromState(streamId),
-      subagentControlsAvailable: controls.subagents.hasItems,
-      taskControlsAvailable: controls.tasks.hasItems,
-    }) ?? 'The selected subagent is no longer accepting follow-ups.'
-  );
 }
 
 interface SlashCommandContext {
