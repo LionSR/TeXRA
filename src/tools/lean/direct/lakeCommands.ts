@@ -10,12 +10,23 @@
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 
-import AsyncLock from 'async-lock';
+import { Mutex } from 'async-mutex';
 
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
 const LAKE_MAX_OUTPUT_CHARS = 4 * 1024 * 1024;
 
-const workspaceLock = new AsyncLock();
+// Keys are resolved workspace roots — a small bounded set per process lifetime,
+// so we don't bother evicting entries after release.
+const workspaceMutexes = new Map<string, Mutex>();
+
+function getWorkspaceMutex(key: string): Mutex {
+  let mutex = workspaceMutexes.get(key);
+  if (!mutex) {
+    mutex = new Mutex();
+    workspaceMutexes.set(key, mutex);
+  }
+  return mutex;
+}
 
 function appendCapped(existing: string, chunk: string): string {
   const combined = existing + chunk;
@@ -53,7 +64,9 @@ export async function runLakeCommand(
     return executeLake(options);
   }
   const workspaceKey = path.resolve(options.workspaceRoot);
-  return workspaceLock.acquire(workspaceKey, () => executeLake(options));
+  return getWorkspaceMutex(workspaceKey).runExclusive(() =>
+    executeLake(options),
+  );
 }
 
 function executeLake(options: LakeCommandOptions): Promise<LakeCommandResult> {

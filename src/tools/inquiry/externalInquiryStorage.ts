@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import AsyncLock from 'async-lock';
+import { Mutex } from 'async-mutex';
 import { z } from 'zod';
 
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -137,7 +137,30 @@ export interface PersistedAnsweredTurn {
 // Per-thread write lock
 // ============================================================================
 
-const threadLock = new AsyncLock();
+const threadMutexes = new Map<string, Mutex>();
+
+function getThreadMutex(threadId: string): Mutex {
+  let mutex = threadMutexes.get(threadId);
+  if (!mutex) {
+    mutex = new Mutex();
+    threadMutexes.set(threadId, mutex);
+  }
+  return mutex;
+}
+
+// Thread IDs are freshly minted per thread, so the Map would otherwise grow
+// without bound. Evict after each critical section once no waiters remain.
+async function withThreadLock<T>(
+  threadId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const mutex = getThreadMutex(threadId);
+  try {
+    return await mutex.runExclusive(fn);
+  } finally {
+    if (!mutex.isLocked()) threadMutexes.delete(threadId);
+  }
+}
 
 // ============================================================================
 // Path helpers
@@ -318,7 +341,7 @@ export async function recordOpenQuestion(params: {
   const threadId =
     params.threadId ?? (`ei_${hexId12()}` as ExternalInquiryThreadId);
 
-  return threadLock.acquire(threadId, async () => {
+  return withThreadLock(threadId, async () => {
     const existing = await readThreadManifest(threadId);
 
     if (params.threadId && !existing) {
@@ -420,7 +443,7 @@ export async function recordAnswerForOpenTurn(params: {
   sessionLinks?: string[] | null;
   executionId?: ExecutionId;
 }): Promise<PersistedAnsweredTurn | null> {
-  return threadLock.acquire(params.threadId, async () => {
+  return withThreadLock(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing) return null;
     if (existing.status !== 'open') return null;
@@ -490,7 +513,7 @@ export async function recordAnswerForOpenTurn(params: {
 export async function markDropped(params: {
   threadId: ExternalInquiryThreadId;
 }): Promise<ExternalInquiryThreadManifest | null> {
-  return threadLock.acquire(params.threadId, async () => {
+  return withThreadLock(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing) return null;
     if (existing.status !== 'open') return null;
@@ -515,7 +538,7 @@ export async function persistOpenTurnDraft(params: {
   threadId: ExternalInquiryThreadId;
   draft: InquiryDraft | null;
 }): Promise<void> {
-  await threadLock.acquire(params.threadId, async () => {
+  await withThreadLock(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing || existing.status !== 'open' || existing.turns.length === 0)
       return;
