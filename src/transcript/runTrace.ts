@@ -32,6 +32,7 @@ export interface RunTrace {
 export function createRunTrace(
   streamId: StreamTabId,
   store: StreamLogStore = getDefaultStreamLogStore(),
+  flushers: Set<() => void> = activeFlushers,
 ): RunTrace {
   const trace = new TraceEmitter();
   const unsubscribeChannel = attachChannelSubscriber(trace, {
@@ -40,29 +41,40 @@ export function createRunTrace(
   });
   const transcript = attachTranscriptRecorder(trace, streamId, store);
 
-  // Centralized registry so the static shutdown hook
-  // (`flushPendingRunTraces()`) can drain every in-flight stream buffer.
-  activeFlushers.add(transcript.flushPending);
+  // Register the flush in the run's (session-scoped) set so the session can
+  // drain its own streams, and track the set so the process-wide shutdown
+  // hook (`flushPendingRunTraces()`) still reaches every session's streams.
+  flushers.add(transcript.flushPending);
+  flusherSets.add(flushers);
 
   return {
     trace,
     dispose: () => {
-      activeFlushers.delete(transcript.flushPending);
+      flushers.delete(transcript.flushPending);
       transcript.unsubscribe();
       unsubscribeChannel();
     },
   };
 }
 
+/** The default (process) session's flusher set; see `getActiveFlushers`. */
 const activeFlushers = new Set<() => void>();
 
 /**
- * Drain pending stream-chunk updates across every active run trace. Called
- * by shutdown paths (progress view dispose, CLI exit) so throttled stream
- * writes hit the store before the process tears down.
+ * Every flusher set handed to {@link createRunTrace}, so the process-wide drain
+ * reaches non-default sessions too. The default set is always a member.
+ */
+const flusherSets = new Set<Set<() => void>>([activeFlushers]);
+
+/**
+ * Drain pending stream-chunk updates across every active run trace in every
+ * session. Called by shutdown paths (progress view dispose, CLI exit) so
+ * throttled stream writes hit the store before the process tears down.
  */
 export function flushPendingRunTraces(): void {
-  for (const flush of [...activeFlushers]) flush();
+  for (const set of flusherSets) {
+    for (const flush of [...set]) flush();
+  }
 }
 
 /**

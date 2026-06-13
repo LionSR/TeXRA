@@ -258,7 +258,8 @@ async function assembleAgentLaunchContext(
     reservedStreamId ??
     getStreamTabId(config.agent, fullConfig.model, { executionId });
 
-  const runTrace = createRunTrace(streamId);
+  const session = input.session ?? defaultSession();
+  const runTrace = createRunTrace(streamId, undefined, session.flushers);
   onRunTraceCreated(runTrace);
   const agentLogger = runTrace.trace;
   modelHandler.setAgentCategory(setting.agentCategory);
@@ -367,7 +368,7 @@ async function assembleAgentLaunchContext(
       proposal: new AgentProposalCoordinator(runtimeHost),
       retry: new RetryRequestCoordinatorImpl(runtimeHost),
     },
-    session: input.session ?? defaultSession(),
+    session,
     disposeTrace: runTrace.dispose,
   };
 }

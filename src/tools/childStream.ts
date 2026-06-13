@@ -93,7 +93,7 @@ export function createChildStream(
   // Capture the run's session at creation (inside the parent run's ALS); the
   // status-update and finalize closures below fire later, possibly outside it.
   const session = currentSession();
-  const runTrace = createRunTrace(childStreamId);
+  const runTrace = createRunTrace(childStreamId, undefined, session.flushers);
   const handle = new AgentExecutionHandle(
     executionId,
     parentStreamId,

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import {
-  flushPendingRunTraces,
   setDefaultStreamLogStore,
   StreamLogStore,
   StreamSnapshotStore,
@@ -9,10 +8,12 @@ import {
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { toErrorMessage } from '@common/errors';
 import { isInFlightStatus } from '@common/constants/streamStatus';
-import { clamp } from '@utils/core';
 import { createChannelTrace } from '@logger';
 import {
   AgentCategoryFilterSchema,
@@ -38,6 +39,7 @@ import {
   createBackendStorage,
 } from '@shared/state/PersistedState';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { clamp } from '@utils/core';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = z.object({
@@ -134,9 +136,15 @@ export class ProgressViewState {
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
   private readonly logger: AgentTrace;
+  private readonly session: SessionHandle;
 
-  constructor(storage: MementoStorage, snapshots = new StreamSnapshotStore()) {
+  constructor(
+    storage: MementoStorage,
+    snapshots = new StreamSnapshotStore(),
+    session: SessionHandle = defaultSession(),
+  ) {
     this.logger = createChannelTrace('ProgressViewState');
+    this.session = session;
     this._prefs = new PersistedState(
       createBackendStorage(storage),
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
@@ -149,7 +157,7 @@ export class ProgressViewState {
 
   /** Drop interruptible handles whose stream sidecar was removed. */
   pruneInterruptHandles(): void {
-    interruptRegistry.retainOnly(this.snapshots.getTaskStateStreams());
+    this.session.interrupts.retainOnly(this.snapshots.getTaskStateStreams());
   }
 
   // -- Preferences ------------------------------------------------------------
@@ -391,7 +399,7 @@ export class ProgressViewState {
    * Flush pending writes from all managers.
    */
   async flush(): Promise<void> {
-    flushPendingRunTraces();
+    this.session.flushPendingTraces();
     await Promise.all([this.streamLogs.flush(), this.snapshots.flush()]);
   }
 
