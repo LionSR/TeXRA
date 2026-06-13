@@ -23,11 +23,16 @@ export interface RunCoordinators {
  * the subset that tool-side code needs without importing the full launch
  * context.
  *
- * **Field naming mismatches with AgentCore** (unavoidable — interfaces were
- * designed independently):
- *   - `AgentCore.logger`  → `RunContext.trace`
- *   - `AgentConfig.agent` → `RunContext.agentName`
- *   - `AgentConfig.model` → `RunContext.model`
+ * **Why the field names differ from AgentCore.** This is a *flat* ambient
+ * projection, not a copy of the nested launch context, so the names describe
+ * the run directly rather than mirror `AgentCore`'s shape:
+ *   - `AgentCore.logger`   → `trace`     (the run's `AgentTrace` SDK channel)
+ *   - `AgentConfig.agent`  → `agentName` (`AgentConfig` nests it; here it is flat)
+ *   - `AgentConfig.model`  → `model`     (flat + live; see below)
+ *
+ * The one place that maps `AgentLaunchContext` onto these fields is
+ * `agentContextToRunContext` (in `AgentLaunchContext.ts`), so the projection
+ * has a single owner and cannot drift across the codebase.
  *
  * `model` is a live property when the context is projected from an
  * {@link AgentLaunchContext}, so mid-session model switches are visible to
