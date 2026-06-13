@@ -14,7 +14,6 @@ import {
   type AgentErrorKind,
 } from '@common/errors';
 import { projectRunOutcome } from '@common/constants/streamStatus';
-import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
   RUN_OUTCOME,
@@ -61,7 +60,7 @@ function emitRunResult(
   category: 'toolUse' | 'workflow',
   outcome: ResultEvent['outcome'],
   isSubagent: boolean,
-  errorKind?: AgentErrorKind,
+  error?: { kind: AgentErrorKind; message?: string },
 ): void {
   const usage = ctx.usageMonitor.lastTotals();
   ctx.logger.emit({
@@ -72,7 +71,7 @@ function emitRunResult(
     agentName: ctx.config.agent,
     category,
     isSubagent,
-    ...(errorKind ? { error: { kind: errorKind } } : {}),
+    ...(error ? { error } : {}),
     ...(usage ? { usage } : {}),
   });
 }
@@ -195,33 +194,11 @@ export async function runFlowWithLifecycle(
       category,
       kind === 'abort' ? 'cancelled' : 'failed',
       options?.isSubagent ?? false,
-      kind,
+      { kind, message: kind === 'unexpected' ? errorMsg : sdkMsg },
     );
-
-    // Subagents propagate errors to the orchestrator via FollowUpQueue —
-    // don't show VS Code popups that would confuse the user.
-    if (!options?.isSubagent) {
-      if (kind === 'disk-full') {
-        ctx.runtimeHost.emit('requestShowError', {
-          message: sdkMsg,
-        });
-      } else if (kind === 'missing-api-key') {
-        ctx.runtimeHost.emit('requestShowInstruction', {
-          key: 'missingApiKey',
-          message:
-            'API key not found. Set your API key in the extension settings and run again.',
-          actions: [
-            INSTRUCTION_ACTION.SET_API_KEY,
-            INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE,
-          ],
-          showSuppress: false,
-        });
-      } else if (kind === 'unexpected') {
-        ctx.runtimeHost.emit('requestShowError', {
-          message: errorMsg,
-        });
-      }
-    }
+    // Terminal-error toasts are no longer emitted here: hosts present them from
+    // the `result` event via `session.onResult` + `terminalResultToast` (the
+    // single decision point). This keeps the run-lifecycle from owning host UI.
 
     if (options?.isSubagent) {
       const result =

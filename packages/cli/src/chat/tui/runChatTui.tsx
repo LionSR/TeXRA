@@ -62,6 +62,7 @@ import {
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
+import { attachTerminalResultToast } from '@cli/runtime/terminalResultToast';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
 import {
   formatCliManualAuthUrlMessage,
@@ -1262,6 +1263,7 @@ export async function runChat(
     });
     const runtimeHost = createCliRuntimeHost(sessionContext);
     const wrapped = wrapRuntimeHost(runtimeHost);
+    const detachResultToast = attachTerminalResultToast(wrapped);
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
     const executionId = generateExecutionId();
@@ -1341,6 +1343,7 @@ export async function runChat(
           : CliExitCode.AgentError;
       })
       .finally(() => {
+        detachResultToast();
         if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
         markChatTuiRunCompleted(session);
         void runtimeHost.close();
@@ -1424,6 +1427,7 @@ export async function runChat(
     const runtimeHost = createCliRuntimeHost(sessionContext);
     const wrapped = wrapRuntimeHost(runtimeHost);
     session.runtimeHost = wrapped;
+    const detachResultToast = attachTerminalResultToast(wrapped);
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
     const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
@@ -1453,6 +1457,7 @@ export async function runChat(
           : CliExitCode.AgentError;
       })
       .finally(() => {
+        detachResultToast();
         if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
         markChatTuiRunCompleted(session);
         void runtimeHost.close();

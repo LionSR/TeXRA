@@ -173,7 +173,7 @@ export interface ResultEvent extends StageStamp {
   readonly agentName: string;
   readonly category: 'toolUse' | 'workflow';
   readonly isSubagent: boolean;
-  readonly error?: { readonly kind: AgentErrorKind };
+  readonly error?: { readonly kind: AgentErrorKind; readonly message?: string };
   readonly usage?: RunUsageTotals;
 }
 

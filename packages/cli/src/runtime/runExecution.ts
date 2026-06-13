@@ -6,6 +6,7 @@ import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
 import { installCliApprovalHandlers } from './approvalAdapter';
 import { createCliRuntimeHost } from './runtimeHost';
+import { attachTerminalResultToast } from './terminalResultToast';
 import {
   readCliTerminalStatus,
   type ExecuteAgentResult,
@@ -48,6 +49,10 @@ export async function executeCliRequest(
   options: CliExecuteOptions = {},
 ): Promise<{ result: ExecuteAgentResult; terminalStatus: ExecutionStatus }> {
   const runtimeHost = createCliRuntimeHost(runContext);
+  // Present terminal-error toasts from the run's `result` event through the same
+  // runtimeHost path the lifecycle used before (so ndjson / logger output is
+  // unchanged); the lifecycle no longer emits them directly.
+  const detachResultToast = attachTerminalResultToast(runtimeHost);
   const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
     beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
   });
@@ -73,6 +78,7 @@ export async function executeCliRequest(
     }
     throw error;
   } finally {
+    detachResultToast();
     uninstallApprovalHandlers();
     await runtimeHost.close();
   }

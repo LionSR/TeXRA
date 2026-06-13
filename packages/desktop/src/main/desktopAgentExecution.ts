@@ -52,6 +52,7 @@ import {
   type RestoredStreamSnapshot,
   type StreamTabId,
 } from '@shared/schemas';
+import { terminalResultToast } from '@shared/agent/terminalResultPresentation';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
@@ -193,6 +194,8 @@ export class DesktopProgressBridge {
    * execution running anywhere" checks use `getAllActiveExecutionIds()`.
    */
   private readonly session: SessionHandle = new SessionHandle();
+  /** Detaches the session→toast consumer; called on dispose. */
+  private detachResultToast: (() => void) | undefined;
 
   constructor(
     private readonly postToRenderer: (message: unknown) => boolean | void,
@@ -382,6 +385,17 @@ export class DesktopProgressBridge {
     this.runtimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),
     };
+    // Present terminal-error toasts from this window's run results (the run
+    // lifecycle no longer emits them directly) through the same runtimeHost
+    // path they used before.
+    this.detachResultToast = this.session.onResult((event) => {
+      const toast = terminalResultToast(event);
+      if (toast?.type === 'instruction') {
+        this.runtimeHost.emit('requestShowInstruction', toast.payload);
+      } else if (toast?.type === 'error') {
+        this.runtimeHost.emit('requestShowError', toast.payload);
+      }
+    });
     this.toolEditApprovals = createDesktopToolEditApprovalController({
       runtimeHost: this.runtimeHost,
       openPath: options.openPath,
@@ -676,6 +690,7 @@ export class DesktopProgressBridge {
   }
 
   dispose(): void {
+    this.detachResultToast?.();
     this.toolEditApprovals.dispose();
     this.unsubscribe();
     this.backend.dispose();
