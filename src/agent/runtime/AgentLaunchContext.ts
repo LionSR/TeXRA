@@ -23,10 +23,7 @@ import {
   AttachedMemoryMissesSchema,
   type AttachedMemoryMiss,
 } from '@agent/types/AttachedMemory';
-import {
-  ensureAgentCategoryForSource,
-  loadAgentSettingAndPrompts,
-} from '@agent/runtime/agentLoad';
+import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
@@ -209,11 +206,11 @@ async function assembleAgentLaunchContext(
   const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
   const resolution = await getAgentPath(fullConfig.agent, runtimeHost);
-  const [loadedSettings, prompt] = await loadAgentSettingAndPrompts(resolution);
-  const setting = ensureAgentCategoryForSource(
-    loadedSettings,
-    resolution.entry.source,
-  );
+  // `loadAgentSettingAndPrompts` already applies `ensureAgentCategoryForSource`
+  // before parsing, and `AgentSettingSchema` prefaults `agentCategory` (to
+  // Workflow when absent), so `setting.agentCategory` is always populated here —
+  // a second `ensureAgentCategoryForSource` pass would be a guaranteed no-op.
+  const [setting, prompt] = await loadAgentSettingAndPrompts(resolution);
 
   // Block category mismatch: prevent launching a tool-use agent as a workflow
   // (or vice versa). Only enforced when the caller opts in via enforceCategory,
