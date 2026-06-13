@@ -153,6 +153,10 @@ export async function buildWorkspaceInfoBlock(
     const parts = ['Git: yes', branchPart];
     if (info.git.dirty) parts.push('uncommitted changes');
     lines.push(parts.join(', '));
+  } else if (info.workspacePath) {
+    lines.push(
+      'Git: no repository detected or git could not be checked for this workspace; avoid git history/status checks unless you first confirm a repository exists.',
+    );
   }
 
   const externalRoots = listExternalRoots();
