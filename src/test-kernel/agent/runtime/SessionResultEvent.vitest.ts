@@ -16,6 +16,7 @@ import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator'
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
@@ -181,6 +182,66 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results[0].outcome).toBe('completed');
     } finally {
       off();
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
+  it('exposes the per-run handle via onRun and settles handle.result (F-2)', async () => {
+    const logger = new TraceEmitter();
+    const { ctx, streamStatus } = createCtx({ logger });
+    let handle: AgentExecutionHandle | undefined;
+    try {
+      await runFlowWithLifecycle(
+        ctx,
+        async () => ({
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId: ctx.executionId,
+          streamId: ctx.streamId,
+        }),
+        {
+          onRun: (h) => {
+            handle = h;
+          },
+        },
+      );
+      expect(handle).toBeDefined();
+      // The handle carries the run's trace channel for run-scoped subscribers.
+      expect(handle?.trace).toBe(logger);
+      // `result` settles with the same terminal event (always resolves).
+      await expect(handle?.result).resolves.toMatchObject({
+        type: 'result',
+        outcome: 'completed',
+        executionId: ctx.executionId,
+      });
+    } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
+  it('settles handle.result as failed on a thrown run (always resolves)', async () => {
+    const logger = new TraceEmitter();
+    const { ctx, streamStatus } = createCtx({ logger });
+    let handle: AgentExecutionHandle | undefined;
+    try {
+      await expect(
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            throw new Error('boom');
+          },
+          {
+            onRun: (h) => {
+              handle = h;
+            },
+          },
+        ),
+      ).rejects.toThrow('boom');
+      await expect(handle?.result).resolves.toMatchObject({
+        type: 'result',
+        outcome: 'failed',
+      });
+    } finally {
       streamStatus.clear(ctx.streamId, { emit: false });
     }
   });
