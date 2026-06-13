@@ -98,6 +98,7 @@ export {
   type AgentTrace,
   type AgentTraceSubscriber,
   type AgentEvent,
+  type ResultEvent,
   TraceEmitter,
   noopTrace,
 } from '@agent/trace';

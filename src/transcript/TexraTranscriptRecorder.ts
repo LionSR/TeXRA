@@ -342,6 +342,12 @@ export function attachTranscriptRecorder(
         return;
       }
 
+      case 'result':
+        // The terminal outcome is consumed by hosts via `session.onResult`.
+        // The transcript already reflects completion through `stage.end`, so it
+        // adds no row here (keeps transcript output unchanged).
+        return;
+
       default: {
         // Exhaustiveness check: adding a new event arm forces an error here.
         const _exhaustive: never = event;

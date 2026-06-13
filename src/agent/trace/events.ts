@@ -8,6 +8,8 @@
  * file-list payloads, latexdiff, scratchpad, etc.) use the `domain`
  * escape hatch with a host-chosen `key`.
  */
+import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
+import type { AgentErrorKind } from '@common/errors';
 import type { EndGroupStatus } from '@shared/schemas';
 
 /** Status assigned to a tool call when it completes. */
@@ -154,6 +156,27 @@ export interface DomainEvent extends StageStamp {
   readonly text?: string;
 }
 
+/**
+ * Terminal run outcome as data — emitted exactly once at the run-lifecycle
+ * boundary (`runFlowWithLifecycle`), never from flows or the bus. `cancelled`
+ * is a sibling of `failed` (a user interrupt is not a failure). `error.kind` is
+ * the classified terminal-error discriminant; the optional `RetryErrorInfo`
+ * enrichment is deferred to the error-pipeline T2-2 work, so the shape carries
+ * only what is genuinely populated today. `usage` is the run totals (present
+ * once at least one round recorded usage, including on failures).
+ */
+export interface ResultEvent extends StageStamp {
+  readonly type: 'result';
+  readonly outcome: 'completed' | 'failed' | 'cancelled';
+  readonly executionId: string;
+  readonly streamId: string;
+  readonly agentName: string;
+  readonly category: 'toolUse' | 'workflow';
+  readonly isSubagent: boolean;
+  readonly error?: { readonly kind: AgentErrorKind };
+  readonly usage?: RunUsageTotals;
+}
+
 /** Discriminated union of every event the SDK surface emits. */
 export type AgentEvent =
   | LogEvent
@@ -166,4 +189,5 @@ export type AgentEvent =
   | StreamStartEvent
   | StreamChunkEvent
   | StreamEndEvent
-  | DomainEvent;
+  | DomainEvent
+  | ResultEvent;

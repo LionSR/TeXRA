@@ -4,18 +4,24 @@ import {
 } from '@controllers/onboarding/onboardingFunnel';
 import { platform } from '@platform/platform';
 import { writeTerminalStatus } from '@agent/storage';
-import { logSdkError } from '@agent/trace';
+import { logSdkError, type ResultEvent } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
   classifyAgentError,
   getSdkErrorMessage,
+  type AgentErrorKind,
 } from '@common/errors';
 import { projectRunOutcome } from '@common/constants/streamStatus';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
-import { RUN_OUTCOME, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  STREAM_STATUS,
+  type RunOutcome,
+  type StreamTabId,
+} from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 
@@ -35,6 +41,40 @@ export interface RunFlowLifecycleOptions {
   parentStreamId?: StreamTabId;
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
+}
+
+/** Map the canonical run outcome onto the terminal `result` event's outcome. */
+function toResultOutcome(outcome: RunOutcome): ResultEvent['outcome'] {
+  if (outcome === RUN_OUTCOME.COMPLETED) return 'completed';
+  if (outcome === RUN_OUTCOME.CANCELLED) return 'cancelled';
+  return 'failed';
+}
+
+/**
+ * Emit the terminal `result` event on the run's trace — the single emission
+ * boundary for run outcomes. Carries the classified error `kind` (when any) and
+ * the run usage totals (present once a round recorded usage, including on
+ * failures, via the UsageMonitor cache).
+ */
+function emitRunResult(
+  ctx: AgentLaunchContext,
+  category: 'toolUse' | 'workflow',
+  outcome: ResultEvent['outcome'],
+  isSubagent: boolean,
+  errorKind?: AgentErrorKind,
+): void {
+  const usage = ctx.usageMonitor.lastTotals();
+  ctx.logger.emit({
+    type: 'result',
+    outcome,
+    executionId: ctx.executionId,
+    streamId: ctx.streamId,
+    agentName: ctx.config.agent,
+    category,
+    isSubagent,
+    ...(errorKind ? { error: { kind: errorKind } } : {}),
+    ...(usage ? { usage } : {}),
+  });
 }
 
 /**
@@ -103,8 +143,16 @@ export async function runFlowWithLifecycle(
       }
     }
 
-    session.executions.untrack(ctx.executionId);
     ctx.parentStage.end(projection.endGroupStatus);
+    // Emit the terminal result BEFORE untrack so the registry's terminal
+    // listener event never precedes the result event.
+    emitRunResult(
+      ctx,
+      category,
+      toResultOutcome(result.outcome),
+      options?.isSubagent ?? false,
+    );
+    session.executions.untrack(ctx.executionId);
 
     if (!ctx.streamStatus.shouldPreserveOnCompletion(streamId)) {
       ctx.streamStatus.set(streamId, projection.streamStatus, {
@@ -139,6 +187,16 @@ export async function runFlowWithLifecycle(
       runtimeHost: ctx.runtimeHost,
       terminalStatus: projection.executionStatus,
     });
+    // One emission covers all three exits below (subagent / abort / throw);
+    // untrack follows in each branch, preserving emit-before-untrack. An abort
+    // is `cancelled`, a sibling of `failed`.
+    emitRunResult(
+      ctx,
+      category,
+      kind === 'abort' ? 'cancelled' : 'failed',
+      options?.isSubagent ?? false,
+      kind,
+    );
 
     // Subagents propagate errors to the orchestrator via FollowUpQueue —
     // don't show VS Code popups that would confuse the user.

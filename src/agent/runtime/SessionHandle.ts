@@ -28,6 +28,7 @@
  */
 
 import { getActiveFlushers } from '@transcript';
+import type { AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 import { tryUseRunContext } from './RunContext';
@@ -101,6 +102,32 @@ export class SessionHandle {
   /** Drain pending trace writes for this session's streams only. */
   flushPendingTraces(): void {
     for (const flush of [...this.flushers]) flush();
+  }
+
+  /** Listeners for terminal run results in this session (the host channel). */
+  private readonly resultListeners = new Set<(event: ResultEvent) => void>();
+
+  /**
+   * Subscribe to terminal `result` events for runs in this session. Hosts hold
+   * the session, so this is how they receive a run's outcome — per-run traces
+   * are created inside the run and are not reachable from the host otherwise.
+   */
+  onResult(listener: (event: ResultEvent) => void): () => void {
+    this.resultListeners.add(listener);
+    return () => this.resultListeners.delete(listener);
+  }
+
+  /**
+   * Bridge a run's trace into this session's `onResult` channel: re-publish its
+   * `result` events to the session's listeners. Returns a detach disposer the
+   * run bundles into its trace teardown.
+   */
+  attachRunTrace(trace: AgentTrace): () => void {
+    return trace.subscribe((event) => {
+      if (event.type === 'result') {
+        for (const listener of this.resultListeners) listener(event);
+      }
+    });
   }
 
   /**

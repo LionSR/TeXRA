@@ -491,7 +491,7 @@ export async function buildAgentLaunchContext(
   // returned context on the success path (cleaned up by runFlowWithLifecycle).
   let runTrace: RunTrace | undefined;
   try {
-    return await assembleAgentLaunchContext(
+    const ctx = await assembleAgentLaunchContext(
       input,
       executionId,
       streamStatus,
@@ -504,6 +504,17 @@ export async function buildAgentLaunchContext(
         runTrace = rt;
       },
     );
+    // Attach the session result-hub only after a successful launch, so a
+    // launch failure (which disposes the trace via the catch below and never
+    // returns a context) can never publish a result event. Bundle the detach
+    // into the run's trace teardown.
+    const detachResultHub = ctx.session?.attachRunTrace(ctx.logger);
+    const disposeTrace = ctx.disposeTrace;
+    ctx.disposeTrace = () => {
+      detachResultHub?.();
+      disposeTrace();
+    };
+    return ctx;
   } catch (err) {
     compensateFailedActivation({
       configPayload,
