@@ -3,7 +3,7 @@ import { OpenRouter } from '@openrouter/sdk';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
-import { logContextManagementEvent, logSdkError } from '@agent/trace';
+import { logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
@@ -23,7 +23,6 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS } from '@utils/files';
-import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype, joinNonEmpty } from '@utils/text/stringUtils';
 import {
   computeOpenRouterPrice,
@@ -51,7 +50,6 @@ import { ModelHandler } from '../ModelHandler';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
-  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
 } from '../contextManagementConstants';
 import type {
   ChatResult,
@@ -296,10 +294,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     if (!this.isToolUseMode()) return false;
     if (this.compactionRequested) return true;
 
-    const thresholdPercent = getConfig<number>(
-      'texra.model.compactionThresholdPercent',
-      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-    );
+    const thresholdPercent = this.getCompactionThresholdPercent();
     if (thresholdPercent <= 0) return false;
 
     const threshold = Math.floor(
@@ -313,97 +308,43 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     messages: ChatMessages[],
     signal?: AbortSignal,
   ): Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }> {
-    const tokensBefore = this.lastKnownInputTokens;
-    const contextWindow = this.config.contextWindow;
-
-    // Separate system messages from conversation
-    const systemMessages: ChatMessages[] = [];
-    const conversationMessages: ChatMessages[] = [];
-    for (const msg of messages) {
-      if (
-        (msg.role === 'system' || msg.role === 'developer') &&
-        conversationMessages.length === 0
-      ) {
-        systemMessages.push(msg);
-      } else {
-        conversationMessages.push(msg);
-      }
-    }
-
-    if (conversationMessages.length <= 2) {
-      this.logger.debug('Conversation too short for compaction, skipping');
-      return { compactedMessages: messages, didCompact: false };
-    }
-
-    try {
-      const summaryRequest: ChatRequest & { stream: false } = {
-        model: this.config.openrouterFullName,
-        messages: [
-          {
-            role: 'system',
-            content: COMPACTION_SYSTEM_PROMPT,
-          },
-          ...conversationMessages,
-        ],
-        maxTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-        temperature: 0,
-        stream: false,
-        // Minimize reasoning for summarization — use lowest valid effort
-        ...(this.capabilities.supportsReasoningEffort
-          ? { reasoning: { effort: 'low' } }
-          : {}),
-      };
-      const summaryResponse = await client.chat.send(
-        { chatRequest: summaryRequest },
-        { signal },
-      );
-
-      const summaryText = summaryResponse.choices[0]?.message?.content;
-      const summary = typeof summaryText === 'string' ? summaryText.trim() : '';
-      if (!summary) {
-        this.logger.warn('Compaction returned empty summary, skipping');
-        return { compactedMessages: messages, didCompact: false };
-      }
-
-      const compactedMessages: ChatMessages[] = [
-        ...systemMessages,
-        {
-          role: 'user',
-          content: `[Previous conversation summary]\n\n${summary}`,
-        },
-      ];
-
-      const summaryOutputTokens = summaryResponse.usage?.completionTokens ?? 0;
-      const estimatedTokensAfter = Math.max(1, summaryOutputTokens);
-      const reduction = tokensBefore - estimatedTokensAfter;
-      const reductionPercent =
-        tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
-
-      logContextManagementEvent(
-        this.logger,
-        `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
-        {
-          action: 'compaction',
-          tokensBefore,
-          tokensAfter: estimatedTokensAfter,
-          contextWindow,
-          utilizationBefore: Number(
-            ((tokensBefore / contextWindow) * 100).toFixed(1),
-          ),
-          utilizationAfter: Number(
-            ((estimatedTokensAfter / contextWindow) * 100).toFixed(1),
-          ),
-          details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
-        },
-      );
-
-      return { compactedMessages, didCompact: true };
-    } catch (err) {
-      this.logger.warn(
-        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
-      );
-      return { compactedMessages: messages, didCompact: false };
-    }
+    return this.runClientCompaction(
+      messages,
+      this.lastKnownInputTokens,
+      async (conversationMessages) => {
+        const summaryRequest: ChatRequest & { stream: false } = {
+          model: this.config.openrouterFullName,
+          messages: [
+            {
+              role: 'system',
+              content: COMPACTION_SYSTEM_PROMPT,
+            },
+            ...conversationMessages,
+          ],
+          maxTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+          temperature: 0,
+          stream: false,
+          // Minimize reasoning for summarization — use lowest valid effort
+          ...(this.capabilities.supportsReasoningEffort
+            ? { reasoning: { effort: 'low' } }
+            : {}),
+        };
+        const summaryResponse = await client.chat.send(
+          { chatRequest: summaryRequest },
+          { signal },
+        );
+        const summaryText = summaryResponse.choices[0]?.message?.content;
+        return {
+          summaryText:
+            typeof summaryText === 'string' ? summaryText.trim() : '',
+          outputTokens: summaryResponse.usage?.completionTokens ?? 0,
+        };
+      },
+      (summary) => ({
+        role: 'user',
+        content: `[Previous conversation summary]\n\n${summary}`,
+      }),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -810,14 +751,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       stopReason === OPENAI_CHAT_FINISH.LENGTH &&
       !hasEndTag(agentSetting, newResponse)
     );
-  }
-
-  addContinueMessageWithPrefill(
-    _messages: ChatMessages[],
-    _workspaceState: AgentWorkspaceState,
-    _agentSetting: AgentSetting,
-  ): void {
-    this.defaultAddContinueWithPrefill();
   }
 
   addContinueMessageWithoutPrefill(

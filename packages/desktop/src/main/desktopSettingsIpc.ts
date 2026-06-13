@@ -62,8 +62,10 @@ import {
 } from '@shared/settingsView/handlers/modelSelectionHandlers';
 import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
 import { createSettingsMemoryController } from '@shared/settingsView/handlers/memoryControllerFactory';
-import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
-import { clampNestedDelegationDepth } from '@shared/constants/delegationPolicy';
+import {
+  buildSuperYoloMessage,
+  setNestedDelegationMaxDepth,
+} from '@shared/settingsView/handlers/superYoloHandlers';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
@@ -746,10 +748,7 @@ export function createDesktopSettingsIpc(
   }
 
   async function updateNestedDelegationMaxDepth(value: number): Promise<void> {
-    await workspaceState.update(
-      WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
-      clampNestedDelegationDepth(value),
-    );
+    await setNestedDelegationMaxDepth({ workspaceState, globalState }, value);
     postSuperYoloEnabled();
   }
 
