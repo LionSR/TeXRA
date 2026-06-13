@@ -274,7 +274,6 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     }
 
     const controller = new AbortController();
-    this.signal = controller.signal;
     options.setAbortController(controller);
 
     let result: ToolResult;
@@ -292,7 +291,6 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       );
     } finally {
       options.setAbortController(null);
-      this.signal = undefined;
     }
 
     if (controller.signal.aborted || options.checkInterruption()) {
