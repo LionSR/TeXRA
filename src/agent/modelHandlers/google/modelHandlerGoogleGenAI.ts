@@ -47,7 +47,7 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 // Local imports - utils
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
-import { pluralize } from '@utils/text/stringUtils';
+import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import {
   computeGooglePrice,
   normalizeGoogleUsage,
@@ -740,11 +740,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   override extractAssistantText(message: Content): string | undefined {
     if (message.role !== 'model') return undefined;
     if (!Array.isArray(message.parts)) return undefined;
-    const texts = message.parts
-      .filter(isTextPart)
-      .map((p) => p.text)
-      .filter(Boolean);
-    return texts.length > 0 ? texts.join('\n') : undefined;
+    return joinNonEmpty(message.parts.filter(isTextPart).map((p) => p.text));
   }
 
   override async createMediaMessage(

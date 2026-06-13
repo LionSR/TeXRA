@@ -144,3 +144,16 @@ export function extractMimeSubtype(
 ): string {
   return mimeType.split('/').pop() ?? fallback ?? mimeType;
 }
+
+/**
+ * Join non-empty strings with `sep` (default `'\n'`).
+ * Returns `undefined` when no non-empty parts remain, so callers can
+ * distinguish "no content" from an empty string.
+ */
+export function joinNonEmpty(
+  parts: string[],
+  sep: string = '\n',
+): string | undefined {
+  const nonempty = parts.filter(Boolean);
+  return nonempty.length > 0 ? nonempty.join(sep) : undefined;
+}

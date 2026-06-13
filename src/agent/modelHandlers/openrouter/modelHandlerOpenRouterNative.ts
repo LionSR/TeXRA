@@ -24,7 +24,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
-import { extractMimeSubtype } from '@utils/text/stringUtils';
+import { extractMimeSubtype, joinNonEmpty } from '@utils/text/stringUtils';
 import {
   computeOpenRouterPrice,
   normalizeOpenRouterUsage,
@@ -538,11 +538,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     const msg = message as ChatAssistantMessage;
     if (typeof msg.content === 'string') return msg.content;
     if (!Array.isArray(msg.content)) return undefined;
-    const texts = (msg.content as ChatContentItems[])
-      .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-      .map((p) => p.text)
-      .filter(Boolean);
-    return texts.length > 0 ? texts.join('\n') : undefined;
+    return joinNonEmpty(
+      (msg.content as ChatContentItems[])
+        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+        .map((p) => p.text),
+    );
   }
 
   // ---------------------------------------------------------------------------
