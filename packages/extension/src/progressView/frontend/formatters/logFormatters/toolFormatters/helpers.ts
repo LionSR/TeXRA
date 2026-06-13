@@ -88,10 +88,7 @@ export function getToolTimeoutMs(
     return getExecutionsWaitTimeoutSeconds(input.timeout) * 1000;
   }
 
-  if (typeof input.timeout === 'number') {
-    return input.timeout;
-  }
-  return defaultTimeout;
+  return typeof input.timeout === 'number' ? input.timeout : defaultTimeout;
 }
 
 /** Truncate a prompt string for display in collapsed headers. */

@@ -93,8 +93,9 @@ export async function runFlowWithLifecycle(
       baseAgentName(agentIdentifier) !== SETUP_AGENT_NAME
     ) {
       try {
-        if (!getFirstRunDone(platform().globalState)) {
-          await setFirstRunDone(platform().globalState, true);
+        const { globalState } = platform();
+        if (!getFirstRunDone(globalState)) {
+          await setFirstRunDone(globalState, true);
         }
       } catch {
         // Ignore: the flag is a UX nicety, never run-critical.

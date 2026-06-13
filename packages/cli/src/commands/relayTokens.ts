@@ -74,21 +74,22 @@ export function formatMintedTokenText(minted: MintedRelayToken): string {
   ].join('\n');
 }
 
+function relayTokenStateLabel(token: RelayTokenInfo): string {
+  if (token.revoked_at) return 'revoked';
+  if (new Date(token.expires_at).getTime() <= Date.now()) return 'expired';
+  return `expires ${token.expires_at.slice(0, 10)}`;
+}
+
 export function formatTokenListText(tokens: readonly RelayTokenInfo[]): string {
   if (tokens.length === 0) {
     return 'No CI relay tokens. Mint one with `texra setup-token`.';
   }
   return tokens
     .map((token) => {
-      const state = token.revoked_at
-        ? 'revoked'
-        : new Date(token.expires_at).getTime() <= Date.now()
-          ? 'expired'
-          : `expires ${token.expires_at.slice(0, 10)}`;
       const lastUsed = token.last_used_at
         ? `last used ${token.last_used_at.slice(0, 10)}`
         : 'never used';
-      return `${token.id}  ${token.name} (${token.token_hint})  ${state}, ${lastUsed}`;
+      return `${token.id}  ${token.name} (${token.token_hint})  ${relayTokenStateLabel(token)}, ${lastUsed}`;
     })
     .join('\n');
 }

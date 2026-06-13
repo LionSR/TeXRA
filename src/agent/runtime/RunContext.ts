@@ -102,7 +102,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
 
   const { getModel, model } = options;
 
-  const context: RunContext = {
+  return Object.freeze<RunContext>({
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
@@ -117,9 +117,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
-  };
-
-  return Object.freeze(context);
+  });
 }
 
 /**

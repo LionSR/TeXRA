@@ -213,11 +213,10 @@ export async function askApproval(
     }
   }
 
-  const accepted = parsed.accepted;
-  if (!accepted) markApprovalDenied(context);
+  if (!parsed.accepted) markApprovalDenied(context);
   return {
-    accepted,
-    userMessage: accepted
+    accepted: parsed.accepted,
+    userMessage: parsed.accepted
       ? undefined
       : feedback || 'Rejected from CLI approval prompt.',
   };
