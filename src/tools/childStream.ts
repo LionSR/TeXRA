@@ -169,6 +169,19 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     );
   }
 
+  // Settle the handle's `result` before untracking (F-2): child streams never
+  // traverse the run lifecycle, so this is their only settle point. Without it
+  // a consumer awaiting a child handle's `result` would hang forever.
+  handle.settleResult({
+    type: 'result',
+    outcome: hasError ? 'failed' : 'completed',
+    executionId: handle.executionId,
+    streamId: handle.childStreamId,
+    agentName: handle.agentName,
+    category: handle.category,
+    isSubagent: handle.parentStreamId !== handle.childStreamId,
+  });
+
   session.executions.finishAgentExecution(handle, {
     status:
       options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY),
