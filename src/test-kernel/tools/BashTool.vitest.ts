@@ -14,6 +14,7 @@ import {
   ModelProvider,
 } from 'llm-zoo';
 import { createRunTrace } from '@transcript';
+import type { AgentEvent } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type {
   AgentPrompt,
@@ -21,6 +22,7 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import { ToolUseDispatchNode } from '@agent/core/flows/toolUseCycle/ToolUseDispatchNode';
 import {
   createToolUseCycleFlow,
   type ToolUseCycleShared,
@@ -34,6 +36,7 @@ import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 
 // Internal imports
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
@@ -141,7 +144,13 @@ describe('BashTool', () => {
       timedOut: false,
     };
 
-    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue(execResult);
+    let receivedSignal: AbortSignal | undefined;
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        receivedSignal = options.signal;
+        return execResult;
+      },
+    );
 
     const bashTool = new BashTool();
     const directResult = await bashTool.call({ command: 'echo long' });
@@ -234,5 +243,133 @@ describe('BashTool', () => {
         toolOutputMessage.output.includes(longOutput),
       'Model follow-up payload should contain the complete stdout text',
     );
+    assert.ok(
+      receivedSignal,
+      'Bash command should receive the active tool-call abort signal',
+    );
+    assert.equal(receivedSignal.aborted, false);
+  });
+
+  it('finalizes deferred progress card when foreground bash is aborted', async () => {
+    let activeController: AbortController | null = null;
+    let receivedSignal: AbortSignal | undefined;
+
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        receivedSignal = options.signal;
+        options.onStdout?.('started\n');
+        activeController?.abort();
+        return {
+          success: false,
+          stdout: null,
+          stderr: 'Command aborted by user',
+          timedOut: false,
+          exitCode: 130,
+        };
+      },
+    );
+
+    const config: ModelConfig = {
+      name: 'test',
+      label: 'Test',
+      fullName: 'test',
+      shortName: 'test',
+      provider: ModelProvider.OPENAI,
+      maxOutputTokens: 10,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 1000,
+      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+      openRouterOnly: false,
+    };
+
+    const runTrace = createRunTrace('BashToolAbortTest' as StreamTabId);
+    const events: AgentEvent[] = [];
+    const unsubscribe = runTrace.trace.subscribe((event) => {
+      events.push(event);
+    });
+
+    const node = new ToolUseDispatchNode<OpenAI>();
+    const bashTool = new BashTool();
+    const workspaceState = AgentWorkspaceState.create();
+    const run = AgentRunStateSnapshotSchema.parse({});
+    const options: ToolUseCycleServices<OpenAI> = {
+      modelHandler: new BashMockHandler(config),
+      config: config as any,
+      setting: {
+        agentCategory: AgentCategory.ToolUse,
+        documentTag: 'doc',
+        temperature: 0,
+        endTag: '</doc>',
+        requiredFiles: {},
+        requiredFilesInternal: {},
+        defaultOutputFiles: [],
+        filePatternsContain: [],
+        tools: [{ name: 'bash' }],
+      } satisfies AgentSetting,
+      prompt: {
+        systemPrompt: '',
+        userPrefix: '',
+        userRequest: '',
+      } satisfies AgentPrompt,
+      userVarChannels: { input: {}, transient: {} },
+      logger: runTrace.trace,
+      runtimeHost: noopAgentRuntimeHost,
+      streamStatus: new StreamStatusRegistry(),
+      client: {} as OpenAI,
+      fileService: new TaskRunFileService('test-execution-id'),
+      toolRegistry: new MapToolRegistry({ bash: bashTool }),
+      checkInterruption: () => activeController?.signal.aborted ?? false,
+      setAbortController: (controller) => {
+        activeController = controller;
+      },
+      streamId: 'bash-tool' as StreamTabId,
+      executionId: 'test-execution-id',
+      run,
+      workspace: workspaceState,
+    };
+
+    const call = {
+      provider: 'google',
+      callId: 'bash-abort-1',
+      name: 'bash',
+      input: { command: 'echo long' },
+      raw: { name: 'bash', args: { command: 'echo long' } },
+    } as SdkToolCall;
+
+    try {
+      node.setServices(options);
+      const result = await node.exec(call);
+
+      assert.equal(result, null);
+      assert.ok(receivedSignal, 'Bash command should receive an abort signal');
+      assert.equal(receivedSignal.aborted, true);
+
+      const toolEvents = events.filter(
+        (event) => event.type === 'tool.start' || event.type === 'tool.end',
+      );
+      assert.equal(toolEvents[0]?.type, 'tool.start');
+
+      const startedLogId =
+        toolEvents[0]?.type === 'tool.start' ? toolEvents[0].logId : null;
+      const progressEvent = toolEvents.find(
+        (event) => event.type === 'tool.end' && event.status === 'in_progress',
+      );
+      const failedEvent = toolEvents.findLast(
+        (event) => event.type === 'tool.end' && event.status === 'failed',
+      );
+
+      assert.ok(progressEvent, 'Streaming output should update the card');
+      assert.ok(failedEvent, 'Abort should close the progress card as failed');
+      if (progressEvent?.type === 'tool.end') {
+        assert.equal(progressEvent.logId, startedLogId);
+      }
+      if (failedEvent?.type === 'tool.end') {
+        assert.equal(failedEvent.logId, startedLogId);
+      }
+    } finally {
+      unsubscribe();
+      runTrace.dispose();
+    }
   });
 });
