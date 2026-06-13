@@ -256,6 +256,8 @@ export class ProgressBoardLayoutMock extends LitElement {
 
       stream-tabs {
         min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
       }
 
       .files-block {
