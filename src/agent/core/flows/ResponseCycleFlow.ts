@@ -196,17 +196,21 @@ type ContinuationNodeResult = SkippableNodeResult<{
 export function responseCycleToolsForModel<C>(
   services: Pick<
     ResponseCycleServices<C>,
-    'approvalPromptsUnavailable' | 'modelHandler' | 'setting'
+    | 'approvalPromptsUnavailable'
+    | 'modelHandler'
+    | 'runtimeUnavailableTools'
+    | 'setting'
   >,
 ): ToolDefinition[] | undefined {
   if (!services.modelHandler.capabilities.supportsFunctionCalling) {
     return undefined;
   }
-  if (services.approvalPromptsUnavailable !== true) {
-    return services.setting.tools;
-  }
+  const runtimeUnavailable = new Set(services.runtimeUnavailableTools ?? []);
   return services.setting.tools.filter(
-    (tool) => !isApprovalGatedToolName(tool.name),
+    (tool) =>
+      !runtimeUnavailable.has(tool.name) &&
+      (services.approvalPromptsUnavailable !== true ||
+        !isApprovalGatedToolName(tool.name)),
   );
 }
 

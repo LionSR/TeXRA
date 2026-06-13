@@ -14,6 +14,7 @@ const APPROVAL_GATED_TOOL_NAME_LIST = [
   'delegate_agent',
   'delegate_workflow',
   'edit_file',
+  'inquiry',
   'install_vscode_extension',
   'invoke_command',
   'plan',
