@@ -455,6 +455,27 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'slash-clear',
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_QUEUED_FOLLOWUPS: 'queued before clear',
+    },
+    keys: ['/clear', '\r', '/status', '\r'],
+    frame: 'tail',
+    expect: [
+      'agent: chat',
+      'model: harness-model',
+      'status: not started',
+      'queued follow-ups: 0',
+    ],
+    unexpect: [
+      '/clear is registered but has no harness action.',
+      'entry-1 chat history line',
+      'queued before clear',
+    ],
+  },
+  {
     name: 'unknown-slash-suggestion',
     cols: 100,
     env: { HARNESS_ENTRIES: '4' },
