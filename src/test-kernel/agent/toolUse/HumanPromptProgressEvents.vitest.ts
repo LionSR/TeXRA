@@ -52,7 +52,10 @@ describe('human prompt progress events', () => {
       createRunContext({ runtimeHost: explicit.host, streamId }),
       () =>
         withToolFileInteractionContext({ tracker: {} as never }, () =>
-          requestBashApproval({ command: 'echo hello' }),
+          requestBashApproval({
+            command: 'echo hello',
+            cwd: '/tmp/texra-project',
+          }),
         ),
     );
 
@@ -75,6 +78,7 @@ describe('human prompt progress events', () => {
         payload: {
           requestId: show.payload.requestId,
           command: 'echo hello',
+          cwd: '/tmp/texra-project',
           allowBypass: true,
           streamId,
         },
