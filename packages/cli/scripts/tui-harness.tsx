@@ -1258,11 +1258,9 @@ function appendHarnessChildSubmitAck(
   streamId: StreamTabId,
 ): void {
   const status = cliState.streams.get().get(streamId)?.status;
-  appendHarnessTranscript('assistant', text, streamId, {
-    finalized: !(
-      status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status)
-    ),
-  });
+  const isLive =
+    status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status);
+  appendHarnessTranscript('assistant', text, streamId, { finalized: !isLive });
 }
 
 function appendHarnessUserTranscript(text: string): void {

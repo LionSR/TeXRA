@@ -62,12 +62,12 @@ interface ToolExecutionResult {
   parsedInput: unknown;
   /** Pre-extracted attachments and sanitized result (avoids re-extraction in post). */
   extracted: ExtractedToolAttachments;
-  editedFiles: Array<{
+  editedFiles: {
     path: string;
     ok: boolean;
     source: string;
     sourceDisplay: string;
-  }>;
+  }[];
   /** Log reference for consistent grouping. logId only set for slow tools. */
   logRef: { logId: string | undefined; groupId: string | undefined };
 }

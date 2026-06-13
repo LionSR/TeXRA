@@ -6,11 +6,11 @@ import axios from 'axios';
 import { StatusCodes } from 'http-status-codes';
 import * as arxivIdentifiers from 'identifiers-arxiv';
 import pRetry, { AbortError } from 'p-retry';
+import pTimeout from 'p-timeout';
 import * as tar from 'tar';
 
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import pTimeout from 'p-timeout';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';

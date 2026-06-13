@@ -139,61 +139,53 @@ function createLifecycleContext({
 }
 
 describe('runFlowWithLifecycle', () => {
-  it('does not complete first-run onboarding for qualified setup sessions', async () => {
-    const fake = await initLifecycleTestPlatform(false);
-    const executionId = 'execution-lifecycle-setup-agent' as ExecutionId;
-    const streamId = 'stream-lifecycle-setup-agent' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
-    const ctx = createLifecycleContext({
-      executionId,
-      streamId,
-      streamStatus,
+  // A completed session marks first-run onboarding done, except for the
+  // built-in setup agent, which must leave the flag untouched.
+  const onboardingCases = [
+    {
+      label:
+        'does not complete first-run onboarding for qualified setup sessions',
+      slug: 'setup-agent',
       agent: agentKey('builtInToolUse', SETUP_AGENT_NAME),
-    });
-
-    try {
-      await runFlowWithLifecycle(ctx, async () => ({
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.COMPLETED,
-        executionId,
-        streamId,
-      }));
-
-      expect(
-        fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
-      ).toBe(false);
-    } finally {
-      streamStatus.clear(streamId, { emit: false });
-    }
-  });
-
-  it('completes first-run onboarding for non-setup completed sessions', async () => {
-    const fake = await initLifecycleTestPlatform(false);
-    const executionId = 'execution-lifecycle-non-setup-agent' as ExecutionId;
-    const streamId = 'stream-lifecycle-non-setup-agent' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
-    const ctx = createLifecycleContext({
-      executionId,
-      streamId,
-      streamStatus,
+      expectedDone: false,
+    },
+    {
+      label: 'completes first-run onboarding for non-setup completed sessions',
+      slug: 'non-setup-agent',
       agent: 'assistant',
-    });
+      expectedDone: true,
+    },
+  ] as const;
 
-    try {
-      await runFlowWithLifecycle(ctx, async () => ({
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.COMPLETED,
+  for (const { label, slug, agent, expectedDone } of onboardingCases) {
+    it(label, async () => {
+      const fake = await initLifecycleTestPlatform(false);
+      const executionId = `execution-lifecycle-${slug}` as ExecutionId;
+      const streamId = `stream-lifecycle-${slug}` as StreamTabId;
+      const streamStatus = new StreamStatusRegistry();
+      const ctx = createLifecycleContext({
         executionId,
         streamId,
-      }));
+        streamStatus,
+        agent,
+      });
 
-      expect(
-        fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
-      ).toBe(true);
-    } finally {
-      streamStatus.clear(streamId, { emit: false });
-    }
-  });
+      try {
+        await runFlowWithLifecycle(ctx, async () => ({
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId,
+          streamId,
+        }));
+
+        expect(
+          fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
+        ).toBe(expectedDone);
+      } finally {
+        streamStatus.clear(streamId, { emit: false });
+      }
+    });
+  }
 
   it('finalizes the stream status owner from the launch context', async () => {
     const executionId = 'execution-lifecycle-status-owner' as ExecutionId;
