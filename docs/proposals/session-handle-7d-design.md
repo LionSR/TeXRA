@@ -178,8 +178,6 @@ Landed as specified, with two deviations recorded honestly: (1) the default sess
 
 Original spec:
 
-
-
 `session?: SessionHandle` on `RunAgentOptions` **and** `ExecuteAgentOptions` **and** `ResumeToolUseFromSnapshotOptions`; `ctx.session`; frozen `RunContext.session`. Migrate core reads to the session (identical instance by default ⇒ byte-identical):
 
 - `runFlowWithLifecycle` track/untrack → `ctx.session.executions`.
