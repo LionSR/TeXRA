@@ -124,6 +124,19 @@ import type {
 } from 'openai/resources/responses/responses';
 
 /**
+ * The per-call values every transport path needs to finalize a response: how
+ * many messages are in the (possibly compacted) conversation, whether
+ * compaction happened this call, and the compacted messages to surface as
+ * {@link CreateResponseResult.updatedMessages}. Grouped into one argument so the
+ * extracted path methods don't carry a long, transposable positional tail.
+ */
+interface ResponseFinalizeContext {
+  readonly effectiveMessagesLength: number;
+  readonly compactedThisCall: boolean;
+  readonly compactedMessages: ResponseInputItem[] | undefined;
+}
+
+/**
  * Handler for OpenAI's Responses API. This implementation works directly with
  * the native response message types instead of reusing the chat completion
  * abstractions. Conversation state is maintained through `previous_response_id`
@@ -1353,152 +1366,172 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     }
 
-    // Wrap execution in try-catch to handle previousResponseId errors
-    // When an error indicates the response ID is invalid, we clear it so
-    // the retry logic can recover by starting a fresh conversation.
-    //
-    // Text accumulated from `response.output_text.delta` events during
-    // streaming. Hoisted here so the catch block can surface it as
-    // partial text on mid-stream failures. ResponseStream has no native
-    // currentMessage accessor (unlike ChatCompletionStream), so we
-    // accumulate manually from the events we already iterate.
-    let streamedText = '';
+    const finalizeContext: ResponseFinalizeContext = {
+      effectiveMessagesLength: effectiveMessages.length,
+      compactedThisCall,
+      compactedMessages,
+    };
+
+    // Wrap execution in a try/catch so the error handler can recover from an
+    // invalid/expired previous_response_id or a context-window overflow.
     try {
-      // Try to resume a pending background response (for retry after connection error)
+      // Try to resume a pending background response (retry after connection error)
       if (useBackgroundResponses && this.pendingBackgroundResponseId) {
-        const resumedResponse = await this.tryResumeBackgroundResponse(
+        const resumed = await this.tryResumeBackgroundIfPending(
           client,
           signal,
+          finalizeContext,
         );
-        if (resumedResponse) {
-          this.finalizeResponse(
-            resumedResponse,
-            effectiveMessages.length,
-            compactedThisCall,
-          );
-          return {
-            response: resumedResponse,
-            updatedMessages: compactedMessages,
-          };
-        }
-        // Resume failed or response failed remotely - fall through to create new request
+        // Null means nothing to resume (or it failed remotely) — fall through
+        // to create a fresh request.
+        if (resumed) return resumed;
       }
 
       // WebSocket transport: persistent connection for lower-latency tool-use loops
       if (useWebSocket) {
-        const wsResult = await this.getWebSocketTransport().execute(
-          client,
+        return await this.executeWebSocketPath(
           params,
+          client,
           signal,
+          finalizeContext,
         );
-        let response = wsResult.response;
-        const processor = wsResult.processor;
-
-        // Safety net: handle unexpected pending status (shouldn't happen without background mode)
-        if (this.isBackgroundPending(response)) {
-          this.logger.debug(
-            `WebSocket response ${response.id} ended with pending status "${response.status}" — polling for completion`,
-          );
-          response = await this.waitForBackgroundCompletion(
-            client,
-            response,
-            signal,
-          );
-        }
-
-        // Finalize streams after background polling so the final text
-        // reflects the completed response, not the pre-poll snapshot.
-        processor.finalize(response);
-
-        this.finalizeResponse(
-          response,
-          effectiveMessages.length,
-          compactedThisCall,
-        );
-        return {
-          response,
-          updatedMessages: compactedMessages,
-        };
       }
 
       if (useStreaming) {
-        const { stream: _stream, ...rest } = params;
-        const streamParams: ResponseStreamParams = { ...rest, stream: true };
-        const stream = await client.responses.stream(streamParams, { signal });
-
-        // Processor handles interleaved thinking and web search
-        // GPT can: think → web_search → think more → web_search → text
-        const processor = this.createStreamProcessor();
-
-        for await (const event of stream) {
-          processor.process(event);
-          if (event.type === 'response.output_text.delta') {
-            streamedText += event.delta;
-          }
-        }
-
-        let response = await stream.finalResponse();
-
-        // If the stream ended before the response completed (e.g., relay timeout
-        // during slow GPT-5 requests), poll until it finishes instead of silently
-        // returning an incomplete response.
-        if (this.isBackgroundPending(response)) {
-          this.logger.debug(
-            `Streaming response ${response.id} ended with pending status "${response.status}" - polling for completion`,
-          );
-          response = await this.waitForBackgroundCompletion(
-            client,
-            response,
-            signal,
-          );
-        }
-
-        processor.finalize(response);
-
-        this.finalizeResponse(
-          response,
-          effectiveMessages.length,
-          compactedThisCall,
+        return await this.executeStreamingPath(
+          params,
+          client,
+          signal,
+          finalizeContext,
         );
-        return {
-          response,
-          updatedMessages: compactedMessages,
-        };
       }
 
       // Non-streaming path
-      // Errors propagate to PocketFlow's execFallback which logs once (log at boundary principle)
-      const { stream: _nonStream, ...nonStreamRest } = params;
-      const nonStreamingParams: ResponseCreateParamsNonStreaming = {
-        ...nonStreamRest,
-        stream: false,
-      };
-      let response = await client.responses.create(nonStreamingParams, {
+      return await this.executeNonStreamingPath(
+        params,
+        client,
         signal,
-      });
+        useBackgroundResponses,
+        finalizeContext,
+      );
+    } catch (error) {
+      return await this.handleCreateResponseError(
+        error,
+        options,
+        compactedThisCall,
+      );
+    }
+  }
 
-      // Poll for completion if response is pending (queued/in_progress).
-      // This can happen in two cases:
-      // 1. Background mode explicitly enabled (expected)
-      // 2. Server-side latency when using previous_response_id (unexpected but handled)
-      if (this.isBackgroundPending(response)) {
-        if (useBackgroundResponses) {
-          logProgressStatus(
-            this.logger,
-            'Running OpenAI in background mode; polling for completion (this may take longer than usual).',
-          );
-        } else {
-          this.logger.debug(
-            `Response ${response.id} returned with pending status "${response.status}" despite non-background mode; polling for completion`,
-            {
-              data: {
-                responseId: response.id,
-                status: response.status,
-                hasPreviousResponseId: !!this.previousResponseId,
-              },
-            },
-          );
+  /**
+   * Resumes a pending background response left over from a prior connection
+   * failure. Returns the finalized result, or null when there is nothing to
+   * resume (or the remote response itself failed) so the caller falls through
+   * to creating a fresh request.
+   */
+  private async tryResumeBackgroundIfPending(
+    client: OpenAI,
+    signal: AbortSignal | undefined,
+    ctx: ResponseFinalizeContext,
+  ): Promise<CreateResponseResult<Response, ResponseInputItem> | null> {
+    const resumedResponse = await this.tryResumeBackgroundResponse(
+      client,
+      signal,
+    );
+    if (!resumedResponse) return null;
+    this.finalizeResponse(
+      resumedResponse,
+      ctx.effectiveMessagesLength,
+      ctx.compactedThisCall,
+    );
+    return {
+      response: resumedResponse,
+      updatedMessages: ctx.compactedMessages,
+    };
+  }
+
+  /**
+   * WebSocket transport path: a persistent connection for lower-latency
+   * tool-use loops. Polls to completion if the response comes back pending.
+   */
+  private async executeWebSocketPath(
+    params: ResponseCreateParamsBase,
+    client: OpenAI,
+    signal: AbortSignal | undefined,
+    ctx: ResponseFinalizeContext,
+  ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
+    const wsResult = await this.getWebSocketTransport().execute(
+      client,
+      params,
+      signal,
+    );
+    let response = wsResult.response;
+    const processor = wsResult.processor;
+
+    // Safety net: handle unexpected pending status (shouldn't happen without background mode)
+    if (this.isBackgroundPending(response)) {
+      this.logger.debug(
+        `WebSocket response ${response.id} ended with pending status "${response.status}" — polling for completion`,
+      );
+      response = await this.waitForBackgroundCompletion(
+        client,
+        response,
+        signal,
+      );
+    }
+
+    // Finalize streams after background polling so the final text
+    // reflects the completed response, not the pre-poll snapshot.
+    processor.finalize(response);
+
+    this.finalizeResponse(
+      response,
+      ctx.effectiveMessagesLength,
+      ctx.compactedThisCall,
+    );
+    return { response, updatedMessages: ctx.compactedMessages };
+  }
+
+  /**
+   * Streaming path. Accumulates `output_text.delta` events so a mid-stream
+   * failure can surface the partial tail as structured error metadata (the
+   * Responses stream has no native currentMessage accessor). Polls to
+   * completion if the stream ends before the response finishes.
+   */
+  private async executeStreamingPath(
+    params: ResponseCreateParamsBase,
+    client: OpenAI,
+    signal: AbortSignal | undefined,
+    ctx: ResponseFinalizeContext,
+  ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
+    // Text accumulated from `response.output_text.delta` events; surfaced as
+    // partial text if the stream fails mid-flight.
+    let streamedText = '';
+    try {
+      const { stream: _stream, ...rest } = params;
+      const streamParams: ResponseStreamParams = { ...rest, stream: true };
+      const stream = await client.responses.stream(streamParams, { signal });
+
+      // Processor handles interleaved thinking and web search
+      // GPT can: think → web_search → think more → web_search → text
+      const processor = this.createStreamProcessor();
+
+      for await (const event of stream) {
+        processor.process(event);
+        if (event.type === 'response.output_text.delta') {
+          streamedText += event.delta;
         }
+      }
+
+      let response = await stream.finalResponse();
+
+      // If the stream ended before the response completed (e.g., relay timeout
+      // during slow GPT-5 requests), poll until it finishes instead of silently
+      // returning an incomplete response.
+      if (this.isBackgroundPending(response)) {
+        this.logger.debug(
+          `Streaming response ${response.id} ended with pending status "${response.status}" - polling for completion`,
+        );
         response = await this.waitForBackgroundCompletion(
           client,
           response,
@@ -1506,102 +1539,167 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
+      processor.finalize(response);
+
       this.finalizeResponse(
         response,
-        effectiveMessages.length,
-        compactedThisCall,
+        ctx.effectiveMessagesLength,
+        ctx.compactedThisCall,
       );
-      return {
-        response,
-        updatedMessages: compactedMessages,
-      };
+      return { response, updatedMessages: ctx.compactedMessages };
     } catch (error) {
-      // Attach a capped tail of any streamed text before normalization so the
+      // Attach a capped tail of any streamed text before it propagates so the
       // retry UI receives the same structured error shape downstream.
       if (streamedText) {
         attachPartialText(error, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
       }
-
-      // Extract error details for diagnostics (useful for relay errors)
-      const providerError = normalizeOpenAIResponseError(
-        error,
-        this.config.provider,
-      );
-      const { rawErrorBody } = providerError;
-      if (rawErrorBody) {
-        this.logger.debug('Raw error body from provider', {
-          data: { rawErrorBody },
-        });
-      }
-
-      // OpenAI: If the error indicates the response ID is invalid, clear it
-      // This allows retry logic to recover by starting a fresh conversation
-      if (isPreviousResponseIdError(error)) {
-        this.logger.debug(
-          `Clearing previousResponseId=${this.previousResponseId} due to invalid/expired response - ` +
-            'next retry will rebuild conversation from local history',
-        );
-        this.invalidateResponseChain();
-        // Also clear pending background response if present
-        this.clearPendingBackgroundResponse();
-      } else if (
-        isContextWindowError(error) &&
-        this.previousResponseId &&
-        !compactedThisCall
-      ) {
-        // Recovery: When using previous_response_id, accumulated reasoning tokens
-        // from prior turns are stored server-side and count against the context
-        // window, but inputTokens.count() may not fully reflect them. This causes
-        // pre-flight validation to pass while the API rejects the request.
-        //
-        // Fix: Drop server-side state (clearing previous_response_id discards the
-        // hidden reasoning tokens) and compact client-side messages, then retry.
-        // The guard !compactedThisCall prevents infinite recursion.
-        logProgressStatus(
-          this.logger,
-          'Context window exceeded — compacting conversation and retrying.',
-        );
-        this.previousResponseId = null;
-        // Don't call resetConversationState() — it zeroes cumulativeInputTokens
-        // which would prevent shouldCompact() from triggering on the retry.
-        this.clearPendingBackgroundResponse();
-        this.compactionRequested = true;
-        this._diagPreFlightTokens = null;
-        // Retry internally: the recursive call will compact (shouldCompact()=true)
-        // and send all messages without server-side state.
-        // Call the impl directly — we're still inside the outer createResponse's
-        // inFlight guard, and the public entry would trip the assertion.
-        return this.createResponseImpl({
-          client,
-          messages,
-          temperature,
-          systemPrompt,
-          signal,
-          tools,
-        });
-      } else if (this.previousResponseId) {
-        // Log diagnostic info for other errors when chaining was active
-        this.logger.debug(
-          `Request failed with previousResponseId=${this.previousResponseId}. ` +
-            `Error: ${providerError.message}`,
-        );
-      }
-
-      // Retention of pendingBackgroundResponseId is decided at the point of
-      // failure (tryResumeBackgroundResponse and waitForBackgroundCompletion).
-      // If it survived to here, the next retry will try to resume the same ID.
-      if (this.pendingBackgroundResponseId) {
-        this.logger.debug(
-          `Retaining pendingBackgroundResponseId=${this.pendingBackgroundResponseId} for retry - ` +
-            'next attempt will try to resume polling instead of creating new request',
-        );
-      }
-
-      // Clear diagnostic state to avoid stale comparison on retry
-      this._diagPreFlightTokens = null;
-
       throw error;
     }
+  }
+
+  /**
+   * Non-streaming path. Errors propagate to PocketFlow's execFallback which
+   * logs once (log-at-boundary principle). Polls for completion when the
+   * response is pending — expected under background mode, and a handled edge
+   * case under server-side `previous_response_id` latency.
+   */
+  private async executeNonStreamingPath(
+    params: ResponseCreateParamsBase,
+    client: OpenAI,
+    signal: AbortSignal | undefined,
+    useBackgroundResponses: boolean,
+    ctx: ResponseFinalizeContext,
+  ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
+    const { stream: _nonStream, ...nonStreamRest } = params;
+    const nonStreamingParams: ResponseCreateParamsNonStreaming = {
+      ...nonStreamRest,
+      stream: false,
+    };
+    let response = await client.responses.create(nonStreamingParams, {
+      signal,
+    });
+
+    // Poll for completion if response is pending (queued/in_progress).
+    // This can happen in two cases:
+    // 1. Background mode explicitly enabled (expected)
+    // 2. Server-side latency when using previous_response_id (unexpected but handled)
+    if (this.isBackgroundPending(response)) {
+      if (useBackgroundResponses) {
+        logProgressStatus(
+          this.logger,
+          'Running OpenAI in background mode; polling for completion (this may take longer than usual).',
+        );
+      } else {
+        this.logger.debug(
+          `Response ${response.id} returned with pending status "${response.status}" despite non-background mode; polling for completion`,
+          {
+            data: {
+              responseId: response.id,
+              status: response.status,
+              hasPreviousResponseId: !!this.previousResponseId,
+            },
+          },
+        );
+      }
+      response = await this.waitForBackgroundCompletion(
+        client,
+        response,
+        signal,
+      );
+    }
+
+    this.finalizeResponse(
+      response,
+      ctx.effectiveMessagesLength,
+      ctx.compactedThisCall,
+    );
+    return { response, updatedMessages: ctx.compactedMessages };
+  }
+
+  /**
+   * Error recovery for {@link createResponseImpl}. Normalizes the provider
+   * error; on an invalid/expired `previous_response_id` it clears the chain so
+   * the next retry rebuilds from local history; on a context-window overflow
+   * while chaining (and not already compacted this call) it drops server-side
+   * state and retries internally with compaction. All other errors rethrow.
+   */
+  private async handleCreateResponseError(
+    error: unknown,
+    options: CreateResponseOptions<ResponseInputItem, OpenAI>,
+    compactedThisCall: boolean,
+  ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
+    // Extract error details for diagnostics (useful for relay errors)
+    const providerError = normalizeOpenAIResponseError(
+      error,
+      this.config.provider,
+    );
+    const { rawErrorBody } = providerError;
+    if (rawErrorBody) {
+      this.logger.debug('Raw error body from provider', {
+        data: { rawErrorBody },
+      });
+    }
+
+    // OpenAI: If the error indicates the response ID is invalid, clear it
+    // This allows retry logic to recover by starting a fresh conversation
+    if (isPreviousResponseIdError(error)) {
+      this.logger.debug(
+        `Clearing previousResponseId=${this.previousResponseId} due to invalid/expired response - ` +
+          'next retry will rebuild conversation from local history',
+      );
+      this.invalidateResponseChain();
+      // Also clear pending background response if present
+      this.clearPendingBackgroundResponse();
+    } else if (
+      isContextWindowError(error) &&
+      this.previousResponseId &&
+      !compactedThisCall
+    ) {
+      // Recovery: When using previous_response_id, accumulated reasoning tokens
+      // from prior turns are stored server-side and count against the context
+      // window, but inputTokens.count() may not fully reflect them. This causes
+      // pre-flight validation to pass while the API rejects the request.
+      //
+      // Fix: Drop server-side state (clearing previous_response_id discards the
+      // hidden reasoning tokens) and compact client-side messages, then retry.
+      // The guard !compactedThisCall prevents infinite recursion.
+      logProgressStatus(
+        this.logger,
+        'Context window exceeded — compacting conversation and retrying.',
+      );
+      this.previousResponseId = null;
+      // Don't call resetConversationState() — it zeroes cumulativeInputTokens
+      // which would prevent shouldCompact() from triggering on the retry.
+      this.clearPendingBackgroundResponse();
+      this.compactionRequested = true;
+      this._diagPreFlightTokens = null;
+      // Retry internally: the recursive call will compact (shouldCompact()=true)
+      // and send all messages without server-side state.
+      // Call the impl directly — we're still inside the outer createResponse's
+      // inFlight guard, and the public entry would trip the assertion.
+      return this.createResponseImpl(options);
+    } else if (this.previousResponseId) {
+      // Log diagnostic info for other errors when chaining was active
+      this.logger.debug(
+        `Request failed with previousResponseId=${this.previousResponseId}. ` +
+          `Error: ${providerError.message}`,
+      );
+    }
+
+    // Retention of pendingBackgroundResponseId is decided at the point of
+    // failure (tryResumeBackgroundResponse and waitForBackgroundCompletion).
+    // If it survived to here, the next retry will try to resume the same ID.
+    if (this.pendingBackgroundResponseId) {
+      this.logger.debug(
+        `Retaining pendingBackgroundResponseId=${this.pendingBackgroundResponseId} for retry - ` +
+          'next attempt will try to resume polling instead of creating new request',
+      );
+    }
+
+    // Clear diagnostic state to avoid stale comparison on retry
+    this._diagPreFlightTokens = null;
+
+    throw error;
   }
 
   /**
