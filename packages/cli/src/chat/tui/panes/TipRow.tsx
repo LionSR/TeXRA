@@ -1,5 +1,10 @@
 import { Box, Text } from 'ink';
 
+const QUEUE_FOLLOW_UP_TIP =
+  'Type while a response is running to queue a follow-up';
+const IDLE_QUEUE_FOLLOW_UP_FALLBACK_TIP =
+  'Press Ctrl-R to search your input history';
+
 const BASE_TIPS = [
   'Use /help to see available commands',
   'Press /model to switch models',
@@ -8,7 +13,7 @@ const BASE_TIPS = [
   'Press /status to see session details',
   'Press /api to view or change API mode',
   'Press Ctrl-T to read the full transcript',
-  'Type while a response is running to queue a follow-up',
+  QUEUE_FOLLOW_UP_TIP,
   'Press Ctrl-R to search your input history',
   'Use /resume to continue a previous session',
 ] as const;
@@ -18,24 +23,31 @@ const AGENT_SELECTION_TIP = 'Press /agent to choose the root agent';
 export function tipRowText({
   agentSelectionAvailable = false,
   hour,
+  responseRunning = false,
 }: {
   readonly agentSelectionAvailable?: boolean;
   readonly hour: number;
+  readonly responseRunning?: boolean;
 }): string {
   const tips = agentSelectionAvailable
     ? [BASE_TIPS[0], BASE_TIPS[1], AGENT_SELECTION_TIP, ...BASE_TIPS.slice(2)]
     : BASE_TIPS;
   const index = ((hour % tips.length) + tips.length) % tips.length;
-  return tips[index]!;
+  const tip = tips[index]!;
+  return !responseRunning && tip === QUEUE_FOLLOW_UP_TIP
+    ? IDLE_QUEUE_FOLLOW_UP_FALLBACK_TIP
+    : tip;
 }
 
 export function TipRow(props: {
   readonly agentSelectionAvailable?: boolean;
   readonly hour: number;
+  readonly responseRunning?: boolean;
 }): React.JSX.Element {
   const tip = tipRowText({
     agentSelectionAvailable: props.agentSelectionAvailable,
     hour: props.hour,
+    responseRunning: props.responseRunning,
   });
 
   return (

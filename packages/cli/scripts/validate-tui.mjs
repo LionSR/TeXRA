@@ -450,7 +450,7 @@ const SCENARIOS = [
       '/clear',
       'Start a fresh chat session',
       'Keyboard',
-      '`Ctrl-C` stops, twice exits',
+      '`Ctrl-C` exits idle chats; stops active responses',
       'Typing while a response is running queues your message as a follow-up.',
     ],
   },
