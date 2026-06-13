@@ -1,8 +1,17 @@
 /**
- * Tool-use cycle flow: Prep → Call → Process → Dispatch, looping until end-of-turn.
+ * Tool-use round flow: Prep → Call → Process → Dispatch, looping until end-of-turn.
+ *
+ * A "round" is one LLM invocation plus the dispatch of any tool calls it returns.
+ * The loop repeats until the model stops requesting tools (end-of-turn).
+ *
+ * This is the inner primitive invoked by ToolUseCycleNode (the outer session step).
+ * The distinction:
+ *   - ToolUseRoundFlow  (this file) = one LLM invocation + tool dispatch loop
+ *   - ToolUseCycleNode  (implementations/flows/tooluse) = one session turn,
+ *     which may invoke many rounds via createToolUseRoundFlow()
  *
  * This file is the public entry point. The node implementations and shared
- * types live in ./toolUseCycle/; external consumers import the flow factory
+ * types live in ./toolUseRound/; external consumers import the flow factory
  * and shared schema/state types from here.
  */
 
@@ -13,20 +22,20 @@ import { defaultPostCompactionContext } from '@agent/core/flows/CommonCycleTypes
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
 import { ModelInvocationNode } from './ModelInvocationNode';
-import { ToolUsePrepNode } from './toolUseCycle/ToolUsePrepNode';
-import { ToolUseProcessNode } from './toolUseCycle/ToolUseProcessNode';
-import { ToolUseDispatchNode } from './toolUseCycle/ToolUseDispatchNode';
-import type { CycleParams, ToolUseCycleServices } from './CycleServices';
-import type { ToolUseCycleShared } from './toolUseCycle/cycleShared';
+import { ToolUsePrepNode } from './toolUseRound/ToolUsePrepNode';
+import { ToolUseProcessNode } from './toolUseRound/ToolUseProcessNode';
+import { ToolUseDispatchNode } from './toolUseRound/ToolUseDispatchNode';
+import type { CycleParams, ToolUseRoundServices } from './CycleServices';
+import type { ToolUseRoundShared } from './toolUseRound/roundShared';
 
 export {
-  ToolUseCycleFieldsSchema,
-  type ToolUseCycleFields,
-  type ToolUseCycleShared,
-} from './toolUseCycle/cycleShared';
+  ToolUseRoundFieldsSchema,
+  type ToolUseRoundFields,
+  type ToolUseRoundShared,
+} from './toolUseRound/roundShared';
 
 /**
- * Creates a tool-use cycle flow with services injected via params.
+ * Creates a tool-use round flow with services injected via params.
  *
  * Flow structure:
  *   Prep → Call → Process → Dispatch
@@ -37,15 +46,12 @@ export {
  * BEFORE calling the model, so the model's thinking/response considers the
  * user's feedback.
  */
-export function createToolUseCycleFlow<C>(): Flow<
-  ToolUseCycleShared,
-  CycleParams
-> {
+export function createToolUseRoundFlow<C>(): Flow<ToolUseRoundShared, CycleParams> {
   const prepNode = new ToolUsePrepNode<C>();
   const callNode = new ModelInvocationNode<
-    ToolUseCycleShared,
+    ToolUseRoundShared,
     CycleParams,
-    ToolUseCycleServices<C>
+    ToolUseRoundServices<C>
   >({
     operationName: 'Tool-use call',
     streaming: true,
@@ -66,5 +72,5 @@ export function createToolUseCycleFlow<C>(): Flow<
   processNode.next(dispatchNode);
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ToolUseCycleShared, CycleParams>(prepNode);
+  return new Flow<ToolUseRoundShared, CycleParams>(prepNode);
 }

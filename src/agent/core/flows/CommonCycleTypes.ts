@@ -1,4 +1,4 @@
-/** Common types shared across cycle flows (ResponseCycleFlow, ToolUseCycleFlow). */
+/** Common types shared across cycle flows (ResponseCycleFlow, ToolUseRoundFlow). */
 
 import { z } from 'zod';
 

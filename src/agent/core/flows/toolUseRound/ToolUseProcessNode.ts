@@ -15,8 +15,8 @@ import { formatContent } from '@utils/text/xmlUtils';
 
 // Local file imports
 import { FlowTransition } from '../FlowTransitions';
-import type { CycleParams, ToolUseCycleServices } from '../CycleServices';
-import type { ToolUseCycleShared } from './cycleShared';
+import type { CycleParams, ToolUseRoundServices } from '../CycleServices';
+import type { ToolUseRoundShared } from './roundShared';
 
 /** Result of exec() containing extracted data needed for post() side effects. */
 type ToolUseProcessExecResult =
@@ -41,11 +41,11 @@ interface ToolUseProcessPrepResult {
 
 /** Processes the model response to extract tool calls and usage data. */
 export class ToolUseProcessNode<C> extends BaseNode<
-  ToolUseCycleShared,
+  ToolUseRoundShared,
   CycleParams,
-  ToolUseCycleServices<C>
+  ToolUseRoundServices<C>
 > {
-  async prep(shared: ToolUseCycleShared): Promise<ToolUseProcessPrepResult> {
+  async prep(shared: ToolUseRoundShared): Promise<ToolUseProcessPrepResult> {
     return {
       shouldStop: shared.shouldStop,
       response: shared.response,
@@ -123,7 +123,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
   }
 
   async post(
-    shared: ToolUseCycleShared,
+    shared: ToolUseRoundShared,
     prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {

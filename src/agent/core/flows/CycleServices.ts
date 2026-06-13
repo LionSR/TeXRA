@@ -21,8 +21,14 @@ export interface ResponseCycleServices<
   round: ConversationRoundStateSnapshot;
 }
 
-/** Services for tool-use cycle flow nodes. */
-export interface ToolUseCycleServices<
+/**
+ * Services for tool-use round flow nodes.
+ *
+ * A "round" is one LLM invocation + tool dispatch loop (the inner primitive).
+ * The outer session step (ToolUseCycleNode) bridges ToolUseServices into this
+ * interface by adding `run`, `workspace`, and `client` before running the round.
+ */
+export interface ToolUseRoundServices<
   C = unknown,
 > extends BaseFlowContextInit<C> {
   readonly client: C;
