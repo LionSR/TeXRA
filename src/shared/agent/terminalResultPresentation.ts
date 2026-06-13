@@ -77,28 +77,3 @@ export function terminalResultToast(
     }
   }
 }
-
-/**
- * Where a host presents the mapped toast. Each host supplies its own surface
- * (`runtimeHost.emit`, or the extension's direct `requestShow*` handlers).
- */
-export interface TerminalResultToastSink {
-  showInstruction(
-    payload: ProgressEventPayloads['requestShowInstruction'],
-  ): void;
-  showError(payload: ProgressEventPayloads['requestShowError']): void;
-}
-
-/**
- * Apply {@link terminalResultToast} and route the result to `sink` — the single
- * place the `instruction` / `error` branch lives, so each host's `onResult`
- * consumer stays a one-liner with no per-host copy of the switch.
- */
-export function presentTerminalResult(
-  event: ResultEvent,
-  sink: TerminalResultToastSink,
-): void {
-  const toast = terminalResultToast(event);
-  if (toast?.type === 'instruction') sink.showInstruction(toast.payload);
-  else if (toast?.type === 'error') sink.showError(toast.payload);
-}

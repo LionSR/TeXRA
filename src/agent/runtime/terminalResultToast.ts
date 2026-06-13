@@ -6,10 +6,13 @@
  * path via the shared {@link presentTerminalResult} mapper.
  *
  * The `session` is load-bearing: desktop passes its per-window session, while
- * CLI passes the process {@link defaultSession}. A helper that hard-coded the
- * default would route desktop to the wrong session and never see its results.
+ * CLI/extension pass the process {@link defaultSession}. A helper that
+ * hard-coded the default would route desktop to the wrong session and never see
+ * its results. Every host presents through its `runtimeHost` — including the
+ * extension, whose `extensionAgentRuntimeHost.emit` is `bus.emit`, so the
+ * `requestShow*` events reach the same `bus.on` handlers exactly once.
  */
-import { presentTerminalResult } from '@shared/agent/terminalResultPresentation';
+import { terminalResultToast } from '@shared/agent/terminalResultPresentation';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { SessionHandle } from './SessionHandle';
@@ -19,11 +22,12 @@ export function attachTerminalResultToast(
   session: SessionHandle,
   runtimeHost: AgentRuntimeHost,
 ): () => void {
-  return session.onResult((event) =>
-    presentTerminalResult(event, {
-      showInstruction: (payload) =>
-        runtimeHost.emit('requestShowInstruction', payload),
-      showError: (payload) => runtimeHost.emit('requestShowError', payload),
-    }),
-  );
+  return session.onResult((event) => {
+    const toast = terminalResultToast(event);
+    if (toast?.type === 'instruction') {
+      runtimeHost.emit('requestShowInstruction', toast.payload);
+    } else if (toast?.type === 'error') {
+      runtimeHost.emit('requestShowError', toast.payload);
+    }
+  });
 }
