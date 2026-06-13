@@ -45,7 +45,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
-import { objectToLogString } from '@utils/text/stringUtils';
+import { joinNonEmpty, objectToLogString } from '@utils/text/stringUtils';
 import {
   computeAnthropicPrice,
   normalizeAnthropicUsage,
@@ -858,14 +858,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (message.role !== 'assistant') return undefined;
     if (typeof message.content === 'string') return message.content;
     if (!Array.isArray(message.content)) return undefined;
-    const texts = message.content
-      .filter(
-        (b): b is { type: 'text'; text: string } =>
-          (b as { type?: string }).type === 'text',
-      )
-      .map((b) => b.text)
-      .filter(Boolean);
-    return texts.length > 0 ? texts.join('\n') : undefined;
+    return joinNonEmpty(
+      message.content
+        .filter(
+          (b): b is { type: 'text'; text: string } =>
+            (b as { type?: string }).type === 'text',
+        )
+        .map((b) => b.text),
+    );
   }
 
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */

@@ -34,7 +34,11 @@ import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString, roundTo } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
-import { extractMimeSubtype, objectToLogString } from '@utils/text/stringUtils';
+import {
+  extractMimeSubtype,
+  joinNonEmpty,
+  objectToLogString,
+} from '@utils/text/stringUtils';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagOpenAISdkError } from './openAISdkError';
 
@@ -882,11 +886,11 @@ export class ModelHandlerOpenAI<
     const { content } = message;
     if (typeof content === 'string') return content;
     if (!Array.isArray(content)) return undefined;
-    const texts = content
-      .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-      .map((p) => p.text)
-      .filter(Boolean);
-    return texts.length > 0 ? texts.join('\n') : undefined;
+    return joinNonEmpty(
+      content
+        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+        .map((p) => p.text),
+    );
   }
 
   /** Builds the default content parts for inline vision requests. */
