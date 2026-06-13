@@ -5,6 +5,7 @@
 import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
+import { isActiveStatus } from '@common/constants/streamStatus';
 import {
   LIVE_ELAPSED_STREAM_STATUSES,
   type StreamStatus,
@@ -618,6 +619,7 @@ export function App(props: AppProps): React.JSX.Element {
   }, [onTranscriptViewportChange, viewportKey]);
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const activeResponseRunning = isActiveStatus(activeSlice?.status);
   const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
@@ -983,6 +985,7 @@ export function App(props: AppProps): React.JSX.Element {
           <TipRow
             agentSelectionAvailable={agentSelectionAvailable}
             hour={tipHour}
+            responseRunning={activeResponseRunning}
           />
         ) : null}
         {queuedFollowUpPanelVisible ? (

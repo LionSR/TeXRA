@@ -63,7 +63,7 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     // Generated from the editing keymap so this list can't drift from the
     // bindings that actually exist (see textInputBindings.ts).
     `- ${textInputEditingHelp()}`,
-    '- `Esc` stops the current response · `Ctrl-C` stops, twice exits',
+    '- `Esc` stops the current response · `Ctrl-C` exits idle chats; stops active responses',
     '- `Ctrl-T` opens the transcript viewer for the focused stream',
     `- \`Tab\` switches streams · \`${focusChord}\` jumps to one (when subagents are running)`,
     `- \`${tasksChord}\` opens tasks · \`${subagentsChord}\` opens subagents (when available)`,
