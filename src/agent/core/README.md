@@ -11,7 +11,7 @@ flat folder.
 | `execution/`  | A **running** agent (run state)  | `AgentWorkspaceState`, `AgentState` (run/round snapshots + metrics), `TaskState` (workflow vs tool-use), `executionRequests` (request validation)                              |
 | `usage/`      | Usage value objects              | `ResponseUsage`, `RunUsageAccumulator`                                                                                                                                         |
 | `tools/`      | Tool contracts                   | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`)                                                                                                                      |
-| `flows/`      | Reusable cycle primitives        | `ResponseCycleFlow`, `ToolUseCycleFlow`, and their shared services/types                                                                                                       |
+| `flows/`      | Reusable cycle primitives        | `ResponseCycleFlow`, `ToolUseRoundFlow` (one LLM invocation + tool dispatch), and their shared services/types                                                                  |
 
 ## Dependency direction
 

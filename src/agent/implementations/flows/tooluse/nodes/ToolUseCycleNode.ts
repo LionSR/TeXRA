@@ -2,9 +2,9 @@ import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import {
-  createToolUseCycleFlow,
-  type ToolUseCycleShared,
-} from '@agent/core/flows/ToolUseCycleFlow';
+  createToolUseRoundFlow,
+  type ToolUseRoundShared,
+} from '@agent/core/flows/ToolUseRoundFlow';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -62,15 +62,15 @@ export class ToolUseCycleNode<C> extends Node<
       return { outcome: 'skipped' };
     }
 
-    const cycleShared: ToolUseCycleShared = {
+    const roundShared: ToolUseRoundShared = {
       messages: prepRes.messages,
       shouldStop: false,
       endTurn: false,
-      cycleIndex: prepRes.runState.totalRounds,
-      cycleResponseTimeMs: 0,
+      roundIndex: prepRes.runState.totalRounds,
+      roundResponseTimeMs: 0,
     };
 
-    const flow = createToolUseCycleFlow<C>();
+    const flow = createToolUseRoundFlow<C>();
     let client = await modelHandler.getClient();
     flow.setServices({
       ...this.services,
@@ -110,19 +110,19 @@ export class ToolUseCycleNode<C> extends Node<
     });
 
     try {
-      await flow.run(cycleShared);
+      await flow.run(roundShared);
 
-      if (cycleShared.shouldStop && cycleShared.lastError) {
+      if (roundShared.shouldStop && roundShared.lastError) {
         return {
           outcome: 'failed',
-          message: cycleShared.lastError.message,
-          userRetryable: cycleShared.lastError.userRetryable,
+          message: roundShared.lastError.message,
+          userRetryable: roundShared.lastError.userRetryable,
         };
       }
-      if (cycleShared.shouldStop && !cycleShared.endTurn) {
+      if (roundShared.shouldStop && !roundShared.endTurn) {
         return { outcome: 'cancelled' };
       }
-      return { outcome: 'completed', messages: cycleShared.messages };
+      return { outcome: 'completed', messages: roundShared.messages };
     } finally {
       prepRes.workspaceState.workPlan.clearOnUpdate();
       // Drain in-flight persist writes before returning so they don't

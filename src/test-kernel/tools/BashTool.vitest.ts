@@ -22,13 +22,13 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
-import { ToolUseDispatchNode } from '@agent/core/flows/toolUseCycle/ToolUseDispatchNode';
+import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
 import {
-  createToolUseCycleFlow,
-  type ToolUseCycleShared,
-} from '@agent/core/flows/ToolUseCycleFlow';
+  createToolUseRoundFlow,
+  type ToolUseRoundShared,
+} from '@agent/core/flows/ToolUseRoundFlow';
 // Type imports
-import type { ToolUseCycleServices } from '@agent/core/flows/CycleServices';
+import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 
 // Local imports - agent runtime
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
@@ -176,7 +176,7 @@ describe('BashTool', () => {
     const handler = new BashMockHandler(config);
     const workspaceState = AgentWorkspaceState.create();
     const run = AgentRunStateSnapshotSchema.parse({});
-    const options: ToolUseCycleServices<OpenAI> = {
+    const options: ToolUseRoundServices<OpenAI> = {
       modelHandler: handler,
       config: config as any,
       setting: {
@@ -212,9 +212,9 @@ describe('BashTool', () => {
 
     const messages: ProviderMessage[] = [];
 
-    // Create shared state for the cycle flow (flat pattern)
-    // Tool-use cycles track metrics in shared (cycleIndex, etc.) instead of round object
-    const shared: ToolUseCycleShared = {
+    // Create shared state for the round flow (flat pattern)
+    // Tool-use rounds track metrics in shared (roundIndex, etc.) instead of round object
+    const shared: ToolUseRoundShared = {
       messages,
       shouldStop: false,
       endTurn: false,
@@ -224,13 +224,13 @@ describe('BashTool', () => {
       lastError: undefined,
       toolCalls: undefined,
       text: undefined,
-      cycleIndex: 0,
-      cycleResponseTimeMs: 0,
-      cycleNormalizedUsage: undefined,
+      roundIndex: 0,
+      roundResponseTimeMs: 0,
+      roundNormalizedUsage: undefined,
     };
 
     // Create and run the flow directly
-    const flow = createToolUseCycleFlow();
+    const flow = createToolUseRoundFlow();
     flow.setServices(options);
     await flow.run(shared);
 
@@ -293,7 +293,7 @@ describe('BashTool', () => {
     const bashTool = new BashTool();
     const workspaceState = AgentWorkspaceState.create();
     const run = AgentRunStateSnapshotSchema.parse({});
-    const options: ToolUseCycleServices<OpenAI> = {
+    const options: ToolUseRoundServices<OpenAI> = {
       modelHandler: new BashMockHandler(config),
       config: config as any,
       setting: {

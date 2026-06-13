@@ -10,8 +10,8 @@ import type { FollowUpQueueBatchItem } from '@agent/toolUse/FollowUpQueue';
 
 // Local file imports
 import { FlowTransition } from '../FlowTransitions';
-import type { CycleParams, ToolUseCycleServices } from '../CycleServices';
-import type { ToolUseCycleShared } from './cycleShared';
+import type { CycleParams, ToolUseRoundServices } from '../CycleServices';
+import type { ToolUseRoundShared } from './roundShared';
 
 /** Prep result for ToolUsePrepNode - drained queued follow-up plus interrupt flag. */
 interface ToolUsePrepResult {
@@ -21,18 +21,18 @@ interface ToolUsePrepResult {
 }
 
 /**
- * Prepares a tool-use cycle by checking interruptions and injecting queued follow-ups.
+ * Prepares a tool-use round by checking interruptions and injecting queued follow-ups.
  *
  * If there are queued user messages (typed during previous tool execution),
  * they are injected here BEFORE calling the model. This ensures the model's
  * thinking/response considers the user's feedback.
  */
 export class ToolUsePrepNode<C> extends BaseNode<
-  ToolUseCycleShared,
+  ToolUseRoundShared,
   CycleParams,
-  ToolUseCycleServices<C>
+  ToolUseRoundServices<C>
 > {
-  async prep(_shared: ToolUseCycleShared): Promise<ToolUsePrepResult> {
+  async prep(_shared: ToolUseRoundShared): Promise<ToolUsePrepResult> {
     const interrupted = this.services.checkInterruption();
 
     if (!this.services.session?.hasQueuedFollowUp()) {
@@ -53,7 +53,7 @@ export class ToolUsePrepNode<C> extends BaseNode<
   }
 
   async post(
-    shared: ToolUseCycleShared,
+    shared: ToolUseRoundShared,
     prepRes: ToolUsePrepResult,
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
@@ -90,12 +90,12 @@ export class ToolUsePrepNode<C> extends BaseNode<
       'response',
       'toolCalls',
       'text',
-      'cycleNormalizedUsage',
+      'roundNormalizedUsage',
     ]);
-    shared.cycleResponseTimeMs = 0;
+    shared.roundResponseTimeMs = 0;
 
     await saveCycleDebug(shared.messages, 'messages', this.services, {
-      continuationCount: shared.cycleIndex,
+      continuationCount: shared.roundIndex,
       baseName: 'tooluse',
     });
 
