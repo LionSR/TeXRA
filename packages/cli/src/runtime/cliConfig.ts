@@ -18,7 +18,7 @@ import {
 } from '../schemas/cliSettings';
 import { KNOWN_TEXRA_KEYS } from '../schemas/knownKeys';
 
-export const CLI_BUILTIN_DEFAULT_MODEL = 'deepseekT';
+export const CLI_BUILTIN_DEFAULT_MODEL = 'deepseekproT';
 
 export interface CliCommandConfig {
   readonly agent?: string;
