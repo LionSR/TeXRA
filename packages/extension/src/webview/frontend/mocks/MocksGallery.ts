@@ -33,6 +33,10 @@ export class MocksGallery extends LitElement {
       :host {
         display: block;
         padding: var(--wa-space-s);
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: hidden;
       }
 
       .heading {
@@ -49,6 +53,8 @@ export class MocksGallery extends LitElement {
 
       .section {
         margin-bottom: var(--wa-space-l);
+        min-width: 0;
+        max-width: 100%;
       }
 
       .section__title {
@@ -69,16 +75,24 @@ export class MocksGallery extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--wa-space-2xs);
+        flex-wrap: wrap;
         padding: var(--wa-space-2xs) var(--wa-space-s);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--wa-border-radius-m);
         background: var(--wa-color-surface-default, transparent);
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
       }
 
       .header-strip__label {
-        flex: 1;
+        flex: 1 1 8rem;
+        min-width: 0;
         color: var(--wa-color-text-quiet);
         font-size: var(--font-size-sm);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
     `,
   ];
