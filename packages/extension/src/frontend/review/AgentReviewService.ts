@@ -335,11 +335,13 @@ class AgentReviewServiceImpl {
       // while the snapshot describes an older tree. The snapshot is only
       // restored when the session reported nothing at all.
       const restored = this.restorePreviousResults(previous);
-      const suffix = restored
-        ? ' · showing previous results'
-        : this.issues.length > 0
-          ? ` · showing the ${this.issues.length} issue${this.issues.length === 1 ? '' : 's'} reported before the session ended`
-          : '';
+      let suffix = '';
+      if (restored) {
+        suffix = ' · showing previous results';
+      } else if (this.issues.length > 0) {
+        const plural = this.issues.length === 1 ? '' : 's';
+        suffix = ` · showing the ${this.issues.length} issue${plural} reported before the session ended`;
+      }
       this.summary = `Review ${verb}${suffix}`;
       logger.warn(CHANNEL, `Agent review session ${verb}`);
       return;

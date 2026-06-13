@@ -24,11 +24,12 @@ function normalizeWorkPlanSnapshot(input: unknown): unknown {
   // Legacy structured plans fail to parse and read back as "no plan";
   // their stored planSummary string still carries the one-line label.
   const plan = parsePlan(record.plan);
-  const planSummary = plan
-    ? planSummaryLine(plan.objective)
-    : isNonEmptyString(record.planSummary)
-      ? record.planSummary
-      : null;
+  let planSummary: string | null = null;
+  if (plan) {
+    planSummary = planSummaryLine(plan.objective);
+  } else if (isNonEmptyString(record.planSummary)) {
+    planSummary = record.planSummary;
+  }
 
   return {
     todos: record.todos,

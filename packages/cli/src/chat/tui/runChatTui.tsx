@@ -60,6 +60,7 @@ import {
 import {
   githubSelectAccountWarning,
   parseChatLoginSlashArgs,
+  type CliLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
@@ -669,6 +670,12 @@ const CHAT_STARTUP_MODEL_RECOVERY = {
   personalModeAction: 'retry with `texra chat --api-mode personal`',
 } satisfies CliNoAvailableModelsRecoveryOptions;
 
+function loginStartMessage(args: CliLoginSlashArgs): string {
+  if (args.device) return 'Starting TeXRA device-code sign-in.';
+  if (args.noBrowser) return `Starting TeXRA ${args.provider} sign-in.`;
+  return `Opening browser for TeXRA ${args.provider} sign-in...`;
+}
+
 async function loginFromChat(input: string): Promise<void> {
   const args = parseChatLoginSlashArgs(input);
   if (!args) {
@@ -678,13 +685,7 @@ async function loginFromChat(input: string): Promise<void> {
 
   const accountWarning = githubSelectAccountWarning(args);
   if (accountWarning) appendLocalAssistantTranscript(accountWarning);
-  appendLocalAssistantTranscript(
-    args.device
-      ? 'Starting TeXRA device-code sign-in.'
-      : args.noBrowser
-        ? `Starting TeXRA ${args.provider} sign-in.`
-        : `Opening browser for TeXRA ${args.provider} sign-in...`,
-  );
+  appendLocalAssistantTranscript(loginStartMessage(args));
 
   try {
     const session = args.device

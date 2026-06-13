@@ -1229,7 +1229,7 @@ export class DesktopProgressBridge {
   }
 
   private releasePendingPermissionsForStream(streamId: StreamTabId): void {
-    for (const [key, pending] of this.pendingPermissionStreams.entries()) {
+    for (const [key, pending] of this.pendingPermissionStreams) {
       if (pending === streamId) {
         this.pendingPermissionStreams.delete(key);
       }

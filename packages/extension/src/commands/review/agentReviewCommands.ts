@@ -84,12 +84,13 @@ export function registerAgentReviewCommands(
   });
   const syncView = () => {
     const state = AgentReviewService.getState();
+    const count = state.issues.length;
     treeView.message = state.summary;
     treeView.badge =
-      state.issues.length > 0
+      count > 0
         ? {
-            value: state.issues.length,
-            tooltip: `${state.issues.length} agent review issue${state.issues.length === 1 ? '' : 's'}`,
+            value: count,
+            tooltip: `${count} agent review issue${count === 1 ? '' : 's'}`,
           }
         : undefined;
   };

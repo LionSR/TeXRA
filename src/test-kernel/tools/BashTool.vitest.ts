@@ -49,6 +49,20 @@ import * as execUtils from '@utils/system/execUtils';
 // Type imports
 import type OpenAI from 'openai';
 
+const testModelConfig: ModelConfig = {
+  name: 'test',
+  label: 'Test',
+  fullName: 'test',
+  shortName: 'test',
+  provider: ModelProvider.OPENAI,
+  maxOutputTokens: 10,
+  inputPrice: 0,
+  outputPrice: 0,
+  contextWindow: 1000,
+  capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+  openRouterOnly: false,
+};
+
 class BashMockHandler extends ModelHandlerOpenAIResponse {
   private callCount = 0;
 
@@ -160,25 +174,12 @@ describe('BashTool', () => {
       'Bash tool should return the full stdout text',
     );
 
-    const config: ModelConfig = {
-      name: 'test',
-      label: 'Test',
-      fullName: 'test',
-      shortName: 'test',
-      provider: ModelProvider.OPENAI,
-      maxOutputTokens: 10,
-      inputPrice: 0,
-      outputPrice: 0,
-      contextWindow: 1000,
-      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-      openRouterOnly: false,
-    };
-    const handler = new BashMockHandler(config);
+    const handler = new BashMockHandler(testModelConfig);
     const workspaceState = AgentWorkspaceState.create();
     const run = AgentRunStateSnapshotSchema.parse({});
     const options: ToolUseRoundServices<OpenAI> = {
       modelHandler: handler,
-      config: config as any,
+      config: testModelConfig as any,
       setting: {
         agentCategory: AgentCategory.ToolUse,
         documentTag: 'doc',
@@ -269,20 +270,6 @@ describe('BashTool', () => {
       },
     );
 
-    const config: ModelConfig = {
-      name: 'test',
-      label: 'Test',
-      fullName: 'test',
-      shortName: 'test',
-      provider: ModelProvider.OPENAI,
-      maxOutputTokens: 10,
-      inputPrice: 0,
-      outputPrice: 0,
-      contextWindow: 1000,
-      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-      openRouterOnly: false,
-    };
-
     const runTrace = createRunTrace('BashToolAbortTest' as StreamTabId);
     const events: AgentEvent[] = [];
     const unsubscribe = runTrace.trace.subscribe((event) => {
@@ -294,8 +281,8 @@ describe('BashTool', () => {
     const workspaceState = AgentWorkspaceState.create();
     const run = AgentRunStateSnapshotSchema.parse({});
     const options: ToolUseRoundServices<OpenAI> = {
-      modelHandler: new BashMockHandler(config),
-      config: config as any,
+      modelHandler: new BashMockHandler(testModelConfig),
+      config: testModelConfig as any,
       setting: {
         agentCategory: AgentCategory.ToolUse,
         documentTag: 'doc',

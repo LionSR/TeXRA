@@ -6,10 +6,7 @@ import { z } from 'zod';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type {
-  DrainedFollowUpItem,
-  FollowUpQueueInput,
-} from '@agent/toolUse/FollowUpQueue';
+import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -49,21 +46,23 @@ async function resumeFromSnapshot(
     runtimeHost,
   });
 
-  let queuedFollowUps: DrainedFollowUpItem[] = [];
+  // Seed with the explicit follow-up so the catch path still re-enqueues it
+  // even if the drain below throws before the full list is assigned.
+  const explicitFollowUp: readonly FollowUpQueueInput[] =
+    followUp !== undefined ? [{ text: followUp, origin: 'user' as const }] : [];
+  let followUps: readonly FollowUpQueueInput[] = explicitFollowUp;
   try {
-    queuedFollowUps = ToolUseFollowUpQueue.drainItems(streamId);
+    followUps = [
+      ...explicitFollowUp,
+      ...ToolUseFollowUpQueue.drainItems(streamId),
+    ];
     runtimeHost.emit('updateQueuedFollowUps', {
       streamId,
     });
 
     await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
       setupSession: (session) => {
-        const allFollowUps: readonly FollowUpQueueInput[] =
-          followUp !== undefined
-            ? [{ text: followUp, origin: 'user' as const }, ...queuedFollowUps]
-            : queuedFollowUps;
-
-        for (const item of allFollowUps) {
+        for (const item of followUps) {
           session.appendFollowUp(item);
         }
       },
@@ -74,14 +73,10 @@ async function resumeFromSnapshot(
     // Re-enqueue the drained follow-ups (and the explicit one, ahead of
     // them) so a later resume picks them up instead of dropping them —
     // matching the desktop bridge's failure path.
-    const requeued: readonly FollowUpQueueInput[] =
-      followUp !== undefined
-        ? [{ text: followUp, origin: 'user' as const }, ...queuedFollowUps]
-        : queuedFollowUps;
-    for (const item of requeued) {
+    for (const item of followUps) {
       ToolUseFollowUpQueue.enqueue(streamId, item, { force: true });
     }
-    if (requeued.length > 0) {
+    if (followUps.length > 0) {
       runtimeHost.emit('updateQueuedFollowUps', { streamId });
     }
 

@@ -75,14 +75,7 @@ describe('buildUntrackedFileDiff', () => {
 describe('collectReviewDiff (real git repository)', () => {
   let repo: string;
 
-  async function git(...args: string[]): Promise<void> {
-    const result = await executeCommand(['git', ...args], { cwd: repo });
-    expect(result.success, `git ${args.join(' ')}: ${result.stderr}`).toBe(
-      true,
-    );
-  }
-
-  async function gitOutput(...args: string[]): Promise<string> {
+  async function git(...args: string[]): Promise<string> {
     const result = await executeCommand(['git', ...args], { cwd: repo });
     expect(result.success, `git ${args.join(' ')}: ${result.stderr}`).toBe(
       true,
@@ -235,7 +228,7 @@ describe('collectReviewDiff (real git repository)', () => {
     await writeFile(path.join(repo, 'notes.txt'), 'notes before\n');
     await git('add', '.');
     await git('commit', '-m', 'add notes');
-    const previousHead = await gitOutput('rev-parse', 'HEAD');
+    const previousHead = await git('rev-parse', 'HEAD');
 
     await writeFile(path.join(repo, 'paper.tex'), 'committed on main\n');
     await git('commit', '-am', 'second');

@@ -681,16 +681,7 @@ export class LaTeXTab extends LitElement {
           title="Toggle"
         ></wa-switch>
         ${isCustom
-          ? html`<wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              aria-label="Reset to default"
-              title="Reset to default (${opts.defaultValue ? 'On' : 'Off'})"
-              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
-            >
-              <wa-icon library="texra" name="discard"></wa-icon>
-            </wa-button>`
+          ? this.renderResetButton(opts.field, opts.defaultValue ? 'On' : 'Off')
           : nothing}
       </div>
     `;
@@ -708,6 +699,23 @@ export class LaTeXTab extends LitElement {
       class="setting-status-icon ${isCustom ? 'is-set' : 'is-default'}"
       title=${isCustom ? 'Customized' : 'Using default'}
     ></wa-icon>`;
+  }
+
+  /** Reset-to-default button shown when a config value has been customized. */
+  private renderResetButton(
+    field: LatexConfigField,
+    defaultDisplay: string,
+  ): TemplateResult {
+    return html`<wa-button
+      appearance="outlined"
+      variant="neutral"
+      size="small"
+      aria-label="Reset to default"
+      title="Reset to default (${defaultDisplay})"
+      @click=${() => this.dispatchSetConfigValue(field, undefined)}
+    >
+      <wa-icon library="texra" name="discard"></wa-icon>
+    </wa-button>`;
   }
 
   private renderNumberSetting(opts: {
@@ -752,16 +760,7 @@ export class LaTeXTab extends LitElement {
           ></wa-input>
         </div>
         ${isCustom
-          ? html`<wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              aria-label="Reset to default"
-              title="Reset to default (${opts.defaultValue})"
-              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
-            >
-              <wa-icon library="texra" name="discard"></wa-icon>
-            </wa-button>`
+          ? this.renderResetButton(opts.field, String(opts.defaultValue))
           : nothing}
       </div>
     `;
@@ -801,16 +800,7 @@ export class LaTeXTab extends LitElement {
           </wa-select>
         </div>
         ${isCustom
-          ? html`<wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              aria-label="Reset to default"
-              title="Reset to default (${opts.defaultValue})"
-              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
-            >
-              <wa-icon library="texra" name="discard"></wa-icon>
-            </wa-button>`
+          ? this.renderResetButton(opts.field, String(opts.defaultValue))
           : nothing}
       </div>
     `;

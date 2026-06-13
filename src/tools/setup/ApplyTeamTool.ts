@@ -93,12 +93,12 @@ ${describeTeams()}`,
     const unresolved = new Set(unresolvedNames);
     const activeWorkflow = workflowKeys.filter((key) => !unresolved.has(key));
     const activeToolUse = toolUseKeys.filter((key) => !unresolved.has(key));
-    const remoteLeadNames: readonly string[] = REMOTE_ORCHESTRATOR_AGENT_NAMES;
+    const remoteLeadNames = new Set<string>(REMOTE_ORCHESTRATOR_AGENT_NAMES);
     const pendingRemoteLeads = unresolvedNames.filter((name) =>
-      remoteLeadNames.includes(name),
+      remoteLeadNames.has(name),
     );
     const pendingOther = unresolvedNames.filter(
-      (name) => !remoteLeadNames.includes(name),
+      (name) => !remoteLeadNames.has(name),
     );
 
     const signInNote =
