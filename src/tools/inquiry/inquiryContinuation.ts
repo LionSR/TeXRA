@@ -15,7 +15,7 @@
 import { platform } from '@platform/platform';
 
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
-import { bus } from '@eventBus/ProgressEventBus';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { createChannelTrace } from '@logger';
 import type {
   ExternalInquiryThreadId,
@@ -110,7 +110,7 @@ async function emitInquiryThreadUpdate(
 ): Promise<void> {
   const summary = await getThreadSummary(threadId);
   if (!summary) return;
-  bus.emit('inquiryThreadUpdated', { ...summary, ...extra });
+  emitRuntimeEvent('inquiryThreadUpdated', { ...summary, ...extra });
 }
 
 async function deliverContinuation(params: {
