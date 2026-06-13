@@ -794,7 +794,9 @@ export function App(props: AppProps): React.JSX.Element {
     pendingEscapeInterruptTimer.current = undefined;
   };
 
-  useEffect(() => clearPendingEscapeInterrupt, []);
+  useEffect(() => {
+    return clearPendingEscapeInterrupt;
+  }, []);
 
   const handleMetaShortcut = (value: string): boolean => {
     const lower = value.toLowerCase();

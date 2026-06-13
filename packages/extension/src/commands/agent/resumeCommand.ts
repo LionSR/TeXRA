@@ -46,13 +46,16 @@ async function resumeFromSnapshot(
     runtimeHost,
   });
 
-  let followUps: readonly FollowUpQueueInput[] = [];
+  // Seed with the explicit follow-up so the catch path still re-enqueues it
+  // even if the drain below throws before the full list is assigned.
+  const explicitFollowUp: readonly FollowUpQueueInput[] =
+    followUp !== undefined ? [{ text: followUp, origin: 'user' as const }] : [];
+  let followUps: readonly FollowUpQueueInput[] = explicitFollowUp;
   try {
-    const queuedFollowUps = ToolUseFollowUpQueue.drainItems(streamId);
-    followUps =
-      followUp !== undefined
-        ? [{ text: followUp, origin: 'user' as const }, ...queuedFollowUps]
-        : queuedFollowUps;
+    followUps = [
+      ...explicitFollowUp,
+      ...ToolUseFollowUpQueue.drainItems(streamId),
+    ];
     runtimeHost.emit('updateQueuedFollowUps', {
       streamId,
     });
