@@ -124,6 +124,19 @@ import type {
 } from 'openai/resources/responses/responses';
 
 /**
+ * The per-call values every transport path needs to finalize a response: how
+ * many messages are in the (possibly compacted) conversation, whether
+ * compaction happened this call, and the compacted messages to surface as
+ * {@link CreateResponseResult.updatedMessages}. Grouped into one argument so the
+ * extracted path methods don't carry a long, transposable positional tail.
+ */
+interface ResponseFinalizeContext {
+  readonly effectiveMessagesLength: number;
+  readonly compactedThisCall: boolean;
+  readonly compactedMessages: ResponseInputItem[] | undefined;
+}
+
+/**
  * Handler for OpenAI's Responses API. This implementation works directly with
  * the native response message types instead of reusing the chat completion
  * abstractions. Conversation state is maintained through `previous_response_id`
@@ -1353,6 +1366,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     }
 
+    const finalizeContext: ResponseFinalizeContext = {
+      effectiveMessagesLength: effectiveMessages.length,
+      compactedThisCall,
+      compactedMessages,
+    };
+
     // Wrap execution in a try/catch so the error handler can recover from an
     // invalid/expired previous_response_id or a context-window overflow.
     try {
@@ -1361,9 +1380,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const resumed = await this.tryResumeBackgroundIfPending(
           client,
           signal,
-          effectiveMessages.length,
-          compactedThisCall,
-          compactedMessages,
+          finalizeContext,
         );
         // Null means nothing to resume (or it failed remotely) — fall through
         // to create a fresh request.
@@ -1376,9 +1393,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           params,
           client,
           signal,
-          effectiveMessages.length,
-          compactedThisCall,
-          compactedMessages,
+          finalizeContext,
         );
       }
 
@@ -1387,9 +1402,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           params,
           client,
           signal,
-          effectiveMessages.length,
-          compactedThisCall,
-          compactedMessages,
+          finalizeContext,
         );
       }
 
@@ -1399,9 +1412,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         client,
         signal,
         useBackgroundResponses,
-        effectiveMessages.length,
-        compactedThisCall,
-        compactedMessages,
+        finalizeContext,
       );
     } catch (error) {
       return await this.handleCreateResponseError(
@@ -1421,9 +1432,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private async tryResumeBackgroundIfPending(
     client: OpenAI,
     signal: AbortSignal | undefined,
-    effectiveMessagesLength: number,
-    compactedThisCall: boolean,
-    compactedMessages: ResponseInputItem[] | undefined,
+    ctx: ResponseFinalizeContext,
   ): Promise<CreateResponseResult<Response, ResponseInputItem> | null> {
     const resumedResponse = await this.tryResumeBackgroundResponse(
       client,
@@ -1432,10 +1441,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (!resumedResponse) return null;
     this.finalizeResponse(
       resumedResponse,
-      effectiveMessagesLength,
-      compactedThisCall,
+      ctx.effectiveMessagesLength,
+      ctx.compactedThisCall,
     );
-    return { response: resumedResponse, updatedMessages: compactedMessages };
+    return {
+      response: resumedResponse,
+      updatedMessages: ctx.compactedMessages,
+    };
   }
 
   /**
@@ -1446,9 +1458,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     params: ResponseCreateParamsBase,
     client: OpenAI,
     signal: AbortSignal | undefined,
-    effectiveMessagesLength: number,
-    compactedThisCall: boolean,
-    compactedMessages: ResponseInputItem[] | undefined,
+    ctx: ResponseFinalizeContext,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     const wsResult = await this.getWebSocketTransport().execute(
       client,
@@ -1474,8 +1484,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // reflects the completed response, not the pre-poll snapshot.
     processor.finalize(response);
 
-    this.finalizeResponse(response, effectiveMessagesLength, compactedThisCall);
-    return { response, updatedMessages: compactedMessages };
+    this.finalizeResponse(
+      response,
+      ctx.effectiveMessagesLength,
+      ctx.compactedThisCall,
+    );
+    return { response, updatedMessages: ctx.compactedMessages };
   }
 
   /**
@@ -1488,9 +1502,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     params: ResponseCreateParamsBase,
     client: OpenAI,
     signal: AbortSignal | undefined,
-    effectiveMessagesLength: number,
-    compactedThisCall: boolean,
-    compactedMessages: ResponseInputItem[] | undefined,
+    ctx: ResponseFinalizeContext,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     // Text accumulated from `response.output_text.delta` events; surfaced as
     // partial text if the stream fails mid-flight.
@@ -1531,10 +1543,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       this.finalizeResponse(
         response,
-        effectiveMessagesLength,
-        compactedThisCall,
+        ctx.effectiveMessagesLength,
+        ctx.compactedThisCall,
       );
-      return { response, updatedMessages: compactedMessages };
+      return { response, updatedMessages: ctx.compactedMessages };
     } catch (error) {
       // Attach a capped tail of any streamed text before it propagates so the
       // retry UI receives the same structured error shape downstream.
@@ -1556,9 +1568,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     client: OpenAI,
     signal: AbortSignal | undefined,
     useBackgroundResponses: boolean,
-    effectiveMessagesLength: number,
-    compactedThisCall: boolean,
-    compactedMessages: ResponseInputItem[] | undefined,
+    ctx: ResponseFinalizeContext,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     const { stream: _nonStream, ...nonStreamRest } = params;
     const nonStreamingParams: ResponseCreateParamsNonStreaming = {
@@ -1598,8 +1608,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
     }
 
-    this.finalizeResponse(response, effectiveMessagesLength, compactedThisCall);
-    return { response, updatedMessages: compactedMessages };
+    this.finalizeResponse(
+      response,
+      ctx.effectiveMessagesLength,
+      ctx.compactedThisCall,
+    );
+    return { response, updatedMessages: ctx.compactedMessages };
   }
 
   /**
