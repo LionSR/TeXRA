@@ -57,9 +57,12 @@ async function runHistoryList(
 async function runHistoryShow(
   context: CliContext,
   id: ExecutionId,
+  options: { full?: boolean } = {},
 ): Promise<number> {
   await initLocalCliPlatform(context);
-  const details = await readCliHistoryDetails(id);
+  const details = await readCliHistoryDetails(id, {
+    includeFullConversation: options.full === true,
+  });
   if (!details) {
     writeTextStderr(`Execution not found: ${id}`);
     return CliExitCode.Usage;
@@ -167,6 +170,11 @@ const historyShowCommand = defineCliCommand({
       required: true,
       description: 'Execution id from `texra history list`',
     },
+    full: {
+      type: 'boolean',
+      description:
+        'Show the full stored conversation instead of only the final preview',
+    },
   },
   run: (context, ctx) => {
     const id = parseCliHistoryId(ctx.args.id);
@@ -174,7 +182,7 @@ const historyShowCommand = defineCliCommand({
       writeTextStderr(`Invalid execution id: ${ctx.args.id}`);
       return Promise.resolve(CliExitCode.Usage);
     }
-    return runHistoryShow(context, id);
+    return runHistoryShow(context, id, { full: ctx.args.full === true });
   },
 });
 
