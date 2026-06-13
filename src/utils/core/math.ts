@@ -8,7 +8,7 @@ export function clamp(value: number, min: number, max: number): number {
 
 /**
  * Clamp `value` to optional bounds. Each bound is applied only when defined.
- * Equivalent to `clamp` when both are provided; a no-op when neither is.
+ * Equivalent to `clamp` when both are provided and `min <= max`; a no-op when neither is.
  */
 export function clampOptional(
   value: number,
