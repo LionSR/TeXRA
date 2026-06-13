@@ -12,6 +12,7 @@ import {
   scrollPageRows,
   type ScrollableDisplayLine,
 } from '../render/scrollBounds';
+import { truncateToWidth } from '../render/terminalText';
 import { KeyHints } from '../ui/KeyHints';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ApprovalDecision } from '../state/approvalQueue';
@@ -34,10 +35,12 @@ const BASH_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 export function bashApprovalCommandRowsBudget({
   availableRows,
   columns,
+  extraFixedRows = 0,
   title = BASH_APPROVAL_TITLE,
 }: {
   readonly availableRows?: number;
   readonly columns: number;
+  readonly extraFixedRows?: number;
   readonly title?: string;
 }): number {
   return confirmCardContentRowsBudget({
@@ -49,6 +52,7 @@ export function bashApprovalCommandRowsBudget({
     compactMaxRows: COMPACT_BASH_COMMAND_ROWS,
     spaciousFixedRows: BASH_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
     compactFixedRows: BASH_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE,
+    extraFixedRows,
   });
 }
 
@@ -64,6 +68,22 @@ export function bashCommandDisplayLines({
     wrapAnsiToWidth(`${index === 0 ? '$ ' : '  '}${line}`, commandWidth)
       .split('\n')
       .map((text): BashCommandDisplayLine => ({ kind: 'command', text })),
+  );
+}
+
+export function bashCwdDisplayLine({
+  cwd,
+  width,
+}: {
+  readonly cwd?: string;
+  readonly width: number;
+}): string | undefined {
+  const trimmedCwd = cwd?.trim();
+  if (!trimmedCwd) return undefined;
+
+  return truncateToWidth(
+    `Directory: ${trimmedCwd}`,
+    Math.max(MIN_BASH_COMMAND_WIDTH, width),
   );
 }
 
@@ -111,9 +131,14 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
     MIN_BASH_COMMAND_WIDTH,
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
+  const cwdLine = useMemo(
+    () => bashCwdDisplayLine({ cwd: props.payload.cwd, width: commandWidth }),
+    [commandWidth, props.payload.cwd],
+  );
   const maxCommandRows = bashApprovalCommandRowsBudget({
     availableRows: props.availableRows,
     columns,
+    extraFixedRows: cwdLine ? 1 : 0,
   });
   const commandRows = useMemo(
     () =>
@@ -148,8 +173,9 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
       alwaysAllow={{ kind: 'bash', label: 'approve session' }}
       onDecide={props.onDecide}
     >
+      {cwdLine ? <Text dimColor>{cwdLine}</Text> : null}
       <Box
-        marginY={scrollable || compactCommandLayout ? 0 : 1}
+        marginY={scrollable || compactCommandLayout || cwdLine ? 0 : 1}
         flexDirection="column"
       >
         {displayLines.map((line, index) => (

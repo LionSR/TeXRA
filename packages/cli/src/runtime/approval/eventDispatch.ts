@@ -16,7 +16,8 @@ export function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(
   switch (event) {
     case 'showBashPermission': {
       const data = payload as ProgressEventPayloads['showBashPermission'];
-      return `Bash command requested:\n${data.command}`;
+      const cwd = data.cwd ? `Directory: ${data.cwd}\n` : '';
+      return `Bash command requested:\n${cwd}${data.command}`;
     }
     case 'showPlanApproval': {
       const data = payload as ProgressEventPayloads['showPlanApproval'];
