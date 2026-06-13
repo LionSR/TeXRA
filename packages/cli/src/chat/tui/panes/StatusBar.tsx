@@ -1,5 +1,3 @@
-import process from 'node:process';
-
 import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { MODEL_CONFIGS } from 'llm-zoo';
@@ -19,6 +17,10 @@ import { filterNotNullish } from '@utils/core';
 
 import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
+import {
+  defaultShortcutModifierLabel,
+  metaChordLabel,
+} from '../shortcutLabels';
 import {
   approvalQueueStatus,
   type ApprovalQueueStatusKind,
@@ -374,19 +376,6 @@ function fitStatusBarLeftSegments(
     }) ??
     compacted
   );
-}
-
-export function defaultShortcutModifierLabel(
-  platform: NodeJS.Platform = process.platform,
-): string {
-  return platform === 'darwin' ? 'Esc' : 'Alt';
-}
-
-/** Bare modifier chord (`Alt-p` / `Esc p`) — also feeds the /help keyboard
- *  section, so the Esc-vs-Alt separator rule lives in one place. */
-export function metaChordLabel(modifierLabel: string, key: string): string {
-  const separator = modifierLabel === 'Esc' ? ' ' : '-';
-  return `${modifierLabel}${separator}${key}`;
 }
 
 function metaShortcutLabel(modifierLabel: string, key: string): string {

@@ -6,7 +6,7 @@
 // its own row in the transcript.
 
 import { textInputEditingHelp } from '../input/textInputBindings';
-import { metaChordLabel } from '../panes/StatusBar';
+import { metaChordLabel } from '../shortcutLabels';
 
 import type { SlashCommand, SlashCommandCategory } from './slashRegistry';
 

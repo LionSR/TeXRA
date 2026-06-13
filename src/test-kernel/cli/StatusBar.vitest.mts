@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   buildStatusBarDisplay,
   ctrlCActionForFocus,
-  defaultShortcutModifierLabel,
   queuedFollowUpsSummary,
   statusBarSegmentText,
   statusBarStreamTarget,
 } from '@cli/chat/tui/panes/StatusBar';
+import { defaultShortcutModifierLabel } from '@cli/chat/tui/shortcutLabels';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import { STREAM_STATUS } from '@shared/schemas';
