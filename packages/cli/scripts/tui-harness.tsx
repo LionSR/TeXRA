@@ -42,10 +42,12 @@ import {
   type TranscriptViewportChange,
 } from '../src/chat/tui/state/transcriptViewportMode';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
+import { formatSlashCommandHelp } from '../src/chat/tui/commands/helpText';
 import {
   findSlashCommand,
   listSlashCommands,
   parseSlashInput,
+  suggestSlashCommand,
 } from '../src/chat/tui/commands/slashRegistry';
 import {
   openCliSlashCommandForm,
@@ -75,6 +77,7 @@ import {
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { streamStatusFromState } from '../src/chat/tui/state/streamStatus';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
+import { defaultShortcutModifierLabel } from '../src/chat/tui/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
 import {
   formatCliApiMode,
@@ -1294,9 +1297,9 @@ function defaultHarnessTranscriptStreamId(): StreamTabId {
 }
 
 function formatHarnessSlashHelp(): string {
-  return listSlashCommands()
-    .map((command) => `/${command.name} - ${command.description}`)
-    .join('\n');
+  return formatSlashCommandHelp(listSlashCommands(), {
+    shortcutModifierLabel: defaultShortcutModifierLabel(),
+  });
 }
 
 function parseHarnessApprovalPolicy(
@@ -1484,7 +1487,13 @@ function handleHarnessSlashCommand(line: string): boolean {
     default: {
       const command = findSlashCommand(commandName);
       if (!command) {
-        appendHarnessAssistantTranscript(`Unknown command: /${parsed.name}`);
+        const suggestion = suggestSlashCommand(commandName);
+        const didYouMean = suggestion
+          ? ` Did you mean /${suggestion.name}?`
+          : '';
+        appendHarnessAssistantTranscript(
+          `Unknown command: /${parsed.name}.${didYouMean} Type /help to list commands.`,
+        );
         return true;
       }
       if (openRegisteredCliSlashForm(command, rest)) return true;
