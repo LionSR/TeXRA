@@ -24,6 +24,8 @@ export interface ToolCallContext {
   onExecutionReady?: () => void;
   /** Called by tools to push partial output for live streaming to the UI. */
   onToolOutput?: (chunk: string) => void;
+  /** Aborts when the current tool call is cancelled by the owning agent run. */
+  signal?: AbortSignal;
   /**
    * Roll a completed subagent's model cost (USD) into the parent run's usage
    * totals. Delegation tools call this when a child run finishes so parent
