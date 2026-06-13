@@ -97,6 +97,8 @@ export interface StreamApprovalController<R extends { accepted: boolean }> {
   bypass: StreamApprovalBypass;
   enqueue<T>(run: () => Promise<T>): Promise<T>;
   rejectPendingForStream(streamId: StreamTabId): void;
+  /** Reject pending entries whose streamId is undefined (no stream context). */
+  rejectUnscopedPending(): void;
   rejectAllPending(): void;
 }
 
@@ -141,6 +143,13 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
     },
     rejectPendingForStream(streamId) {
       rejectMatching(streamId);
+    },
+    rejectUnscopedPending() {
+      for (const entry of pending.values()) {
+        if (!entry.streamId && !entry.isSettled()) {
+          entry.settle(options.rejectionResult());
+        }
+      }
     },
     rejectAllPending() {
       rejectMatching();

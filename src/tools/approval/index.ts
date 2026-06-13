@@ -15,6 +15,7 @@ import type { StreamTabId } from '@shared/schemas';
 import {
   _rejectAllPendingUserQuestions,
   _rejectPendingUserQuestionsForStream,
+  _rejectUnscopedUserQuestions,
 } from '@tools/userQuestion';
 
 import { bashApprovalController } from './bashApproval';
@@ -40,6 +41,24 @@ export function cleanupApprovalsForStream(
   bashApprovalController.bypass.clearForStream(streamId);
   proposalApprovalState.clearForStream(streamId);
   session.coordinators.cleanupRequestsForStream(streamId);
+}
+
+/**
+ * Reject pending tool-edit, bash, and user-question approvals that have no
+ * stream context (streamId is undefined). These would otherwise survive a
+ * per-stream {@link cleanupApprovalsForStream} loop because `undefined` ≠
+ * any concrete StreamTabId, only {@link cleanupAllApprovals} catches them.
+ * Bypass, proposal, and coordinator state are always streamId-keyed and are
+ * not affected here.
+ *
+ * Desktop `deleteAllStreams` calls this after the per-stream sweep so that
+ * an approval emitted without a concrete stream (rare, but the schema allows
+ * it) is rejected rather than left pending with no UI prompt to answer.
+ */
+export function cleanupUnscopedApprovals(): void {
+  toolEditApprovalController.rejectUnscopedPending();
+  bashApprovalController.rejectUnscopedPending();
+  _rejectUnscopedUserQuestions();
 }
 
 /**
