@@ -439,6 +439,32 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'slash-help',
+    rows: 45,
+    cols: 100,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/help', '\r'],
+    frame: 'tail',
+    expect: [
+      'Session',
+      '/clear',
+      'Start a fresh chat session',
+      'Keyboard',
+      '`Ctrl-C` stops, twice exits',
+      'Typing while a response is running queues your message as a follow-up.',
+    ],
+  },
+  {
+    name: 'unknown-slash-suggestion',
+    cols: 100,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/hlp\r'],
+    frame: 'tail',
+    expect: [
+      'Unknown command: /hlp. Did you mean /help? Type /help to list commands.',
+    ],
+  },
+  {
     name: 'narrow-slash-palette-command-names',
     rows: 16,
     cols: 52,
