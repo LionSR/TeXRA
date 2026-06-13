@@ -6,6 +6,10 @@ export const streamTabStyles = css`
   :host {
     display: block;
     container-type: inline-size;
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
   }
 
   .tab-container {
@@ -13,8 +17,12 @@ export const streamTabStyles = css`
     align-items: center;
     position: relative;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     gap: var(--wa-space-3xs);
     border-left: var(--border-medium) solid transparent;
+    box-sizing: border-box;
+    overflow: hidden;
   }
 
   /*
@@ -86,10 +94,12 @@ export const streamTabStyles = css`
     align-items: center;
     gap: var(--wa-space-2xs);
     width: 100%;
+    min-width: 0;
   }
 
   .tab-title {
     flex: 1;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -121,6 +131,8 @@ export const streamTabStyles = css`
     color: var(--wa-color-text-normal);
     opacity: var(--opacity-subtle);
     width: 100%;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .tab-meta .remote-agent,
@@ -280,6 +292,8 @@ export const streamTabsContainerStyles = css`
     flex-direction: column;
     flex: 1;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 0;
     overflow: hidden;
   }
@@ -301,7 +315,7 @@ export const streamTabsContainerStyles = css`
     min-width: 0;
     font-size: var(--font-size-sm);
     height: 100%;
-    overflow: visible;
+    overflow: hidden;
     background-color: var(--background-color);
   }
 
@@ -331,8 +345,15 @@ export const streamTabsContainerStyles = css`
   .tabs-content {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     min-height: 0;
     scrollbar-width: thin;
+  }
+
+  .tabs-content > div {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .stream-list-footer {
@@ -386,6 +407,10 @@ export const streamTabsContainerStyles = css`
     padding-left: var(--wa-space-xs, 12px);
     border-left: var(--border-thin) solid var(--color-border);
     margin-left: var(--wa-space-2xs);
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
   }
 
   .child-streams stream-tab {

@@ -53,8 +53,25 @@ export class MocksGallery extends LitElement {
 
       .section {
         margin-bottom: var(--wa-space-l);
+        box-sizing: border-box;
         min-width: 0;
         max-width: 100%;
+        overflow-x: hidden;
+      }
+
+      .section > * {
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
+      }
+
+      texra-todo-list-mock,
+      texra-followup-controls-mock,
+      texra-progress-board-layout-mock {
+        display: block;
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: hidden;
       }
 
       .section__title {
