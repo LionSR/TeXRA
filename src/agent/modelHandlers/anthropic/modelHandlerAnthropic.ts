@@ -991,15 +991,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
   }
 
-  /** Manages continuation with prefill support (typically no-op for models with prefill). */
-  addContinueMessageWithPrefill(
-    _messages: MessageParam[],
-    _workspaceState: AgentWorkspaceState,
-    _agentSetting: AgentSetting,
-  ): void {
-    this.defaultAddContinueWithPrefill();
-  }
-
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
     messages: MessageParam[],
