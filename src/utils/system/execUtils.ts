@@ -177,13 +177,25 @@ export async function executeCommand(
     onPid?: (pid: number) => void;
     /** Set to false to skip buffering stdout/stderr in memory (use with onStdout/onStderr). */
     buffer?: boolean;
+    /** Abort signal used to terminate the subprocess and any shell children. */
+    signal?: AbortSignal;
   } = {},
 ): Promise<ExecResult> {
   // Hoisted so the finally block can clear them on both success and error paths.
   let shellTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let forceKillTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  let removeAbortListener: (() => void) | undefined;
 
   try {
+    if (options.signal?.aborted) {
+      return resultFromProcessOutput(
+        null,
+        'Command aborted by user',
+        130,
+        false,
+      );
+    }
+
     const workspacePath = options.cwd ?? WorkspaceFS.getPath();
     if (!workspacePath) {
       throw new Error('No workspace path found');
@@ -205,6 +217,37 @@ export async function executeCommand(
 
     let subprocess: ResultPromise;
     let shellTimedOut = false;
+    let shellAborted = false;
+
+    const terminateSubprocess = (signal: NodeJS.Signals): void => {
+      const pid = subprocess.pid;
+      if (!pid) return;
+
+      signalProcessGroup(pid, signal);
+
+      // Force-kill after FORCE_KILL_DELAY_MS if SIGTERM didn't work,
+      // and destroy streams as a last resort to unblock `await subprocess`.
+      if (signal === 'SIGTERM' && forceKillTimeoutId === undefined) {
+        forceKillTimeoutId = setTimeout(() => {
+          signalProcessGroup(pid, 'SIGKILL');
+          subprocess.stdout?.destroy();
+          subprocess.stderr?.destroy();
+        }, FORCE_KILL_DELAY_MS);
+      }
+    };
+
+    const installAbortListener = (): void => {
+      if (!options.signal) return;
+      const onAbort = (): void => {
+        shellAborted = true;
+        terminateSubprocess('SIGTERM');
+      };
+      options.signal.addEventListener('abort', onAbort, { once: true });
+      removeAbortListener = () => {
+        options.signal?.removeEventListener('abort', onAbort);
+      };
+      if (options.signal.aborted) onAbort();
+    };
 
     if (Array.isArray(command)) {
       const [cmd, ...args] = command;
@@ -214,6 +257,7 @@ export async function executeCommand(
       );
       subprocess = execa(cmd, args, execaOptions);
       if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
+      installAbortListener();
     } else {
       logger.debug(logChannel, `Running command: ${command}`);
       // Shell commands with pipes (e.g. "find / | head -2") create child
@@ -231,36 +275,27 @@ export async function executeCommand(
       //
       // Tradeoff: `detached` means the process group is NOT automatically
       // cleaned up if the extension host is hard-killed (SIGKILL / crash) --
-      // long-running shell commands would be orphaned.  This only affects the
-      // bash tool (all other callers use array-form commands which skip this
-      // path).  Acceptable because the alternative is `await` hanging forever.
+      // long-running shell commands would be orphaned. This only affects
+      // shell-form commands that opt into timeout/cancel handling, primarily
+      // the bash tool. Acceptable because the alternative is `await` hanging
+      // forever or leaving approved children running after a user stop.
       const { timeout: _shellTimeout, ...execaNoTimeout } = execaOptions;
-      // Only use detached when we have a timeout and need process-group killing.
+      // Only use detached when we have a timeout/signal and need process-group killing.
       // On POSIX, detached creates a process group we can kill as a unit.
       // On Windows, detached opens a new console window so we always skip it.
-      const useDetached = !!_shellTimeout && !IS_WINDOWS;
+      const useDetached = (!!_shellTimeout || !!options.signal) && !IS_WINDOWS;
       subprocess = execa(command, {
         ...execaNoTimeout,
         shell: true,
         ...(useDetached ? { detached: true } : {}),
       });
       if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
+      installAbortListener();
 
       if (_shellTimeout) {
         shellTimeoutId = setTimeout(() => {
           shellTimedOut = true;
-          const pid = subprocess.pid;
-          if (!pid) return;
-
-          signalProcessGroup(pid, 'SIGTERM');
-
-          // Force-kill after FORCE_KILL_DELAY_MS if SIGTERM didn't work,
-          // and destroy streams as a last resort to unblock `await subprocess`.
-          forceKillTimeoutId = setTimeout(() => {
-            signalProcessGroup(pid, 'SIGKILL');
-            subprocess.stdout?.destroy();
-            subprocess.stderr?.destroy();
-          }, FORCE_KILL_DELAY_MS);
+          terminateSubprocess('SIGTERM');
         }, _shellTimeout);
       }
     }
@@ -281,12 +316,19 @@ export async function executeCommand(
 
     const stdout = (result.stdout as string) ?? '';
     const stderr = (result.stderr as string) ?? '';
-    const exitCode = result.exitCode ?? 1;
+    const exitCode = result.exitCode ?? (shellAborted ? 130 : 1);
     const timedOut = (result.timedOut ?? false) || shellTimedOut;
+    const normalizedStderr =
+      shellAborted && !stderr ? 'Command aborted by user' : stderr;
 
-    logCommandStderr(logChannel, stderr, options.truncate);
+    logCommandStderr(logChannel, normalizedStderr, options.truncate);
 
-    return resultFromProcessOutput(stdout, stderr, exitCode, timedOut);
+    return resultFromProcessOutput(
+      stdout,
+      normalizedStderr,
+      exitCode,
+      timedOut,
+    );
   } catch (err) {
     logger.error(
       options.channel ?? CHANNEL,
@@ -297,6 +339,7 @@ export async function executeCommand(
   } finally {
     if (shellTimeoutId !== undefined) clearTimeout(shellTimeoutId);
     if (forceKillTimeoutId !== undefined) clearTimeout(forceKillTimeoutId);
+    removeAbortListener?.();
   }
 }
 
