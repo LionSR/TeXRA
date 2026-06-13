@@ -64,6 +64,12 @@ export const requestPanelStyles: CSSResult = css`
    * Shared request panel layout (all panel types)
    * ================================================================ */
 
+  :host {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+  }
+
   :is(${CONTAINERS}) {
     margin: ${sp.medium} 0;
     padding: ${sp.medium};
@@ -73,6 +79,9 @@ export const requestPanelStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     gap: ${sp.medium};
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
   }
 
   :is(${HEADERS}) {
@@ -87,6 +96,8 @@ export const requestPanelStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     gap: ${sp.medium};
+    min-width: 0;
+    max-width: 100%;
   }
 
   :is(${ITEMS}) {
@@ -98,6 +109,9 @@ export const requestPanelStyles: CSSResult = css`
     padding: ${sp.medium};
     gap: ${sp.medium};
     position: relative;
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
   }
 
   :is(${DETAILS}) {
@@ -129,6 +143,8 @@ export const requestPanelStyles: CSSResult = css`
     display: flex;
     flex-wrap: wrap;
     gap: ${sp.small};
+    min-width: 0;
+    max-width: 100%;
   }
 
   /* The primary action buttons (which carry data-action) fill the row
@@ -151,10 +167,10 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .approval-request__actions wa-button[data-action] {
-    flex: 0 1 6.5rem;
-    width: 6.5rem;
-    min-width: 0;
-    max-width: 100%;
+    flex: 0 0 auto;
+    width: auto;
+    min-width: min(5.5rem, 100%);
+    max-width: min(7rem, 100%);
   }
 
   :is(${ACTIONS}) wa-button[data-action]::part(base) {
@@ -262,15 +278,23 @@ export const requestPanelStyles: CSSResult = css`
     position: relative;
     display: inline-flex;
     align-items: center;
-    flex: 0 1 auto;
+    flex: 0 1 8.25rem;
+    min-width: 0;
     max-width: 100%;
   }
 
   .approval-request__actions .diff-dropdown .diff-main-button {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
+    width: auto;
     min-width: 0;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
+  }
+
+  .approval-request__actions .diff-dropdown .diff-main-button::part(base) {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
   }
 
   .approval-request__actions .diff-dropdown .diff-dropdown-trigger {
