@@ -31,8 +31,8 @@ import {
   normalizeToolCallError,
   parseToolInput,
 } from './toolCallParsing';
-import type { CycleParams, ToolUseCycleServices } from '../CycleServices';
-import type { ToolUseCycleShared } from './cycleShared';
+import type { CycleParams, ToolUseRoundServices } from '../CycleServices';
+import type { ToolUseRoundShared } from './roundShared';
 
 /** Tools that may take a while and benefit from showing in-progress state. */
 const SLOW_TOOLS = new Set([
@@ -84,9 +84,9 @@ interface ToolExecutionResult {
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
 export class ToolUseDispatchNode<C> extends BatchNode<
-  ToolUseCycleShared,
+  ToolUseRoundShared,
   CycleParams,
-  ToolUseCycleServices<C>
+  ToolUseRoundServices<C>
 > {
   /**
    * Call IDs of duplicate parallel calls detected during prep().
@@ -96,7 +96,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
   private _duplicateCallIds = new Set<string>();
 
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
-  async prep(shared: ToolUseCycleShared): Promise<SdkToolCall[]> {
+  async prep(shared: ToolUseRoundShared): Promise<SdkToolCall[]> {
     this._duplicateCallIds.clear();
     const toolCalls = shared.toolCalls ?? [];
 
@@ -180,7 +180,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     call: SdkToolCall,
     tool: { call(input: unknown): Promise<ToolResult> } | undefined,
     parsedInput: unknown,
-    options: ToolUseCycleServices<C>,
+    options: ToolUseRoundServices<C>,
     tracker: FileInteractionState,
     workPlanState: WorkPlanState,
     onExecutionReady?: () => void,
@@ -218,7 +218,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
   /** Execute a single tool call and return the result with metadata. */
   private async executeToolCall(
     call: SdkToolCall,
-    options: ToolUseCycleServices<C>,
+    options: ToolUseRoundServices<C>,
     tracker: FileInteractionState,
     workPlanState: WorkPlanState,
   ): Promise<ToolExecutionResult> {
@@ -369,7 +369,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
 
   /** Process tool execution results and create follow-up messages. */
   async post(
-    shared: ToolUseCycleShared,
+    shared: ToolUseRoundShared,
     _toolCalls: SdkToolCall[],
     execResults: (ToolExecutionResult | null)[],
   ): Promise<string | undefined> {

@@ -2,9 +2,9 @@ import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import {
-  createToolUseCycleFlow,
-  type ToolUseCycleShared,
-} from '@agent/core/flows/ToolUseCycleFlow';
+  createToolUseRoundFlow,
+  type ToolUseRoundShared,
+} from '@agent/core/flows/ToolUseRoundFlow';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -62,7 +62,7 @@ export class ToolUseCycleNode<C> extends Node<
       return { outcome: 'skipped' };
     }
 
-    const cycleShared: ToolUseCycleShared = {
+    const cycleShared: ToolUseRoundShared = {
       messages: prepRes.messages,
       shouldStop: false,
       endTurn: false,
@@ -70,7 +70,7 @@ export class ToolUseCycleNode<C> extends Node<
       cycleResponseTimeMs: 0,
     };
 
-    const flow = createToolUseCycleFlow<C>();
+    const flow = createToolUseRoundFlow<C>();
     let client = await modelHandler.getClient();
     flow.setServices({
       ...this.services,

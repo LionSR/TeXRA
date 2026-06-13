@@ -10,7 +10,7 @@ import {
 } from '@agent/types/NormalizedUsage';
 
 /**
- * Schema for serializable tool-use cycle fields.
+ * Schema for serializable tool-use round fields.
  *
  * Extends BaseCycleFieldsSchema with tool-specific fields.
  * Uses the same flat pattern as ResponseCycleFlow for consistency.
@@ -23,7 +23,7 @@ import {
  * Tool-use specific fields:
  * - response, toolCalls, text, cycleIndex, cycleResponseTimeMs, cycleNormalizedUsage
  */
-export const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
+export const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
   /** Raw response from model (provider-specific, not schematized) */
   response: z.unknown().optional(),
   /**
@@ -35,38 +35,38 @@ export const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
   /** Text content from response */
   text: z.string().optional(),
   /**
-   * Current cycle index (0-based).
+   * Current round index (0-based).
    *
    * Used for debug file naming and usage tracking. Incremented after each
-   * successful cycle in ToolUseProcessNode.post().
+   * successful round in ToolUseProcessNode.post().
    */
   cycleIndex: z.int().nonnegative(),
   /**
-   * Accumulated response time for current cycle (milliseconds).
-   * Reset after finalization when continuing to next cycle.
+   * Accumulated response time for current round (milliseconds).
+   * Reset after finalization when continuing to next round.
    */
   cycleResponseTimeMs: z.number().nonnegative(),
   /**
-   * Normalized usage for current cycle.
-   * Reset after finalization when continuing to next cycle.
+   * Normalized usage for current round.
+   * Reset after finalization when continuing to next round.
    */
   cycleNormalizedUsage: NormalizedUsageSchema.optional(),
 });
 
-/** Tool-use cycle fields derived from schema */
-export type ToolUseCycleFields = z.infer<typeof ToolUseCycleFieldsSchema>;
+/** Tool-use round fields derived from schema */
+export type ToolUseRoundFields = z.infer<typeof ToolUseRoundFieldsSchema>;
 
 /**
- * Shared state for tool-use cycle flows.
+ * Shared state for tool-use round flows.
  *
  * Uses flat structure (like ResponseCycleFlow) for consistency.
- * All fields from ToolUseCycleFieldsSchema plus runtime-only toolCalls typing.
+ * All fields from ToolUseRoundFieldsSchema plus runtime-only toolCalls typing.
  *
  * ## Architecture
  * - Mutable state: `shared` (this interface) - flat, no nested wrappers
- * - Immutable services: `this.services` (ToolUseCycleServices)
+ * - Immutable services: `this.services` (ToolUseRoundServices)
  */
-export interface ToolUseCycleShared extends ToolUseCycleFields {
+export interface ToolUseRoundShared extends ToolUseRoundFields {
   /** Tool calls with proper typing (schema uses z.unknown()) */
   toolCalls?: SdkToolCall[];
   /** Normalized usage with proper typing */

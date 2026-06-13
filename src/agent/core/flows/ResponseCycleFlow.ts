@@ -43,7 +43,7 @@ import type { CycleParams, ResponseCycleServices } from './CycleServices';
  *
  * ## Field Categories
  *
- * From BaseCycleFieldsSchema (shared with ToolUseCycleFlow):
+ * From BaseCycleFieldsSchema (shared with ToolUseRoundFlow):
  * - messages, shouldStop, endTurn, responseTimeMs, stopReason, lastError
  *
  * Response-specific fields:
