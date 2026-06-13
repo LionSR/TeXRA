@@ -46,7 +46,10 @@ export {
  * BEFORE calling the model, so the model's thinking/response considers the
  * user's feedback.
  */
-export function createToolUseRoundFlow<C>(): Flow<ToolUseRoundShared, CycleParams> {
+export function createToolUseRoundFlow<C>(): Flow<
+  ToolUseRoundShared,
+  CycleParams
+> {
   const prepNode = new ToolUsePrepNode<C>();
   const callNode = new ModelInvocationNode<
     ToolUseRoundShared,

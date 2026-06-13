@@ -185,6 +185,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     workPlanState: WorkPlanState,
     onExecutionReady?: () => void,
     onToolOutput?: (chunk: string) => void,
+    signal?: AbortSignal,
   ): Promise<ToolResult> {
     if (!tool) {
       return { error: `Unknown tool ${call.name}`, isError: true };
@@ -198,6 +199,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
           toolCallId: call.callId,
           onExecutionReady,
           onToolOutput,
+          signal,
           // Subagent cost lands in the parent's totals only (no normalized
           // snapshot), so per-round usage reporting doesn't double-count it —
           // the child's own run already reported its rounds.
@@ -221,7 +223,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     options: ToolUseRoundServices<C>,
     tracker: FileInteractionState,
     workPlanState: WorkPlanState,
-  ): Promise<ToolExecutionResult> {
+  ): Promise<ToolExecutionResult | null> {
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
     const isDeferred = DEFERRED_LOG_TOOLS.has(call.name);
@@ -271,16 +273,43 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       };
     }
 
-    const result = await this.invokeToolSafely(
-      call,
-      tool,
-      parsedInput,
-      options,
-      tracker,
-      workPlanState,
-      onExecutionReady,
-      onToolOutput,
-    );
+    const controller = new AbortController();
+    options.setAbortController(controller);
+
+    let result: ToolResult;
+    try {
+      result = await this.invokeToolSafely(
+        call,
+        tool,
+        parsedInput,
+        options,
+        tracker,
+        workPlanState,
+        onExecutionReady,
+        onToolOutput,
+        controller.signal,
+      );
+    } finally {
+      options.setAbortController(null);
+    }
+
+    if (controller.signal.aborted || options.checkInterruption()) {
+      if (logRef.logId) {
+        endToolUseCard(
+          options.logger,
+          { logId: logRef.logId, groupId: logRef.groupId },
+          {
+            toolName: call.name,
+            input: parsedInput ?? call.raw,
+            output:
+              result.error ?? result.output ?? 'Tool execution cancelled.',
+            isError: true,
+          },
+          'failed',
+        );
+      }
+      return null;
+    }
 
     const trackedEdits = tracker.recordEdits(result.edits);
     if (!result.lineChanges && trackedEdits.lineChanges) {
