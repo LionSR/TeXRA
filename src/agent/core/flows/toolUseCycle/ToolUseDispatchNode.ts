@@ -296,6 +296,20 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     }
 
     if (controller.signal.aborted || options.checkInterruption()) {
+      if (logRef.logId) {
+        endToolUseCard(
+          options.logger,
+          { logId: logRef.logId, groupId: logRef.groupId },
+          {
+            toolName: call.name,
+            input: parsedInput ?? call.raw,
+            output:
+              result.error ?? result.output ?? 'Tool execution cancelled.',
+            isError: true,
+          },
+          'failed',
+        );
+      }
       return null;
     }
 
