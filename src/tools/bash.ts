@@ -1,6 +1,9 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Local imports - platform
+import { tryPlatform } from '@platform/platform';
+
 // Local imports - agent
 import {
   getExecutionStore,
@@ -19,11 +22,11 @@ import {
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { toErrorMessage } from '@common/errors';
 import {
   deriveRunOutcome,
   projectRunOutcome,
 } from '@common/constants/streamStatus';
-import { toErrorMessage } from '@common/errors';
 
 // Local imports - tools
 import { type StreamTabId, type ExecutionId } from '@shared/schemas';
@@ -121,8 +124,15 @@ export class BashTool extends defineTool({
       throw new ToolError(SHELL_BACKGROUNDING_MESSAGE);
     }
 
-    // Request approval before executing the command
-    const approval = await requestBashApproval({ command: input.command });
+    const contexts = getCurrentToolContexts();
+    const callContext = contexts?.callContext;
+    const runContext = contexts?.runContext;
+    const cwd =
+      parseWorkingDirectory(runContext?.workingDirectory) ??
+      tryPlatform()?.workspace.getWorkspacePath();
+
+    // Request approval before executing the command.
+    const approval = await requestBashApproval({ command: input.command, cwd });
 
     if (!approval.accepted) {
       return buildBashApprovalRejectedResult(
@@ -132,14 +142,9 @@ export class BashTool extends defineTool({
     }
 
     // Signal execution starting (triggers in-progress log after approval)
-    const contexts = getCurrentToolContexts();
-    const callContext = contexts?.callContext;
-    const runContext = contexts?.runContext;
     callContext?.onExecutionReady?.();
 
     const timeoutMs = input.timeout ?? BASH_TOOL_DEFAULT_TIMEOUT_MS;
-
-    const cwd = parseWorkingDirectory(runContext?.workingDirectory);
 
     if (input.run_in_background) {
       return this.executeBackground(

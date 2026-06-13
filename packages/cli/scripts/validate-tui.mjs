@@ -1001,6 +1001,7 @@ const SCENARIOS = [
       'agent: chat · model: harness-model',
       'Run bash command?',
       '$ npm run compile:safe',
+      'Directory:',
       'y approve',
       'a approve session',
       'Use foreground panel shortcuts',
@@ -1031,6 +1032,7 @@ const SCENARIOS = [
     expect: [
       'Run bash command?',
       '$ npm run compile:safe',
+      'Directory:',
       'y approve',
       'n reject',
       'Esc cancel',
@@ -1048,6 +1050,7 @@ const SCENARIOS = [
     bootExpect: '[Ctrl-C]',
     expect: [
       'Run bash command?',
+      'Directory:',
       "$ python3 << 'EOF'",
       'more rows',
       'scroll command',
@@ -1068,6 +1071,7 @@ const SCENARIOS = [
     frame: 'tail',
     expect: [
       'Run bash command?',
+      'Directory:',
       "$ python3 << 'EOF'",
       'more rows',
       'scroll command',
@@ -1089,6 +1093,7 @@ const SCENARIOS = [
     frame: 'tail',
     expect: [
       'Run bash command?',
+      'Directory:',
       'x2 = 1 + 2 * y * y',
       'previous',
       'more rows',
@@ -1110,13 +1115,13 @@ const SCENARIOS = [
     frame: 'tail',
     expect: [
       'Run bash command?',
+      'Directory:',
       'for y in range(1, 100):',
-      'x2 = 1 + 2 * y * y',
       'previous',
       'more rows',
       'PgUp/PgDn page',
     ],
-    unexpect: ["$ python3 << 'EOF'", 'solutions = []', '[Option-p]tasks'],
+    unexpect: ["$ python3 << 'EOF'", '[Option-p]tasks'],
   },
   {
     name: 'tiny-compact-long-bash-approval',
@@ -1128,7 +1133,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Ctrl-C]',
     frame: 'tail',
-    expect: ['Run bash command?', 'more rows', 'scroll command', 'y approve'],
+    expect: ['Run bash command?', 'Directory:', 'rows hidden', 'y approve'],
     unexpect: ['[Option-p]tasks'],
   },
   {
