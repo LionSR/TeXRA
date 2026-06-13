@@ -62,7 +62,9 @@ export async function runLakeCommand(
     return executeLake(options);
   }
   const workspaceKey = path.resolve(options.workspaceRoot);
-  return getWorkspaceMutex(workspaceKey).runExclusive(() => executeLake(options));
+  return getWorkspaceMutex(workspaceKey).runExclusive(() =>
+    executeLake(options),
+  );
 }
 
 function executeLake(options: LakeCommandOptions): Promise<LakeCommandResult> {
