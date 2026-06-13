@@ -37,6 +37,7 @@ export type ToolEditPermission = z.infer<typeof ToolEditPermissionSchema>;
 
 export const BashPermissionSchema = PermissionBaseSchema.extend({
   command: z.string(),
+  cwd: z.string().optional(),
 });
 export type BashPermission = z.infer<typeof BashPermissionSchema>;
 

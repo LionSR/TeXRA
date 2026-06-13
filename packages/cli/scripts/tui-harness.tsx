@@ -739,6 +739,7 @@ function makeBashApprovalPayload() {
   return {
     requestId: 'harness-bash-approval',
     command: BASH_APPROVAL_COMMAND,
+    cwd: HARNESS_CWD,
     allowBypass: true,
     streamId: STREAM_ID,
   };

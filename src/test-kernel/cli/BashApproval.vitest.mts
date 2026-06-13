@@ -4,6 +4,7 @@ import {
   bashApprovalPageRows,
   bashApprovalCommandRowsBudget,
   bashCommandDisplayLines,
+  bashCwdDisplayLine,
   boundedBashCommandDisplayLines,
   maxBashCommandScrollOffset,
 } from '@cli/chat/tui/modals/BashApproval';
@@ -26,6 +27,43 @@ const HEREDOC_COMMAND = [
 ].join('\n');
 
 describe('CLI bash approval layout', () => {
+  it('includes the working directory when one is available', () => {
+    const line = bashCwdDisplayLine({
+      cwd: '/tmp/texra-project',
+      width: 76,
+    });
+
+    expect(line).toBe('Directory: /tmp/texra-project');
+  });
+
+  it('keeps cwd out of the scrollable command rows', () => {
+    const visible = boundedBashCommandDisplayLines({
+      command: HEREDOC_COMMAND,
+      maxDisplayLines: 3,
+      width: 76,
+    });
+
+    expect(visible).toHaveLength(3);
+    expect(visible.some((line) => line.text.startsWith('Directory:'))).toBe(
+      false,
+    );
+  });
+
+  it('counts the fixed cwd row before clamping command rows', () => {
+    const withoutCwd = bashApprovalCommandRowsBudget({
+      availableRows: 8,
+      columns: 80,
+    });
+    const withCwd = bashApprovalCommandRowsBudget({
+      availableRows: 8,
+      columns: 80,
+      extraFixedRows: 1,
+    });
+
+    expect(withoutCwd).toBe(2);
+    expect(withCwd).toBe(1);
+  });
+
   it('caps long commands so the approval footer stays visible', () => {
     const budget = bashApprovalCommandRowsBudget({
       availableRows: 16,
