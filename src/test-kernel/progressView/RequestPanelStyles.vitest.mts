@@ -39,12 +39,13 @@ describe('request panel styles', () => {
     expect(hostRule).toContain('max-width: 100%');
     expect(actionStart).toBeGreaterThanOrEqual(0);
     expect(baseStart).toBeGreaterThan(actionStart);
-    expect(actionRule).toContain('flex: 0 1 auto');
-    expect(actionRule).toContain('width: auto');
+    expect(actionRule).toContain('flex: 0 0 auto');
+    expect(actionRule).toContain('width: fit-content');
     expect(actionRule).toContain('min-width: min(5.5rem, 100%)');
-    expect(actionRule).toContain('max-width: fit-content');
+    expect(actionRule).toContain('max-width: min(9rem, 100%)');
     expect(baseRule).toContain('justify-content: center');
-    expect(baseRule).toContain('width: 100%');
+    expect(baseRule).toContain('width: auto');
+    expect(baseRule).toContain('max-width: 100%');
   });
 
   it('lets the tool edit diff dropdown shrink inside narrow panels', () => {
