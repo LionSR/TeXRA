@@ -35,7 +35,7 @@ const API_KEY_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   anthropic: 'opus48T',
   openai: 'gpt55',
   google: 'gemini31p',
-  deepseek: 'deepseekT',
+  deepseek: 'deepseekproT',
   openRouter: 'sonnet46T',
   xai: 'grok4',
   moonshot: 'kimi25T',

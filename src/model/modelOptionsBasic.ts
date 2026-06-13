@@ -21,13 +21,12 @@ export const DEFAULT_MODELS = [
   'fable5',
   'gpt55',
   'gpt54',
-  'deepseekT',
   'deepseekproT',
   'kimi26T',
 ];
 
 /** Increment when the persisted model list needs reconciliation. */
-export const MODEL_LIST_VERSION = 19;
+export const MODEL_LIST_VERSION = 20;
 
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;
