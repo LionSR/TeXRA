@@ -46,7 +46,10 @@ import {
 } from '../runtime/runModel';
 import { getCliAuthProvider } from '../runtime/supabaseAuth';
 
-import { missingToolUseAgentMessage } from './_helpers/agentLookupText';
+import {
+  missingMultiAgentPresetMessage,
+  missingToolUseAgentMessage,
+} from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { formatMultiAgentRunInstruction } from './_helpers/multiAgentInstruction';
 import { emitCliResult } from './_helpers/output';
@@ -106,7 +109,7 @@ function planCurrentMultiAgentRun(
     init.preset,
   );
   if (!preset) {
-    throw new CliUsageError(`Multi-agent preset not found: ${init.preset}`);
+    throw new CliUsageError(missingMultiAgentPresetMessage(init.preset));
   }
   return planCliMultiAgentPresetRun(preset, {
     workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
@@ -255,7 +258,7 @@ async function runMultiAgentShow(
   const presets = readCliMultiAgentPresets();
   const preset = findCliMultiAgentPreset(presets, presetIdOrName);
   if (!preset) {
-    writeTextStderr(`Multi-agent preset not found: ${presetIdOrName}`);
+    writeTextStderr(missingMultiAgentPresetMessage(presetIdOrName));
     return CliExitCode.Usage;
   }
 
