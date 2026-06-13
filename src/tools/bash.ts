@@ -173,6 +173,7 @@ export class BashTool extends defineTool({
       timeout: timeoutMs,
       onStdout: ctx?.onToolOutput,
       onStderr: ctx?.onToolOutput,
+      signal: ctx?.signal,
     });
 
     if (result.timedOut) {
