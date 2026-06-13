@@ -21,6 +21,9 @@ function readRequestPanelStyles(): string {
 describe('request panel styles', () => {
   it('keeps tool edit approval actions compact', () => {
     const source = readRequestPanelStyles();
+    const hostStart = source.indexOf(':host {');
+    const containersStart = source.indexOf(':is(${CONTAINERS}) {');
+    const hostRule = source.slice(hostStart, containersStart);
     const actionStart = source.indexOf(
       '.approval-request__actions wa-button[data-action] {',
     );
@@ -30,13 +33,42 @@ describe('request panel styles', () => {
     const actionRule = source.slice(actionStart, baseStart);
     const baseRule = source.slice(baseStart, source.indexOf('}', baseStart));
 
+    expect(hostStart).toBeGreaterThanOrEqual(0);
+    expect(containersStart).toBeGreaterThan(hostStart);
+    expect(hostRule).toContain('min-width: 0');
+    expect(hostRule).toContain('max-width: 100%');
     expect(actionStart).toBeGreaterThanOrEqual(0);
     expect(baseStart).toBeGreaterThan(actionStart);
-    expect(actionRule).toContain('flex: 0 1 6.5rem');
-    expect(actionRule).toContain('width: 6.5rem');
-    expect(actionRule).toContain('max-width: 100%');
+    expect(actionRule).toContain('flex: 0 0 auto');
+    expect(actionRule).toContain('width: auto');
+    expect(actionRule).toContain('min-width: min(5.5rem, 100%)');
+    expect(actionRule).toContain('max-width: min(7rem, 100%)');
     expect(baseRule).toContain('justify-content: center');
     expect(baseRule).toContain('width: 100%');
+  });
+
+  it('lets the tool edit diff dropdown shrink inside narrow panels', () => {
+    const source = readRequestPanelStyles();
+    const dropdownStart = source.indexOf(
+      '.approval-request__actions .diff-dropdown {',
+    );
+    const dropdownButtonStart = source.indexOf(
+      '.approval-request__actions .diff-dropdown .diff-main-button {',
+    );
+    const dropdownRule = source.slice(dropdownStart, dropdownButtonStart);
+    const dropdownButtonRule = source.slice(
+      dropdownButtonStart,
+      source.indexOf('}', dropdownButtonStart),
+    );
+
+    expect(dropdownStart).toBeGreaterThanOrEqual(0);
+    expect(dropdownButtonStart).toBeGreaterThan(dropdownStart);
+    expect(dropdownRule).toContain('flex: 0 1 8.25rem');
+    expect(dropdownRule).toContain('min-width: 0');
+    expect(dropdownRule).toContain('max-width: 100%');
+    expect(dropdownButtonRule).toContain('flex: 1 1 auto');
+    expect(dropdownButtonRule).toContain('width: auto');
+    expect(dropdownButtonRule).toContain('min-width: 0');
   });
 
   it('keeps retry error details headers compact', () => {
