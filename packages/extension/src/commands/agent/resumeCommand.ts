@@ -6,10 +6,7 @@ import { z } from 'zod';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type {
-  DrainedFollowUpItem,
-  FollowUpQueueInput,
-} from '@agent/toolUse/FollowUpQueue';
+import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -49,21 +46,20 @@ async function resumeFromSnapshot(
     runtimeHost,
   });
 
-  let queuedFollowUps: DrainedFollowUpItem[] = [];
+  let followUps: readonly FollowUpQueueInput[] = [];
   try {
-    queuedFollowUps = ToolUseFollowUpQueue.drainItems(streamId);
+    const queuedFollowUps = ToolUseFollowUpQueue.drainItems(streamId);
+    followUps =
+      followUp !== undefined
+        ? [{ text: followUp, origin: 'user' as const }, ...queuedFollowUps]
+        : queuedFollowUps;
     runtimeHost.emit('updateQueuedFollowUps', {
       streamId,
     });
 
     await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
       setupSession: (session) => {
-        const allFollowUps: readonly FollowUpQueueInput[] =
-          followUp !== undefined
-            ? [{ text: followUp, origin: 'user' as const }, ...queuedFollowUps]
-            : queuedFollowUps;
-
-        for (const item of allFollowUps) {
+        for (const item of followUps) {
           session.appendFollowUp(item);
         }
       },
@@ -74,14 +70,10 @@ async function resumeFromSnapshot(
     // Re-enqueue the drained follow-ups (and the explicit one, ahead of
     // them) so a later resume picks them up instead of dropping them —
     // matching the desktop bridge's failure path.
-    const requeued: readonly FollowUpQueueInput[] =
-      followUp !== undefined
-        ? [{ text: followUp, origin: 'user' as const }, ...queuedFollowUps]
-        : queuedFollowUps;
-    for (const item of requeued) {
+    for (const item of followUps) {
       ToolUseFollowUpQueue.enqueue(streamId, item, { force: true });
     }
-    if (requeued.length > 0) {
+    if (followUps.length > 0) {
       runtimeHost.emit('updateQueuedFollowUps', { streamId });
     }
 

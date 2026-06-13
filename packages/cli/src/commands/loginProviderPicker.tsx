@@ -26,6 +26,7 @@ function LoginProviderPicker(props: {
   readonly onSelect: (provider: LoginPickerChoice | undefined) => void;
 }): React.JSX.Element {
   const app = useApp();
+  const remoteSession = isLikelyRemoteSession();
   const finish = (provider: LoginPickerChoice | undefined): void => {
     props.onSelect(provider);
     app.exit();
@@ -42,7 +43,7 @@ function LoginProviderPicker(props: {
         TeXRA login
       </Text>
       <Text dimColor>Choose how to sign in:</Text>
-      {isLikelyRemoteSession() ? (
+      {remoteSession ? (
         <Text dimColor>
           Remote session detected — the device code option works without a
           callback port.
@@ -51,9 +52,7 @@ function LoginProviderPicker(props: {
       <Box marginTop={1} flexDirection="column">
         <Select<LoginPickerChoice>
           items={LOGIN_PICKER_ITEMS}
-          activeValue={
-            isLikelyRemoteSession() ? 'device' : DEFAULT_OAUTH_PROVIDER
-          }
+          activeValue={remoteSession ? 'device' : DEFAULT_OAUTH_PROVIDER}
           onSelect={finish}
           onCancel={() => finish(undefined)}
         />

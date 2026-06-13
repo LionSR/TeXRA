@@ -43,6 +43,7 @@ import { AbsoluteFS, StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
+import { clamp } from '@utils/core';
 import {
   formatResultCount,
   formatTimestamp,
@@ -155,11 +156,9 @@ const ExecutionsToolInputSchema = z.strictObject({
 export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 
 const normalizeWaitTimeout = (timeout: number | null | undefined): number =>
-  Math.min(
-    Math.max(
-      timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
-      EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-    ),
+  clamp(
+    timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+    EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
     EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
   );
 
@@ -169,19 +168,17 @@ const normalizeExecutionsToolInput = (input: unknown): unknown => {
   }
 
   const record = input as Record<string, unknown>;
-  if (
-    typeof record.timeout !== 'number' ||
-    !Number.isFinite(record.timeout) ||
-    (record.timeout >= EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS &&
-      record.timeout <= EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS)
-  ) {
+  const { timeout } = record;
+  const outOfRange =
+    typeof timeout === 'number' &&
+    Number.isFinite(timeout) &&
+    (timeout < EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS ||
+      timeout > EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS);
+  if (!outOfRange) {
     return input;
   }
 
-  return {
-    ...record,
-    timeout: normalizeWaitTimeout(record.timeout),
-  };
+  return { ...record, timeout: normalizeWaitTimeout(timeout) };
 };
 
 export class ExecutionsTool extends defineTool({

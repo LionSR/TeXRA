@@ -15,9 +15,10 @@ import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import pTimeout from 'p-timeout';
+
 import { toErrorMessage } from '@common/errors';
 import { debug, info, warn } from '@logger/logUtils';
-import pTimeout from 'p-timeout';
 import {
   registerLeanServer,
   unregisterLeanServer,

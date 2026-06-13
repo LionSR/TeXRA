@@ -96,7 +96,7 @@ export async function pollForDeviceSession(
   hooks: DeviceAuthPollHooks = {},
 ): Promise<GitHubTokenExchangeResponse> {
   const now = hooks.now ?? Date.now;
-  const sleep = hooks.sleep ?? ((ms: number) => sleepMs(ms));
+  const sleep = hooks.sleep ?? sleepMs;
   const deadline = now() + authorization.expires_in * 1000;
   let intervalSeconds = authorization.interval;
   let transientFailures = 0;

@@ -51,7 +51,7 @@ import {
 import { cliState } from './state/cliState';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
-import { activeStreamScope, streamDisplayLabel } from './state/streamViews';
+import { streamDisplayLabel } from './state/streamViews';
 import { defaultShortcutModifierLabel } from './shortcutLabels';
 import {
   isScopedTranscriptViewport,
@@ -794,15 +794,7 @@ export function App(props: AppProps): React.JSX.Element {
     pendingEscapeInterruptTimer.current = undefined;
   };
 
-  useEffect(
-    () => () => {
-      if (pendingEscapeInterruptTimer.current !== undefined) {
-        clearTimeout(pendingEscapeInterruptTimer.current);
-        pendingEscapeInterruptTimer.current = undefined;
-      }
-    },
-    [],
-  );
+  useEffect(() => clearPendingEscapeInterrupt, []);
 
   const handleMetaShortcut = (value: string): boolean => {
     const lower = value.toLowerCase();
@@ -844,9 +836,7 @@ export function App(props: AppProps): React.JSX.Element {
   // handler (gating internally) is clearer than several hooks racing on the same
   // chord. Stays mounted so Ctrl+C works even while a modal/form owns the input.
   useInput((input, key) => {
-    const pendingEscapeInterrupt =
-      pendingEscapeInterruptTimer.current !== undefined;
-    if (pendingEscapeInterrupt) {
+    if (pendingEscapeInterruptTimer.current !== undefined) {
       clearPendingEscapeInterrupt();
       if (
         !key.ctrl &&
