@@ -81,6 +81,17 @@ export {
   noopAgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
 
+// ── 5b. Session ownership (per-session runtime-state container) ──
+// One owner per session for interrupt / execution / coordinator / subscription
+// state plus the trace flusher set. `defaultSessionHandle` wraps the existing
+// process singletons by identity (behavior-neutral); hosts that need isolation
+// construct their own `new SessionHandle({ hostChannel })`.
+export {
+  SessionHandle,
+  defaultSessionHandle,
+  type SessionHandleInit,
+} from '@agent/runtime/SessionHandle';
+
 // ── 6. Telemetry: the AgentTrace discriminated-event channel ──
 // SDK consumers attach their own subscriber via trace.subscribe(...).
 export {

@@ -64,3 +64,16 @@ const activeFlushers = new Set<() => void>();
 export function flushPendingRunTraces(): void {
   for (const flush of [...activeFlushers]) flush();
 }
+
+/**
+ * Accessor for the process-default flusher set.
+ *
+ * Exposed so `SessionHandle` (in `@agent/runtime`) can alias the default
+ * session's flushers to this exact set *by identity*. The dependency edge
+ * must point this way only — `@transcript` never imports `@agent/runtime`
+ * (the layering inversion that the SDK readiness work already removed) — so
+ * the agent runtime reaches the set through this accessor, not the reverse.
+ */
+export function getActiveFlushers(): Set<() => void> {
+  return activeFlushers;
+}
