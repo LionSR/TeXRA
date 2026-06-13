@@ -10,11 +10,27 @@ import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolU
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { TaskRunFileService } from '@utils/files';
 
+/**
+ * The live model-client contract every cycle/round flow shares because each
+ * runs a `ModelInvocationNode`.
+ *
+ * - `client` is the provider SDK client for the run's active model.
+ * - `refreshClient` re-fetches it after a mid-run model switch so the retry
+ *   path picks up the new handler.
+ *
+ * Declared here (instead of being supplied implicitly through an erased
+ * `setServices` call) so the cycle/round factories can type-check the outer
+ * node that bridges these fields in before running the inner flow.
+ */
+export interface ModelClientServices<C = unknown> {
+  readonly client: C;
+  readonly refreshClient?: () => Promise<void>;
+}
+
 /** Services for response cycle flow nodes. */
 export interface ResponseCycleServices<
   C = unknown,
-> extends BaseFlowContextInit<C> {
-  readonly client: C;
+> extends BaseFlowContextInit<C>, ModelClientServices<C> {
   readonly fileService: TaskRunFileService;
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
@@ -26,12 +42,12 @@ export interface ResponseCycleServices<
  *
  * A "round" is one LLM invocation + tool dispatch loop (the inner primitive).
  * The outer session step (ToolUseCycleNode) bridges ToolUseServices into this
- * interface by adding `run`, `workspace`, and `client` before running the round.
+ * interface by adding `run`, `workspace`, and the {@link ModelClientServices}
+ * fields before running the round.
  */
 export interface ToolUseRoundServices<
   C = unknown,
-> extends BaseFlowContextInit<C> {
-  readonly client: C;
+> extends BaseFlowContextInit<C>, ModelClientServices<C> {
   readonly fileService: TaskRunFileService;
   readonly toolRegistry: IToolRegistry;
   /** Session for injecting queued user messages after tool dispatch. */

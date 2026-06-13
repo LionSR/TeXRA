@@ -139,17 +139,17 @@ export class ToolUseProcessNode<C> extends BaseNode<
       execRes.lastAssistantContent ?? [];
 
     if (shared.responseTimeMs != null) {
-      shared.cycleResponseTimeMs += shared.responseTimeMs;
+      shared.roundResponseTimeMs += shared.responseTimeMs;
     }
     if (execRes.normalizedUsage) {
-      shared.cycleNormalizedUsage = execRes.normalizedUsage;
+      shared.roundNormalizedUsage = execRes.normalizedUsage;
     }
 
     recordCycleMetrics(
       run,
-      shared.cycleIndex,
-      shared.cycleResponseTimeMs,
-      shared.cycleNormalizedUsage ?? null,
+      shared.roundIndex,
+      shared.roundResponseTimeMs,
+      shared.roundNormalizedUsage ?? null,
     );
     await onRoundFinalized?.(run);
     run.totalRounds += 1;
@@ -176,9 +176,9 @@ export class ToolUseProcessNode<C> extends BaseNode<
 
     shared.toolCalls = execRes.toolCalls;
     shared.text = execRes.text;
-    shared.cycleIndex += 1;
-    shared.cycleResponseTimeMs = 0;
-    shared.cycleNormalizedUsage = undefined;
+    shared.roundIndex += 1;
+    shared.roundResponseTimeMs = 0;
+    shared.roundNormalizedUsage = undefined;
     return FlowTransition.DEFAULT;
   }
 }

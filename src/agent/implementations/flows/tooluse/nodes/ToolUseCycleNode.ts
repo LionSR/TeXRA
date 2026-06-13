@@ -62,12 +62,12 @@ export class ToolUseCycleNode<C> extends Node<
       return { outcome: 'skipped' };
     }
 
-    const cycleShared: ToolUseRoundShared = {
+    const roundShared: ToolUseRoundShared = {
       messages: prepRes.messages,
       shouldStop: false,
       endTurn: false,
-      cycleIndex: prepRes.runState.totalRounds,
-      cycleResponseTimeMs: 0,
+      roundIndex: prepRes.runState.totalRounds,
+      roundResponseTimeMs: 0,
     };
 
     const flow = createToolUseRoundFlow<C>();
@@ -110,19 +110,19 @@ export class ToolUseCycleNode<C> extends Node<
     });
 
     try {
-      await flow.run(cycleShared);
+      await flow.run(roundShared);
 
-      if (cycleShared.shouldStop && cycleShared.lastError) {
+      if (roundShared.shouldStop && roundShared.lastError) {
         return {
           outcome: 'failed',
-          message: cycleShared.lastError.message,
-          userRetryable: cycleShared.lastError.userRetryable,
+          message: roundShared.lastError.message,
+          userRetryable: roundShared.lastError.userRetryable,
         };
       }
-      if (cycleShared.shouldStop && !cycleShared.endTurn) {
+      if (roundShared.shouldStop && !roundShared.endTurn) {
         return { outcome: 'cancelled' };
       }
-      return { outcome: 'completed', messages: cycleShared.messages };
+      return { outcome: 'completed', messages: roundShared.messages };
     } finally {
       prepRes.workspaceState.workPlan.clearOnUpdate();
       // Drain in-flight persist writes before returning so they don't

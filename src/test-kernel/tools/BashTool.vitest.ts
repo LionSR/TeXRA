@@ -212,8 +212,8 @@ describe('BashTool', () => {
 
     const messages: ProviderMessage[] = [];
 
-    // Create shared state for the cycle flow (flat pattern)
-    // Tool-use cycles track metrics in shared (cycleIndex, etc.) instead of round object
+    // Create shared state for the round flow (flat pattern)
+    // Tool-use rounds track metrics in shared (roundIndex, etc.) instead of round object
     const shared: ToolUseRoundShared = {
       messages,
       shouldStop: false,
@@ -224,9 +224,9 @@ describe('BashTool', () => {
       lastError: undefined,
       toolCalls: undefined,
       text: undefined,
-      cycleIndex: 0,
-      cycleResponseTimeMs: 0,
-      cycleNormalizedUsage: undefined,
+      roundIndex: 0,
+      roundResponseTimeMs: 0,
+      roundNormalizedUsage: undefined,
     };
 
     // Create and run the flow directly

@@ -77,9 +77,9 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       lastError: undefined,
       toolCalls: undefined,
       text: undefined,
-      cycleIndex: 0,
-      cycleResponseTimeMs: 0,
-      cycleNormalizedUsage: undefined,
+      roundIndex: 0,
+      roundResponseTimeMs: 0,
+      roundNormalizedUsage: undefined,
     };
 
     await createToolUseRoundFlow().setServices(services).run(shared);

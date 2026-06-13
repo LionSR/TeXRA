@@ -21,7 +21,7 @@ import {
  * - messages, shouldStop, endTurn, responseTimeMs, stopReason, lastError
  *
  * Tool-use specific fields:
- * - response, toolCalls, text, cycleIndex, cycleResponseTimeMs, cycleNormalizedUsage
+ * - response, toolCalls, text, roundIndex, roundResponseTimeMs, roundNormalizedUsage
  */
 export const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
   /** Raw response from model (provider-specific, not schematized) */
@@ -40,17 +40,17 @@ export const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
    * Used for debug file naming and usage tracking. Incremented after each
    * successful round in ToolUseProcessNode.post().
    */
-  cycleIndex: z.int().nonnegative(),
+  roundIndex: z.int().nonnegative(),
   /**
    * Accumulated response time for current round (milliseconds).
    * Reset after finalization when continuing to next round.
    */
-  cycleResponseTimeMs: z.number().nonnegative(),
+  roundResponseTimeMs: z.number().nonnegative(),
   /**
    * Normalized usage for current round.
    * Reset after finalization when continuing to next round.
    */
-  cycleNormalizedUsage: NormalizedUsageSchema.optional(),
+  roundNormalizedUsage: NormalizedUsageSchema.optional(),
 });
 
 /** Tool-use round fields derived from schema */
@@ -70,5 +70,5 @@ export interface ToolUseRoundShared extends ToolUseRoundFields {
   /** Tool calls with proper typing (schema uses z.unknown()) */
   toolCalls?: SdkToolCall[];
   /** Normalized usage with proper typing */
-  cycleNormalizedUsage?: NormalizedUsage;
+  roundNormalizedUsage?: NormalizedUsage;
 }

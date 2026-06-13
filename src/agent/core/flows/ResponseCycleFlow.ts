@@ -590,7 +590,8 @@ class ResponseContinuationNode<C> extends BaseNode<
  */
 export function createResponseCycleFlow<C>(): Flow<
   ResponseCycleShared,
-  CycleParams
+  CycleParams,
+  ResponseCycleServices<C>
 > {
   const prepNode = new ResponsePrepNode<C>();
   const invokeNode = new ModelInvocationNode<
@@ -629,5 +630,7 @@ export function createResponseCycleFlow<C>(): Flow<
 
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ResponseCycleShared, CycleParams>(prepNode);
+  return new Flow<ResponseCycleShared, CycleParams, ResponseCycleServices<C>>(
+    prepNode,
+  );
 }

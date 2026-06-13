@@ -48,7 +48,8 @@ export {
  */
 export function createToolUseRoundFlow<C>(): Flow<
   ToolUseRoundShared,
-  CycleParams
+  CycleParams,
+  ToolUseRoundServices<C>
 > {
   const prepNode = new ToolUsePrepNode<C>();
   const callNode = new ModelInvocationNode<
@@ -63,7 +64,7 @@ export function createToolUseRoundFlow<C>(): Flow<
     },
     getPostCompactionContext: defaultPostCompactionContext,
     getDebugFileOptions: (shared) => ({
-      continuationCount: shared.cycleIndex,
+      continuationCount: shared.roundIndex,
       baseName: 'tooluse_response',
     }),
   });
@@ -75,5 +76,7 @@ export function createToolUseRoundFlow<C>(): Flow<
   processNode.next(dispatchNode);
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ToolUseRoundShared, CycleParams>(prepNode);
+  return new Flow<ToolUseRoundShared, CycleParams, ToolUseRoundServices<C>>(
+    prepNode,
+  );
 }

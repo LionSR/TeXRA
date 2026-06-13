@@ -21,7 +21,7 @@ interface ToolUsePrepResult {
 }
 
 /**
- * Prepares a tool-use cycle by checking interruptions and injecting queued follow-ups.
+ * Prepares a tool-use round by checking interruptions and injecting queued follow-ups.
  *
  * If there are queued user messages (typed during previous tool execution),
  * they are injected here BEFORE calling the model. This ensures the model's
@@ -90,12 +90,12 @@ export class ToolUsePrepNode<C> extends BaseNode<
       'response',
       'toolCalls',
       'text',
-      'cycleNormalizedUsage',
+      'roundNormalizedUsage',
     ]);
-    shared.cycleResponseTimeMs = 0;
+    shared.roundResponseTimeMs = 0;
 
     await saveCycleDebug(shared.messages, 'messages', this.services, {
-      continuationCount: shared.cycleIndex,
+      continuationCount: shared.roundIndex,
       baseName: 'tooluse',
     });
 
