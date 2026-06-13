@@ -97,6 +97,22 @@ jobs:
       - name: Kernel tests
         run: pnpm run test
 
+      - name: Validate CLI TUI smoke frames
+        if: runner.os == 'Linux'
+        run: >-
+          pnpm --filter @texra-ai/cli validate:tui --
+          --snapshot-dir artifacts/tui-frames
+          edit-approval subagent-picker hidden-root-approval-tab-return
+
+      - name: Upload CLI TUI smoke frames
+        if: runner.os == 'Linux' && always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-cli-tui-smoke-frames
+          path: artifacts/tui-frames
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Compile
         run: pnpm run compile
 
