@@ -302,6 +302,15 @@ describe('CLI root argument routing', () => {
         '--instruction-file=prompt.md',
       ]),
     ).resolves.toBeUndefined();
+    await expect(
+      detectUnknownCliFlag([
+        'run',
+        'polish',
+        '--input',
+        'paper.tex',
+        '--instruction-file=prompt.md',
+      ]),
+    ).resolves.toBeUndefined();
   });
 
   it('rejects camelCase spellings for kebab-case flags', async () => {
