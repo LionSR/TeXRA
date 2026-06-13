@@ -107,10 +107,11 @@ const STATUS_MESSAGES: Record<string, string> = {
  * Project an {@link AgentLaunchContext} onto the subset of fields that belong
  * in the ambient {@link RunContext}.
  *
- * Centralises the mapping so new per-run flags (e.g. `stopAfterCycle`,
- * `approvalPromptsUnavailable`, `runtimeUnavailableTools`) live in one place
- * and are never silently dropped. Three field renames are unavoidable given the interfaces were
- * designed independently:
+ * This is the single owner of the launch-context → ambient-context mapping, so
+ * new per-run flags (e.g. `stopAfterCycle`, `approvalPromptsUnavailable`,
+ * `runtimeUnavailableTools`) live in one place and are never silently dropped.
+ * The ambient context is intentionally a flat projection, so three fields are
+ * renamed from their nested `AgentCore` positions:
  *  - `AgentCore.logger`   → `RunContext.trace`
  *  - `AgentConfig.agent`  → `RunContext.agentName`
  *  - `AgentConfig.model`  → `RunContext.model`
