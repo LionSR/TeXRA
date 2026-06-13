@@ -39,12 +39,15 @@ describe('request panel styles', () => {
     expect(hostRule).toContain('max-width: 100%');
     expect(actionStart).toBeGreaterThanOrEqual(0);
     expect(baseStart).toBeGreaterThan(actionStart);
+    expect(actionRule).toContain('display: inline-flex');
     expect(actionRule).toContain('flex: 0 0 auto');
-    expect(actionRule).toContain('width: fit-content');
+    expect(actionRule).toContain('inline-size: max-content');
     expect(actionRule).toContain('min-width: min(5.5rem, 100%)');
-    expect(actionRule).toContain('max-width: min(9rem, 100%)');
+    expect(actionRule).toContain('max-width: min(7rem, 100%)');
+    expect(actionRule).toContain('max-inline-size: min(7rem, 100%)');
     expect(baseRule).toContain('justify-content: center');
     expect(baseRule).toContain('width: auto');
+    expect(baseRule).toContain('inline-size: auto');
     expect(baseRule).toContain('max-width: 100%');
   });
 
@@ -67,6 +70,7 @@ describe('request panel styles', () => {
     expect(dropdownRule).toContain('flex: 0 1 8.25rem');
     expect(dropdownRule).toContain('min-width: 0');
     expect(dropdownRule).toContain('max-width: 100%');
+    expect(dropdownRule).toContain('max-inline-size: 100%');
     expect(dropdownButtonRule).toContain('flex: 1 1 auto');
     expect(dropdownButtonRule).toContain('width: auto');
     expect(dropdownButtonRule).toContain('min-width: 0');

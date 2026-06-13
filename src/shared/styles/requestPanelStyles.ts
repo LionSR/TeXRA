@@ -141,6 +141,7 @@ export const requestPanelStyles: CSSResult = css`
 
   :is(${ACTIONS}) {
     display: flex;
+    align-items: center;
     flex-wrap: wrap;
     gap: ${sp.small};
     min-width: 0;
@@ -167,10 +168,13 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .approval-request__actions wa-button[data-action] {
+    display: inline-flex;
     flex: 0 0 auto;
-    width: fit-content;
+    width: auto;
+    inline-size: max-content;
     min-width: min(5.5rem, 100%);
-    max-width: min(9rem, 100%);
+    max-width: min(7rem, 100%);
+    max-inline-size: min(7rem, 100%);
   }
 
   :is(${ACTIONS}) wa-button[data-action]::part(base) {
@@ -181,6 +185,7 @@ export const requestPanelStyles: CSSResult = css`
   .approval-request__actions wa-button[data-action]::part(base) {
     justify-content: center;
     width: auto;
+    inline-size: auto;
     min-width: 0;
     max-width: 100%;
   }
@@ -282,6 +287,7 @@ export const requestPanelStyles: CSSResult = css`
     flex: 0 1 8.25rem;
     min-width: 0;
     max-width: 100%;
+    max-inline-size: 100%;
   }
 
   .approval-request__actions .diff-dropdown .diff-main-button {

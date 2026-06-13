@@ -22,18 +22,34 @@ describe('mock gallery styles', () => {
     );
     const hostStart = source.indexOf(':host {');
     const sectionStart = source.indexOf('.section {');
+    const sectionChildrenStart = source.indexOf('.section > * {');
+    const customElementStart = source.indexOf('texra-todo-list-mock,');
     const headerStart = source.indexOf('.header-strip {');
     const labelStart = source.indexOf('.header-strip__label {');
     const hostRule = source.slice(hostStart, sectionStart);
+    const sectionRule = source.slice(sectionStart, sectionChildrenStart);
+    const customElementRule = source.slice(
+      customElementStart,
+      source.indexOf('}', customElementStart),
+    );
     const headerRule = source.slice(headerStart, labelStart);
     const labelRule = source.slice(labelStart, source.indexOf('}', labelStart));
 
     expect(hostStart).toBeGreaterThanOrEqual(0);
+    expect(sectionChildrenStart).toBeGreaterThan(sectionStart);
+    expect(customElementStart).toBeGreaterThan(sectionChildrenStart);
     expect(headerStart).toBeGreaterThan(hostStart);
     expect(labelStart).toBeGreaterThan(headerStart);
     expect(hostRule).toContain('min-width: 0');
     expect(hostRule).toContain('max-width: 100%');
     expect(hostRule).toContain('overflow-x: hidden');
+    expect(sectionRule).toContain('min-width: 0');
+    expect(sectionRule).toContain('max-width: 100%');
+    expect(sectionRule).toContain('overflow-x: hidden');
+    expect(customElementRule).toContain('display: block');
+    expect(customElementRule).toContain('min-width: 0');
+    expect(customElementRule).toContain('max-width: 100%');
+    expect(customElementRule).toContain('overflow-x: hidden');
     expect(headerRule).toContain('flex-wrap: wrap');
     expect(headerRule).toContain('min-width: 0');
     expect(headerRule).toContain('max-width: 100%');
