@@ -1,0 +1,82 @@
+/**
+ * Tool-use round flow: Prep → Call → Process → Dispatch, looping until end-of-turn.
+ *
+ * A "round" is one LLM invocation plus the dispatch of any tool calls it returns.
+ * The loop repeats until the model stops requesting tools (end-of-turn).
+ *
+ * This is the inner primitive invoked by ToolUseCycleNode (the outer session step).
+ * The distinction:
+ *   - ToolUseRoundFlow  (this file) = one LLM invocation + tool dispatch loop
+ *   - ToolUseCycleNode  (implementations/flows/tooluse) = one session turn,
+ *     which may invoke many rounds via createToolUseRoundFlow()
+ *
+ * This file is the public entry point. The node implementations and shared
+ * types live in ./toolUseRound/; external consumers import the flow factory
+ * and shared schema/state types from here.
+ */
+
+// Local imports - core flow primitives
+import { Flow } from '@agent/node';
+import { defaultPostCompactionContext } from '@agent/core/flows/CommonCycleTypes';
+
+// Local file imports
+import { FlowTransition } from './FlowTransitions';
+import { ModelInvocationNode } from './ModelInvocationNode';
+import { ToolUsePrepNode } from './toolUseRound/ToolUsePrepNode';
+import { ToolUseProcessNode } from './toolUseRound/ToolUseProcessNode';
+import { ToolUseDispatchNode } from './toolUseRound/ToolUseDispatchNode';
+import type { CycleParams, ToolUseRoundServices } from './CycleServices';
+import type { ToolUseRoundShared } from './toolUseRound/roundShared';
+
+export {
+  ToolUseRoundFieldsSchema,
+  type ToolUseRoundFields,
+  type ToolUseRoundShared,
+} from './toolUseRound/roundShared';
+
+/**
+ * Creates a tool-use round flow with services injected via params.
+ *
+ * Flow structure:
+ *   Prep → Call → Process → Dispatch
+ *     ↑                        |
+ *     └────── CONTINUE ────────┘
+ *
+ * Queued user messages (typed during tool execution) are injected in PrepNode
+ * BEFORE calling the model, so the model's thinking/response considers the
+ * user's feedback.
+ */
+export function createToolUseRoundFlow<C>(): Flow<
+  ToolUseRoundShared,
+  CycleParams,
+  ToolUseRoundServices<C>
+> {
+  const prepNode = new ToolUsePrepNode<C>();
+  const callNode = new ModelInvocationNode<
+    ToolUseRoundShared,
+    CycleParams,
+    ToolUseRoundServices<C>
+  >({
+    operationName: 'Tool-use call',
+    streaming: true,
+    storeResponse: (shared, response) => {
+      shared.response = response;
+    },
+    getPostCompactionContext: defaultPostCompactionContext,
+    getDebugFileOptions: (shared) => ({
+      continuationCount: shared.roundIndex,
+      baseName: 'tooluse_response',
+    }),
+  });
+  const processNode = new ToolUseProcessNode<C>();
+  const dispatchNode = new ToolUseDispatchNode<C>();
+
+  prepNode.next(callNode);
+  callNode.next(processNode);
+  processNode.next(dispatchNode);
+  dispatchNode.on(FlowTransition.CONTINUE, prepNode);
+
+  return new Flow<ToolUseRoundShared, CycleParams, ToolUseRoundServices<C>>(
+    prepNode,
+  );
+}
