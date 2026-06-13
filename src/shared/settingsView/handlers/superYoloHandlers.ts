@@ -46,3 +46,19 @@ export function buildSuperYoloMessage(
     ),
   };
 }
+
+/**
+ * Persists the nested-delegation depth cap. Centralizes the clamp invariant and
+ * the backing {@link WorkspaceStateKey} so the extension (VS Code) and desktop
+ * (Electron) hosts can't drift on either. Callers refresh their own
+ * webview/renderer afterwards (the refresh transport is host-specific).
+ */
+export async function setNestedDelegationMaxDepth(
+  ports: SettingsStatePorts,
+  value: number,
+): Promise<void> {
+  await ports.workspaceState.update(
+    WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
+    clampNestedDelegationDepth(value),
+  );
+}

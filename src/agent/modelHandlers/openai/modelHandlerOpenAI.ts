@@ -6,7 +6,7 @@ import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 
 // Local imports - agent components
-import { logContextManagementEvent, logSdkError } from '@agent/trace';
+import { logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
@@ -18,7 +18,6 @@ import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceSt
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
-import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import {
   getSdkErrorMessage,
   isMissingFinishReasonError,
@@ -31,7 +30,7 @@ import type { ToolDefinition } from '@model';
 // Local imports - tools and utils
 import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
-import { isNonEmptyString, roundTo } from '@utils/core';
+import { isNonEmptyString } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import {
@@ -39,6 +38,7 @@ import {
   joinNonEmpty,
   objectToLogString,
 } from '@utils/text/stringUtils';
+import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagOpenAISdkError } from './openAISdkError';
 
@@ -69,7 +69,6 @@ import {
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
-  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
 } from '../contextManagementConstants';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 import type {
@@ -146,17 +145,6 @@ export class ModelHandlerOpenAI<
   // ── Compaction internals ──────────────────────────────────────────────
 
   /**
-   * Get the configured compaction threshold percentage.
-   * Returns 0 if compaction is disabled.
-   */
-  private getCompactionThresholdPercent(): number {
-    return getConfig<number>(
-      'texra.model.compactionThresholdPercent',
-      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-    );
-  }
-
-  /**
    * Check if the conversation should be compacted based on token usage.
    * Compaction is only triggered when:
    * - In tool-use mode (only mode with multi-turn message accumulation)
@@ -195,108 +183,56 @@ export class ModelHandlerOpenAI<
     didCompact: boolean;
   }> {
     const tokensBefore = this.lastKnownInputTokens;
-    const contextWindow = this.config.contextWindow;
-    const utilizationBefore = (tokensBefore / contextWindow) * 100;
-
     this.logger.debug(
-      `Compacting conversation with ${tokensBefore} input tokens (${utilizationBefore.toFixed(1)}% of ${contextWindow} context window)`,
+      `Compacting conversation with ${tokensBefore} input tokens (${((tokensBefore / this.config.contextWindow) * 100).toFixed(1)}% of ${this.config.contextWindow} context window)`,
     );
 
-    // Separate system/developer messages from conversation messages
-    const systemMessages: ChatCompletionMessageParam[] = [];
-    const conversationMessages: ChatCompletionMessageParam[] = [];
-    for (const msg of messages) {
-      if (msg.role === 'system' || (msg.role as string) === 'developer') {
-        if (conversationMessages.length === 0) {
-          systemMessages.push(msg);
-        } else {
-          conversationMessages.push(msg);
+    return this.runClientCompaction(
+      messages,
+      tokensBefore,
+      async (conversationMessages) => {
+        // System-prompt-swap: send conversation messages as-is with a
+        // summarization system prompt. Apply provider-specific normalization
+        // (e.g. DeepSeek's convertContentToString, mergeConsecutiveRoles) so
+        // the compaction call doesn't get rejected.
+        const normOptions = this.getMessageNormalizationOptions();
+        const normalizedConversation = normOptions
+          ? this.prepareNormalizedMessages(conversationMessages, normOptions)
+          : conversationMessages;
+
+        const summaryParams: ChatCompletionSummaryParams = {
+          model: this.config.fullName,
+          messages: [
+            { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
+            ...normalizedConversation,
+          ],
+          max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+          temperature: 0,
+          stream: false,
+        };
+        // Disable thinking for the summary call — reasoning models
+        // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
+        if (
+          this.getThinkingParameter() ||
+          this.capabilities.supportsReasoning
+        ) {
+          summaryParams.thinking = { type: 'disabled' };
         }
-      } else {
-        conversationMessages.push(msg);
-      }
-    }
-
-    // Nothing to summarize if conversation is too short
-    if (conversationMessages.length <= 2) {
-      this.logger.debug('Conversation too short for compaction, skipping');
-      return { compactedMessages: messages, didCompact: false };
-    }
-
-    // System-prompt-swap: replace the agent's system prompt with summarization
-    // instructions and send conversation messages as-is. The model reads the
-    // actual structured messages (roles, tool calls, tool results) natively.
-    // Apply provider-specific normalization (e.g., DeepSeek's convertContentToString,
-    // mergeConsecutiveRoles) so the compaction call doesn't get rejected.
-    const normOptions = this.getMessageNormalizationOptions();
-    const normalizedConversation = normOptions
-      ? this.prepareNormalizedMessages(conversationMessages, normOptions)
-      : conversationMessages;
-
-    try {
-      const summaryParams: ChatCompletionSummaryParams = {
-        model: this.config.fullName,
-        messages: [
-          { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
-          ...normalizedConversation,
-        ],
-        max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-        temperature: 0,
-        stream: false,
-      };
-      // Disable thinking for the summary call — reasoning models
-      // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
-      if (this.getThinkingParameter() || this.capabilities.supportsReasoning) {
-        summaryParams.thinking = { type: 'disabled' };
-      }
-      const summaryResponse = await client.chat.completions.create(
-        summaryParams,
-        { signal },
-      );
-
-      const summaryText = summaryResponse.choices[0]?.message?.content?.trim();
-      if (!summaryText) {
-        this.logger.warn('Compaction returned empty summary, skipping');
-        return { compactedMessages: messages, didCompact: false };
-      }
-
-      // Replace ALL messages with system prompt + summary
-      const compactedMessages: ChatCompletionMessageParam[] = [
-        ...systemMessages,
-        {
-          role: 'user',
-          content: `[Previous conversation summary]\n\n${summaryText}`,
-        },
-      ];
-
-      const summaryOutputTokens = summaryResponse.usage?.completion_tokens ?? 0;
-      const estimatedTokensAfter = Math.max(1, summaryOutputTokens);
-      const utilizationAfter = (estimatedTokensAfter / contextWindow) * 100;
-      const reduction = tokensBefore - estimatedTokensAfter;
-      const reductionPercent =
-        tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
-
-      logContextManagementEvent(
-        this.logger,
-        `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
-        {
-          action: 'compaction',
-          tokensBefore,
-          tokensAfter: estimatedTokensAfter,
-          contextWindow,
-          utilizationBefore: roundTo(utilizationBefore, 1),
-          utilizationAfter: roundTo(utilizationAfter, 1),
-          details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
-        },
-      );
-
-      return { compactedMessages, didCompact: true };
-    } catch (err) {
-      this.logger.warn(
-        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
-      );
-      return { compactedMessages: messages, didCompact: false };
-    }
+        const summaryResponse = await client.chat.completions.create(
+          summaryParams,
+          { signal },
+        );
+        return {
+          summaryText:
+            summaryResponse.choices[0]?.message?.content?.trim() ?? '',
+          outputTokens: summaryResponse.usage?.completion_tokens ?? 0,
+        };
+      },
+      (summary) => ({
+        role: 'user',
+        content: `[Previous conversation summary]\n\n${summary}`,
+      }),
+    );
   }
 
   /**
@@ -1054,15 +990,6 @@ export class ModelHandlerOpenAI<
     }
 
     return { text: newResponse, usage: responseObject.usage, stopReason };
-  }
-
-  /** Manages continuation with prefill support (typically no-op for models with prefill). */
-  addContinueMessageWithPrefill(
-    _messages: ChatCompletionMessageParam[],
-    _workspaceState: AgentWorkspaceState,
-    _agentSetting: AgentSetting,
-  ): void {
-    this.defaultAddContinueWithPrefill();
   }
 
   /** Manages continuation for models without prefill support by adding a continuation prompt. */

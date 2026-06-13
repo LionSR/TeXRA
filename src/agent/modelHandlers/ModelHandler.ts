@@ -48,10 +48,12 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
+import { roundTo } from '@utils/core';
 import {
   getProviderStreaming,
   getGlobalStreaming,
 } from '@utils/config/providerConfig';
+import { getConfig } from '@utils/config/configUtils';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   resolveBaseUrl,
@@ -72,6 +74,7 @@ import {
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
   TOOL_USE_MAX_OUTPUT_FACTOR,
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
 } from './contextManagementConstants';
 
 // Type imports
@@ -658,15 +661,6 @@ export abstract class ModelHandler<
     return `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${endTag}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
   }
 
-  /**
-   * Default implementation for models with prefill support.
-   * Most models with prefill don't need special continuation handling.
-   * Override in subclasses only if custom behavior is needed.
-   */
-  protected defaultAddContinueWithPrefill(): void {
-    this.logger.debug('Skipping continuation - assistant prefill is supported');
-  }
-
   /** Creates and configures a client instance for the specific model provider. */
   abstract getClient(): Promise<C>;
 
@@ -754,14 +748,18 @@ export abstract class ModelHandler<
   ): ExtractResponseResult;
 
   /**
-   * Manages continuation for truncated responses in multi-turn conversations with prefill support.
-   * Updates messages array and tool state for next turn.
+   * Manages continuation for truncated responses in multi-turn conversations
+   * with prefill support. Most models with prefill don't need special handling,
+   * so the default is a no-op. Override in subclasses only if custom behavior is
+   * needed (e.g. providers without native assistant-prefill continuation).
    */
-  abstract addContinueMessageWithPrefill(
-    messages: M[],
-    workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
-  ): void;
+  addContinueMessageWithPrefill(
+    _messages: M[],
+    _workspaceState: AgentWorkspaceState,
+    _agentSetting: AgentSetting,
+  ): void {
+    this.logger.debug('Skipping continuation - assistant prefill is supported');
+  }
 
   /**
    * Manages continuation for truncated responses in multi-turn conversations without prefill support.
@@ -772,6 +770,102 @@ export abstract class ModelHandler<
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
   ): void;
+
+  /**
+   * Configured client-side compaction threshold, as a percentage of the context
+   * window. Returns 0 when compaction is disabled.
+   */
+  protected getCompactionThresholdPercent(): number {
+    return getConfig<number>(
+      'texra.model.compactionThresholdPercent',
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    );
+  }
+
+  /**
+   * Shared scaffold for client-side conversation compaction (system-prompt-swap
+   * summarization). Owns the provider-agnostic parts: separating leading
+   * system/developer messages, the too-short guard, assembling the compacted
+   * history, success/failure logging, and the error fallback.
+   *
+   * The provider supplies {@link summarize} (build the request, call the SDK,
+   * and return the summary text plus output-token count) and
+   * {@link buildSummaryMessage} (wrap the summary into a provider message).
+   */
+  protected async runClientCompaction(
+    messages: M[],
+    tokensBefore: number,
+    summarize: (
+      conversationMessages: M[],
+    ) => Promise<{ summaryText: string; outputTokens: number }>,
+    buildSummaryMessage: (summary: string) => M,
+  ): Promise<{ compactedMessages: M[]; didCompact: boolean }> {
+    const contextWindow = this.config.contextWindow;
+
+    // Separate leading system/developer messages from the conversation body.
+    const systemMessages: M[] = [];
+    const conversationMessages: M[] = [];
+    for (const msg of messages) {
+      const role = (msg as { role?: string }).role;
+      if (
+        (role === 'system' || role === 'developer') &&
+        conversationMessages.length === 0
+      ) {
+        systemMessages.push(msg);
+      } else {
+        conversationMessages.push(msg);
+      }
+    }
+
+    // Nothing meaningful to summarize if the conversation is too short.
+    if (conversationMessages.length <= 2) {
+      this.logger.debug('Conversation too short for compaction, skipping');
+      return { compactedMessages: messages, didCompact: false };
+    }
+
+    try {
+      const { summaryText, outputTokens } =
+        await summarize(conversationMessages);
+      if (!summaryText) {
+        this.logger.warn('Compaction returned empty summary, skipping');
+        return { compactedMessages: messages, didCompact: false };
+      }
+
+      const compactedMessages: M[] = [
+        ...systemMessages,
+        buildSummaryMessage(summaryText),
+      ];
+
+      const estimatedTokensAfter = Math.max(1, outputTokens);
+      const reduction = tokensBefore - estimatedTokensAfter;
+      const reductionPercent =
+        tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
+
+      logContextManagementEvent(
+        this.logger,
+        `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+        {
+          action: 'compaction',
+          tokensBefore,
+          tokensAfter: estimatedTokensAfter,
+          contextWindow,
+          utilizationBefore: roundTo((tokensBefore / contextWindow) * 100, 1),
+          utilizationAfter: roundTo(
+            (estimatedTokensAfter / contextWindow) * 100,
+            1,
+          ),
+          details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
+        },
+      );
+
+      return { compactedMessages, didCompact: true };
+    } catch (err) {
+      this.logger.warn(
+        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
+      );
+      return { compactedMessages: messages, didCompact: false };
+    }
+  }
 
   /**
    * Sets up output file and handles content prefilling.
