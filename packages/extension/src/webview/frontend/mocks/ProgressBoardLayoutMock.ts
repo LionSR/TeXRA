@@ -199,6 +199,10 @@ export class ProgressBoardLayoutMock extends LitElement {
     css`
       :host {
         display: block;
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: hidden;
       }
 
       .board {
@@ -227,6 +231,8 @@ export class ProgressBoardLayoutMock extends LitElement {
         display: flex;
         flex-direction: column;
         min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
         border-right: var(--border-thin) solid var(--color-border);
       }
 
@@ -239,7 +245,9 @@ export class ProgressBoardLayoutMock extends LitElement {
 
       .log-body {
         min-height: 0;
+        min-width: 0;
         flex: 1;
+        overflow: hidden;
       }
 
       task-group-list {
