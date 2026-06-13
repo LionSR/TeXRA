@@ -1,4 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
+  handleExternalInquiryAction: handleExternalInquiryActionMock,
+}));
 
 import {
   appendCliApiSwitchHint,
@@ -50,6 +56,7 @@ const credentialExhaustedRetry: ProgressEventPayloads['showRetryRequest'] = {
 
 afterEach(() => {
   setToolEditApprovalHandler();
+  handleExternalInquiryActionMock.mockClear();
 });
 
 describe('immediateDecisionForApproval', () => {
@@ -168,6 +175,41 @@ describe('approval prompt hooks', () => {
 
     expect(handled).toBe(true);
     expect(events).toEqual([]);
+  });
+
+  it('does not prompt for external inquiry in non-TUI CLI runs', async () => {
+    const events: string[] = [];
+    const handled = handleCliApprovalEvent(
+      'showExternalInquiry',
+      {
+        requestId: 'ei_aabbccdd0011',
+        threadId: 'ei_aabbccdd0011',
+        question: 'May I ask an external model to verify this proof?',
+        allowBypass: false,
+        streamId: 'root@deepseekT#abc',
+      },
+      context({
+        approvalPrompt: async () => {
+          events.push('prompt');
+          return 'yes';
+        },
+      }),
+      {
+        beforePrompt: () => {
+          events.push('before');
+        },
+      },
+    );
+
+    await Promise.resolve();
+
+    expect(handled).toBe(true);
+    expect(events).toEqual([]);
+    expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
+      action: 'drop',
+      threadId: 'ei_aabbccdd0011',
+      feedback: expect.stringContaining('non-TUI CLI runs'),
+    });
   });
 });
 

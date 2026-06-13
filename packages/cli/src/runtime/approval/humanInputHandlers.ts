@@ -15,10 +15,16 @@ import {
 } from './approvalPolicy';
 import { formatUserQuestionPrompt } from './approvalSummaries';
 
+const NON_TUI_EXTERNAL_INQUIRY_FEEDBACK =
+  'External inquiry is not available in non-TUI CLI runs: inquiry answers ' +
+  'are delivered as asynchronous continuations, and this process cannot ' +
+  'resume them after the run finalizes. Use texra chat for the inquiry ' +
+  'panel, or ask_user_question for synchronous CLI input.';
+
 export function handleExternalInquiry(
   payload: ProgressEventPayloads['showExternalInquiry'],
   context: CliContext,
-  hooks: CliApprovalPromptHooks = {},
+  _hooks: CliApprovalPromptHooks = {},
 ): void {
   const threadId = payload.threadId;
   if (!threadId) {
@@ -35,40 +41,11 @@ export function handleExternalInquiry(
     return;
   }
 
-  void (async () => {
-    let answer: string;
-    try {
-      hooks.beforePrompt?.();
-      answer = await queueCliApprovalQuestion(context, {
-        kind: 'externalInquiry',
-        summary: `External inquiry requested:\n${payload.question}`,
-        prompt: 'Answer (blank to skip): ',
-      });
-    } catch {
-      markApprovalDenied(context);
-      await handleExternalInquiryAction({
-        action: 'drop',
-        threadId,
-        feedback: 'CLI external inquiry prompt failed.',
-      });
-      return;
-    }
-
-    const trimmed = answer.trim();
-    if (trimmed.length === 0) {
-      await handleExternalInquiryAction({
-        action: 'drop',
-        threadId,
-        feedback: 'External inquiry skipped by user.',
-      });
-      return;
-    }
-    await handleExternalInquiryAction({
-      action: 'submit',
-      threadId,
-      answer: trimmed,
-    });
-  })();
+  void handleExternalInquiryAction({
+    action: 'drop',
+    threadId,
+    feedback: NON_TUI_EXTERNAL_INQUIRY_FEEDBACK,
+  });
 }
 
 export function handleUserQuestion(

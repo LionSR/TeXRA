@@ -12,6 +12,8 @@ import {
 } from './terminalStatus';
 import type { CliContext } from './cliContext';
 
+const NON_TUI_CLI_UNAVAILABLE_TOOLS = ['inquiry'] as const;
+
 export interface CliExecuteOptions {
   /** Forwarded to `runAgent`. */
   readonly enforceCategory?: boolean;
@@ -24,6 +26,8 @@ export interface CliExecuteOptions {
   readonly markErrorOnThrow?: boolean;
   /** Stop a tool-use execution after one model/tool cycle. */
   readonly stopAfterCycle?: boolean;
+  /** Additional tools unavailable in this CLI runtime. */
+  readonly runtimeUnavailableTools?: readonly string[];
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
   readonly wrap?: (
@@ -54,6 +58,10 @@ export async function executeCliRequest(
       registerExecution: options.registerExecution,
       stopAfterCycle: options.stopAfterCycle,
       approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
+      runtimeUnavailableTools: [
+        ...NON_TUI_CLI_UNAVAILABLE_TOOLS,
+        ...(options.runtimeUnavailableTools ?? []),
+      ],
     });
 
   let result: ExecuteAgentResult;

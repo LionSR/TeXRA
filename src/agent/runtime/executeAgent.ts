@@ -245,6 +245,8 @@ export interface ExecuteAgentOptions {
   stopAfterCycle?: boolean;
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
   approvalPromptsUnavailable?: boolean;
+  /** Hide tools unavailable because the current host/runtime cannot support them. */
+  runtimeUnavailableTools?: readonly string[];
   /** Fires after flow completes but before executionRegistry.untrack, so follow-ups are enqueued before waiters resolve. */
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   /** Fires when a subagent fails and should report the failure to its orchestrator. */
@@ -271,6 +273,7 @@ export async function executeAgent(
   });
   ctx.delegationDepth = options.delegationDepth ?? 0;
   ctx.approvalPromptsUnavailable = options.approvalPromptsUnavailable;
+  ctx.runtimeUnavailableTools = options.runtimeUnavailableTools;
   ctx.stopAfterCycle = options.stopAfterCycle;
   return withExecutionRunContext(ctx, async () => {
     const { setting, streamId, config } = ctx;
@@ -325,6 +328,7 @@ export async function executeAgent(
                 setting,
                 isSubagent,
                 approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+                runtimeUnavailableTools: options.runtimeUnavailableTools,
                 onBeforeWaiting: options.onBeforeWaiting,
                 stopAfterCycle: options.stopAfterCycle,
                 onProgress: (update) => {
@@ -417,6 +421,8 @@ export async function executeAgent(
 export interface ResumeToolUseFromSnapshotOptions {
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
   readonly approvalPromptsUnavailable?: boolean;
+  /** Hide tools unavailable because the current host/runtime cannot support them. */
+  readonly runtimeUnavailableTools?: readonly string[];
   readonly setupSession?: (session: IToolUseSession) => void;
 }
 
@@ -441,6 +447,7 @@ export async function resumeToolUseFromSnapshot(
     snapshot.executionId,
   );
   ctx.approvalPromptsUnavailable = options.approvalPromptsUnavailable;
+  ctx.runtimeUnavailableTools = options.runtimeUnavailableTools;
   const { setting, streamId } = ctx;
 
   await withExecutionRunContext(ctx, async () => {
@@ -464,6 +471,7 @@ export async function resumeToolUseFromSnapshot(
           // /memories protocol) that the fresh run had included.
           isSubagent: (ctx.delegationDepth ?? 0) > 0,
           approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+          runtimeUnavailableTools: options.runtimeUnavailableTools,
           onFollowUpConsumed: () =>
             ctx.runtimeHost.emit('updateQueuedFollowUps', {
               streamId: ctx.streamId,
