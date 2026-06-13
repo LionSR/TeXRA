@@ -5,7 +5,6 @@
 import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import {
   LIVE_ELAPSED_STREAM_STATUSES,
   type StreamStatus,
@@ -25,11 +24,7 @@ import {
   QueuedFollowUpsPanel,
   queuedFollowUpPanelRowCount,
 } from './panes/QueuedFollowUpsPanel';
-import {
-  defaultShortcutModifierLabel,
-  metaChordLabel,
-  StatusBar,
-} from './panes/StatusBar';
+import { StatusBar } from './panes/StatusBar';
 import {
   StreamTabsStrip,
   streamTabsDisplayItems,
@@ -53,8 +48,10 @@ import {
   type ChildControlMode,
 } from './state/childControls';
 import { cliState } from './state/cliState';
+import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { activeStreamScope, streamDisplayLabel } from './state/streamViews';
+import { defaultShortcutModifierLabel } from './shortcutLabels';
 import {
   isScopedTranscriptViewport,
   transcriptViewportChange,
@@ -480,45 +477,6 @@ export function approvalForegroundMaxRows(
     default:
       return assertNever(pending.payload, 'Unhandled approval payload kind');
   }
-}
-
-export function focusedChildInputDisabledMessage(init: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly shortcutModifierLabel?: string;
-  readonly status: StreamStatus | undefined;
-  readonly subagentControlsAvailable?: boolean;
-  readonly taskControlsAvailable?: boolean;
-}): string | undefined {
-  const scope = activeStreamScope({
-    activeStreamId: init.activeStreamId,
-    parentStream: init.parentStream,
-  });
-  if (
-    scope.kind !== 'child' ||
-    init.status === undefined ||
-    isInFlightStatus(init.status)
-  ) {
-    return undefined;
-  }
-  const shortcutModifierLabel =
-    init.shortcutModifierLabel ?? defaultShortcutModifierLabel();
-  const alternateActions: string[] = [];
-  if (init.subagentControlsAvailable !== false) {
-    alternateActions.push(
-      `${metaChordLabel(shortcutModifierLabel, 's')} to choose another`,
-    );
-  }
-  if (init.taskControlsAvailable === true) {
-    alternateActions.push(
-      `${metaChordLabel(shortcutModifierLabel, 'p')} to review tasks`,
-    );
-  }
-  const base =
-    'Subagent is no longer accepting follow-ups; press Tab to switch streams';
-  if (alternateActions.length === 0) return `${base}.`;
-  const alternateText = alternateActions.join(', or ');
-  return `${base} or ${alternateText}.`;
 }
 
 export interface AppProps {
