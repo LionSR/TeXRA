@@ -28,9 +28,8 @@ export interface ModelClientServices<C = unknown> {
 }
 
 /** Services for response cycle flow nodes. */
-export interface ResponseCycleServices<
-  C = unknown,
-> extends BaseFlowContextInit<C>, ModelClientServices<C> {
+export interface ResponseCycleServices<C = unknown>
+  extends BaseFlowContextInit<C>, ModelClientServices<C> {
   readonly fileService: TaskRunFileService;
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
@@ -45,9 +44,8 @@ export interface ResponseCycleServices<
  * interface by adding `run`, `workspace`, and the {@link ModelClientServices}
  * fields before running the round.
  */
-export interface ToolUseRoundServices<
-  C = unknown,
-> extends BaseFlowContextInit<C>, ModelClientServices<C> {
+export interface ToolUseRoundServices<C = unknown>
+  extends BaseFlowContextInit<C>, ModelClientServices<C> {
   readonly fileService: TaskRunFileService;
   readonly toolRegistry: IToolRegistry;
   /** Session for injecting queued user messages after tool dispatch. */
