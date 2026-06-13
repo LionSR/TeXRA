@@ -9,13 +9,16 @@ function toolNames(tools: readonly { name: string }[] | undefined): string[] {
 
 function responseServices({
   approvalPromptsUnavailable,
+  runtimeUnavailableTools,
   supportsFunctionCalling = true,
 }: {
   approvalPromptsUnavailable?: boolean;
+  runtimeUnavailableTools?: readonly string[];
   supportsFunctionCalling?: boolean;
 }) {
   return {
     approvalPromptsUnavailable,
+    runtimeUnavailableTools,
     modelHandler: {
       capabilities: { supportsFunctionCalling },
     },
@@ -23,6 +26,7 @@ function responseServices({
       tools: [
         { name: 'bash' },
         { name: 'grep' },
+        { name: 'inquiry' },
         { name: 'write_file' },
         { name: 'wolfram' },
       ],
@@ -45,6 +49,23 @@ describe('response cycle tool visibility', () => {
     const tools = responseCycleToolsForModel(
       responseServices({
         approvalPromptsUnavailable: false,
+      }) as any,
+    );
+
+    expect(toolNames(tools)).toEqual([
+      'bash',
+      'grep',
+      'inquiry',
+      'write_file',
+      'wolfram',
+    ]);
+  });
+
+  it('filters runtime-unavailable workflow tools without hiding approvals', () => {
+    const tools = responseCycleToolsForModel(
+      responseServices({
+        approvalPromptsUnavailable: false,
+        runtimeUnavailableTools: ['inquiry'],
       }) as any,
     );
 

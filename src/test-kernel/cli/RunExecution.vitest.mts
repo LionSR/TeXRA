@@ -118,6 +118,46 @@ describe('executeCliRequest', () => {
     );
   });
 
+  it('hides async inquiry in non-TUI CLI execution', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = {
+      config: {},
+      executionId: 'exec-1',
+    } as Parameters<typeof executeCliRequest>[0];
+
+    await executeCliRequest(
+      request,
+      cliContext({ mode: 'interactive', approvalPolicy: 'ask' }),
+    );
+
+    expect(mocks.runAgent).toHaveBeenCalledWith(
+      request,
+      expect.objectContaining({
+        approvalPromptsUnavailable: false,
+        runtimeUnavailableTools: ['inquiry'],
+      }),
+    );
+  });
+
+  it('preserves caller-provided runtime tool exclusions', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = {
+      config: {},
+      executionId: 'exec-1',
+    } as Parameters<typeof executeCliRequest>[0];
+
+    await executeCliRequest(request, cliContext(), {
+      runtimeUnavailableTools: ['custom_tool'],
+    });
+
+    expect(mocks.runAgent).toHaveBeenCalledWith(
+      request,
+      expect.objectContaining({
+        runtimeUnavailableTools: ['inquiry', 'custom_tool'],
+      }),
+    );
+  });
+
   it('installs CLI approval handlers with the runtime prompt hook', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = {

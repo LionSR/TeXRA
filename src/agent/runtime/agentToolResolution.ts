@@ -56,6 +56,8 @@ export interface ResolveAgentToolsInput {
   delegationBlocked: boolean;
   /** When true, approval-gated tools are filtered out before model invocation. */
   approvalPromptsUnavailable?: boolean;
+  /** Tools unavailable because the current host/runtime cannot support them. */
+  runtimeUnavailableTools?: readonly string[];
   /** Conditional runtime tool injections. Defaults to the shared registry. */
   toolInjections?: ToolInjectionRegistry;
 }
@@ -109,11 +111,13 @@ export async function resolveAgentTools({
   logger,
   delegationBlocked,
   approvalPromptsUnavailable,
+  runtimeUnavailableTools,
   toolInjections = toolInjectionRegistry,
 }: ResolveAgentToolsInput): Promise<ResolvedAgentTools> {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
+  const runtimeUnavailable = new Set(runtimeUnavailableTools ?? []);
   const missingDependency: string[] = [];
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
@@ -125,6 +129,7 @@ export async function resolveAgentTools({
       delegationTrimmed = true;
       return false;
     }
+    if (runtimeUnavailable.has(name)) return false;
     return (
       approvalPromptsUnavailable !== true || !isApprovalGatedToolName(name)
     );
