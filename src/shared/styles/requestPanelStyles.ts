@@ -167,10 +167,10 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .approval-request__actions wa-button[data-action] {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     width: auto;
     min-width: min(5.5rem, 100%);
-    max-width: min(7rem, 100%);
+    max-width: fit-content;
   }
 
   :is(${ACTIONS}) wa-button[data-action]::part(base) {
