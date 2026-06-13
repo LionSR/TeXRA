@@ -18,7 +18,6 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
-import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import {
   detectStatusCode,
   getSdkErrorMessage,
@@ -43,6 +42,7 @@ import {
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 import { flexibleFS } from '@utils/files/flexibleFS';
+import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import { normalizeUsage } from '../support/UsageNormalizer';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagOpenAISdkError } from './openAISdkError';
@@ -67,7 +67,6 @@ import { ModelHandler } from '../ModelHandler';
 import {
   CHAINED_RESPONSE_MAX_OUTPUT_FACTOR,
   CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT,
-  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
 } from '../contextManagementConstants';
@@ -580,17 +579,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Retrieve the stored previous response ID. */
   getPreviousResponseId(): string | null {
     return this.previousResponseId;
-  }
-
-  /**
-   * Get the configured compaction threshold percentage.
-   * Returns 0 if compaction is disabled.
-   */
-  private getCompactionThresholdPercent(): number {
-    return getConfig<number>(
-      'texra.model.compactionThresholdPercent',
-      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-    );
   }
 
   /**
@@ -1735,15 +1723,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       rawUsage,
       responseTimeMs,
     );
-  }
-
-  /** Models with prefill support do not require additional continuation messages. */
-  addContinueMessageWithPrefill(
-    _messages: ResponseInputItem[],
-    _workspaceState: AgentWorkspaceState,
-    _agentSetting: AgentSetting,
-  ): void {
-    this.defaultAddContinueWithPrefill();
   }
 
   private isBackgroundPending(response: Response): boolean {
