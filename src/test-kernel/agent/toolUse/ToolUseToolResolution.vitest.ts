@@ -42,6 +42,7 @@ describe('tool-use tool resolution', () => {
       'bash',
       'delegate_agent',
       'grep',
+      'inquiry',
       'plan',
       'send_to_terminal',
       'update_config',
@@ -56,6 +57,7 @@ describe('tool-use tool resolution', () => {
         'bash',
         'delegate_agent',
         'grep',
+        'inquiry',
         'plan',
         'send_to_terminal',
         'update_config',
@@ -80,6 +82,7 @@ describe('tool-use tool resolution', () => {
       'bash',
       'delegate_agent',
       'grep',
+      'inquiry',
       'plan',
       'update_config',
     ]);
@@ -91,6 +94,7 @@ describe('tool-use tool resolution', () => {
         'bash',
         'delegate_agent',
         'grep',
+        'inquiry',
         'plan',
         'update_config',
       ]),
@@ -107,8 +111,42 @@ describe('tool-use tool resolution', () => {
       'bash',
       'delegate_agent',
       'grep',
+      'inquiry',
       'plan',
       'update_config',
+    ]);
+  });
+
+  it('filters runtime-unavailable tools without hiding other approval-gated tools', async () => {
+    const registry = registryFor([
+      'ask_user_question',
+      'bash',
+      'grep',
+      'inquiry',
+      'write_file',
+    ]);
+
+    const { tools } = await resolveAgentTools({
+      tools: toolDefs([
+        'ask_user_question',
+        'bash',
+        'grep',
+        'inquiry',
+        'write_file',
+      ]),
+      registry,
+      logger,
+      toolInjections,
+      approvalPromptsUnavailable: false,
+      runtimeUnavailableTools: ['inquiry'],
+      delegationBlocked: false,
+    });
+
+    expect(tools.map((tool) => tool.name)).toEqual([
+      'ask_user_question',
+      'bash',
+      'grep',
+      'write_file',
     ]);
   });
 

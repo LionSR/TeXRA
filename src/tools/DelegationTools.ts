@@ -448,6 +448,7 @@ async function executeSubagent(
         parentStreamId: orchestratorStreamId,
         delegationDepth: parentDelegationDepth + 1,
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
+        runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
         stopAfterCycle: true,
         onStreamResolved: inheritChildStreamApprovals,
         onError: (err) => {
@@ -575,6 +576,7 @@ async function executeSubagent(
     parentStreamId: orchestratorStreamId,
     delegationDepth: parentDelegationDepth + 1,
     approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
+    runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       inheritChildStreamApprovals(resolvedStreamId);

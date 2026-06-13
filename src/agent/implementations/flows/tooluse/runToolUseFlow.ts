@@ -53,6 +53,8 @@ export interface RunToolUseFlowInput<
   isSubagent?: boolean;
   /** When true, approval-gated tools are filtered out before model invocation. */
   approvalPromptsUnavailable?: boolean;
+  /** Tools unavailable because the current host/runtime cannot support them. */
+  runtimeUnavailableTools?: readonly string[];
   /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
   onBeforeWaiting?: ToolUseBeforeWaitingCallback;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
@@ -143,6 +145,7 @@ export async function runToolUseFlow<C = unknown>(
     logger,
     delegationBlocked: !delegationGate.allowed,
     approvalPromptsUnavailable: input.approvalPromptsUnavailable,
+    runtimeUnavailableTools: input.runtimeUnavailableTools,
     toolInjections: input.toolInjections,
   });
 

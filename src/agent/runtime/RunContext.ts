@@ -60,6 +60,8 @@ export interface RunContext {
   readonly delegationDepth?: number;
   /** Whether approval or user prompts cannot be answered by the current host. */
   readonly approvalPromptsUnavailable?: boolean;
+  /** Tools unavailable because the current host/runtime cannot support them. */
+  readonly runtimeUnavailableTools?: readonly string[];
   /** Whether this run should stop after one tool-use cycle instead of idling. */
   readonly stopAfterCycle?: boolean;
 }
@@ -82,6 +84,7 @@ export interface CreateRunContextOptions {
   workingDirectory?: string;
   delegationDepth?: number;
   approvalPromptsUnavailable?: boolean;
+  runtimeUnavailableTools?: readonly string[];
   stopAfterCycle?: boolean;
 }
 
@@ -107,6 +110,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     workingDirectory: options.workingDirectory,
     delegationDepth: options.delegationDepth,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+    runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
   };
 

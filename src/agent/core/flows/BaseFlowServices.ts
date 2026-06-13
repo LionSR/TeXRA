@@ -48,6 +48,8 @@ export interface AgentCore<C = unknown> {
   delegationDepth?: number;
   /** Whether approval or user prompts cannot be answered by the current host. */
   approvalPromptsUnavailable?: boolean;
+  /** Tools unavailable because the current host/runtime cannot support them. */
+  runtimeUnavailableTools?: readonly string[];
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
