@@ -4,10 +4,11 @@ import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
-  AgentExecutionHandle,
-  executionRegistry,
-} from '@agent/runtime/executionRegistry';
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
@@ -89,6 +90,9 @@ export function createChildStream(
     description: truncateWithEllipsis(options.description, 80),
   });
 
+  // Capture the run's session at creation (inside the parent run's ALS); the
+  // status-update and finalize closures below fire later, possibly outside it.
+  const session = currentSession();
   const runTrace = createRunTrace(childStreamId);
   const handle = new AgentExecutionHandle(
     executionId,
@@ -99,7 +103,7 @@ export function createChildStream(
     runtimeHost,
   );
   if (options.toolName) handle.toolName = options.toolName;
-  executionRegistry.trackAgentExecution(handle, {
+  session.executions.trackAgentExecution(handle, {
     status: STREAM_STATUS.RUNNING,
   });
 
@@ -109,23 +113,27 @@ export function createChildStream(
     // Mid-run status updates are intentionally best-effort. Explicit stops and
     // stale handles are ignored by the registry; finalize owns terminal status.
     waitForInput: () => {
-      executionRegistry.updateAgentExecutionStatus(
+      session.executions.updateAgentExecutionStatus(
         handle,
         STREAM_STATUS.WAITING,
       );
     },
     beginTurn: () => {
-      executionRegistry.updateAgentExecutionStatus(
+      session.executions.updateAgentExecutionStatus(
         handle,
         STREAM_STATUS.RUNNING,
       );
     },
     failTurn: () => {
-      executionRegistry.updateAgentExecutionStatus(handle, STREAM_STATUS.ERROR);
+      session.executions.updateAgentExecutionStatus(
+        handle,
+        STREAM_STATUS.ERROR,
+      );
     },
     finalize: (finalizeOptions) => {
       finalizeChildStream({
         handle,
+        session,
         logger: runTrace.trace,
         disposeTrace: runTrace.dispose,
         options: finalizeOptions,
@@ -136,6 +144,7 @@ export function createChildStream(
 
 interface FinalizeChildStreamArgs {
   handle: AgentExecutionHandle;
+  session: SessionHandle;
   logger: AgentTrace;
   disposeTrace: () => void;
   options?: FinalizeChildStreamOptions;
@@ -143,7 +152,7 @@ interface FinalizeChildStreamArgs {
 
 /** Finalize a child stream tab and untrack its execution handle. */
 function finalizeChildStream(args: FinalizeChildStreamArgs): void {
-  const { handle, logger, disposeTrace, options } = args;
+  const { handle, session, logger, disposeTrace, options } = args;
   const hasError = options?.error != null || options?.errorMessage != null;
 
   if (options?.errorMessage) {
@@ -160,7 +169,7 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     );
   }
 
-  executionRegistry.finishAgentExecution(handle, {
+  session.executions.finishAgentExecution(handle, {
     status:
       options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY),
   });

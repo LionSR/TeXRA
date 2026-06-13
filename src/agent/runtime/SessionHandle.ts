@@ -11,7 +11,7 @@
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop `BrowserWindow`. The default instance,
- * {@link defaultSessionHandle}, wraps the existing process-global singletons
+ * {@link defaultSession}, wraps the existing process-global singletons
  * **by identity**, so every unmigrated call site keeps hitting the same objects
  * byte-for-byte while the 7d train migrates call sites incrementally.
  *
@@ -30,6 +30,7 @@
 import { getActiveFlushers } from '@transcript';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
+import { tryUseRunContext } from './RunContext';
 import { ExecutionRegistry, executionRegistry } from './executionRegistry';
 import { InterruptRegistry, interruptRegistry } from './InterruptRegistry';
 import { RunCoordinatorBridge, runCoordinatorBridge } from './runCoordinators';
@@ -117,17 +118,39 @@ export class SessionHandle {
   }
 }
 
+let cachedDefaultSession: SessionHandle | undefined;
+
 /**
  * The process-default session. Its members ARE the existing exported singletons
  * — identity is the behavior-neutral compatibility mechanism for the 7d train:
  * unmigrated call sites keep hitting the same objects, and per-call-site
  * migration is `runCoordinatorBridge.x(...)` → `session.coordinators.x(...)`
  * against the identical instance.
+ *
+ * Constructed lazily on first use rather than at module evaluation: many
+ * run-scoped modules import `currentSession`, which pulls this module into
+ * their import cycle, and an eager construction here would read the
+ * `executionSubscriptionBinder` singleton before its own module finished
+ * initializing (TDZ). Deferring to first call sidesteps that entirely.
  */
-export const defaultSessionHandle = new SessionHandle({
-  interrupts: interruptRegistry,
-  executions: executionRegistry,
-  coordinators: runCoordinatorBridge,
-  subscriptions: executionSubscriptionBinder,
-  flushers: getActiveFlushers(),
-});
+export function defaultSession(): SessionHandle {
+  return (cachedDefaultSession ??= new SessionHandle({
+    interrupts: interruptRegistry,
+    executions: executionRegistry,
+    coordinators: runCoordinatorBridge,
+    subscriptions: executionSubscriptionBinder,
+    flushers: getActiveFlushers(),
+  }));
+}
+
+/**
+ * Resolve the session for the calling context: the active run's session when
+ * called inside a run, otherwise the process {@link defaultSession}. This is
+ * the single resolution point run-scoped code (flows, tools, formatters) uses
+ * instead of touching the process singletons directly — behavior-neutral while
+ * the default session aliases those singletons, and the seam that lets a host
+ * inject an isolated session per run.
+ */
+export function currentSession(): SessionHandle {
+  return tryUseRunContext()?.session ?? defaultSession();
+}

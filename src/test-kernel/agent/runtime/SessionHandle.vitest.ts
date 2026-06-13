@@ -13,10 +13,7 @@ import {
   withRunContext,
   type RunCoordinators,
 } from '@agent/runtime/RunContext';
-import {
-  SessionHandle,
-  defaultSessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { SessionHandle, defaultSession } from '@agent/runtime/SessionHandle';
 import {
   AgentExecutionHandle,
   executionRegistry,
@@ -63,15 +60,13 @@ function trackAgent(
 }
 
 describe('SessionHandle', () => {
-  it('defaultSessionHandle wraps the process singletons by identity', () => {
-    expect(defaultSessionHandle.interrupts).toBe(interruptRegistry);
-    expect(defaultSessionHandle.executions).toBe(executionRegistry);
-    expect(defaultSessionHandle.coordinators).toBe(runCoordinatorBridge);
-    expect(defaultSessionHandle.subscriptions).toBe(
-      executionSubscriptionBinder,
-    );
-    expect(defaultSessionHandle.flushers).toBe(getActiveFlushers());
-    expect(defaultSessionHandle.hostChannel).toBeUndefined();
+  it('defaultSession wraps the process singletons by identity', () => {
+    expect(defaultSession().interrupts).toBe(interruptRegistry);
+    expect(defaultSession().executions).toBe(executionRegistry);
+    expect(defaultSession().coordinators).toBe(runCoordinatorBridge);
+    expect(defaultSession().subscriptions).toBe(executionSubscriptionBinder);
+    expect(defaultSession().flushers).toBe(getActiveFlushers());
+    expect(defaultSession().hostChannel).toBeUndefined();
   });
 
   it('a fresh session shares no member with the module singletons', () => {

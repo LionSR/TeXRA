@@ -11,10 +11,8 @@
  */
 
 import { platform } from '@platform';
-import {
-  executionRegistry,
-  type ToolUseFollowUpQueueReason,
-} from '@agent/runtime/executionRegistry';
+import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
@@ -137,7 +135,7 @@ export async function sendFollowUp(
   mediaFiles?: readonly string[],
   displayText?: string,
 ): Promise<SendFollowUpResult> {
-  const target = executionRegistry.getToolUseFollowUpTarget(streamId);
+  const target = currentSession().executions.getToolUseFollowUpTarget(streamId);
   const item =
     typeof followUp === 'string'
       ? { text: followUp, mediaFiles, displayText }

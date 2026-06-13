@@ -20,12 +20,9 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
-import {
-  AgentExecutionHandle,
-  executionRegistry,
-} from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
   getAgentFlowErrorResult,
   type AgentFlowResult,
@@ -291,7 +288,7 @@ function resolveDeliveryStreamId(
   executionId: string,
   fallbackStreamId: StreamTabId,
 ): StreamTabId | undefined {
-  const handle = executionRegistry.getHandle(executionId);
+  const handle = currentSession().executions.getHandle(executionId);
   if (!(handle instanceof AgentExecutionHandle)) return fallbackStreamId;
   // AgentExecutionHandle.detach() promotes a child by setting
   // parentStreamId === childStreamId. Do not enqueue the formatted result
@@ -799,7 +796,7 @@ async function proposeAndExecute(
 
   const proposalId = nanoid();
 
-  const result = await runCoordinatorBridge.waitForProposal(streamId, {
+  const result = await currentSession().coordinators.waitForProposal(streamId, {
     proposalId,
     proposal,
   });
@@ -1138,7 +1135,7 @@ Git worktree support: ${
     const gated = depthGateError(parentDelegationDepth);
     if (gated) return gated;
 
-    const handle = executionRegistry.getHandle(executionId);
+    const handle = currentSession().executions.getHandle(executionId);
     if (!(handle instanceof AgentExecutionHandle)) {
       throw new Error(
         `Execution '${executionId}' not found or not an agent execution. Use the executions tool to check status.`,

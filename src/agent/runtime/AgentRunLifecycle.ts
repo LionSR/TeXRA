@@ -19,7 +19,8 @@ import { RUN_OUTCOME, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 
-import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
+import { AgentExecutionHandle } from './executionRegistry';
+import { defaultSession } from './SessionHandle';
 import {
   getAgentFlowErrorResult,
   buildTerminalFlowResult,
@@ -51,6 +52,7 @@ export async function runFlowWithLifecycle(
   options?: RunFlowLifecycleOptions,
 ): Promise<AgentFlowResult> {
   const { streamId } = ctx;
+  const session = ctx.session ?? defaultSession();
   const agentIdentifier = ctx.config.agent;
   const category =
     ctx.setting.agentCategory === AgentCategory.ToolUse
@@ -66,7 +68,7 @@ export async function runFlowWithLifecycle(
     ctx.runtimeHost,
     ctx.coordinators,
   );
-  executionRegistry.track(handle);
+  session.executions.track(handle);
   try {
     // The lifecycle owns every stream-status transition: RUNNING here,
     // terminal states in the success/error arms below. Runners must not
@@ -101,7 +103,7 @@ export async function runFlowWithLifecycle(
       }
     }
 
-    executionRegistry.untrack(ctx.executionId);
+    session.executions.untrack(ctx.executionId);
     ctx.parentStage.end(projection.endGroupStatus);
 
     if (!ctx.streamStatus.shouldPreserveOnCompletion(streamId)) {
@@ -180,11 +182,11 @@ export async function runFlowWithLifecycle(
           `Failed to deliver subagent error for ${agentIdentifier}: ${getSdkErrorMessage(deliveryError)}`,
         );
       }
-      executionRegistry.untrack(ctx.executionId);
+      session.executions.untrack(ctx.executionId);
       return result;
     }
 
-    executionRegistry.untrack(ctx.executionId);
+    session.executions.untrack(ctx.executionId);
     if (kind === 'abort') {
       return buildTerminalFlowResult(
         category,

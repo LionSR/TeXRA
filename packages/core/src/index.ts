@@ -83,12 +83,12 @@ export {
 
 // ── 5b. Session ownership (per-session runtime-state container) ──
 // One owner per session for interrupt / execution / coordinator / subscription
-// state plus the trace flusher set. `defaultSessionHandle` wraps the existing
+// state plus the trace flusher set. `defaultSession` wraps the existing
 // process singletons by identity (behavior-neutral); hosts that need isolation
 // construct their own `new SessionHandle({ hostChannel })`.
 export {
   SessionHandle,
-  defaultSessionHandle,
+  defaultSession,
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 

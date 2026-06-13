@@ -57,6 +57,7 @@ import {
   StreamStatusService,
   type StreamStatusRegistry,
 } from './StreamStatusService';
+import { defaultSession, type SessionHandle } from './SessionHandle';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface AgentLaunchContext extends AgentCore {
@@ -70,6 +71,14 @@ export interface AgentLaunchContext extends AgentCore {
   approvalPromptsUnavailable?: boolean;
   /** Whether this tool-use run exits after one cycle instead of idling. */
   stopAfterCycle?: boolean;
+  /**
+   * Session that owns this run's coordination state. Always populated by
+   * {@link buildAgentLaunchContext} (defaults to {@link defaultSession},
+   * which wraps the process singletons by identity), and projected into the
+   * ambient {@link RunContext} so run-scoped code resolves it via
+   * `currentSession()`.
+   */
+  session?: SessionHandle;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -91,6 +100,8 @@ export interface AgentLaunchInput {
   enforceCategory?: boolean;
   /** Skip the `requestShowError` toast -- for callers that show their own UI. */
   suppressErrorNotification?: boolean;
+  /** Session owning this run's coordination state. Defaults to the process session. */
+  session?: SessionHandle;
 }
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -131,6 +142,7 @@ function agentContextToRunContext(
     approvalPromptsUnavailable: ctx.approvalPromptsUnavailable,
     runtimeUnavailableTools: ctx.runtimeUnavailableTools,
     stopAfterCycle: ctx.stopAfterCycle,
+    session: ctx.session,
   };
 }
 
@@ -355,6 +367,7 @@ async function assembleAgentLaunchContext(
       proposal: new AgentProposalCoordinator(runtimeHost),
       retry: new RetryRequestCoordinatorImpl(runtimeHost),
     },
+    session: input.session ?? defaultSession(),
     disposeTrace: runTrace.dispose,
   };
 }

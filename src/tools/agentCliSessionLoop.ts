@@ -11,10 +11,8 @@
 
 import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
-import {
-  interruptRegistry,
-  type IInterruptible,
-} from '@agent/runtime/InterruptRegistry';
+import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   sendFollowUp,
   wakeOrReleaseQueuedStream,
@@ -153,10 +151,13 @@ export function runAgentCliSession<TTurn>(
     params;
   const { childStreamId, logger } = childStream;
 
+  // Capture the run's session inside the tool's ALS so the cleanup below
+  // unregisters against the same handle the registration used.
+  const runSession = currentSession();
   const session = new AgentCliSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
   session.setQueue(queue);
-  interruptRegistry.register(childStreamId, session);
+  runSession.interrupts.register(childStreamId, session);
 
   // The child session runs on its own trace, whose per-instance stage scope is
   // empty here, so this opens as a root with no cross-trace parent.
@@ -270,7 +271,7 @@ export function runAgentCliSession<TTurn>(
         }),
       );
       sessionStage.end(projection.endGroupStatus);
-      interruptRegistry.unregister(childStreamId);
+      runSession.interrupts.unregister(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       strategy.onSessionCleanup?.();
       // Persist terminal status before childStream.finalize() untracks and
