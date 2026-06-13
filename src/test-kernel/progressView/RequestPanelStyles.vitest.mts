@@ -39,10 +39,10 @@ describe('request panel styles', () => {
     expect(hostRule).toContain('max-width: 100%');
     expect(actionStart).toBeGreaterThanOrEqual(0);
     expect(baseStart).toBeGreaterThan(actionStart);
-    expect(actionRule).toContain('flex: 0 0 auto');
+    expect(actionRule).toContain('flex: 0 1 auto');
     expect(actionRule).toContain('width: auto');
     expect(actionRule).toContain('min-width: min(5.5rem, 100%)');
-    expect(actionRule).toContain('max-width: min(7rem, 100%)');
+    expect(actionRule).toContain('max-width: fit-content');
     expect(baseRule).toContain('justify-content: center');
     expect(baseRule).toContain('width: 100%');
   });
