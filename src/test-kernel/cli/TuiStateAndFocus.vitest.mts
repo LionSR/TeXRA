@@ -28,7 +28,6 @@ import {
   approvalVisibleForActiveStream,
   childControlForegroundMaxRows,
   digitFromMetaShortcut,
-  focusedChildInputDisabledMessage,
   foregroundEscapeAction,
   foregroundSurfaceKind,
   shouldDeferEscapeInterruptForMetaChord,
@@ -43,6 +42,7 @@ import {
   nextFocusForward,
 } from '@cli/chat/tui/state/focusCycle';
 import { hasChildControlItems } from '@cli/chat/tui/state/childControls';
+import { focusedChildInputDisabledMessage } from '@cli/chat/tui/state/focusedChildFollowUp';
 import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
 import {
   finalizeSettledPrefix,
