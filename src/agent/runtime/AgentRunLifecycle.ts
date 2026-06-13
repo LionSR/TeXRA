@@ -39,6 +39,12 @@ export interface RunFlowLifecycleOptions {
   parentStreamId?: StreamTabId;
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
+  /**
+   * Fires once with the live per-run handle, right after it is tracked (F-2) —
+   * the additive exposure of the control handle (`.trace`, `.result`, interrupt
+   * via `executions`). Throwing here must not abort the run, so it is guarded.
+   */
+  onRun?: (handle: AgentExecutionHandle) => void;
 }
 
 /** Map the canonical run outcome onto the terminal `result` event's outcome. */
@@ -60,9 +66,9 @@ function emitRunResult(
   outcome: ResultEvent['outcome'],
   isSubagent: boolean,
   error?: { kind: AgentErrorKind; message?: string },
-): void {
+): ResultEvent {
   const usage = ctx.usageMonitor.lastTotals();
-  ctx.logger.emit({
+  const event: ResultEvent = {
     type: 'result',
     outcome,
     executionId: ctx.executionId,
@@ -72,7 +78,9 @@ function emitRunResult(
     isSubagent,
     ...(error ? { error } : {}),
     ...(usage ? { usage } : {}),
-  });
+  };
+  ctx.logger.emit(event);
+  return event;
 }
 
 function endParentStageSafely(
@@ -118,8 +126,20 @@ export async function runFlowWithLifecycle(
     category,
     ctx.runtimeHost,
     ctx.coordinators,
+    ctx.logger,
   );
   session.executions.track(handle);
+  // Expose the live handle to the launcher (F-2). Guarded: a throwing consumer
+  // callback must never abort the run.
+  if (options?.onRun) {
+    try {
+      options.onRun(handle);
+    } catch (err) {
+      logger.warn(
+        `onRun callback threw for ${agentIdentifier}: ${String(err)}`,
+      );
+    }
+  }
   // Tracks whether the terminal `result` event has already been emitted, so a
   // throw in the success arm's post-emit cleanup can never fall into the catch
   // arm and publish a second, contradictory `failed` result for a finished run.
@@ -160,12 +180,15 @@ export async function runFlowWithLifecycle(
 
     endParentStageSafely(ctx, agentIdentifier, projection.endGroupStatus);
     // Emit the terminal result BEFORE untrack so the registry's terminal
-    // listener event never precedes the result event.
-    emitRunResult(
-      ctx,
-      category,
-      toResultOutcome(result.outcome),
-      options?.isSubagent ?? false,
+    // listener event never precedes the result event, and settle the handle's
+    // `result` promise with the same event (F-2: per-run control handle).
+    handle.settleResult(
+      emitRunResult(
+        ctx,
+        category,
+        toResultOutcome(result.outcome),
+        options?.isSubagent ?? false,
+      ),
     );
     resultEmitted = true;
     try {
@@ -225,12 +248,14 @@ export async function runFlowWithLifecycle(
     // Abort still carries the SDK message for event consumers; the toast mapper
     // intentionally suppresses user-facing notifications for aborts.
     if (!resultEmitted) {
-      emitRunResult(
-        ctx,
-        category,
-        toResultOutcome(outcome),
-        options?.isSubagent ?? false,
-        { kind, message: kind === 'unexpected' ? errorMsg : sdkMsg },
+      handle.settleResult(
+        emitRunResult(
+          ctx,
+          category,
+          toResultOutcome(outcome),
+          options?.isSubagent ?? false,
+          { kind, message: kind === 'unexpected' ? errorMsg : sdkMsg },
+        ),
       );
     }
     try {

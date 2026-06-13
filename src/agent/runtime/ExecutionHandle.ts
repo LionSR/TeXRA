@@ -5,6 +5,7 @@
  * describe themselves. Termination policy lives with the owning registry.
  */
 
+import type { AgentTrace, ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
 import {
@@ -75,6 +76,17 @@ export class AgentExecutionHandle implements ExecutionHandle {
   /** Stable tool name for UI identification (e.g. "bash", "codex"). */
   toolName?: string;
 
+  /**
+   * The run's terminal outcome, settled exactly once (by the run lifecycle, or
+   * by `finalizeChildStream` for non-lifecycle child streams) BEFORE the
+   * execution is untracked. Always resolves — never rejects — so a consumer-less
+   * failed run cannot produce an unhandled rejection. SDK consumers awaiting a
+   * specific run's outcome use this; the host-wide stream is `session.onResult`.
+   */
+  readonly result: Promise<ResultEvent>;
+  private settle!: (event: ResultEvent) => void;
+  private settled = false;
+
   constructor(
     readonly executionId: string,
     parentStreamId: StreamTabId,
@@ -83,8 +95,20 @@ export class AgentExecutionHandle implements ExecutionHandle {
     readonly category: AgentCategory,
     readonly runtimeHost: AgentRuntimeHost,
     readonly coordinators?: RunCoordinators,
+    /** The run's discriminated-event channel, for run-scoped subscribers. */
+    readonly trace?: AgentTrace,
   ) {
     this._parentStreamId = parentStreamId;
+    this.result = new Promise<ResultEvent>((resolve) => {
+      this.settle = resolve;
+    });
+  }
+
+  /** Settle {@link result} with the terminal outcome (idempotent). */
+  settleResult(event: ResultEvent): void {
+    if (this.settled) return;
+    this.settled = true;
+    this.settle(event);
   }
 
   get parentStreamId(): StreamTabId {
