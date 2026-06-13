@@ -141,7 +141,13 @@ describe('BashTool', () => {
       timedOut: false,
     };
 
-    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue(execResult);
+    let receivedSignal: AbortSignal | undefined;
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        receivedSignal = options.signal;
+        return execResult;
+      },
+    );
 
     const bashTool = new BashTool();
     const directResult = await bashTool.call({ command: 'echo long' });
@@ -234,5 +240,10 @@ describe('BashTool', () => {
         toolOutputMessage.output.includes(longOutput),
       'Model follow-up payload should contain the complete stdout text',
     );
+    assert.ok(
+      receivedSignal,
+      'Bash command should receive the active tool-call abort signal',
+    );
+    assert.equal(receivedSignal.aborted, false);
   });
 });
