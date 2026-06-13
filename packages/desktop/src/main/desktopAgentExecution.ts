@@ -21,12 +21,11 @@ import {
   TaskStateSchema,
   type TaskState,
 } from '@agent/core/execution/TaskState';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
@@ -187,12 +186,21 @@ export class DesktopProgressBridge {
   readonly runtimeHost: AgentRuntimeHost;
   readonly progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
 
+  /**
+   * This window's own session. Each desktop BrowserWindow gets a fresh one so
+   * its runs, interrupts, coordinator requests, and trace flushers are isolated
+   * from other windows and torn down on window close. Cross-window "is this
+   * execution running anywhere" checks use `getAllActiveExecutionIds()`.
+   */
+  private readonly session: SessionHandle = new SessionHandle();
+
   constructor(
     private readonly postToRenderer: (message: unknown) => boolean | void,
     private readonly options: DesktopProgressBridgeOptions = {},
   ) {
     setProgressViewBridge({ isViewVisible: () => true });
     this.backend = new ProgressBackend({
+      session: this.session,
       storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
       snapshots: options.progressSnapshotStore ?? new StreamSnapshotStore(),
       sendMessage: (message) => {
@@ -216,7 +224,7 @@ export class DesktopProgressBridge {
             // run takes the normal cancel path instead of hanging in WAITING
             // for an answer that can never arrive.
             showRetryRequest: (payload) => {
-              runCoordinatorBridge.cancelRetry(payload.streamId);
+              this.session.coordinators.cancelRetry(payload.streamId);
             },
             resolveRetryRequest: () => undefined,
             showToolEditPermission: (payload) => {
@@ -457,7 +465,7 @@ export class DesktopProgressBridge {
         return true;
       },
       resolveProposal: (proposalId, result) => {
-        runCoordinatorBridge.resolveProposal(proposalId, result);
+        this.session.coordinators.resolveProposal(proposalId, result);
       },
       onMissingProposal: (proposalId) => {
         this.logger.warn(
@@ -568,7 +576,7 @@ export class DesktopProgressBridge {
         handleBashApprovalAction: (message) =>
           handleProgressViewBashApprovalAction(message),
         handlePlanApprovalAction: (message) => {
-          runCoordinatorBridge.resolvePlanApproval(message.approvalId, {
+          this.session.coordinators.resolvePlanApproval(message.approvalId, {
             action: message.action,
             ...(message.action === 'reject' && {
               feedback: message.feedback,
@@ -678,6 +686,9 @@ export class DesktopProgressBridge {
         data: error instanceof Error ? error : { error },
       });
     });
+    // Tear down this window's session last, after the flush above has drained
+    // its trace buffers (dispose does not clear the flusher set).
+    this.session.dispose();
   }
 
   private clearDesktopSessionMaps(): void {
@@ -897,7 +908,7 @@ export class DesktopProgressBridge {
     this.removePersistedStream(streamId);
 
     // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
-    cleanupApprovalsForStream(streamId);
+    cleanupApprovalsForStream(streamId, this.session);
     ToolUseFollowUpQueue.release(streamId);
 
     this.deleteAgentProposalsForStream(streamId);
@@ -920,7 +931,7 @@ export class DesktopProgressBridge {
 
   async deleteAllStreams(): Promise<void> {
     // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
-    cleanupAllApprovals();
+    cleanupAllApprovals(this.session);
     const streamIds = new Set<StreamTabId>([
       ...this.streamLogs.keys(),
       ...this.restoredStreams.keys(),
@@ -974,8 +985,8 @@ export class DesktopProgressBridge {
   }
 
   private stopStream(streamId: StreamTabId): void {
-    runCoordinatorBridge.clearRetryRequest(streamId);
-    executionRegistry.stopAgentStream(streamId, {
+    this.session.coordinators.clearRetryRequest(streamId);
+    this.session.executions.stopAgentStream(streamId, {
       // Read the live workspace-state value (written by the desktop settings
       // view) at stop time, matching the extension and CLI hosts.
       detachActiveChildren:
@@ -1040,6 +1051,7 @@ export class DesktopProgressBridge {
         this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
         try {
           await resumeToolUseFromSnapshot(resume.snapshot, this.runtimeHost, {
+            session: this.session,
             setupSession: (session) => {
               for (const item of queuedFollowUps) {
                 session.appendFollowUp(item);
@@ -1188,6 +1200,7 @@ export class DesktopProgressBridge {
     const { runAgent } = await import('@agent/runtime/runAgent');
     await runAgent(request, {
       runtimeHost: this.runtimeHost,
+      session: this.session,
       openWorkflowOutput: async (result) => {
         // Match the extension's auto-open contract: only a completed workflow
         // opens its final output — cancelled runs may carry partial outputs

@@ -19,7 +19,11 @@ import {
   withRunContext,
   type RunCoordinators,
 } from '@agent/runtime/RunContext';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  SessionHandle,
+  getAllActiveExecutionIds,
+} from '@agent/runtime/SessionHandle';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 import { cleanupAllApprovals } from '@tools/approval';
 
@@ -34,6 +38,45 @@ function createCoordinators(host: AgentRuntimeHost): RunCoordinators {
     retry: new RetryRequestCoordinatorImpl(host),
   };
 }
+
+describe('cross-session active executions (SDK Step 7d PR 4)', () => {
+  it('aggregates active execution ids across live sessions and drops them on dispose', () => {
+    const a = new SessionHandle();
+    const b = new SessionHandle();
+    const { host } = createRecordingHost();
+    const track = (session: SessionHandle, id: string): void => {
+      session.executions.track(
+        new AgentExecutionHandle(
+          id,
+          `${id}-stream` as StreamTabId,
+          `${id}-stream` as StreamTabId,
+          'orchestrator',
+          'toolUse',
+          host,
+          createCoordinators(host),
+        ),
+      );
+    };
+
+    try {
+      track(a, 'exec:agg-a');
+      track(b, 'exec:agg-b');
+
+      const ids = getAllActiveExecutionIds();
+      expect(ids).toContain('exec:agg-a');
+      expect(ids).toContain('exec:agg-b');
+
+      // Disposing one session removes only its executions from the aggregate.
+      a.dispose();
+      const after = getAllActiveExecutionIds();
+      expect(after).not.toContain('exec:agg-a');
+      expect(after).toContain('exec:agg-b');
+    } finally {
+      a.dispose();
+      b.dispose();
+    }
+  });
+});
 
 describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
   it('registers the flush in the run session set, not the default set', () => {

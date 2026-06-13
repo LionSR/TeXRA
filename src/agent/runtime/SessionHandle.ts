@@ -95,6 +95,7 @@ export class SessionHandle {
     // process-module set so `createRunTrace`'s default writes still drain.
     this.flushers = init.flushers ?? new Set<() => void>();
     this.hostChannel = init.hostChannel;
+    liveSessions.add(this);
   }
 
   /** Drain pending trace writes for this session's streams only. */
@@ -115,7 +116,30 @@ export class SessionHandle {
     this.subscriptions.dispose();
     this.executions.dispose();
     this.interrupts.retainOnly(new Set());
+    liveSessions.delete(this);
   }
+}
+
+/**
+ * Every live session in this process, so global queries (e.g. a host's
+ * "is this execution running anywhere" history guard) can aggregate across
+ * sessions instead of seeing only one. Sessions register on construction and
+ * deregister on {@link SessionHandle.dispose}.
+ */
+const liveSessions = new Set<SessionHandle>();
+
+/**
+ * Active execution ids across every live session — the cross-session view a
+ * multi-window host needs so deleting history from one window still respects an
+ * execution running in another. For a single-session process this equals the
+ * one session's `executions.getActiveIds()`.
+ */
+export function getAllActiveExecutionIds(): string[] {
+  const ids = new Set<string>();
+  for (const session of liveSessions) {
+    for (const id of session.executions.getActiveIds()) ids.add(id);
+  }
+  return [...ids];
 }
 
 let cachedDefaultSession: SessionHandle | undefined;
