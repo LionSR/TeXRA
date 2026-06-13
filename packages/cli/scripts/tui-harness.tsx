@@ -57,6 +57,7 @@ import { formatApprovalPolicyForCli } from '../src/chat/tui/forms/ApprovalPolicy
 import {
   cliState,
   patchStream,
+  resetCliState,
   setParentStream,
   type ConversationEntry,
 } from '../src/chat/tui/state/cliState';
@@ -71,6 +72,7 @@ import {
   tuiOutputStreamForColor,
 } from '../src/chat/tui/render/noColorOutput';
 import {
+  clearApprovals,
   enqueueApproval,
   type ApprovalDecision,
 } from '../src/chat/tui/state/approvalQueue';
@@ -1465,6 +1467,27 @@ function appendHarnessStatus(): void {
   );
 }
 
+function resetHarnessForClear(): void {
+  const meta = cliState.sessionMeta.get();
+  clearApprovals();
+  ToolUseFollowUpQueue.drain(STREAM_ID);
+  const store = getDefaultStreamLogStore();
+  for (const streamId of cliState.streams.get().keys()) {
+    store.delete(streamId).catch(() => {
+      // The harness reset is best-effort; visible cliState is reset below.
+    });
+  }
+  resetCliState({
+    ...meta,
+    approvalPolicy: harnessApprovalPolicy,
+  });
+  cliState.activeStreamId.set(STREAM_ID);
+  inkRef.current?.repaint({
+    clearScrollback: true,
+    preserveStatic: false,
+  });
+}
+
 function handleHarnessSlashCommand(line: string): boolean {
   const parsed = parseSlashInput(line);
   if (!parsed) return false;
@@ -1477,6 +1500,9 @@ function handleHarnessSlashCommand(line: string): boolean {
       return true;
     case 'status':
       appendHarnessStatus();
+      return true;
+    case 'clear':
+      resetHarnessForClear();
       return true;
     case 'approval':
       applyHarnessApprovalPolicySelection(rest, HARNESS_APPROVAL_USAGE);
