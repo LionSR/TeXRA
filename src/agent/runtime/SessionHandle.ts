@@ -97,6 +97,12 @@ export class SessionHandle {
     this.interrupts = interrupts;
     this.executions = executions;
     this.coordinators = coordinators;
+    // INVARIANT (SDK Step 7d residue #9): this per-session binder reads the
+    // process-global, streamId-keyed `ToolUseFollowUpQueue` as its release
+    // source. That is coherent ONLY while the queue stays keyed by the globally-
+    // unique streamId — a session's release then touches only its own streams.
+    // If the queue is ever re-keyed (e.g. by sessionId+streamId), per-session
+    // cleanup silently breaks; the queue must move onto the session at that point.
     const subscriptions =
       init.subscriptions ??
       new ExecutionSubscriptionBinder({
