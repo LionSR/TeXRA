@@ -43,12 +43,16 @@ export function cleanupApprovalsForStream(
 }
 
 /**
- * Clean up all approval state when deleting all streams.
- * Handles pending approvals (tool edits + bash), plan approvals, and YOLO mode state.
+ * PROCESS-WIDE reset of all approval state — rejects every pending tool-edit /
+ * bash / user-question approval, clears all bypass + proposal state, and clears
+ * `session`'s coordinator requests.
  *
- * The bridge half is scoped to `session` (its `activeCoordinators()` enumerates
- * only that session's handles); the tool/bypass controllers remain process-wide
- * (documented residue — they are not yet per-session).
+ * The tool/bypass controllers are process-global and streamId-keyed, so this
+ * `clearAll` touches EVERY session's streams. Safe only for single-session
+ * hosts (the extension's default session), test reset, and process shutdown.
+ * A MULTI-SESSION host (e.g. a desktop window) must NOT use this to delete its
+ * own streams — it would wipe sibling windows' pending approvals; it scopes the
+ * sweep to its own streams by looping {@link cleanupApprovalsForStream} instead.
  */
 export function cleanupAllApprovals(
   session: SessionHandle = defaultSession(),
