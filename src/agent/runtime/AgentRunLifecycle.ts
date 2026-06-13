@@ -25,7 +25,6 @@ import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 
 import { AgentExecutionHandle } from './executionRegistry';
-import { defaultSession } from './SessionHandle';
 import {
   getAgentFlowErrorResult,
   buildTerminalFlowResult,
@@ -90,8 +89,7 @@ export async function runFlowWithLifecycle(
   runner: (handle: AgentExecutionHandle) => Promise<AgentFlowResult>,
   options?: RunFlowLifecycleOptions,
 ): Promise<AgentFlowResult> {
-  const { streamId } = ctx;
-  const session = ctx.session ?? defaultSession();
+  const { streamId, session } = ctx;
   const agentIdentifier = ctx.config.agent;
   const category =
     ctx.setting.agentCategory === AgentCategory.ToolUse
@@ -108,6 +106,10 @@ export async function runFlowWithLifecycle(
     ctx.coordinators,
   );
   session.executions.track(handle);
+  // Tracks whether the terminal `result` event has already been emitted, so a
+  // throw in the success arm's post-emit cleanup can never fall into the catch
+  // arm and publish a second, contradictory `failed` result for a finished run.
+  let resultEmitted = false;
   try {
     // The lifecycle owns every stream-status transition: RUNNING here,
     // terminal states in the success/error arms below. Runners must not
@@ -151,13 +153,24 @@ export async function runFlowWithLifecycle(
       toResultOutcome(result.outcome),
       options?.isSubagent ?? false,
     );
-    session.executions.untrack(ctx.executionId);
+    resultEmitted = true;
 
-    if (!ctx.streamStatus.shouldPreserveOnCompletion(streamId)) {
-      ctx.streamStatus.set(streamId, projection.streamStatus, {
-        runtimeHost: ctx.runtimeHost,
-        terminalStatus: projection.executionStatus,
-      });
+    // The run has produced its canonical terminal result. Guard the terminal
+    // cleanup so a throw from untrack's listeners or a stream-status host emit
+    // cannot fall into the catch arm and publish a second `failed` result (or
+    // re-throw) for an already-completed run.
+    try {
+      session.executions.untrack(ctx.executionId);
+      if (!ctx.streamStatus.shouldPreserveOnCompletion(streamId)) {
+        ctx.streamStatus.set(streamId, projection.streamStatus, {
+          runtimeHost: ctx.runtimeHost,
+          terminalStatus: projection.executionStatus,
+        });
+      }
+    } catch (cleanupErr) {
+      logger.warn(
+        `Post-completion cleanup threw for ${agentIdentifier}: ${getSdkErrorMessage(cleanupErr)}`,
+      );
     }
     logger.debug(`Task completed with outcome: ${result.outcome}`);
     return result;
@@ -187,15 +200,20 @@ export async function runFlowWithLifecycle(
       terminalStatus: projection.executionStatus,
     });
     // One emission covers all three exits below (subagent / abort / throw);
-    // untrack follows in each branch, preserving emit-before-untrack. An abort
-    // is `cancelled`, a sibling of `failed`.
-    emitRunResult(
-      ctx,
-      category,
-      kind === 'abort' ? 'cancelled' : 'failed',
-      options?.isSubagent ?? false,
-      { kind, message: kind === 'unexpected' ? errorMsg : sdkMsg },
-    );
+    // untrack follows in each branch, preserving emit-before-untrack. Outcome
+    // routes through the same canonical mapper as the success arm
+    // (`toResultOutcome(AGENT_ERROR_OUTCOME[kind])` — abort ⇒ `cancelled`, a
+    // sibling of `failed`). Skipped when the success arm already emitted, so a
+    // post-completion cleanup throw cannot double-publish.
+    if (!resultEmitted) {
+      emitRunResult(
+        ctx,
+        category,
+        toResultOutcome(outcome),
+        options?.isSubagent ?? false,
+        { kind, message: kind === 'unexpected' ? errorMsg : sdkMsg },
+      );
+    }
     // Terminal-error toasts are no longer emitted here: hosts present them from
     // the `result` event via `session.onResult` + `terminalResultToast` (the
     // single decision point). This keeps the run-lifecycle from owning host UI.

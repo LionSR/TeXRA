@@ -27,9 +27,11 @@
  * session is justified only as the ownership container.
  */
 
-import { getActiveFlushers } from '@transcript';
+import { getActiveFlushers, unregisterFlushers } from '@transcript';
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { toErrorMessage } from '@common/errors';
+import { createChannelTrace } from '@logger';
 
 import { tryUseRunContext } from './RunContext';
 import { ExecutionRegistry, executionRegistry } from './executionRegistry';
@@ -41,6 +43,8 @@ import {
 } from './ExecutionSubscriptionBinder';
 import { StreamStatusService } from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
+
+const logger = createChannelTrace('sessionHandle');
 
 /** Members callers may inject; everything else is fresh-constructed in order. */
 export type SessionHandleInit = Partial<
@@ -124,26 +128,47 @@ export class SessionHandle {
    */
   attachRunTrace(trace: AgentTrace): () => void {
     return trace.subscribe((event) => {
-      if (event.type === 'result') {
-        for (const listener of this.resultListeners) listener(event);
+      if (event.type !== 'result') return;
+      // Guard each listener so one throwing consumer can't starve the rest:
+      // the whole fan-out is a single trace subscriber, so without this a throw
+      // would skip the remaining listeners (TraceEmitter only guards at the
+      // subscriber boundary, not between listeners).
+      for (const listener of this.resultListeners) {
+        try {
+          listener(event);
+        } catch (err) {
+          logger.warn(`onResult listener threw: ${toErrorMessage(err)}`);
+        }
       }
     });
   }
 
   /**
-   * Tear down everything this session owns. Order matters: resolve any pending
-   * coordinator requests, drop subscription disposers, then dispose the
-   * execution registry (the first production caller — this retires the
-   * module-level status-subscription residue for non-default sessions), then
-   * clear interrupt entries (`InterruptRegistry` has no `clear()`; `retainOnly`
-   * with the empty set is the existing precedent).
+   * Tear down everything this session owns. Order matters: drain this session's
+   * pending trace writes, resolve any pending coordinator requests, drop
+   * subscription disposers, then dispose the execution registry (the first
+   * production caller — this retires the module-level status-subscription
+   * residue for non-default sessions), then clear interrupt entries
+   * (`InterruptRegistry` has no `clear()`; `retainOnly` with the empty set is
+   * the existing precedent) and drop any result listeners. Finally unregister
+   * this session's flusher set from the process-wide drain and deregister from
+   * `liveSessions` — both in `finally` so a teardown throw can't strand a
+   * half-disposed session in the cross-session aggregate.
    */
   dispose(): void {
-    this.coordinators.cleanupAllRequests();
-    this.subscriptions.dispose();
-    this.executions.dispose();
-    this.interrupts.retainOnly(new Set());
-    liveSessions.delete(this);
+    try {
+      // Drain throttled writes before the flusher set leaves the drain registry
+      // (the default session's set is permanent; a fresh session's is not).
+      this.flushPendingTraces();
+      this.coordinators.cleanupAllRequests();
+      this.subscriptions.dispose();
+      this.executions.dispose();
+      this.interrupts.retainOnly(new Set());
+      this.resultListeners.clear();
+    } finally {
+      unregisterFlushers(this.flushers);
+      liveSessions.delete(this);
+    }
   }
 }
 

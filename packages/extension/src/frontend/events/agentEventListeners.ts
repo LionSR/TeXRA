@@ -21,7 +21,7 @@ import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { terminalResultToast } from '@shared/agent/terminalResultPresentation';
+import { presentTerminalResult } from '@shared/agent/terminalResultPresentation';
 
 const CHANNEL = 'agentEventListeners';
 
@@ -153,13 +153,14 @@ export function registerAgentEventListeners(): vscode.Disposable {
   );
 
   // Terminal-error toasts now come from the run's `result` event (the lifecycle
-  // no longer emits them directly). Present them through the same handlers.
-  const detachResult = defaultSession().onResult((event) => {
-    const toast = terminalResultToast(event);
-    if (toast?.type === 'instruction')
-      handleRequestShowInstruction(toast.payload);
-    else if (toast?.type === 'error') handleRequestShowError(toast.payload);
-  });
+  // no longer emits them directly). Present them through the same handlers via
+  // the shared mapper — no bus round-trip, so the direct-handler path stays.
+  const detachResult = defaultSession().onResult((event) =>
+    presentTerminalResult(event, {
+      showInstruction: handleRequestShowInstruction,
+      showError: handleRequestShowError,
+    }),
+  );
   signal.addEventListener('abort', detachResult, { once: true });
 
   return new vscode.Disposable(() => controller.abort());

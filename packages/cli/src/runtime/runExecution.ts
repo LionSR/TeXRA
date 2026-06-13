@@ -1,12 +1,13 @@
 import { writeTerminalStatus } from '@agent/storage';
 import { runAgent } from '@agent/runtime/runAgent';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
 import { installCliApprovalHandlers } from './approvalAdapter';
 import { createCliRuntimeHost } from './runtimeHost';
-import { attachTerminalResultToast } from './terminalResultToast';
 import {
   readCliTerminalStatus,
   type ExecuteAgentResult,
@@ -52,7 +53,10 @@ export async function executeCliRequest(
   // Present terminal-error toasts from the run's `result` event through the same
   // runtimeHost path the lifecycle used before (so ndjson / logger output is
   // unchanged); the lifecycle no longer emits them directly.
-  const detachResultToast = attachTerminalResultToast(runtimeHost);
+  const detachResultToast = attachTerminalResultToast(
+    defaultSession(),
+    runtimeHost,
+  );
   const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
     beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
   });

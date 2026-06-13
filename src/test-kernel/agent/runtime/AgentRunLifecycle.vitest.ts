@@ -16,6 +16,7 @@ import {
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
@@ -104,6 +105,7 @@ function createLifecycleContext({
     streamId,
     executionId,
     runtimeHost: explicit.host,
+    session: defaultSession(),
     streamStatus,
     logger: noopTrace,
     parentStage: noopTrace.openStage('Run: test-agent'),

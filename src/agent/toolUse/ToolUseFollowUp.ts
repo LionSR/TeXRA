@@ -12,7 +12,10 @@
 
 import { platform } from '@platform';
 import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
-import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
@@ -118,6 +121,14 @@ export function notifyFollowUpSent(
  * 3. No session found → { status: 'no_session' }
  *
  * Items queued for WAITING sessions are picked up when user resumes.
+ *
+ * `session` defaults to {@link currentSession} so in-run callers (binder send,
+ * bash, delegation, CLI session loop, inquiry continuation) resolve the active
+ * run's session via the ALS and stay byte-identical. HOST-PATH callers that
+ * run OUTSIDE any run ALS (e.g. the desktop progress-view IPC handler, whose
+ * runs are tracked in a per-window session, not the process default) MUST pass
+ * their owning session, or the run's handle is looked up in the wrong registry
+ * and a live follow-up is dropped as `no_session`.
  */
 export function sendFollowUp(
   streamId: StreamTabId,
@@ -128,14 +139,18 @@ export function sendFollowUp(
   followUp: string,
   mediaFiles?: readonly string[],
   displayText?: string,
+  session?: SessionHandle,
 ): Promise<SendFollowUpResult>;
 export async function sendFollowUp(
   streamId: StreamTabId,
   followUp: string | FollowUpQueueInput,
   mediaFiles?: readonly string[],
   displayText?: string,
+  session?: SessionHandle,
 ): Promise<SendFollowUpResult> {
-  const target = currentSession().executions.getToolUseFollowUpTarget(streamId);
+  const target = (
+    session ?? currentSession()
+  ).executions.getToolUseFollowUpTarget(streamId);
   const item =
     typeof followUp === 'string'
       ? { text: followUp, mediaFiles, displayText }

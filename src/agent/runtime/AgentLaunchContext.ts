@@ -73,12 +73,13 @@ export interface AgentLaunchContext extends AgentCore {
   stopAfterCycle?: boolean;
   /**
    * Session that owns this run's coordination state. Always populated by
-   * {@link buildAgentLaunchContext} (defaults to {@link defaultSession},
-   * which wraps the process singletons by identity), and projected into the
-   * ambient {@link RunContext} so run-scoped code resolves it via
+   * {@link buildAgentLaunchContext} (defaults to {@link defaultSession}, which
+   * wraps the process singletons by identity) — hence required here, unlike the
+   * optional {@link AgentLaunchInput.session} launch param — and projected into
+   * the ambient {@link RunContext} so run-scoped code resolves it via
    * `currentSession()`.
    */
-  session?: SessionHandle;
+  session: SessionHandle;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -508,10 +509,10 @@ export async function buildAgentLaunchContext(
     // launch failure (which disposes the trace via the catch below and never
     // returns a context) can never publish a result event. Bundle the detach
     // into the run's trace teardown.
-    const detachResultHub = ctx.session?.attachRunTrace(ctx.logger);
+    const detachResultHub = ctx.session.attachRunTrace(ctx.logger);
     const disposeTrace = ctx.disposeTrace;
     ctx.disposeTrace = () => {
-      detachResultHub?.();
+      detachResultHub();
       disposeTrace();
     };
     return ctx;

@@ -29,6 +29,7 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { toErrorMessage } from '@common/errors';
 import {
   getFileListConfig,
@@ -52,7 +53,6 @@ import {
   type RestoredStreamSnapshot,
   type StreamTabId,
 } from '@shared/schemas';
-import { terminalResultToast } from '@shared/agent/terminalResultPresentation';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
@@ -387,15 +387,11 @@ export class DesktopProgressBridge {
     };
     // Present terminal-error toasts from this window's run results (the run
     // lifecycle no longer emits them directly) through the same runtimeHost
-    // path they used before.
-    this.detachResultToast = this.session.onResult((event) => {
-      const toast = terminalResultToast(event);
-      if (toast?.type === 'instruction') {
-        this.runtimeHost.emit('requestShowInstruction', toast.payload);
-      } else if (toast?.type === 'error') {
-        this.runtimeHost.emit('requestShowError', toast.payload);
-      }
-    });
+    // path they used before — scoped to this window's session.
+    this.detachResultToast = attachTerminalResultToast(
+      this.session,
+      this.runtimeHost,
+    );
     this.toolEditApprovals = createDesktopToolEditApprovalController({
       runtimeHost: this.runtimeHost,
       openPath: options.openPath,
@@ -701,8 +697,16 @@ export class DesktopProgressBridge {
         data: error instanceof Error ? error : { error },
       });
     });
-    // Tear down this window's session last, after the flush above has drained
-    // its trace buffers (dispose does not clear the flusher set).
+    // Tear down this window's session last. `dispose()` drains this session's
+    // own trace flushers and unregisters its flusher set from the process-wide
+    // drain (the fire-and-forget `state.flush()` above still owns store/snapshot
+    // persistence, which dispose cannot await). Orphan policy: dispose clears
+    // this window's execution/interrupt/coordinator entries but deliberately
+    // does NOT kill in-flight runs — on macOS the process outlives the window,
+    // so a run launched here keeps executing headless until process exit
+    // (rebind-or-orphan on window reopen is deferred to a future multi-window
+    // design; cross-window history protection still holds via
+    // getAllActiveExecutionIds while the run's session is live).
     this.session.dispose();
   }
 
@@ -1196,7 +1200,17 @@ export class DesktopProgressBridge {
     text: string,
     mediaFiles?: readonly string[],
   ): Promise<void> {
-    const result = await sendFollowUp(streamId, text, mediaFiles);
+    // Resolve the follow-up target against THIS window's session: the run's
+    // handle is tracked in `this.session`, but this IPC path runs outside the
+    // run ALS, so the module default (currentSession ⇒ defaultSession) would
+    // look in the wrong registry and report `no_session` for a live run.
+    const result = await sendFollowUp(
+      streamId,
+      text,
+      mediaFiles,
+      undefined,
+      this.session,
+    );
     if (result.status === 'sent' || result.status === 'queued') {
       this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
       return;

@@ -15,12 +15,13 @@ import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinato
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   RUN_OUTCOME,
+  STREAM_STATUS,
   type ExecutionId,
   type StorageKey,
   type StreamTabId,
@@ -83,6 +84,7 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
     streamId,
     executionId,
     runtimeHost: explicit.host,
+    session: defaultSession(),
     streamStatus,
     logger,
     parentStage: logger.openStage('Run: assistant'),
@@ -149,6 +151,36 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       });
       expect(results[0].error).toBeUndefined();
     } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
+  it('emits exactly one completed result even if terminal stream-status cleanup throws', async () => {
+    const logger = new TraceEmitter();
+    const results = collectResults(logger);
+    const { ctx, streamStatus } = createCtx({ logger });
+    // A status subscriber that throws on the terminal (STOPPED) transition, not
+    // the initial RUNNING one — models a host emit / status listener throwing
+    // during post-completion cleanup. The run already emitted `completed`, so
+    // this must NOT re-enter the catch arm and publish a second `failed`.
+    const off = streamStatus.onDidChange((change) => {
+      if (change.status === STREAM_STATUS.STOPPED) {
+        throw new Error('status listener boom');
+      }
+    });
+    try {
+      await expect(
+        runFlowWithLifecycle(ctx, async () => ({
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId: ctx.executionId,
+          streamId: ctx.streamId,
+        })),
+      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+      expect(results).toHaveLength(1);
+      expect(results[0].outcome).toBe('completed');
+    } finally {
+      off();
       streamStatus.clear(ctx.streamId, { emit: false });
     }
   });

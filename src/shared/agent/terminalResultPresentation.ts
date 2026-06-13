@@ -65,9 +65,40 @@ export function terminalResultToast(
           message: event.error.message ?? 'Unexpected error executing agent.',
         },
       };
-    default:
-      // 'abort' and any other classified kind: no toast (matches the prior
-      // lifecycle behavior, which only toasted these three kinds).
+    case 'abort':
+      // User-initiated cancellation: no toast (matches the prior lifecycle).
       return null;
+    default: {
+      // Exhaustiveness guard: a new AgentErrorKind must take an explicit stance
+      // here rather than silently falling through to no-toast.
+      const _exhaustive: never = event.error.kind;
+      void _exhaustive;
+      return null;
+    }
   }
+}
+
+/**
+ * Where a host presents the mapped toast. Each host supplies its own surface
+ * (`runtimeHost.emit`, or the extension's direct `requestShow*` handlers).
+ */
+export interface TerminalResultToastSink {
+  showInstruction(
+    payload: ProgressEventPayloads['requestShowInstruction'],
+  ): void;
+  showError(payload: ProgressEventPayloads['requestShowError']): void;
+}
+
+/**
+ * Apply {@link terminalResultToast} and route the result to `sink` — the single
+ * place the `instruction` / `error` branch lives, so each host's `onResult`
+ * consumer stays a one-liner with no per-host copy of the switch.
+ */
+export function presentTerminalResult(
+  event: ResultEvent,
+  sink: TerminalResultToastSink,
+): void {
+  const toast = terminalResultToast(event);
+  if (toast?.type === 'instruction') sink.showInstruction(toast.payload);
+  else if (toast?.type === 'error') sink.showError(toast.payload);
 }

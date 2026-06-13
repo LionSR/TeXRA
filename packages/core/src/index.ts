@@ -102,6 +102,10 @@ export {
   TraceEmitter,
   noopTrace,
 } from '@agent/trace';
+// `ResultEvent`'s member types, so consumers can name the discriminant of
+// `event.error.kind` and the `usage` shape without deep internal imports.
+export type { AgentErrorKind } from '@common/errors';
+export type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 
 // ── 7. Agent registry (discover/resolve agent definitions) ──
 export {

@@ -89,3 +89,14 @@ export function flushPendingRunTraces(): void {
 export function getActiveFlushers(): Set<() => void> {
   return activeFlushers;
 }
+
+/**
+ * Drop a session's flusher set from the process-wide drain registry — called by
+ * {@link SessionHandle.dispose} so a torn-down session's set is not iterated by
+ * {@link flushPendingRunTraces} for the rest of the process lifetime. The
+ * default (process) set is never removed: it lives for the whole process and
+ * the default session is never disposed.
+ */
+export function unregisterFlushers(set: Set<() => void>): void {
+  if (set !== activeFlushers) flusherSets.delete(set);
+}

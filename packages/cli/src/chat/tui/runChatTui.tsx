@@ -31,6 +31,8 @@ import {
   resumeToolUseFromSnapshot,
 } from '@agent/runtime/executeAgent';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import {
   notifyFollowUpSent,
   sendFollowUp,
@@ -62,7 +64,6 @@ import {
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
-import { attachTerminalResultToast } from '@cli/runtime/terminalResultToast';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
 import {
   formatCliManualAuthUrlMessage,
@@ -1263,7 +1264,10 @@ export async function runChat(
     });
     const runtimeHost = createCliRuntimeHost(sessionContext);
     const wrapped = wrapRuntimeHost(runtimeHost);
-    const detachResultToast = attachTerminalResultToast(wrapped);
+    const detachResultToast = attachTerminalResultToast(
+      defaultSession(),
+      wrapped,
+    );
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
     const executionId = generateExecutionId();
@@ -1427,7 +1431,10 @@ export async function runChat(
     const runtimeHost = createCliRuntimeHost(sessionContext);
     const wrapped = wrapRuntimeHost(runtimeHost);
     session.runtimeHost = wrapped;
-    const detachResultToast = attachTerminalResultToast(wrapped);
+    const detachResultToast = attachTerminalResultToast(
+      defaultSession(),
+      wrapped,
+    );
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
     const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);

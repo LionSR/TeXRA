@@ -24,6 +24,8 @@ import {
   getAllActiveExecutionIds,
 } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 import { cleanupAllApprovals } from '@tools/approval';
 
@@ -105,6 +107,39 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
       sessionB.dispose();
     }
   });
+
+  it("drops the disposed session's flusher set from the process-wide drain", () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+    const sessionB = new SessionHandle();
+    let drained = 0;
+
+    try {
+      // Registers sessionB.flushers in the process-wide drain registry.
+      createRunTrace(
+        'stream:flusher-dispose' as StreamTabId,
+        store,
+        sessionB.flushers,
+      );
+      sessionB.flushers.add(() => {
+        drained += 1;
+      });
+
+      flushPendingRunTraces();
+      // While live, the session's set is reached by the process-wide drain.
+      expect(drained).toBeGreaterThan(0);
+
+      sessionB.dispose();
+
+      drained = 0;
+      flushPendingRunTraces();
+      // After dispose the set is unregistered — no longer iterated forever.
+      expect(drained).toBe(0);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
 });
 
 describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
@@ -146,6 +181,53 @@ describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
     } finally {
       a.dispose();
       b.dispose();
+    }
+  });
+});
+
+describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
+  it('resolves the follow-up target against the passed session, not the process default', async () => {
+    const windowSession = new SessionHandle();
+    const { host } = createRecordingHost();
+    const parentStream = 'stream:fu-parent' as StreamTabId;
+
+    try {
+      // A child run is tracked in the per-window session, exactly as a desktop
+      // run is after PR 4 (launched with { session: this.session }).
+      windowSession.executions.track(
+        new AgentExecutionHandle(
+          'exec:fu-child',
+          parentStream,
+          'stream:fu-child' as StreamTabId,
+          'orchestrator',
+          'toolUse',
+          host,
+          createCoordinators(host),
+        ),
+      );
+
+      // A host-path caller (outside any run ALS, like the desktop IPC handler)
+      // that passes its window session sees the live child and queues.
+      await expect(
+        sendFollowUp(
+          parentStream,
+          'continue',
+          undefined,
+          undefined,
+          windowSession,
+        ),
+      ).resolves.toEqual({ status: 'queued', reason: 'children_running' });
+
+      // Without the session it falls back to the default session, which does
+      // not track this run — this is the dropped-follow-up regression the
+      // session parameter prevents on desktop.
+      await expect(sendFollowUp(parentStream, 'continue')).resolves.toEqual({
+        status: 'no_session',
+        streamStatus: undefined,
+      });
+    } finally {
+      ToolUseFollowUpQueue.release(parentStream);
+      windowSession.dispose();
     }
   });
 });
