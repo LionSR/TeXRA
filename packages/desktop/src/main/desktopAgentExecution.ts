@@ -63,7 +63,6 @@ import { AgentCategory } from '@shared/schemas/agent';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
-  cleanupAllApprovals,
   cleanupApprovalsForStream,
   handleProgressViewBashApprovalAction,
 } from '@tools/approval';
@@ -953,12 +952,18 @@ export class DesktopProgressBridge {
   }
 
   async deleteAllStreams(): Promise<void> {
-    // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
-    cleanupAllApprovals(this.session);
     const streamIds = new Set<StreamTabId>([
       ...this.streamLogs.keys(),
       ...this.restoredStreams.keys(),
     ]);
+    // Approval cleanup (incl. retry/proposal/plan coordinator state) is scoped
+    // to THIS window's streams via the per-stream helper, NOT the process-wide
+    // `cleanupAllApprovals` reset — so one window's "delete all" can't wipe
+    // another window's pending approvals (the approval controllers are
+    // process-global and streamId-keyed; the coordinator half is session-owned).
+    for (const streamId of streamIds) {
+      cleanupApprovalsForStream(streamId, this.session);
+    }
     for (const streamId of streamIds) {
       this.deletedStreams.add(streamId);
     }
