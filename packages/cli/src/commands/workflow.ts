@@ -31,6 +31,7 @@ import {
   optionalStringFlagValue,
   optString,
 } from './_helpers/globalArgs';
+import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { resolveCliAgent } from '../runtime/agentResolution';
 import { executeCliRequest } from '../runtime/runExecution';
 import {
@@ -58,6 +59,7 @@ interface WorkflowRunInit {
   readonly outputDir?: string;
   readonly model?: string;
   readonly instruction: string;
+  readonly instructionFile?: string;
 }
 
 export async function runWorkflowAgent(
@@ -74,6 +76,7 @@ export async function runWorkflowAgent(
   // parent component blows up at copy time (`EISDIR` / `EEXIST`) after the
   // full agent run otherwise.
   await assertOutputFileAvailable(init.output, context.cwd);
+  const instruction = await resolveFileBackedInstruction(init, context.cwd);
 
   await initLocalCliPlatform(context);
   const agent = await resolveCliAgent(init.agent);
@@ -124,7 +127,7 @@ export async function runWorkflowAgent(
       contextFiles,
       outputFiles: modelOutputFile ? [modelOutputFile] : [],
       cliOutputFile: init.output,
-      instruction: init.instruction,
+      instruction,
       workingDirectory: runContext.cwd,
       agentCategory: AgentCategory.Workflow,
     };
@@ -223,6 +226,12 @@ export const runWorkflowCommand = defineCliCommand({
       type: 'string',
       description: 'Instruction passed to the workflow agent',
     },
+    'instruction-file': {
+      type: 'string',
+      valueHint: 'file',
+      description:
+        'File whose contents are passed before --instruction when both are set',
+    },
   },
   run: (context, ctx) =>
     runWorkflowAgent(context, {
@@ -233,5 +242,6 @@ export const runWorkflowCommand = defineCliCommand({
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
       model: optString(ctx.args.model),
       instruction: optString(ctx.args.instruction) ?? '',
+      instructionFile: optionalStringFlagValue(ctx.rawArgs, 'instruction-file'),
     }),
 });
