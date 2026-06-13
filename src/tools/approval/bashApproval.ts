@@ -12,6 +12,7 @@ import { createStreamApprovalController } from './streamApprovalQueue';
 
 const BashApprovalRequestSchema = z.object({
   command: z.string(),
+  cwd: z.string().optional(),
   streamId: StreamTabIdSchema.optional(),
 });
 export type BashApprovalRequest = z.infer<typeof BashApprovalRequestSchema>;
@@ -121,6 +122,7 @@ async function showApprovalPrompt(
       runtimeHost.emit('showBashPermission', {
         requestId,
         command: request.command,
+        ...(request.cwd ? { cwd: request.cwd } : {}),
         allowBypass: true,
         streamId: streamId ?? '',
       });

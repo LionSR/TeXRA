@@ -336,6 +336,18 @@ export const requestPanelStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
+  .bash-approval-request__cwd {
+    color: var(--text-muted);
+    font-family: var(--wa-font-family-mono);
+    font-size: var(--font-size-xs);
+    margin-bottom: var(--spacing-xs);
+    overflow-wrap: anywhere;
+  }
+
+  .bash-approval-request__cwd span {
+    color: var(--text-secondary);
+  }
+
   .bash-approval-request__command .code-block {
     border-left: var(--border-medium) solid var(--wa-color-terminal-ansi-yellow);
   }
