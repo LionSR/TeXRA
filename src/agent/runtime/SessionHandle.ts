@@ -59,6 +59,14 @@ export type SessionHandleInit = Partial<
   >
 >;
 
+export interface SessionDisposeOptions {
+  /**
+   * Keep active executions registered after host teardown so process-wide
+   * running-execution guards still see headless runs until they settle.
+   */
+  keepActiveExecutions?: boolean;
+}
+
 export class SessionHandle {
   /** Live executions that can be interrupted by stream id. */
   readonly interrupts: InterruptRegistry;
@@ -111,6 +119,7 @@ export class SessionHandle {
 
   /** Listeners for terminal run results in this session (the host channel). */
   private readonly resultListeners = new Set<(event: ResultEvent) => void>();
+  private idleDisposeStarted = false;
 
   /**
    * Subscribe to terminal `result` events for runs in this session. Hosts hold
@@ -147,26 +156,52 @@ export class SessionHandle {
   /**
    * Tear down everything this session owns. Order matters: drain this session's
    * pending trace writes, resolve any pending coordinator requests, drop
-   * subscription disposers, then dispose the execution registry (the first
-   * production caller — this retires the module-level status-subscription
-   * residue for non-default sessions), then clear interrupt entries
+   * subscription disposers, then dispose the execution registry unless active
+   * executions must remain visible for process-wide guards, then clear interrupt entries
    * (`InterruptRegistry` has no `clear()`; `retainOnly` with the empty set is
    * the existing precedent) and drop any result listeners. Finally unregister
    * this session's flusher set from the process-wide drain and deregister from
-   * `liveSessions` — both in `finally` so a teardown throw can't strand a
-   * half-disposed session in the cross-session aggregate.
+   * `liveSessions` once no active executions remain — both in `finally` so a
+   * teardown throw can't strand a fully disposed session in the cross-session
+   * aggregate.
    */
-  dispose(): void {
+  dispose(options: SessionDisposeOptions = {}): void {
+    const keepActiveExecutions =
+      options.keepActiveExecutions === true &&
+      this.executions.getActiveIds().length > 0;
     try {
       // Drain throttled writes before the flusher set leaves the drain registry
       // (the default session's set is permanent; a fresh session's is not).
       this.flushPendingTraces();
       this.coordinators.cleanupAllRequests();
       this.subscriptions.dispose();
-      this.executions.dispose();
-      this.interrupts.retainOnly(new Set());
+      if (keepActiveExecutions) {
+        void this.disposeWhenIdle();
+      } else {
+        this.executions.dispose();
+        this.interrupts.retainOnly(new Set());
+      }
       this.resultListeners.clear();
     } finally {
+      if (!keepActiveExecutions) {
+        unregisterFlushers(this.flushers);
+        liveSessions.delete(this);
+      }
+    }
+  }
+
+  private async disposeWhenIdle(): Promise<void> {
+    if (this.idleDisposeStarted) return;
+    this.idleDisposeStarted = true;
+    try {
+      while (true) {
+        const activeIds = this.executions.getActiveIds();
+        if (activeIds.length === 0) break;
+        await this.executions.waitForAnyChange(activeIds);
+      }
+    } finally {
+      this.executions.dispose();
+      this.interrupts.retainOnly(new Set());
       unregisterFlushers(this.flushers);
       liveSessions.delete(this);
     }

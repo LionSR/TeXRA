@@ -13,7 +13,11 @@ import {
   withRunContext,
   type RunCoordinators,
 } from '@agent/runtime/RunContext';
-import { SessionHandle, defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  SessionHandle,
+  defaultSession,
+  getAllActiveExecutionIds,
+} from '@agent/runtime/SessionHandle';
 import {
   AgentExecutionHandle,
   executionRegistry,
@@ -204,5 +208,35 @@ describe('SessionHandle', () => {
     expect(subscriptions).toHaveBeenCalledOnce();
     expect(executions).toHaveBeenCalledOnce();
     expect(retainOnly).toHaveBeenCalledWith(new Set());
+  });
+
+  it('can keep active executions visible until they settle', async () => {
+    const session = new SessionHandle();
+    const { host } = createRecordingHost();
+    const executionId = 'exec:dispose-keep-active';
+    const streamId = 'stream:dispose-keep-active' as StreamTabId;
+    try {
+      const handle = trackAgent(
+        session,
+        host,
+        createCoordinators(host),
+        executionId,
+        streamId,
+      );
+
+      session.dispose({ keepActiveExecutions: true });
+
+      expect(session.executions.getHandle(executionId)).toBe(handle);
+      expect(getAllActiveExecutionIds()).toContain(executionId);
+
+      session.executions.untrack(executionId);
+
+      await vi.waitFor(() => {
+        expect(getAllActiveExecutionIds()).not.toContain(executionId);
+      });
+    } finally {
+      session.executions.untrack(executionId);
+      session.dispose();
+    }
   });
 });
