@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 
 - **Homebrew installs get the right upgrade command** — the CLI's in-session update prompt now recognizes a Homebrew install (the `texra-ai/tap` formula) and offers `brew update && brew upgrade texra` instead of misdetecting it as an npm global and suggesting `npm install -g`, which would have clashed with the brew-managed copy.
 
+### Extension (VS Code)
+
+#### Features
+
+- **Agent Review in the Source Control panel** — the agent review that scans your changes for issues now appears as a **Find Issues** section right in VS Code's Source Control (git) view, alongside the existing entry in the TeXRA sidebar. A new **Find Issues with Options…** action opens quick prompts to set optional free-text instructions, the review approach (Quick / Thorough) for this run, and the branch to diff against — so you can target a one-off review without changing your saved settings. Findings still stream into the panel and the Problems view with the same Fix-with-Agent and Dismiss actions.
+
 ## [0.38.7] - 2026-06-11
 
 ### Shared (all surfaces)

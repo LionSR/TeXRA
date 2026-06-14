@@ -42,6 +42,12 @@ export interface CollectReviewDiffOptions {
   baseRef?: string;
   /** User-facing label for {@link baseRef}. */
   baseDescription?: string;
+  /**
+   * Explicit base *branch* to diff against, with merge-base semantics (like
+   * the auto-detected main branch). Set by the "Diff Against…" picker;
+   * ignored when {@link baseRef} is provided.
+   */
+  baseBranch?: string;
 }
 
 export interface ReviewDiff {
@@ -147,6 +153,63 @@ async function detectBaseBranch(cwd: string): Promise<BaseBranch | null> {
     }
   }
   return null;
+}
+
+/**
+ * Resolve a user-chosen base branch (from the "Diff Against…" picker). The ref
+ * is verified so a stale pick degrades to a clear failure rather than a
+ * confusing empty diff. The short name drops a leading `origin/` so the
+ * "branch already checked out" comparison still matches.
+ */
+async function resolveBaseBranch(
+  cwd: string,
+  branch: string,
+): Promise<BaseBranch | null> {
+  const verified = await git(cwd, ['rev-parse', '--verify', '--quiet', branch]);
+  if (verified === null) return null;
+  return { ref: branch, shortName: branch.replace(/^origin\//, '') };
+}
+
+/** A branch offered by the "Diff Against…" picker. */
+export interface BaseBranchCandidate {
+  /** Ref usable as a diff base: a local branch name or `origin/<name>`. */
+  ref: string;
+  /** True when this is the currently checked-out branch. */
+  current: boolean;
+}
+
+/**
+ * List local and origin branches for the "Diff Against…" picker, flagging the
+ * current branch. Best-effort: returns an empty list when the repository
+ * cannot be resolved, leaving the picker with just its auto-detect default.
+ */
+export async function listBaseBranchCandidates(
+  cwd: string,
+): Promise<BaseBranchCandidate[]> {
+  const repoRoot = (await git(cwd, ['rev-parse', '--show-toplevel']))?.trim();
+  if (!repoRoot) return [];
+  const [headOut, localsOut, remotesOut] = await Promise.all([
+    git(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD']),
+    git(repoRoot, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']),
+    git(repoRoot, [
+      'for-each-ref',
+      '--format=%(refname:short)',
+      'refs/remotes/origin',
+    ]),
+  ]);
+  const current = headOut?.trim();
+  const seen = new Set<string>();
+  const candidates: BaseBranchCandidate[] = [];
+  for (const ref of [
+    ...splitOutputLines(localsOut ?? ''),
+    ...splitOutputLines(remotesOut ?? ''),
+  ]) {
+    // `origin/HEAD` is a symbolic alias, not a real branch to diff against.
+    if (!ref || ref === 'origin/HEAD' || seen.has(ref)) continue;
+    seen.add(ref);
+    candidates.push({ ref, current: ref === current });
+  }
+  return candidates;
 }
 
 /**
@@ -297,11 +360,15 @@ export async function collectReviewDiff(
     baseRef = options.baseRef;
     baseDescription = options.baseDescription ?? options.baseRef;
   } else {
-    const base = await detectBaseBranch(repoRoot);
+    const base = options.baseBranch
+      ? await resolveBaseBranch(repoRoot, options.baseBranch)
+      : await detectBaseBranch(repoRoot);
     if (!base) {
       return {
         ok: false,
-        reason: `Could not find the repository's main branch (looked for origin/HEAD plus local and origin remote-tracking ${BASE_BRANCH_CANDIDATES.join('/')}).`,
+        reason: options.baseBranch
+          ? `Could not resolve the base branch "${options.baseBranch}"; it may have been deleted.`
+          : `Could not find the repository's main branch (looked for origin/HEAD plus local and origin remote-tracking ${BASE_BRANCH_CANDIDATES.join('/')}).`,
       };
     }
 
@@ -322,7 +389,9 @@ export async function collectReviewDiff(
         };
       }
       baseRef = mergeBase.trim();
-      baseDescription = `main branch (${base.ref})`;
+      baseDescription = options.baseBranch
+        ? `branch ${base.ref}`
+        : `main branch (${base.ref})`;
     }
   }
 
