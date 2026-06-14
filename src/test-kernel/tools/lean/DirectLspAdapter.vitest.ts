@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
 import { delay } from '@utils/core/async';
+import { splitOutputLines } from '@utils/text/stringUtils';
 
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');
@@ -126,7 +127,7 @@ afterEach(() => {
 
 async function countStarts(): Promise<number> {
   const text = await readFile(countPath, 'utf8').catch(() => '');
-  return text.split('\n').filter(Boolean).length;
+  return splitOutputLines(text).length;
 }
 
 describe('createDirectLspLeanAdapter', () => {
