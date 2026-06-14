@@ -75,6 +75,20 @@ function emitRunResult(
   });
 }
 
+function endParentStageSafely(
+  ctx: AgentLaunchContext,
+  agentIdentifier: string,
+  status: Parameters<AgentLaunchContext['parentStage']['end']>[0],
+): void {
+  try {
+    ctx.parentStage.end(status);
+  } catch (stageErr) {
+    logger.warn(
+      `Failed to end parent stage for ${agentIdentifier}: ${getSdkErrorMessage(stageErr)}`,
+    );
+  }
+}
+
 /**
  * Wraps a flow runner with full agent run lifecycle management: execution
  * registry tracking, stream-status transitions, error classification, user
@@ -144,7 +158,7 @@ export async function runFlowWithLifecycle(
       }
     }
 
-    ctx.parentStage.end(projection.endGroupStatus);
+    endParentStageSafely(ctx, agentIdentifier, projection.endGroupStatus);
     // Emit the terminal result BEFORE untrack so the registry's terminal
     // listener event never precedes the result event.
     emitRunResult(
@@ -201,7 +215,7 @@ export async function runFlowWithLifecycle(
       });
     }
 
-    ctx.parentStage.end(projection.endGroupStatus);
+    endParentStageSafely(ctx, agentIdentifier, projection.endGroupStatus);
     // One emission covers all three exits below (subagent / abort / throw);
     // untrack follows in each branch, preserving emit-before-untrack. Outcome
     // routes through the same canonical mapper as the success arm

@@ -185,6 +185,34 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     }
   });
 
+  it('emits the completed result even if ending the parent stage throws', async () => {
+    const logger = new TraceEmitter();
+    const results = collectResults(logger);
+    const { ctx, streamStatus } = createCtx({ logger });
+    vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
+      throw new Error('stage listener boom');
+    });
+
+    try {
+      await expect(
+        runFlowWithLifecycle(ctx, async () => ({
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId: ctx.executionId,
+          streamId: ctx.streamId,
+        })),
+      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        outcome: 'completed',
+        executionId: ctx.executionId,
+      });
+    } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
   it('keeps the completed result when the completion hook throws', async () => {
     const logger = new TraceEmitter();
     const results = collectResults(logger);
@@ -240,6 +268,31 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       });
     } finally {
       off();
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
+  it('emits the failed result even if ending the parent stage throws', async () => {
+    const logger = new TraceEmitter();
+    const results = collectResults(logger);
+    const { ctx, streamStatus } = createCtx({ logger });
+    vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
+      throw new Error('stage listener boom');
+    });
+
+    try {
+      await expect(
+        runFlowWithLifecycle(ctx, async () => {
+          throw new Error('model exploded');
+        }),
+      ).rejects.toThrow('model exploded');
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        outcome: 'failed',
+        executionId: ctx.executionId,
+      });
+    } finally {
       streamStatus.clear(ctx.streamId, { emit: false });
     }
   });
