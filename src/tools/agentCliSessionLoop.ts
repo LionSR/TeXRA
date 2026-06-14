@@ -236,10 +236,16 @@ export function runAgentCliSession<TTurn>(
             `Failed to persist report for ${executionId}: ${toErrorMessage(storageErr)}`,
           );
         }
-        const delivery = await sendFollowUp(parentStreamId, {
-          text: msg,
-          origin: 'subagent_result',
-        });
+        const delivery = await sendFollowUp(
+          parentStreamId,
+          {
+            text: msg,
+            origin: 'subagent_result',
+          },
+          undefined,
+          undefined,
+          runSession,
+        );
         if (delivery.status === 'no_session') {
           logger.warn(
             `Turn result for ${executionId} not delivered: parent stream ${parentStreamId} has no active session (status: ${delivery.streamStatus ?? 'unknown'}). The result remains in the execution report.`,

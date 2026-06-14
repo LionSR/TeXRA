@@ -155,15 +155,15 @@ export class SessionHandle {
 
   /**
    * Tear down everything this session owns. Order matters: drain this session's
-   * pending trace writes, resolve any pending coordinator requests, drop
-   * subscription disposers, then dispose the execution registry unless active
-   * executions must remain visible for process-wide guards, then clear interrupt entries
-   * (`InterruptRegistry` has no `clear()`; `retainOnly` with the empty set is
-   * the existing precedent) and drop any result listeners. Finally unregister
-   * this session's flusher set from the process-wide drain and deregister from
-   * `liveSessions` once no active executions remain — both in `finally` so a
-   * teardown throw can't strand a fully disposed session in the cross-session
-   * aggregate.
+   * pending trace writes, then either defer teardown while active executions
+   * must remain visible for process-wide guards, or resolve pending coordinator
+   * requests, drop subscription disposers, dispose the execution registry, clear
+   * interrupt entries (`InterruptRegistry` has no `clear()`; `retainOnly` with
+   * the empty set is the existing precedent), and drop result listeners. Finally
+   * unregister this session's flusher set from the process-wide drain and
+   * deregister from `liveSessions` once no active executions remain — both in
+   * `finally` so a teardown throw can't strand a fully disposed session in the
+   * cross-session aggregate.
    */
   dispose(options: SessionDisposeOptions = {}): void {
     const keepActiveExecutions =
@@ -173,15 +173,15 @@ export class SessionHandle {
       // Drain throttled writes before the flusher set leaves the drain registry
       // (the default session's set is permanent; a fresh session's is not).
       this.flushPendingTraces();
-      this.coordinators.cleanupAllRequests();
-      this.subscriptions.dispose();
       if (keepActiveExecutions) {
         void this.disposeWhenIdle();
       } else {
+        this.coordinators.cleanupAllRequests();
+        this.subscriptions.dispose();
         this.executions.dispose();
         this.interrupts.retainOnly(new Set());
+        this.resultListeners.clear();
       }
-      this.resultListeners.clear();
     } finally {
       if (!keepActiveExecutions) {
         unregisterFlushers(this.flushers);
@@ -200,8 +200,12 @@ export class SessionHandle {
         await this.executions.waitForAnyChange(activeIds);
       }
     } finally {
+      this.flushPendingTraces();
+      this.coordinators.cleanupAllRequests();
+      this.subscriptions.dispose();
       this.executions.dispose();
       this.interrupts.retainOnly(new Set());
+      this.resultListeners.clear();
       unregisterFlushers(this.flushers);
       liveSessions.delete(this);
     }

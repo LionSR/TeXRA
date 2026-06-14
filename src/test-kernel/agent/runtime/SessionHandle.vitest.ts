@@ -215,6 +215,8 @@ describe('SessionHandle', () => {
     const { host } = createRecordingHost();
     const executionId = 'exec:dispose-keep-active';
     const streamId = 'stream:dispose-keep-active' as StreamTabId;
+    const cleanup = vi.spyOn(session.coordinators, 'cleanupAllRequests');
+    const subscriptions = vi.spyOn(session.subscriptions, 'dispose');
     try {
       const handle = trackAgent(
         session,
@@ -228,12 +230,16 @@ describe('SessionHandle', () => {
 
       expect(session.executions.getHandle(executionId)).toBe(handle);
       expect(getAllActiveExecutionIds()).toContain(executionId);
+      expect(cleanup).not.toHaveBeenCalled();
+      expect(subscriptions).not.toHaveBeenCalled();
 
       session.executions.untrack(executionId);
 
       await vi.waitFor(() => {
         expect(getAllActiveExecutionIds()).not.toContain(executionId);
       });
+      expect(cleanup).toHaveBeenCalledOnce();
+      expect(subscriptions).toHaveBeenCalledOnce();
     } finally {
       session.executions.untrack(executionId);
       session.dispose();

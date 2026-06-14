@@ -306,10 +306,16 @@ export class BashTool extends defineTool({
     };
 
     const deliverParentFollowUp = async (text: string): Promise<void> => {
-      const result = await sendFollowUp(parentStreamId, {
-        text,
-        origin: 'subagent_result',
-      });
+      const result = await sendFollowUp(
+        parentStreamId,
+        {
+          text,
+          origin: 'subagent_result',
+        },
+        undefined,
+        undefined,
+        runSession,
+      );
       if (result.status === 'no_session') {
         logger.debug(
           `Background bash follow-up dropped: parent stream ${parentStreamId} has no active session (${result.streamStatus ?? 'unknown'}).`,
