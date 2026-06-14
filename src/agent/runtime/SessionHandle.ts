@@ -163,6 +163,14 @@ export class SessionHandle {
    */
   dispose(): void {
     try {
+      // Preserve history delete-protection for runs still active at dispose:
+      // on macOS a window can close while a resumable run keeps going headless,
+      // and disposing the session would otherwise drop it from
+      // `getAllActiveExecutionIds()`, letting a reopened window delete its
+      // history mid-run. Record those ids so the guard still covers them.
+      for (const id of this.executions.getActiveIds()) {
+        orphanedActiveExecutions.add(id);
+      }
       // Drain throttled writes before the flusher set leaves the drain registry
       // (the default session's set is permanent; a fresh session's is not).
       this.flushPendingTraces();
@@ -187,13 +195,25 @@ export class SessionHandle {
 const liveSessions = new Set<SessionHandle>();
 
 /**
- * Active execution ids across every live session — the cross-session view a
- * multi-window host needs so deleting history from one window still respects an
- * execution running in another. For a single-session process this equals the
- * one session's `executions.getActiveIds()`.
+ * Executions that were still active when their owning session was disposed
+ * (e.g. a desktop window closed while a resumable run kept going headless).
+ * Kept so {@link getAllActiveExecutionIds} still protects them from a reopened
+ * window's history delete. An orphaned run is untracked, so its completion is
+ * not observable — these ids therefore linger until process exit; the resulting
+ * over-protection is safe-leaning (it only ever refuses an unsafe delete). A
+ * resumed run is re-tracked in its new session, so it is also covered live.
+ */
+const orphanedActiveExecutions = new Set<string>();
+
+/**
+ * Active execution ids across every live session, plus any orphaned-but-running
+ * executions from disposed sessions — the cross-session view a multi-window host
+ * needs so deleting history from one window still respects an execution running
+ * in (or orphaned by) another. For a single-session process with no orphans this
+ * equals the one session's `executions.getActiveIds()`.
  */
 export function getAllActiveExecutionIds(): string[] {
-  const ids = new Set<string>();
+  const ids = new Set<string>(orphanedActiveExecutions);
   for (const session of liveSessions) {
     for (const id of session.executions.getActiveIds()) ids.add(id);
   }

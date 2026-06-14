@@ -68,7 +68,8 @@ describe('cross-session active executions (SDK Step 7d PR 4)', () => {
       expect(ids).toContain('exec:agg-a');
       expect(ids).toContain('exec:agg-b');
 
-      // Disposing one session removes only its executions from the aggregate.
+      // A FINISHED execution (untracked before dispose) drops from the aggregate.
+      a.executions.untrack('exec:agg-a');
       a.dispose();
       const after = getAllActiveExecutionIds();
       expect(after).not.toContain('exec:agg-a');
@@ -76,6 +77,32 @@ describe('cross-session active executions (SDK Step 7d PR 4)', () => {
     } finally {
       a.dispose();
       b.dispose();
+    }
+  });
+
+  it('preserves delete-protection for a run still active when its session is disposed (multi-window orphan)', () => {
+    const win = new SessionHandle();
+    const { host } = createRecordingHost();
+    win.executions.track(
+      new AgentExecutionHandle(
+        'exec:orphan',
+        'exec:orphan-stream' as StreamTabId,
+        'exec:orphan-stream' as StreamTabId,
+        'orchestrator',
+        'toolUse',
+        host,
+        createCoordinators(host),
+      ),
+    );
+    try {
+      expect(getAllActiveExecutionIds()).toContain('exec:orphan');
+      // Window closes while the run is still active (resumable, headless): the
+      // run is orphaned, but its id stays protected from a reopened window's
+      // history delete.
+      win.dispose();
+      expect(getAllActiveExecutionIds()).toContain('exec:orphan');
+    } finally {
+      win.dispose();
     }
   });
 });
