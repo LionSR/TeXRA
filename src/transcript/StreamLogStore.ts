@@ -558,7 +558,8 @@ export class StreamLogStore {
     const result = StreamLogSummarySchema.safeParse(value);
     if (!result.success) return undefined;
     const { firstTimestamp, lastTimestamp, hasRunningGroup } = result.data;
-    if (firstTimestamp === undefined && lastTimestamp === undefined) return undefined;
+    if (firstTimestamp === undefined && lastTimestamp === undefined)
+      return undefined;
     return { firstTimestamp, lastTimestamp, hasRunningGroup };
   }
 

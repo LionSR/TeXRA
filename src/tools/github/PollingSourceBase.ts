@@ -11,7 +11,11 @@
  * 24 h detach gate) lives here once.
  */
 
-import { type IBackoff, ExponentialBackoff, fullJitterGenerator } from 'cockatiel';
+import {
+  type IBackoff,
+  ExponentialBackoff,
+  fullJitterGenerator,
+} from 'cockatiel';
 
 import type { AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -356,9 +360,7 @@ export abstract class PollingSourceBase<
       this.detach(key);
       return;
     }
-    const retryDelaySec = Math.round(
-      (state.skipPollUntilMs - now) / 1000,
-    );
+    const retryDelaySec = Math.round((state.skipPollUntilMs - now) / 1000);
     this.logger.warn(
       `Poll failed for ${key} (failure #${state.consecutiveFailures}, ` +
         `retrying in ${retryDelaySec}s): ${String(err)}`,
