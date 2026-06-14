@@ -86,6 +86,7 @@ export function createStreamApprovalBypass(
 
 export interface PendingApproval<R extends { accepted: boolean }> {
   streamId?: StreamTabId;
+  runtimeHost?: AgentRuntimeHost;
   isSettled: () => boolean;
   settle: (result: R) => void;
 }
@@ -97,6 +98,11 @@ export interface StreamApprovalController<R extends { accepted: boolean }> {
   bypass: StreamApprovalBypass;
   enqueue<T>(run: () => Promise<T>): Promise<T>;
   rejectPendingForStream(streamId: StreamTabId): void;
+  /**
+   * Reject pending entries with no concrete stream context. When `runtimeHost`
+   * is provided, only rejects entries owned by that host.
+   */
+  rejectUnscopedPending(runtimeHost?: AgentRuntimeHost): void;
   rejectAllPending(): void;
 }
 
@@ -141,6 +147,17 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
     },
     rejectPendingForStream(streamId) {
       rejectMatching(streamId);
+    },
+    rejectUnscopedPending(runtimeHost) {
+      for (const entry of pending.values()) {
+        if (
+          !entry.streamId &&
+          !entry.isSettled() &&
+          (runtimeHost === undefined || entry.runtimeHost === runtimeHost)
+        ) {
+          entry.settle(options.rejectionResult());
+        }
+      }
     },
     rejectAllPending() {
       rejectMatching();

@@ -4,22 +4,27 @@ import {
 } from '@controllers/onboarding/onboardingFunnel';
 import { platform } from '@platform/platform';
 import { writeTerminalStatus } from '@agent/storage';
-import { logSdkError } from '@agent/trace';
+import { logSdkError, type ResultEvent } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
   classifyAgentError,
   getSdkErrorMessage,
+  type AgentErrorKind,
 } from '@common/errors';
 import { projectRunOutcome } from '@common/constants/streamStatus';
-import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
-import { RUN_OUTCOME, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  STREAM_STATUS,
+  type RunOutcome,
+  type StreamTabId,
+} from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 
-import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
+import { AgentExecutionHandle, type AgentRunHandle } from './executionRegistry';
 import {
   getAgentFlowErrorResult,
   buildTerminalFlowResult,
@@ -34,6 +39,62 @@ export interface RunFlowLifecycleOptions {
   parentStreamId?: StreamTabId;
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
+  /**
+   * Fires once with the live per-run handle, right after it is tracked (F-2) —
+   * the additive exposure of the control handle (`.trace`, `.result`, interrupt
+   * via `executions`). Throwing here must not abort the run, so it is guarded.
+   */
+  onRun?: (handle: AgentRunHandle) => void | Promise<void>;
+}
+
+/** Map the canonical run outcome onto the terminal `result` event's outcome. */
+function toResultOutcome(outcome: RunOutcome): ResultEvent['outcome'] {
+  if (outcome === RUN_OUTCOME.COMPLETED) return 'completed';
+  if (outcome === RUN_OUTCOME.CANCELLED) return 'cancelled';
+  return 'failed';
+}
+
+/**
+ * Emit the terminal `result` event on the run's trace — the single emission
+ * boundary for run outcomes. Carries the classified error `kind` (when any) and
+ * the run usage totals (present once a round recorded usage, including on
+ * failures, via the UsageMonitor cache).
+ */
+function emitRunResult(
+  ctx: AgentLaunchContext,
+  category: 'toolUse' | 'workflow',
+  outcome: ResultEvent['outcome'],
+  isSubagent: boolean,
+  error?: { kind: AgentErrorKind; message?: string },
+): ResultEvent {
+  const usage = ctx.usageMonitor.lastTotals();
+  const event: ResultEvent = {
+    type: 'result',
+    outcome,
+    executionId: ctx.executionId,
+    streamId: ctx.streamId,
+    agentName: ctx.config.agent,
+    category,
+    isSubagent,
+    ...(error ? { error } : {}),
+    ...(usage ? { usage } : {}),
+  };
+  ctx.logger.emit(event);
+  return event;
+}
+
+function endParentStageSafely(
+  ctx: AgentLaunchContext,
+  agentIdentifier: string,
+  status: Parameters<AgentLaunchContext['parentStage']['end']>[0],
+): void {
+  try {
+    ctx.parentStage.end(status);
+  } catch (stageErr) {
+    logger.warn(
+      `Failed to end parent stage for ${agentIdentifier}: ${getSdkErrorMessage(stageErr)}`,
+    );
+  }
 }
 
 /**
@@ -50,7 +111,7 @@ export async function runFlowWithLifecycle(
   runner: (handle: AgentExecutionHandle) => Promise<AgentFlowResult>,
   options?: RunFlowLifecycleOptions,
 ): Promise<AgentFlowResult> {
-  const { streamId } = ctx;
+  const { streamId, session } = ctx;
   const agentIdentifier = ctx.config.agent;
   const category =
     ctx.setting.agentCategory === AgentCategory.ToolUse
@@ -65,8 +126,29 @@ export async function runFlowWithLifecycle(
     category,
     ctx.runtimeHost,
     ctx.coordinators,
+    ctx.logger,
   );
-  executionRegistry.track(handle);
+  session.executions.track(handle);
+  // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
+  // throw nor an async rejection from a consumer callback may abort the run.
+  if (options?.onRun) {
+    try {
+      const maybePromise = options.onRun(handle);
+      void Promise.resolve(maybePromise).catch((err: unknown) =>
+        logger.warn(
+          `onRun callback rejected for ${agentIdentifier}: ${String(err)}`,
+        ),
+      );
+    } catch (err) {
+      logger.warn(
+        `onRun callback threw for ${agentIdentifier}: ${String(err)}`,
+      );
+    }
+  }
+  // Tracks whether the terminal `result` event has already been emitted, so a
+  // throw in the success arm's post-emit cleanup can never fall into the catch
+  // arm and publish a second, contradictory `failed` result for a finished run.
+  let resultEmitted = false;
   try {
     // The lifecycle owns every stream-status transition: RUNNING here,
     // terminal states in the success/error arms below. Runners must not
@@ -75,7 +157,6 @@ export async function runFlowWithLifecycle(
       runtimeHost: ctx.runtimeHost,
     });
     const result = await runner(handle);
-    await options?.onCompleted?.(result);
     // The flow's outcome is the canonical terminal fact; everything below is
     // one row of the projection table. No other layer may re-derive these.
     const projection = projectRunOutcome(result.outcome);
@@ -102,14 +183,43 @@ export async function runFlowWithLifecycle(
       }
     }
 
-    executionRegistry.untrack(ctx.executionId);
-    ctx.parentStage.end(projection.endGroupStatus);
+    endParentStageSafely(ctx, agentIdentifier, projection.endGroupStatus);
+    // Emit the terminal result BEFORE untrack so the registry's terminal
+    // listener event never precedes the result event, and settle the handle's
+    // `result` promise with the same event (F-2: per-run control handle).
+    handle.settleResult(
+      emitRunResult(
+        ctx,
+        category,
+        toResultOutcome(result.outcome),
+        options?.isSubagent ?? false,
+      ),
+    );
+    resultEmitted = true;
+    try {
+      await options?.onCompleted?.(result);
+    } catch (deliveryError) {
+      logger.warn(
+        `Completion hook failed for ${agentIdentifier}: ${getSdkErrorMessage(deliveryError)}`,
+      );
+    }
 
-    if (!ctx.streamStatus.shouldPreserveOnCompletion(streamId)) {
-      ctx.streamStatus.set(streamId, projection.streamStatus, {
-        runtimeHost: ctx.runtimeHost,
-        terminalStatus: projection.executionStatus,
-      });
+    // The run has produced its canonical terminal result. Guard the terminal
+    // cleanup so a throw from untrack's listeners or a stream-status host emit
+    // cannot fall into the catch arm and publish a second `failed` result (or
+    // re-throw) for an already-completed run.
+    try {
+      session.executions.untrack(ctx.executionId);
+      if (!ctx.streamStatus.shouldPreserveOnCompletion(streamId)) {
+        ctx.streamStatus.set(streamId, projection.streamStatus, {
+          runtimeHost: ctx.runtimeHost,
+          terminalStatus: projection.executionStatus,
+        });
+      }
+    } catch (cleanupErr) {
+      logger.warn(
+        `Post-completion cleanup threw for ${agentIdentifier}: ${getSdkErrorMessage(cleanupErr)}`,
+      );
     }
     logger.debug(`Task completed with outcome: ${result.outcome}`);
     return result;
@@ -133,36 +243,39 @@ export async function runFlowWithLifecycle(
       });
     }
 
-    ctx.parentStage.end(projection.endGroupStatus);
-    ctx.streamStatus.set(streamId, projection.streamStatus, {
-      runtimeHost: ctx.runtimeHost,
-      terminalStatus: projection.executionStatus,
-    });
-
-    // Subagents propagate errors to the orchestrator via FollowUpQueue —
-    // don't show VS Code popups that would confuse the user.
-    if (!options?.isSubagent) {
-      if (kind === 'disk-full') {
-        ctx.runtimeHost.emit('requestShowError', {
-          message: sdkMsg,
-        });
-      } else if (kind === 'missing-api-key') {
-        ctx.runtimeHost.emit('requestShowInstruction', {
-          key: 'missingApiKey',
-          message:
-            'API key not found. Set your API key in the extension settings and run again.',
-          actions: [
-            INSTRUCTION_ACTION.SET_API_KEY,
-            INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE,
-          ],
-          showSuppress: false,
-        });
-      } else if (kind === 'unexpected') {
-        ctx.runtimeHost.emit('requestShowError', {
-          message: errorMsg,
-        });
-      }
+    endParentStageSafely(ctx, agentIdentifier, projection.endGroupStatus);
+    // One emission covers all three exits below (subagent / abort / throw);
+    // untrack follows in each branch, preserving emit-before-untrack. Outcome
+    // routes through the same canonical mapper as the success arm
+    // (`toResultOutcome(AGENT_ERROR_OUTCOME[kind])` — abort ⇒ `cancelled`, a
+    // sibling of `failed`). Skipped when the success arm already emitted, so a
+    // post-completion cleanup throw cannot double-publish.
+    // Abort still carries the SDK message for event consumers; the toast mapper
+    // intentionally suppresses user-facing notifications for aborts.
+    if (!resultEmitted) {
+      handle.settleResult(
+        emitRunResult(
+          ctx,
+          category,
+          toResultOutcome(outcome),
+          options?.isSubagent ?? false,
+          { kind, message: kind === 'unexpected' ? errorMsg : sdkMsg },
+        ),
+      );
     }
+    try {
+      ctx.streamStatus.set(streamId, projection.streamStatus, {
+        runtimeHost: ctx.runtimeHost,
+        terminalStatus: projection.executionStatus,
+      });
+    } catch (statusErr) {
+      logger.warn(
+        `Failed to set terminal error status for ${agentIdentifier}: ${getSdkErrorMessage(statusErr)}`,
+      );
+    }
+    // Terminal-error toasts are no longer emitted here: hosts present them from
+    // the `result` event via `session.onResult` + `terminalResultToast` (the
+    // single decision point). This keeps the run-lifecycle from owning host UI.
 
     if (options?.isSubagent) {
       const result =
@@ -181,11 +294,11 @@ export async function runFlowWithLifecycle(
           `Failed to deliver subagent error for ${agentIdentifier}: ${getSdkErrorMessage(deliveryError)}`,
         );
       }
-      executionRegistry.untrack(ctx.executionId);
+      session.executions.untrack(ctx.executionId);
       return result;
     }
 
-    executionRegistry.untrack(ctx.executionId);
+    session.executions.untrack(ctx.executionId);
     if (kind === 'abort') {
       return buildTerminalFlowResult(
         category,

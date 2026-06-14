@@ -1,6 +1,10 @@
 // Standard library imports
 import { createInterface } from 'node:readline/promises';
 
+// Local imports - CLI schemas
+import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+
+// Local imports - errors
 import { toErrorMessage } from '@common/errors/errorMessage';
 import type { LogLevel } from '@shared/schemas';
 
@@ -178,7 +182,8 @@ class NdjsonStdoutSink implements LogSink {
       while (!this.stdoutClosed && this.queue.length > 0) {
         const record = this.queue.shift();
         if (!record) continue;
-        const line = `${JSON.stringify({ kind: 'log', ...record })}\n`;
+        const lineRecord: CliNdjsonRecord = { kind: 'log', ...record };
+        const line = `${JSON.stringify(lineRecord)}\n`;
         let canContinue: boolean;
         try {
           canContinue = process.stdout.write(line);

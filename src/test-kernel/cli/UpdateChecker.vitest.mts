@@ -7,6 +7,7 @@ import {
   detectInstallMethod,
   exitCodeForRelaunchClose,
   fetchLatestCliVersion,
+  fetchLatestHomebrewFormulaVersion,
   formatUpdateCommand,
   isNewerVersion,
 } from '@cli/runtime/updateChecker';
@@ -47,9 +48,43 @@ describe('detectInstallMethod', () => {
     expect(detectInstallMethod('/Users/me/.bun/install/global/x')).toBe('bun');
   });
 
+  it('recognizes Homebrew Cellar layouts across platforms', () => {
+    // Apple Silicon.
+    expect(
+      detectInstallMethod(
+        '/opt/homebrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      ),
+    ).toBe('brew');
+    // Intel macOS.
+    expect(
+      detectInstallMethod(
+        '/usr/local/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      ),
+    ).toBe('brew');
+    // Linuxbrew.
+    expect(
+      detectInstallMethod(
+        '/home/linuxbrew/.linuxbrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      ),
+    ).toBe('brew');
+  });
+
   it('falls back to npm for the unmarked global layout', () => {
     expect(
       detectInstallMethod('/usr/local/lib/node_modules/@texra-ai/cli/dist'),
+    ).toBe('npm');
+  });
+
+  it('does not treat Homebrew-managed Node npm globals as brew installs', () => {
+    expect(
+      detectInstallMethod(
+        '/opt/homebrew/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
+      ),
+    ).toBe('npm');
+    expect(
+      detectInstallMethod(
+        '/home/linuxbrew/.linuxbrew/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
+      ),
     ).toBe('npm');
   });
 });
@@ -66,9 +101,18 @@ describe('buildUpdateCommand / formatUpdateCommand', () => {
       'yarn global add @texra-ai/cli@latest',
     );
     expect(formatUpdateCommand('bun')).toBe('bun add -g @texra-ai/cli@latest');
+    // Homebrew upgrades through brew, not the npm registry; refresh the tap
+    // first so the just-detected version is actually available locally.
+    expect(formatUpdateCommand('brew')).toBe(
+      'brew update && brew upgrade texra',
+    );
     expect(buildUpdateCommand('npm')).toEqual({
       command: 'npm',
       args: ['install', '-g', '@texra-ai/cli@latest'],
+    });
+    expect(buildUpdateCommand('brew')).toEqual({
+      command: 'brew',
+      args: ['update', '&&', 'brew', 'upgrade', 'texra'],
     });
   });
 });
@@ -166,5 +210,87 @@ describe('fetchLatestCliVersion', () => {
   it('returns undefined when the body lacks a version', async () => {
     const fetchImpl = (async () => jsonResponse({})) as typeof fetch;
     await expect(fetchLatestCliVersion({ fetchImpl })).resolves.toBeUndefined();
+  });
+});
+
+describe('fetchLatestHomebrewFormulaVersion', () => {
+  it('returns the stable formula version from brew info JSON', async () => {
+    await expect(
+      fetchLatestHomebrewFormulaVersion({
+        runCommand: async () =>
+          JSON.stringify({
+            formulae: [
+              {
+                name: 'texra',
+                versions: { stable: '0.39.0' },
+              },
+            ],
+          }),
+      }),
+    ).resolves.toBe('0.39.0');
+  });
+
+  it('returns undefined when brew info is unavailable or missing the formula', async () => {
+    await expect(
+      fetchLatestHomebrewFormulaVersion({
+        runCommand: async () => undefined,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      fetchLatestHomebrewFormulaVersion({
+        runCommand: async () => JSON.stringify({ formulae: [] }),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('still reads formula info when the Homebrew tap refresh fails', async () => {
+    const calls: Array<{ command: string; args: readonly string[] }> = [];
+    await expect(
+      fetchLatestHomebrewFormulaVersion({
+        runCommand: async (command, args) => {
+          calls.push({ command, args });
+          if (args[0] === 'update') return undefined;
+          return JSON.stringify({
+            formulae: [{ name: 'texra', versions: { stable: '0.39.0' } }],
+          });
+        },
+      }),
+    ).resolves.toBe('0.39.0');
+
+    expect(calls).toEqual([
+      { command: 'brew', args: ['update', '--quiet'] },
+      { command: 'brew', args: ['info', '--json=v2', 'texra'] },
+    ]);
+  });
+
+  it('passes the formula and timeout through to the command runner', async () => {
+    const calls: Array<{
+      command: string;
+      args: readonly string[];
+      timeoutMs: number;
+    }> = [];
+    await fetchLatestHomebrewFormulaVersion({
+      formula: 'custom',
+      timeoutMs: 123,
+      runCommand: async (command, args, timeoutMs) => {
+        calls.push({ command, args, timeoutMs });
+        return JSON.stringify({
+          formulae: [{ name: 'custom', versions: { stable: '1.2.3' } }],
+        });
+      },
+    });
+
+    expect(calls).toEqual([
+      {
+        command: 'brew',
+        args: ['update', '--quiet'],
+        timeoutMs: 123,
+      },
+      {
+        command: 'brew',
+        args: ['info', '--json=v2', 'custom'],
+        timeoutMs: 123,
+      },
+    ]);
   });
 });

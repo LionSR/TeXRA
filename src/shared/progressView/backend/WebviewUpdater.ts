@@ -428,7 +428,7 @@ export class WebviewUpdater {
     const allStates = state.getAllStreamStates();
     const streamMetadata: Record<StreamTabId, StreamMetadata> = {};
     for (const { name, agentCategory } of streams) {
-      const current = allStates[name];
+      const current = allStates.get(name);
       streamMetadata[name] = buildStreamMetadata({
         kind: agentCategory,
         status: statuses?.get(name),
