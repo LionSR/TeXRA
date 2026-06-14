@@ -7,6 +7,7 @@ import path from 'node:path';
 
 import { sync as globSync } from 'glob';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
 
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
@@ -14,12 +15,13 @@ import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { debug } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
+import { LATEXDIFF_TEMP_FILE_LOCATIONS } from '@shared/schemas/coreSettings';
 import {
   createExternalLocation,
   createWorkspaceLocation,
   WorkspaceFS,
 } from '@utils/files';
-import { getConfig } from '@utils/config/configUtils';
+import { getValidatedConfig } from '@utils/config/configUtils';
 
 export type BuildDisplayFn = (
   location: FileLocation,
@@ -49,9 +51,6 @@ export interface LatexPreviewEntry {
   /** Platform-specific error reporter, injected by the caller. */
   onError: (message: string) => void;
 }
-
-/** Temp file location options */
-type TempFileLocation = 'sameDirectory' | 'workspaceTemp';
 
 const TEXRA_TEMP_DIR = '.texra-temp';
 /** Length of the random suffix for temp file names (8 nanoid chars ≈ 2^47 combinations, sufficient for uniqueness) */
@@ -145,8 +144,9 @@ async function createTempFileWithCleanup(
     throw new Error('No workspace folder open');
   }
 
-  const location = getConfig<TempFileLocation>(
+  const location = getValidatedConfig(
     'texra.latexdiff.tempFileLocation',
+    z.enum(LATEXDIFF_TEMP_FILE_LOCATIONS),
     'sameDirectory',
   );
 
