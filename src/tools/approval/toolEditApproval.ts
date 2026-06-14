@@ -75,6 +75,7 @@ export function registerPendingApproval(
   id: string,
   entry: {
     streamId?: StreamTabId;
+    runtimeHost?: AgentRuntimeHost;
     isSettled: () => boolean;
     settle: (result: ToolEditApprovalResult) => void;
   },

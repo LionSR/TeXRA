@@ -962,11 +962,11 @@ export class DesktopProgressBridge {
       cleanupApprovalsForStream(streamId, this.session);
       ToolUseFollowUpQueue.release(streamId);
     }
-    // Catch any pending approvals whose streamId was undefined (no concrete
-    // stream context) — the per-stream loop skips them because `undefined` ≠
-    // any StreamTabId. They are rare (every desktop agent runs in a stream),
-    // but without this they'd hang with no UI prompt left to answer.
-    cleanupUnscopedApprovals();
+    // Catch pending approvals with no concrete stream context (undefined or
+    // empty streamId) — the per-stream loop skips them because they do not
+    // equal any StreamTabId. Scope this to THIS window's runtime host so a
+    // sibling window's streamless approval is not rejected.
+    cleanupUnscopedApprovals(this.runtimeHost);
     // Child/subagent coordinator requests may be session-owned without a local
     // desktop stream entry, so clear the owning window's coordinator bridge
     // after the visible per-stream sweep. This is session-scoped and does not
