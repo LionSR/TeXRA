@@ -19,13 +19,20 @@ import { createCliStyle, type CliStyle } from './style';
 /** Published package name on npm; the `texra` bin lives here. */
 const CLI_PACKAGE_NAME = '@texra-ai/cli';
 
+/**
+ * Homebrew formula name (in the `texra-ai/tap` tap). The unqualified name is
+ * enough for `brew upgrade` once the tap is installed.
+ */
+const CLI_HOMEBREW_FORMULA = 'texra';
+
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const DEFAULT_TIMEOUT_MS = 2500;
+const HOMEBREW_COMMAND_TIMEOUT_MS = 10000;
 const POSIX_SIGNAL_EXIT_OFFSET = 128;
 const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 
 /** Package manager the running binary was installed with. */
-export type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun';
+export type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
 
 /**
  * True when `latest` is strictly newer than `current`, using full semver
@@ -43,14 +50,21 @@ export function isNewerVersion(latest: string, current: string): boolean {
 }
 
 /**
- * Guess the package manager from the path the binary runs out of. Global
- * pnpm/yarn/bun installs leave a recognizable segment in the path; npm's global
- * layout has none, so it is the fallback.
+ * Guess the package manager from the path the binary runs out of. Homebrew and
+ * global pnpm/yarn/bun installs each leave a recognizable segment in the path;
+ * npm's global layout has none, so it is the fallback.
+ *
+ * Homebrew's Tier-1 formula installs the npm package into the Cellar, so a brew
+ * install must NOT be treated as a plain npm global — `npm install -g` would
+ * shadow or clash with the brew-managed copy. Only the `Cellar` segment marks a
+ * brew formula install; broader `homebrew` / `linuxbrew` prefixes also contain
+ * npm globals when Node itself was installed by Homebrew.
  */
 export function detectInstallMethod(
   modulePath: string = currentModulePath(),
 ): InstallMethod {
   const segments = modulePath.toLowerCase().split(/[\\/]+/);
+  if (segments.includes('cellar')) return 'brew';
   if (segments.some((part) => part === 'bun' || part === '.bun')) return 'bun';
   if (segments.some((part) => part === 'pnpm' || part === '.pnpm'))
     return 'pnpm';
@@ -81,6 +95,15 @@ export function buildUpdateCommand(
       return { command: 'yarn', args: ['global', 'add', target] };
     case 'bun':
       return { command: 'bun', args: ['add', '-g', target] };
+    case 'brew':
+      // Brew prompts are gated on the locally-known formula version, then the
+      // tap is refreshed immediately before upgrade. Run via the shell chain
+      // (`runCliUpdate` and `formatUpdateCommand` both treat the result as a
+      // shell command).
+      return {
+        command: 'brew',
+        args: ['update', '&&', 'brew', 'upgrade', CLI_HOMEBREW_FORMULA],
+      };
     case 'npm':
       return { command: 'npm', args: ['install', '-g', target] };
   }
@@ -117,6 +140,88 @@ export async function fetchLatestCliVersion(options?: {
   } finally {
     clearTimeout(timer);
   }
+}
+
+type CommandRunner = (
+  command: string,
+  args: readonly string[],
+  timeoutMs: number,
+) => Promise<string | undefined>;
+
+async function readCommandStdout(
+  command: string,
+  args: readonly string[],
+  timeoutMs: number,
+): Promise<string | undefined> {
+  return new Promise<string | undefined>((resolve) => {
+    const child = spawn(command, args, {
+      shell: false,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    let stdout = '';
+    let settled = false;
+    const finish = (value: string | undefined): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(undefined);
+    }, timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.on('error', () => finish(undefined));
+    child.on('close', (code) => finish(code === 0 ? stdout : undefined));
+  });
+}
+
+function parseHomebrewFormulaVersion(
+  stdout: string,
+  formula = CLI_HOMEBREW_FORMULA,
+): string | undefined {
+  try {
+    const body = JSON.parse(stdout) as { formulae?: unknown };
+    if (!Array.isArray(body.formulae)) return undefined;
+    const entry = body.formulae.find((candidate) => {
+      if (typeof candidate !== 'object' || candidate === null) return false;
+      return (candidate as { name?: unknown }).name === formula;
+    });
+    if (typeof entry !== 'object' || entry === null) return undefined;
+    const { versions } = entry as { versions?: { stable?: unknown } };
+    return typeof versions?.stable === 'string' ? versions.stable : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Attempt to refresh Homebrew tap metadata and fetch the latest formula
+ * version, or undefined. Without the explicit update, `brew info` can report
+ * stale local metadata and hide an available upgrade until the user runs
+ * `brew update` manually. If the refresh fails, still read `brew info`: local
+ * metadata may already be fresh enough to offer the right prompt.
+ */
+export async function fetchLatestHomebrewFormulaVersion(options?: {
+  formula?: string;
+  timeoutMs?: number;
+  runCommand?: CommandRunner;
+}): Promise<string | undefined> {
+  const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
+  const runCommand = options?.runCommand ?? readCommandStdout;
+  const timeoutMs = options?.timeoutMs ?? HOMEBREW_COMMAND_TIMEOUT_MS;
+  await runCommand('brew', ['update', '--quiet'], timeoutMs);
+  const stdout = await runCommand(
+    'brew',
+    ['info', '--json=v2', formula],
+    timeoutMs,
+  );
+  return stdout == null
+    ? undefined
+    : parseHomebrewFormulaVersion(stdout, formula);
 }
 
 function runCliUpdate(method: InstallMethod): Promise<boolean> {
@@ -226,10 +331,11 @@ async function relaunchAfterUpdate(
 let notified = false;
 
 /**
- * Once per process: check npm for a newer release and, in an interactive
- * terminal, offer to run the matching global install. Never blocks meaningfully
- * when up to date, offline, or the check is disabled — failures are silent so a
- * flaky network never gets between the user and their session.
+ * Once per process: check the package source for a newer release and, in an
+ * interactive terminal, offer to run the matching global install. npm-like
+ * installs read the npm registry; Homebrew installs refresh local tap metadata
+ * before reading the formula version. Failures are silent so a flaky network
+ * never gets between the user and their session.
  *
  * Disable entirely with `TEXRA_NO_UPDATE_CHECK=1`.
  */
@@ -248,10 +354,13 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
     return;
   if (context.outputFormat === 'ndjson' || context.quietLogs === true) return;
 
-  const latest = await fetchLatestCliVersion();
+  const method = detectInstallMethod();
+  const latest =
+    method === 'brew'
+      ? await fetchLatestHomebrewFormulaVersion()
+      : await fetchLatestCliVersion();
   if (!latest || !isNewerVersion(latest, context.version)) return;
 
-  const method = detectInstallMethod();
   const updateCmd = formatUpdateCommand(method);
   const style = createCliStyle(context.colorEnabled);
   writeTextStderr(

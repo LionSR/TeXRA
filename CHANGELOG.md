@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### CLI
+
+#### Bug Fixes
+
+- **Homebrew installs get the right upgrade command** — the CLI's in-session update prompt now recognizes a Homebrew install (the `texra-ai/tap` formula) and offers `brew update && brew upgrade texra` instead of misdetecting it as an npm global and suggesting `npm install -g`, which would have clashed with the brew-managed copy.
+
 ## [0.38.7] - 2026-06-11
 
 ### Shared (all surfaces)
