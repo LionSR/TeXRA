@@ -263,6 +263,44 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       // always-set fields are present even for a bare-Error failure.
       expect(typeof err?.userRetryable).toBe('boolean');
       expect(typeof err?.isRelayError).toBe('boolean');
+      // A bare Error without provider metadata: userRetryable defaults to true
+      // (unrecognized error path) and isRelayError is false.
+      expect(err?.userRetryable).toBe(true);
+      expect(err?.isRelayError).toBe(false);
+    } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
+  it('fully populates result.error for a provider-tagged error (T2-2/T3-2)', async () => {
+    const { normalizeProviderError } = await import('@common/errors');
+    const logger = new TraceEmitter();
+    const results = collectResults(logger);
+    const { ctx, streamStatus } = createCtx({ logger });
+    try {
+      // Simulate a provider-boundary error: attach structured metadata via
+      // normalizeProviderError (as provider adapters do), then throw it so
+      // buildResultError detects the cached ProviderError and forwards the
+      // full set of event-safe fields.
+      const tagged = Object.assign(new Error('Too Many Requests'), {
+        statusCode: 429,
+        name: 'APIConnectionError',
+      });
+      normalizeProviderError(tagged);
+      await expect(
+        runFlowWithLifecycle(ctx, async () => {
+          throw tagged;
+        }),
+      ).rejects.toThrow('Too Many Requests');
+      const err = results[0].error;
+      expect(err?.kind).toBeDefined();
+      expect(err?.statusCode).toBe(429);
+      expect(typeof err?.statusText).toBe('string');
+      expect(err?.userRetryable).toBe(true); // HTTP 429 is retryable
+      expect(err?.isRelayError).toBe(false);
+      // Conditional fields not set for a non-relay 429 from a generic provider.
+      expect(err?.isCredentialExhausted).toBeUndefined();
+      expect(err?.isUpstreamCreditDepleted).toBeUndefined();
     } finally {
       streamStatus.clear(ctx.streamId, { emit: false });
     }

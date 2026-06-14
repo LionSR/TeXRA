@@ -71,12 +71,19 @@ function buildResultError(
   message: string,
 ): ResultError {
   const pe = normalizeProviderError(err);
+  // `missing-api-key` means the user hasn't configured credentials — retrying
+  // won't help.  Override the bare-Error default (userRetryable=true from the
+  // unrecognized-error path in normalizeProviderError) so SDK consumers that
+  // gate retry UI on userRetryable surface key setup instead of a retry button.
+  const userRetryable =
+    kind === 'missing-api-key' ? false : pe.userRetryable;
   return {
     kind,
     message,
-    userRetryable: pe.userRetryable,
+    userRetryable,
     isRelayError: pe.isRelayError,
     ...(pe.statusCode !== undefined && { statusCode: pe.statusCode }),
+    ...(pe.statusText !== undefined && { statusText: pe.statusText }),
     ...(pe.provider !== undefined && { provider: pe.provider }),
     ...(pe.requestId !== undefined && { requestId: pe.requestId }),
     ...(pe.isCredentialExhausted !== undefined && {
