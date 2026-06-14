@@ -148,3 +148,12 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     ],
   },
 ];
+
+/**
+ * Built-in presets indexed by id. {@link AGENT_MODE_PRESETS} stays the ordered
+ * source of truth (the settings UI renders team cards in declaration order);
+ * this map is the native lookup structure for id resolution, so callers don't
+ * linear-scan the array on every resolve.
+ */
+export const AGENT_MODE_PRESETS_BY_ID: ReadonlyMap<string, AgentModePreset> =
+  new Map(AGENT_MODE_PRESETS.map((preset) => [preset.id, preset]));

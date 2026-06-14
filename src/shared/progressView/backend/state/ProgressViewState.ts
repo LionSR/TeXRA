@@ -294,8 +294,8 @@ export class ProgressViewState {
     return this._streamStates.get(stream);
   }
 
-  getAllStreamStates(): Record<StreamTabId, StreamExecutionState> {
-    return Object.fromEntries(this._streamStates.entries());
+  getAllStreamStates(): ReadonlyMap<StreamTabId, StreamExecutionState> {
+    return this._streamStates;
   }
 
   async endRunningTaskGroups(
