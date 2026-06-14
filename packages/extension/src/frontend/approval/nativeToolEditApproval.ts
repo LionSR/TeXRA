@@ -232,6 +232,7 @@ async function nativeRequestApproval(
       // Register with the pure module for rejection tracking
       registerPendingApproval(requestId, {
         streamId,
+        runtimeHost: getRuntimeHost(),
         isSettled: () => settled,
         settle,
       });
