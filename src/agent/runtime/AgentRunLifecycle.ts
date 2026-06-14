@@ -115,11 +115,16 @@ export async function runFlowWithLifecycle(
     ctx.logger,
   );
   session.executions.track(handle);
-  // Expose the live handle to the launcher (F-2). Guarded: a throwing consumer
-  // callback must never abort the run.
+  // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
+  // throw nor an async rejection from a consumer callback may abort the run.
   if (options?.onRun) {
     try {
-      options.onRun(handle);
+      const maybePromise = options.onRun(handle) as void | Promise<void>;
+      void Promise.resolve(maybePromise).catch((err: unknown) =>
+        logger.warn(
+          `onRun callback rejected for ${agentIdentifier}: ${String(err)}`,
+        ),
+      );
     } catch (err) {
       logger.warn(
         `onRun callback threw for ${agentIdentifier}: ${String(err)}`,

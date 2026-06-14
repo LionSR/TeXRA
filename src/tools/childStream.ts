@@ -101,6 +101,8 @@ export function createChildStream(
     options.agentName,
     'toolUse',
     runtimeHost,
+    undefined,
+    runTrace.trace,
   );
   if (options.toolName) handle.toolName = options.toolName;
   session.executions.trackAgentExecution(handle, {
@@ -169,12 +171,22 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     );
   }
 
+  // The terminal status the child finishes with — the single source of truth
+  // for both the registry status and the handle's result outcome. Child streams
+  // only ever finish READY or ERROR (never STOPPED), so the outcome is
+  // failed/completed; deriving from the status (not just `hasError`) also covers
+  // a caller that passes `status: ERROR` without an error/errorMessage.
+  const finalStatus =
+    options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY);
+  const outcome =
+    hasError || finalStatus === STREAM_STATUS.ERROR ? 'failed' : 'completed';
+
   // Settle the handle's `result` before untracking (F-2): child streams never
   // traverse the run lifecycle, so this is their only settle point. Without it
   // a consumer awaiting a child handle's `result` would hang forever.
   handle.settleResult({
     type: 'result',
-    outcome: hasError ? 'failed' : 'completed',
+    outcome,
     executionId: handle.executionId,
     streamId: handle.childStreamId,
     agentName: handle.agentName,
@@ -182,10 +194,7 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     isSubagent: handle.parentStreamId !== handle.childStreamId,
   });
 
-  session.executions.finishAgentExecution(handle, {
-    status:
-      options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY),
-  });
+  session.executions.finishAgentExecution(handle, { status: finalStatus });
   disposeTrace();
 
   if (options?.autoClose) {
