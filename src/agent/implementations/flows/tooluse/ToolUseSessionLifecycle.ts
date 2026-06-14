@@ -1,5 +1,8 @@
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { FollowUpQueueBatch, FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
+import type {
+  FollowUpQueueBatch,
+  FollowUpQueueInput,
+} from '@agent/toolUse/FollowUpQueue';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { StreamTabId } from '@shared/schemas';
 
