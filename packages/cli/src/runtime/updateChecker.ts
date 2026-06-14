@@ -202,10 +202,11 @@ function parseHomebrewFormulaVersion(
 }
 
 /**
- * Refresh the Homebrew tap metadata and fetch the latest formula version, or
- * undefined. Without the explicit update, `brew info` can report stale local
- * metadata and hide an available upgrade until the user runs `brew update`
- * manually.
+ * Attempt to refresh Homebrew tap metadata and fetch the latest formula
+ * version, or undefined. Without the explicit update, `brew info` can report
+ * stale local metadata and hide an available upgrade until the user runs
+ * `brew update` manually. If the refresh fails, still read `brew info`: local
+ * metadata may already be fresh enough to offer the right prompt.
  */
 export async function fetchLatestHomebrewFormulaVersion(options?: {
   formula?: string;
@@ -215,12 +216,7 @@ export async function fetchLatestHomebrewFormulaVersion(options?: {
   const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
   const runCommand = options?.runCommand ?? readCommandStdout;
   const timeoutMs = options?.timeoutMs ?? HOMEBREW_COMMAND_TIMEOUT_MS;
-  const updateStdout = await runCommand(
-    'brew',
-    ['update', '--quiet'],
-    timeoutMs,
-  );
-  if (updateStdout == null) return undefined;
+  await runCommand('brew', ['update', '--quiet'], timeoutMs);
   const stdout = await runCommand(
     'brew',
     ['info', '--json=v2', formula],
