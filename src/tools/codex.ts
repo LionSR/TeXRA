@@ -31,6 +31,7 @@ import {
 } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { toErrorMessage } from '@common/errors';
@@ -401,7 +402,7 @@ function startCodexLoop(params: {
   // turn completes. Resumed threads are registered up front (onSessionStart) so
   // a second codex call with the same thread_id during the first turn can't
   // bypass the in-memory guard and start a concurrent loop.
-  const registerThread = (): void => {
+  const registerThread = (session: SessionHandle): void => {
     const threadId = thread.id;
     if (threadId && !codexThreads.isActive(threadId)) {
       codexThreads.register(threadId, {
@@ -409,6 +410,7 @@ function startCodexLoop(params: {
         childStreamId,
         parentStreamId,
         executionId,
+        interrupts: session.interrupts,
       });
     }
   };
@@ -426,7 +428,7 @@ function startCodexLoop(params: {
         abortController.signal,
       ),
     getUsage: (turn) => turn.usage,
-    onTurnSuccess: registerThread,
+    onTurnSuccess: (_turn, session) => registerThread(session),
     publishUsage: (turn) => {
       if (turn.usage) {
         publishAgentCliStreamUsage(

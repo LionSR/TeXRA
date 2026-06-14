@@ -18,7 +18,8 @@
 import { z } from 'zod';
 
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { bus } from '@eventBus/ProgressEventBus';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { createChannelTrace } from '@logger';
 import {
   ExternalInquiryThreadIdSchema,
@@ -145,6 +146,7 @@ export type InquiryInput = z.infer<typeof InquiryInputSchema>;
 
 export async function handleExternalInquiryAction(
   payload: InquiryActionMessage,
+  options: { session?: SessionHandle } = {},
 ): Promise<void> {
   if (payload.action === 'submit') {
     const persisted = await recordAnswerForOpenTurn({
@@ -156,7 +158,11 @@ export async function handleExternalInquiryAction(
     // this the request would replay on next webview load and the stream would
     // be reported as having pending permissions forever. Emit even for stale
     // submits so duplicate/delayed UI actions do not leave a leaked permission.
-    bus.emit('resolveExternalInquiry', { requestId: payload.threadId });
+    emitRuntimeEvent(
+      'resolveExternalInquiry',
+      { requestId: payload.threadId },
+      options.session,
+    );
     if (!persisted) {
       logger.warn(
         `Inquiry submit ignored: thread ${payload.threadId} has no open turn.`,
@@ -170,6 +176,7 @@ export async function handleExternalInquiryAction(
     await injectContinuationForAnsweredThread(
       payload.threadId,
       persisted.manifest,
+      options.session,
     );
     return;
   }
@@ -181,9 +188,17 @@ export async function handleExternalInquiryAction(
     );
   }
   const droppedManifest = await markDropped({ threadId: payload.threadId });
-  bus.emit('resolveExternalInquiry', { requestId: payload.threadId });
+  emitRuntimeEvent(
+    'resolveExternalInquiry',
+    { requestId: payload.threadId },
+    options.session,
+  );
   if (droppedManifest) {
-    await injectContinuationForDroppedThread(payload.threadId, droppedManifest);
+    await injectContinuationForDroppedThread(
+      payload.threadId,
+      droppedManifest,
+      options.session,
+    );
   } else {
     logger.warn(
       `Inquiry drop ignored: thread ${payload.threadId} is no longer open ` +

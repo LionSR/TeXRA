@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent runtime
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -34,7 +34,7 @@ class TestPollingSource extends PollingSourceBase<
       pollIntervalMs: 10_000,
       maxConcurrent: 1,
       backoffBaseMs: 1_000,
-      backoffMaxMs: 1_000,
+      backoffMaxMs: 10_000,
       maxFailureDurationMs: 60_000,
     });
   }
@@ -53,6 +53,10 @@ class TestPollingSource extends PollingSourceBase<
 
   failWithAuthError(state: BasePollSubscriptionState): void {
     this.handleFailure('owner/repo', state, new GitHubAuthError('bad token'));
+  }
+
+  failWithTransient(key: string, state: BasePollSubscriptionState): void {
+    this.handleFailure(key, state, new Error('network down'));
   }
 }
 
@@ -144,6 +148,34 @@ describe('GitHub subscription progress events', () => {
       event: 'githubTokenInvalid',
       payload: { message: 'bad token' },
     });
+  });
+
+  it('tracks transient backoff independently per subscription', () => {
+    const now = 1_800_000_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const createState = (): BasePollSubscriptionState => ({
+      listeners: new Set(),
+      runtimeHostByListener: new Map(),
+      lastSuccessAt: now,
+      consecutiveFailures: 0,
+      skipPollUntilMs: 0,
+    });
+    const source = new TestPollingSource();
+    const first = createState();
+    const second = createState();
+
+    try {
+      source.failWithTransient('owner/repo#1', first);
+      source.failWithTransient('owner/repo#1', first);
+      source.failWithTransient('owner/repo#2', second);
+
+      expect(first.skipPollUntilMs).toBe(now + 2_000);
+      expect(second.skipPollUntilMs).toBe(now + 1_000);
+    } finally {
+      nowSpy.mockRestore();
+      randomSpy.mockRestore();
+    }
   });
 
   it('emits one binding change when unsubscribe disposes synchronously', () => {

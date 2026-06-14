@@ -6,6 +6,8 @@ import { generateExecutionId } from '@utils/core/executionId';
 import { executeAgent } from './executeAgent';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
+import type { AgentRunHandle } from './executionRegistry';
+import type { SessionHandle } from './SessionHandle';
 
 export interface RunAgentOptions {
   runtimeHost: AgentRuntimeHost;
@@ -15,6 +17,15 @@ export interface RunAgentOptions {
   stopAfterCycle?: boolean;
   approvalPromptsUnavailable?: boolean;
   runtimeUnavailableTools?: readonly string[];
+  /** Session owning this run's coordination state. Defaults to the process session. */
+  session?: SessionHandle;
+  /**
+   * Fires once with the live per-run handle right after it is tracked (F-2):
+   * `handle.result` settles with the terminal outcome, `handle.trace` is the
+   * run's event channel, and the handle can interrupt via the session. The
+   * returned promise is unchanged — this is additive, post-launch exposure.
+   */
+  onRun?: (handle: AgentRunHandle) => void | Promise<void>;
 }
 
 /**
@@ -55,6 +66,8 @@ export async function runAgent(
     stopAfterCycle: options.stopAfterCycle,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
+    session: options.session,
+    onRun: options.onRun,
   });
   if (result.category === 'workflow') {
     await options.openWorkflowOutput?.(result);

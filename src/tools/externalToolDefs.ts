@@ -615,7 +615,16 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   // LaTeX settings tab — see LaTeXTab.ts and SettingsViewMessageHandler.ts.
 ];
 
+/**
+ * Tool definitions indexed by id. The array above stays the ordered source of
+ * truth (dashboard renders in declaration order); this map is the native
+ * lookup structure for id resolution.
+ */
+const EXTERNAL_TOOL_DEFS_BY_ID: ReadonlyMap<string, ExternalToolDef> = new Map(
+  EXTERNAL_TOOL_DEFS.map((d) => [d.id, d]),
+);
+
 /** Look up a tool definition by id. */
 export function findExternalToolDef(id: string): ExternalToolDef | undefined {
-  return EXTERNAL_TOOL_DEFS.find((d) => d.id === id);
+  return EXTERNAL_TOOL_DEFS_BY_ID.get(id);
 }

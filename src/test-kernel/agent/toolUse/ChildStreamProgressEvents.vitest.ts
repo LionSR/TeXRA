@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   STREAM_STATUS,
@@ -20,6 +21,15 @@ const loopExecutionId = 'exec:child-stream-loop' as ExecutionId;
 const loopChildStreamId = 'codex#exec:child-stream-loop' as StreamTabId;
 const stoppedExecutionId = 'exec:child-stream-stopped' as ExecutionId;
 const stoppedChildStreamId = 'codex#exec:child-stream-stopped' as StreamTabId;
+const cancelledExecutionId = 'exec:child-stream-cancelled' as ExecutionId;
+const cancelledChildStreamId =
+  'codex#exec:child-stream-cancelled' as StreamTabId;
+const failedExecutionId = 'exec:child-stream-failed' as ExecutionId;
+const failedChildStreamId = 'codex#exec:child-stream-failed' as StreamTabId;
+const normalizedErrorExecutionId =
+  'exec:child-stream-normalized-error' as ExecutionId;
+const normalizedErrorChildStreamId =
+  'codex#exec:child-stream-normalized-error' as StreamTabId;
 const config = {
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -32,6 +42,9 @@ describe('child stream progress events', () => {
       childStreamId,
       loopChildStreamId,
       stoppedChildStreamId,
+      cancelledChildStreamId,
+      failedChildStreamId,
+      normalizedErrorChildStreamId,
     ]) {
       StreamStatusService.clear(streamId, { emit: false });
     }
@@ -125,7 +138,7 @@ describe('child stream progress events', () => {
     });
   });
 
-  it('publishes child loop status changes through the child stream owner', () => {
+  it('publishes child loop status changes through the child stream owner', async () => {
     const active = createRecordingHost();
 
     const childStream = createChildStream(loopExecutionId, parentStreamId, {
@@ -137,6 +150,9 @@ describe('child stream progress events', () => {
       config,
       toolName: 'codex',
     });
+    const handle =
+      defaultSession().executions.getAgentHandleByStream(loopChildStreamId);
+    expect(handle).toBeDefined();
     active.events.splice(0);
 
     childStream.waitForInput();
@@ -162,9 +178,17 @@ describe('child stream progress events', () => {
       event: 'updateActiveSubagents',
       payload: { parentStreamId, children: [] },
     });
+    await expect(handle?.result).resolves.toMatchObject({
+      type: 'result',
+      outcome: 'failed',
+      error: {
+        kind: 'unexpected',
+        message: 'Child stream failed',
+      },
+    });
   });
 
-  it('preserves explicit user stops during child loop status changes', () => {
+  it('preserves explicit user stops during child loop status changes', async () => {
     const active = createRecordingHost();
 
     const childStream = createChildStream(stoppedExecutionId, parentStreamId, {
@@ -176,6 +200,9 @@ describe('child stream progress events', () => {
       config,
       toolName: 'codex',
     });
+    const handle =
+      defaultSession().executions.getAgentHandleByStream(stoppedChildStreamId);
+    expect(handle).toBeDefined();
     StreamStatusService.set(stoppedChildStreamId, STREAM_STATUS.STOPPED, {
       emit: false,
     });
@@ -192,5 +219,113 @@ describe('child stream progress events', () => {
     expect(
       active.events.filter((entry) => entry.event === 'updateStreamStatus'),
     ).toHaveLength(0);
+    await expect(handle?.result).resolves.toMatchObject({
+      type: 'result',
+      outcome: 'cancelled',
+      executionId: stoppedExecutionId,
+      streamId: stoppedChildStreamId,
+    });
+  });
+
+  it('settles child handle results as cancelled for stopped finalization', async () => {
+    const active = createRecordingHost();
+
+    const childStream = createChildStream(
+      cancelledExecutionId,
+      parentStreamId,
+      {
+        runtimeHost: active.host,
+        streamPrefix: 'codex',
+        streamCategory: AgentCategory.ToolUse,
+        agentName: 'codex',
+        description: 'Run an interrupted Codex child loop',
+        config,
+        toolName: 'codex',
+      },
+    );
+    const handle = defaultSession().executions.getAgentHandleByStream(
+      cancelledChildStreamId,
+    );
+    expect(handle).toBeDefined();
+
+    childStream.finalize({ status: STREAM_STATUS.STOPPED });
+
+    await expect(handle?.result).resolves.toMatchObject({
+      type: 'result',
+      outcome: 'cancelled',
+      executionId: cancelledExecutionId,
+      streamId: cancelledChildStreamId,
+    });
+  });
+
+  it('settles failed child handle results with error details', async () => {
+    const active = createRecordingHost();
+
+    const childStream = createChildStream(failedExecutionId, parentStreamId, {
+      runtimeHost: active.host,
+      streamPrefix: 'codex',
+      streamCategory: AgentCategory.ToolUse,
+      agentName: 'codex',
+      description: 'Run a failing Codex child loop',
+      config,
+      toolName: 'codex',
+    });
+    const handle =
+      defaultSession().executions.getAgentHandleByStream(failedChildStreamId);
+    expect(handle).toBeDefined();
+
+    childStream.finalize({ errorMessage: 'child process exited 1' });
+
+    await expect(handle?.result).resolves.toMatchObject({
+      type: 'result',
+      outcome: 'failed',
+      executionId: failedExecutionId,
+      streamId: failedChildStreamId,
+      error: {
+        kind: 'unexpected',
+        message: 'child process exited 1',
+      },
+    });
+  });
+
+  it('normalizes explicit non-error status when child finalization has an error', async () => {
+    const active = createRecordingHost();
+
+    const childStream = createChildStream(
+      normalizedErrorExecutionId,
+      parentStreamId,
+      {
+        runtimeHost: active.host,
+        streamPrefix: 'codex',
+        streamCategory: AgentCategory.ToolUse,
+        agentName: 'codex',
+        description: 'Run a child loop with mismatched finalization inputs',
+        config,
+        toolName: 'codex',
+      },
+    );
+    const handle = defaultSession().executions.getAgentHandleByStream(
+      normalizedErrorChildStreamId,
+    );
+    expect(handle).toBeDefined();
+
+    childStream.finalize({
+      status: STREAM_STATUS.READY,
+      errorMessage: 'tool failed after reporting ready',
+    });
+
+    expect(StreamStatusService.get(normalizedErrorChildStreamId)).toBe(
+      STREAM_STATUS.ERROR,
+    );
+    await expect(handle?.result).resolves.toMatchObject({
+      type: 'result',
+      outcome: 'failed',
+      executionId: normalizedErrorExecutionId,
+      streamId: normalizedErrorChildStreamId,
+      error: {
+        kind: 'unexpected',
+        message: 'tool failed after reporting ready',
+      },
+    });
   });
 });
