@@ -70,11 +70,23 @@ interface WorkflowRunInit {
  */
 async function resolveWorkflowDisplayResultOrExit(
   executionId: ReturnType<typeof generateExecutionId>,
-  ...args: Parameters<typeof resolveWorkflowOutput>
+  output: Parameters<typeof resolveWorkflowOutput>[0],
+  outputDir: Parameters<typeof resolveWorkflowOutput>[1],
+  result: Parameters<typeof resolveWorkflowOutput>[2],
+  runContext: Parameters<typeof resolveWorkflowOutput>[3],
+  options: Parameters<typeof resolveWorkflowOutput>[4],
 ): Promise<CliRunResult | CliExitCode> {
-  const { terminalStatus } = args[4];
+  const { terminalStatus } = options;
   try {
-    return (await resolveWorkflowOutput(...args)).displayResult;
+    return (
+      await resolveWorkflowOutput(
+        output,
+        outputDir,
+        result,
+        runContext,
+        options,
+      )
+    ).displayResult;
   } catch (error) {
     if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
       writeErrorStderr(error);
