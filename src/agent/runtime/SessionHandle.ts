@@ -85,16 +85,17 @@ export class SessionHandle {
       new ExecutionRegistry({ interrupts, streamStatus: StreamStatusService });
     const coordinators =
       init.coordinators ?? new RunCoordinatorBridge(executions);
+
+    this.interrupts = interrupts;
+    this.executions = executions;
+    this.coordinators = coordinators;
     const subscriptions =
       init.subscriptions ??
       new ExecutionSubscriptionBinder({
         registry: executions,
         releaseSource: ToolUseFollowUpQueue,
+        session: this,
       });
-
-    this.interrupts = interrupts;
-    this.executions = executions;
-    this.coordinators = coordinators;
     this.subscriptions = subscriptions;
     // A fresh session owns its own flusher set; the default session aliases the
     // process-module set so `createRunTrace`'s default writes still drain.
