@@ -1,4 +1,5 @@
 import pMap from 'p-map';
+import { z } from 'zod';
 
 import { KVStore } from '@common/storage/KVStore';
 import * as log from '@logger/logUtils';
@@ -8,7 +9,7 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
-import { filterNotNull, isFiniteNumber, isObject } from '@utils/core';
+import { debounce, filterNotNull, isObject } from '@utils/core';
 
 import {
   isRunningGroupEntry,
@@ -29,6 +30,12 @@ interface StreamLogSummary {
   lastTimestamp?: number;
   hasRunningGroup?: boolean;
 }
+
+const StreamLogSummarySchema = z.object({
+  firstTimestamp: z.number().finite().optional(),
+  lastTimestamp: z.number().finite().optional(),
+  hasRunningGroup: z.boolean().optional(),
+});
 
 interface StreamLoadResult {
   streamId: StreamTabId;
@@ -81,9 +88,10 @@ export class StreamLogStore {
   /** Guards persistence — tests create store without calling load(). */
   private loaded = false;
 
-  private saveTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingResolve: (() => void) | null = null;
-  private savePromise: Promise<void> | null = null;
+  private readonly debouncedSave = debounce(
+    () => this.executeWrite(),
+    SAVE_DEBOUNCE_MS,
+  );
   private inFlightWrite: Promise<void> | null = null;
   private writeGeneration = 0;
   private readonly writeTombstones = new Set<StreamTabId>();
@@ -409,23 +417,7 @@ export class StreamLogStore {
 
   async save(): Promise<void> {
     if (!this.loaded) return;
-
-    if (this.saveTimer !== null) clearTimeout(this.saveTimer);
-
-    if (!this.savePromise || this.pendingResolve === null) {
-      this.savePromise = new Promise<void>((resolve) => {
-        this.pendingResolve = resolve;
-      });
-    }
-
-    this.saveTimer = setTimeout(() => {
-      this.saveTimer = null;
-      const resolve = this.pendingResolve;
-      this.pendingResolve = null;
-      this.executeWrite(resolve);
-    }, SAVE_DEBOUNCE_MS);
-
-    return this.savePromise;
+    return this.debouncedSave();
   }
 
   async flush(): Promise<void> {
@@ -443,12 +435,9 @@ export class StreamLogStore {
     const MAX_WRITE_RETRIES = 3;
     let writeAttempts = 0;
     while (true) {
-      if (this.saveTimer !== null) {
-        clearTimeout(this.saveTimer);
-        this.saveTimer = null;
-        const resolve = this.pendingResolve;
-        this.pendingResolve = null;
-        await this.executeWrite(resolve);
+      if (this.debouncedSave.isPending()) {
+        this.debouncedSave.cancel();
+        await this.executeWrite();
         writeAttempts++;
       } else if (this.inFlightWrite) {
         await this.inFlightWrite;
@@ -469,7 +458,7 @@ export class StreamLogStore {
           );
           return;
         }
-        await this.executeWrite(null);
+        await this.executeWrite();
         writeAttempts++;
       }
     }
@@ -566,21 +555,11 @@ export class StreamLogStore {
   }
 
   private parsePersistedSummary(value: unknown): StreamLogSummary | undefined {
-    if (!isObject(value)) return undefined;
-    const firstTimestamp = this.parseTimestamp(value.firstTimestamp);
-    const lastTimestamp = this.parseTimestamp(value.lastTimestamp);
-    const hasRunningGroup =
-      typeof value.hasRunningGroup === 'boolean'
-        ? value.hasRunningGroup
-        : undefined;
-    if (firstTimestamp === undefined && lastTimestamp === undefined) {
-      return undefined;
-    }
+    const result = StreamLogSummarySchema.safeParse(value);
+    if (!result.success) return undefined;
+    const { firstTimestamp, lastTimestamp, hasRunningGroup } = result.data;
+    if (firstTimestamp === undefined && lastTimestamp === undefined) return undefined;
     return { firstTimestamp, lastTimestamp, hasRunningGroup };
-  }
-
-  private parseTimestamp(value: unknown): number | undefined {
-    return isFiniteNumber(value) ? value : undefined;
   }
 
   private async writeStream(
@@ -670,12 +649,7 @@ export class StreamLogStore {
   }
 
   private cancelPendingSave(): void {
-    if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
-    }
-    this.pendingResolve = null;
-    this.savePromise = null;
+    this.debouncedSave.cancel();
   }
 
   private parsePersistedEntries(rawEntries: unknown): StreamLogEntry[] {
@@ -686,9 +660,8 @@ export class StreamLogStore {
     });
   }
 
-  private executeWrite(resolve: (() => void) | null): Promise<void> {
+  private executeWrite(): Promise<void> {
     if (!this.loaded) {
-      resolve?.();
       return Promise.resolve();
     }
 
@@ -709,7 +682,6 @@ export class StreamLogStore {
     }
 
     if (dirtyIds.length === 0) {
-      resolve?.();
       return Promise.resolve();
     }
 
@@ -747,12 +719,8 @@ export class StreamLogStore {
         for (const streamId of dirtyIds) this.flushing.delete(streamId);
         if (this.inFlightWrite === writePromise) {
           this.inFlightWrite = null;
-          if (!this.pendingResolve) {
-            this.savePromise = null;
-          }
         }
         this.drainPendingReleases();
-        resolve?.();
       });
 
     this.inFlightWrite = writePromise;
