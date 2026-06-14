@@ -51,6 +51,7 @@ import {
   missingToolUseAgentMessage,
 } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
+import { withUsageSections } from './_helpers/dispatch/usage';
 import { formatMultiAgentRunInstruction } from './_helpers/multiAgentInstruction';
 import { emitCliResult } from './_helpers/output';
 import {
@@ -437,60 +438,80 @@ const multiAgentInspectCommand = defineCliCommand({
   run: (context, ctx) => runMultiAgentInspect(context, ctx.args.preset),
 });
 
-const multiAgentRunCommand = defineCliCommand({
-  meta: { name: 'run', description: 'Run a multi-agent team preset' },
-  args: {
-    ...AGENT_RUN_GLOBAL_ARGS,
-    preset: {
-      type: 'positional',
-      required: true,
-      description: 'Preset id or name from `texra multi-agent list`',
+const multiAgentRunCommand = withUsageSections(
+  defineCliCommand({
+    meta: { name: 'run', description: 'Run a multi-agent team preset' },
+    args: {
+      ...AGENT_RUN_GLOBAL_ARGS,
+      preset: {
+        type: 'positional',
+        required: true,
+        description: 'Preset id or name from `texra multi-agent list`',
+      },
+      input: {
+        type: 'string',
+        alias: 'i',
+        valueHint: 'file',
+        description:
+          'Input file passed to the team orchestrator (repeatable; optional when --instruction or --instruction-file is provided; use `-` to read stdin)',
+      },
+      context: {
+        type: 'string',
+        alias: 'c',
+        valueHint: 'file',
+        description:
+          'Read-only context file passed to the team orchestrator (repeatable; use `-` to read stdin)',
+      },
+      agent: {
+        type: 'string',
+        description: MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION,
+      },
+      model: {
+        type: 'string',
+        alias: 'm',
+        description: MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION,
+      },
+      instruction: {
+        type: 'string',
+        description: 'Additional instruction for the team orchestrator',
+      },
+      'instruction-file': {
+        type: 'string',
+        valueHint: 'file',
+        description:
+          'File whose contents are passed before --instruction when both are set',
+      },
     },
-    input: {
-      type: 'string',
-      alias: 'i',
-      valueHint: 'file',
-      description:
-        'Input file passed to the team orchestrator (repeatable; optional when --instruction or --instruction-file is provided; use `-` to read stdin)',
+    run: (context, ctx) =>
+      runMultiAgentPreset(context, {
+        preset: ctx.args.preset,
+        inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
+        contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
+        agent: optString(ctx.args.agent),
+        model: optString(ctx.args.model),
+        instruction: optString(ctx.args.instruction) ?? '',
+        instructionFile: optionalStringFlagValue(
+          ctx.rawArgs,
+          'instruction-file',
+        ),
+      }),
+  }),
+  [
+    {
+      title: 'RUN MODE',
+      rows: [
+        [
+          'direct',
+          'executes the team in the terminal and exits after the final response',
+        ],
+        [
+          'rich TUI',
+          'use `texra orchestrate` to pick a team from the launcher and keep chat/subagent panes open',
+        ],
+      ],
     },
-    context: {
-      type: 'string',
-      alias: 'c',
-      valueHint: 'file',
-      description:
-        'Read-only context file passed to the team orchestrator (repeatable; use `-` to read stdin)',
-    },
-    agent: {
-      type: 'string',
-      description: MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION,
-    },
-    model: {
-      type: 'string',
-      alias: 'm',
-      description: MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION,
-    },
-    instruction: {
-      type: 'string',
-      description: 'Additional instruction for the team orchestrator',
-    },
-    'instruction-file': {
-      type: 'string',
-      valueHint: 'file',
-      description:
-        'File whose contents are passed before --instruction when both are set',
-    },
-  },
-  run: (context, ctx) =>
-    runMultiAgentPreset(context, {
-      preset: ctx.args.preset,
-      inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
-      contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
-      agent: optString(ctx.args.agent),
-      model: optString(ctx.args.model),
-      instruction: optString(ctx.args.instruction) ?? '',
-      instructionFile: optionalStringFlagValue(ctx.rawArgs, 'instruction-file'),
-    }),
-});
+  ],
+);
 
 export const multiAgentCommand = defineCommand({
   meta: {
