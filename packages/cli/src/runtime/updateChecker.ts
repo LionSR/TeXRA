@@ -27,6 +27,7 @@ const CLI_HOMEBREW_FORMULA = 'texra';
 
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const DEFAULT_TIMEOUT_MS = 2500;
+const HOMEBREW_INFO_TIMEOUT_MS = 2500;
 const POSIX_SIGNAL_EXIT_OFFSET = 128;
 const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 
@@ -55,22 +56,15 @@ export function isNewerVersion(latest: string, current: string): boolean {
  *
  * Homebrew's Tier-1 formula installs the npm package into the Cellar, so a brew
  * install must NOT be treated as a plain npm global — `npm install -g` would
- * shadow or clash with the brew-managed copy. The Cellar lives under
- * `/opt/homebrew` (Apple Silicon), `/usr/local/Cellar` (Intel), or
- * `/home/linuxbrew/.linuxbrew` (Linux), so a `cellar`, `homebrew`, or
- * `linuxbrew` segment is a reliable marker.
+ * shadow or clash with the brew-managed copy. Only the `Cellar` segment marks a
+ * brew formula install; broader `homebrew` / `linuxbrew` prefixes also contain
+ * npm globals when Node itself was installed by Homebrew.
  */
 export function detectInstallMethod(
   modulePath: string = currentModulePath(),
 ): InstallMethod {
   const segments = modulePath.toLowerCase().split(/[\\/]+/);
-  if (
-    segments.some(
-      (part) =>
-        part === 'cellar' || part === 'homebrew' || part === 'linuxbrew',
-    )
-  )
-    return 'brew';
+  if (segments.includes('cellar')) return 'brew';
   if (segments.some((part) => part === 'bun' || part === '.bun')) return 'bun';
   if (segments.some((part) => part === 'pnpm' || part === '.pnpm'))
     return 'pnpm';
@@ -146,6 +140,85 @@ export async function fetchLatestCliVersion(options?: {
   } finally {
     clearTimeout(timer);
   }
+}
+
+type CommandRunner = (
+  command: string,
+  args: readonly string[],
+  timeoutMs: number,
+) => Promise<string | undefined>;
+
+async function readCommandStdout(
+  command: string,
+  args: readonly string[],
+  timeoutMs: number,
+): Promise<string | undefined> {
+  return new Promise<string | undefined>((resolve) => {
+    const child = spawn(command, args, {
+      shell: false,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    let stdout = '';
+    let settled = false;
+    const finish = (value: string | undefined): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(undefined);
+    }, timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.on('error', () => finish(undefined));
+    child.on('close', (code) => finish(code === 0 ? stdout : undefined));
+  });
+}
+
+function parseHomebrewFormulaVersion(
+  stdout: string,
+  formula = CLI_HOMEBREW_FORMULA,
+): string | undefined {
+  try {
+    const body = JSON.parse(stdout) as { formulae?: unknown };
+    if (!Array.isArray(body.formulae)) return undefined;
+    for (const entry of body.formulae) {
+      if (typeof entry !== 'object' || entry === null) continue;
+      const { name, versions } = entry as {
+        name?: unknown;
+        versions?: { stable?: unknown };
+      };
+      if (name !== formula) continue;
+      return typeof versions?.stable === 'string'
+        ? versions.stable
+        : undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+/** Fetch the latest locally-known Homebrew formula version, or undefined. */
+export async function fetchLatestHomebrewFormulaVersion(options?: {
+  formula?: string;
+  timeoutMs?: number;
+  runCommand?: CommandRunner;
+}): Promise<string | undefined> {
+  const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
+  const runCommand = options?.runCommand ?? readCommandStdout;
+  const stdout = await runCommand(
+    'brew',
+    ['info', '--json=v2', formula],
+    options?.timeoutMs ?? HOMEBREW_INFO_TIMEOUT_MS,
+  );
+  return stdout == null
+    ? undefined
+    : parseHomebrewFormulaVersion(stdout, formula);
 }
 
 function runCliUpdate(method: InstallMethod): Promise<boolean> {
@@ -277,10 +350,13 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
     return;
   if (context.outputFormat === 'ndjson' || context.quietLogs === true) return;
 
-  const latest = await fetchLatestCliVersion();
+  const method = detectInstallMethod();
+  const latest =
+    method === 'brew'
+      ? await fetchLatestHomebrewFormulaVersion()
+      : await fetchLatestCliVersion();
   if (!latest || !isNewerVersion(latest, context.version)) return;
 
-  const method = detectInstallMethod();
   const updateCmd = formatUpdateCommand(method);
   const style = createCliStyle(context.colorEnabled);
   writeTextStderr(
