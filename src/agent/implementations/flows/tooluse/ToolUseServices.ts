@@ -9,7 +9,7 @@ import type {
 import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
-import type { IToolUseSession } from './ToolUseSessionLifecycle';
+import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
 export type ToolUseBeforeWaitingCallback = (

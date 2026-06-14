@@ -1,0 +1,15 @@
+import type {
+  FollowUpQueueBatch,
+  FollowUpQueueInput,
+} from '@agent/toolUse/FollowUpQueue';
+
+/** Contract for injecting queued user messages into an active tool-use cycle. */
+export interface IToolUseSession {
+  appendFollowUp(followUp: FollowUpQueueInput): void;
+  appendSyntheticFollowUp(text: string): void;
+  hasQueuedFollowUp(): boolean;
+  /** Wait for the next follow-up items. Returns null if interrupted. */
+  waitForFollowUp(
+    checkInterruption: () => boolean,
+  ): Promise<FollowUpQueueBatch | null>;
+}

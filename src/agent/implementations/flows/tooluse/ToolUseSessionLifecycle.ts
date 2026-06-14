@@ -3,17 +3,8 @@ import type {
   FollowUpQueueBatch,
   FollowUpQueueInput,
 } from '@agent/toolUse/FollowUpQueue';
+import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { StreamTabId } from '@shared/schemas';
-
-export interface IToolUseSession {
-  appendFollowUp(followUp: FollowUpQueueInput): void;
-  appendSyntheticFollowUp(text: string): void;
-  hasQueuedFollowUp(): boolean;
-  /** Wait for the next follow-up items. Returns null if interrupted. */
-  waitForFollowUp(
-    checkInterruption: () => boolean,
-  ): Promise<FollowUpQueueBatch | null>;
-}
 
 export class ToolUseSessionLifecycle implements IToolUseSession {
   private readonly followUps = ToolUseFollowUpQueue.acquire(this.streamTabId);
