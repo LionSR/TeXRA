@@ -3,7 +3,13 @@
 // Tab / Shift-Tab cycles focus across subagent streams.
 
 import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import { isActiveStatus } from '@common/constants/streamStatus';
 import {
@@ -425,10 +431,12 @@ export function approvalVisibleForActiveStream({
 
 export function foregroundEscapeAction({
   activeFormEscapeAction,
+  childControlEscapeAction,
   foregroundKind,
   pending,
 }: {
   readonly activeFormEscapeAction?: string;
+  readonly childControlEscapeAction?: string;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
   readonly pending: PendingApproval | undefined;
 }): string | undefined {
@@ -438,7 +446,7 @@ export function foregroundEscapeAction({
     case 'form':
       return activeFormEscapeAction ?? 'close';
     case 'childControls':
-      return 'close';
+      return childControlEscapeAction ?? 'close';
     case 'transcript':
       return 'close';
     case 'approval': {
@@ -519,6 +527,8 @@ export function App(props: AppProps): React.JSX.Element {
   const [childControlMode, setChildControlMode] = useState<
     ChildControlMode | undefined
   >(undefined);
+  const [childControlEscapeAction, setChildControlEscapeAction] =
+    useState('close');
   const [tipHour] = useState(() => new Date().getHours());
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
@@ -678,6 +688,12 @@ export function App(props: AppProps): React.JSX.Element {
     childControlMode !== undefined
       ? childControlTargets[childControlMode]
       : undefined;
+  const updateChildControlEscapeAction = useCallback((action: string) => {
+    setChildControlEscapeAction(action);
+  }, []);
+  useEffect(() => {
+    if (childControlMode === undefined) setChildControlEscapeAction('close');
+  }, [childControlMode]);
   const childControlHasItems = childControlTarget?.hasItems ?? false;
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
     foregroundMaxRows:
@@ -756,6 +772,7 @@ export function App(props: AppProps): React.JSX.Element {
             availableRows={foregroundRows}
             mode={childControlMode}
             onClose={() => setChildControlMode(undefined)}
+            onEscapeActionChange={updateChildControlEscapeAction}
             onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
             onViewStream={(streamId) =>
               cliState.transcriptViewerStreamId.set(streamId)
@@ -1005,6 +1022,7 @@ export function App(props: AppProps): React.JSX.Element {
           commandName={props.commandName}
           foregroundEscapeAction={foregroundEscapeAction({
             activeFormEscapeAction: activeForm?.escapeAction,
+            childControlEscapeAction,
             foregroundKind,
             pending: activeApprovalVisible ? pending : undefined,
           })}
