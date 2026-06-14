@@ -27,13 +27,13 @@ versus irreducible platform glue or intentionally distinct semantics.
 
 ## Ranking (top 5 of 10)
 
-| #   | Dual system                                                                | Dual surface                                   | Genuine overlap   | Verdict                  |
-| --- | -------------------------------------------------------------------------- | ---------------------------------------------- | ----------------- | ------------------------ |
-| 1   | Provider model handlers (Anthropic / OpenAI / OpenAIResponse / Google / OpenRouter) | ~8.3k LOC of handlers over 1.24k base + 1.3k support | 60–70% of concern | Real, partly tractable   |
-| 2   | Host orchestration (extension 56k / CLI 38k / desktop 10k)                 | ~13k command/view glue                         | 20–40%            | Mostly intentional       |
-| 3   | Webview frontends (progressView 20k / settingsView 13k / main 7.8k)        | ~41k Lit UI                                     | 10–15%            | Mostly intentional       |
-| 4   | View message handlers + content providers (Main/Progress/Settings)        | ~2.5k handlers + 1.3k providers over 368 base  | 15–20%            | Thin, already based       |
-| 5   | Reflection flow vs ToolUse flow                                            | 1.28k / 1.36k over 2.5k shared core            | 10–15%            | Intentional              |
+| #   | Dual system                                                                         | Dual surface                                         | Genuine overlap   | Verdict                |
+| --- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- | ----------------- | ---------------------- |
+| 1   | Provider model handlers (Anthropic / OpenAI / OpenAIResponse / Google / OpenRouter) | ~8.3k LOC of handlers over 1.24k base + 1.3k support | 60–70% of concern | Real, partly tractable |
+| 2   | Host orchestration (extension 56k / CLI 38k / desktop 10k)                          | ~13k command/view glue                               | 20–40%            | Mostly intentional     |
+| 3   | Webview frontends (progressView 20k / settingsView 13k / main 7.8k)                 | ~41k Lit UI                                          | 10–15%            | Mostly intentional     |
+| 4   | View message handlers + content providers (Main/Progress/Settings)                  | ~2.5k handlers + 1.3k providers over 368 base        | 15–20%            | Thin, already based    |
+| 5   | Reflection flow vs ToolUse flow                                                     | 1.28k / 1.36k over 2.5k shared core                  | 10–15%            | Intentional            |
 
 Screened and parked (ranked 6–10), lower tractable overlap: per-view message
 schemas (~6.9k); CLI-TUI vs webview rendering (21k / 3.2k); ToolUse- vs
@@ -155,10 +155,10 @@ _clarity of the distinction_, not erasing it.
 
 Of the top 5 by size, only two items survive an adversarial pass:
 
-| Item                                                              | Severity | Status   | Effort     |
-| ---------------------------------------------------------------- | -------- | -------- | ---------- |
-| 1. Incremental helper extraction in model-handler `support/`     | LOW      | Ongoing  | Continuous |
-| 2. Extract desktop inlined approval/file-action logic to shared  | MEDIUM   | Proposed | ~300–400 LOC |
+| Item                                                            | Severity | Status   | Effort       |
+| --------------------------------------------------------------- | -------- | -------- | ------------ |
+| 1. Incremental helper extraction in model-handler `support/`    | LOW      | Ongoing  | Continuous   |
+| 2. Extract desktop inlined approval/file-action logic to shared | MEDIUM   | Proposed | ~300–400 LOC |
 
 The other three are large-by-scale but their overlap is either already
 consolidated or intentionally distinct typed contracts that `CLAUDE.md`'s
