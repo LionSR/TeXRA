@@ -16,6 +16,7 @@ export type {
   ContextStateEvent,
   DomainEvent,
   LogEvent,
+  ResultEvent,
   StageEndEvent,
   StageStartEvent,
   StageStamp,
