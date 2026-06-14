@@ -27,7 +27,7 @@ const CLI_HOMEBREW_FORMULA = 'texra';
 
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const DEFAULT_TIMEOUT_MS = 2500;
-const HOMEBREW_INFO_TIMEOUT_MS = 2500;
+const HOMEBREW_COMMAND_TIMEOUT_MS = 10000;
 const POSIX_SIGNAL_EXIT_OFFSET = 128;
 const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 
@@ -201,7 +201,12 @@ function parseHomebrewFormulaVersion(
   return undefined;
 }
 
-/** Fetch the latest locally-known Homebrew formula version, or undefined. */
+/**
+ * Refresh the Homebrew tap metadata and fetch the latest formula version, or
+ * undefined. Without the explicit update, `brew info` can report stale local
+ * metadata and hide an available upgrade until the user runs `brew update`
+ * manually.
+ */
 export async function fetchLatestHomebrewFormulaVersion(options?: {
   formula?: string;
   timeoutMs?: number;
@@ -209,10 +214,17 @@ export async function fetchLatestHomebrewFormulaVersion(options?: {
 }): Promise<string | undefined> {
   const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
   const runCommand = options?.runCommand ?? readCommandStdout;
+  const timeoutMs = options?.timeoutMs ?? HOMEBREW_COMMAND_TIMEOUT_MS;
+  const updateStdout = await runCommand(
+    'brew',
+    ['update', '--quiet'],
+    timeoutMs,
+  );
+  if (updateStdout == null) return undefined;
   const stdout = await runCommand(
     'brew',
     ['info', '--json=v2', formula],
-    options?.timeoutMs ?? HOMEBREW_INFO_TIMEOUT_MS,
+    timeoutMs,
   );
   return stdout == null
     ? undefined
@@ -326,10 +338,11 @@ async function relaunchAfterUpdate(
 let notified = false;
 
 /**
- * Once per process: check npm for a newer release and, in an interactive
- * terminal, offer to run the matching global install. Never blocks meaningfully
- * when up to date, offline, or the check is disabled — failures are silent so a
- * flaky network never gets between the user and their session.
+ * Once per process: check the package source for a newer release and, in an
+ * interactive terminal, offer to run the matching global install. npm-like
+ * installs read the npm registry; Homebrew installs refresh local tap metadata
+ * before reading the formula version. Failures are silent so a flaky network
+ * never gets between the user and their session.
  *
  * Disable entirely with `TEXRA_NO_UPDATE_CHECK=1`.
  */
