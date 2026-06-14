@@ -63,8 +63,8 @@ import { AgentCategory } from '@shared/schemas/agent';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
-  cleanupAllApprovals,
   cleanupApprovalsForStream,
+  cleanupUnscopedApprovals,
   handleProgressViewBashApprovalAction,
 } from '@tools/approval';
 import { GoalStore, isGoalInFlight } from '@tools/goal';
@@ -948,18 +948,30 @@ export class DesktopProgressBridge {
   }
 
   async deleteAllStreams(): Promise<void> {
-    // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
-    cleanupAllApprovals(this.session);
     const streamIds = new Set<StreamTabId>([
       ...this.streamLogs.keys(),
       ...this.restoredStreams.keys(),
     ]);
+    // Approval cleanup (incl. retry/proposal/plan coordinator state) is scoped
+    // to THIS window's streams via the per-stream helper, NOT the process-wide
+    // `cleanupAllApprovals` reset — so one window's "delete all" can't wipe
+    // another window's pending approvals (the approval controllers are
+    // process-global and streamId-keyed; the coordinator half is session-owned).
     for (const streamId of streamIds) {
       this.deletedStreams.add(streamId);
-    }
-    for (const streamId of streamIds) {
+      cleanupApprovalsForStream(streamId, this.session);
       ToolUseFollowUpQueue.release(streamId);
     }
+    // Catch pending approvals with no concrete stream context (undefined or
+    // empty streamId) — the per-stream loop skips them because they do not
+    // equal any StreamTabId. Scope this to THIS window's runtime host so a
+    // sibling window's streamless approval is not rejected.
+    cleanupUnscopedApprovals(this.runtimeHost);
+    // Child/subagent coordinator requests may be session-owned without a local
+    // desktop stream entry, so clear the owning window's coordinator bridge
+    // after the visible per-stream sweep. This is session-scoped and does not
+    // touch sibling windows.
+    this.session.coordinators.cleanupAllRequests();
     await GoalStore.forgetMany([...streamIds]);
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
