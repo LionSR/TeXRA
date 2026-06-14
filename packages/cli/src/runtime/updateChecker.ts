@@ -186,19 +186,16 @@ function parseHomebrewFormulaVersion(
   try {
     const body = JSON.parse(stdout) as { formulae?: unknown };
     if (!Array.isArray(body.formulae)) return undefined;
-    for (const entry of body.formulae) {
-      if (typeof entry !== 'object' || entry === null) continue;
-      const { name, versions } = entry as {
-        name?: unknown;
-        versions?: { stable?: unknown };
-      };
-      if (name !== formula) continue;
-      return typeof versions?.stable === 'string' ? versions.stable : undefined;
-    }
+    const entry = body.formulae.find((candidate) => {
+      if (typeof candidate !== 'object' || candidate === null) return false;
+      return (candidate as { name?: unknown }).name === formula;
+    });
+    if (typeof entry !== 'object' || entry === null) return undefined;
+    const { versions } = entry as { versions?: { stable?: unknown } };
+    return typeof versions?.stable === 'string' ? versions.stable : undefined;
   } catch {
     return undefined;
   }
-  return undefined;
 }
 
 /**
