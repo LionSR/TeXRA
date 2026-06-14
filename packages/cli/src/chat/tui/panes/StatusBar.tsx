@@ -556,6 +556,17 @@ function isLiveStreamStatus(status: string | undefined): boolean {
   return status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status);
 }
 
+function hasPendingOrLiveStream(
+  streams: ReadonlyMap<StreamTabId, StatusBarVisibleStream>,
+): boolean {
+  for (const stream of streams.values()) {
+    if (stream.status === undefined || isLiveStreamStatus(stream.status)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function rootActiveSegment(
   input: StatusBarDisplayInput,
 ): StatusBarSegment | undefined {
@@ -604,11 +615,13 @@ export interface StatusBarStreamTarget {
 export function statusBarStreamTarget({
   activeStreamId,
   canStopActiveRun,
+  canStopPendingRunWithoutStream = false,
   parentStream,
   streams,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly canStopActiveRun: boolean;
+  readonly canStopPendingRunWithoutStream?: boolean;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): StatusBarStreamTarget {
@@ -620,10 +633,13 @@ export function statusBarStreamTarget({
     canUseValue: (stream: StatusBarVisibleStream) =>
       isLiveStreamStatus(stream.status),
   });
+  const canStopVisibleRun =
+    canStopActiveRun &&
+    (canStopPendingRunWithoutStream || hasPendingOrLiveStream(streams));
   return {
     ctrlCAction: ctrlCActionForFocus({
       activeStreamId,
-      canStopActiveRun,
+      canStopActiveRun: canStopVisibleRun,
       parentStream,
     }),
     displaySlice: activeSlice ?? liveAncestor?.value,
@@ -780,6 +796,7 @@ export function buildStatusBarDisplay(
 export interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
   readonly canStopActiveRun?: () => boolean;
+  readonly canStopPendingRunWithoutStream?: () => boolean;
   readonly commandName?: string;
   readonly foregroundEscapeAction?: string;
   readonly queuedFollowUpPreview?: boolean;
@@ -802,6 +819,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const target = statusBarStreamTarget({
     activeStreamId,
     canStopActiveRun: props.canStopActiveRun?.() === true,
+    canStopPendingRunWithoutStream:
+      props.canStopPendingRunWithoutStream?.() === true,
     parentStream,
     streams,
   });
