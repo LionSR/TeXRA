@@ -195,7 +195,7 @@ export interface RunChatInit {
   readonly teamName?: string;
   /** Multi-agent preset id when chat was launched from a team preset. */
   readonly cliMultiAgentPresetId?: string;
-  /** Pre-resolved startup resume from `texra --resume <id>`. */
+  /** Pre-resolved startup resume from `texra resume <id>`. */
   readonly initialResume?: {
     readonly id: ExecutionId;
     readonly resolution: CliToolUseResumeResolution;
@@ -423,7 +423,7 @@ export function chatTuiSigintAction(input: {
   // Resumable-idle (interruptible but not actively running): exit WITHOUT
   // interrupting so the suspended tool-use flow record survives for resume —
   // interrupting would clear it in runToolUseFlow's finally. preserve-exit
-  // calls process.exit, leaving the suspended flow on disk for `texra --resume`.
+  // calls process.exit, leaving the suspended flow on disk for `texra resume`.
   if (input.canInterruptActiveRun) return 'preserve-exit';
   return 'clean-exit';
 }
@@ -1812,7 +1812,7 @@ export async function runChat(
       case 'preserve-exit':
         // Resumable-idle: exit WITHOUT interrupting. This preserves the
         // suspended tool-use flow record (executions/<id>/flow-*.json) so
-        // `texra --resume` can continue it. Preserve the session's current
+        // `texra resume` can continue it. Preserve the session's current
         // terminal status too; an intentional idle exit after a successful turn
         // should not report SIGINT/130.
         //
@@ -1945,7 +1945,7 @@ export async function runChat(
         // The dangling runPromise keeps the event loop alive, so a normal return
         // would never let the process exit. Force-exit here, AFTER persistence
         // is flushed and the resume hint is printed, preserving the suspended
-        // flow record on disk for `texra --resume`. Run platform shutdown first
+        // flow record on disk for `texra resume`. Run platform shutdown first
         // so queued usage logs flush — bin/texra.ts's finally won't on exit().
         await runPlatformShutdown();
         process.exit(session.runExitCode);
