@@ -254,9 +254,7 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(calls).toEqual([
-      { command: 'brew', args: ['update', '--quiet'] },
-    ]);
+    expect(calls).toEqual([{ command: 'brew', args: ['update', '--quiet'] }]);
   });
 
   it('passes the formula and timeout through to the command runner', async () => {
