@@ -2945,6 +2945,7 @@ const SNAPSHOT_THEME = {
   border: '#d8d0c3',
   headerBorder: '#e4ddd2',
   failedBorder: '#b55d54',
+  passedText: '#356f4f',
   link: '#1b5e8f',
   failureText: '#9b3d35',
 };
@@ -2984,22 +2985,40 @@ function writeSnapshot(index, name, frame) {
   writeFileSync(svgFile, snapshotSvgDocument(name, frame));
 }
 
+function snapshotStatus(result) {
+  if (result.skipped) return 'skipped';
+  return result.ok ? 'passed' : 'failed';
+}
+
 function snapshotHtmlDocument(results) {
   const generatedAt = new Date().toISOString();
+  const summary = results.reduce(
+    (counts, result) => {
+      counts[snapshotStatus(result)] += 1;
+      return counts;
+    },
+    { passed: 0, failed: 0, skipped: 0 },
+  );
+  const summaryText = [
+    `${summary.passed} passed`,
+    `${summary.failed} failed`,
+    `${summary.skipped} skipped`,
+  ].join(' · ');
   const entries = results
     .map((result, index) => {
       const textFile = snapshotFileName(index, result.name);
       const svgFile = snapshotFileName(index, result.name, 'svg');
       const frame = result.frame;
-      const statusClass = result.ok ? 'ok' : 'failed';
+      const status = snapshotStatus(result);
       const failures = result.failures.length
         ? `<ul>${result.failures
             .map((failure) => `<li>${escapeHtml(failure)}</li>`)
             .join('')}</ul>`
         : '';
-      return `<section class="scenario ${statusClass}">
+      return `<section class="scenario ${status}">
   <header>
     <h2>${escapeHtml(result.name)}</h2>
+    <span class="status ${status}">${escapeHtml(status)}</span>
     <nav>
       <a href="${escapeHtml(textFile)}">text frame</a>
       <a href="${escapeHtml(svgFile)}">svg frame</a>
@@ -3026,6 +3045,11 @@ function snapshotHtmlDocument(results) {
     main { max-width: 1280px; margin: 0 auto; padding: 24px; }
     h1 { font-size: 20px; margin: 0 0 6px; }
     .meta { color: ${SNAPSHOT_THEME.muted}; margin: 0 0 24px; }
+    .summary {
+      display: flex;
+      gap: 12px;
+      margin: 0 0 24px;
+    }
     .scenario {
       border: 1px solid ${SNAPSHOT_THEME.border};
       border-radius: 8px;
@@ -3034,15 +3058,30 @@ function snapshotHtmlDocument(results) {
       background: ${SNAPSHOT_THEME.cardBackground};
     }
     .scenario.failed { border-color: ${SNAPSHOT_THEME.failedBorder}; }
+    .scenario.skipped { border-color: ${SNAPSHOT_THEME.muted}; }
     header {
       align-items: center;
       border-bottom: 1px solid ${SNAPSHOT_THEME.headerBorder};
       display: flex;
-      justify-content: space-between;
+      gap: 12px;
       padding: 10px 14px;
     }
     h2 { font-size: 14px; margin: 0; }
-    nav { display: flex; gap: 14px; }
+    .status {
+      border: 1px solid ${SNAPSHOT_THEME.border};
+      border-radius: 999px;
+      color: ${SNAPSHOT_THEME.muted};
+      font-size: 12px;
+      padding: 2px 8px;
+      text-transform: uppercase;
+    }
+    .status.failed {
+      border-color: ${SNAPSHOT_THEME.failedBorder};
+      color: ${SNAPSHOT_THEME.failureText};
+    }
+    .status.passed { color: ${SNAPSHOT_THEME.passedText}; }
+    .status.skipped { color: ${SNAPSHOT_THEME.muted}; }
+    nav { display: flex; gap: 14px; margin-left: auto; }
     a { color: ${SNAPSHOT_THEME.link}; text-decoration: none; }
     ul { color: ${SNAPSHOT_THEME.failureText}; margin: 12px 14px 0; }
     pre {
@@ -3059,6 +3098,7 @@ function snapshotHtmlDocument(results) {
   <main>
     <h1>TeXRA TUI snapshots</h1>
     <p class="meta">Generated ${escapeHtml(generatedAt)} from ${results.length} scenario${results.length === 1 ? '' : 's'}.</p>
+    <p class="summary" aria-label="Snapshot summary">${escapeHtml(summaryText)}</p>
     ${entries}
   </main>
 </body>
