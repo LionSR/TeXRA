@@ -1,5 +1,6 @@
 import { platform } from '@platform/platform';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES, type AgentEntry } from '@agent/index';
+import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { agentKey } from '@shared/schemas/agent';
@@ -241,7 +242,7 @@ export function formatCliMultiAgentPresetInspection(
 
 export function cliMultiAgentPresetNdjsonRecords(
   plans: readonly CliMultiAgentPresetRunPlan[],
-): object[] {
+): CliNdjsonRecord[] {
   const ts = new Date().toISOString();
   return plans.map((plan) => ({
     kind: 'multi-agent-preset',
