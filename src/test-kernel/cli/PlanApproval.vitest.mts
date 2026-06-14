@@ -127,8 +127,7 @@ describe('CLI plan approval layout', () => {
   });
 
   it('keeps the autonomous warning concise enough for the approval card', () => {
-    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('Press r');
-    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('bash + file edits');
+    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('edits still ask');
     expect(PLAN_APPROVAL_GOAL_NOTICE.length).toBeLessThanOrEqual(56);
   });
 
@@ -136,8 +135,8 @@ describe('CLI plan approval layout', () => {
     const notice = planApprovalGoalNoticeLine(40);
 
     expect(textDisplayWidth(notice)).toBe(40);
-    expect(notice).toContain('Press r');
-    expect(notice).toContain('…');
+    expect(notice).toContain('edits still ask');
+    expect(notice).not.toContain('…');
   });
 
   it('wraps body lines before Ink renders the bordered card', () => {

@@ -2,14 +2,14 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
 /**
- * Engage or clear the per-stream bash + tool-edit approval bypass for an
- * autonomous goal.
+ * Engage or clear the per-stream bash approval bypass for an autonomous goal.
  *
  * "Approve & Run Autonomously" is the user's explicit consent to unattended
- * execution; without the bypass, the first bash/edit approval prompt silently
- * parks the loop, which reads as the goal "stopping early". Engaged when a
- * goal starts or is retargeted, cleared whenever it pauses or ends so manual
- * follow-up turns prompt normally again.
+ * command execution; without the bypass, the first verification/build command
+ * silently parks the loop, which reads as the goal "stopping early". File edits
+ * keep their normal diff approval prompt because an approved plan is not an
+ * edit approval. Engaged when a goal starts or is retargeted, cleared whenever
+ * it pauses or ends so manual follow-up turns prompt normally again.
  *
  * Subagents inherit the parent stream's bypass through the existing
  * delegation wiring (`inheritBashBypassOnChildStream`), so no child-stream
@@ -20,18 +20,12 @@ import type { StreamTabId } from '@shared/schemas/identifiers';
  * modules at module scope drags their filesystem/logger imports into every
  * consumer — breaking partial logger mocks in CLI tests.
  */
-export async function setGoalSessionAutoApprovals(
+export async function setGoalSessionBashAutoApproval(
   streamId: StreamTabId,
   enabled: boolean,
   runtimeHost: AgentRuntimeHost,
 ): Promise<void> {
-  const [
-    { setBashApprovalSessionBypass },
-    { setToolEditApprovalSessionBypass },
-  ] = await Promise.all([
-    import('@tools/approval/bashApproval'),
-    import('@tools/approval/toolEditApproval'),
-  ]);
+  const { setBashApprovalSessionBypass } =
+    await import('@tools/approval/bashApproval');
   setBashApprovalSessionBypass(streamId, enabled, runtimeHost);
-  setToolEditApprovalSessionBypass(streamId, enabled, runtimeHost);
 }
