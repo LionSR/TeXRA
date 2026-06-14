@@ -1,5 +1,6 @@
 // Local imports - runtime
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local imports - CLI runtime
@@ -46,12 +47,13 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       }
 
       if (context.outputFormat === 'ndjson') {
-        writeNdjsonStdout({
+        const record: CliNdjsonRecord = {
           kind: 'progress',
           event,
           ts: new Date().toISOString(),
           payload,
-        });
+        };
+        writeNdjsonStdout(record);
         return;
       }
 

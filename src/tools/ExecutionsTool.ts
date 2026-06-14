@@ -25,9 +25,8 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 import {
   AgentExecutionHandle,
   ProcessExecutionHandle,
-  executionRegistry,
 } from '@agent/runtime/executionRegistry';
-import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
+import { currentSession } from '@agent/runtime/SessionHandle';
 
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
@@ -40,10 +39,10 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { requireRunStream } from '@tools/contextHelpers';
 import { AbsoluteFS, StorageFS } from '@utils/files';
+import { clamp } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
-import { clamp } from '@utils/core';
 import {
   formatResultCount,
   formatTimestamp,
@@ -340,7 +339,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
   ): Promise<void> {
     const candidateIds = ids?.length
       ? [...new Set(ids)]
-      : executionRegistry.getActiveIds();
+      : currentSession().executions.getActiveIds();
     if (candidateIds.length === 0) return;
 
     // Exclude executions that are already effectively done
@@ -353,7 +352,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     // Abort early if a follow-up is sent to this stream (user wants to break the wait)
     const cleanupFollowUp = listenForFollowUp(ac);
     // Register callback before re-checking to close the race window
-    const waitPromise = executionRegistry.waitForAnyChange(
+    const waitPromise = currentSession().executions.waitForAnyChange(
       pendingIds,
       ac.signal,
     );
@@ -376,7 +375,10 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     // Abort early if a follow-up is sent to this stream (user wants to break the wait)
     const cleanupFollowUp = listenForFollowUp(ac);
     // Register callback before re-checking to close the race window
-    const waitPromise = executionRegistry.waitForChange(executionId, ac.signal);
+    const waitPromise = currentSession().executions.waitForChange(
+      executionId,
+      ac.signal,
+    );
     // Re-check after registration: if state changed in the gap, abort.
     if (shouldSkipWait(executionId)) ac.abort();
     await waitPromise;
@@ -402,9 +404,9 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     const lines = page.map(formatListingLine);
 
     // Count active background processes for the header
-    const activeIds = executionRegistry.getActiveIds();
+    const activeIds = currentSession().executions.getActiveIds();
     const bgCount = activeIds.filter(
-      (id) => executionRegistry.getHandle(id)?.category === 'process',
+      (id) => currentSession().executions.getHandle(id)?.category === 'process',
     ).length;
     const bgSuffix =
       bgCount > 0
@@ -419,7 +421,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
 
   private async showSummary(executionId: ExecutionId): Promise<ToolResult> {
     // Check in-memory handle first (free) — running executions have everything we need
-    const handle = executionRegistry.getHandle(executionId);
+    const handle = currentSession().executions.getHandle(executionId);
 
     if (handle) {
       // Running execution: agent/status from handle, only fetch live data from KV
@@ -431,7 +433,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         store.readReport(),
       ]);
 
-      const info = executionRegistry.getStatus(handle);
+      const info = currentSession().executions.getStatus(handle);
       const lines = [
         `Execution: ${executionId}`,
         `Agent: ${handle.agentName}`,
@@ -580,7 +582,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       };
     }
 
-    const target = executionRegistry.getHandle(executionId);
+    const target = currentSession().executions.getHandle(executionId);
     if (!target) {
       return {
         output: `Execution ${executionId} not found or already completed.`,
@@ -611,7 +613,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       };
     }
 
-    const success = executionRegistry.kill(executionId, {
+    const success = currentSession().executions.kill(executionId, {
       detachActiveChildren: platform().workspaceState.get<boolean>(
         WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
         false,
@@ -637,7 +639,11 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       );
     }
     try {
-      executionSubscriptionBinder.bind(streamId, executionId, ctx.runtimeHost);
+      currentSession().subscriptions.bind(
+        streamId,
+        executionId,
+        ctx.runtimeHost,
+      );
     } catch (err) {
       throw new ToolError(toErrorMessage(err));
     }
@@ -654,7 +660,10 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         'unsubscribe must be called from within an agent stream.',
       );
     }
-    const removed = executionSubscriptionBinder.unbind(streamId, executionId);
+    const removed = currentSession().subscriptions.unbind(
+      streamId,
+      executionId,
+    );
     return {
       output: removed
         ? `Unsubscribed from ${executionId}.`
@@ -667,7 +676,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     viewRange?: number[],
   ): Promise<ToolResult> {
     // Running process: read live output from ephemeral temp files
-    const handle = executionRegistry.getHandle(executionId);
+    const handle = currentSession().executions.getHandle(executionId);
     if (handle instanceof ProcessExecutionHandle && handle.outputPaths) {
       const [stdout, stderr] = await Promise.all([
         platform()

@@ -4,14 +4,15 @@ import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
-  AgentExecutionHandle,
-  executionRegistry,
-} from '@agent/runtime/executionRegistry';
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
-import { toErrorMessage } from '@common/errors';
+import { classifyAgentError, toErrorMessage } from '@common/errors';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
@@ -47,7 +48,8 @@ interface FinalizeChildStreamOptions {
 
 type ChildStreamTerminalStatus =
   | typeof STREAM_STATUS.READY
-  | typeof STREAM_STATUS.ERROR;
+  | typeof STREAM_STATUS.ERROR
+  | typeof STREAM_STATUS.STOPPED;
 
 export interface ChildStream {
   childStreamId: StreamTabId;
@@ -89,7 +91,10 @@ export function createChildStream(
     description: truncateWithEllipsis(options.description, 80),
   });
 
-  const runTrace = createRunTrace(childStreamId);
+  // Capture the run's session at creation (inside the parent run's ALS); the
+  // status-update and finalize closures below fire later, possibly outside it.
+  const session = currentSession();
+  const runTrace = createRunTrace(childStreamId, undefined, session.flushers);
   const handle = new AgentExecutionHandle(
     executionId,
     parentStreamId,
@@ -97,9 +102,11 @@ export function createChildStream(
     options.agentName,
     'toolUse',
     runtimeHost,
+    undefined,
+    runTrace.trace,
   );
   if (options.toolName) handle.toolName = options.toolName;
-  executionRegistry.trackAgentExecution(handle, {
+  session.executions.trackAgentExecution(handle, {
     status: STREAM_STATUS.RUNNING,
   });
 
@@ -109,23 +116,27 @@ export function createChildStream(
     // Mid-run status updates are intentionally best-effort. Explicit stops and
     // stale handles are ignored by the registry; finalize owns terminal status.
     waitForInput: () => {
-      executionRegistry.updateAgentExecutionStatus(
+      session.executions.updateAgentExecutionStatus(
         handle,
         STREAM_STATUS.WAITING,
       );
     },
     beginTurn: () => {
-      executionRegistry.updateAgentExecutionStatus(
+      session.executions.updateAgentExecutionStatus(
         handle,
         STREAM_STATUS.RUNNING,
       );
     },
     failTurn: () => {
-      executionRegistry.updateAgentExecutionStatus(handle, STREAM_STATUS.ERROR);
+      session.executions.updateAgentExecutionStatus(
+        handle,
+        STREAM_STATUS.ERROR,
+      );
     },
     finalize: (finalizeOptions) => {
       finalizeChildStream({
         handle,
+        session,
         logger: runTrace.trace,
         disposeTrace: runTrace.dispose,
         options: finalizeOptions,
@@ -136,6 +147,7 @@ export function createChildStream(
 
 interface FinalizeChildStreamArgs {
   handle: AgentExecutionHandle;
+  session: SessionHandle;
   logger: AgentTrace;
   disposeTrace: () => void;
   options?: FinalizeChildStreamOptions;
@@ -143,13 +155,14 @@ interface FinalizeChildStreamArgs {
 
 /** Finalize a child stream tab and untrack its execution handle. */
 function finalizeChildStream(args: FinalizeChildStreamArgs): void {
-  const { handle, logger, disposeTrace, options } = args;
+  const { handle, session, logger, disposeTrace, options } = args;
   const hasError = options?.error != null || options?.errorMessage != null;
+  const errorMessage =
+    options?.errorMessage ??
+    (options?.error != null ? toErrorMessage(options.error) : undefined);
 
-  if (options?.errorMessage) {
-    logger.error(options.errorMessage);
-  } else if (options?.error) {
-    logger.error(toErrorMessage(options.error));
+  if (errorMessage) {
+    logger.error(errorMessage);
   }
   if (options?.wallTimeMs != null) {
     logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
@@ -160,10 +173,49 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     );
   }
 
-  executionRegistry.finishAgentExecution(handle, {
-    status:
-      options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY),
+  // The terminal status the child finishes with — the single source of truth
+  // for both the registry status and the handle's result outcome. Deriving from
+  // status (not just `hasError`) covers callers that pass ERROR without an
+  // error payload, and long-lived child loops that finalize after an interrupt.
+  const requestedStatus =
+    options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY);
+  const currentStatus = session.executions.getStatus(handle).status;
+  const finalStatus =
+    currentStatus === STREAM_STATUS.STOPPED ||
+    requestedStatus === STREAM_STATUS.STOPPED
+      ? STREAM_STATUS.STOPPED
+      : hasError
+        ? STREAM_STATUS.ERROR
+        : requestedStatus;
+  const outcome =
+    finalStatus === STREAM_STATUS.ERROR
+      ? 'failed'
+      : finalStatus === STREAM_STATUS.STOPPED
+        ? 'cancelled'
+        : 'completed';
+  const error =
+    outcome === 'failed'
+      ? {
+          kind: classifyAgentError(options?.error),
+          message: errorMessage ?? 'Child stream failed',
+        }
+      : undefined;
+
+  // Settle the handle's `result` before untracking (F-2): child streams never
+  // traverse the run lifecycle, so this is their only settle point. Without it
+  // a consumer awaiting a child handle's `result` would hang forever.
+  handle.settleResult({
+    type: 'result',
+    outcome,
+    executionId: handle.executionId,
+    streamId: handle.childStreamId,
+    agentName: handle.agentName,
+    category: handle.category,
+    isSubagent: handle.parentStreamId !== handle.childStreamId,
+    ...(error ? { error } : {}),
   });
+
+  session.executions.finishAgentExecution(handle, { status: finalStatus });
   disposeTrace();
 
   if (options?.autoClose) {

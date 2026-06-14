@@ -13,6 +13,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { filterNotNullish } from '@utils/core';
 
 import { truncateSummaryToWidth } from '../render/terminalText';
@@ -199,7 +200,10 @@ function numberedQueuedFollowUpPreview(
 ): string {
   const prefix = `${index + 1}. `;
   const bodyColumns = Math.max(0, maxColumns - stringWidth(prefix));
-  return `${prefix}${truncateSummaryToWidth(message, bodyColumns)}`;
+  return `${prefix}${truncateSummaryToWidth(
+    summarizeFollowupMessage(message),
+    bodyColumns,
+  )}`;
 }
 
 function queuedFollowUpsListSummary(
@@ -239,7 +243,10 @@ export function queuedFollowUpsSummary(
   if (messages.length > 1) {
     return queuedFollowUpsListSummary(messages, previewLength);
   }
-  return truncateSummaryToWidth(messages[0] ?? '', previewLength);
+  return truncateSummaryToWidth(
+    summarizeFollowupMessage(messages[0] ?? ''),
+    previewLength,
+  );
 }
 
 function queuedFollowUpsCountSegment(

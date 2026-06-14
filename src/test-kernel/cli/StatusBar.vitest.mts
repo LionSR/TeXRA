@@ -13,6 +13,10 @@ import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import { STREAM_STATUS } from '@shared/schemas';
 
 const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
+const COMPLETED_REVIEW_FOLLOWUP =
+  '<orchestrator-followup><subagent-result id="child-q" agent="review" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>';
+const PROGRESS_REVIEW_FOLLOWUP =
+  '<orchestrator-followup><subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/></orchestrator-followup>';
 
 describe('CLI StatusBar display model', () => {
   it('previews queued follow-up messages without duplicating the count', () => {
@@ -26,6 +30,29 @@ describe('CLI StatusBar display model', () => {
         'Also mention the finite monoid argument.',
       ]),
     ).toBe('1. Keep the proof und… · 2. Also mention the f…');
+  });
+
+  it('summarizes queued subagent follow-up XML in the status preview', () => {
+    expect(queuedFollowUpsSummary([COMPLETED_REVIEW_FOLLOWUP], 80)).toBe(
+      '✓ review completed All good <ok>',
+    );
+
+    const progressSummary = queuedFollowUpsSummary(
+      [PROGRESS_REVIEW_FOLLOWUP],
+      80,
+    );
+    expect(progressSummary).toBe(
+      '⟳ review · todos · 6 done, 0 active, 0 pending',
+    );
+    expect(progressSummary).not.toContain('<subagent-progress');
+
+    const listSummary = queuedFollowUpsSummary([
+      PROGRESS_REVIEW_FOLLOWUP,
+      'Check the edge case.',
+    ]);
+    expect(listSummary).toContain('1. ⟳ review');
+    expect(listSummary).not.toContain('<orchestrator-followup>');
+    expect(listSummary).not.toContain('<subagent-progress');
   });
 
   it('marks hidden queued follow-up previews', () => {

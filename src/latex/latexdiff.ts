@@ -245,7 +245,11 @@ export class LaTeXdiffService {
     mathMarkup?: MathMarkupOption,
   ): Promise<boolean> {
     try {
-      const result = await this.runDiffVc(inputLocation, commitHash, mathMarkup);
+      const result = await this.runDiffVc(
+        inputLocation,
+        commitHash,
+        mathMarkup,
+      );
       return result.success;
     } catch (err) {
       logger.error(

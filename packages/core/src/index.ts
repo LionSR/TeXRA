@@ -74,6 +74,10 @@ export {
   AgentFlowResultSchema,
   type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
+// Per-run control handle (F-2): the run's live handle, exposed via `onRun`.
+// Its `.result` promise settles with the terminal `ResultEvent` (always
+// resolves), and `.trace` is the run's discriminated-event channel.
+export { type AgentRunHandle } from '@agent/runtime/executionRegistry';
 
 // ── 5. Host port (consumer-injected progress-event sink) ──
 export {
@@ -81,15 +85,31 @@ export {
   noopAgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
 
+// ── 5b. Session ownership (per-session runtime-state container) ──
+// One owner per session for interrupt / execution / coordinator / subscription
+// state plus the trace flusher set. `defaultSession` wraps the existing
+// process singletons by identity (behavior-neutral); hosts that need isolation
+// construct their own `new SessionHandle({ hostChannel })`.
+export {
+  SessionHandle,
+  defaultSession,
+  type SessionHandleInit,
+} from '@agent/runtime/SessionHandle';
+
 // ── 6. Telemetry: the AgentTrace discriminated-event channel ──
 // SDK consumers attach their own subscriber via trace.subscribe(...).
 export {
   type AgentTrace,
   type AgentTraceSubscriber,
   type AgentEvent,
+  type ResultEvent,
   TraceEmitter,
   noopTrace,
 } from '@agent/trace';
+// `ResultEvent`'s member types, so consumers can name the discriminant of
+// `event.error.kind` and the `usage` shape without deep internal imports.
+export type { AgentErrorKind } from '@common/errors';
+export type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 
 // ── 7. Agent registry (discover/resolve agent definitions) ──
 export {

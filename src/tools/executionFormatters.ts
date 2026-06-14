@@ -2,8 +2,8 @@ import type { ExecutionListingEntry, TodoEntry } from '@agent/storage';
 import {
   type ExecutionHandle,
   type ExecutionStatusInfo,
-  executionRegistry,
 } from '@agent/runtime/executionRegistry';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   EXECUTION_STATUS,
   STATUS_DISPLAY,
@@ -58,8 +58,9 @@ export function getExecutionStatusInfo(
   executionId: string,
   terminalStatus?: string,
 ): ExecutionStatusInfo {
-  const handle = executionRegistry.getHandle(executionId);
-  if (handle) return executionRegistry.getStatus(handle);
+  const session = currentSession();
+  const handle = session.executions.getHandle(executionId);
+  if (handle) return session.executions.getStatus(handle);
   return {
     status: terminalStatus ?? EXECUTION_STATUS.COMPLETED,
     elapsed: null,

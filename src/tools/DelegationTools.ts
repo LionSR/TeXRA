@@ -20,12 +20,9 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
-import {
-  AgentExecutionHandle,
-  executionRegistry,
-} from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
   getAgentFlowErrorResult,
   type AgentFlowResult,
@@ -291,7 +288,7 @@ function resolveDeliveryStreamId(
   executionId: string,
   fallbackStreamId: StreamTabId,
 ): StreamTabId | undefined {
-  const handle = executionRegistry.getHandle(executionId);
+  const handle = currentSession().executions.getHandle(executionId);
   if (!(handle instanceof AgentExecutionHandle)) return fallbackStreamId;
   // AgentExecutionHandle.detach() promotes a child by setting
   // parentStreamId === childStreamId. Do not enqueue the formatted result
@@ -383,6 +380,7 @@ async function executeSubagent(
   const parentExecutionId = parentContext.executionId;
   const parentDelegationDepth = parentContext.delegationDepth ?? 0;
   const runtimeHost = parentContext.runtimeHost;
+  const parentSession = currentSession();
   // Captured now (while the launching tool call's ALS frame is live) so the
   // async completion callbacks below can still roll the child's cost into the
   // parent run after this tool call has returned. Subagents count toward
@@ -507,7 +505,13 @@ async function executeSubagent(
     );
     if (!targetStreamId) return false;
 
-    const result = await sendFollowUp(targetStreamId, followUp);
+    const result = await sendFollowUp(
+      targetStreamId,
+      followUp,
+      undefined,
+      undefined,
+      parentSession,
+    );
     if (result.status === 'no_session') {
       logger.warn(
         'subagentDelivery',
@@ -799,7 +803,7 @@ async function proposeAndExecute(
 
   const proposalId = nanoid();
 
-  const result = await runCoordinatorBridge.waitForProposal(streamId, {
+  const result = await currentSession().coordinators.waitForProposal(streamId, {
     proposalId,
     proposal,
   });
@@ -1138,7 +1142,7 @@ Git worktree support: ${
     const gated = depthGateError(parentDelegationDepth);
     if (gated) return gated;
 
-    const handle = executionRegistry.getHandle(executionId);
+    const handle = currentSession().executions.getHandle(executionId);
     if (!(handle instanceof AgentExecutionHandle)) {
       throw new Error(
         `Execution '${executionId}' not found or not an agent execution. Use the executions tool to check status.`,

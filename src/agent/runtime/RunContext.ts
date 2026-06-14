@@ -7,6 +7,7 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentProposalCoordinator } from './AgentProposalCoordinator';
 import type { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
 import type { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
+import type { SessionHandle } from './SessionHandle';
 
 export interface RunCoordinators {
   readonly plan: PlanApprovalCoordinator;
@@ -69,6 +70,14 @@ export interface RunContext {
   readonly runtimeUnavailableTools?: readonly string[];
   /** Whether this run should stop after one tool-use cycle instead of idling. */
   readonly stopAfterCycle?: boolean;
+  /**
+   * The session that owns this run's coordination state (interrupts,
+   * executions, coordinators, subscriptions). Run-scoped code resolves it via
+   * `currentSession()` (`tryUseRunContext()?.session ?? defaultSession`);
+   * when omitted the default session — which wraps the process singletons by
+   * identity — is used, so reads are byte-identical to direct singleton access.
+   */
+  readonly session?: SessionHandle;
 }
 
 export interface CreateRunContextOptions {
@@ -91,6 +100,7 @@ export interface CreateRunContextOptions {
   approvalPromptsUnavailable?: boolean;
   runtimeUnavailableTools?: readonly string[];
   stopAfterCycle?: boolean;
+  session?: SessionHandle;
 }
 
 const runContextScope = new AsyncLocalStorage<RunContext>();
@@ -117,6 +127,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
+    session: options.session,
   });
 }
 

@@ -1,10 +1,11 @@
 import { getExecutionStore } from '@agent/storage';
-import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
+import type { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 export interface AgentCliSessionEntry {
   childStreamId: StreamTabId;
   executionId: ExecutionId;
+  interrupts: InterruptRegistry;
 }
 
 export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
@@ -42,8 +43,8 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
   }
 
   interruptAll(): void {
-    for (const { childStreamId } of [...this.sessions.values()]) {
-      interruptRegistry.get(childStreamId)?.interrupt();
+    for (const { childStreamId, interrupts } of [...this.sessions.values()]) {
+      interrupts.get(childStreamId)?.interrupt();
     }
   }
 }

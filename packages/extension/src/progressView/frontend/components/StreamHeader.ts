@@ -126,6 +126,10 @@ export class StreamHeader extends LitElement {
     css`
       :host {
         display: block;
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
+        container-type: inline-size;
       }
 
       :host([hidden]) {
@@ -141,6 +145,8 @@ export class StreamHeader extends LitElement {
         gap: var(--wa-space-2xs);
         min-height: var(--height-header);
         box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
         color: var(--color-text-secondary);
         border-bottom: var(--border-thin) solid var(--color-border);
       }
@@ -149,6 +155,9 @@ export class StreamHeader extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--wa-space-xs);
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
       }
 
       .header-left {
@@ -157,13 +166,17 @@ export class StreamHeader extends LitElement {
         gap: var(--wa-space-xs);
         flex: 1;
         min-width: 0;
+        max-width: 100%;
       }
 
       .stream-header {
         display: flex;
         align-items: center;
         gap: var(--wa-space-2xs);
+        flex: 1 1 auto;
         min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
       }
 
       .stream-header #activeStreamName {
@@ -178,8 +191,16 @@ export class StreamHeader extends LitElement {
       }
 
       .header-actions {
-        flex-shrink: 0;
+        display: flex;
+        justify-content: flex-end;
+        flex: 0 0 auto;
+        min-width: 0;
+        max-width: 100%;
         margin-left: auto;
+      }
+
+      .header-actions wa-button-group {
+        max-width: 100%;
       }
 
       /* Status indicator overrides - base styles from statusIndicatorStyles.
@@ -258,10 +279,9 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-xs);
       }
 
-      @media (max-width: 500px) {
-        .log-header {
+      @container (max-width: 320px) {
+        .log-header__primary {
           flex-wrap: wrap;
-          gap: var(--wa-space-2xs);
         }
 
         .header-left {
@@ -269,7 +289,8 @@ export class StreamHeader extends LitElement {
         }
 
         .header-actions {
-          margin-left: auto;
+          width: 100%;
+          margin-left: 0;
         }
       }
     `,

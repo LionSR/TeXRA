@@ -442,12 +442,13 @@ function startClaudeAgentLoop(params: {
     onTurnError: (turn, log) => {
       if (turn.errorMessage) log.error(turn.errorMessage);
     },
-    onTurnSuccess: (turn) => {
+    onTurnSuccess: (turn, session) => {
       if (turn.sessionId && !claudeAgentSessions.isActive(turn.sessionId)) {
         claudeAgentSessions.register(turn.sessionId, {
           childStreamId,
           parentStreamId,
           executionId,
+          interrupts: session.interrupts,
           model: params.model,
           permissionMode: params.permissionMode,
           effort: params.effort,

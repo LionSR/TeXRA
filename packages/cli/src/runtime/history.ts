@@ -11,6 +11,7 @@ import {
   type ResultMeta,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { isFileNotFoundError } from '@common/errors';
 import {
   EXECUTION_STATUS,
@@ -277,7 +278,7 @@ export function formatCliHistoryText(
 export function cliHistoryNdjsonRecords(
   entries: readonly CliHistoryEntry[],
   ts = new Date().toISOString(),
-): object[] {
+): CliNdjsonRecord[] {
   return entries.map((entry) => ({ kind: 'history-entry', ts, entry }));
 }
 
