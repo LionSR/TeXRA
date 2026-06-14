@@ -12,7 +12,7 @@ import {
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
-import { toErrorMessage } from '@common/errors';
+import { classifyAgentError, toErrorMessage } from '@common/errors';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
@@ -48,7 +48,8 @@ interface FinalizeChildStreamOptions {
 
 type ChildStreamTerminalStatus =
   | typeof STREAM_STATUS.READY
-  | typeof STREAM_STATUS.ERROR;
+  | typeof STREAM_STATUS.ERROR
+  | typeof STREAM_STATUS.STOPPED;
 
 export interface ChildStream {
   childStreamId: StreamTabId;
@@ -101,6 +102,8 @@ export function createChildStream(
     options.agentName,
     'toolUse',
     runtimeHost,
+    undefined,
+    runTrace.trace,
   );
   if (options.toolName) handle.toolName = options.toolName;
   session.executions.trackAgentExecution(handle, {
@@ -154,11 +157,12 @@ interface FinalizeChildStreamArgs {
 function finalizeChildStream(args: FinalizeChildStreamArgs): void {
   const { handle, session, logger, disposeTrace, options } = args;
   const hasError = options?.error != null || options?.errorMessage != null;
+  const errorMessage =
+    options?.errorMessage ??
+    (options?.error != null ? toErrorMessage(options.error) : undefined);
 
-  if (options?.errorMessage) {
-    logger.error(options.errorMessage);
-  } else if (options?.error) {
-    logger.error(toErrorMessage(options.error));
+  if (errorMessage) {
+    logger.error(errorMessage);
   }
   if (options?.wallTimeMs != null) {
     logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
@@ -169,10 +173,49 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     );
   }
 
-  session.executions.finishAgentExecution(handle, {
-    status:
-      options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY),
+  // The terminal status the child finishes with — the single source of truth
+  // for both the registry status and the handle's result outcome. Deriving from
+  // status (not just `hasError`) covers callers that pass ERROR without an
+  // error payload, and long-lived child loops that finalize after an interrupt.
+  const requestedStatus =
+    options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY);
+  const currentStatus = session.executions.getStatus(handle).status;
+  const finalStatus =
+    currentStatus === STREAM_STATUS.STOPPED ||
+    requestedStatus === STREAM_STATUS.STOPPED
+      ? STREAM_STATUS.STOPPED
+      : hasError
+        ? STREAM_STATUS.ERROR
+        : requestedStatus;
+  const outcome =
+    finalStatus === STREAM_STATUS.ERROR
+      ? 'failed'
+      : finalStatus === STREAM_STATUS.STOPPED
+        ? 'cancelled'
+        : 'completed';
+  const error =
+    outcome === 'failed'
+      ? {
+          kind: classifyAgentError(options?.error),
+          message: errorMessage ?? 'Child stream failed',
+        }
+      : undefined;
+
+  // Settle the handle's `result` before untracking (F-2): child streams never
+  // traverse the run lifecycle, so this is their only settle point. Without it
+  // a consumer awaiting a child handle's `result` would hang forever.
+  handle.settleResult({
+    type: 'result',
+    outcome,
+    executionId: handle.executionId,
+    streamId: handle.childStreamId,
+    agentName: handle.agentName,
+    category: handle.category,
+    isSubagent: handle.parentStreamId !== handle.childStreamId,
+    ...(error ? { error } : {}),
   });
+
+  session.executions.finishAgentExecution(handle, { status: finalStatus });
   disposeTrace();
 
   if (options?.autoClose) {
