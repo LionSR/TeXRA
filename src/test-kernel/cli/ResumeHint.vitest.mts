@@ -127,9 +127,9 @@ describe('collectResumeTargets', () => {
 
 describe('formatResumeHint', () => {
   it('formats resume commands with a local launcher when provided', () => {
-    expect(formatResumeCommand(undefined, 'root')).toBe('texra --resume root');
+    expect(formatResumeCommand(undefined, 'root')).toBe('texra resume root');
     expect(formatResumeCommand('texra-local', 'root')).toBe(
-      'texra-local --resume root',
+      'texra-local resume root',
     );
   });
 
@@ -142,8 +142,8 @@ describe('formatResumeHint', () => {
     ).toBe(
       [
         'Resume this session with:',
-        '  texra --resume root  (main)',
-        '  texra --resume rev  (reviewer)',
+        '  texra resume root  (main)',
+        '  texra resume rev  (reviewer)',
       ].join('\n'),
     );
   });
@@ -161,8 +161,8 @@ describe('formatResumeHint', () => {
     ).toBe(
       [
         'Resume this session with:',
-        '  texra-local --resume root  (main)',
-        '  texra-local --resume rev  (reviewer)',
+        '  texra-local resume root  (main)',
+        '  texra-local resume rev  (reviewer)',
       ].join('\n'),
     );
   });
@@ -180,7 +180,7 @@ describe('formatResumeHint', () => {
       [
         'Token usage: total=197,232,342 input=186,189,742 (+ 6,470,327,168 cached) output=11,042,600 (reasoning 3,489,148)',
         'Resume this session with:',
-        '  texra --resume root  (main)',
+        '  texra resume root  (main)',
       ].join('\n'),
     );
   });

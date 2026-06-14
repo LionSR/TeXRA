@@ -36,7 +36,7 @@ export function formatResumeCommand(
   commandName: string | undefined,
   executionId: string,
 ): string {
-  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} --resume ${executionId}`;
+  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}`;
 }
 
 function formatInteger(value: number): string {

@@ -25,7 +25,7 @@ import {
 import type { CliContext } from '../runtime/cliContext';
 
 /**
- * `texra --resume <id>` continues (resumes) a stored tool-use session by
+ * `texra resume <id>` continues (resumes) a stored tool-use session by
  * reopening the interactive chat TUI, which rehydrates the prior transcript and
  * continues the suspended flow.
  *
