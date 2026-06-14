@@ -25,7 +25,7 @@ export interface RunAgentOptions {
    * run's event channel, and the handle can interrupt via the session. The
    * returned promise is unchanged — this is additive, post-launch exposure.
    */
-  onRun?: (handle: AgentRunHandle) => void;
+  onRun?: (handle: AgentRunHandle) => void | Promise<void>;
 }
 
 /**

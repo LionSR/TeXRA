@@ -44,7 +44,7 @@ export interface RunFlowLifecycleOptions {
    * the additive exposure of the control handle (`.trace`, `.result`, interrupt
    * via `executions`). Throwing here must not abort the run, so it is guarded.
    */
-  onRun?: (handle: AgentRunHandle) => void;
+  onRun?: (handle: AgentRunHandle) => void | Promise<void>;
 }
 
 /** Map the canonical run outcome onto the terminal `result` event's outcome. */
@@ -133,7 +133,7 @@ export async function runFlowWithLifecycle(
   // throw nor an async rejection from a consumer callback may abort the run.
   if (options?.onRun) {
     try {
-      const maybePromise = options.onRun(handle) as void | Promise<void>;
+      const maybePromise = options.onRun(handle);
       void Promise.resolve(maybePromise).catch((err: unknown) =>
         logger.warn(
           `onRun callback rejected for ${agentIdentifier}: ${String(err)}`,
