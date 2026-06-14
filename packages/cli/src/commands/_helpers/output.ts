@@ -1,8 +1,6 @@
 import { writeNdjsonStdout, writeTextStdout } from '@cli/runtime/logSinks';
 import { pageStdout } from '@cli/runtime/pager';
 import type { CliContext } from '@cli/runtime/cliContext';
-
-export type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 
 /**
