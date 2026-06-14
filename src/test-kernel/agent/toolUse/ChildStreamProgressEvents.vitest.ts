@@ -26,6 +26,10 @@ const cancelledChildStreamId =
   'codex#exec:child-stream-cancelled' as StreamTabId;
 const failedExecutionId = 'exec:child-stream-failed' as ExecutionId;
 const failedChildStreamId = 'codex#exec:child-stream-failed' as StreamTabId;
+const normalizedErrorExecutionId =
+  'exec:child-stream-normalized-error' as ExecutionId;
+const normalizedErrorChildStreamId =
+  'codex#exec:child-stream-normalized-error' as StreamTabId;
 const config = {
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -40,6 +44,7 @@ describe('child stream progress events', () => {
       stoppedChildStreamId,
       cancelledChildStreamId,
       failedChildStreamId,
+      normalizedErrorChildStreamId,
     ]) {
       StreamStatusService.clear(streamId, { emit: false });
     }
@@ -279,6 +284,47 @@ describe('child stream progress events', () => {
       error: {
         kind: 'unexpected',
         message: 'child process exited 1',
+      },
+    });
+  });
+
+  it('normalizes explicit non-error status when child finalization has an error', async () => {
+    const active = createRecordingHost();
+
+    const childStream = createChildStream(
+      normalizedErrorExecutionId,
+      parentStreamId,
+      {
+        runtimeHost: active.host,
+        streamPrefix: 'codex',
+        streamCategory: AgentCategory.ToolUse,
+        agentName: 'codex',
+        description: 'Run a child loop with mismatched finalization inputs',
+        config,
+        toolName: 'codex',
+      },
+    );
+    const handle = defaultSession().executions.getAgentHandleByStream(
+      normalizedErrorChildStreamId,
+    );
+    expect(handle).toBeDefined();
+
+    childStream.finalize({
+      status: STREAM_STATUS.READY,
+      errorMessage: 'tool failed after reporting ready',
+    });
+
+    expect(StreamStatusService.get(normalizedErrorChildStreamId)).toBe(
+      STREAM_STATUS.ERROR,
+    );
+    await expect(handle?.result).resolves.toMatchObject({
+      type: 'result',
+      outcome: 'failed',
+      executionId: normalizedErrorExecutionId,
+      streamId: normalizedErrorChildStreamId,
+      error: {
+        kind: 'unexpected',
+        message: 'tool failed after reporting ready',
       },
     });
   });
