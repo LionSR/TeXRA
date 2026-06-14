@@ -49,6 +49,14 @@ type TestableBridge = Bridge & {
   };
 };
 
+type BridgeWithSession = TestableBridge & {
+  session: {
+    coordinators: {
+      cleanupAllRequests(): void;
+    };
+  };
+};
+
 type DesktopExecution = {
   handleExecute(message: unknown): Promise<void>;
   progress: Bridge;
@@ -1156,6 +1164,10 @@ describe('DesktopProgressBridge', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
+    const cleanupAllRequests = vi.spyOn(
+      (bridge as BridgeWithSession).session.coordinators,
+      'cleanupAllRequests',
+    );
 
     try {
       bridge.handleProgressEvent('setActiveStream', {
@@ -1179,6 +1191,7 @@ describe('DesktopProgressBridge', () => {
         streams: [],
         streamStates: {},
       });
+      expect(cleanupAllRequests).toHaveBeenCalledOnce();
     } finally {
       bridge.dispose();
     }
