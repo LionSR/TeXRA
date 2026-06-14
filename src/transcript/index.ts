@@ -25,6 +25,8 @@ export { type TranscriptRecorderHandle } from './TexraTranscriptRecorder';
 export {
   createRunTrace,
   flushPendingRunTraces,
+  getActiveFlushers,
+  unregisterFlushers,
   type RunTrace,
 } from './runTrace';
 export { streamDataDir, type StreamDataKey } from './streamDataPaths';

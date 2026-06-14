@@ -9,12 +9,9 @@ import {
 } from '@agent/output/outputState';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import {
-  interruptRegistry,
-  type IInterruptible,
-} from '@agent/runtime/InterruptRegistry';
+import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
@@ -92,6 +89,9 @@ export async function runReflectionFlow<C = unknown>(
     checkInterruption,
     onRoundFinalized = async () => {},
   } = input;
+  // Capture the run's session at setup (inside the run's ALS); the interrupt
+  // closure below fires from the host thread outside the ALS.
+  const runSession = currentSession();
 
   let outcome: RunOutcome = RUN_OUTCOME.CANCELLED;
   let shared: ReflectionFlowShared | undefined;
@@ -168,8 +168,8 @@ export async function runReflectionFlow<C = unknown>(
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
-      runCoordinatorBridge.clearRetryRequest(streamId);
-      runCoordinatorBridge.clearPlanApprovalForStream(streamId);
+      runSession.coordinators.clearRetryRequest(streamId);
+      runSession.coordinators.clearPlanApprovalForStream(streamId);
     },
   };
 
@@ -191,7 +191,7 @@ export async function runReflectionFlow<C = unknown>(
   const kv = getExecutionStore(executionId);
 
   try {
-    interruptRegistry.register(streamId, interruptible);
+    runSession.interrupts.register(streamId, interruptible);
 
     const flowRecord = await kv.read<FlowRecord>(flowKey(executionId));
     const validated = flowRecord?.shared
@@ -311,10 +311,10 @@ export async function runReflectionFlow<C = unknown>(
       }
     }
 
-    runCoordinatorBridge.clearRetryRequest(streamId);
-    runCoordinatorBridge.clearPlanApprovalForStream(streamId);
+    runSession.coordinators.clearRetryRequest(streamId);
+    runSession.coordinators.clearPlanApprovalForStream(streamId);
 
-    interruptRegistry.unregister(streamId);
+    runSession.interrupts.unregister(streamId);
   }
 
   const totalCostUsd =

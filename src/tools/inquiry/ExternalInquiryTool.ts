@@ -18,6 +18,7 @@
 import { z } from 'zod';
 
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { bus } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
@@ -145,6 +146,7 @@ export type InquiryInput = z.infer<typeof InquiryInputSchema>;
 
 export async function handleExternalInquiryAction(
   payload: InquiryActionMessage,
+  options: { session?: SessionHandle } = {},
 ): Promise<void> {
   if (payload.action === 'submit') {
     const persisted = await recordAnswerForOpenTurn({
@@ -170,6 +172,7 @@ export async function handleExternalInquiryAction(
     await injectContinuationForAnsweredThread(
       payload.threadId,
       persisted.manifest,
+      options.session,
     );
     return;
   }
@@ -183,7 +186,11 @@ export async function handleExternalInquiryAction(
   const droppedManifest = await markDropped({ threadId: payload.threadId });
   bus.emit('resolveExternalInquiry', { requestId: payload.threadId });
   if (droppedManifest) {
-    await injectContinuationForDroppedThread(payload.threadId, droppedManifest);
+    await injectContinuationForDroppedThread(
+      payload.threadId,
+      droppedManifest,
+      options.session,
+    );
   } else {
     logger.warn(
       `Inquiry drop ignored: thread ${payload.threadId} is no longer open ` +

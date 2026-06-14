@@ -8,8 +8,8 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 import {
   ACTIVE_STATUSES,
   AgentExecutionHandle,
-  executionRegistry,
 } from '@agent/runtime/executionRegistry';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { onFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
 import { STREAM_STATUS } from '@shared/schemas';
 
@@ -26,10 +26,11 @@ import { STREAM_STATUS } from '@shared/schemas';
  * One getHandle + one getStatus per call — no redundant lookups.
  */
 export function shouldSkipWait(executionId: string): boolean {
-  const handle = executionRegistry.getHandle(executionId);
+  const session = currentSession();
+  const handle = session.executions.getHandle(executionId);
   if (!handle) return true;
 
-  const { status } = executionRegistry.getStatus(handle);
+  const { status } = session.executions.getStatus(handle);
   if (!ACTIVE_STATUSES.has(status)) return true;
 
   // Tool-use subagent in WAITING = job delivered via onBeforeWaiting, don't block.

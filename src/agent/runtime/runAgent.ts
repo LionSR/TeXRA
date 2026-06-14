@@ -6,6 +6,7 @@ import { generateExecutionId } from '@utils/core/executionId';
 import { executeAgent } from './executeAgent';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
+import type { SessionHandle } from './SessionHandle';
 
 export interface RunAgentOptions {
   runtimeHost: AgentRuntimeHost;
@@ -15,6 +16,8 @@ export interface RunAgentOptions {
   stopAfterCycle?: boolean;
   approvalPromptsUnavailable?: boolean;
   runtimeUnavailableTools?: readonly string[];
+  /** Session owning this run's coordination state. Defaults to the process session. */
+  session?: SessionHandle;
 }
 
 /**
@@ -55,6 +58,7 @@ export async function runAgent(
     stopAfterCycle: options.stopAfterCycle,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
+    session: options.session,
   });
   if (result.category === 'workflow') {
     await options.openWorkflowOutput?.(result);
