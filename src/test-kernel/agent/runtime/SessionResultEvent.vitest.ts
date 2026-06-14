@@ -16,6 +16,7 @@ import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator'
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
@@ -213,6 +214,106 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     }
   });
 
+  it('exposes the per-run handle via onRun and settles handle.result (F-2)', async () => {
+    const logger = new TraceEmitter();
+    const { ctx, streamStatus } = createCtx({ logger });
+    let handle: AgentRunHandle | undefined;
+    try {
+      await runFlowWithLifecycle(
+        ctx,
+        async () => ({
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId: ctx.executionId,
+          streamId: ctx.streamId,
+        }),
+        {
+          onRun: (h) => {
+            handle = h;
+          },
+        },
+      );
+      expect(handle).toBeDefined();
+      // The handle carries the run's trace channel for run-scoped subscribers.
+      expect(handle?.trace).toBe(logger);
+      // `result` settles with the same terminal event (always resolves).
+      await expect(handle?.result).resolves.toMatchObject({
+        type: 'result',
+        outcome: 'completed',
+        executionId: ctx.executionId,
+      });
+    } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
+  it('keeps running when onRun throws synchronously', async () => {
+    const logger = new TraceEmitter();
+    const results = collectResults(logger);
+    const { ctx, streamStatus } = createCtx({ logger });
+    try {
+      await expect(
+        runFlowWithLifecycle(
+          ctx,
+          async () => ({
+            category: 'toolUse',
+            outcome: RUN_OUTCOME.COMPLETED,
+            executionId: ctx.executionId,
+            streamId: ctx.streamId,
+          }),
+          {
+            onRun: () => {
+              throw new Error('onRun boom');
+            },
+          },
+        ),
+      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        type: 'result',
+        outcome: 'completed',
+        executionId: ctx.executionId,
+      });
+    } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
+  it('keeps running when onRun rejects asynchronously', async () => {
+    const logger = new TraceEmitter();
+    const results = collectResults(logger);
+    const { ctx, streamStatus } = createCtx({ logger });
+    try {
+      await expect(
+        runFlowWithLifecycle(
+          ctx,
+          async () => ({
+            category: 'toolUse',
+            outcome: RUN_OUTCOME.COMPLETED,
+            executionId: ctx.executionId,
+            streamId: ctx.streamId,
+          }),
+          {
+            onRun: async () => {
+              throw new Error('onRun async boom');
+            },
+          },
+        ),
+      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+      await Promise.resolve();
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        type: 'result',
+        outcome: 'completed',
+        executionId: ctx.executionId,
+      });
+    } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
   it('keeps the completed result when the completion hook throws', async () => {
     const logger = new TraceEmitter();
     const results = collectResults(logger);
@@ -291,6 +392,33 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results[0]).toMatchObject({
         outcome: 'failed',
         executionId: ctx.executionId,
+      });
+    } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
+  it('settles handle.result as failed on a thrown run (always resolves)', async () => {
+    const logger = new TraceEmitter();
+    const { ctx, streamStatus } = createCtx({ logger });
+    let handle: AgentRunHandle | undefined;
+    try {
+      await expect(
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            throw new Error('boom');
+          },
+          {
+            onRun: (h) => {
+              handle = h;
+            },
+          },
+        ),
+      ).rejects.toThrow('boom');
+      await expect(handle?.result).resolves.toMatchObject({
+        type: 'result',
+        outcome: 'failed',
       });
     } finally {
       streamStatus.clear(ctx.streamId, { emit: false });
