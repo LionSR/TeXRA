@@ -19,13 +19,19 @@ import { createCliStyle, type CliStyle } from './style';
 /** Published package name on npm; the `texra` bin lives here. */
 const CLI_PACKAGE_NAME = '@texra-ai/cli';
 
+/**
+ * Homebrew formula name (in the `texra-ai/tap` tap). The unqualified name is
+ * enough for `brew upgrade` once the tap is installed.
+ */
+const CLI_HOMEBREW_FORMULA = 'texra';
+
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const DEFAULT_TIMEOUT_MS = 2500;
 const POSIX_SIGNAL_EXIT_OFFSET = 128;
 const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 
 /** Package manager the running binary was installed with. */
-export type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun';
+export type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
 
 /**
  * True when `latest` is strictly newer than `current`, using full semver
@@ -43,14 +49,28 @@ export function isNewerVersion(latest: string, current: string): boolean {
 }
 
 /**
- * Guess the package manager from the path the binary runs out of. Global
- * pnpm/yarn/bun installs leave a recognizable segment in the path; npm's global
- * layout has none, so it is the fallback.
+ * Guess the package manager from the path the binary runs out of. Homebrew and
+ * global pnpm/yarn/bun installs each leave a recognizable segment in the path;
+ * npm's global layout has none, so it is the fallback.
+ *
+ * Homebrew's Tier-1 formula installs the npm package into the Cellar, so a brew
+ * install must NOT be treated as a plain npm global — `npm install -g` would
+ * shadow or clash with the brew-managed copy. The Cellar lives under
+ * `/opt/homebrew` (Apple Silicon), `/usr/local/Cellar` (Intel), or
+ * `/home/linuxbrew/.linuxbrew` (Linux), so a `cellar`, `homebrew`, or
+ * `linuxbrew` segment is a reliable marker.
  */
 export function detectInstallMethod(
   modulePath: string = currentModulePath(),
 ): InstallMethod {
   const segments = modulePath.toLowerCase().split(/[\\/]+/);
+  if (
+    segments.some(
+      (part) =>
+        part === 'cellar' || part === 'homebrew' || part === 'linuxbrew',
+    )
+  )
+    return 'brew';
   if (segments.some((part) => part === 'bun' || part === '.bun')) return 'bun';
   if (segments.some((part) => part === 'pnpm' || part === '.pnpm'))
     return 'pnpm';
@@ -81,6 +101,15 @@ export function buildUpdateCommand(
       return { command: 'yarn', args: ['global', 'add', target] };
     case 'bun':
       return { command: 'bun', args: ['add', '-g', target] };
+    case 'brew':
+      // Refresh the tap first: a brew install upgrades through Homebrew, not the
+      // npm registry, and the local formula cache may not yet have the bump that
+      // the registry check just detected. Run via the shell chain (`runCliUpdate`
+      // and `formatUpdateCommand` both treat the result as a shell command).
+      return {
+        command: 'brew',
+        args: ['update', '&&', 'brew', 'upgrade', CLI_HOMEBREW_FORMULA],
+      };
     case 'npm':
       return { command: 'npm', args: ['install', '-g', target] };
   }
