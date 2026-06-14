@@ -1,8 +1,7 @@
 import { writeNdjsonStdout, writeTextStdout } from '@cli/runtime/logSinks';
 import { pageStdout } from '@cli/runtime/pager';
 import type { CliContext } from '@cli/runtime/cliContext';
-
-export type CliNdjsonRecord = object;
+import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 
 /**
  * Single home for the `json` / `ndjson` / `text` switch every headless command
