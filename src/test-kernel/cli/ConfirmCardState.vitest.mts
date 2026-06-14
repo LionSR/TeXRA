@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  confirmCardCompactChromeRows,
   confirmCardFeedbackHints,
   confirmCardKeyAction,
   confirmCardKeyHints,
@@ -109,5 +110,15 @@ describe('CLI confirm-card key handling', () => {
         maxColumns: 10,
       }),
     ).toEqual([{ key: 'Esc', action: 'cancel' }]);
+  });
+
+  it('reports stacked compact chrome rows for long extra actions', () => {
+    const options = {
+      title: 'Approve plan?',
+      extraActions: [{ key: 'r', action: 'approve & run' }],
+    };
+
+    expect(confirmCardCompactChromeRows({ ...options, columns: 60 })).toBe(2);
+    expect(confirmCardCompactChromeRows({ ...options, columns: 100 })).toBe(1);
   });
 });
