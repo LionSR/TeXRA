@@ -90,7 +90,8 @@ async function commandFlagSpecs(
     resolved.commandPath.length === 2 &&
     (commandName === 'chat' ||
       commandName === 'orchestrate' ||
-      commandName === 'setup')
+      commandName === 'setup' ||
+      commandName === 'resume')
   ) {
     // Keep the existing explicit "interactive command" usage error for these
     // known headless-only global flags instead of downgrading it to "unknown".
