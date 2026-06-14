@@ -181,19 +181,27 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
   // for both the registry status and the handle's result outcome. Deriving from
   // status (not just `hasError`) covers callers that pass ERROR without an
   // error payload, and long-lived child loops that finalize after an interrupt.
-  const finalStatus =
+  const requestedStatus =
     options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY);
+  const currentStatus = session.executions.getStatus(handle).status;
+  const finalStatus =
+    currentStatus === STREAM_STATUS.STOPPED ||
+    requestedStatus === STREAM_STATUS.STOPPED
+      ? STREAM_STATUS.STOPPED
+      : hasError
+        ? STREAM_STATUS.ERROR
+        : requestedStatus;
   const outcome =
-    hasError || finalStatus === STREAM_STATUS.ERROR
+    finalStatus === STREAM_STATUS.ERROR
       ? 'failed'
       : finalStatus === STREAM_STATUS.STOPPED
         ? 'cancelled'
         : 'completed';
   const error =
-    outcome === 'failed' && errorMessage
+    outcome === 'failed'
       ? {
           kind: getChildStreamErrorKind(options?.error),
-          message: errorMessage,
+          message: errorMessage ?? 'Child stream failed',
         }
       : undefined;
 
