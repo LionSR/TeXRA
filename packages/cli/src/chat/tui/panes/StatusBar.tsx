@@ -620,12 +620,10 @@ export function statusBarStreamTarget({
     canUseValue: (stream: StatusBarVisibleStream) =>
       isLiveStreamStatus(stream.status),
   });
-  const canStopVisibleRun =
-    isLiveStreamStatus(activeSlice?.status) || liveAncestor !== undefined;
   return {
     ctrlCAction: ctrlCActionForFocus({
       activeStreamId,
-      canStopActiveRun: canStopActiveRun || canStopVisibleRun,
+      canStopActiveRun,
       parentStream,
     }),
     displaySlice: activeSlice ?? liveAncestor?.value,
