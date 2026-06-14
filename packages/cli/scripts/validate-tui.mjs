@@ -2575,7 +2575,9 @@ const SCENARIOS = [
       'Harness interrupt requested.',
       '[main](stopped)',
       '◆ stopped keys',
+      '[Ctrl-C]exit',
     ],
+    unexpect: ['[Ctrl-C]stop'],
   },
 ];
 

@@ -885,6 +885,106 @@ describe('CLI StatusBar display model', () => {
       ctrlCAction: 'stop root',
       displaySlice: grandchildSlice,
     });
+
+    expect(
+      statusBarStreamTarget({
+        activeStreamId: undefined,
+        canStopActiveRun: true,
+        canStopPendingRunWithoutStream: false,
+        parentStream: new Map([[child, root]]),
+        streams: new Map(),
+      }),
+    ).toMatchObject({
+      ctrlCAction: 'exit',
+      displaySlice: undefined,
+    });
+
+    expect(
+      statusBarStreamTarget({
+        activeStreamId: undefined,
+        canStopActiveRun: true,
+        canStopPendingRunWithoutStream: true,
+        parentStream: new Map([[child, root]]),
+        streams: new Map(),
+      }),
+    ).toMatchObject({
+      ctrlCAction: 'stop',
+      displaySlice: undefined,
+    });
+
+    const pendingRootSlice = {
+      streamId: root,
+      status: undefined,
+    } as StreamSlice;
+    expect(
+      statusBarStreamTarget({
+        activeStreamId: root,
+        canStopActiveRun: true,
+        parentStream: new Map([[child, root]]),
+        streams: new Map<StreamSlice['streamId'], StreamSlice>([
+          [root, pendingRootSlice],
+        ]),
+      }),
+    ).toMatchObject({
+      ctrlCAction: 'stop',
+      displaySlice: pendingRootSlice,
+    });
+
+    const waitingRootSlice = {
+      streamId: root,
+      status: STREAM_STATUS.WAITING,
+    } as StreamSlice;
+    expect(
+      statusBarStreamTarget({
+        activeStreamId: root,
+        canStopActiveRun: true,
+        canStopPendingRunWithoutStream: true,
+        parentStream: new Map([[child, root]]),
+        streams: new Map<StreamSlice['streamId'], StreamSlice>([
+          [root, waitingRootSlice],
+        ]),
+      }),
+    ).toMatchObject({
+      ctrlCAction: 'stop',
+      displaySlice: waitingRootSlice,
+    });
+
+    const stoppedRootSlice = {
+      streamId: root,
+      status: STREAM_STATUS.STOPPED,
+    } as StreamSlice;
+    const stoppedChildSlice = {
+      streamId: child,
+      status: STREAM_STATUS.STOPPED,
+    } as StreamSlice;
+    const stoppedStreams = new Map<StreamSlice['streamId'], StreamSlice>([
+      [root, stoppedRootSlice],
+      [child, stoppedChildSlice],
+    ]);
+    expect(
+      statusBarStreamTarget({
+        activeStreamId: root,
+        // A stale host callback must not leave the footer advertising stop
+        // after the visible stream tree has already become terminal.
+        canStopActiveRun: true,
+        parentStream: new Map([[child, root]]),
+        streams: stoppedStreams,
+      }),
+    ).toMatchObject({
+      ctrlCAction: 'exit',
+      displaySlice: stoppedRootSlice,
+    });
+    expect(
+      statusBarStreamTarget({
+        activeStreamId: child,
+        canStopActiveRun: true,
+        parentStream: new Map([[child, root]]),
+        streams: stoppedStreams,
+      }),
+    ).toMatchObject({
+      ctrlCAction: 'exit',
+      displaySlice: stoppedChildSlice,
+    });
     expect(
       statusBarStreamTarget({
         activeStreamId: root,
