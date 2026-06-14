@@ -1799,7 +1799,7 @@ do not delete.**
   landed in prior periods (injectable `ExecutionRegistry` / `RunCoordinatorBridge` /
   `InterruptRegistry`); the remaining cross-session seam is still the **`clearAll*` reset
   sweep** (`runCoordinators.ts:142` `cleanupAllRequests` → `clearAll{PlanApprovals,Proposals,
-  RetryRequests}` `:148/:171/:181`, reachable via `tools/approval`). The keyed registries
+RetryRequests}` `:148/:171/:181`, reachable via `tools/approval`). The keyed registries
   themselves need not move for correctness (no current single-session host exhibits a bug).
 - **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish (the
   `@texra/core` and `src/platform/index.ts` surfaces already cover the underlying concern).
