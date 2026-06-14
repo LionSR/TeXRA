@@ -654,7 +654,7 @@ const BYPASS_BADGES: ReadonlyArray<{
 }> = [
   { field: 'superYolo', text: 'YOLO', badgeColor: 'red' },
   { field: 'bash', text: 'AUTO-BASH', badgeColor: 'yellow' },
-  { field: 'toolEdit', text: 'AUTO-APPROVE', badgeColor: 'yellow' },
+  { field: 'toolEdit', text: 'AUTO-EDIT', badgeColor: 'yellow' },
 ];
 
 export function buildStatusBarDisplay(
