@@ -1,4 +1,4 @@
-// Resolve what `texra --resume <id>` should continue.
+// Resolve what `texra resume <id>` should continue.
 //
 // Resume = continue (load the prior conversation), not re-run. The resumable
 // state lives in the per-execution flow record (executions/<id>/flow-*.json),
