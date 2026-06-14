@@ -6,6 +6,7 @@ import { Box, Text, useWindowSize, type BoxProps } from 'ink';
 import { useInput } from 'ink';
 
 import {
+  confirmCardCompactHintLayout,
   confirmCardFeedbackHints,
   confirmCardKeyAction,
   confirmCardKeyHintsForWidth,
@@ -114,35 +115,29 @@ export function ConfirmCard({
     key: action.key,
     action: action.label,
   }));
+  const compactHintLayout = feedbackMode
+    ? undefined
+    : confirmCardCompactHintLayout({
+        title,
+        approveLabel,
+        rejectLabel,
+        alwaysAllowLabel: alwaysAllow?.label,
+        extraActions: mappedExtraActions,
+        columns,
+      });
   const hints = feedbackMode
     ? confirmCardFeedbackHints()
-    : confirmCardKeyHintsForWidth({
-        approveLabel,
-        rejectLabel,
-        alwaysAllowLabel: alwaysAllow?.label,
-        extraActions: mappedExtraActions,
-        maxColumns: Math.max(
-          0,
-          columns -
-            (compact
-              ? title.length + KEY_HINT_SEPARATOR.length
-              : CONFIRM_CARD_HORIZONTAL_DECORATION),
-        ),
-      });
-  const stackedCompactHints = feedbackMode
-    ? hints
-    : confirmCardKeyHintsForWidth({
-        approveLabel,
-        rejectLabel,
-        alwaysAllowLabel: alwaysAllow?.label,
-        extraActions: mappedExtraActions,
-        maxColumns: columns,
-      });
-  const stackCompactHints =
-    compact &&
-    !feedbackMode &&
-    hints.some((hint) => hint.key === 'Esc') &&
-    stackedCompactHints.length > hints.length;
+    : compact
+      ? (compactHintLayout?.inlineHints ?? [])
+      : confirmCardKeyHintsForWidth({
+          approveLabel,
+          rejectLabel,
+          alwaysAllowLabel: alwaysAllow?.label,
+          extraActions: mappedExtraActions,
+          maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),
+        });
+  const stackedCompactHints = compactHintLayout?.stackedHints ?? hints;
+  const stackCompactHints = compact && (compactHintLayout?.stack ?? false);
 
   if (compact) {
     return (
