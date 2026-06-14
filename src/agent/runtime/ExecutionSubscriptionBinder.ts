@@ -23,6 +23,7 @@ import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
+import type { SessionHandle } from './SessionHandle';
 
 const logger = createChannelTrace('ExecutionSubscriptionBinder');
 
@@ -47,6 +48,7 @@ interface ExecutionSubscriptionBinderOptions {
   registry?: Pick<ExecutionRegistry, 'addListener' | 'getHandle' | 'getStatus'>;
   releaseSource?: ReleaseSource;
   logger?: BinderLogger;
+  session?: SessionHandle;
 }
 
 function progressLine(progress: ExecutionProgress | undefined): string | null {
@@ -95,6 +97,7 @@ class ExecutionSubscription implements Disposable {
       'addListener' | 'getHandle' | 'getStatus'
     >,
     private readonly onDisposed: () => void,
+    private readonly session?: SessionHandle,
   ) {
     this.executionId = handle.executionId;
     this.agentName = handle.agentName;
@@ -164,15 +167,19 @@ class ExecutionSubscription implements Disposable {
   }
 
   private send(text: string): void {
-    void sendFollowUp(this.streamId, wrapAndSanitizeTag(TAG, text)).then(
-      (result) => {
-        if (result.status === 'sent' || result.status === 'queued') {
-          this.runtimeHost.emit('updateQueuedFollowUps', {
-            streamId: this.streamId,
-          });
-        }
-      },
-    );
+    void sendFollowUp(
+      this.streamId,
+      wrapAndSanitizeTag(TAG, text),
+      undefined,
+      undefined,
+      this.session,
+    ).then((result) => {
+      if (result.status === 'sent' || result.status === 'queued') {
+        this.runtimeHost.emit('updateQueuedFollowUps', {
+          streamId: this.streamId,
+        });
+      }
+    });
   }
 }
 
@@ -183,6 +190,7 @@ export class ExecutionSubscriptionBinder {
   >;
   private readonly releaseSource: ReleaseSource;
   private readonly logger: BinderLogger;
+  private readonly session?: SessionHandle;
   private readonly perStream = new Map<StreamTabId, PerStream>();
   private releaseHook: (() => void) | undefined;
 
@@ -190,6 +198,7 @@ export class ExecutionSubscriptionBinder {
     this.registry = options.registry ?? executionRegistry;
     this.releaseSource = options.releaseSource ?? ToolUseFollowUpQueue;
     this.logger = options.logger ?? logger;
+    this.session = options.session;
   }
 
   /**
@@ -225,6 +234,7 @@ export class ExecutionSubscriptionBinder {
       runtimeHost,
       this.registry,
       () => this.removeBoundKey(streamId, executionId),
+      this.session,
     );
     bound.set(executionId, subscription);
     if (subscription.bind()) {

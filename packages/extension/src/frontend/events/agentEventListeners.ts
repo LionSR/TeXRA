@@ -9,6 +9,8 @@
 import * as vscode from 'vscode';
 
 import { getProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { toErrorMessage } from '@common/errors';
 import { bus, INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import type {
@@ -18,6 +20,7 @@ import type {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
@@ -149,6 +152,16 @@ export function registerAgentEventListeners(): vscode.Disposable {
     (payload) => void handleRequestEnsureProgressView(payload),
     { signal },
   );
+
+  // Terminal-error toasts now come from the run's `result` event (the lifecycle
+  // no longer emits them directly). The same shared helper every host uses
+  // re-emits `requestShow*` through `extensionAgentRuntimeHost` (= `bus.emit`),
+  // reaching the `bus.on` handlers registered above exactly once.
+  const detachResult = attachTerminalResultToast(
+    defaultSession(),
+    extensionAgentRuntimeHost,
+  );
+  signal.addEventListener('abort', detachResult, { once: true });
 
   return new vscode.Disposable(() => controller.abort());
 }

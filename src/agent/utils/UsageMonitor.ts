@@ -8,13 +8,13 @@ import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { toErrorMessage } from '@common/errors';
-import { roundTo } from '@utils/core';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,
   StreamTabId,
   TokenUsageStats,
 } from '@shared/schemas';
+import { roundTo } from '@utils/core';
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
 
 /**
@@ -80,6 +80,13 @@ export interface UsageMonitorContext {
 type UsageMonitorRunKind = 'workflow' | 'tool-use';
 
 export class UsageMonitor {
+  /**
+   * The most recent run totals seen by {@link recordUsage}. Cached so a failed
+   * run can still report usage on its terminal `result` event (the catch arm
+   * has no flow result to read totals from). Undefined before the first round.
+   */
+  private lastSeenTotals: RunUsageTotals | undefined;
+
   constructor(
     private modelInfo: UsageMonitorModelInfo,
     private readonly context: UsageMonitorContext,
@@ -90,6 +97,11 @@ export class UsageMonitor {
     this.modelInfo = modelInfo;
   }
 
+  /** The last run totals recorded this run, or undefined before any round. */
+  lastTotals(): RunUsageTotals | undefined {
+    return this.lastSeenTotals;
+  }
+
   async recordUsage(stateGlobal: AgentRunStateSnapshot): Promise<void> {
     const { logger, runtimeHost, storageKey, streamId } = this.context;
     const { agentCategory } = this.metadata;
@@ -98,6 +110,7 @@ export class UsageMonitor {
 
     try {
       const totals = stateGlobal.usageAccumulator.totals;
+      this.lastSeenTotals = totals;
       const latestUsage =
         stateGlobal.usageAccumulator.normalizedSnapshots.at(-1)?.usage;
 

@@ -108,6 +108,7 @@ async function showApprovalPrompt(
 
       bashApprovalController.registerPending(requestId, {
         streamId,
+        runtimeHost,
         settle,
         isSettled: () => settled,
       });

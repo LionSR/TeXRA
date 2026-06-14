@@ -23,10 +23,7 @@ import {
   AttachedMemoryMissesSchema,
   type AttachedMemoryMiss,
 } from '@agent/types/AttachedMemory';
-import {
-  ensureAgentCategoryForSource,
-  loadAgentSettingAndPrompts,
-} from '@agent/runtime/agentLoad';
+import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
@@ -60,6 +57,7 @@ import {
   StreamStatusService,
   type StreamStatusRegistry,
 } from './StreamStatusService';
+import { currentSession, type SessionHandle } from './SessionHandle';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface AgentLaunchContext extends AgentCore {
@@ -73,6 +71,16 @@ export interface AgentLaunchContext extends AgentCore {
   approvalPromptsUnavailable?: boolean;
   /** Whether this tool-use run exits after one cycle instead of idling. */
   stopAfterCycle?: boolean;
+  /**
+   * Session that owns this run's coordination state. Always populated by
+   * {@link buildAgentLaunchContext} (defaults to `currentSession()` — the
+   * parent run's session for a delegated launch, the process default for a root
+   * launch) — hence required here, unlike the optional
+   * {@link AgentLaunchInput.session} launch param — and projected into the
+   * ambient {@link RunContext} so run-scoped code resolves it via
+   * `currentSession()`.
+   */
+  session: SessionHandle;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -94,6 +102,8 @@ export interface AgentLaunchInput {
   enforceCategory?: boolean;
   /** Skip the `requestShowError` toast -- for callers that show their own UI. */
   suppressErrorNotification?: boolean;
+  /** Session owning this run's coordination state. Defaults to the launcher's session (`currentSession()`). */
+  session?: SessionHandle;
 }
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -135,6 +145,7 @@ function agentContextToRunContext(
     approvalPromptsUnavailable: ctx.approvalPromptsUnavailable,
     runtimeUnavailableTools: ctx.runtimeUnavailableTools,
     stopAfterCycle: ctx.stopAfterCycle,
+    session: ctx.session,
   };
 }
 
@@ -210,11 +221,11 @@ async function assembleAgentLaunchContext(
   const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
   const resolution = await getAgentPath(fullConfig.agent, runtimeHost);
-  const [loadedSettings, prompt] = await loadAgentSettingAndPrompts(resolution);
-  const setting = ensureAgentCategoryForSource(
-    loadedSettings,
-    resolution.entry.source,
-  );
+  // `loadAgentSettingAndPrompts` already applies `ensureAgentCategoryForSource`
+  // before parsing, and `AgentSettingSchema` prefaults `agentCategory` (to
+  // Workflow when absent), so `setting.agentCategory` is always populated here —
+  // a second `ensureAgentCategoryForSource` pass would be a guaranteed no-op.
+  const [setting, prompt] = await loadAgentSettingAndPrompts(resolution);
 
   // Block category mismatch: prevent launching a tool-use agent as a workflow
   // (or vice versa). Only enforced when the caller opts in via enforceCategory,
@@ -250,7 +261,12 @@ async function assembleAgentLaunchContext(
     reservedStreamId ??
     getStreamTabId(config.agent, fullConfig.model, { executionId });
 
-  const runTrace = createRunTrace(streamId);
+  // `currentSession()` (not `defaultSession()`): a delegated launch runs inside
+  // the parent run's ALS, so it inherits the parent's session; a root launch
+  // runs outside any ALS, so it resolves to the process default. Either way the
+  // child is tracked in the same session as its launcher.
+  const session = input.session ?? currentSession();
+  const runTrace = createRunTrace(streamId, undefined, session.flushers);
   onRunTraceCreated(runTrace);
   const agentLogger = runTrace.trace;
   modelHandler.setAgentCategory(setting.agentCategory);
@@ -359,6 +375,7 @@ async function assembleAgentLaunchContext(
       proposal: new AgentProposalCoordinator(runtimeHost),
       retry: new RetryRequestCoordinatorImpl(runtimeHost),
     },
+    session,
     disposeTrace: runTrace.dispose,
   };
 }
@@ -481,7 +498,7 @@ export async function buildAgentLaunchContext(
   // returned context on the success path (cleaned up by runFlowWithLifecycle).
   let runTrace: RunTrace | undefined;
   try {
-    return await assembleAgentLaunchContext(
+    const ctx = await assembleAgentLaunchContext(
       input,
       executionId,
       streamStatus,
@@ -494,6 +511,17 @@ export async function buildAgentLaunchContext(
         runTrace = rt;
       },
     );
+    // Attach the session result-hub only after a successful launch, so a
+    // launch failure (which disposes the trace via the catch below and never
+    // returns a context) can never publish a result event. Bundle the detach
+    // into the run's trace teardown.
+    const detachResultHub = ctx.session.attachRunTrace(ctx.logger);
+    const disposeTrace = ctx.disposeTrace;
+    ctx.disposeTrace = () => {
+      detachResultHub();
+      disposeTrace();
+    };
+    return ctx;
   } catch (err) {
     compensateFailedActivation({
       configPayload,
