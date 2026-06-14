@@ -224,7 +224,7 @@ export function getAllActiveExecutionIds(): string[] {
   for (const id of orphanedActiveExecutions) {
     if (live.has(id)) orphanedActiveExecutions.delete(id);
   }
-  return [...new Set([...orphanedActiveExecutions, ...live])];
+  return [...orphanedActiveExecutions, ...live];
 }
 
 let cachedDefaultSession: SessionHandle | undefined;

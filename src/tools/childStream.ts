@@ -181,7 +181,7 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
   const outcome =
     hasError || finalStatus === STREAM_STATUS.ERROR ? 'failed' : 'completed';
 
-  // Settle the handle's `result` before untracking (F-2): child streams never
+  // Settle the handle's `result` before untracking: child streams never
   // traverse the run lifecycle, so this is their only settle point. Without it
   // a consumer awaiting a child handle's `result` would hang forever.
   handle.settleResult({

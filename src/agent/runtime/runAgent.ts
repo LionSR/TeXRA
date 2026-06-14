@@ -20,7 +20,7 @@ export interface RunAgentOptions {
   /** Session owning this run's coordination state. Defaults to the process session. */
   session?: SessionHandle;
   /**
-   * Fires once with the live per-run handle right after it is tracked (F-2):
+   * Fires once with the live per-run handle right after it is tracked:
    * `handle.result` settles with the terminal outcome, `handle.trace` is the
    * run's event channel, and the handle can interrupt via the session. The
    * returned promise is unchanged — this is additive, post-launch exposure.

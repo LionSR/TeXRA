@@ -254,7 +254,7 @@ export interface ExecuteAgentOptions {
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   /** Fires when a subagent fails and should report the failure to its orchestrator. */
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
-  /** Fires once with the live per-run handle right after it is tracked (F-2). */
+  /** Fires once with the live per-run handle right after it is tracked. */
   onRun?: (handle: AgentExecutionHandle) => void;
 }
 

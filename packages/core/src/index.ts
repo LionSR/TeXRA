@@ -74,7 +74,7 @@ export {
   AgentFlowResultSchema,
   type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-// Per-run control handle (F-2): the run's live handle, exposed via `onRun`.
+// Per-run control handle: the run's live handle, exposed via `onRun`.
 // Its `.result` promise settles with the terminal `ResultEvent` (always
 // resolves), and `.trace` is the run's discriminated-event channel.
 export { type AgentExecutionHandle } from '@agent/runtime/executionRegistry';

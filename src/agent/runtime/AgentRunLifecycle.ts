@@ -18,10 +18,10 @@ import { createChannelTrace } from '@logger';
 import {
   RUN_OUTCOME,
   STREAM_STATUS,
+  type ProviderErrorPartial,
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
-import type { ProviderErrorPartial } from '@shared/schemas/errors';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 
@@ -41,7 +41,7 @@ export interface RunFlowLifecycleOptions {
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
   /**
-   * Fires once with the live per-run handle, right after it is tracked (F-2) —
+   * Fires once with the live per-run handle, right after it is tracked —
    * the additive exposure of the control handle (`.trace`, `.result`, interrupt
    * via `executions`). Throwing here must not abort the run, so it is guarded.
    */
@@ -75,8 +75,7 @@ function buildResultError(
   // won't help.  Override the bare-Error default (userRetryable=true from the
   // unrecognized-error path in normalizeProviderError) so SDK consumers that
   // gate retry UI on userRetryable surface key setup instead of a retry button.
-  const userRetryable =
-    kind === 'missing-api-key' ? false : pe.userRetryable;
+  const userRetryable = kind === 'missing-api-key' ? false : pe.userRetryable;
   return {
     kind,
     message,
@@ -155,7 +154,7 @@ export async function runFlowWithLifecycle(
     ctx.logger,
   );
   session.executions.track(handle);
-  // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
+  // Expose the live handle to the launcher. Guarded: neither a synchronous
   // throw nor an async rejection from a consumer callback may abort the run.
   if (options?.onRun) {
     try {
@@ -213,7 +212,7 @@ export async function runFlowWithLifecycle(
     ctx.parentStage.end(projection.endGroupStatus);
     // Emit the terminal result BEFORE untrack so the registry's terminal
     // listener event never precedes the result event, and settle the handle's
-    // `result` promise with the same event (F-2: per-run control handle).
+    // `result` promise with the same event.
     handle.settleResult(
       emitRunResult(
         ctx,

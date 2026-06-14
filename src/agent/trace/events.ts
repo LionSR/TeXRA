@@ -10,8 +10,7 @@
  */
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentErrorKind } from '@common/errors';
-import type { EndGroupStatus } from '@shared/schemas';
-import type { ProviderErrorPartial } from '@shared/schemas/errors';
+import type { EndGroupStatus, ProviderErrorPartial } from '@shared/schemas';
 
 /** Status assigned to a tool call when it completes. */
 export type ToolStatus = 'completed' | 'failed' | 'in_progress';
@@ -179,7 +178,9 @@ export interface ResultEvent extends StageStamp {
   readonly agentName: string;
   readonly category: 'toolUse' | 'workflow';
   readonly isSubagent: boolean;
-  readonly error?: { readonly kind: AgentErrorKind } & Readonly<ProviderErrorPartial>;
+  readonly error?: {
+    readonly kind: AgentErrorKind;
+  } & Readonly<ProviderErrorPartial>;
   readonly usage?: RunUsageTotals;
 }
 
