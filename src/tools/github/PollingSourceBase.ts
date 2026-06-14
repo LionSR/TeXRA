@@ -11,12 +11,6 @@
  * 24 h detach gate) lives here once.
  */
 
-import {
-  type IBackoff,
-  ExponentialBackoff,
-  noJitterGenerator,
-} from 'cockatiel';
-
 import type { AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -50,14 +44,6 @@ export interface PollingSourceConfig {
   maxFailureDurationMs: number;
 }
 
-const twentyPercentJitterGenerator: typeof noJitterGenerator = (
-  state,
-  options,
-) => {
-  const [delay, nextState] = noJitterGenerator(state, options);
-  return [Math.round(delay * (0.8 + Math.random() * 0.4)), nextState];
-};
-
 /**
  * `K` is the canonical string key (PR keys flatten to `owner/repo#N`,
  * repo keys are `owner/repo`); `S` is the per-subscription state object,
@@ -74,23 +60,9 @@ export abstract class PollingSourceBase<
   >();
   private timer: ReturnType<typeof setInterval> | undefined;
   private tickInFlight = false;
-  private readonly backoff: ExponentialBackoff<number>;
-  /**
-   * Per-subscription backoff cursor; absent means "use initial delay".
-   * `ExponentialBackoff.next()` creates a fresh sequence, and the returned
-   * cursor carries attempt state for subsequent failures on the same key.
-   */
-  private readonly backoffCursors = new Map<K, IBackoff<unknown>>();
 
   constructor(protected readonly config: PollingSourceConfig) {
     this.logger = createChannelTrace(config.name);
-    this.backoff = new ExponentialBackoff({
-      initialDelay: config.backoffBaseMs,
-      maxDelay: config.backoffMaxMs,
-      // Preserve the previous retry cadence while delegating cursor state to
-      // cockatiel: exponential delay capped by config, then jittered +/-20%.
-      generator: twentyPercentJitterGenerator,
-    });
   }
 
   /** Subclass: poll the endpoints for one subscription and emit any new events. */
@@ -145,7 +117,6 @@ export abstract class PollingSourceBase<
   disposeAll(): void {
     const runtimeHosts = this.activeRuntimeHosts();
     this.subscriptions.clear();
-    this.backoffCursors.clear();
     this.stopTimer();
     this.notifyKeysChanged(runtimeHosts);
   }
@@ -204,7 +175,6 @@ export abstract class PollingSourceBase<
     if (!state) return;
     const runtimeHosts = this.hostsForState(state);
     this.subscriptions.delete(key);
-    this.backoffCursors.delete(key);
     this.notifyKeysChanged(runtimeHosts);
   }
 
@@ -216,7 +186,6 @@ export abstract class PollingSourceBase<
     state.runtimeHostByListener.delete(onEvent);
     if (state.listeners.size === 0) {
       this.subscriptions.delete(key);
-      this.backoffCursors.delete(key);
       this.logger.info(`Unsubscribed from ${key}`);
       this.notifyKeysChanged(runtimeHost ? [runtimeHost] : []);
     }
@@ -288,7 +257,6 @@ export abstract class PollingSourceBase<
             await this.pollOne(key, state);
             state.lastSuccessAt = Date.now();
             state.consecutiveFailures = 0;
-            this.backoffCursors.delete(key);
           } catch (err) {
             this.handleFailure(key, state, err);
           }
@@ -354,10 +322,15 @@ export abstract class PollingSourceBase<
       return;
     }
     state.consecutiveFailures += 1;
-    const prevCursor = this.backoffCursors.get(key);
-    const nextCursor = prevCursor ? prevCursor.next({}) : this.backoff.next();
-    this.backoffCursors.set(key, nextCursor);
-    state.skipPollUntilMs = now + Math.round(nextCursor.duration);
+    const backoffMs = Math.min(
+      this.config.backoffBaseMs * 2 ** (state.consecutiveFailures - 1),
+      this.config.backoffMaxMs,
+    );
+    // Jitter +/-20% so a network outage doesn't stampede every subscription
+    // back at exactly the same moment.
+    const jitter = 0.8 + Math.random() * 0.4;
+    const actualDelayMs = Math.round(backoffMs * jitter);
+    state.skipPollUntilMs = now + actualDelayMs;
     if (now - state.lastSuccessAt >= this.config.maxFailureDurationMs) {
       this.logger.warn(
         `Poll failed for ${key} (failure #${state.consecutiveFailures}); ` +
@@ -374,10 +347,9 @@ export abstract class PollingSourceBase<
       this.detach(key);
       return;
     }
-    const retryDelaySec = Math.round((state.skipPollUntilMs - now) / 1000);
     this.logger.warn(
       `Poll failed for ${key} (failure #${state.consecutiveFailures}, ` +
-        `retrying in ${retryDelaySec}s): ${String(err)}`,
+        `retrying in ${Math.round(actualDelayMs / 1000)}s): ${String(err)}`,
     );
   }
 }

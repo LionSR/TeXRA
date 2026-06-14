@@ -80,9 +80,6 @@ importers:
       bibtex:
         specifier: ^0.9.0
         version: 0.9.0
-      cockatiel:
-        specifier: ^4.0.0
-        version: 4.0.0
       deepmerge:
         specifier: ^4.3.1
         version: 4.3.1
@@ -3236,10 +3233,6 @@ packages:
   cockatiel@3.2.1:
     resolution: {integrity: sha512-gfrHV6ZPkquExvMh9IOkKsBzNDk6sDuZ6DdBGUBkvFnTCqCxzpuq48RySgP0AnaqQkw2zynOFj9yly6T1Q2G5Q==}
     engines: {node: '>=16'}
-
-  cockatiel@4.0.0:
-    resolution: {integrity: sha512-XpUZJnogsd03BGB19T9sv7Xb8SwvD8JddZV2Tlp0LNspopZ6Idv24ZwCl8vAGJ6JwODZ0zLRYVj3NWvmRcUDqA==}
-    engines: {node: '>=22'}
 
   code-block-writer@13.0.3:
     resolution: {integrity: sha512-Oofo0pq3IKnsFtuHqSF7TqBfr71aeyZDVJ0HpmqB7FBM2qEigL0iPONSCZSO9pE9dZTAxANe5XHG9Uy0YMv8cg==}
@@ -8846,8 +8839,6 @@ snapshots:
       mimic-response: 1.0.1
 
   cockatiel@3.2.1: {}
-
-  cockatiel@4.0.0: {}
 
   code-block-writer@13.0.3: {}
 
