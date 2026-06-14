@@ -964,6 +964,9 @@ export class DesktopProgressBridge {
     for (const streamId of streamIds) {
       cleanupApprovalsForStream(streamId, this.session);
     }
+    // Sweep any of this session's coordinator requests not tied to one of the
+    // streams above (it is session-owned, so this stays window-scoped).
+    this.session.coordinators.cleanupAllRequests();
     for (const streamId of streamIds) {
       this.deletedStreams.add(streamId);
     }
