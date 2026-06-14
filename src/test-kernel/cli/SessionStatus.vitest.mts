@@ -100,7 +100,7 @@ describe('CLI session status formatter', () => {
     });
 
     expect(status).toContain('session: abc123');
-    expect(status).toContain('resume later with: texra --resume abc123');
+    expect(status).toContain('resume later with: texra resume abc123');
   });
 
   it('uses the provided command name in the resume status line', () => {
@@ -115,7 +115,7 @@ describe('CLI session status formatter', () => {
       queuedFollowUpMessages: [],
     });
 
-    expect(status).toContain('resume later with: texra-local --resume abc123');
+    expect(status).toContain('resume later with: texra-local resume abc123');
   });
 
   it('omits session lines before the first run starts', () => {
@@ -129,7 +129,7 @@ describe('CLI session status formatter', () => {
     });
 
     expect(status).not.toContain('session:');
-    expect(status).not.toContain('--resume');
+    expect(status).not.toContain('resume later with:');
   });
 
   it('reports an empty follow-up queue explicitly', () => {

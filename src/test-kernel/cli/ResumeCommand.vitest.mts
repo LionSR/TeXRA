@@ -99,7 +99,7 @@ describe('runResumeExecution', () => {
     expect(mocks.resolveCliResumeSnapshot).not.toHaveBeenCalled();
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      expect.stringContaining(`texra --resume ${EXECUTION_ID}`),
+      expect.stringContaining(`texra resume ${EXECUTION_ID}`),
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining('For scripting, use `texra run`.'),
@@ -117,7 +117,7 @@ describe('runResumeExecution', () => {
     ).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      expect.stringContaining(`texra-local --resume ${EXECUTION_ID}`),
+      expect.stringContaining(`texra-local resume ${EXECUTION_ID}`),
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining('For scripting, use `texra-local run`.'),
