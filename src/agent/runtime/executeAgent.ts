@@ -255,7 +255,7 @@ export interface ExecuteAgentOptions {
   /** Fires when a subagent fails and should report the failure to its orchestrator. */
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
   /** Fires once with the live per-run handle right after it is tracked (F-2). */
-  onRun?: (handle: AgentRunHandle) => void;
+  onRun?: (handle: AgentRunHandle) => void | Promise<void>;
 }
 
 export async function executeAgent(
@@ -432,6 +432,7 @@ export interface ResumeToolUseFromSnapshotOptions {
   readonly runtimeUnavailableTools?: readonly string[];
   /** Session owning this run's coordination state. Defaults to the process session. */
   readonly session?: SessionHandle;
+  readonly onRun?: (handle: AgentRunHandle) => void | Promise<void>;
   readonly setupSession?: (session: IToolUseSession) => void;
 }
 
@@ -504,7 +505,7 @@ export async function resumeToolUseFromSnapshot(
           ctx.attachedMemoryMisses,
         );
       },
-      { isSubagent },
+      { isSubagent, onRun: options.onRun },
     );
   });
 }
