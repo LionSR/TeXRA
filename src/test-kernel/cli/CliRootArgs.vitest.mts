@@ -1370,6 +1370,11 @@ describe('runCli usage output stream routing', () => {
       'Root agent for the team run (defaults to the preset orchestrator)',
     );
     expect(stdout).toContain('Model for the team root agent');
+    expect(stdout).toContain('RUN MODE');
+    expect(stdout).toContain(
+      'executes the team in the terminal and exits after the final response',
+    );
+    expect(stdout).toContain('use `texra orchestrate`');
     expect(stdout).not.toContain('root tool-use agent');
     expect(stderr).toBe('');
   });
