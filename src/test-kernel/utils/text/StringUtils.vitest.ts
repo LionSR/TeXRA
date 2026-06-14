@@ -2,7 +2,11 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { pluralize, splitContentLines } from '@utils/text/stringUtils';
+import {
+  pluralize,
+  splitContentLines,
+  splitOutputLines,
+} from '@utils/text/stringUtils';
 
 describe('splitContentLines', () => {
   it('normalizes CRLF and drops the phantom line after a trailing newline', () => {
@@ -17,6 +21,28 @@ describe('splitContentLines', () => {
 
   it('returns no lines for empty input', () => {
     expect(splitContentLines('')).toEqual([]);
+  });
+});
+
+describe('splitOutputLines', () => {
+  it('splits Unix-newline output and drops the trailing blank', () => {
+    expect(splitOutputLines('foo\nbar\n')).toEqual(['foo', 'bar']);
+  });
+
+  it('normalizes CRLF before splitting', () => {
+    expect(splitOutputLines('foo\r\nbar\r\n')).toEqual(['foo', 'bar']);
+  });
+
+  it('drops interior blank lines', () => {
+    expect(splitOutputLines('foo\n\nbar')).toEqual(['foo', 'bar']);
+  });
+
+  it('returns an empty array for empty input', () => {
+    expect(splitOutputLines('')).toEqual([]);
+  });
+
+  it('returns an empty array for a blank-only string', () => {
+    expect(splitOutputLines('\n\n')).toEqual([]);
   });
 });
 

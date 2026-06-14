@@ -14,6 +14,7 @@ import * as path from 'node:path';
 // Local imports
 import { platform } from '@platform/platform';
 import { executeCommand } from '@utils/system/execUtils';
+import { splitOutputLines } from '@utils/text/stringUtils';
 
 import { normalizeReviewFilePath } from './reviewIssues';
 
@@ -234,7 +235,7 @@ async function collectUntrackedDiffs(
   ]);
   if (listing === null) return null;
 
-  const untracked = listing.split('\n').filter(Boolean);
+  const untracked = splitOutputLines(listing);
   const included = untracked.slice(0, MAX_UNTRACKED_FILES);
   const contents = await Promise.all(
     included.map(async (file) => {
@@ -348,7 +349,7 @@ export async function collectReviewDiff(
     };
   }
 
-  const changedFiles = nameOnly.split('\n').filter(Boolean);
+  const changedFiles = splitOutputLines(nameOnly);
   let combined = diffText;
   if (untracked.diff) {
     combined = combined ? `${combined}\n${untracked.diff}` : untracked.diff;

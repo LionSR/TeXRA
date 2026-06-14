@@ -6,6 +6,7 @@ import { ToolError, type ToolResult } from '@tools/result';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
 import { executeCommand } from '@utils/system/execUtils';
+import { splitOutputLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -139,7 +140,7 @@ export class GrepTool extends defineTool({
     }
 
     // Filter empty lines consistently for counting and pagination
-    const allLines = result.stdout?.split(/\r?\n/).filter(Boolean) ?? [];
+    const allLines = splitOutputLines(result.stdout ?? '');
     const totalCount = allLines.length;
 
     if (totalCount === 0) {
