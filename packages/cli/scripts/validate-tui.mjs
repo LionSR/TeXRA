@@ -810,6 +810,13 @@ const SCENARIOS = [
     unexpect: ['approval: deny privileged actions'],
   },
   {
+    name: 'uninterruptible-running-status-bar',
+    env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
+    frame: 'tail',
+    expect: ['◆ running', '[Ctrl-C]exit'],
+    unexpect: ['[Ctrl-C]stop'],
+  },
+  {
     name: 'tools-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/tools', '\r'],
