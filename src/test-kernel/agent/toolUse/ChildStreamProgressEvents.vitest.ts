@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   STREAM_STATUS,
@@ -20,6 +21,9 @@ const loopExecutionId = 'exec:child-stream-loop' as ExecutionId;
 const loopChildStreamId = 'codex#exec:child-stream-loop' as StreamTabId;
 const stoppedExecutionId = 'exec:child-stream-stopped' as ExecutionId;
 const stoppedChildStreamId = 'codex#exec:child-stream-stopped' as StreamTabId;
+const cancelledExecutionId = 'exec:child-stream-cancelled' as ExecutionId;
+const cancelledChildStreamId =
+  'codex#exec:child-stream-cancelled' as StreamTabId;
 const config = {
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -32,6 +36,7 @@ describe('child stream progress events', () => {
       childStreamId,
       loopChildStreamId,
       stoppedChildStreamId,
+      cancelledChildStreamId,
     ]) {
       StreamStatusService.clear(streamId, { emit: false });
     }
@@ -192,5 +197,36 @@ describe('child stream progress events', () => {
     expect(
       active.events.filter((entry) => entry.event === 'updateStreamStatus'),
     ).toHaveLength(0);
+  });
+
+  it('settles child handle results as cancelled for stopped finalization', async () => {
+    const active = createRecordingHost();
+
+    const childStream = createChildStream(
+      cancelledExecutionId,
+      parentStreamId,
+      {
+        runtimeHost: active.host,
+        streamPrefix: 'codex',
+        streamCategory: AgentCategory.ToolUse,
+        agentName: 'codex',
+        description: 'Run an interrupted Codex child loop',
+        config,
+        toolName: 'codex',
+      },
+    );
+    const handle = defaultSession().executions.getAgentHandleByStream(
+      cancelledChildStreamId,
+    );
+    expect(handle).toBeDefined();
+
+    childStream.finalize({ status: STREAM_STATUS.STOPPED });
+
+    await expect(handle?.result).resolves.toMatchObject({
+      type: 'result',
+      outcome: 'cancelled',
+      executionId: cancelledExecutionId,
+      streamId: cancelledChildStreamId,
+    });
   });
 });

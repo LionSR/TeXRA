@@ -6,7 +6,7 @@ import { generateExecutionId } from '@utils/core/executionId';
 import { executeAgent } from './executeAgent';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
-import type { AgentExecutionHandle } from './executionRegistry';
+import type { AgentRunHandle } from './executionRegistry';
 import type { SessionHandle } from './SessionHandle';
 
 export interface RunAgentOptions {
@@ -25,7 +25,7 @@ export interface RunAgentOptions {
    * run's event channel, and the handle can interrupt via the session. The
    * returned promise is unchanged — this is additive, post-launch exposure.
    */
-  onRun?: (handle: AgentExecutionHandle) => void;
+  onRun?: (handle: AgentRunHandle) => void;
 }
 
 /**
