@@ -246,6 +246,29 @@ describe('StreamLogStore load', () => {
     expect(store.get('alpha')?.size).toBe(2);
   });
 
+  it('salvages valid fields from partially corrupt summaries', async () => {
+    const storage = mockStorage({
+      logs: {
+        alpha: [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)],
+      },
+      summaries: {
+        alpha: {
+          firstTimestamp: 200,
+          lastTimestamp: 'bad',
+          hasRunningGroup: 'bad',
+        },
+      },
+    });
+
+    const store = new StreamLogStore();
+    await store.load();
+
+    expect(storage.fullLogReads()).toBe(0);
+    expect(store.keys()).toEqual(['alpha']);
+    expect(store.getFirstTimestamp('alpha')).toBe(200);
+    expect(store.getLastTimestamp('alpha')).toBeUndefined();
+  });
+
   it('falls back once for missing summaries and writes the sidecar cache', async () => {
     const storage = mockStorage({
       logs: {
@@ -442,9 +465,10 @@ describe('StreamLogStore load', () => {
 
       expect(settled).toHaveBeenCalledOnce();
     } finally {
-      vi.useRealTimers();
       releaseRead();
       await load;
+      await store.flush();
+      vi.useRealTimers();
     }
   });
 

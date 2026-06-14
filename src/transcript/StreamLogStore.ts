@@ -32,9 +32,9 @@ interface StreamLogSummary {
 }
 
 const StreamLogSummarySchema = z.object({
-  firstTimestamp: z.number().finite().optional(),
-  lastTimestamp: z.number().finite().optional(),
-  hasRunningGroup: z.boolean().optional(),
+  firstTimestamp: z.number().finite().optional().catch(undefined),
+  lastTimestamp: z.number().finite().optional().catch(undefined),
+  hasRunningGroup: z.boolean().optional().catch(undefined),
 });
 
 interface StreamLoadResult {
