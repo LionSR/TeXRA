@@ -251,25 +251,36 @@ export abstract class PollingSourceBase<
       const now = Date.now();
       const entries = [...this.subscriptions.entries()];
       await Promise.allSettled(
-        entries.map(async ([key, state]) => {
-          if (state.skipPollUntilMs > now) return;
-          try {
-            await this.pollOne(key, state);
-            state.lastSuccessAt = Date.now();
-            state.consecutiveFailures = 0;
-          } catch (err) {
-            this.handleFailure(key, state, err);
-          }
-        }),
+        entries.map(([key, state]) => this.pollEntry(key, state, now)),
       );
-      try {
-        await this.afterTick(entries, now);
-      } catch (err) {
-        this.logger.warn(`Post-poll hook failed: ${String(err)}`);
-      }
+      await this.runAfterTick(entries, now);
       if (this.subscriptions.size === 0) this.stopTimer();
     } finally {
       this.tickInFlight = false;
+    }
+  }
+
+  /** Poll one subscription, routing any failure through handleFailure. */
+  private async pollEntry(key: K, state: S, now: number): Promise<void> {
+    if (state.skipPollUntilMs > now) return;
+    try {
+      await this.pollOne(key, state);
+      state.lastSuccessAt = Date.now();
+      state.consecutiveFailures = 0;
+    } catch (err) {
+      this.handleFailure(key, state, err);
+    }
+  }
+
+  /** Run the post-poll hook, logging but otherwise swallowing its errors. */
+  private async runAfterTick(
+    entries: ReadonlyArray<readonly [K, S]>,
+    now: number,
+  ): Promise<void> {
+    try {
+      await this.afterTick(entries, now);
+    } catch (err) {
+      this.logger.warn(`Post-poll hook failed: ${String(err)}`);
     }
   }
 
