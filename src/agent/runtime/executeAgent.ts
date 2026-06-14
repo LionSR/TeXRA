@@ -48,7 +48,7 @@ import {
   type CompileFailureSummary,
   type OutputFileSummary,
 } from './AgentFlowResult';
-import type { AgentExecutionHandle } from './executionRegistry';
+import type { AgentRunHandle } from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const CHANNEL = 'executeAgent';
@@ -255,7 +255,7 @@ export interface ExecuteAgentOptions {
   /** Fires when a subagent fails and should report the failure to its orchestrator. */
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
   /** Fires once with the live per-run handle right after it is tracked (F-2). */
-  onRun?: (handle: AgentExecutionHandle) => void;
+  onRun?: (handle: AgentRunHandle) => void;
 }
 
 export async function executeAgent(
