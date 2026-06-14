@@ -47,6 +47,27 @@ describe('detectInstallMethod', () => {
     expect(detectInstallMethod('/Users/me/.bun/install/global/x')).toBe('bun');
   });
 
+  it('recognizes Homebrew Cellar layouts across platforms', () => {
+    // Apple Silicon.
+    expect(
+      detectInstallMethod(
+        '/opt/homebrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      ),
+    ).toBe('brew');
+    // Intel macOS.
+    expect(
+      detectInstallMethod(
+        '/usr/local/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      ),
+    ).toBe('brew');
+    // Linuxbrew.
+    expect(
+      detectInstallMethod(
+        '/home/linuxbrew/.linuxbrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      ),
+    ).toBe('brew');
+  });
+
   it('falls back to npm for the unmarked global layout', () => {
     expect(
       detectInstallMethod('/usr/local/lib/node_modules/@texra-ai/cli/dist'),
@@ -66,9 +87,18 @@ describe('buildUpdateCommand / formatUpdateCommand', () => {
       'yarn global add @texra-ai/cli@latest',
     );
     expect(formatUpdateCommand('bun')).toBe('bun add -g @texra-ai/cli@latest');
+    // Homebrew upgrades through brew, not the npm registry; refresh the tap
+    // first so the just-detected version is actually available locally.
+    expect(formatUpdateCommand('brew')).toBe(
+      'brew update && brew upgrade texra',
+    );
     expect(buildUpdateCommand('npm')).toEqual({
       command: 'npm',
       args: ['install', '-g', '@texra-ai/cli@latest'],
+    });
+    expect(buildUpdateCommand('brew')).toEqual({
+      command: 'brew',
+      args: ['update', '&&', 'brew', 'upgrade', 'texra'],
     });
   });
 });
