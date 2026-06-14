@@ -14,7 +14,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { isLatexFile } from '@common/files/fileTypeUtils';
 import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
 import {
   type DiffSession,
@@ -32,8 +31,8 @@ import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
   computeUserPatch,
+  emitToolEditApprovalPrompt,
   firstChangedLine,
-  isApprovalBypassedForStream,
   registerPendingApproval,
   setToolEditApprovalHandler,
   unregisterPendingApproval,
@@ -110,24 +109,14 @@ async function showProgressViewApprovalPrompt(
   await Promise.resolve(
     vscode.commands.executeCommand('texra.showProgressView'),
   ).catch(() => {});
-  const streamId = request.streamId;
 
-  // Activate the stream that needs approval so user sees the prompt immediately
-  if (streamId) {
-    getRuntimeHost().emit('setActiveStream', { streamId });
-  }
-
-  const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
-  getRuntimeHost().emit('showToolEditPermission', {
+  // Activate the stream that needs approval and post the prompt (shared with
+  // the desktop host); VS Code computes the relative path via the workspace.
+  emitToolEditApprovalPrompt(getRuntimeHost(), {
     requestId,
-    path: request.path,
+    request,
     relativePath,
-    sourceTool: request.sourceTool,
-    allowBypass: !isBypassed,
-    streamId: streamId ?? '',
-    addedLines: lineChanges.added,
-    removedLines: lineChanges.removed,
-    isLatex: isLatexFile(request.path),
+    lineChanges,
   });
 }
 

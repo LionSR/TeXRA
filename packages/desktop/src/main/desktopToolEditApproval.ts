@@ -18,7 +18,7 @@ import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
   computeUserPatch,
-  isApprovalBypassedForStream,
+  emitToolEditApprovalPrompt,
   registerPendingApproval,
   setToolEditApprovalHandler,
   unregisterPendingApproval,
@@ -184,25 +184,14 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     request: ToolEditApprovalRequest,
     lineChanges: { added: number; removed: number },
   ): void {
-    if (request.streamId) {
-      this.options.runtimeHost.emit('setActiveStream', {
-        streamId: request.streamId,
-      });
-    }
-
-    const isBypassed = request.streamId
-      ? isApprovalBypassedForStream(request.streamId)
-      : false;
-    this.options.runtimeHost.emit('showToolEditPermission', {
+    // Activate the stream that needs approval and post the prompt (shared with
+    // the VS Code host); the desktop host has no workspace API, so it falls
+    // back to a basename when computing the relative display path.
+    emitToolEditApprovalPrompt(this.options.runtimeHost, {
       requestId,
-      path: request.path,
+      request,
       relativePath: this.relativeDisplayPath(request.path),
-      sourceTool: request.sourceTool,
-      allowBypass: !isBypassed,
-      streamId: request.streamId ?? '',
-      addedLines: lineChanges.added,
-      removedLines: lineChanges.removed,
-      isLatex: isLatexFile(request.path),
+      lineChanges,
     });
   }
 
