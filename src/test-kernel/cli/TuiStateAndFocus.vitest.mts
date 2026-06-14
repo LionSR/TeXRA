@@ -1029,10 +1029,18 @@ describe('CLI TUI row allocation', () => {
 
     expect(
       foregroundEscapeAction({
+        childControlEscapeAction: 'close',
         foregroundKind: 'childControls',
         pending: undefined,
       }),
     ).toBe('close');
+    expect(
+      foregroundEscapeAction({
+        childControlEscapeAction: 'back',
+        foregroundKind: 'childControls',
+        pending: undefined,
+      }),
+    ).toBe('back');
     expect(
       foregroundEscapeAction({ foregroundKind: 'form', pending: undefined }),
     ).toBe('close');
