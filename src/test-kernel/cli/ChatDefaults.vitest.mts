@@ -49,14 +49,14 @@ const mockedReadJson = vi.mocked(GlobalStorageFS.readJson);
 describe('CLI chat defaults', () => {
   it('uses assistant and DeepSeek as the built-in chat defaults', async () => {
     expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('assistant');
-    expect(BUILTIN_DEFAULT_CHAT_MODEL).toBe('deepseekT');
+    expect(BUILTIN_DEFAULT_CHAT_MODEL).toBe('deepseekproT');
     expect(MODEL_CONFIGS[BUILTIN_DEFAULT_CHAT_MODEL]).toBeDefined();
 
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
     ).resolves.toMatchObject({
       agent: 'assistant',
-      model: 'deepseekT',
+      model: 'deepseekproT',
       source: 'builtin',
       agentSource: 'builtin',
       modelSource: 'builtin',
@@ -75,7 +75,7 @@ describe('CLI chat defaults', () => {
       resolveChatDefaults({ cwd: workspace }),
     ).resolves.toMatchObject({
       agent: 'assistant',
-      model: 'deepseekT',
+      model: 'deepseekproT',
       source: 'mixed',
       agentSource: 'workspace',
       modelSource: 'builtin',
@@ -133,7 +133,7 @@ describe('CLI chat defaults', () => {
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
     ).resolves.toMatchObject({
       agent: 'assistant',
-      model: 'deepseekT',
+      model: 'deepseekproT',
       source: 'builtin',
     });
   });
