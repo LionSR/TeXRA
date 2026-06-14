@@ -243,18 +243,24 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('returns undefined when the Homebrew tap refresh fails', async () => {
+  it('still reads formula info when the Homebrew tap refresh fails', async () => {
     const calls: Array<{ command: string; args: readonly string[] }> = [];
     await expect(
       fetchLatestHomebrewFormulaVersion({
         runCommand: async (command, args) => {
           calls.push({ command, args });
-          return undefined;
+          if (args[0] === 'update') return undefined;
+          return JSON.stringify({
+            formulae: [{ name: 'texra', versions: { stable: '0.39.0' } }],
+          });
         },
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe('0.39.0');
 
-    expect(calls).toEqual([{ command: 'brew', args: ['update', '--quiet'] }]);
+    expect(calls).toEqual([
+      { command: 'brew', args: ['update', '--quiet'] },
+      { command: 'brew', args: ['info', '--json=v2', 'texra'] },
+    ]);
   });
 
   it('passes the formula and timeout through to the command runner', async () => {
