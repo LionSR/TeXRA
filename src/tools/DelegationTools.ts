@@ -380,6 +380,7 @@ async function executeSubagent(
   const parentExecutionId = parentContext.executionId;
   const parentDelegationDepth = parentContext.delegationDepth ?? 0;
   const runtimeHost = parentContext.runtimeHost;
+  const parentSession = currentSession();
   // Captured now (while the launching tool call's ALS frame is live) so the
   // async completion callbacks below can still roll the child's cost into the
   // parent run after this tool call has returned. Subagents count toward
@@ -504,7 +505,13 @@ async function executeSubagent(
     );
     if (!targetStreamId) return false;
 
-    const result = await sendFollowUp(targetStreamId, followUp);
+    const result = await sendFollowUp(
+      targetStreamId,
+      followUp,
+      undefined,
+      undefined,
+      parentSession,
+    );
     if (result.status === 'no_session') {
       logger.warn(
         'subagentDelivery',

@@ -185,6 +185,65 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     }
   });
 
+  it('keeps the completed result when the completion hook throws', async () => {
+    const logger = new TraceEmitter();
+    const results = collectResults(logger);
+    const { ctx, streamStatus } = createCtx({ logger });
+    try {
+      await expect(
+        runFlowWithLifecycle(
+          ctx,
+          async () => ({
+            category: 'toolUse',
+            outcome: RUN_OUTCOME.COMPLETED,
+            executionId: ctx.executionId,
+            streamId: ctx.streamId,
+          }),
+          {
+            onCompleted: () => {
+              throw new Error('delivery hook boom');
+            },
+          },
+        ),
+      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        outcome: 'completed',
+        executionId: ctx.executionId,
+      });
+    } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
+  it('emits the failed result before terminal error status listeners run', async () => {
+    const logger = new TraceEmitter();
+    const results = collectResults(logger);
+    const { ctx, streamStatus } = createCtx({ logger });
+    const off = streamStatus.onDidChange((change) => {
+      if (change.status === STREAM_STATUS.ERROR) {
+        throw new Error('status listener boom');
+      }
+    });
+    try {
+      await expect(
+        runFlowWithLifecycle(ctx, async () => {
+          throw new Error('model exploded');
+        }),
+      ).rejects.toThrow('model exploded');
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        outcome: 'failed',
+        executionId: ctx.executionId,
+      });
+    } finally {
+      off();
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
   it('maps a returned cancellation to a cancelled result (sibling of failed)', async () => {
     const logger = new TraceEmitter();
     const results = collectResults(logger);

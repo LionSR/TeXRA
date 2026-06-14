@@ -12,7 +12,10 @@
 import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
-import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import {
   sendFollowUp,
   wakeOrReleaseQueuedStream,
@@ -93,7 +96,7 @@ export interface AgentCliSessionStrategy<TTurn> {
    * Called once before the loop starts. Used to register a resumed session id
    * immediately so a concurrent call with the same id can't start a second loop.
    */
-  onSessionStart?(): void;
+  onSessionStart?(session: SessionHandle): void;
 
   /** Run one streamed turn. Throws on hard failure. */
   runTurn(prompt: string, abortController: AbortController): Promise<TTurn>;
@@ -111,7 +114,7 @@ export interface AgentCliSessionStrategy<TTurn> {
   onTurnError?(turn: TTurn, logger: AgentTrace): void;
 
   /** After a successful turn: register the session/thread id, etc. */
-  onTurnSuccess?(turn: TTurn): void;
+  onTurnSuccess?(turn: TTurn, session: SessionHandle): void;
 
   /** Publish token usage to the UI. */
   publishUsage(turn: TTurn): void;
@@ -163,7 +166,7 @@ export function runAgentCliSession<TTurn>(
   // empty here, so this opens as a root with no cross-trace parent.
   const sessionStage = logger.openStage(strategy.stageLabel);
 
-  strategy.onSessionStart?.();
+  strategy.onSessionStart?.(runSession);
 
   // Seed the initial prompt; the loop drains it as the first turn.
   queue.enqueue({ text: initialPrompt });
@@ -211,7 +214,7 @@ export function runAgentCliSession<TTurn>(
         const turnFailed = err != null || turnIsError;
 
         if (!turnFailed && turn != null) {
-          strategy.onTurnSuccess?.(turn);
+          strategy.onTurnSuccess?.(turn, runSession);
         }
 
         // publishUsage owns its own usage-presence check; the loop only needs a

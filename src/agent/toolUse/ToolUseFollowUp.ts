@@ -136,6 +136,13 @@ export function sendFollowUp(
 ): Promise<SendFollowUpResult>;
 export function sendFollowUp(
   streamId: StreamTabId,
+  followUp: FollowUpQueueInput,
+  mediaFiles: undefined,
+  displayText: undefined,
+  session?: SessionHandle,
+): Promise<SendFollowUpResult>;
+export function sendFollowUp(
+  streamId: StreamTabId,
   followUp: string,
   mediaFiles?: readonly string[],
   displayText?: string,

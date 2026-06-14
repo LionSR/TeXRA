@@ -118,7 +118,6 @@ export async function runFlowWithLifecycle(
       runtimeHost: ctx.runtimeHost,
     });
     const result = await runner(handle);
-    await options?.onCompleted?.(result);
     // The flow's outcome is the canonical terminal fact; everything below is
     // one row of the projection table. No other layer may re-derive these.
     const projection = projectRunOutcome(result.outcome);
@@ -155,6 +154,13 @@ export async function runFlowWithLifecycle(
       options?.isSubagent ?? false,
     );
     resultEmitted = true;
+    try {
+      await options?.onCompleted?.(result);
+    } catch (deliveryError) {
+      logger.warn(
+        `Completion hook failed for ${agentIdentifier}: ${getSdkErrorMessage(deliveryError)}`,
+      );
+    }
 
     // The run has produced its canonical terminal result. Guard the terminal
     // cleanup so a throw from untrack's listeners or a stream-status host emit
@@ -196,10 +202,6 @@ export async function runFlowWithLifecycle(
     }
 
     ctx.parentStage.end(projection.endGroupStatus);
-    ctx.streamStatus.set(streamId, projection.streamStatus, {
-      runtimeHost: ctx.runtimeHost,
-      terminalStatus: projection.executionStatus,
-    });
     // One emission covers all three exits below (subagent / abort / throw);
     // untrack follows in each branch, preserving emit-before-untrack. Outcome
     // routes through the same canonical mapper as the success arm
@@ -213,6 +215,16 @@ export async function runFlowWithLifecycle(
         toResultOutcome(outcome),
         options?.isSubagent ?? false,
         { kind, message: kind === 'unexpected' ? errorMsg : sdkMsg },
+      );
+    }
+    try {
+      ctx.streamStatus.set(streamId, projection.streamStatus, {
+        runtimeHost: ctx.runtimeHost,
+        terminalStatus: projection.executionStatus,
+      });
+    } catch (statusErr) {
+      logger.warn(
+        `Failed to set terminal error status for ${agentIdentifier}: ${getSdkErrorMessage(statusErr)}`,
       );
     }
     // Terminal-error toasts are no longer emitted here: hosts present them from

@@ -463,39 +463,44 @@ export async function resumeToolUseFromSnapshot(
       );
     }
 
-    await runFlowWithLifecycle(ctx, async (handle) => {
-      const result = await runToolUseFlow(
-        {
-          ...ctx,
-          ...createInterruptCallbacks(),
-          onRoundFinalized: createUsageRecordingCallback(ctx),
-          setting,
-          resumeSnapshot: snapshot,
-          // Derive from the recovered parent chain: any execution with a
-          // parent is a subagent. Without this, the rebuilt system prompt
-          // would drop subagent-specific instructions (e.g. the shared
-          // /memories protocol) that the fresh run had included.
-          isSubagent: (ctx.delegationDepth ?? 0) > 0,
-          approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-          runtimeUnavailableTools: options.runtimeUnavailableTools,
-          onFollowUpConsumed: () =>
-            ctx.runtimeHost.emit('updateQueuedFollowUps', {
-              streamId: ctx.streamId,
-            }),
-        },
-        undefined,
-        (flowContext) => {
-          handle.attachToolUseFlow(flowContext);
-          options.setupSession?.(flowContext.session);
-          return () => handle.detachToolUseFlow(flowContext);
-        },
-      );
-      return buildToolUseFlowResult(
-        result,
-        ctx.executionId,
-        streamId,
-        ctx.attachedMemoryMisses,
-      );
-    });
+    const isSubagent = (ctx.delegationDepth ?? 0) > 0;
+    await runFlowWithLifecycle(
+      ctx,
+      async (handle) => {
+        const result = await runToolUseFlow(
+          {
+            ...ctx,
+            ...createInterruptCallbacks(),
+            onRoundFinalized: createUsageRecordingCallback(ctx),
+            setting,
+            resumeSnapshot: snapshot,
+            // Derive from the recovered parent chain: any execution with a
+            // parent is a subagent. Without this, the rebuilt system prompt
+            // would drop subagent-specific instructions (e.g. the shared
+            // /memories protocol) that the fresh run had included.
+            isSubagent,
+            approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+            runtimeUnavailableTools: options.runtimeUnavailableTools,
+            onFollowUpConsumed: () =>
+              ctx.runtimeHost.emit('updateQueuedFollowUps', {
+                streamId: ctx.streamId,
+              }),
+          },
+          undefined,
+          (flowContext) => {
+            handle.attachToolUseFlow(flowContext);
+            options.setupSession?.(flowContext.session);
+            return () => handle.detachToolUseFlow(flowContext);
+          },
+        );
+        return buildToolUseFlowResult(
+          result,
+          ctx.executionId,
+          streamId,
+          ctx.attachedMemoryMisses,
+        );
+      },
+      { isSubagent },
+    );
   });
 }
