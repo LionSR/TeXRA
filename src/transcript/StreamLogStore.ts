@@ -92,6 +92,16 @@ export class StreamLogStore {
     () => this.executeWrite(),
     SAVE_DEBOUNCE_MS,
   );
+  /**
+   * Track save() awaiters so we can settle them when the debounced write is
+   * cancelled (flush / delete / clear). perfect-debounce's cancel() drops
+   * pending resolvers without settling them, which would hang any awaited
+   * save() indefinitely.
+   */
+  private pendingSaveAwaiters: Array<{
+    resolve: () => void;
+    reject: (err: unknown) => void;
+  }> = [];
   private inFlightWrite: Promise<void> | null = null;
   private writeGeneration = 0;
   private readonly writeTombstones = new Set<StreamTabId>();
@@ -415,9 +425,16 @@ export class StreamLogStore {
     this.loaded = true;
   }
 
-  async save(): Promise<void> {
-    if (!this.loaded) return;
-    return this.debouncedSave();
+  save(): Promise<void> {
+    if (!this.loaded) return Promise.resolve();
+    // Start/extend the debounce timer. perfect-debounce handles timer
+    // management and returns a shared promise, but we ignore it and track
+    // our own awaiters so we can settle them when the debounce is cancelled
+    // during flush / delete / clear.
+    this.debouncedSave();
+    return new Promise<void>((resolve, reject) => {
+      this.pendingSaveAwaiters.push({ resolve, reject });
+    });
   }
 
   async flush(): Promise<void> {
@@ -651,6 +668,10 @@ export class StreamLogStore {
 
   private cancelPendingSave(): void {
     this.debouncedSave.cancel();
+    // Settle outstanding save() awaiters so they don't hang. delete() and
+    // clear() discard the data, so there is nothing left to persist.
+    const awaiters = this.pendingSaveAwaiters.splice(0);
+    for (const a of awaiters) a.resolve();
   }
 
   private parsePersistedEntries(rawEntries: unknown): StreamLogEntry[] {
@@ -685,6 +706,12 @@ export class StreamLogStore {
     if (dirtyIds.length === 0) {
       return Promise.resolve();
     }
+
+    // Snapshot current save awaiters so new save() calls during this write
+    // get fresh awaiters for the next debounce window. We settle these after
+    // the write completes (success or failure) so flush / delete / clear
+    // don't strand callers that are awaiting save().
+    const awaiters = this.pendingSaveAwaiters.splice(0);
 
     log.debug(LOG_TAG, `Writing ${dirtyIds.length} dirty stream(s)`);
     const writeGeneration = this.writeGeneration;
@@ -722,6 +749,10 @@ export class StreamLogStore {
           this.inFlightWrite = null;
         }
         this.drainPendingReleases();
+        // Settle the snapshotted save awaiters — on failure the dirty
+        // streams have already been re-marked for retry, so resolve
+        // regardless.
+        for (const a of awaiters) a.resolve();
       });
 
     this.inFlightWrite = writePromise;
