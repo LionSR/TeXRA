@@ -1,7 +1,7 @@
 // Child execution picker for the CLI TUI.
 
 // Third-party imports
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
@@ -34,6 +34,7 @@ export interface ChildControlPickerProps {
   readonly availableRows?: number;
   readonly mode: ChildControlMode;
   readonly onClose: () => void;
+  readonly onEscapeActionChange?: (action: string) => void;
   readonly onFocusStream: (streamId: StreamTabId) => void;
   /** Open the chosen subagent's transcript viewer (its independent history).
    *  Falls back to focus when omitted. */
@@ -964,6 +965,7 @@ export function ChildControlPicker({
   availableRows,
   mode,
   onClose,
+  onEscapeActionChange,
   onFocusStream,
   onViewStream,
   onKillExecution,
@@ -988,6 +990,7 @@ export function ChildControlPicker({
   const tailItem = tailExecutionId
     ? items.find((item) => item.executionId === tailExecutionId)
     : undefined;
+  const escapeAction = tailItem ? 'back' : 'close';
   const stackSelectedSubagent = mode === 'subagents' && hasItems;
   const compactEmptyPicker = !hasItems;
   const listLayout = computePickerListLayout({
@@ -1021,6 +1024,10 @@ export function ChildControlPicker({
   useEffect(() => {
     if (tailExecutionId && !tailItem) setTailExecutionId(undefined);
   }, [tailExecutionId, tailItem]);
+
+  useLayoutEffect(() => {
+    onEscapeActionChange?.(escapeAction);
+  }, [escapeAction, onEscapeActionChange]);
 
   useInput(
     (input, key) => {
