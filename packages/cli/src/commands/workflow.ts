@@ -62,6 +62,30 @@ interface WorkflowRunInit {
   readonly instructionFile?: string;
 }
 
+/**
+ * Resolve the workflow output, mapping a failure to an exit code: an
+ * interrupted run yields `Interrupted`, otherwise the run is marked errored and
+ * `AgentError` is returned. Returns the display result on success; callers
+ * branch on `typeof result === 'number'`.
+ */
+async function resolveWorkflowDisplayResultOrExit(
+  executionId: ReturnType<typeof generateExecutionId>,
+  ...args: Parameters<typeof resolveWorkflowOutput>
+): Promise<CliRunResult | CliExitCode> {
+  const { terminalStatus } = args[4];
+  try {
+    return (await resolveWorkflowOutput(...args)).displayResult;
+  } catch (error) {
+    if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+      writeErrorStderr(error);
+      return CliExitCode.Interrupted;
+    }
+    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+    writeErrorStderr(error);
+    return CliExitCode.AgentError;
+  }
+}
+
 export async function runWorkflowAgent(
   context: CliContext,
   init: WorkflowRunInit,
@@ -143,29 +167,20 @@ export async function runWorkflowAgent(
         markErrorOnThrow: true,
       },
     );
-    let displayResult: CliRunResult;
-    try {
-      ({ displayResult } = await resolveWorkflowOutput(
-        init.output,
-        init.outputDir,
-        result,
-        runContext,
-        {
-          expectedOutputFiles: init.outputDir
-            ? expectedOutputFilesForOutputDir(agent, inputFiles)
-            : undefined,
-          terminalStatus,
-        },
-      ));
-    } catch (error) {
-      if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-        writeErrorStderr(error);
-        return CliExitCode.Interrupted;
-      }
-      await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-      writeErrorStderr(error);
-      return CliExitCode.AgentError;
-    }
+    const displayResult = await resolveWorkflowDisplayResultOrExit(
+      executionId,
+      init.output,
+      init.outputDir,
+      result,
+      runContext,
+      {
+        expectedOutputFiles: init.outputDir
+          ? expectedOutputFilesForOutputDir(agent, inputFiles)
+          : undefined,
+        terminalStatus,
+      },
+    );
+    if (typeof displayResult === 'number') return displayResult;
 
     emitCliResult(runContext, {
       json: displayResult,
