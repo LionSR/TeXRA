@@ -5,7 +5,6 @@ import {
 import { platform } from '@platform/platform';
 import { writeTerminalStatus } from '@agent/storage';
 import { logSdkError, type ResultEvent } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -14,7 +13,6 @@ import {
   normalizeProviderError,
   type AgentErrorKind,
 } from '@common/errors';
-import type { ProviderErrorPartial } from '@shared/schemas/errors';
 import { projectRunOutcome } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
@@ -23,6 +21,7 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
+import type { ProviderErrorPartial } from '@shared/schemas/errors';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 
@@ -135,10 +134,8 @@ export async function runFlowWithLifecycle(
 ): Promise<AgentFlowResult> {
   const { streamId, session } = ctx;
   const agentIdentifier = ctx.config.agent;
-  const category =
-    ctx.setting.agentCategory === AgentCategory.ToolUse
-      ? 'toolUse'
-      : 'workflow';
+  // `AgentCategory` IS the `'toolUse' | 'workflow'` union, so no remap needed.
+  const category = ctx.setting.agentCategory;
   const parentStreamId = options?.parentStreamId ?? streamId;
   const handle = new AgentExecutionHandle(
     ctx.executionId,
