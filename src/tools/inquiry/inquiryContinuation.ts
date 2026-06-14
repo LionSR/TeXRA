@@ -16,7 +16,7 @@ import { platform } from '@platform/platform';
 
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { bus } from '@eventBus/ProgressEventBus';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { createChannelTrace } from '@logger';
 import type {
   ExternalInquiryThreadId,
@@ -108,10 +108,11 @@ export function buildContinuationText(params: {
 async function emitInquiryThreadUpdate(
   threadId: ExternalInquiryThreadId,
   extra: { resumeOutcome: InquiryResumeOutcome },
+  session?: SessionHandle,
 ): Promise<void> {
   const summary = await getThreadSummary(threadId);
   if (!summary) return;
-  bus.emit('inquiryThreadUpdated', { ...summary, ...extra });
+  emitRuntimeEvent('inquiryThreadUpdated', { ...summary, ...extra }, session);
 }
 
 async function deliverContinuation(params: {
@@ -130,7 +131,11 @@ async function deliverContinuation(params: {
 
   switch (result.status) {
     case 'sent':
-      await emitInquiryThreadUpdate(params.threadId, { resumeOutcome: 'sent' });
+      await emitInquiryThreadUpdate(
+        params.threadId,
+        { resumeOutcome: 'sent' },
+        params.session,
+      );
       return 'sent';
     case 'queued': {
       if (result.reason === 'waiting' || result.reason === 'children_running') {
@@ -138,23 +143,35 @@ async function deliverContinuation(params: {
           params.parentStreamId,
         );
         const outcome: InjectionOutcome = resumed ? 'resumed' : 'queued';
-        await emitInquiryThreadUpdate(params.threadId, {
-          resumeOutcome: outcome,
-        });
+        await emitInquiryThreadUpdate(
+          params.threadId,
+          {
+            resumeOutcome: outcome,
+          },
+          params.session,
+        );
         return outcome;
       }
-      await emitInquiryThreadUpdate(params.threadId, {
-        resumeOutcome: 'queued',
-      });
+      await emitInquiryThreadUpdate(
+        params.threadId,
+        {
+          resumeOutcome: 'queued',
+        },
+        params.session,
+      );
       return 'queued';
     }
     case 'no_session':
       logger.warn(
         `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} has no session.`,
       );
-      await emitInquiryThreadUpdate(params.threadId, {
-        resumeOutcome: 'parent_finished',
-      });
+      await emitInquiryThreadUpdate(
+        params.threadId,
+        {
+          resumeOutcome: 'parent_finished',
+        },
+        params.session,
+      );
       return 'archived';
   }
 }
@@ -176,9 +193,13 @@ export async function injectContinuationForAnsweredThread(
   const lastTurn = manifest.turns.at(-1);
   if (!lastTurn || !lastTurn.answer) return 'archived';
   if (manifest.parentStreamId == null) {
-    await emitInquiryThreadUpdate(threadId, {
-      resumeOutcome: 'parent_finished',
-    });
+    await emitInquiryThreadUpdate(
+      threadId,
+      {
+        resumeOutcome: 'parent_finished',
+      },
+      session,
+    );
     return 'archived';
   }
 
@@ -213,9 +234,13 @@ export async function injectContinuationForDroppedThread(
   const manifest = manifestHint ?? (await readExternalInquiryThread(threadId));
   if (!manifest) return 'archived';
   if (manifest.parentStreamId == null) {
-    await emitInquiryThreadUpdate(threadId, {
-      resumeOutcome: 'parent_finished',
-    });
+    await emitInquiryThreadUpdate(
+      threadId,
+      {
+        resumeOutcome: 'parent_finished',
+      },
+      session,
+    );
     return 'archived';
   }
 
