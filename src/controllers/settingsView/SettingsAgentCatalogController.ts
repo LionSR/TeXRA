@@ -1,7 +1,7 @@
 // Local imports - shared
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import {
-  AGENT_MODE_PRESETS,
+  AGENT_MODE_PRESETS_BY_ID,
   AgentModePresetSchema,
 } from '@shared/schemas/agentPresets';
 import {
@@ -214,8 +214,7 @@ export class SettingsAgentCatalogController {
 
   private getPreset(presetId: string): AgentModePreset | null {
     return (
-      AGENT_MODE_PRESETS.find((preset) => preset.id === presetId) ??
-      this.getCustomPreset(presetId)
+      AGENT_MODE_PRESETS_BY_ID.get(presetId) ?? this.getCustomPreset(presetId)
     );
   }
 }

@@ -19,7 +19,7 @@ import {
 } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { getAgentsByCategory } from '@agent/index/agentRegistry';
 import {
-  AGENT_MODE_PRESETS,
+  AGENT_MODE_PRESETS_BY_ID,
   STARTER_AGENT_MODE_PRESET,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
@@ -32,7 +32,7 @@ import type { StateStore } from '@platform/interfaces/state';
 /** Resolve a team id to its built-in preset (the hidden 'starter' included). */
 export function resolveTeamPreset(teamId: string): AgentModePreset | undefined {
   if (teamId === STARTER_AGENT_MODE_PRESET.id) return STARTER_AGENT_MODE_PRESET;
-  return AGENT_MODE_PRESETS.find((preset) => preset.id === teamId);
+  return AGENT_MODE_PRESETS_BY_ID.get(teamId);
 }
 
 /**
