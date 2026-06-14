@@ -1,3 +1,4 @@
+import { defineCommand } from 'citty';
 import type { ExecutionId } from '@shared/schemas';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -14,8 +15,12 @@ import {
   interactiveTerminalFailure,
 } from '../runtime/terminalRequirements';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { contextFromArgs } from './_helpers/context';
+import { setExitCode } from './_helpers/exitCode';
+import {
+  INTERACTIVE_GLOBAL_ARGS,
+  rejectHeadlessOnlyFlags,
+} from './_helpers/globalArgs';
 
 import type { CliContext } from '../runtime/cliContext';
 
@@ -79,25 +84,28 @@ export async function runResumeExecution(
   return result.exitCode;
 }
 
-export const resumeCommand = defineCliCommand({
+export const resumeCommand = defineCommand({
   meta: {
     name: 'resume',
     description: 'Continue (resume) a stored tool-use session',
   },
   args: {
-    ...GLOBAL_ARGS,
+    ...INTERACTIVE_GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: true,
       description: 'Execution id from `texra history list`',
     },
   },
-  run: (context, ctx) => {
+  async run(ctx) {
+    rejectHeadlessOnlyFlags(ctx.rawArgs, 'resume');
     const id = parseCliHistoryId(ctx.args.id);
     if (!id) {
       writeTextStderr(`Invalid execution id: ${ctx.args.id}`);
-      return Promise.resolve(CliExitCode.Usage);
+      setExitCode(CliExitCode.Usage);
+      return;
     }
-    return runResumeExecution(context, id);
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(await runResumeExecution(context, id));
   },
 });
