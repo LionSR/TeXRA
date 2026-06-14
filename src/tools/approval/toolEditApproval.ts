@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import { isLatexFile } from '@common/files/fileTypeUtils';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import {
   LineChangesSchema,
@@ -110,6 +111,44 @@ export function toggleToolEditApprovalSessionBypass(
 
 export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
   return toolEditApprovalController.bypass.isBypassed(streamId);
+}
+
+/**
+ * Emit the tool-edit approval prompt to the progress view: activate the stream
+ * awaiting input and post the `showToolEditPermission` event with the bypass
+ * affordance gated on the stream's current bypass state.
+ *
+ * Shared host-agnostic logic for the VS Code (`nativeToolEditApproval`) and
+ * desktop (`desktopToolEditApproval`) approval surfaces. Each host computes
+ * `relativePath` in its own way and performs any host-specific routing (e.g.
+ * revealing the progress view) around this call.
+ */
+export function emitToolEditApprovalPrompt(
+  runtimeHost: AgentRuntimeHost,
+  params: {
+    requestId: string;
+    request: ToolEditApprovalRequest;
+    relativePath: string;
+    lineChanges: LineChanges;
+  },
+): void {
+  const { requestId, request, relativePath, lineChanges } = params;
+  const { streamId } = request;
+  if (streamId) {
+    runtimeHost.emit('setActiveStream', { streamId });
+  }
+  const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
+  runtimeHost.emit('showToolEditPermission', {
+    requestId,
+    path: request.path,
+    relativePath,
+    sourceTool: request.sourceTool,
+    allowBypass: !isBypassed,
+    streamId: streamId ?? '',
+    addedLines: lineChanges.added,
+    removedLines: lineChanges.removed,
+    isLatex: isLatexFile(request.path),
+  });
 }
 
 export function setToolEditApprovalHandler(
