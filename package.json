@@ -16,6 +16,7 @@
     "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest --config vitest.config.mjs",
     "test:kernel": "vitest run --config vitest.config.mjs",
+    "validate:tui": "corepack pnpm --filter @texra-ai/cli validate:tui",
     "workspace:typecheck": "corepack pnpm --recursive --if-present typecheck",
     "workspace:build": "corepack pnpm --recursive --if-present build",
     "desktop:build": "corepack pnpm --filter @texra/desktop build",
