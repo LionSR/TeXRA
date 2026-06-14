@@ -90,6 +90,32 @@ For a deterministic local run check that does not require provider credentials:
 corepack pnpm --filter @texra-ai/cli validate:run
 ```
 
+For deterministic TUI checks, use the Ink frame validator. It drives the CLI
+through a PTY, so it verifies the same visible terminal frame a user sees in
+chat mode:
+
+```bash
+corepack pnpm --filter @texra-ai/cli validate:tui
+```
+
+To capture reviewable TUI screenshots, pass a snapshot directory and the
+scenario names you want to inspect. The command writes numbered `.txt` and
+`.svg` frames plus an `index.html` report:
+
+```bash
+corepack pnpm --filter @texra-ai/cli validate:tui -- --snapshot-dir /tmp/texra-tui-frames \
+  transcript edit-approval bash-approval-approve-session subagents
+```
+
+Open `/tmp/texra-tui-frames/index.html` in a browser to review the captured
+frames.
+
+List the available scenarios before narrowing a product-review pass:
+
+```bash
+corepack pnpm --filter @texra-ai/cli validate:tui -- --list
+```
+
 ## Remove the Linked Command
 
 For the side-by-side `texra-local` link:
