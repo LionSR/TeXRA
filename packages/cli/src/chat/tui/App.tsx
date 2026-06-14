@@ -485,6 +485,7 @@ export interface AppProps {
   readonly onKillExecution: (executionId: string) => void;
   readonly canInterruptActiveRun: () => boolean;
   readonly canStopActiveRun?: () => boolean;
+  readonly canStopPendingRunWithoutStream?: () => boolean;
   readonly colorEnabled?: boolean;
   readonly commandName?: string;
   readonly onInterruptActive: () => void;
@@ -521,6 +522,8 @@ export function App(props: AppProps): React.JSX.Element {
   const [tipHour] = useState(() => new Date().getHours());
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
+  const canStopPendingRunWithoutStream =
+    props.canStopPendingRunWithoutStream ?? (() => false);
   const agentSelectionAvailable = rootRunStartAvailable;
   const activeApprovalVisible = approvalVisibleForActiveStream({
     activeStreamId,
@@ -998,6 +1001,7 @@ export function App(props: AppProps): React.JSX.Element {
         <StatusBar
           agentSelectionAvailable={agentSelectionAvailable}
           canStopActiveRun={canStopActiveRun}
+          canStopPendingRunWithoutStream={canStopPendingRunWithoutStream}
           commandName={props.commandName}
           foregroundEscapeAction={foregroundEscapeAction({
             activeFormEscapeAction: activeForm?.escapeAction,
