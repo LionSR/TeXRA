@@ -184,6 +184,7 @@ const SCENARIOS = [
     cols: 120,
     env: {
       HARNESS_ENTRIES: '2',
+      HARNESS_CAN_INTERRUPT: '1',
       HARNESS_QUEUED_FOLLOWUPS:
         'First queued follow-up||Second queued follow-up',
     },
@@ -240,6 +241,7 @@ const SCENARIOS = [
     cols: 60,
     env: {
       HARNESS_ENTRIES: '2',
+      HARNESS_CAN_INTERRUPT: '1',
       HARNESS_QUEUED_FOLLOWUPS:
         'First queued follow-up||Second queued follow-up',
     },
