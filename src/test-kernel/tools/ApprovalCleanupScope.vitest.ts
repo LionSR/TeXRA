@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { StreamTabId } from '@shared/schemas';
 import {
   cleanupApprovalsForStream,
-  setBashApprovalSessionBypass,
   isBashApprovalBypassedForStream,
+  setBashApprovalSessionBypass,
 } from '@tools/approval';
-import type { StreamTabId } from '@shared/schemas';
 
 const sid = (s: string): StreamTabId => s as StreamTabId;
 

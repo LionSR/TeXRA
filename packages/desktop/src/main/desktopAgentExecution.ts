@@ -967,6 +967,11 @@ export class DesktopProgressBridge {
     // any StreamTabId. They are rare (every desktop agent runs in a stream),
     // but without this they'd hang with no UI prompt left to answer.
     cleanupUnscopedApprovals();
+    // Child/subagent coordinator requests may be session-owned without a local
+    // desktop stream entry, so clear the owning window's coordinator bridge
+    // after the visible per-stream sweep. This is session-scoped and does not
+    // touch sibling windows.
+    this.session.coordinators.cleanupAllRequests();
     await GoalStore.forgetMany([...streamIds]);
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
