@@ -217,6 +217,24 @@ const SCENARIOS = [
     unexpect: ['<orchestrator-followup>', '<subagent-result'],
   },
   {
+    name: 'queued-subagent-followup-status-preview',
+    cols: 140,
+    env: {
+      HARNESS_ENTRIES: '2',
+      HARNESS_QUEUED_FOLLOWUPS:
+        '<orchestrator-followup><subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/></orchestrator-followup>',
+    },
+    bootExpect: 'queued 1',
+    frame: 'tail',
+    expect: [
+      'Queued follow-ups (1)',
+      '1. ⟳ review · todos · 6 done, 0 active, 0 pending',
+      'queued 1',
+      '⟳ review · todos · 6 done, 0 active, 0 pending',
+    ],
+    unexpect: ['<orchestrator-followup>', '<subagent-progress'],
+  },
+  {
     name: 'compact-queued-followups',
     rows: 8,
     cols: 60,
