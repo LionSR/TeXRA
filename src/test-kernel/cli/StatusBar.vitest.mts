@@ -1270,7 +1270,7 @@ describe('CLI StatusBar display model', () => {
       PERSONAL_API_MODE_LABEL,
     ]);
     expect(display.bindings).toBe(
-      'Resume this session with: texra --resume abc123',
+      'Resume this session with: texra resume abc123',
     );
   });
 
@@ -1295,7 +1295,7 @@ describe('CLI StatusBar display model', () => {
     });
 
     expect(display.bindings).toBe(
-      'Resume this session with: texra-local --resume abc123',
+      'Resume this session with: texra-local resume abc123',
     );
   });
 
@@ -1393,7 +1393,7 @@ describe('CLI StatusBar display model', () => {
       'Press Ctrl-C again to ex…',
     ]);
     expect(display.bindings).toBe(
-      'Resume this session with: texra --resume abc123',
+      'Resume this session with: texra resume abc123',
     );
   });
 
