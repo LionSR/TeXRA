@@ -91,6 +91,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       this.pending.set(requestId, entry);
       registerPendingApproval(requestId, {
         streamId: request.streamId,
+        runtimeHost: this.options.runtimeHost,
         isSettled: () => settled,
         settle: (value) => this.settle(requestId, value),
       });
