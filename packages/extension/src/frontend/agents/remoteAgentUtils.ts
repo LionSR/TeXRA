@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 
 import { createKey, getAgent, type AgentSource } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -54,8 +53,9 @@ export async function selectAgentInMainView(
     }
 
     const entry = getAgent(agentValue);
-    const sessionType =
-      entry?.category === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
+    // `category` is the `'toolUse' | 'workflow'` union; default to workflow when
+    // the agent isn't resolvable.
+    const sessionType = entry?.category ?? 'workflow';
 
     logger.info(
       CHANNEL,
