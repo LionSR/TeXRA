@@ -246,6 +246,29 @@ describe('StreamLogStore load', () => {
     expect(store.get('alpha')?.size).toBe(2);
   });
 
+  it('salvages valid fields from partially corrupt summaries', async () => {
+    const storage = mockStorage({
+      logs: {
+        alpha: [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)],
+      },
+      summaries: {
+        alpha: {
+          firstTimestamp: 200,
+          lastTimestamp: 'bad',
+          hasRunningGroup: 'bad',
+        },
+      },
+    });
+
+    const store = new StreamLogStore();
+    await store.load();
+
+    expect(storage.fullLogReads()).toBe(0);
+    expect(store.keys()).toEqual(['alpha']);
+    expect(store.getFirstTimestamp('alpha')).toBe(200);
+    expect(store.getLastTimestamp('alpha')).toBeUndefined();
+  });
+
   it('falls back once for missing summaries and writes the sidecar cache', async () => {
     const storage = mockStorage({
       logs: {
@@ -393,6 +416,62 @@ describe('StreamLogStore load', () => {
     expect(storage.fullLogReads()).toBe(streamIds.length);
   });
 
+  it('settles save waiters when dirty streams are still rehydrating', async () => {
+    let releaseRead: () => void = () => {};
+    let markReadStarted: () => void = () => {};
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+    mockStorage({
+      logs: {
+        alpha: [logEntry('alpha', 1, 100)],
+      },
+      summaries: {
+        alpha: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: false,
+        },
+      },
+      onLogRead: async () => {
+        markReadStarted();
+        await readGate;
+      },
+    });
+    const store = new StreamLogStore();
+    await store.load();
+    const load = store.ensureLoaded('alpha');
+    await readStarted;
+
+    vi.useFakeTimers();
+    try {
+      store.append('alpha', {
+        id: 'alpha-live-entry',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 200,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'live while loading',
+      });
+      const save = store.save();
+      const settled = vi.fn();
+      save.then(settled);
+
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+
+      expect(settled).toHaveBeenCalledOnce();
+    } finally {
+      releaseRead();
+      await load;
+      await store.flush();
+      vi.useRealTimers();
+    }
+  });
+
   it('lets delete win over an in-flight stream write', async () => {
     const storage = mockStorage({
       logs: {},
@@ -429,6 +508,43 @@ describe('StreamLogStore load', () => {
     expect(storage.deletes).toContain(
       storageFile(STREAM_LOG_SUMMARIES_DIR, 'delete-me'),
     );
+  });
+
+  it('flushes unrelated dirty streams when delete cancels a pending save', async () => {
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+    });
+    const store = new StreamLogStore();
+    await store.load();
+
+    vi.useFakeTimers();
+    try {
+      store.append('alpha', {
+        id: 'alpha-entry',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 500,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'must persist',
+      });
+      const save = store.save();
+      const settled = vi.fn();
+      save.then(settled);
+
+      await store.delete('beta');
+      await Promise.resolve();
+
+      expect(settled).toHaveBeenCalledOnce();
+      expect(storage.writes.has(storageFile(STREAM_LOGS_DIR, 'alpha'))).toBe(
+        true,
+      );
+      expect(
+        storage.writes.has(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('allows a stream id to be reused after a deleted in-flight write', async () => {
