@@ -438,7 +438,7 @@ export function foregroundEscapeAction({
     case 'form':
       return activeFormEscapeAction ?? 'close';
     case 'childControls':
-      return 'panel';
+      return 'close';
     case 'transcript':
       return 'close';
     case 'approval': {
