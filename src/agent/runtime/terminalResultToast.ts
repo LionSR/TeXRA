@@ -3,7 +3,7 @@
  * through an {@link AgentRuntimeHost} (CLI, desktop). The lifecycle no longer
  * emits these toasts directly — it emits one `result` event, and this bridges
  * that event to the host's existing `requestShowInstruction` / `requestShowError`
- * path via the shared {@link presentTerminalResult} mapper.
+ * path via the shared {@link terminalResultToast} mapper.
  *
  * The `session` is load-bearing: desktop passes its per-window session, while
  * CLI/extension pass the process {@link defaultSession}. A helper that

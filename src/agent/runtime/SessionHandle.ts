@@ -174,7 +174,9 @@ export class SessionHandle {
       // (the default session's set is permanent; a fresh session's is not).
       this.flushPendingTraces();
       if (keepActiveExecutions) {
-        void this.disposeWhenIdle();
+        void this.disposeWhenIdle().catch((err) => {
+          logger.warn(`Idle session disposal failed: ${toErrorMessage(err)}`);
+        });
       } else {
         this.coordinators.cleanupAllRequests();
         this.subscriptions.dispose();
