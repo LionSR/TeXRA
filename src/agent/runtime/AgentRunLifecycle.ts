@@ -222,6 +222,8 @@ export async function runFlowWithLifecycle(
     // (`toResultOutcome(AGENT_ERROR_OUTCOME[kind])` — abort ⇒ `cancelled`, a
     // sibling of `failed`). Skipped when the success arm already emitted, so a
     // post-completion cleanup throw cannot double-publish.
+    // Abort still carries the SDK message for event consumers; the toast mapper
+    // intentionally suppresses user-facing notifications for aborts.
     if (!resultEmitted) {
       emitRunResult(
         ctx,

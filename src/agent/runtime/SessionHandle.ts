@@ -119,6 +119,7 @@ export class SessionHandle {
 
   /** Listeners for terminal run results in this session (the host channel). */
   private readonly resultListeners = new Set<(event: ResultEvent) => void>();
+  private disposeStarted = false;
   private idleDisposeStarted = false;
 
   /**
@@ -166,6 +167,9 @@ export class SessionHandle {
    * cross-session aggregate.
    */
   dispose(options: SessionDisposeOptions = {}): void {
+    if (this.disposeStarted) return;
+    this.disposeStarted = true;
+
     const keepActiveExecutions =
       options.keepActiveExecutions === true &&
       this.executions.getActiveIds().length > 0;

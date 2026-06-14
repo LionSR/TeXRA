@@ -245,4 +245,37 @@ describe('SessionHandle', () => {
       session.dispose();
     }
   });
+
+  it('makes deferred dispose idempotent while executions are active', async () => {
+    const session = new SessionHandle();
+    const { host } = createRecordingHost();
+    const executionId = 'exec:dispose-idempotent';
+    const streamId = 'stream:dispose-idempotent' as StreamTabId;
+    const executionsDispose = vi.spyOn(session.executions, 'dispose');
+    try {
+      const handle = trackAgent(
+        session,
+        host,
+        createCoordinators(host),
+        executionId,
+        streamId,
+      );
+
+      session.dispose({ keepActiveExecutions: true });
+      session.dispose();
+
+      expect(session.executions.getHandle(executionId)).toBe(handle);
+      expect(executionsDispose).not.toHaveBeenCalled();
+
+      session.executions.untrack(executionId);
+
+      await vi.waitFor(() => {
+        expect(session.executions.getHandle(executionId)).toBeUndefined();
+      });
+      expect(executionsDispose).toHaveBeenCalledOnce();
+    } finally {
+      session.executions.untrack(executionId);
+      session.dispose();
+    }
+  });
 });
