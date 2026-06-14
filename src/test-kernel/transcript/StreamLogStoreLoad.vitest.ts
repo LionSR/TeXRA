@@ -486,6 +486,43 @@ describe('StreamLogStore load', () => {
     );
   });
 
+  it('flushes unrelated dirty streams when delete cancels a pending save', async () => {
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+    });
+    const store = new StreamLogStore();
+    await store.load();
+
+    vi.useFakeTimers();
+    try {
+      store.append('alpha', {
+        id: 'alpha-entry',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 500,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'must persist',
+      });
+      const save = store.save();
+      const settled = vi.fn();
+      save.then(settled);
+
+      await store.delete('beta');
+      await Promise.resolve();
+
+      expect(settled).toHaveBeenCalledOnce();
+      expect(storage.writes.has(storageFile(STREAM_LOGS_DIR, 'alpha'))).toBe(
+        true,
+      );
+      expect(
+        storage.writes.has(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('allows a stream id to be reused after a deleted in-flight write', async () => {
     const storage = mockStorage({
       logs: {},

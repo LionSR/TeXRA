@@ -299,12 +299,13 @@ export class StreamLogStore {
 
   async delete(streamId: StreamTabId): Promise<void> {
     this.writeTombstones.add(streamId);
-    this.cancelPendingSave();
+    this.cancelPendingSaveTimer();
     this.forgetStreamState(streamId);
 
     try {
       await this.inFlightWrite;
       this.forgetStreamState(streamId);
+      await this.executeWrite();
       if (!this.loaded) return;
 
       log.info(LOG_TAG, `Deleting stream: ${streamId}`);
@@ -670,10 +671,14 @@ export class StreamLogStore {
   }
 
   private cancelPendingSave(): void {
-    this.debouncedSave.cancel();
-    // Settle outstanding save() awaiters so they don't hang. delete() and
-    // clear() discard the data, so there is nothing left to persist.
+    this.cancelPendingSaveTimer();
+    // `clear()` discards all streams, so there is nothing left for pending
+    // save() callers to wait on.
     this.settlePendingSaveAwaiters();
+  }
+
+  private cancelPendingSaveTimer(): void {
+    this.debouncedSave.cancel();
   }
 
   private settlePendingSaveAwaiters(): void {
