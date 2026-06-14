@@ -139,6 +139,64 @@ export interface RunAgentCliSessionParams<TTurn> {
   strategy: AgentCliSessionStrategy<TTurn>;
 }
 
+/** Outcome of a single turn attempt, flattening the loop's inner try/catch. */
+type TurnAttempt<TTurn> =
+  | { kind: 'completed'; turn: TTurn; turnIsError: boolean }
+  | { kind: 'failed'; err: unknown }
+  | { kind: 'interrupted' };
+
+/**
+ * Run one turn and classify the outcome. Owns the per-turn try/catch/finally so
+ * the loop body stays flat: a clean interruption maps to `interrupted` (the
+ * caller breaks), a thrown turn to `failed`, and a returned turn to `completed`
+ * (carrying its application-level error flag). `session.finishTurn()` always
+ * runs, matching the original `finally`.
+ */
+async function attemptTurn<TTurn>(
+  strategy: AgentCliSessionStrategy<TTurn>,
+  session: AgentCliSession,
+  logger: AgentTrace,
+  prompt: string,
+  abortController: AbortController,
+  startedAt: number,
+): Promise<TurnAttempt<TTurn>> {
+  try {
+    const turn = await strategy.runTurn(prompt, abortController);
+    logTurnSummary(logger, Date.now() - startedAt, strategy.getUsage(turn));
+    const turnIsError = strategy.isTurnError?.(turn) === true;
+    if (turnIsError) {
+      strategy.onTurnError?.(turn, logger);
+    }
+    return { kind: 'completed', turn, turnIsError };
+  } catch (caught) {
+    if (isCleanInterruption(caught, abortController.signal, session)) {
+      return { kind: 'interrupted' };
+    }
+    logger.error(toErrorMessage(caught));
+    return { kind: 'failed', err: caught };
+  } finally {
+    session.finishTurn();
+  }
+}
+
+/**
+ * Persist a turn report, swallowing storage errors. Best-effort — but the report
+ * is the only durable copy of the result when delivery fails, so leave a trace.
+ */
+async function persistReportBestEffort(
+  executionId: ExecutionId,
+  msg: string,
+  logger: AgentTrace,
+): Promise<void> {
+  try {
+    await getExecutionStore(executionId).writeReport(msg);
+  } catch (storageErr) {
+    logger.warn(
+      `Failed to persist report for ${executionId}: ${toErrorMessage(storageErr)}`,
+    );
+  }
+}
+
 /**
  * Drive an agent-CLI session loop. The initial prompt is seeded into the child's
  * follow-up queue so the first turn goes through the same code path as every
@@ -182,29 +240,20 @@ export function runAgentCliSession<TTurn>(
         const startedAt = Date.now();
         const abortController = session.startTurn();
 
-        let turn: TTurn | null = null;
-        let err: unknown = null;
-        let turnIsError = false;
-        try {
-          turn = await strategy.runTurn(prompt, abortController);
-          logTurnSummary(
-            logger,
-            Date.now() - startedAt,
-            strategy.getUsage(turn),
-          );
-          turnIsError = strategy.isTurnError?.(turn) === true;
-          if (turnIsError) {
-            strategy.onTurnError?.(turn, logger);
-          }
-        } catch (caught) {
-          if (isCleanInterruption(caught, abortController.signal, session)) {
-            break;
-          }
-          err = caught;
-          logger.error(toErrorMessage(caught));
-        } finally {
-          session.finishTurn();
-        }
+        const attempt = await attemptTurn(
+          strategy,
+          session,
+          logger,
+          prompt,
+          abortController,
+          startedAt,
+        );
+        if (attempt.kind === 'interrupted') break;
+
+        const turn = attempt.kind === 'completed' ? attempt.turn : null;
+        const err = attempt.kind === 'failed' ? attempt.err : null;
+        const turnIsError =
+          attempt.kind === 'completed' ? attempt.turnIsError : false;
 
         const wallTimeMs = Date.now() - startedAt;
         const turnFailed = err != null || turnIsError;
@@ -223,15 +272,7 @@ export function runAgentCliSession<TTurn>(
           turn != null && !turnFailed
             ? strategy.formatDelivery(turn, prompt, wallTimeMs)
             : strategy.formatError(turn, prompt, err);
-        try {
-          await getExecutionStore(executionId).writeReport(msg);
-        } catch (storageErr) {
-          // Best-effort — but the report is the only durable copy of the
-          // result when delivery fails, so leave a trace.
-          logger.warn(
-            `Failed to persist report for ${executionId}: ${toErrorMessage(storageErr)}`,
-          );
-        }
+        await persistReportBestEffort(executionId, msg, logger);
         const delivery = await sendFollowUp(parentStreamId, {
           text: msg,
           origin: 'subagent_result',

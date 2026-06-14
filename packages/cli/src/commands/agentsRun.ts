@@ -67,15 +67,16 @@ async function resolveToolUseInstruction(
   return instruction;
 }
 
-export async function runToolUseAgent(
-  context: CliContext,
-  init: ToolUseAgentRunInit,
-): Promise<number> {
-  let inputFiles: string[];
-  let contextFiles: string[];
-  let instruction: string;
+/**
+ * Run a thunk, mapping a `CliUsageError` to the `Usage` exit code (after writing
+ * it to stderr) and re-throwing anything else. Returns the thunk's value on
+ * success; callers branch on `typeof result === 'number'` for the exit code.
+ */
+async function withUsageExit<T>(
+  thunk: () => Promise<T>,
+): Promise<T | CliExitCode> {
   try {
-    instruction = await resolveToolUseInstruction(init, context.cwd);
+    return await thunk();
   } catch (error: unknown) {
     if (!(error instanceof CliUsageError)) {
       throw error;
@@ -83,6 +84,18 @@ export async function runToolUseAgent(
     writeErrorStderr(error);
     return CliExitCode.Usage;
   }
+}
+
+export async function runToolUseAgent(
+  context: CliContext,
+  init: ToolUseAgentRunInit,
+): Promise<number> {
+  let inputFiles: string[];
+  let contextFiles: string[];
+  const instruction = await withUsageExit(() =>
+    resolveToolUseInstruction(init, context.cwd),
+  );
+  if (typeof instruction === 'number') return instruction;
 
   await initLocalCliPlatform(context);
   const agent = await resolveCliAgent(init.agent);
@@ -106,26 +119,16 @@ export async function runToolUseAgent(
     tempDir: runContext.cwd,
   });
   try {
-    try {
-      const expanded = await expandRunInputs(
-        init.inputFiles,
-        init.contextFiles,
-        runContext.cwd,
-        {
-          allowEmptyInput: true,
-          requireWorkspaceFiles: true,
-          stdinInputFile,
-        },
-      );
-      inputFiles = expanded.inputFiles;
-      contextFiles = expanded.contextFiles;
-    } catch (error: unknown) {
-      if (!(error instanceof CliUsageError)) {
-        throw error;
-      }
-      writeErrorStderr(error);
-      return CliExitCode.Usage;
-    }
+    const expanded = await withUsageExit(() =>
+      expandRunInputs(init.inputFiles, init.contextFiles, runContext.cwd, {
+        allowEmptyInput: true,
+        requireWorkspaceFiles: true,
+        stdinInputFile,
+      }),
+    );
+    if (typeof expanded === 'number') return expanded;
+    inputFiles = expanded.inputFiles;
+    contextFiles = expanded.contextFiles;
 
     const config: AgentConfigPayload = {
       agent: init.agent,
