@@ -620,19 +620,25 @@ export class DesktopProgressBridge {
             );
             return;
           }
-          await handleExternalInquiryAction({
-            action: 'submit',
-            threadId: data.threadId,
-            answer: data.answer,
-            sessionLinks: data.sessionLinks,
-          });
+          await handleExternalInquiryAction(
+            {
+              action: 'submit',
+              threadId: data.threadId,
+              answer: data.answer,
+              sessionLinks: data.sessionLinks,
+            },
+            { session: this.session },
+          );
           return;
         }
-        await handleExternalInquiryAction({
-          action: 'drop',
-          threadId: data.threadId,
-          feedback: data.feedback,
-        });
+        await handleExternalInquiryAction(
+          {
+            action: 'drop',
+            threadId: data.threadId,
+            feedback: data.feedback,
+          },
+          { session: this.session },
+        );
       },
     };
   }
