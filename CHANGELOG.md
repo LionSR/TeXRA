@@ -2,13 +2,77 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.38.8] - 2026-06-14
 
-### CLI
+### Shared (all surfaces)
+
+#### Features
+
+- **Guided first-run onboarding** — first-time users now get a setup funnel that walks through signing in, confirming model access, and seeding a starter agent team, presented consistently in the CLI and the VS Code extension.
 
 #### Bug Fixes
 
-- **Homebrew installs get the right upgrade command** — the CLI's in-session update prompt now recognizes a Homebrew install (the `texra-ai/tap` formula) and offers `brew update && brew upgrade texra` instead of misdetecting it as an npm global and suggesting `npm install -g`, which would have clashed with the brew-managed copy.
+- **Stopping a run kills its running command** — stopping a run now aborts the in-progress foreground `bash` command instead of leaving it (and its child processes) running in the background.
+- **Killing a run honors your subagent preference** — terminating a run now also respects the "Keep agents running if I stop the orchestrator" setting, instead of always tearing down still-running subagents.
+- **Subagents follow a mid-session model switch** — after you change models during a session, delegated subagents and tools now inherit your current model instead of the one the session started with.
+- **Bash approvals show the working directory** — command approval prompts now display the directory the command will run in, so a relative command is no longer ambiguous about where it executes.
+- **Queued follow-ups survive a failed resume** — if resuming a run fails, the follow-up messages you queued are kept and re-sent instead of being silently dropped.
+
+#### Improvements
+
+- **Default model is now DeepSeek V4 Pro (Thinking)** — new chats and runs default to DeepSeek V4 Pro (Thinking) instead of V4 Flash (Thinking), at the same price (~$0.14/$0.28 per MTok); the model list drops the now-redundant Flash (Thinking) entry and existing model lists reconcile automatically. Pick any other model from the Models settings tab or the `texra` model picker.
+- **TeXRA is now "an AI theorist"** — the product description shown in the VS Code Marketplace, the CLI, and the welcome view is updated from "LaTeX research assistant" to "24/7 AI theorist," reflecting that TeXRA now spans research, computation, and code beyond LaTeX.
+- **Fable 5 for Claude Code delegation** — Claude Fable 5 is now selectable in the Claude Code integration's model dropdown and the `claude_code` delegation tool's model options, alongside Sonnet 4.6, Opus 4.8, and Haiku 4.5.
+- **Cleaner prompts in non-git workspaces** — when a workspace is not a git repository, agents are told so up front and stop attempting git history and status checks that would only fail.
+- **Subagents return substantive results** — delegated tool-use subagents now hand back their actual findings and answer to the orchestrator instead of bare status notes like "done," so the orchestrator has something real to act on.
+
+### CLI
+
+#### Features
+
+- **Device-code sign-in and CI relay tokens** — sign in to the CLI by approving a short code in a browser with `texra login --device` (recommended automatically on SSH sessions, and the path to use on WSL2 or inside containers where a local browser redirect cannot complete), and mint long-lived relay tokens for headless CI with `texra setup-token` — list and revoke them with `texra auth token`, and supply one via the `TEXRA_RELAY_TOKEN` environment variable.
+- **Give a reason when rejecting an approval** — at a raw (non-TUI) CLI approval prompt you can now type a reason after `n` (for example, `n try a smaller change`), or be prompted for one, and it is passed back to the agent instead of a bare rejection.
+
+#### Bug Fixes
+
+- **One-shot runs stop asking unanswerable questions** — single-agent and team `texra run` invocations now know the session ends after the final response, so they complete the task or state the next command to run instead of finishing with a follow-up question no one can answer.
+- **Honest Ctrl-C footer** — the status bar shows "stop" versus "exit" based on whether the run can actually be stopped, instead of offering to stop a run that cannot be.
+- **Resume command hints corrected** — the CLI points you to `texra resume <id>` (the supported public command) rather than the removed `--resume` flag form, and `texra resume --help` no longer lists headless-only flags (`--print`, `--output-format`) that do not apply to interactive resume.
+- **Workflow runs accept instruction files** — `texra workflow run` now supports `--instruction-file`, matching the other run commands.
+- **Accurate chat guidance** — idle sessions no longer show the queued-follow-up tip, and `/help` now describes what `Ctrl-C` does correctly.
+- **Full history transcripts** — `texra history show --full` prints the complete stored conversation instead of only the final preview.
+- **Slash palette recovers after Escape** — closing the slash command palette with `Escape` and retyping no longer sends a stray double-slash chat message; the command form reopens as expected.
+- **Steadier approval prompts** — long plan objectives in the approval prompt now wrap to the terminal width and clear cleanly on redraw, and the subagent-proposal box no longer changes width as you scroll through it.
+- **Consistent "idle" subagent label** — the subagent panel and child-control pickers now show a waiting subagent as `idle`, matching the rest of the CLI, instead of `waiting`.
+- **Clearer stopped-subagent input** — when a subagent is stopped, the disabled input explains why instead of going silently inert, and `Escape` no longer swallows your keyboard shortcuts.
+- **No more spurious resize warning** — the chat TUI no longer prints a stray runtime warning to your terminal when many panels are open.
+- **Idle exits report success** — leaving an idle chat session with `Ctrl+C` after a completed turn now exits with a success code instead of the interrupt code (130).
+- **Bundled agents refresh on upgrade** — upgrading the CLI now refreshes its bundled workflow and tool-use agent definitions instead of leaving stale copies in place.
+- **Homebrew installs get the right upgrade command** — the in-session update prompt now recognizes a Homebrew install (the `texra-ai/tap` formula) and offers `brew update && brew upgrade texra` instead of misdetecting it as an npm global and suggesting `npm install -g`, which would have clashed with the brew-managed copy.
+- **Live tool rows stay with your prompt** — in-flight tool activity now renders grouped under the prompt that triggered it instead of detaching while the turn streams.
+- **Subagent headers show the subagent model** — focusing a subagent in the CLI now shows that subagent's own model in the scrollback header instead of reusing the parent chat model.
+
+#### Improvements
+
+- **Auto-approval state in the status bar** — when an auto-approval bypass is on, the status bar shows a badge for it (`YOLO`, `AUTO-BASH`, or `AUTO-EDIT`) so the active safety policy is visible at a glance.
+- **Cleaner queued follow-up status** — the status bar summarizes queued subagent follow-ups instead of showing their raw message markup.
+- **Helpful hints for unknown presets** — naming an unknown multi-agent preset now suggests the available presets instead of failing silently.
+- **Clearer remote team loading** — when a preset pulls in relay-served agents, the CLI explains what happened and points you to `texra multi-agent inspect` to see the resolved team.
+
+### Extension (VS Code)
+
+#### Features
+
+- **Local Agent Review** — a new Agent Review section in the TeXRA sidebar reviews your working-tree changes against the main branch with an AI agent and lists potential issues in both the Agent Review view and Problems panel. You can dismiss findings, hand one or all findings to a fixing agent, review automatically after each commit, include submodules and untracked files, choose a quick or thorough pass, and pin a dedicated review model.
+
+#### Bug Fixes
+
+- **Progress board header fits narrow panels** — the toolbar actions in a stream's header no longer overflow when the progress view is docked narrow.
+
+#### Improvements
+
+- **Sharper Marketplace icon** — the extension icon is now shipped at 512×512 instead of 128×128, so it no longer looks blurry on the Marketplace listing and high-DPI displays.
+- **Tidier webview controls** — the LaTeX diff operations move out of cramped icon rows into labeled button groups beneath the file they act on, main-view actions gain hover tooltips, settings actions use consistent buttons, and the sign-in and workflow banners are laid out more clearly.
 
 ## [0.38.7] - 2026-06-11
 
@@ -44,7 +108,6 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Subagent headers show the subagent model** — focusing a subagent in the CLI now shows that subagent's own model in the scrollback header instead of reusing the parent chat model.
 - **Terminal always restored on exit** — a crash or unexpected exit can no longer leave your shell stuck in raw mode with a hidden cursor or mouse reporting left on.
 - **Stopping honors your subagent preference** — stopping an orchestrator now respects the "Keep agents running if I stop the orchestrator" setting instead of always interrupting running subagents.
 
@@ -65,17 +128,9 @@ All notable changes to this project will be documented in this file.
 
 ### Extension (VS Code)
 
-#### Features
-
-- **Local Agent Review** — a new Agent Review section in the TeXRA sidebar reviews your working-tree changes against the main branch with an AI agent and lists potential issues in both the Agent Review view and Problems panel. You can dismiss findings, hand one or all findings to a fixing agent, review automatically after each commit, include submodules and untracked files, choose a quick or thorough pass, and pin a dedicated review model.
-
 #### Bug Fixes
 
 - **In-editor GitHub sign-in works again** — signing in with GitHub through the editor's account flow had been failing with a server configuration error and silently falling back to browser sign-in; it now completes again. Long-standing existing sessions may ask you to sign in one more time.
-
-#### Improvements
-
-- **Sharper Marketplace icon** — the extension icon is now shipped at 512×512 instead of 128×128, so it no longer looks blurry on the Marketplace listing and high-DPI displays.
 
 ## [0.38.6] - 2026-06-07
 
