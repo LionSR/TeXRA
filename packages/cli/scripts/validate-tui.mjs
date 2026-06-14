@@ -473,6 +473,21 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'slash-resume-empty',
+    cols: 100,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/resume', '\r'],
+    frame: 'tail',
+    settleMs: ASYNC_FORM_SETTLE_MS,
+    expect: [
+      '/resume',
+      'No resumable sessions found.',
+      'Esc close',
+      'Use foreground panel shortcuts',
+    ],
+    unexpect: ['/resume is registered but has no harness action.'],
+  },
+  {
     name: 'slash-clear',
     cols: 100,
     env: {
