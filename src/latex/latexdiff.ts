@@ -91,6 +91,21 @@ export class LaTeXdiffService {
     return { success: false, message };
   }
 
+  /** Read both diff inputs, returning their contents or null if either read fails. */
+  private async readDiffInputs(
+    inputLocation: FileLocation,
+    editedLocation: FileLocation,
+  ): Promise<string[] | null> {
+    try {
+      return await Promise.all([
+        flexibleFS.read(inputLocation),
+        flexibleFS.read(editedLocation),
+      ]);
+    } catch {
+      return null;
+    }
+  }
+
   async runDiff(
     inputLocation: FileLocation,
     editedLocation: FileLocation,
@@ -111,13 +126,8 @@ export class LaTeXdiffService {
       // Direct callers use one read pass for both existence and document
       // structure validation. Round-specific wrappers keep their earlier
       // exists checks so they can report round-specific error messages.
-      let contents: string[];
-      try {
-        contents = await Promise.all([
-          flexibleFS.read(inputLocation),
-          flexibleFS.read(editedLocation),
-        ]);
-      } catch {
+      const contents = await this.readDiffInputs(inputLocation, editedLocation);
+      if (!contents) {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
         logger.warn(this.channel, message);
         return { success: false, message };
@@ -228,6 +238,28 @@ export class LaTeXdiffService {
     }
   }
 
+  /** Run one VC diff, logging and reporting failure as `false` for the batch loop. */
+  private async runDiffVcEntry(
+    inputLocation: FileLocation,
+    commitHash: string,
+    mathMarkup?: MathMarkupOption,
+  ): Promise<boolean> {
+    try {
+      const result = await this.runDiffVc(
+        inputLocation,
+        commitHash,
+        mathMarkup,
+      );
+      return result.success;
+    } catch (err) {
+      logger.error(
+        this.channel,
+        `Error processing ${inputLocation.absolutePath}: ${toErrorMessage(err)}`,
+      );
+      return false;
+    }
+  }
+
   async runDiffVcMultiple(
     inputLocations: FileLocation[],
     commitHash: string,
@@ -248,23 +280,10 @@ export class LaTeXdiffService {
 
       for (const inputLocation of inputLocations) {
         const inputFile = inputLocation.absolutePath;
-        try {
-          const result = await this.runDiffVc(
-            inputLocation,
-            commitHash,
-            mathMarkup,
-          );
-          if (result.success) {
-            results.success.push(inputFile);
-          } else {
-            results.failed.push(inputFile);
-          }
-        } catch (err) {
+        if (await this.runDiffVcEntry(inputLocation, commitHash, mathMarkup)) {
+          results.success.push(inputFile);
+        } else {
           results.failed.push(inputFile);
-          logger.error(
-            this.channel,
-            `Error processing ${inputFile}: ${toErrorMessage(err)}`,
-          );
         }
       }
 

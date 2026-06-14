@@ -159,6 +159,31 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
 };
 
 /**
+ * Run a probe command, returning its result or null when the spawn itself
+ * throws (missing binary, permission error). `reject: false` means non-zero
+ * exit codes still resolve, so only a real spawn failure lands here. `label`
+ * distinguishes the primary probe from a fallback one in the log line. The
+ * inline `reject: false` literal keeps execa's overload resolving `stdout`/
+ * `stderr` to strings.
+ */
+async function tryExeca(
+  cmd: string,
+  args: string[],
+  label: string,
+  env: NodeJS.ProcessEnv,
+) {
+  try {
+    return await execa(cmd, args, { env, reject: false, timeout: 5000 });
+  } catch (execErr) {
+    logger.info(
+      CHANNEL,
+      `Exception executing ${label}'${cmd}': ${toErrorMessage(execErr)}`,
+    );
+    return null;
+  }
+}
+
+/**
  * Generic function to check if a tool is installed
  * @param toolOrConfig Tool name (string) or tool configuration object
  * @param showError Whether to show an error message if the tool is not installed
@@ -193,11 +218,7 @@ export async function checkToolInstalled(
     let isInstalled = false;
 
     const extendedPath = extendEnvPath();
-    const execOptions = {
-      env: { ...process.env, PATH: extendedPath },
-      reject: false,
-      timeout: 5000,
-    };
+    const execEnv = { ...process.env, PATH: extendedPath };
 
     // Log PATH info once (not per-command)
     logger.debug(
@@ -220,16 +241,8 @@ export async function checkToolInstalled(
         `Checking tool '${cmd}' with args [${args.join(', ')}]`,
       );
 
-      let result;
-      try {
-        result = await execa(cmd, args, execOptions);
-      } catch (execErr) {
-        logger.info(
-          CHANNEL,
-          `Exception executing '${cmd}': ${toErrorMessage(execErr)}`,
-        );
-        return false;
-      }
+      let result = await tryExeca(cmd, args, '', execEnv);
+      if (!result) return false;
       logger.debug(
         CHANNEL,
         `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
@@ -255,15 +268,13 @@ export async function checkToolInstalled(
           CHANNEL,
           `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
         );
-        try {
-          result = await execa(fallback.command, fallback.args, execOptions);
-        } catch (fallbackErr) {
-          logger.info(
-            CHANNEL,
-            `Exception executing fallback '${fallback.command}': ${toErrorMessage(fallbackErr)}`,
-          );
-          return false;
-        }
+        result = await tryExeca(
+          fallback.command,
+          fallback.args,
+          'fallback ',
+          execEnv,
+        );
+        if (!result) return false;
         logger.debug(
           CHANNEL,
           `Fallback result: exitCode=${result.exitCode}, ` +
