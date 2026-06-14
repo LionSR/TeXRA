@@ -213,11 +213,18 @@ const orphanedActiveExecutions = new Set<string>();
  * equals the one session's `executions.getActiveIds()`.
  */
 export function getAllActiveExecutionIds(): string[] {
-  const ids = new Set<string>(orphanedActiveExecutions);
+  const live = new Set<string>();
   for (const session of liveSessions) {
-    for (const id of session.executions.getActiveIds()) ids.add(id);
+    for (const id of session.executions.getActiveIds()) live.add(id);
   }
-  return [...ids];
+  // Reconcile orphan markers: a resumed orphan is re-tracked live in its new
+  // session, so drop its stale marker here — it stops being double-counted and
+  // is then cleaned up naturally when that live run finishes (instead of
+  // lingering until process exit). Non-resumed orphans keep their marker.
+  for (const id of orphanedActiveExecutions) {
+    if (live.has(id)) orphanedActiveExecutions.delete(id);
+  }
+  return [...new Set([...orphanedActiveExecutions, ...live])];
 }
 
 let cachedDefaultSession: SessionHandle | undefined;

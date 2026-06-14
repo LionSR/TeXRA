@@ -105,6 +105,39 @@ describe('cross-session active executions (SDK Step 7d PR 4)', () => {
       win.dispose();
     }
   });
+
+  it('reconciles the orphan marker once the run is resumed (re-tracked) and finishes', () => {
+    const win = new SessionHandle();
+    const reopened = new SessionHandle();
+    const { host } = createRecordingHost();
+    const make = (session: SessionHandle): void =>
+      session.executions.track(
+        new AgentExecutionHandle(
+          'exec:resumed',
+          'exec:resumed-stream' as StreamTabId,
+          'exec:resumed-stream' as StreamTabId,
+          'orchestrator',
+          'toolUse',
+          host,
+          createCoordinators(host),
+        ),
+      );
+    try {
+      make(win);
+      win.dispose(); // orphaned
+      expect(getAllActiveExecutionIds()).toContain('exec:resumed');
+
+      // A reopened window resumes the run — re-tracked live. The stale orphan
+      // marker is reconciled, so when the resumed run finishes it drops out.
+      make(reopened);
+      expect(getAllActiveExecutionIds()).toContain('exec:resumed');
+      reopened.executions.untrack('exec:resumed');
+      expect(getAllActiveExecutionIds()).not.toContain('exec:resumed');
+    } finally {
+      win.dispose();
+      reopened.dispose();
+    }
+  });
 });
 
 describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
