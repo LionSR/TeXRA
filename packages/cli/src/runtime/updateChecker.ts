@@ -193,9 +193,7 @@ function parseHomebrewFormulaVersion(
         versions?: { stable?: unknown };
       };
       if (name !== formula) continue;
-      return typeof versions?.stable === 'string'
-        ? versions.stable
-        : undefined;
+      return typeof versions?.stable === 'string' ? versions.stable : undefined;
     }
   } catch {
     return undefined;
