@@ -791,7 +791,7 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
-  it('projects the focused status target and visible stoppable run once', () => {
+  it('projects focused status while keeping stop capability host-owned', () => {
     const root = 'root';
     const child = 'child';
     const grandchild = 'grandchild';
@@ -821,6 +821,17 @@ describe('CLI StatusBar display model', () => {
         streams,
       }),
     ).toMatchObject({
+      ctrlCAction: 'exit',
+      displaySlice: rootSlice,
+    });
+    expect(
+      statusBarStreamTarget({
+        activeStreamId: root,
+        canStopActiveRun: true,
+        parentStream: new Map([[child, root]]),
+        streams,
+      }),
+    ).toMatchObject({
       ctrlCAction: 'stop',
       displaySlice: rootSlice,
     });
@@ -832,6 +843,17 @@ describe('CLI StatusBar display model', () => {
         streams,
       }),
     ).toMatchObject({
+      ctrlCAction: 'exit',
+      displaySlice: childSlice,
+    });
+    expect(
+      statusBarStreamTarget({
+        activeStreamId: child,
+        canStopActiveRun: true,
+        parentStream: new Map([[child, root]]),
+        streams,
+      }),
+    ).toMatchObject({
       ctrlCAction: 'stop root',
       displaySlice: childSlice,
     });
@@ -839,6 +861,20 @@ describe('CLI StatusBar display model', () => {
       statusBarStreamTarget({
         activeStreamId: grandchild,
         canStopActiveRun: false,
+        parentStream: new Map([
+          [child, root],
+          [grandchild, child],
+        ]),
+        streams,
+      }),
+    ).toMatchObject({
+      ctrlCAction: 'exit',
+      displaySlice: grandchildSlice,
+    });
+    expect(
+      statusBarStreamTarget({
+        activeStreamId: grandchild,
+        canStopActiveRun: true,
         parentStream: new Map([
           [child, root],
           [grandchild, child],
