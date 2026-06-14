@@ -326,7 +326,7 @@ export abstract class PollingSourceBase<
       this.config.backoffBaseMs * 2 ** (state.consecutiveFailures - 1),
       this.config.backoffMaxMs,
     );
-    // Jitter ±20% so a network outage doesn't stampede every subscription
+    // Jitter +/-20% so a network outage doesn't stampede every subscription
     // back at exactly the same moment.
     const jitter = 0.8 + Math.random() * 0.4;
     const actualDelayMs = Math.round(backoffMs * jitter);
