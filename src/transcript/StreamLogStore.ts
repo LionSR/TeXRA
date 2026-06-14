@@ -670,8 +670,12 @@ export class StreamLogStore {
     this.debouncedSave.cancel();
     // Settle outstanding save() awaiters so they don't hang. delete() and
     // clear() discard the data, so there is nothing left to persist.
+    this.settlePendingSaveAwaiters();
+  }
+
+  private settlePendingSaveAwaiters(): void {
     const awaiters = this.pendingSaveAwaiters.splice(0);
-    for (const a of awaiters) a.resolve();
+    for (const awaiter of awaiters) awaiter.resolve();
   }
 
   private parsePersistedEntries(rawEntries: unknown): StreamLogEntry[] {
@@ -704,6 +708,7 @@ export class StreamLogStore {
     }
 
     if (dirtyIds.length === 0) {
+      this.settlePendingSaveAwaiters();
       return Promise.resolve();
     }
 
@@ -752,7 +757,7 @@ export class StreamLogStore {
         // Settle the snapshotted save awaiters — on failure the dirty
         // streams have already been re-marked for retry, so resolve
         // regardless.
-        for (const a of awaiters) a.resolve();
+        for (const awaiter of awaiters) awaiter.resolve();
       });
 
     this.inFlightWrite = writePromise;

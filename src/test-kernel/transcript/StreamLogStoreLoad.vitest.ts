@@ -393,6 +393,61 @@ describe('StreamLogStore load', () => {
     expect(storage.fullLogReads()).toBe(streamIds.length);
   });
 
+  it('settles save waiters when dirty streams are still rehydrating', async () => {
+    let releaseRead: () => void = () => {};
+    let markReadStarted: () => void = () => {};
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+    mockStorage({
+      logs: {
+        alpha: [logEntry('alpha', 1, 100)],
+      },
+      summaries: {
+        alpha: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: false,
+        },
+      },
+      onLogRead: async () => {
+        markReadStarted();
+        await readGate;
+      },
+    });
+    const store = new StreamLogStore();
+    await store.load();
+    const load = store.ensureLoaded('alpha');
+    await readStarted;
+
+    vi.useFakeTimers();
+    try {
+      store.append('alpha', {
+        id: 'alpha-live-entry',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 200,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'live while loading',
+      });
+      const save = store.save();
+      const settled = vi.fn();
+      save.then(settled);
+
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+
+      expect(settled).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+      releaseRead();
+      await load;
+    }
+  });
+
   it('lets delete win over an in-flight stream write', async () => {
     const storage = mockStorage({
       logs: {},
