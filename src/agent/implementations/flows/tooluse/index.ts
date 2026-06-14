@@ -13,7 +13,7 @@ export {
   type ToolUseFlowSetupCallback,
 } from './runToolUseFlow';
 
-export { type IToolUseSession } from './ToolUseSessionLifecycle';
+export { type IToolUseSession } from '@agent/core/flows/IToolUseSession';
 
 export { type ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 

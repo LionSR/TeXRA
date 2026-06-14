@@ -6,7 +6,7 @@ import type {
 } from '@agent/core/execution/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
-import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
+import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { TaskRunFileService } from '@utils/files';
 
