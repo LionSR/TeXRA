@@ -1,4 +1,5 @@
 // Local imports - shared progress backend
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ProgressViewOutboundMessage } from '@shared/schemas';
 import {
   WebviewBridge,
@@ -33,6 +34,8 @@ export interface ProgressBackendOptions {
   sendMessage: ProgressBackendMessageSender;
   hasTarget(): boolean;
   configureUi(services: ProgressBackendServices): ProgressBackendUiConfig;
+  /** Session that owns this backend's coordination state (defaults to the process session). */
+  session?: SessionHandle;
 }
 
 function sendUpdaterMessage(
@@ -59,7 +62,11 @@ export class ProgressBackend {
   readonly eventHandler: ProgressEventHandler;
 
   constructor(options: ProgressBackendOptions) {
-    this.state = new ProgressViewState(options.storage, options.snapshots);
+    this.state = new ProgressViewState(
+      options.storage,
+      options.snapshots,
+      options.session,
+    );
     this.webviewUpdater = new WebviewUpdater((message) => {
       sendUpdaterMessage(options.sendMessage, message);
     }, options.hasTarget);

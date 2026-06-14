@@ -6,8 +6,7 @@ import {
   createModelHandler,
   modelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
-import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   PersistedFlow,
   flowKey,
@@ -135,6 +134,10 @@ export async function runToolUseFlow<C = unknown>(
 ): Promise<RunToolUseFlowResult> {
   const { logger, runtimeHost, streamId, executionId, setting, onInterrupt } =
     input;
+  // Capture the run's session at setup (inside the run's ALS). The interrupt
+  // closure below fires from the host thread outside the ALS, so it must use
+  // this captured handle, not a fresh currentSession() lookup.
+  const runSession = currentSession();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
   const delegationDepth = input.delegationDepth ?? 0;
@@ -255,7 +258,7 @@ export async function runToolUseFlow<C = unknown>(
     },
     interrupt(): void {
       onInterrupt?.();
-      runCoordinatorBridge.cleanupRequestsForStream(streamId);
+      runSession.coordinators.cleanupRequestsForStream(streamId);
       sessionLifecycle.interrupt();
     },
     requestImmediateCompaction(): void {
@@ -283,7 +286,7 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   try {
-    interruptRegistry.register(streamId, flowContext);
+    runSession.interrupts.register(streamId, flowContext);
     teardownSetup = onSetup?.(flowContext) ?? undefined;
     let flowRecord: FlowRecord | null = null;
     try {
@@ -378,8 +381,8 @@ export async function runToolUseFlow<C = unknown>(
     }
 
     sessionLifecycle.dispose();
-    runCoordinatorBridge.cleanupRequestsForStream(streamId);
-    interruptRegistry.unregister(streamId);
+    runSession.coordinators.cleanupRequestsForStream(streamId);
+    runSession.interrupts.unregister(streamId);
     for (const handler of switchedHandlers) {
       handler.dispose();
     }

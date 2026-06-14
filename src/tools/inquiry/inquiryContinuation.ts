@@ -15,6 +15,7 @@
 import { platform } from '@platform/platform';
 
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { bus } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import type {
@@ -117,8 +118,15 @@ async function deliverContinuation(params: {
   parentStreamId: StreamTabId;
   text: string;
   threadId: ExternalInquiryThreadId;
+  session?: SessionHandle;
 }): Promise<InjectionOutcome> {
-  const result = await sendFollowUp(params.parentStreamId, params.text);
+  const result = await sendFollowUp(
+    params.parentStreamId,
+    params.text,
+    undefined,
+    undefined,
+    params.session,
+  );
 
   switch (result.status) {
     case 'sent':
@@ -160,6 +168,7 @@ export async function injectContinuationForAnsweredThread(
    * re-read, which would otherwise drop the continuation as archived.
    */
   manifestHint?: ExternalInquiryThreadManifest,
+  session?: SessionHandle,
 ): Promise<InjectionOutcome> {
   const manifest = manifestHint ?? (await readExternalInquiryThread(threadId));
   if (!manifest) return 'archived';
@@ -186,6 +195,7 @@ export async function injectContinuationForAnsweredThread(
     parentStreamId: manifest.parentStreamId,
     text,
     threadId,
+    session,
   });
 }
 
@@ -198,6 +208,7 @@ export async function injectContinuationForDroppedThread(
    * before a fresh read, which would mislabel the continuation.
    */
   manifestHint?: ExternalInquiryThreadManifest,
+  session?: SessionHandle,
 ): Promise<InjectionOutcome> {
   const manifest = manifestHint ?? (await readExternalInquiryThread(threadId));
   if (!manifest) return 'archived';
@@ -222,5 +233,6 @@ export async function injectContinuationForDroppedThread(
     parentStreamId: manifest.parentStreamId,
     text,
     threadId,
+    session,
   });
 }

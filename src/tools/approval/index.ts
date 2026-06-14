@@ -7,7 +7,10 @@
  * Import cleanup helpers from here, not from individual modules.
  */
 
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import {
   _rejectAllPendingUserQuestions,
@@ -26,28 +29,37 @@ import {
  * Clean up all approval state for a deleted stream.
  * Handles pending approvals (tool edits + bash), plan approvals, and YOLO mode state.
  */
-export function cleanupApprovalsForStream(streamId: StreamTabId): void {
+export function cleanupApprovalsForStream(
+  streamId: StreamTabId,
+  session: SessionHandle = defaultSession(),
+): void {
   toolEditApprovalController.rejectPendingForStream(streamId);
   bashApprovalController.rejectPendingForStream(streamId);
   _rejectPendingUserQuestionsForStream(streamId);
   toolEditApprovalController.bypass.clearForStream(streamId);
   bashApprovalController.bypass.clearForStream(streamId);
   proposalApprovalState.clearForStream(streamId);
-  runCoordinatorBridge.cleanupRequestsForStream(streamId);
+  session.coordinators.cleanupRequestsForStream(streamId);
 }
 
 /**
  * Clean up all approval state when deleting all streams.
  * Handles pending approvals (tool edits + bash), plan approvals, and YOLO mode state.
+ *
+ * The bridge half is scoped to `session` (its `activeCoordinators()` enumerates
+ * only that session's handles); the tool/bypass controllers remain process-wide
+ * (documented residue — they are not yet per-session).
  */
-export function cleanupAllApprovals(): void {
+export function cleanupAllApprovals(
+  session: SessionHandle = defaultSession(),
+): void {
   toolEditApprovalController.rejectAllPending();
   bashApprovalController.rejectAllPending();
   _rejectAllPendingUserQuestions();
   toolEditApprovalController.bypass.clearAll();
   bashApprovalController.bypass.clearAll();
   proposalApprovalState.clearAll();
-  runCoordinatorBridge.cleanupAllRequests();
+  session.coordinators.cleanupAllRequests();
 }
 
 export { enableYoloOnChildStream, inheritBashBypassOnChildStream };
