@@ -11,8 +11,10 @@ import {
   AgentError,
   classifyAgentError,
   getSdkErrorMessage,
+  normalizeProviderError,
   type AgentErrorKind,
 } from '@common/errors';
+import type { ProviderErrorPartial } from '@shared/schemas/errors';
 import { projectRunOutcome } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
@@ -54,6 +56,37 @@ function toResultOutcome(outcome: RunOutcome): ResultEvent['outcome'] {
   return 'failed';
 }
 
+type ResultError = { kind: AgentErrorKind } & ProviderErrorPartial;
+
+/**
+ * Build the `result` event's structured error from a caught error: the
+ * classified `kind` + the event-safe fields recovered by
+ * `normalizeProviderError` (T2-2/T3-2). Fully populated when the error reaches
+ * the boundary tagged; for a bare-`Error` flow failure only `message` and the
+ * always-set `userRetryable`/`isRelayError` are present until the T2-2 flow-seam
+ * attach lands. Excludes `rawErrorBody`/`streamDiagnostics` (event bloat).
+ */
+function buildResultError(
+  err: unknown,
+  kind: AgentErrorKind,
+  message: string,
+): ResultError {
+  const pe = normalizeProviderError(err);
+  return {
+    kind,
+    message,
+    userRetryable: pe.userRetryable,
+    isRelayError: pe.isRelayError,
+    ...(pe.statusCode !== undefined && { statusCode: pe.statusCode }),
+    ...(pe.provider !== undefined && { provider: pe.provider }),
+    ...(pe.requestId !== undefined && { requestId: pe.requestId }),
+    ...(pe.isCredentialExhausted !== undefined && {
+      isCredentialExhausted: pe.isCredentialExhausted,
+    }),
+    ...(pe.partialText !== undefined && { partialText: pe.partialText }),
+  };
+}
+
 /**
  * Emit the terminal `result` event on the run's trace — the single emission
  * boundary for run outcomes. Carries the classified error `kind` (when any) and
@@ -65,7 +98,7 @@ function emitRunResult(
   category: 'toolUse' | 'workflow',
   outcome: ResultEvent['outcome'],
   isSubagent: boolean,
-  error?: { kind: AgentErrorKind; message?: string },
+  error?: ResultError,
 ): ResultEvent {
   const usage = ctx.usageMonitor.lastTotals();
   const event: ResultEvent = {
@@ -241,7 +274,11 @@ export async function runFlowWithLifecycle(
           category,
           toResultOutcome(outcome),
           options?.isSubagent ?? false,
-          { kind, message: kind === 'unexpected' ? errorMsg : sdkMsg },
+          buildResultError(
+            err,
+            kind,
+            kind === 'unexpected' ? errorMsg : sdkMsg,
+          ),
         ),
       );
     }

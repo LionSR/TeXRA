@@ -246,6 +246,28 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     }
   });
 
+  it('carries the structured ProviderErrorPartial fields on result.error (T2-2/T3-2)', async () => {
+    const logger = new TraceEmitter();
+    const results = collectResults(logger);
+    const { ctx, streamStatus } = createCtx({ logger });
+    try {
+      await expect(
+        runFlowWithLifecycle(ctx, async () => {
+          throw new Error('provider exploded');
+        }),
+      ).rejects.toThrow('provider exploded');
+      const err = results[0].error;
+      expect(err?.kind).toBeDefined();
+      expect(typeof err?.message).toBe('string');
+      // `result.error` reuses the structured ProviderErrorPartial shape — the
+      // always-set fields are present even for a bare-Error failure.
+      expect(typeof err?.userRetryable).toBe('boolean');
+      expect(typeof err?.isRelayError).toBe('boolean');
+    } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
   it('maps a returned cancellation to a cancelled result (sibling of failed)', async () => {
     const logger = new TraceEmitter();
     const results = collectResults(logger);

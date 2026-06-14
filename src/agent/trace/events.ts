@@ -11,6 +11,7 @@
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentErrorKind } from '@common/errors';
 import type { EndGroupStatus } from '@shared/schemas';
+import type { ProviderErrorPartial } from '@shared/schemas/errors';
 
 /** Status assigned to a tool call when it completes. */
 export type ToolStatus = 'completed' | 'failed' | 'in_progress';
@@ -160,10 +161,15 @@ export interface DomainEvent extends StageStamp {
  * Terminal run outcome as data — emitted exactly once at the run-lifecycle
  * boundary (`runFlowWithLifecycle`), never from flows or the bus. `cancelled`
  * is a sibling of `failed` (a user interrupt is not a failure). `error.kind` is
- * the classified terminal-error discriminant; the optional `RetryErrorInfo`
- * enrichment is deferred to the error-pipeline T2-2 work, so the shape carries
- * only what is genuinely populated today. `usage` is the run totals (present
- * once at least one round recorded usage, including on failures).
+ * the classified terminal-error discriminant; the rest of `error` reuses the
+ * structured {@link ProviderErrorPartial} shape (statusCode / provider /
+ * requestId / partialText / isCredentialExhausted / isRelayError / userRetryable
+ * — all optional), populated best-effort from `normalizeProviderError` at the
+ * boundary. It is FULLY populated for errors that reach the boundary tagged;
+ * flow failures currently rethrow a bare `Error`, so for those only `message`
+ * (and the always-set `userRetryable` / `isRelayError`) are present until the
+ * T2-2 flow-seam attach lands. `usage` is the run totals (present once at least
+ * one round recorded usage, including on failures).
  */
 export interface ResultEvent extends StageStamp {
   readonly type: 'result';
@@ -173,7 +179,7 @@ export interface ResultEvent extends StageStamp {
   readonly agentName: string;
   readonly category: 'toolUse' | 'workflow';
   readonly isSubagent: boolean;
-  readonly error?: { readonly kind: AgentErrorKind; readonly message?: string };
+  readonly error?: { readonly kind: AgentErrorKind } & ProviderErrorPartial;
   readonly usage?: RunUsageTotals;
 }
 
