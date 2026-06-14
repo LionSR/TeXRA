@@ -157,3 +157,21 @@ export function joinNonEmpty(
   const nonempty = parts.filter(Boolean);
   return nonempty.length > 0 ? nonempty.join(sep) : undefined;
 }
+
+/**
+ * Split command/tool output on newlines, discarding blank lines.
+ * Handles both Unix (`\n`) and Windows (`\r\n`) line endings.
+ *
+ * Prefer this over inline `.split('\n').filter(Boolean)` in command-output
+ * parsing so that CRLF line endings from Windows tools are handled uniformly.
+ *
+ * @example
+ * splitOutputLines('foo\nbar\n')     // ['foo', 'bar']
+ * splitOutputLines('foo\r\nbar\r\n') // ['foo', 'bar']
+ * splitOutputLines('foo\n\nbar')     // ['foo', 'bar']
+ * splitOutputLines('')               // []
+ */
+export function splitOutputLines(text: string): string[] {
+  if (!text) return [];
+  return normalizeLineEndings(text).split('\n').filter(Boolean);
+}

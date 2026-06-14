@@ -20,7 +20,8 @@ export function getPathSegments(input: string): string[] {
   if (!input || input === '.') {
     return [];
   }
-  return toPosixPath(input).split('/').filter(Boolean);
+  // slash+trim then split directly — avoids the redundant join/split inside toPosixPath.
+  return slash(input.trim()).split('/').filter(Boolean);
 }
 
 /** Normalize a path for LaTeX \input commands (strips leading ./). */
