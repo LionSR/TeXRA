@@ -12,11 +12,7 @@ import {
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
-import {
-  classifyAgentError,
-  toErrorMessage,
-  type AgentErrorKind,
-} from '@common/errors';
+import { classifyAgentError, toErrorMessage } from '@common/errors';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
@@ -200,7 +196,7 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
   const error =
     outcome === 'failed'
       ? {
-          kind: getChildStreamErrorKind(options?.error),
+          kind: classifyAgentError(options?.error),
           message: errorMessage ?? 'Child stream failed',
         }
       : undefined;
@@ -225,8 +221,4 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
   if (options?.autoClose) {
     handle.runtimeHost.emit('removeStream', { streamId: handle.childStreamId });
   }
-}
-
-function getChildStreamErrorKind(error: unknown): AgentErrorKind {
-  return error == null ? 'unexpected' : classifyAgentError(error);
 }
