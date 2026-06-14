@@ -83,6 +83,9 @@ function buildResultError(
     ...(pe.isCredentialExhausted !== undefined && {
       isCredentialExhausted: pe.isCredentialExhausted,
     }),
+    ...(pe.isUpstreamCreditDepleted !== undefined && {
+      isUpstreamCreditDepleted: pe.isUpstreamCreditDepleted,
+    }),
     ...(pe.partialText !== undefined && { partialText: pe.partialText }),
   };
 }
