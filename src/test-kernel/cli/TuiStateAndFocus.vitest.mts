@@ -1032,7 +1032,7 @@ describe('CLI TUI row allocation', () => {
         foregroundKind: 'childControls',
         pending: undefined,
       }),
-    ).toBe('panel');
+    ).toBe('close');
     expect(
       foregroundEscapeAction({ foregroundKind: 'form', pending: undefined }),
     ).toBe('close');
