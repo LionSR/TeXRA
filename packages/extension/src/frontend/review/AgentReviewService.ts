@@ -15,6 +15,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -23,7 +24,6 @@ import {
   buildFixInstruction,
   buildReviewInstruction,
   createReviewIssue,
-  type ReviewApproach,
   type ReviewIssue,
   type ReviewIssueReport,
   type ReviewSeverity,
@@ -35,8 +35,9 @@ import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
+import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
 import { WorkspaceFS } from '@utils/files';
-import { getConfig } from '@utils/config/configUtils';
+import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'AgentReview';
 const COLLECTION_NAME = 'texra-agent-review';
@@ -281,7 +282,11 @@ class AgentReviewServiceImpl {
         changedFiles,
         diff,
         truncated,
-        approach: getConfig<ReviewApproach>('agentReview.approach', 'quick'),
+        approach: getValidatedConfig(
+          'agentReview.approach',
+          z.enum(AGENT_REVIEW_APPROACHES),
+          'quick',
+        ),
       });
       const model = getConfig<string>('agentReview.model', '').trim();
       const config = AgentConfigSchema.parse({
