@@ -19,7 +19,7 @@ import { z } from 'zod';
 // Local imports - tools
 import type { WorkPlanState } from '@agent/core/execution/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import type { CurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import { toErrorMessage } from '@common/errors';
@@ -258,7 +258,7 @@ Best practices:
     logger.info('Requesting approval for plan objective');
 
     const result: PlanApprovalResult =
-      await runCoordinatorBridge.waitForPlanApproval(streamId, {
+      await currentSession().coordinators.waitForPlanApproval(streamId, {
         approvalId,
         plan,
         goalEnabled,

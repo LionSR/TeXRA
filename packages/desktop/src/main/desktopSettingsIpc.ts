@@ -14,7 +14,7 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
 import { MAX_TIER, ULTRA_TIER } from '@auth/sharedConfig';
 import {
   API_PROVIDERS,
@@ -416,7 +416,7 @@ export function createDesktopSettingsIpc(
   }
 
   async function deleteHistoryItem(historyId: string): Promise<void> {
-    if (executionRegistry.getActiveIds().includes(historyId)) {
+    if (getAllActiveExecutionIds().includes(historyId)) {
       await options.showInfoMessage?.('Cannot delete a running execution');
       return;
     }
@@ -430,7 +430,7 @@ export function createDesktopSettingsIpc(
   }
 
   async function clearHistory(): Promise<void> {
-    await deleteAllExecutions(new Set(executionRegistry.getActiveIds()));
+    await deleteAllExecutions(new Set(getAllActiveExecutionIds()));
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
     });

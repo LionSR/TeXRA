@@ -11,10 +11,11 @@
 
 import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
+import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
 import {
-  interruptRegistry,
-  type IInterruptible,
-} from '@agent/runtime/InterruptRegistry';
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import {
   sendFollowUp,
   wakeOrReleaseQueuedStream,
@@ -95,7 +96,7 @@ export interface AgentCliSessionStrategy<TTurn> {
    * Called once before the loop starts. Used to register a resumed session id
    * immediately so a concurrent call with the same id can't start a second loop.
    */
-  onSessionStart?(): void;
+  onSessionStart?(session: SessionHandle): void;
 
   /** Run one streamed turn. Throws on hard failure. */
   runTurn(prompt: string, abortController: AbortController): Promise<TTurn>;
@@ -113,7 +114,7 @@ export interface AgentCliSessionStrategy<TTurn> {
   onTurnError?(turn: TTurn, logger: AgentTrace): void;
 
   /** After a successful turn: register the session/thread id, etc. */
-  onTurnSuccess?(turn: TTurn): void;
+  onTurnSuccess?(turn: TTurn, session: SessionHandle): void;
 
   /** Publish token usage to the UI. */
   publishUsage(turn: TTurn): void;
@@ -153,16 +154,19 @@ export function runAgentCliSession<TTurn>(
     params;
   const { childStreamId, logger } = childStream;
 
+  // Capture the run's session inside the tool's ALS so the cleanup below
+  // unregisters against the same handle the registration used.
+  const runSession = currentSession();
   const session = new AgentCliSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
   session.setQueue(queue);
-  interruptRegistry.register(childStreamId, session);
+  runSession.interrupts.register(childStreamId, session);
 
   // The child session runs on its own trace, whose per-instance stage scope is
   // empty here, so this opens as a root with no cross-trace parent.
   const sessionStage = logger.openStage(strategy.stageLabel);
 
-  strategy.onSessionStart?.();
+  strategy.onSessionStart?.(runSession);
 
   // Seed the initial prompt; the loop drains it as the first turn.
   queue.enqueue({ text: initialPrompt });
@@ -210,7 +214,7 @@ export function runAgentCliSession<TTurn>(
         const turnFailed = err != null || turnIsError;
 
         if (!turnFailed && turn != null) {
-          strategy.onTurnSuccess?.(turn);
+          strategy.onTurnSuccess?.(turn, runSession);
         }
 
         // publishUsage owns its own usage-presence check; the loop only needs a
@@ -232,10 +236,16 @@ export function runAgentCliSession<TTurn>(
             `Failed to persist report for ${executionId}: ${toErrorMessage(storageErr)}`,
           );
         }
-        const delivery = await sendFollowUp(parentStreamId, {
-          text: msg,
-          origin: 'subagent_result',
-        });
+        const delivery = await sendFollowUp(
+          parentStreamId,
+          {
+            text: msg,
+            origin: 'subagent_result',
+          },
+          undefined,
+          undefined,
+          runSession,
+        );
         if (delivery.status === 'no_session') {
           logger.warn(
             `Turn result for ${executionId} not delivered: parent stream ${parentStreamId} has no active session (status: ${delivery.streamStatus ?? 'unknown'}). The result remains in the execution report.`,
@@ -270,7 +280,7 @@ export function runAgentCliSession<TTurn>(
         }),
       );
       sessionStage.end(projection.endGroupStatus);
-      interruptRegistry.unregister(childStreamId);
+      runSession.interrupts.unregister(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       strategy.onSessionCleanup?.();
       // Persist terminal status before childStream.finalize() untracks and
