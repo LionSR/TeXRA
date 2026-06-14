@@ -30,6 +30,17 @@ export interface ConfirmCardHintWidthOptions extends ConfirmCardHintOptions {
   readonly maxColumns?: number;
 }
 
+export interface ConfirmCardCompactHintLayoutOptions extends ConfirmCardHintOptions {
+  readonly title: string;
+  readonly columns: number;
+}
+
+export interface ConfirmCardCompactHintLayout {
+  readonly inlineHints: readonly ConfirmCardHintAction[];
+  readonly stackedHints: readonly ConfirmCardHintAction[];
+  readonly stack: boolean;
+}
+
 export function confirmCardKeyAction(
   input: string,
   key: ConfirmCardKey,
@@ -141,4 +152,41 @@ export function confirmCardKeyHintsForWidth(
   if (hintsFit(coreHints, options.maxColumns)) return coreHints;
 
   return [{ key: 'Esc', action: 'cancel' }];
+}
+
+export function confirmCardCompactHintLayout({
+  title,
+  columns,
+  approveLabel,
+  rejectLabel,
+  alwaysAllowLabel,
+  extraActions,
+}: ConfirmCardCompactHintLayoutOptions): ConfirmCardCompactHintLayout {
+  const inlineHints = confirmCardKeyHintsForWidth({
+    approveLabel,
+    rejectLabel,
+    alwaysAllowLabel,
+    extraActions,
+    maxColumns: Math.max(0, columns - title.length - KEY_HINT_SEPARATOR.length),
+  });
+  const stackedHints = confirmCardKeyHintsForWidth({
+    approveLabel,
+    rejectLabel,
+    alwaysAllowLabel,
+    extraActions,
+    maxColumns: columns,
+  });
+  return {
+    inlineHints,
+    stackedHints,
+    stack:
+      inlineHints.some((hint) => hint.key === 'Esc') &&
+      stackedHints.length > inlineHints.length,
+  };
+}
+
+export function confirmCardCompactChromeRows(
+  options: ConfirmCardCompactHintLayoutOptions,
+): number {
+  return confirmCardCompactHintLayout(options).stack ? 2 : 1;
 }
