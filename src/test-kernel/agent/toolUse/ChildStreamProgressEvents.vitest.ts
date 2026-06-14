@@ -133,7 +133,7 @@ describe('child stream progress events', () => {
     });
   });
 
-  it('publishes child loop status changes through the child stream owner', () => {
+  it('publishes child loop status changes through the child stream owner', async () => {
     const active = createRecordingHost();
 
     const childStream = createChildStream(loopExecutionId, parentStreamId, {
@@ -145,6 +145,9 @@ describe('child stream progress events', () => {
       config,
       toolName: 'codex',
     });
+    const handle =
+      defaultSession().executions.getAgentHandleByStream(loopChildStreamId);
+    expect(handle).toBeDefined();
     active.events.splice(0);
 
     childStream.waitForInput();
@@ -170,9 +173,17 @@ describe('child stream progress events', () => {
       event: 'updateActiveSubagents',
       payload: { parentStreamId, children: [] },
     });
+    await expect(handle?.result).resolves.toMatchObject({
+      type: 'result',
+      outcome: 'failed',
+      error: {
+        kind: 'unexpected',
+        message: 'Child stream failed',
+      },
+    });
   });
 
-  it('preserves explicit user stops during child loop status changes', () => {
+  it('preserves explicit user stops during child loop status changes', async () => {
     const active = createRecordingHost();
 
     const childStream = createChildStream(stoppedExecutionId, parentStreamId, {
@@ -184,6 +195,9 @@ describe('child stream progress events', () => {
       config,
       toolName: 'codex',
     });
+    const handle =
+      defaultSession().executions.getAgentHandleByStream(stoppedChildStreamId);
+    expect(handle).toBeDefined();
     StreamStatusService.set(stoppedChildStreamId, STREAM_STATUS.STOPPED, {
       emit: false,
     });
@@ -200,6 +214,12 @@ describe('child stream progress events', () => {
     expect(
       active.events.filter((entry) => entry.event === 'updateStreamStatus'),
     ).toHaveLength(0);
+    await expect(handle?.result).resolves.toMatchObject({
+      type: 'result',
+      outcome: 'cancelled',
+      executionId: stoppedExecutionId,
+      streamId: stoppedChildStreamId,
+    });
   });
 
   it('settles child handle results as cancelled for stopped finalization', async () => {
