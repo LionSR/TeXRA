@@ -11,6 +11,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 import {
   _rejectAllPendingUserQuestions,
@@ -45,20 +46,21 @@ export function cleanupApprovalsForStream(
 
 /**
  * Reject pending tool-edit, bash, and user-question approvals that have no
- * stream context (streamId is undefined). These would otherwise survive a
- * per-stream {@link cleanupApprovalsForStream} loop because `undefined` ≠
- * any concrete StreamTabId, only {@link cleanupAllApprovals} catches them.
- * Bypass, proposal, and coordinator state are always streamId-keyed and are
- * not affected here.
+ * concrete stream context (streamId is undefined or empty). These would
+ * otherwise survive a per-stream {@link cleanupApprovalsForStream} loop
+ * because they do not equal any concrete StreamTabId, only
+ * {@link cleanupAllApprovals} catches them. Bypass, proposal, and coordinator
+ * state are always streamId-keyed and are not affected here.
  *
  * Desktop `deleteAllStreams` calls this after the per-stream sweep so that
- * an approval emitted without a concrete stream (rare, but the schema allows
- * it) is rejected rather than left pending with no UI prompt to answer.
+ * an approval emitted without a concrete stream is rejected rather than left
+ * pending with no UI prompt to answer. Multi-session hosts pass their own
+ * `runtimeHost` so sibling windows' streamless approvals stay intact.
  */
-export function cleanupUnscopedApprovals(): void {
-  toolEditApprovalController.rejectUnscopedPending();
-  bashApprovalController.rejectUnscopedPending();
-  _rejectUnscopedUserQuestions();
+export function cleanupUnscopedApprovals(runtimeHost?: AgentRuntimeHost): void {
+  toolEditApprovalController.rejectUnscopedPending(runtimeHost);
+  bashApprovalController.rejectUnscopedPending(runtimeHost);
+  _rejectUnscopedUserQuestions(runtimeHost);
 }
 
 /**

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { createChannelTrace } from '@logger';
 import {
@@ -41,6 +42,7 @@ const pendingQuestions = new Map<
   string,
   {
     streamId?: StreamTabId;
+    runtimeHost?: AgentRuntimeHost;
     settle: (result: UserQuestionResult) => void;
     isSettled: () => boolean;
   }
@@ -49,12 +51,9 @@ const pendingQuestions = new Map<
 async function awaitUserQuestionResponse(params: {
   requestId: string;
   input: AskUserQuestionInput;
+  runtimeHost: AgentRuntimeHost;
   streamId?: StreamTabId;
 }): Promise<UserQuestionResult> {
-  const runtimeHost = requireRuntimeHost(
-    'ask_user_question',
-    tryUseRunContext(),
-  );
   return new Promise<UserQuestionResult>((resolve) => {
     let settled = false;
     const settle = (result: UserQuestionResult) => {
@@ -65,15 +64,16 @@ async function awaitUserQuestionResponse(params: {
 
     pendingQuestions.set(params.requestId, {
       streamId: params.streamId,
+      runtimeHost: params.runtimeHost,
       settle,
       isSettled: () => settled,
     });
 
-    runtimeHost.emit('requestEnsureProgressView', {});
+    params.runtimeHost.emit('requestEnsureProgressView', {});
     if (params.streamId) {
-      runtimeHost.emit('setActiveStream', { streamId: params.streamId });
+      params.runtimeHost.emit('setActiveStream', { streamId: params.streamId });
     }
-    runtimeHost.emit('showUserQuestion', {
+    params.runtimeHost.emit('showUserQuestion', {
       requestId: params.requestId,
       questions: params.input.questions,
       context: params.input.context ?? undefined,
@@ -119,10 +119,16 @@ export function _rejectAllPendingUserQuestions(): void {
   }
 }
 
-/** @internal Called by unified cleanup for unscoped (streamId-less) approvals. */
-export function _rejectUnscopedUserQuestions(): void {
+/** @internal Called by unified cleanup for questions with no concrete stream. */
+export function _rejectUnscopedUserQuestions(
+  runtimeHost?: AgentRuntimeHost,
+): void {
   for (const entry of pendingQuestions.values()) {
-    if (!entry.streamId && !entry.isSettled()) {
+    if (
+      !entry.streamId &&
+      !entry.isSettled() &&
+      (runtimeHost === undefined || entry.runtimeHost === runtimeHost)
+    ) {
       entry.settle({ submitted: false });
     }
   }
@@ -151,6 +157,7 @@ The tool returns a JSON object whose keys are the original question texts and wh
       const result = await awaitUserQuestionResponse({
         requestId,
         input,
+        runtimeHost,
         streamId,
       });
 
