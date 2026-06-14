@@ -77,7 +77,10 @@ export {
 // Per-run control handle (F-2): the run's live handle, exposed via `onRun`.
 // Its `.result` promise settles with the terminal `ResultEvent` (always
 // resolves), and `.trace` is the run's discriminated-event channel.
-export { type AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+export {
+  type AgentRunHandle,
+  type AgentRunHandle as AgentExecutionHandle,
+} from '@agent/runtime/executionRegistry';
 
 // ── 5. Host port (consumer-injected progress-event sink) ──
 export {

@@ -24,7 +24,7 @@ import {
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 
-import { AgentExecutionHandle } from './executionRegistry';
+import { AgentExecutionHandle, type AgentRunHandle } from './executionRegistry';
 import {
   getAgentFlowErrorResult,
   buildTerminalFlowResult,
@@ -44,7 +44,7 @@ export interface RunFlowLifecycleOptions {
    * the additive exposure of the control handle (`.trace`, `.result`, interrupt
    * via `executions`). Throwing here must not abort the run, so it is guarded.
    */
-  onRun?: (handle: AgentExecutionHandle) => void;
+  onRun?: (handle: AgentRunHandle) => void;
 }
 
 /** Map the canonical run outcome onto the terminal `result` event's outcome. */
@@ -129,11 +129,16 @@ export async function runFlowWithLifecycle(
     ctx.logger,
   );
   session.executions.track(handle);
-  // Expose the live handle to the launcher (F-2). Guarded: a throwing consumer
-  // callback must never abort the run.
+  // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
+  // throw nor an async rejection from a consumer callback may abort the run.
   if (options?.onRun) {
     try {
-      options.onRun(handle);
+      const maybePromise = options.onRun(handle) as void | Promise<void>;
+      void Promise.resolve(maybePromise).catch((err: unknown) =>
+        logger.warn(
+          `onRun callback rejected for ${agentIdentifier}: ${String(err)}`,
+        ),
+      );
     } catch (err) {
       logger.warn(
         `onRun callback threw for ${agentIdentifier}: ${String(err)}`,

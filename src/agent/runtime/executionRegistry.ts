@@ -39,6 +39,7 @@ export {
   type ExecutionProgress,
   type ExecutionStatusInfo,
   type LiveToolUseFlowContext,
+  type AgentRunHandle,
   ACTIVE_STATUSES,
   AgentExecutionHandle,
   ProcessExecutionHandle,
