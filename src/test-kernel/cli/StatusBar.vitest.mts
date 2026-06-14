@@ -1280,7 +1280,7 @@ describe('CLI StatusBar display model', () => {
     ]);
   });
 
-  it('preserves distinct YOLO and auto-approval badges', () => {
+  it('preserves distinct YOLO, bash, and edit bypass badges', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
       pendingExitHint: false,
@@ -1305,7 +1305,7 @@ describe('CLI StatusBar display model', () => {
       PERSONAL_API_MODE_LABEL,
       'YOLO',
       'AUTO-BASH',
-      'AUTO-APPROVE',
+      'AUTO-EDIT',
     ]);
     expect(display.left.at(-3)).toMatchObject({
       badge: true,
@@ -1341,7 +1341,7 @@ describe('CLI StatusBar display model', () => {
       width: 61,
     });
 
-    expect(display.right).toBe('Keep the pr…');
+    expect(display.right).toBe('Keep the proof…');
     expect(display.bindings).toContain('[Ctrl-C]exit');
   });
 
