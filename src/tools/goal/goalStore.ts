@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { platform } from '@platform/platform';
 import { tryGetWorkspaceState } from '@agent/core/stateStore';
-import { bus } from '@eventBus/ProgressEventBus';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import {
   type ExecutionId,
   StreamTabIdSchema,
@@ -145,7 +145,8 @@ async function update(
   if (!goal) return null;
   const final: Goal = { ...mutate(goal), updatedAt: nowIso() };
   await writeRaw(final);
-  bus.emit('goalStateChanged', { streamId });
+  // In-run: the active run's host (ALS), falling back to the bus.
+  emitRuntimeEvent('goalStateChanged', { streamId });
   return final;
 }
 
@@ -203,7 +204,7 @@ export const GoalStore = {
       updatedAt: now,
     };
     await Promise.all([writeRaw(goal), addToIndex(streamId)]);
-    bus.emit('goalStateChanged', { streamId });
+    emitRuntimeEvent('goalStateChanged', { streamId });
     return goal;
   },
 
@@ -272,7 +273,9 @@ export const GoalStore = {
       state.update(legacyStreamKey(streamId), undefined),
       removeFromIndex(streamId),
     ]);
-    bus.emit('goalStateChanged', { streamId });
+    // Dual-context: PlanTool forgets in-run (→ run host via ALS); the
+    // progress-view lifecycle controller forgets host-path (→ bus fallback).
+    emitRuntimeEvent('goalStateChanged', { streamId });
   },
 
   /**
@@ -306,7 +309,8 @@ export const GoalStore = {
         ? state.update(LEGACY_INDEX_KEY, undefined)
         : Promise.resolve(),
     ]);
-    for (const id of toRemove) bus.emit('goalStateChanged', { streamId: id });
+    for (const id of toRemove)
+      emitRuntimeEvent('goalStateChanged', { streamId: id });
   },
 
   /**
