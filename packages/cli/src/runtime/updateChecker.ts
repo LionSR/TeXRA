@@ -96,10 +96,10 @@ export function buildUpdateCommand(
     case 'bun':
       return { command: 'bun', args: ['add', '-g', target] };
     case 'brew':
-      // Refresh the tap first: a brew install upgrades through Homebrew, not the
-      // npm registry, and the local formula cache may not yet have the bump that
-      // the registry check just detected. Run via the shell chain (`runCliUpdate`
-      // and `formatUpdateCommand` both treat the result as a shell command).
+      // Brew prompts are gated on the locally-known formula version, then the
+      // tap is refreshed immediately before upgrade. Run via the shell chain
+      // (`runCliUpdate` and `formatUpdateCommand` both treat the result as a
+      // shell command).
       return {
         command: 'brew',
         args: ['update', '&&', 'brew', 'upgrade', CLI_HOMEBREW_FORMULA],
