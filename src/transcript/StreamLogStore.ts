@@ -98,10 +98,13 @@ export class StreamLogStore {
    * pending resolvers without settling them, which would hang any awaited
    * save() indefinitely.
    */
-  private pendingSaveAwaiters: Array<{
-    resolve: () => void;
-    reject: (err: unknown) => void;
-  }> = [];
+  private pendingSaveAwaiters: Array<() => void> = [];
+  /**
+   * Tracks the active write. A flush can cancel the debounce and start a write
+   * while an already-queued debounce callback also runs; that is safe because
+   * each write snapshots and clears `dirtyStreamIds`, so the second call only
+   * sees newly dirtied streams or settles with no work.
+   */
   private inFlightWrite: Promise<void> | null = null;
   private writeGeneration = 0;
   private readonly writeTombstones = new Set<StreamTabId>();
@@ -432,8 +435,8 @@ export class StreamLogStore {
     // our own awaiters so we can settle them when the debounce is cancelled
     // during flush / delete / clear.
     this.debouncedSave();
-    return new Promise<void>((resolve, reject) => {
-      this.pendingSaveAwaiters.push({ resolve, reject });
+    return new Promise<void>((resolve) => {
+      this.pendingSaveAwaiters.push(resolve);
     });
   }
 
@@ -675,7 +678,7 @@ export class StreamLogStore {
 
   private settlePendingSaveAwaiters(): void {
     const awaiters = this.pendingSaveAwaiters.splice(0);
-    for (const awaiter of awaiters) awaiter.resolve();
+    for (const resolve of awaiters) resolve();
   }
 
   private parsePersistedEntries(rawEntries: unknown): StreamLogEntry[] {
@@ -757,7 +760,7 @@ export class StreamLogStore {
         // Settle the snapshotted save awaiters — on failure the dirty
         // streams have already been re-marked for retry, so resolve
         // regardless.
-        for (const awaiter of awaiters) awaiter.resolve();
+        for (const resolve of awaiters) resolve();
       });
 
     this.inFlightWrite = writePromise;

@@ -14,7 +14,7 @@
 import {
   type IBackoff,
   ExponentialBackoff,
-  fullJitterGenerator,
+  noJitterGenerator,
 } from 'cockatiel';
 
 import type { AgentTrace } from '@agent/trace';
@@ -50,6 +50,14 @@ export interface PollingSourceConfig {
   maxFailureDurationMs: number;
 }
 
+const twentyPercentJitterGenerator: typeof noJitterGenerator = (
+  state,
+  options,
+) => {
+  const [delay, nextState] = noJitterGenerator(state, options);
+  return [Math.round(delay * (0.8 + Math.random() * 0.4)), nextState];
+};
+
 /**
  * `K` is the canonical string key (PR keys flatten to `owner/repo#N`,
  * repo keys are `owner/repo`); `S` is the per-subscription state object,
@@ -66,8 +74,12 @@ export abstract class PollingSourceBase<
   >();
   private timer: ReturnType<typeof setInterval> | undefined;
   private tickInFlight = false;
-  private readonly backoff: ExponentialBackoff<unknown>;
-  /** Per-subscription backoff cursor; absent means "use initial delay". */
+  private readonly backoff: ExponentialBackoff<number>;
+  /**
+   * Per-subscription backoff cursor; absent means "use initial delay".
+   * `ExponentialBackoff.next()` creates a fresh sequence, and the returned
+   * cursor carries attempt state for subsequent failures on the same key.
+   */
   private readonly backoffCursors = new Map<K, IBackoff<unknown>>();
 
   constructor(protected readonly config: PollingSourceConfig) {
@@ -75,7 +87,9 @@ export abstract class PollingSourceBase<
     this.backoff = new ExponentialBackoff({
       initialDelay: config.backoffBaseMs,
       maxDelay: config.backoffMaxMs,
-      generator: fullJitterGenerator,
+      // Preserve the previous retry cadence while delegating cursor state to
+      // cockatiel: exponential delay capped by config, then jittered +/-20%.
+      generator: twentyPercentJitterGenerator,
     });
   }
 
