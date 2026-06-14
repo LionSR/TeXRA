@@ -145,6 +145,20 @@ export class AgentExecutionHandle implements ExecutionHandle {
   }
 }
 
+export type AgentRunHandle = Pick<
+  AgentExecutionHandle,
+  | 'executionId'
+  | 'parentStreamId'
+  | 'childStreamId'
+  | 'category'
+  | 'agentName'
+  | 'startedAt'
+  | 'runtimeHost'
+  | 'trace'
+  | 'result'
+  | 'getProgress'
+>;
+
 /**
  * Handle for background bash processes.
  * No `childStreamId` — processes don't have their own stream.

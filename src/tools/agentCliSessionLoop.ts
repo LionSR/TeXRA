@@ -289,8 +289,13 @@ export function runAgentCliSession<TTurn>(
         () => {},
       );
 
+      const finalStatus = sawTurnFailure
+        ? STREAM_STATUS.ERROR
+        : session.isInterrupted()
+          ? STREAM_STATUS.STOPPED
+          : STREAM_STATUS.READY;
       childStream.finalize({
-        status: sawTurnFailure ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
+        status: finalStatus,
       });
     }
   })();
