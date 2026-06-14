@@ -1,6 +1,7 @@
 // Local imports
 import { tryPlatform } from '@platform/platform';
 import { ensureArray } from '@utils/core';
+import type { ZodType } from 'zod';
 import type { ConfigTarget } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
 
@@ -35,6 +36,28 @@ function configProvider() {
 export function getConfig<T>(path: string, defaultValue?: T): T {
   const provider = configProvider();
   return provider ? provider.get(path, defaultValue) : (defaultValue as T);
+}
+
+/**
+ * Reads a configuration value and validates it against a Zod schema, returning
+ * `defaultValue` when the setting is unset or fails validation.
+ *
+ * Prefer this over `getConfig<T>(path, default)` whenever the value has a
+ * constrained shape (enums, bounded numbers, structured records). `getConfig`
+ * only *asserts* the type at the call site — a stale or hand-edited
+ * `settings.json` can still feed through a value that violates it. Passing the
+ * authoritative schema (e.g. the `z.enum(...)` built from a `coreSettings.ts`
+ * constant) makes that schema the single shared contract for both the type and
+ * the runtime check, so drift surfaces as a clean fallback rather than an
+ * invalid value flowing downstream.
+ */
+export function getValidatedConfig<T>(
+  path: string,
+  schema: ZodType<T>,
+  defaultValue: T,
+): T {
+  const result = schema.safeParse(getConfig<unknown>(path));
+  return result.success ? result.data : defaultValue;
 }
 
 /**
