@@ -35,6 +35,10 @@ const REPRESENTATIVE_RECORDS: CliNdjsonRecord[] = [
   { kind: 'result', result: { category: 'workflow' } },
   { kind: 'skill', ts: '2026-01-01T00:00:00.000Z', skill: { name: 's1' } },
   { kind: 'skill-issue', ts: '2026-01-01T00:00:00.000Z', issue: { code: 'x' } },
+  { kind: 'doctor-check', ts: '2026-01-01T00:00:00.000Z', id: 'node' },
+  { kind: 'doctor-summary', ts: '2026-01-01T00:00:00.000Z', ok: true },
+  { kind: 'progress', ts: '2026-01-01T00:00:00.000Z', event: 'setTaskState' },
+  { kind: 'log', ts: '2026-01-01T00:00:00.000Z', level: 'info' },
 ];
 
 describe('CLI NDJSON record contract', () => {
