@@ -1201,6 +1201,8 @@ export async function runChat(
     chatTuiCanInterruptActiveRun(session);
   const canStopActiveRun = (): boolean =>
     chatTuiCanStopVisibleRun(session, rootStreamStatus());
+  const canStopPendingRunWithoutStream = (): boolean =>
+    Boolean(session.runPromise && !session.runCompleted && !session.streamId);
   const shouldDetachSubagentsOnStop = (): boolean =>
     tryPlatform()?.workspaceState.get<boolean>(
       WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
@@ -1668,6 +1670,7 @@ export async function runChat(
       onSubmit={handleSubmit}
       canInterruptActiveRun={canInterruptActiveRun}
       canStopActiveRun={canStopActiveRun}
+      canStopPendingRunWithoutStream={canStopPendingRunWithoutStream}
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
       onInterruptActive={interruptActive}
