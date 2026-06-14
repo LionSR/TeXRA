@@ -247,6 +247,73 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     }
   });
 
+  it('keeps running when onRun throws synchronously', async () => {
+    const logger = new TraceEmitter();
+    const results = collectResults(logger);
+    const { ctx, streamStatus } = createCtx({ logger });
+    try {
+      await expect(
+        runFlowWithLifecycle(
+          ctx,
+          async () => ({
+            category: 'toolUse',
+            outcome: RUN_OUTCOME.COMPLETED,
+            executionId: ctx.executionId,
+            streamId: ctx.streamId,
+          }),
+          {
+            onRun: () => {
+              throw new Error('onRun boom');
+            },
+          },
+        ),
+      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        type: 'result',
+        outcome: 'completed',
+        executionId: ctx.executionId,
+      });
+    } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
+  it('keeps running when onRun rejects asynchronously', async () => {
+    const logger = new TraceEmitter();
+    const results = collectResults(logger);
+    const { ctx, streamStatus } = createCtx({ logger });
+    try {
+      await expect(
+        runFlowWithLifecycle(
+          ctx,
+          async () => ({
+            category: 'toolUse',
+            outcome: RUN_OUTCOME.COMPLETED,
+            executionId: ctx.executionId,
+            streamId: ctx.streamId,
+          }),
+          {
+            onRun: async () => {
+              throw new Error('onRun async boom');
+            },
+          },
+        ),
+      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+      await Promise.resolve();
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        type: 'result',
+        outcome: 'completed',
+        executionId: ctx.executionId,
+      });
+    } finally {
+      streamStatus.clear(ctx.streamId, { emit: false });
+    }
+  });
+
   it('keeps the completed result when the completion hook throws', async () => {
     const logger = new TraceEmitter();
     const results = collectResults(logger);

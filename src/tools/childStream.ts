@@ -12,7 +12,11 @@ import {
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
-import { toErrorMessage } from '@common/errors';
+import {
+  classifyAgentError,
+  toErrorMessage,
+  type AgentErrorKind,
+} from '@common/errors';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
@@ -157,11 +161,12 @@ interface FinalizeChildStreamArgs {
 function finalizeChildStream(args: FinalizeChildStreamArgs): void {
   const { handle, session, logger, disposeTrace, options } = args;
   const hasError = options?.error != null || options?.errorMessage != null;
+  const errorMessage =
+    options?.errorMessage ??
+    (options?.error != null ? toErrorMessage(options.error) : undefined);
 
-  if (options?.errorMessage) {
-    logger.error(options.errorMessage);
-  } else if (options?.error) {
-    logger.error(toErrorMessage(options.error));
+  if (errorMessage) {
+    logger.error(errorMessage);
   }
   if (options?.wallTimeMs != null) {
     logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
@@ -184,6 +189,13 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
       : finalStatus === STREAM_STATUS.STOPPED
         ? 'cancelled'
         : 'completed';
+  const error =
+    outcome === 'failed' && errorMessage
+      ? {
+          kind: getChildStreamErrorKind(options?.error),
+          message: errorMessage,
+        }
+      : undefined;
 
   // Settle the handle's `result` before untracking (F-2): child streams never
   // traverse the run lifecycle, so this is their only settle point. Without it
@@ -196,6 +208,7 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     agentName: handle.agentName,
     category: handle.category,
     isSubagent: handle.parentStreamId !== handle.childStreamId,
+    ...(error ? { error } : {}),
   });
 
   session.executions.finishAgentExecution(handle, { status: finalStatus });
@@ -204,4 +217,8 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
   if (options?.autoClose) {
     handle.runtimeHost.emit('removeStream', { streamId: handle.childStreamId });
   }
+}
+
+function getChildStreamErrorKind(error: unknown): AgentErrorKind {
+  return error == null ? 'unexpected' : classifyAgentError(error);
 }
