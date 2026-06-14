@@ -243,6 +243,22 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('returns undefined when the Homebrew tap refresh fails', async () => {
+    const calls: Array<{ command: string; args: readonly string[] }> = [];
+    await expect(
+      fetchLatestHomebrewFormulaVersion({
+        runCommand: async (command, args) => {
+          calls.push({ command, args });
+          return undefined;
+        },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(calls).toEqual([
+      { command: 'brew', args: ['update', '--quiet'] },
+    ]);
+  });
+
   it('passes the formula and timeout through to the command runner', async () => {
     const calls: Array<{
       command: string;
@@ -261,6 +277,11 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
     });
 
     expect(calls).toEqual([
+      {
+        command: 'brew',
+        args: ['update', '--quiet'],
+        timeoutMs: 123,
+      },
       {
         command: 'brew',
         args: ['info', '--json=v2', 'custom'],
