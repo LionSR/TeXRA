@@ -295,6 +295,9 @@ describe('CLI root argument routing', () => {
       detectUnknownCliFlag(['setup', '--no-input']),
     ).resolves.toBeUndefined();
     await expect(
+      detectUnknownCliFlag(['resume', 'abc123', '--print']),
+    ).resolves.toBeUndefined();
+    await expect(
       detectUnknownCliFlag([
         'multi-agent',
         'run',
@@ -1221,6 +1224,25 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toBe('');
 
     stderr = '';
+    const resumeResult = await runCli(['resume', 'abc123', '--print']);
+    expect(resumeResult.exitCode).toBe(2);
+    expect(stderr).toContain('texra resume is interactive');
+    expect(stderr).not.toContain('Unknown option');
+    expect(stdout).toBe('');
+
+    stderr = '';
+    const resumeShortcutResult = await runCli([
+      '--output-format',
+      'json',
+      '--resume',
+      'abc123',
+    ]);
+    expect(resumeShortcutResult.exitCode).toBe(2);
+    expect(stderr).toContain('texra resume is interactive');
+    expect(stderr).not.toContain('Unknown option');
+    expect(stdout).toBe('');
+
+    stderr = '';
     const setupResult = await runCli(['setup', '--no-input']);
     expect(setupResult.exitCode).toBe(2);
     expect(stderr).toContain('texra setup is interactive');
@@ -1274,6 +1296,17 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('open an item directly');
     expect(stdout).toContain('Enter');
     expect(stdout).toContain('Esc');
+    expect(stderr).toBe('');
+  });
+
+  it('does not advertise headless-only globals in resume --help', async () => {
+    const result = await runCli(['resume', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('USAGE texra resume');
+    expect(stdout).toContain('--approval-policy');
+    expect(stdout).not.toContain('--print');
+    expect(stdout).not.toContain('--output-format');
+    expect(stdout).not.toContain('--no-input');
     expect(stderr).toBe('');
   });
 
