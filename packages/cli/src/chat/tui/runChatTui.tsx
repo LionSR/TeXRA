@@ -367,10 +367,14 @@ export function chatTuiCanStopActiveRun(
 export function chatTuiCanStopVisibleRun(
   session: InterruptibleTuiSessionState,
   status: StreamStatus | undefined,
+  streamTreeHasLiveRun = false,
 ): boolean {
   return (
     chatTuiCanStopActiveRun(session, status) ||
-    Boolean(session.streamId && LIVE_ELAPSED_STREAM_STATUSES.has(status ?? ''))
+    Boolean(
+      session.streamId &&
+      (LIVE_ELAPSED_STREAM_STATUSES.has(status ?? '') || streamTreeHasLiveRun),
+    )
   );
 }
 
@@ -1199,8 +1203,18 @@ export async function runChat(
   };
   const canInterruptActiveRun = (): boolean =>
     chatTuiCanInterruptActiveRun(session);
+  const streamTreeHasLiveRun = (): boolean => {
+    for (const stream of cliState.streams.get().values()) {
+      if (LIVE_ELAPSED_STREAM_STATUSES.has(stream.status ?? '')) return true;
+    }
+    return false;
+  };
   const canStopActiveRun = (): boolean =>
-    chatTuiCanStopVisibleRun(session, rootStreamStatus());
+    chatTuiCanStopVisibleRun(
+      session,
+      rootStreamStatus(),
+      streamTreeHasLiveRun(),
+    );
   const canStopPendingRunWithoutStream = (): boolean =>
     Boolean(session.runPromise && !session.runCompleted && !session.streamId);
   const shouldDetachSubagentsOnStop = (): boolean =>

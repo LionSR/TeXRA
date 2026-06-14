@@ -1325,6 +1325,28 @@ describe('CLI TUI row allocation', () => {
         STREAM_STATUS.WAITING,
       ),
     ).toBe(false);
+    expect(
+      chatTuiCanStopVisibleRun(
+        {
+          runCompleted: false,
+          runPromise: Promise.resolve(),
+          streamId: root,
+        },
+        STREAM_STATUS.WAITING,
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      chatTuiCanStopVisibleRun(
+        {
+          runCompleted: false,
+          runPromise: Promise.resolve(),
+          streamId: root,
+        },
+        STREAM_STATUS.WAITING,
+        false,
+      ),
+    ).toBe(false);
   });
 
   it('resolves the TUI Ctrl-C action from armed, stoppable, and interruptible state', () => {
