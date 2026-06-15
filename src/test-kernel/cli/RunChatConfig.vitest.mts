@@ -1,11 +1,37 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getAgent, type AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   buildInitialChatAgentConfig,
+  chatToolUseAgentUsageError,
   restorePendingSkillActivations,
   takePendingSkillActivations,
 } from '@cli/chat/tui/runChatTui';
+
+vi.mock('@agent/index', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/index')>();
+  return {
+    ...actual,
+    getAgent: vi.fn(),
+  };
+});
+
+const mockedGetAgent = vi.mocked(getAgent);
+
+function registryAgent(category: AgentCategory): AgentEntry {
+  return {
+    name: category === AgentCategory.ToolUse ? 'assistant' : 'polish',
+    source:
+      category === AgentCategory.ToolUse ? 'builtInToolUse' : 'builtInWorkflow',
+    path: '/tmp/agent.yaml',
+    category,
+  };
+}
+
+beforeEach(() => {
+  mockedGetAgent.mockReset();
+});
 
 describe('CLI chat run config', () => {
   it('tags preset-launched team chats with the multi-agent preset id', () => {
@@ -130,6 +156,29 @@ describe('CLI chat run config', () => {
     expect(prepared.displayInstruction).toBe('compare A < B & C');
     expect(prepared.instruction).toContain(
       '<user_request>\ncompare A &lt; B &amp; C\n</user_request>',
+    );
+  });
+
+  it('accepts valid tool-use root chat agents', () => {
+    mockedGetAgent.mockReturnValueOnce(registryAgent(AgentCategory.ToolUse));
+
+    expect(chatToolUseAgentUsageError('assistant')).toBeUndefined();
+    expect(mockedGetAgent).toHaveBeenCalledWith('assistant', true);
+  });
+
+  it('rejects missing root chat agents before a prompt is submitted', () => {
+    mockedGetAgent.mockReturnValueOnce(undefined);
+
+    expect(chatToolUseAgentUsageError('mathematician')).toContain(
+      'Tool-use agent not found: mathematician.',
+    );
+  });
+
+  it('rejects workflow agents as root chat agents', () => {
+    mockedGetAgent.mockReturnValueOnce(registryAgent(AgentCategory.Workflow));
+
+    expect(chatToolUseAgentUsageError('polish')).toContain(
+      '`texra chat` only handles tool-use agents',
     );
   });
 });

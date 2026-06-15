@@ -50,6 +50,7 @@ import {
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
+import { missingToolUseAgentMessage } from '@cli/commands/_helpers/agentLookupText';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
@@ -491,6 +492,19 @@ function agentSupportsDelegation(agentName: string): boolean {
   );
 }
 
+export function chatToolUseAgentUsageError(
+  agentName: string,
+): string | undefined {
+  const agent = getAgent(agentName, true);
+  if (!agent) {
+    return missingToolUseAgentMessage(agentName);
+  }
+  if (agent.category !== AgentCategory.ToolUse) {
+    return `Agent "${agentName}" is a ${agent.category} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${agentName}\` for workflow agents, or \`texra multi-agent run <preset>\` for teams.`;
+  }
+  return undefined;
+}
+
 function applyInitialCliAgentSelection(
   agentName: string,
   context: SlashCommandContext,
@@ -503,6 +517,11 @@ function applyInitialCliAgentSelection(
   }
 
   const nextAgent = agentName.trim();
+  const usageError = chatToolUseAgentUsageError(nextAgent);
+  if (usageError) {
+    appendLocalAssistantTranscript(usageError);
+    return;
+  }
   cliState.sessionMeta.set({
     ...cliState.sessionMeta.get(),
     agent: nextAgent,
@@ -1033,6 +1052,12 @@ export async function runChat(
     envAgent: context.envAgent,
     envModel: context.envModel,
   });
+  await loadAgents();
+  const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
+  if (agentUsageError) {
+    writeTextStderr(agentUsageError);
+    return { exitCode: CliExitCode.Usage };
+  }
   // One API mode for the whole session: an explicit --api-mode/env override
   // wins, otherwise the persisted account default. Model resolution, the
   // no-models hints, and the header/status all read this same value so they can
@@ -1090,7 +1115,6 @@ export async function runChat(
     resetSession: resetSessionForClear,
     resumeExecution: resumeAgentRun,
   });
-  await loadAgents();
   cliState.sessionMeta.set({
     agent,
     model,
