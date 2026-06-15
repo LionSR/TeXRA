@@ -50,21 +50,19 @@ function resolveSkillSourcePath(base: string, candidate: string): string {
 }
 
 function uniqueSources(sources: readonly SkillSource[]): SkillSource[] {
-  const unique: SkillSource[] = [];
-  const seen = new Map<string, number>();
+  const seen = new Map<string, SkillSource>();
   for (const source of sources) {
     const key = path.resolve(source.path);
-    const existingIndex = seen.get(key);
-    if (existingIndex !== undefined) {
+    const existing = seen.get(key);
+    if (existing) {
       if (source.required === true) {
-        unique[existingIndex] = { ...unique[existingIndex], required: true };
+        seen.set(key, { ...existing, required: true });
       }
-      continue;
+    } else {
+      seen.set(key, { ...source, path: key });
     }
-    seen.set(key, unique.length);
-    unique.push({ ...source, path: key });
   }
-  return unique;
+  return [...seen.values()];
 }
 
 export function defaultSkillSources(

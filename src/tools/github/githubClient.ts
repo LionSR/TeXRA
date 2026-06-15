@@ -7,6 +7,7 @@
  * back on subsequent requests; a 304 means "no change since that ETag".
  */
 
+import { isNonEmptyString } from '@utils/core';
 import { request as octokitRequest } from '@octokit/request';
 import { RequestError } from '@octokit/request-error';
 
@@ -53,11 +54,10 @@ export class GitHubPermanentError extends Error {
  * to a JSON-stringified form if we ever need to format it ourselves.
  */
 function extractApiMessage(data: unknown, fallback: string): string {
-  if (typeof data === 'string' && data.trim()) return data;
+  if (isNonEmptyString(data)) return data;
   if (data && typeof data === 'object') {
     const rec = data as { message?: unknown };
-    if (typeof rec.message === 'string' && rec.message.trim())
-      return rec.message;
+    if (isNonEmptyString(rec.message)) return rec.message;
     // `data` is a plain GitHub error object (already JSON-parsed), so
     // stringifying it can't realistically throw — no guard needed.
     return JSON.stringify(data);
