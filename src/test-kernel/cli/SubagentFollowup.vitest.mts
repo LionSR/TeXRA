@@ -133,6 +133,30 @@ describe('summarizeSubagentFollowup', () => {
     );
   });
 
+  it('previews long result responses without flooding the transcript', () => {
+    const response = Array.from(
+      { length: 20 },
+      (_, index) => `result line ${index + 1}`,
+    ).join('\n');
+    const xml = [
+      '<subagent-result id="abc" agent="prover" category="toolUse" status="completed">',
+      '<wall-time>2m</wall-time>',
+      '<response>',
+      response,
+      '</response>',
+      '</subagent-result>',
+    ].join('\n');
+
+    const summary = summarizeSubagentFollowup(xml);
+
+    expect(summary).toContain('✓ prover completed · 2m');
+    expect(summary).toContain('result line 12');
+    expect(summary).not.toContain('result line 13');
+    expect(summary).toContain(
+      '… 8 more lines; open the subagent transcript for the full response',
+    );
+  });
+
   it('summarizes wrapped result follow-up messages for queued displays', () => {
     const xml = [
       '<orchestrator-followup>',

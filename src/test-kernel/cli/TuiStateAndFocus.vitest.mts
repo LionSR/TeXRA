@@ -1764,6 +1764,45 @@ describe('CLI transcript state', () => {
     }
   });
 
+  it('bounds long subagent result responses in the visible transcript', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      const response = Array.from(
+        { length: 20 },
+        (_, index) => `proof line ${index + 1}`,
+      ).join('\n');
+      logger.info(
+        [
+          '<subagent-result id="abc" agent="prover" category="toolUse" status="completed">',
+          '<wall-time>2m</wall-time>',
+          '<response>',
+          response,
+          '</response>',
+          '</subagent-result>',
+        ].join('\n'),
+        { messageType: MESSAGE_TYPES.USER_MESSAGE },
+      );
+
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.text).toContain('✓ prover completed · 2m');
+      expect(entries[0]?.text).toContain('proof line 12');
+      expect(entries[0]?.text).not.toContain('proof line 13');
+      expect(entries[0]?.text).toContain(
+        '… 8 more lines; open the subagent transcript for the full response',
+      );
+      expect(entries[0]?.text).not.toContain('<subagent-result');
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
   it('mirrors error log entries into the transcript', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
