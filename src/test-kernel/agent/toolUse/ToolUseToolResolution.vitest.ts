@@ -71,7 +71,7 @@ describe('tool-use tool resolution', () => {
       delegationBlocked: false,
     });
 
-    expect(tools.map((tool) => tool.name)).toEqual(['grep', 'wolfram']);
+    expect(tools.map((tool) => tool.name)).toEqual(['grep']);
     expect(delegationTrimmed).toBe(false);
   });
 

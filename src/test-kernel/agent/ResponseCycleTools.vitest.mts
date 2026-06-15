@@ -42,7 +42,7 @@ describe('response cycle tool visibility', () => {
       }) as any,
     );
 
-    expect(toolNames(tools)).toEqual(['grep', 'wolfram']);
+    expect(toolNames(tools)).toEqual(['grep']);
   });
 
   it('keeps workflow tools when approval prompts are available', () => {
