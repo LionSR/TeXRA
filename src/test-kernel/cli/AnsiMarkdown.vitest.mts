@@ -70,6 +70,38 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('<code>');
   });
 
+  it('renders HTML headings as markdown headings without leaking tags', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown(
+      '<h3>Verification Report</h3>The proof is <b>fully verified</b>.',
+      { colorEnabled: false, width: 80 },
+    );
+    const plain = stripAnsi(out);
+
+    expect(plain).toContain('Verification Report');
+    expect(plain).toContain('The proof is fully verified.');
+    expect(plain).not.toContain('<h3>');
+    expect(plain).not.toContain('</h3>');
+    expect(plain).not.toContain('<b>');
+    expect(plain).not.toContain('</b>');
+  });
+
+  it('keeps HTML headings inside HTML blockquotes quoted', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown(
+      '<blockquote><h3>Quoted Report</h3><p>The proof is <b>fully verified</b>.</p></blockquote>',
+      { colorEnabled: false, width: 80 },
+    );
+    const plain = stripAnsi(out);
+
+    expect(plain).toContain('│ Quoted Report');
+    expect(plain).toContain('│ The proof is fully verified.');
+    expect(plain).not.toContain('\nQuoted Report');
+    expect(plain).not.toContain('<blockquote>');
+    expect(plain).not.toContain('<h3>');
+    expect(plain).not.toContain('<b>');
+  });
+
   it('summarizes embedded subagent result XML before HTML rendering', () => {
     _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown(
