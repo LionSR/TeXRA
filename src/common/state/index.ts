@@ -9,8 +9,9 @@ export {
 // VS Code-free consumers should:
 //   - import key constants from '@shared/state/stateKeys' (canonical, no vscode dependency)
 //   - access state via platform() from '@platform/platform'
-//     (platform().workspaceState / platform().globalState), or the
-//     pre-init-tolerant tryGetWorkspaceState() in '@agent/core/stateStore'
+//     (platform().workspaceState / platform().globalState)
+//   - for pre-init-tolerant access use tryWorkspaceState() / tryGlobalState()
+//     from '@platform/platform'
 // Only extension-host wiring (packages/extension/src/) may use these exports.
 export { workspaceSM, globalSM, initializeStateManagers } from './stateManager';
 export {

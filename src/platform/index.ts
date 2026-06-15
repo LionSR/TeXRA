@@ -12,5 +12,6 @@ export {
   platform,
   tryPlatform,
   tryGlobalState,
+  tryWorkspaceState,
   type Platform,
 } from './platform';
