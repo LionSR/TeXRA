@@ -38,7 +38,12 @@ export function normalizeWriterCategory(
 ): AgentConfig {
   if (config.agentCategory !== AgentCategory.ToolUse) return config;
   if (!isAgentRegistryReady()) return config;
-  if (getAgent(agentName)?.category === AgentCategory.ToolUse) return config;
+  if (
+    getAgent(agentName, AgentCategory.ToolUse)?.category ===
+    AgentCategory.ToolUse
+  ) {
+    return config;
+  }
   return { ...config, agentCategory: AgentCategory.Workflow };
 }
 
