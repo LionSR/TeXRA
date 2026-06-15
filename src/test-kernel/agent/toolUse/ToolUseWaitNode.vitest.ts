@@ -273,6 +273,168 @@ describe('ToolUseWaitNode', () => {
     }
   });
 
+  it('injects an active goal continuation before the blocking wait', async () => {
+    const streamId = 'wait-node-active-goal' as StreamTabId;
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({}));
+
+    await GoalStore.start(streamId, 'Finish the autonomous proof audit.');
+
+    const shared: ToolUseRunShared = {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const createUserFollowUpMessages = vi.fn(
+      async (messages: unknown[], userMessage: string) => [
+        ...messages,
+        { role: 'user', content: userMessage },
+      ],
+    );
+    const onFollowUpConsumed = vi.fn();
+    const waitForFollowUp = vi.fn();
+    const streamStatus = new StreamStatusRegistry();
+    const services = {
+      checkInterruption: () => false,
+      isSubagent: false,
+      logger: { error: vi.fn(), info: vi.fn() },
+      modelHandler: {
+        createUserFollowUpMessages,
+        extractAssistantText: () => undefined,
+      },
+      onFollowUpConsumed,
+      runtimeHost: { emit: vi.fn() },
+      session: {
+        hasQueuedFollowUp: () => false,
+        waitForFollowUp,
+      },
+      streamId,
+      streamStatus,
+    } as unknown as ToolUseServices;
+    const node = new ToolUseWaitNode().setServices(services);
+
+    try {
+      const prep = await node.prep(shared);
+      const exec = await node.exec(prep);
+
+      expect(exec.kind).toBe('continue');
+      if (exec.kind !== 'continue') return;
+      expect(exec.synthetic).toBe(true);
+      expect(exec.followUps).toEqual([
+        {
+          text: expect.stringContaining('Finish the autonomous proof audit.'),
+          origin: 'synthetic',
+        },
+      ]);
+      expect(waitForFollowUp).not.toHaveBeenCalled();
+      expect(streamStatus.get(streamId)).toBeUndefined();
+
+      const transition = await node.post(shared, prep, exec);
+
+      expect(transition).toBe(FlowTransition.CONTINUE);
+      expect(onFollowUpConsumed).not.toHaveBeenCalled();
+      expect(createUserFollowUpMessages).toHaveBeenCalledOnce();
+      expect(createUserFollowUpMessages).toHaveBeenCalledWith(
+        [],
+        expect.stringContaining('<goal_context>'),
+      );
+      expect(shared.messages).toEqual([
+        {
+          role: 'user',
+          content: expect.stringContaining(
+            'Finish the autonomous proof audit.',
+          ),
+        },
+      ]);
+      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+    } finally {
+      await GoalStore.forget(streamId);
+    }
+  });
+
+  it('lets queued user follow-up win over an active goal continuation', async () => {
+    const streamId = 'wait-node-goal-user-queued' as StreamTabId;
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({}));
+
+    await GoalStore.start(streamId, 'Keep going autonomously.');
+
+    const waitForFollowUp = vi.fn(async () => ({
+      items: [{ text: 'user correction', origin: 'user' }],
+      synthetic: false,
+    }));
+    const services = {
+      checkInterruption: () => false,
+      logger: { error: vi.fn() },
+      modelHandler: { extractAssistantText: () => undefined },
+      runtimeHost: { emit: vi.fn() },
+      session: {
+        hasQueuedFollowUp: () => true,
+        waitForFollowUp,
+      },
+      streamId,
+      streamStatus: new StreamStatusRegistry(),
+    } as unknown as ToolUseServices;
+    const node = new ToolUseWaitNode().setServices(services);
+
+    try {
+      const exec = await node.exec({
+        afterError: false,
+        lastResponse: undefined,
+        previouslyDeliveredToOrchestrator: false,
+        touchedFiles: [],
+      });
+
+      expect(waitForFollowUp).toHaveBeenCalledOnce();
+      expect(exec).toEqual({
+        kind: 'continue',
+        followUps: [{ text: 'user correction', origin: 'user' }],
+        synthetic: false,
+      });
+    } finally {
+      await GoalStore.forget(streamId);
+    }
+  });
+
+  it('does not let a subagent drive the parent goal continuation loop', async () => {
+    const streamId = 'wait-node-goal-subagent' as StreamTabId;
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({}));
+
+    await GoalStore.start(streamId, 'Parent-owned objective.');
+
+    const waitForFollowUp = vi.fn(async () => null);
+    const services = {
+      checkInterruption: () => false,
+      isSubagent: true,
+      logger: { error: vi.fn() },
+      modelHandler: { extractAssistantText: () => undefined },
+      runtimeHost: { emit: vi.fn() },
+      session: {
+        hasQueuedFollowUp: () => false,
+        waitForFollowUp,
+      },
+      streamId,
+      streamStatus: new StreamStatusRegistry(),
+    } as unknown as ToolUseServices;
+    const node = new ToolUseWaitNode().setServices(services);
+
+    try {
+      const exec = await node.exec({
+        afterError: false,
+        lastResponse: undefined,
+        previouslyDeliveredToOrchestrator: false,
+        touchedFiles: [],
+      });
+
+      expect(waitForFollowUp).toHaveBeenCalledOnce();
+      expect(exec.kind).toBe('stop');
+      expect(GoalStore.getForStream(streamId)?.status).toBe('active');
+    } finally {
+      await GoalStore.forget(streamId);
+    }
+  });
+
   it('updates the injected stream status owner while waiting and resuming', async () => {
     const streamId = 'wait-node-owner' as StreamTabId;
     const streamStatus = new StreamStatusRegistry();
