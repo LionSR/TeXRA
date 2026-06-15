@@ -11,4 +11,4 @@ export {
 } from './goalMeta';
 
 export { GoalStore } from './goalStore';
-export { setGoalSessionAutoApprovals } from './goalAutoApproval';
+export { setGoalSessionBashAutoApproval } from './goalAutoApproval';
