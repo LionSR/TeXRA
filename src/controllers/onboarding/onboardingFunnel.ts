@@ -14,6 +14,7 @@
  * sources and reads the flags below from its `platform().globalState`.
  */
 
+import { isNonEmptyString } from '@utils/core';
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
@@ -114,7 +115,7 @@ export async function setFirstRunDone(
 /** User-level default team id, written by the setup agent's `apply_team`. */
 export function getDefaultTeamId(state: StateStore): string | undefined {
   const value = state.get<string>(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID);
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
+  return isNonEmptyString(value) ? value : undefined;
 }
 
 export async function setDefaultTeamId(
@@ -173,7 +174,7 @@ export async function hasAnyProviderApiKey(
   for (const provider of API_PROVIDERS) {
     // Sequential by design: stop at the first key found.
     const key = await lookupApiKey(secrets, provider);
-    if (typeof key === 'string' && key.trim().length > 0) return true;
+    if (isNonEmptyString(key)) return true;
   }
   return false;
 }

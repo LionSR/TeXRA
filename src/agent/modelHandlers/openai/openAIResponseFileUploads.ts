@@ -261,10 +261,9 @@ export async function buildInlineAttachmentParts(
         });
       } else {
         // PDF, office documents, and other file types accepted by input_file
-        const filename =
-          typeof attachment.path === 'string' && attachment.path.length > 0
-            ? path.basename(attachment.path)
-            : 'attachment';
+        const filename = isNonEmptyString(attachment.path)
+          ? path.basename(attachment.path)
+          : 'attachment';
         parts.push({
           type: 'input_file',
           file_data: `data:${mimeType};base64,${base64}`,

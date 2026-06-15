@@ -46,6 +46,7 @@ import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
+import { isNonEmptyString } from '@utils/core';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -281,7 +282,7 @@ export async function runStreamedTurn(params: {
       usage = raw.usage ?? null;
       totalCostUsd = raw.total_cost_usd;
       if (raw.subtype === 'success') {
-        if (typeof raw.result === 'string' && raw.result.length > 0) {
+        if (isNonEmptyString(raw.result)) {
           responseParts.push(raw.result);
         }
       } else {
@@ -314,7 +315,7 @@ function handleAssistantBlocks(
   for (const block of blocks) {
     switch (block.type) {
       case 'text':
-        if (typeof block.text === 'string' && block.text.length > 0) {
+        if (isNonEmptyString(block.text)) {
           logger.info(block.text, {
             messageType: MESSAGE_TYPES.MODEL_RESPONSE,
           });
@@ -322,7 +323,7 @@ function handleAssistantBlocks(
         }
         break;
       case 'thinking':
-        if (typeof block.thinking === 'string' && block.thinking.length > 0) {
+        if (isNonEmptyString(block.thinking)) {
           logger.info(block.thinking, { messageType: MESSAGE_TYPES.THINKING });
         }
         break;
