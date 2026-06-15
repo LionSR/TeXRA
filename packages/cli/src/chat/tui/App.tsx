@@ -961,7 +961,6 @@ export function App(props: AppProps): React.JSX.Element {
         <Box flexDirection="column" overflowY="hidden">
           {!transcriptViewerOpen && conversationRows > 0 ? (
             <ConversationPane
-              allowNativeScrollbackOverflow={scopedTranscript}
               colorEnabled={props.colorEnabled}
               width={transcriptWidth}
               maxRows={conversationRows}
