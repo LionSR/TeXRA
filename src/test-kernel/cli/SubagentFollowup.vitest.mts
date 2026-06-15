@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  decodeXmlEntities,
   hasIncompleteEmbeddedSubagentFollowup,
   stripOrchestratorFollowup,
   summarizeEmbeddedSubagentFollowups,
@@ -171,6 +172,12 @@ describe('summarizeSubagentFollowup', () => {
     expect(summarizeSubagentFollowup(xml)).toBe(
       '✓ research completed\nKeep </response> literal & inspect <file>',
     );
+  });
+
+  it('decodes only XML entities in a single pass', () => {
+    expect(decodeXmlEntities('&quot;&apos;&lt;&gt;&amp;')).toBe('"\'<>&');
+    expect(decodeXmlEntities('&amp;lt;')).toBe('&lt;');
+    expect(decodeXmlEntities('&copy; &#39;')).toBe('&copy; &#39;');
   });
 
   it('previews long result responses without flooding the transcript', () => {

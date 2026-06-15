@@ -180,6 +180,65 @@ describe('renderAnsiMarkdown', () => {
     }
   });
 
+  it('keeps quoted list prefixes aligned across ANSI charset escapes', () => {
+    const esc = String.fromCharCode(27);
+    const line = `${esc}(0│ ${esc}(B  • abcdef ghijkl mnopqr`;
+    const out = wrapAnsiToWidth(line, 10, true);
+    const plain = stripAnsi(out);
+    const lines = plain.split('\n');
+
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines[0]).toBe('│   • abcd');
+    expect(lines.slice(1).every((line) => line.startsWith('│     '))).toBe(
+      true,
+    );
+    expect(plain).not.toContain('0│');
+    expect(plain).not.toContain('B  •');
+    for (const wrappedLine of lines) {
+      expect(displayWidthForTest(wrappedLine)).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it('wraps quoted list prefixes after C1-ST OSC hyperlinks', () => {
+    const esc = String.fromCharCode(27);
+    const c1StringTerminator = String.fromCharCode(0x9c);
+    const link = `${esc}]8;;https://example.test${c1StringTerminator}`;
+    const out = wrapAnsiToWidth(`${link}│   • abcdef ghijkl mnopqr`, 10, true);
+    const plain = stripAnsi(out);
+    const lines = plain.split('\n');
+
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines[0]).toBe('│   • abcd');
+    expect(lines.slice(1).every((line) => line.startsWith('│     '))).toBe(
+      true,
+    );
+    for (const wrappedLine of lines) {
+      expect(displayWidthForTest(wrappedLine)).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it('wraps quoted list prefixes after C1 CSI styles', () => {
+    const c1Csi = String.fromCharCode(0x9b);
+    const out = wrapAnsiToWidth(
+      `${c1Csi}31m│ ${c1Csi}39m  • abcdef ghijkl mnopqr`,
+      10,
+      true,
+    );
+    const plain = stripAnsi(out);
+    const lines = plain.split('\n');
+
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines[0]).toBe('│   • abcd');
+    expect(lines.slice(1).every((line) => line.startsWith('│     '))).toBe(
+      true,
+    );
+    expect(plain).not.toContain('31m');
+    expect(plain).not.toContain('39m');
+    for (const wrappedLine of lines) {
+      expect(displayWidthForTest(wrappedLine)).toBeLessThanOrEqual(10);
+    }
+  });
+
   it('styles heading text across inline code boundaries', () => {
     _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('## Use `git` correctly');
