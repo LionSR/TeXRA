@@ -14,6 +14,7 @@ import {
 import { normalizeToolUseData } from '@shared/toolUse';
 
 import {
+  hasIncompleteEmbeddedSubagentFollowup,
   summarizeEmbeddedSubagentFollowups,
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
@@ -130,6 +131,8 @@ function entriesEqual(
   if (
     prev.role !== next.role ||
     prev.text !== next.text ||
+    prev.pendingEmbeddedSubagentFollowup !==
+      next.pendingEmbeddedSubagentFollowup ||
     prev.finalized !== next.finalized
   ) {
     return false;
@@ -213,6 +216,8 @@ function renderLogEntry(
 
   const text = entry.text ?? '';
   const role = logEntryRole(entry.messageType);
+  const assistantTranscript =
+    role === 'assistant' ? trimAssistantTranscriptLead(text) : undefined;
   const renderedText = renderLogEntryText(role, text);
   // Assistant text is promoted by `finalizeSettledPrefix` once the model
   // moves on to a later entry; inherit the prior flag here so a re-sync
@@ -223,6 +228,10 @@ function renderLogEntry(
     id: entry.id,
     role,
     text: renderedText,
+    ...(assistantTranscript !== undefined &&
+    hasIncompleteEmbeddedSubagentFollowup(assistantTranscript)
+      ? { pendingEmbeddedSubagentFollowup: true }
+      : {}),
     finalized,
   };
   if (!isRenderableTranscriptEntry(next)) return null;
@@ -248,7 +257,9 @@ function isSettledEntry(
     case 'tool':
       return entry.toolUse?.status === TOOL_USE_STATUS.COMPLETED;
     case 'assistant':
-      return index < entries.length - 1;
+      return (
+        !entry.pendingEmbeddedSubagentFollowup && index < entries.length - 1
+      );
   }
 }
 
