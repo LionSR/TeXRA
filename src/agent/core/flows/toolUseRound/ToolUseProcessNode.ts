@@ -195,7 +195,6 @@ export class ToolUseProcessNode<C> extends BaseNode<
         blankAfterToolResult &&
         shared.blankToolResultContinuationMessageIndex !== lastMessageIndex
       ) {
-        shared.blankToolResultContinuationMessageIndex = lastMessageIndex;
         shared.messages = await appendFollowUpAsUserMessage(
           shared.messages,
           {
@@ -204,6 +203,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
           },
           this.services,
         );
+        shared.blankToolResultContinuationMessageIndex = lastMessageIndex;
         workspace.resetServerToolContent();
         workspace.resetReasoning();
         shared.roundIndex += 1;
