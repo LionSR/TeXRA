@@ -1188,6 +1188,20 @@ const SCENARIOS = [
     unexpect: ['AUTO-APPROVE', 'Run bash command?', '1 approval'],
   },
   {
+    name: 'bash-approval-approve-twice',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_BASH_APPROVAL: '1',
+      HARNESS_REPEATED_BASH_APPROVAL: '1',
+    },
+    bootExpect: '[Ctrl-C]',
+    keys: ['y', { input: 'y', delayMs: 1000 }],
+    settleMs: 6000,
+    frame: 'tail',
+    expect: ['SECOND-BASH-APPROVED', '[/status]details', '[/model]models'],
+    unexpect: ['Run bash command?', '1 approval'],
+  },
+  {
     name: 'bash-approval-session-status',
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
