@@ -14,6 +14,11 @@ import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator'
 import { type RunCoordinators } from '@agent/runtime/RunContext';
 import { withToolEnvironment } from '@agent/toolUse/ToolFileInteractionContext';
 import { planSummaryLine, type Plan, type StreamTabId } from '@shared/schemas';
+import {
+  cleanupApprovalsForStream,
+  isApprovalBypassedForStream,
+  isBashApprovalBypassedForStream,
+} from '@tools/approval';
 import { GOAL_FEATURE_FLAG_KEY, GoalStore } from '@tools/goal';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { createRecordingHost } from '../agent/progressTestUtils';
@@ -164,8 +169,11 @@ describe('PlanTool — update (plan approval)', () => {
       expect(goal!.status).toBe('active');
       // The approved plan document seeds the goal verbatim.
       expect(goal!.objective).toBe(plan.objective);
+      expect(isBashApprovalBypassedForStream(streamId)).toBe(true);
+      expect(isApprovalBypassedForStream(streamId)).toBe(false);
     } finally {
       await GoalStore.forget(streamId);
+      cleanupApprovalsForStream(streamId);
     }
   });
 
@@ -215,8 +223,11 @@ describe('PlanTool — update (plan approval)', () => {
       expect(goal!.status).toBe('active');
       expect(goal!.objective).toBe(followUpPlan.objective);
       expect(goal!.objective).not.toContain('Old objective');
+      expect(isBashApprovalBypassedForStream(streamId)).toBe(true);
+      expect(isApprovalBypassedForStream(streamId)).toBe(false);
     } finally {
       await GoalStore.forget(streamId);
+      cleanupApprovalsForStream(streamId);
     }
   });
 
