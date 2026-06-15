@@ -1646,8 +1646,16 @@ describe('finalizeSettledPrefix', () => {
         status,
       },
     }) as const;
-  const assistant = (id: string) =>
-    ({ id, role: 'assistant', text: id, finalized: false }) as const;
+  const assistant = (id: string, pendingEmbeddedSubagentFollowup = false) =>
+    ({
+      id,
+      role: 'assistant',
+      text: id,
+      ...(pendingEmbeddedSubagentFollowup
+        ? { pendingEmbeddedSubagentFollowup }
+        : {}),
+      finalized: false,
+    }) as const;
   const finalizedIds = (
     entries: readonly { id: string; finalized: boolean }[],
   ) => entries.filter((entry) => entry.finalized).map((entry) => entry.id);
@@ -1664,6 +1672,15 @@ describe('finalizeSettledPrefix', () => {
 
   it('keeps the in-flight tail pending while the stream runs', () => {
     const out = finalizeSettledPrefix([assistant('a1')], false);
+    expect(finalizedIds(out)).toEqual([]);
+  });
+
+  it('keeps assistant entries with incomplete subagent blocks pending', () => {
+    const out = finalizeSettledPrefix(
+      [assistant('a1', true), tool('t1', 'completed'), assistant('a2')],
+      false,
+    );
+
     expect(finalizedIds(out)).toEqual([]);
   });
 
