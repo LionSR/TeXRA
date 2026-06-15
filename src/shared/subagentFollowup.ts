@@ -225,11 +225,29 @@ export function hasIncompleteEmbeddedSubagentFollowup(text: string): boolean {
   );
 }
 
+function embeddedBoundary(text: string, index: number): string {
+  const char = text[index];
+  return char !== undefined && !/\s/.test(char) ? '\n' : '';
+}
+
+function summarizeEmbeddedSubagentBlock(
+  block: string,
+  offset: number,
+  source: string,
+): string {
+  return [
+    embeddedBoundary(source, offset - 1),
+    summarizeSubagentFollowup(block),
+    embeddedBoundary(source, offset + block.length),
+  ].join('');
+}
+
 export function summarizeEmbeddedSubagentFollowups(text: string): string {
   if (!text.includes('<subagent-')) return text;
   const completeSummarized = text.replaceAll(
     EMBEDDED_SUBAGENT_BLOCK_RE,
-    (block) => summarizeSubagentFollowup(block),
+    (block, _tag, offset, source) =>
+      summarizeEmbeddedSubagentBlock(block, offset, source),
   );
   const incomplete = findIncompleteEmbeddedSubagentFollowup(completeSummarized);
   if (!incomplete) return completeSummarized;

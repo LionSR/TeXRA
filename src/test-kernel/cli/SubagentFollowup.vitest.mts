@@ -109,6 +109,18 @@ describe('summarizeSubagentFollowup', () => {
     );
   });
 
+  it('separates embedded subagent summaries from adjacent assistant text', () => {
+    expect(
+      summarizeEmbeddedSubagentFollowups(
+        [
+          'Before',
+          '<subagent-result id="abc" agent="review" category="toolUse" status="completed"></subagent-result>',
+          'Next sentence.',
+        ].join(''),
+      ),
+    ).toBe(['Before', '✓ review completed', 'Next sentence.'].join('\n'));
+  });
+
   it('summarizes incomplete embedded subagent blocks while streaming', () => {
     const text = [
       'before',
