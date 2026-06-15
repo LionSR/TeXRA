@@ -9,6 +9,7 @@ import {
   formatMediaNeedsVisionWarning,
   shouldWarnMediaNeedsVision,
 } from '@agent/runtime/mediaVisionWarning';
+import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import type { TaskRunFileService } from '@utils/files';
 import type { FollowUpQueueBatchItem } from './FollowUpQueue';
 
@@ -19,6 +20,13 @@ interface FollowUpMessageServices<C> {
   >;
   readonly fileService: Pick<TaskRunFileService, 'createLocation'>;
   readonly logger: Pick<AgentTrace, 'warn'>;
+}
+
+export function followUpDisplayText(followUp: FollowUpQueueBatchItem): string {
+  if (followUp.displayText !== undefined) return followUp.displayText;
+  return followUp.origin === 'subagent_result'
+    ? summarizeFollowupMessage(followUp.text)
+    : followUp.text;
 }
 
 export async function appendFollowUpAsUserMessage<C>(

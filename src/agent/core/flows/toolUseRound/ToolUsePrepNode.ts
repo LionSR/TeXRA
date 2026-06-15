@@ -5,7 +5,10 @@ import {
   resetCycleState,
   saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
-import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
+import {
+  appendFollowUpAsUserMessage,
+  followUpDisplayText,
+} from '@agent/toolUse/followUpMessages';
 import type { FollowUpQueueBatchItem } from '@agent/toolUse/FollowUpQueue';
 
 // Local file imports
@@ -68,10 +71,7 @@ export class ToolUsePrepNode<C> extends BaseNode<
     if (prepRes.queuedFollowUps?.length) {
       if (!prepRes.synthetic) {
         for (const followUp of prepRes.queuedFollowUps) {
-          logUserMessage(
-            this.services.logger,
-            followUp.displayText ?? followUp.text,
-          );
+          logUserMessage(this.services.logger, followUpDisplayText(followUp));
         }
       }
       for (const followUp of prepRes.queuedFollowUps) {
