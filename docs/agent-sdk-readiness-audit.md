@@ -1855,9 +1855,18 @@ A fourteenth pass — a fresh-eyes model-handler + agent-core/runtime audit (ind
 sight of this document) plus a direct line-by-line re-check of every open-ledger item and the
 logger/platform surface against branch `claude/eager-noether-bpuuje` at HEAD `00d2414`
 (baseline for drift: §18's `4f75594`, **reachable** from this branch — the first time in
-several passes the prior baseline is an ancestor, so the drift list is exact). **All
-2026-05-28 → 06-14 findings hold without change. No new structural over-abstraction
-surfaced.** TeXRA remains well-architected and SDK-aligned; the gaps are incremental, not
+several passes the prior baseline is an ancestor, so the diff _range_ `4f75594..00d2414` is
+exactly computable, not approximated across lineages as prior passes had to). That range is
+~60 non-merge commits over the audited surfaces; the **Drift** section below enumerates only
+the SDK-_structural_ subset (the new run-entry/handle/emit/state work). The unenumerated
+remainder is behavior fixes (subagent handoffs, approval gating, blank-tool-result turns) and
+tests, plus further simplification that moves _with_ the audit — DRY/flatten/dependency swaps
+such as `fad5fd6` (replace hand-rolled utilities with `p-debounce`/Zod), `bb8b6d1` (share
+tool-edit approval prompt emission across hosts), `68c3809` (flatten nested try/catch via
+helper extraction) — **none adding a wrapper, barrel, or abstraction** (the guardrail greps
+below — no new `index.ts`, vscode-free — are what back the "no new structural over-abstraction"
+conclusion, not the enumerated list). **All 2026-05-28 → 06-14 findings hold without change.
+No new structural over-abstraction surfaced.** TeXRA remains well-architected and SDK-aligned; the gaps are incremental, not
 structural. Like §15/§17/§18 this is a **confirmation-only pass — no refactor applied** —
 because no pure dead-code/anti-shim item remains for a tidy pass to safely remove (the
 independent audit found **zero** `export … from` re-export lines and **zero** dead modules
