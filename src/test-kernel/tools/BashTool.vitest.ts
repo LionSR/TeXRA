@@ -251,6 +251,27 @@ describe('BashTool', () => {
     assert.equal(receivedSignal.aborted, false);
   });
 
+  it('accepts optional command descriptions without passing them to the shell', async () => {
+    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
+      success: true,
+      stdout: 'checked\n',
+      stderr: '',
+      timedOut: false,
+      exitCode: 0,
+    });
+
+    const result = await new BashTool().call({
+      command: 'test -f proof.tex',
+      description: 'Check that the proof file exists.',
+    });
+
+    assert.equal(result.output, 'checked\n');
+    assert.equal(
+      vi.mocked(execUtils.executeCommand).mock.calls[0]?.[0],
+      'test -f proof.tex',
+    );
+  });
+
   it('finalizes deferred progress card when foreground bash is aborted', async () => {
     let activeController: AbortController | null = null;
     let receivedSignal: AbortSignal | undefined;

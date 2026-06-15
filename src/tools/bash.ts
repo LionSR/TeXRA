@@ -66,6 +66,12 @@ function backgroundBashTerminalStatus(success: boolean) {
 
 const BashInputSchema = z.strictObject({
   command: z.string(),
+  description: z
+    .string()
+    .nullish()
+    .describe(
+      'Optional human-readable purpose for the command. Ignored by execution.',
+    ),
   timeout: z
     .int()
     .min(1000)
