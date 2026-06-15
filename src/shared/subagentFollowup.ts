@@ -13,7 +13,6 @@
 // CLI can consume it.
 
 import escapeRegExp from 'escape-string-regexp';
-import he from 'he';
 
 const SUBAGENT_TAG_RE = /^<subagent-(?:progress|result|error)\b/;
 const EMBEDDED_SUBAGENT_BLOCK_RE =
@@ -54,9 +53,15 @@ function elementBody(xml: string, tag: string): string | undefined {
 }
 
 // `<message>` bodies are escapeText()'d by the producer; decode for display.
+// `&amp;` last so an escaped `&lt;` never double-decodes.
 export function decodeXmlEntities(text: string): string {
   if (!text.includes('&')) return text;
-  return he.decode(text);
+  return text
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&');
 }
 
 function progressDetail(xml: string): string {
