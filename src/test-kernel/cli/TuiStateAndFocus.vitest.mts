@@ -1730,6 +1730,40 @@ describe('CLI transcript state', () => {
     }
   });
 
+  it('summarizes embedded subagent progress blocks in assistant transcript text', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info(
+        [
+          'Waiting for the child.',
+          '<subagent-progress id="abc" agent="prover" type="todos">',
+          '[{"content":"check","status":"completed"},{"content":"prove","status":"in_progress"}]',
+          '</subagent-progress>',
+          '<subagent-progress id="abc" agent="prover" type="activity">Subagent prover is proving completeness.</subagent-progress>',
+        ].join('\n'),
+        { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
+      );
+
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        [
+          'Waiting for the child.',
+          '⟳ prover · todos · 1 done, 1 active, 0 pending',
+          '⟳ prover · Subagent prover is proving completeness.',
+        ].join('\n'),
+      ]);
+      expect(entries[0]?.text).not.toContain('<subagent-progress');
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
   it('mirrors error log entries into the transcript', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();

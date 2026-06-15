@@ -15,6 +15,8 @@
 import escapeRegExp from 'escape-string-regexp';
 
 const SUBAGENT_TAG_RE = /^<subagent-(?:progress|result|error)\b/;
+const EMBEDDED_SUBAGENT_BLOCK_RE =
+  /<subagent-(?:progress|result|error)\b[^>]*\/>|<subagent-(progress|result|error)\b[^>]*>[\s\S]*?<\/subagent-\1>/g;
 const EMPTY_FOLLOW_UP_SUMMARY = '(empty follow-up)';
 
 function followupText(text: unknown): string | undefined {
@@ -38,6 +40,12 @@ function attr(xml: string, name: string): string | undefined {
 
 function innerTag(xml: string, tag: string): string | undefined {
   return new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(xml)?.[1]?.trim();
+}
+
+function elementBody(xml: string, tag: string): string | undefined {
+  return new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`)
+    .exec(xml)?.[1]
+    ?.trim();
 }
 
 // `<message>` bodies are escapeText()'d by the producer; decode for display.
@@ -73,8 +81,49 @@ function progressDetail(xml: string): string {
       return attr(xml, 'status') === 'cleared'
         ? 'plan cleared'
         : `plan · ${attr(xml, 'steps') ?? '0'} steps`;
-    case 'todos':
-      return `todos · ${attr(xml, 'completed') ?? '0'} done, ${attr(xml, 'active') ?? '0'} active, ${attr(xml, 'pending') ?? '0'} pending`;
+    case 'todos': {
+      const completed = attr(xml, 'completed');
+      const active = attr(xml, 'active');
+      const pending = attr(xml, 'pending');
+      if (completed || active || pending) {
+        return `todos · ${completed ?? '0'} done, ${active ?? '0'} active, ${pending ?? '0'} pending`;
+      }
+      const body = elementBody(xml, 'subagent-progress');
+      if (!body) return 'todos updated';
+      try {
+        const todos = JSON.parse(decodeXmlEntities(body));
+        if (!Array.isArray(todos)) return 'todos updated';
+        let done = 0;
+        let inProgress = 0;
+        let todo = 0;
+        for (const item of todos) {
+          const status =
+            typeof item === 'object' && item !== null && 'status' in item
+              ? item.status
+              : undefined;
+          if (status === 'completed') done += 1;
+          else if (status === 'in_progress') inProgress += 1;
+          else todo += 1;
+        }
+        return `todos · ${done} done, ${inProgress} active, ${todo} pending`;
+      } catch {
+        return 'todos updated';
+      }
+    }
+    case 'conversations': {
+      const turns = attr(xml, 'turns');
+      const chars = attr(xml, 'characters');
+      const parts: string[] = [];
+      if (turns) parts.push(`${turns} turns`);
+      if (chars) parts.push(`${chars} chars`);
+      return parts.length > 0
+        ? `conversation · ${parts.join(' · ')}`
+        : 'conversation update';
+    }
+    case 'activity': {
+      const body = elementBody(xml, 'subagent-progress');
+      return body ? decodeXmlEntities(body).split('\n')[0]! : 'activity';
+    }
     default:
       return 'working';
   }
@@ -117,4 +166,11 @@ export function summarizeSubagentFollowup(text: unknown): string {
 
 export function summarizeFollowupMessage(text: unknown): string {
   return summarizeSubagentFollowup(stripOrchestratorFollowup(text));
+}
+
+export function summarizeEmbeddedSubagentFollowups(text: string): string {
+  if (!text.includes('<subagent-')) return text;
+  return text.replace(EMBEDDED_SUBAGENT_BLOCK_RE, (block) =>
+    summarizeSubagentFollowup(block),
+  );
 }
