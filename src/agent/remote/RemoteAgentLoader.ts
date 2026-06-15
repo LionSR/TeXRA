@@ -46,10 +46,10 @@ interface RemoteAgentListRow {
 }
 
 const RemoteAgentListQueryErrorSchema = z.object({
-  code: z.string().optional(),
-  message: z.string().optional(),
-  details: z.string().optional(),
-  hint: z.string().optional(),
+  code: z.string().nullish(),
+  message: z.string().nullish(),
+  details: z.string().nullish(),
+  hint: z.string().nullish(),
 });
 type RemoteAgentListQueryError = z.infer<
   typeof RemoteAgentListQueryErrorSchema
