@@ -87,7 +87,7 @@ export function skillsSelectWindow(args: {
   return computeSelectWindowSize({
     availableRows: args.availableRows,
     itemCount: args.itemCount,
-    chromeRows: args.hasIssues ? 6 : 5,
+    chromeRows: args.hasIssues ? 7 : 6,
   });
 }
 

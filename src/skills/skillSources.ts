@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -21,15 +22,23 @@ export const INTEROP_SKILL_DIRS = [
 ] as const;
 
 function bundledSkillSources(resourcesPath: string): SkillSource[] {
+  const packagedSource = {
+    scope: 'bundled',
+    path: path.join(resourcesPath, 'skills'),
+    label: 'bundled',
+  } satisfies SkillSource;
+  if (existsSync(packagedSource.path)) return [packagedSource];
+
   return [
-    {
-      scope: 'bundled',
-      path: path.join(resourcesPath, 'skills'),
-      label: 'bundled',
-    },
+    packagedSource,
     {
       scope: 'bundled',
       path: path.resolve(resourcesPath, '../../..', 'skills'),
+      label: 'bundled source',
+    },
+    {
+      scope: 'bundled',
+      path: path.resolve(resourcesPath, '../../../..', 'skills'),
       label: 'bundled source',
     },
   ];
