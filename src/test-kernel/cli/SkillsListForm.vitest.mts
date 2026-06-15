@@ -101,13 +101,13 @@ describe('SkillsListForm helpers', () => {
         itemCount: 10,
         hasIssues: false,
       }),
-    ).toEqual({ maxVisibleItems: 3, showOverflow: true });
+    ).toEqual({ maxVisibleItems: 2, showOverflow: true });
     expect(
       skillsSelectWindow({
         availableRows: 10,
         itemCount: 10,
         hasIssues: true,
       }),
-    ).toEqual({ maxVisibleItems: 2, showOverflow: true });
+    ).toEqual({ maxVisibleItems: 1, showOverflow: true });
   });
 });
