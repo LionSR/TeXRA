@@ -187,6 +187,7 @@ describe('renderAnsiMarkdown', () => {
     const plain = stripAnsi(out);
     const lines = plain.split('\n');
 
+    expect(lines.length).toBeGreaterThan(1);
     expect(lines[0]).toBe('│   • abcd');
     expect(lines.slice(1).every((line) => line.startsWith('│     '))).toBe(
       true,
