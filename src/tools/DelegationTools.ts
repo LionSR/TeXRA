@@ -136,6 +136,9 @@ const WORKTREE_DISABLED_MESSAGE =
   "git worktree support is disabled in this workspace. Omit working_directory, or enable 'Allow agents to work in git worktrees' on the Multi-Agent settings tab.";
 const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
   'Delegated task handoff:',
+  '- Treat the delegated instruction as your full task contract.',
+  '- Follow any tool, network, file, approval, output-format, or scope constraints it includes.',
+  '- If a requested action conflicts with those constraints or needs missing context, report the conflict instead of guessing permission.',
   '- Your final response is delivered verbatim to the parent orchestrator.',
   '- Include the substantive result requested: answer, findings, evidence/checks, and unresolved caveats.',
   '- Do not finish with only status/process notes such as "done", "complete", or "no files were edited"; if no files were edited, state that after the task result.',
@@ -1059,7 +1062,7 @@ const DelegateAgentInputSchema = z.strictObject({
   instruction: z
     .string()
     .describe(
-      'Plain prose instruction for the agent. For new delegations, include file paths naturally. For resumes, reference previous work freely — the subagent retains its full history.',
+      'Plain prose instruction for the agent. For new delegations, include file paths naturally and copy every relevant parent constraint into this field: tool/network/file/approval limits, output format, and scope. The subagent does not automatically inherit the parent conversation or hidden constraints. For resumes, reference previous work freely — the subagent retains its full history.',
     ),
   memories: memoriesField,
   working_directory: workingDirectoryField,
