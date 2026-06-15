@@ -49,8 +49,17 @@ afterEach(async () => {
 describe('CLI skills runtime', () => {
   it('resolves default, interop, and custom skill sources in precedence order', () => {
     const cwd = '/tmp/project';
-    const resourcesPath = '/tmp/resources';
-    const bundledSourcePath = path.resolve(resourcesPath, '../../..', 'skills');
+    const resourcesPath = '/tmp/repo/packages/cli/dist/resources';
+    const extensionBundledSourcePath = path.resolve(
+      resourcesPath,
+      '../../..',
+      'skills',
+    );
+    const cliDistBundledSourcePath = path.resolve(
+      resourcesPath,
+      '../../../..',
+      'skills',
+    );
     const sources = defaultSkillSources(
       {
         cwd,
@@ -74,8 +83,9 @@ describe('CLI skills runtime', () => {
       path.join(os.homedir(), '.claude', 'skills'),
       path.join(os.homedir(), '.codex', 'skills'),
       path.join(os.homedir(), '.gemini', 'skills'),
-      '/tmp/resources/skills',
-      bundledSourcePath,
+      '/tmp/repo/packages/cli/dist/resources/skills',
+      extensionBundledSourcePath,
+      cliDistBundledSourcePath,
     ]);
     expect(sources.map((source) => source.scope)).toEqual([
       'custom',
@@ -89,6 +99,7 @@ describe('CLI skills runtime', () => {
       'interop',
       'interop',
       'interop',
+      'bundled',
       'bundled',
       'bundled',
     ]);
@@ -105,6 +116,7 @@ describe('CLI skills runtime', () => {
       '.codex user',
       '.gemini user',
       'bundled',
+      'bundled source',
       'bundled source',
     ]);
     expect(
