@@ -36,11 +36,11 @@ prompts:
     (1) For every key derivation, reproduce it step-by-step. Check that each step follows logically from the previous one. When a step is nontrivial, write out the intermediate algebra explicitly.
     (2) Verify limiting cases and special cases of results. Does the general formula reduce correctly when a parameter vanishes or diverges?
     (3) Check dimensional consistency of equations.
-    (4) Verify numerical values, coefficients, and prefactors by independent computation.
+    (4) Verify numerical values, coefficients, and prefactors by independent computation when they are substantive or not easily checked by inspection.
     (5) For inequalities or bounds, test with concrete examples to confirm they hold.
     (6) For differential equations, verify that stated solutions satisfy the original equation.
-    (7) Use the wolfram tool to verify symbolic algebra, evaluate integrals, check identities, and perform numerical spot-checks. Sessions do NOT persist between wolfram tool calls — each execution starts fresh. For multi-step verifications needing persistence, write to a .wl file and run via bash.
-    (8) If wolfram is unavailable, fall back to bash with short Python/SymPy scripts for the same computational checks.
+    (7) Prefer direct mathematical review when a claim can be checked by hand. Use the wolfram tool only when computation adds real evidence for nontrivial symbolic algebra, integrals, identities, or numerical spot-checks; do not request external computation for elementary facts such as nonnegativity of squares or $x^2 = 0$ over the reals. Sessions do NOT persist between wolfram tool calls — each execution starts fresh. For multi-step verifications needing persistence, write to a .wl file and run via bash.
+    (8) If computational verification is warranted and wolfram is unavailable, fall back to bash with short Python/SymPy scripts for the same checks.
 
     Notation Consistency:
     (1) Use grep to find all occurrences of key symbols and variables across the manuscript.
