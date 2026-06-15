@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_DEFAULT_CHAT_AGENT,
   implicitDefaultToolUseAgents,
-  isImplicitDefaultToolUseAgentAllowed,
   resolveImplicitToolUseAgentDefault,
 } from '@cli/runtime/defaultAgents';
 
@@ -12,19 +11,11 @@ describe('CLI implicit default agent policy', () => {
     expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('assistant');
   });
 
-  it('does not allow simplifier to become an implicit default', () => {
-    expect(isImplicitDefaultToolUseAgentAllowed('assistant')).toBe(true);
-    expect(isImplicitDefaultToolUseAgentAllowed(' simplifier ')).toBe(false);
-    expect(isImplicitDefaultToolUseAgentAllowed('SIMPLIFIER')).toBe(false);
-    expect(
-      isImplicitDefaultToolUseAgentAllowed('builtInToolUse:simplifier'),
-    ).toBe(false);
-  });
-
   it('filters implicit default candidates without mutating explicit options', () => {
     const candidates = [
       { name: 'simplifier', source: 'built-in' },
       { name: 'builtInToolUse:simplifier', source: 'built-in' },
+      { name: 'SIMPLIFIER', source: 'built-in' },
       { name: 'assistant', source: 'built-in' },
       { name: 'review', source: 'built-in' },
     ] as const;
@@ -38,6 +29,10 @@ describe('CLI implicit default agent policy', () => {
   it('normalizes only allowed implicit default values', () => {
     expect(resolveImplicitToolUseAgentDefault(' review ')).toBe('review');
     expect(resolveImplicitToolUseAgentDefault('simplifier')).toBeUndefined();
+    expect(resolveImplicitToolUseAgentDefault('SIMPLIFIER')).toBeUndefined();
+    expect(
+      resolveImplicitToolUseAgentDefault('builtInToolUse:simplifier'),
+    ).toBeUndefined();
     expect(resolveImplicitToolUseAgentDefault('   ')).toBeUndefined();
     expect(resolveImplicitToolUseAgentDefault(undefined)).toBeUndefined();
   });
