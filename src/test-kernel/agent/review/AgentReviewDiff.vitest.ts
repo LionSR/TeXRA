@@ -328,12 +328,7 @@ describe('collectReviewDiff (real git repository)', () => {
     const candidates = await listBaseBranchCandidates(repo);
     const byRef = new Map(candidates.map((c) => [c.ref, c]));
     expect([...byRef.keys()]).toEqual(
-      expect.arrayContaining([
-        'main',
-        'develop',
-        'feature',
-        'origin/release',
-      ]),
+      expect.arrayContaining(['main', 'develop', 'feature', 'origin/release']),
     );
     // origin/HEAD is a symbolic alias, not a diffable branch.
     expect(byRef.has('origin/HEAD')).toBe(false);

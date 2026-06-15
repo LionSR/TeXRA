@@ -33,9 +33,6 @@ import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'AgentReview';
 
-/** Mirror of the sidebar review tree contributed into the Source Control panel. */
-const SCM_AGENT_REVIEW_VIEW_ID = 'texra.scmAgentReviewView';
-
 const agentReviewCommands = {
   run: 'texra.agentReview.run',
   runWithOptions: 'texra.agentReview.runWithOptions',
@@ -98,37 +95,28 @@ export function registerAgentReviewCommands(
     AgentReviewService.addIssueReport(report),
   );
 
-  // One provider backs both surfaces: the TeXRA sidebar tree and a mirror in
-  // VS Code's Source Control panel (GitKraken/Cursor-style). Tree item ids are
-  // per-view, so sharing the provider is safe.
+  // The Agent Review tree lives in VS Code's Source Control (git) panel,
+  // GitKraken/Cursor-style.
   const treeProvider = new AgentReviewTreeProvider();
-  const treeViews = [
-    vscode.window.createTreeView(AGENT_REVIEW_VIEW_ID, {
-      treeDataProvider: treeProvider,
-    }),
-    vscode.window.createTreeView(SCM_AGENT_REVIEW_VIEW_ID, {
-      treeDataProvider: treeProvider,
-    }),
-  ];
+  const treeView = vscode.window.createTreeView(AGENT_REVIEW_VIEW_ID, {
+    treeDataProvider: treeProvider,
+  });
   const syncView = () => {
     const state = AgentReviewService.getState();
     const count = state.issues.length;
-    const badge =
+    treeView.message = state.summary;
+    treeView.badge =
       count > 0
         ? {
             value: count,
             tooltip: `${count} agent review issue${count === 1 ? '' : 's'}`,
           }
         : undefined;
-    for (const view of treeViews) {
-      view.message = state.summary;
-      view.badge = badge;
-    }
   };
   syncView();
   context.subscriptions.push(
     treeProvider,
-    ...treeViews,
+    treeView,
     AgentReviewService.onDidChange(syncView),
     vscode.languages.registerCodeActionsProvider(
       { scheme: 'file' },

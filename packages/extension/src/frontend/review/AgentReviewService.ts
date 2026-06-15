@@ -54,7 +54,8 @@ const FIX_AGENT = 'coder';
  */
 const MAX_ISSUES_PER_REVIEW = 25;
 
-export const AGENT_REVIEW_VIEW_ID = 'texra.agentReviewView';
+/** The Agent Review tree lives in VS Code's Source Control (git) panel. */
+export const AGENT_REVIEW_VIEW_ID = 'texra.scmAgentReviewView';
 
 type AgentReviewTrigger = 'manual' | 'commit';
 

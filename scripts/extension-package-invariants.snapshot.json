@@ -359,8 +359,16 @@
         {
           "category": "TeXRA",
           "command": "texra.agentReview.run",
-          "icon": "$(refresh)",
-          "title": "Run Agent Review"
+          "icon": "$(search)",
+          "shortTitle": "Find Issues",
+          "title": "Find Issues (Agent Review)"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.agentReview.runWithOptions",
+          "icon": "$(ellipsis)",
+          "shortTitle": "Options…",
+          "title": "Find Issues with Options (Agent Review)"
         },
         {
           "category": "TeXRA",
@@ -1106,6 +1114,10 @@
             "when": "texra.activated"
           },
           {
+            "command": "texra.agentReview.runWithOptions",
+            "when": "texra.activated"
+          },
+          {
             "command": "texra.agentReview.fixAllIssues",
             "when": "texra.activated && texra.agentReview.hasIssues"
           },
@@ -1406,12 +1418,12 @@
           {
             "command": "texra.agentReview.fixIssue",
             "group": "inline@1",
-            "when": "view == texra.agentReviewView && viewItem == texraReviewIssue"
+            "when": "view == texra.scmAgentReviewView && viewItem == texraReviewIssue"
           },
           {
             "command": "texra.agentReview.dismissIssue",
             "group": "inline@2",
-            "when": "view == texra.agentReviewView && viewItem == texraReviewIssue"
+            "when": "view == texra.scmAgentReviewView && viewItem == texraReviewIssue"
           }
         ],
         "view/title": [
@@ -1448,33 +1460,42 @@
           {
             "command": "texra.agentReview.run",
             "group": "navigation@1",
-            "when": "texra.activated && view == texra.agentReviewView"
+            "when": "texra.activated && view == texra.scmAgentReviewView"
+          },
+          {
+            "command": "texra.agentReview.runWithOptions",
+            "group": "navigation@2",
+            "when": "texra.activated && view == texra.scmAgentReviewView"
           },
           {
             "command": "texra.agentReview.fixAllIssues",
-            "group": "navigation@2",
-            "when": "texra.activated && view == texra.agentReviewView && texra.agentReview.hasIssues"
+            "group": "navigation@3",
+            "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.hasIssues"
           },
           {
             "command": "texra.agentReview.clear",
-            "when": "texra.activated && view == texra.agentReviewView && texra.agentReview.hasIssues"
+            "group": "navigation@4",
+            "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.hasIssues"
           }
         ]
       },
       "views": {
+        "scm": [
+          {
+            "contextualTitle": "Agent Review",
+            "id": "texra.scmAgentReviewView",
+            "name": "Agent Review",
+            "type": "tree",
+            "visibility": "collapsed",
+            "when": "texra.activated"
+          }
+        ],
         "texra": [
           {
             "contextualTitle": "TeXRA",
             "id": "texra.mainView",
             "name": "TeXRA",
             "type": "webview"
-          },
-          {
-            "contextualTitle": "Agent Review",
-            "id": "texra.agentReviewView",
-            "name": "Agent Review",
-            "type": "tree",
-            "visibility": "collapsed"
           }
         ]
       },
@@ -1489,8 +1510,8 @@
       },
       "viewsWelcome": [
         {
-          "contents": "Review your working-tree changes against the main branch with an AI agent. Issues also appear in the Problems panel with quick fixes.\n[Run Agent Review](command:texra.agentReview.run)",
-          "view": "texra.agentReviewView",
+          "contents": "Review changes against the main branch for issues.\n[Find Issues](command:texra.agentReview.run)\n[Find Issues with Options…](command:texra.agentReview.runWithOptions)",
+          "view": "texra.scmAgentReviewView",
           "when": "texra.activated && !texra.agentReview.running"
         }
       ],
