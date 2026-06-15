@@ -13,6 +13,7 @@ import {
   toErrorMessage,
 } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
+import { StatusCodes } from 'http-status-codes';
 import { STREAM_STATUS, type RetryErrorInfo } from '@shared/schemas';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -141,7 +142,7 @@ export abstract class RetryableInvocationNode<
       return result;
     } catch (retryErr) {
       const retryFormatted = normalizeProviderError(retryErr);
-      if (retryFormatted.isRelayError && retryFormatted.statusCode === 401) {
+      if (retryFormatted.isRelayError && retryFormatted.statusCode === StatusCodes.UNAUTHORIZED) {
         services.logger.debug(
           'Still 401 after token refresh, skipping auto-retries',
         );
@@ -183,7 +184,7 @@ export abstract class RetryableInvocationNode<
       const formatted = normalizeProviderError(err);
       if (
         formatted.isRelayError &&
-        formatted.statusCode === 401 &&
+        formatted.statusCode === StatusCodes.UNAUTHORIZED &&
         !this._hasAttemptedTokenRefresh
       ) {
         return this.attemptRelay401Recovery(err, operation);
@@ -205,7 +206,7 @@ export abstract class RetryableInvocationNode<
     if (formatted.isCredentialExhausted) return false;
     if (!formatted.userRetryable) return false;
     const code = formatted.statusCode;
-    return code !== 401 && code !== 403;
+    return code !== StatusCodes.UNAUTHORIZED && code !== StatusCodes.FORBIDDEN;
   }
 
   protected isBackgroundModeActive(): boolean {

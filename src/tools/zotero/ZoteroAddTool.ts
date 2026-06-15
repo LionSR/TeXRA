@@ -19,6 +19,7 @@
 // Third-party imports
 import axios, { AxiosError } from 'axios';
 import { type Work } from '@jamesgopsill/crossref-client';
+import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
 // Local imports - core
@@ -147,7 +148,7 @@ async function callZoteroConnector(
         headers: { 'Content-Type': 'application/json' },
       },
     );
-    if (response.status === 200 || response.status === 201) {
+    if (response.status === StatusCodes.OK || response.status === StatusCodes.CREATED) {
       return { status: 'success' };
     }
     return {
