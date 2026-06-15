@@ -9,6 +9,7 @@ export { AgentCategory };
 export const AgentSettingBaseSchema = z.strictObject({
   documentTag: z
     .string()
+    .trim()
     .min(1, 'documentTag cannot be empty')
     .prefault('documents'),
   endTag: z.string().prefault('</documents>'),
@@ -60,7 +61,7 @@ function deriveEndTag(input: unknown): unknown {
   const obj = input as Record<string, unknown>;
   if (obj.endTag !== undefined) return obj;
   const docTag = isNonEmptyString(obj.documentTag)
-    ? obj.documentTag
+    ? obj.documentTag.trim()
     : 'documents';
   return { ...obj, endTag: `</${docTag}>` };
 }
