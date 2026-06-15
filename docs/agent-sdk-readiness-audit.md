@@ -1846,3 +1846,166 @@ dead-code/anti-shim slack a tidy pass would target. The remaining ledger is unch
 §2.6 (relocate), §4 (gated two-sink consolidation), §5/Step 7 (one unscoped reset-sweep
 seam), and three low-priority residuals (§16 #1 orchestrator move, #2 idempotent call, #4
 import cycle). No rewrite warranted.
+
+---
+
+## 19. Re-verification addendum — 2026-06-15 (fourteenth pass — confirmation; F-2 control handle + F-1 emit re-route land, two long-standing items close)
+
+A fourteenth pass — a fresh-eyes model-handler + agent-core/runtime audit (independent, no
+sight of this document) plus a direct line-by-line re-check of every open-ledger item and the
+logger/platform surface against branch `claude/eager-noether-bpuuje` at HEAD `00d2414`
+(baseline for drift: §18's `4f75594`, **reachable** from this branch — the first time in
+several passes the prior baseline is an ancestor, so the drift list is exact). **All
+2026-05-28 → 06-14 findings hold without change. No new structural over-abstraction
+surfaced.** TeXRA remains well-architected and SDK-aligned; the gaps are incremental, not
+structural. Like §15/§17/§18 this is a **confirmation-only pass — no refactor applied** —
+because no pure dead-code/anti-shim item remains for a tidy pass to safely remove (the
+independent audit found **zero** `export … from` re-export lines and **zero** dead modules
+across `modelHandlers/`, `core/`, `runtime/`; counts of live importers run 1–18). But unlike
+the recent confirmation passes, the intervening drift is **SDK-meaningful**: it advances or
+closes four ledger items, including the two largest open structural gaps (the per-run
+streaming handle and the F-1 host-path emit re-route).
+
+### Drift since the §18 baseline (`4f75594` → `00d2414`) — SDK-boundary work landing, audited clean
+
+The commits touching the audited dirs move entirely _with_ the audit — none adds a wrapper,
+barrel, or run-entry indirection:
+
+- **`84052a4` "F-2 — expose the per-run control handle (onRun + trace + result)."** This is
+  the proposal's **SDK-002** gap ("there is no streaming run entry … neither is an
+  async-iterable … progress is a side channel") substantially closing. `AgentExecutionHandle`
+  (`runtime/ExecutionHandle.ts:70`) now carries `trace` (the run's discriminated `AgentEvent`
+  channel, `:99`) and `result: Promise<ResultEvent>` (`:86`) — an always-resolving deferred
+  settled exactly once via the idempotent `settleResult` (`:108`), in both lifecycle arms; and
+  `onRun?(handle)` fires once after the handle is tracked. The return type is **unchanged**
+  (still `Promise<AgentFlowResult>`), so this is purely additive. `@texra/core` re-exports
+  `AgentExecutionHandle` / `AgentRunHandle` / `ResultEvent` (`packages/core/src/index.ts:77-109`),
+  so an SDK consumer can now await a run's typed terminal outcome and read its event channel by
+  handle — the SDK `query() → Query` handle shape, over the existing engine rather than a
+  rewrite. The §10/Step-6 "infeasible-as-scoped without Step 7" note is now overtaken: Step 7d
+  landed and the handle followed.
+- **`96f63e8` "SDK Step 7d: per-session `SessionHandle` + terminal `result` event
+  (consolidated) (#5960)"** and **`c0b7478` "Extract `IToolUseSession` to core/flows module
+  (#5968)."** Step 7d's consolidated train is in this lineage's history (the proposal already
+  marked 7d landed 2026-06-13; re-confirmed in tree — `runtime/SessionHandle.ts`,
+  `terminalResultToast.ts` present). The independent audit re-confirmed both new handle files
+  are **composition records, not facades**: `SessionHandle` composes four landed owners in a
+  forced dependency order; `ExecutionHandle` holds two distinct concrete classes
+  (`AgentExecutionHandle` / `ProcessExecutionHandle`) over one interface with real polymorphic
+  behavior. Neither re-exposes per-concern methods.
+- **`ee4645e` "centralize tool progress emits (#5975)."** Directly executes the proposal's
+  **Step-7d "Remaining for F-1" criterion (a)** ("one emission path for run-scoped events").
+  New `runtime/emitRuntimeEvent.ts` (`emitRuntimeEvent(event, payload, session?)`) replaces the
+  direct `src/tools` progress-`bus.emit` sites that CLAUDE.md grandfathered "until SDK Step 7d,"
+  preserving explicit `SessionHandle` routing for the host-path external-inquiry events. Adopted
+  in `tools/goal/goalStore.ts`, `tools/inquiry/ExternalInquiryTool.ts`,
+  `tools/inquiry/inquiryContinuation.ts` (grep). The remaining `this.emit(...)` calls in
+  `src/tools/github/*PollingSource.ts` are those classes' **own** `EventEmitter`, not the
+  run-scoped `ProgressEventBus` — out of scope for F-1, correctly untouched.
+- **`cf1479d` "residues — scope desktop approval delete-all per stream."** **Fixes the §5
+  multi-session reset-sweep bug**, not just narrows it: desktop `cleanupAllApprovals` (whose
+  tool/bypass controllers are `streamId`-keyed and global) now loops the per-stream
+  `cleanupApprovalsForStream(streamId, this.session)` over its own streams, so one window's
+  "delete all" no longer rejects **every** window's pending approvals. The process-wide
+  `cleanupAllApprovals` / `runCoordinators.cleanupAllRequests` (`runCoordinators.ts:142`) is
+  **kept and documented** as single-session-reset / test / shutdown — the audit's standing
+  "relocate-or-scope, never delete" prescription, applied.
+- **`a982e72` "move `tryWorkspaceState` to platform" (2026-06-15).** **Deepens SDK-008
+  past CLOSED.** `src/agent/core/stateStore.ts` is now **deleted entirely** (was the last
+  domain-layer state accessor); `tryWorkspaceState()` joins its twin `tryGlobalState()` in
+  `src/platform/platform.ts` (`:+5`), the `@platform` barrel exports it
+  (`src/platform/index.ts:+1`), and the `core/README.md` + `common/state/index.ts` comments
+  that called out the split path are reconciled. `@agent/core/` no longer owns a platform
+  concern. Grep confirms no dead `core/stateStore` references in `src/agent/**` (the surviving
+  `stateStore` hits are the unrelated desktop-auth `createStateStore` / CLI
+  `createCliStateStores`).
+- **`00d2414` "surface agent review in source control."** A new user-facing review feature —
+  product code, **not** an abstraction change to the audited surface (no new barrel/wrapper).
+
+**Guardrails intact:** `find src/agent -name index.ts` shows the **same eight** pre-existing
+barrels (no new one); `src/agent/runtime/index.ts` still absent (§3.1); `grep` for `vscode`
+imports over `src/agent`/`src/model`/`src/latex`/`src/tools` is **clean**; `@logger` imports
+nothing from `@platform` (decoupled); `@texra/core` is still the curated host-neutral barrel
+(now 16 `export` statements — grew only by the additive F-2 handle re-exports).
+
+### Two long-standing ledger items close/advance this period
+
+- **§16 #2 (idempotent double `ensureAgentCategoryForSource`) — RESOLVED on this lineage.**
+  The second call in `AgentLaunchContext` is **gone**; only an explanatory comment remains
+  (`AgentLaunchContext.ts:224-227`: "`loadAgentSettingAndPrompts` already applies … a second
+  pass would be a guaranteed no-op"). `agentLoad.ts:123` is the single, load-bearing call.
+  (§17 had resolved it on the `3mei4j` lineage 2026-06-13; §18's `ahal3o` lineage still
+  carried it; this branch has it removed — the two lineages have now converged on resolved.)
+- **§5 / Step 7 reset-sweep seam — the genuine bug is fixed** (`cf1479d`, above). What
+  remains is the deliberately-retained process-wide reset for single-session/shutdown, no
+  longer reachable as a cross-window foot-gun. Still no first-class `delegateTo(...)` primitive
+  (`grep` over `src/**` + `packages/**` empty); delegation remains a tool call inside the LLM
+  loop — the one structurally-open item, and a multi-day primitive by design.
+
+### Re-rebutted false positive (`IModelHandler` redundant — would have been the eighth)
+
+The independent fresh-eyes audit did **not** re-flag it this pass — it verified
+`IModelHandler` is typed into `AgentCore.modelHandler` (`core/flows/BaseFlowServices.ts:24-30`)
+and recorded it as load-bearing, not a `ModelHandler` duplicate. Consistent with §9–§18.
+
+### One marginal observation (NOT a finding — recorded so it is not re-discovered)
+
+`modelHandlers/utils/usageNormalization.ts` is a single 6-line pure function
+(`computeCachePercentage`) in its own file with exactly one importer
+(`support/UsageNormalizer.ts`). Inlinable in principle, but it is genuine named shared logic
+with no wrapper/delegation/factory/shim smell — it violates no CLAUDE.md anti-pattern. **Not
+worth a change** (consistent with the §16 `helperModelName` lean-keep reasoning).
+
+### Open ledger at HEAD `00d2414` (line numbers refreshed; all still present unless noted)
+
+- **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still in the production
+  handler dir, gated by `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL` (`ModelFactory.ts:53`,
+  dynamic-imported at `:327`). Relocate-with-injection (CLI machinery, not vitest-only) still
+  recommended; still low priority.
+- **§4** — token usage still a deliberate two-sink fan-out in `src/agent/utils/UsageMonitor.ts`:
+  `runtimeHost.emit('updateStreamUsage', …)` `:167` (progress-view sidebar, **all** agents) and
+  `logger.usage(payload, …)` `:176` gated to `AgentCategory.Workflow` `:172` (transcript stats
+  line; the two-audience rationale is documented at `:63`). Per §13 Finding A this is two
+  audiences, not a duplicate — its fix is a sink consolidation onto `AgentTrace` preserving the
+  workflow-only gate. **Note:** `ee4645e`'s `emitRuntimeEvent` is the routing primitive this
+  consolidation will eventually ride; the producer-side de-dup (criterion (b)) is still deferred
+  as behavior-touching.
+- **§5 / proposal Step 7** — no `delegateTo(...)` primitive; the cross-window reset-sweep bug is
+  **fixed** (`cf1479d`); the retained `cleanupAllRequests` (`runCoordinators.ts:142`) is the
+  documented single-session/shutdown reset. The keyed registries need not move for correctness.
+- **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish.
+- **§13 finding #1 (`AgentRuntimeHost.emit` mixes UI + essential events)** — unchanged; the
+  two-tier headless-contract TSDoc is present (`AgentRuntimeHost.ts:6-23`), structural split
+  deferred.
+- **§16 #1 (`agentRegistry` UI-altitude)** — unchanged from §17/§18: only the thin
+  `computeAgentOptionsData` orchestrator (`agentRegistry.ts:477`) still sits beside the
+  SDK-exported core; the ordering policy (`sortAgentEntries`/`entryToOptionData`) lives in
+  `index/agentOptionsBuilder.ts`. Optional polish (mostly closed).
+- **§16 #2** — **RESOLVED** on this lineage (above).
+- **§16 #4 (`@logger`↔`@agent/trace` import cycle)** — still present (`runTrace.ts:10` imports
+  `TraceEmitter` from `@agent/trace`; `TraceEmitter.ts:18` imports `@logger/logUtils`). Latent,
+  low; for the eventual package-extraction step.
+- **SDK-008** — **CLOSED and deepened**: `core/stateStore.ts` removed entirely (`a982e72`);
+  `tryWorkspaceState`/`tryGlobalState`/`tryPlatform` now live together in `@platform`.
+
+**Subagent split points — unchanged and accurate** (§5 + proposal): config-driven YAML agents
+over the two flows (reflection / `ToolUseRoundFlow`) + the `delegate_*` tools are the existing
+subagent mechanism; the `agentCategory` dispatch in `executeAgent` is the cleanest internal
+seam; the helper-model tasks and node-level candidates (`MediaExtractionNode`, `TeXCountNode`,
+`OutputNode`, the `sessionDescription` background call) stay the lowest-risk extractions, gated
+behind the same delegation-as-primitive (§5) work. The new F-2 per-run handle (`trace` +
+`result` + `onRun`) is the consumer-facing surface a future `delegateTo(...)` primitive would
+return.
+
+**Net for 2026-06-15:** thesis reaffirmed for the fourteenth pass — incremental, not
+structural — but this is the most SDK-meaningful drift in several passes. The post-06-14 work
+lands the **F-2 per-run control handle** (closing the bulk of SDK-002 — a typed `result`
+promise + `trace` channel + `onRun`, surfaced through `@texra/core`), **begins the F-1
+host-path emit re-route** (`emitRuntimeEvent`, criterion (a)), **fixes the §5 cross-window
+approval reset bug**, and **deepens SDK-008** (the domain-layer `stateStore.ts` deleted). Two
+long-standing ledger items close (§16 #2 resolved here; §5's genuine bug fixed). An independent
+fresh-eyes audit of model handlers + agent core found **no new over-abstraction** and **no dead
+shim/barrel** to remove, so — consistent with the discipline — **no refactor was applied**: the
+only remaining items are behavior-sensitive (§4 producer de-dup, §16 #4 cycle) or a multi-day
+primitive (§5 `delegateTo`). The codebase continues to acquire exactly the SDK-shaped surface
+the original audit projected, by its own team, without a rewrite.
