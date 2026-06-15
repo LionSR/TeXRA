@@ -165,10 +165,10 @@ export class BackgroundTasksPanel extends LitElement {
         line-height: 1;
       }
 
-      /* Nested sections are native <wa-details class="collapsible-quiet">;
-         the section label lives in the summary slot and keeps the uppercase
-         small-caps look. wa-details supplies the disclosure chevron, so no
-         hand-rolled toggle icon. */
+      /* Nested sections use Web Awesome <wa-details class="collapsible-quiet">
+         in place of a hand-rolled <details>; the section label lives in the
+         summary slot and keeps the uppercase small-caps look. wa-details
+         supplies the disclosure chevron, so no hand-rolled toggle icon. */
       wa-details.collapsible-quiet::part(header) {
         padding-inline: 0;
       }
@@ -199,7 +199,7 @@ export class BackgroundTasksPanel extends LitElement {
         font-style: italic;
       }
 
-      /* Collapsible output per task — also native wa-details. */
+      /* Collapsible output per task — also a <wa-details>. */
       wa-details.task-output {
         margin-left: calc(var(--wa-space-2xs) + var(--font-size-sm));
       }
