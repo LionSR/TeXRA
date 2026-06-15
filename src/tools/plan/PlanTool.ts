@@ -32,7 +32,7 @@ import {
   isGoalEnabled,
   isGoalInFlight,
   goalElapsedMs,
-  setGoalSessionAutoApprovals,
+  setGoalSessionBashAutoApproval,
   type Goal,
 } from '@tools/goal';
 import { ToolError, type ToolResult } from '@tools/result';
@@ -193,7 +193,7 @@ Best practices:
       };
     }
     const updated = (await GoalStore.setStatus(streamId, 'paused')) ?? goal;
-    await this.setAutoApprovals(streamId, false);
+    await this.setBashAutoApproval(streamId, false);
     return {
       summary: 'Goal paused.',
       output: `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
@@ -201,17 +201,17 @@ Best practices:
   }
 
   /**
-   * Engage/clear the goal's bash + edit auto-approval bypass when the run
-   * context can reach the host. Best-effort: without a runtime host (e.g.
+   * Engage/clear the goal's bash auto-approval bypass when the run context can
+   * reach the host. Best-effort: without a runtime host (e.g.
    * tests or headless edge paths) approvals simply keep prompting.
    */
-  private async setAutoApprovals(
+  private async setBashAutoApproval(
     streamId: string,
     enabled: boolean,
   ): Promise<void> {
     const runtimeHost = getCurrentToolContexts()?.runContext?.runtimeHost;
     if (runtimeHost) {
-      await setGoalSessionAutoApprovals(streamId, enabled, runtimeHost);
+      await setGoalSessionBashAutoApproval(streamId, enabled, runtimeHost);
     }
   }
 
@@ -232,7 +232,7 @@ Best practices:
     // archived one. The autonomous loop stops because no `active` record
     // remains for the next wait-node continuation check.
     await GoalStore.forget(streamId);
-    await this.setAutoApprovals(streamId, false);
+    await this.setBashAutoApproval(streamId, false);
     return {
       summary: 'Goal complete.',
       output:
@@ -340,7 +340,7 @@ Best practices:
           retargeted.status === 'paused'
             ? ((await GoalStore.setStatus(streamId, 'active')) ?? retargeted)
             : retargeted;
-        await this.setAutoApprovals(streamId, true);
+        await this.setBashAutoApproval(streamId, true);
         return {
           summary: `Plan approved — goal ${active.goalId} retargeted`,
           output:
@@ -376,7 +376,7 @@ Best practices:
 
     try {
       const goal = await GoalStore.start(streamId, objective);
-      await this.setAutoApprovals(streamId, true);
+      await this.setBashAutoApproval(streamId, true);
       return {
         summary: `Plan approved — goal ${goal.goalId} started`,
         output:
