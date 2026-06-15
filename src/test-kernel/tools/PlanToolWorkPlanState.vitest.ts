@@ -351,22 +351,28 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     expect(GoalStore.getForStream(STREAM_ID)).toBeNull();
   });
 
-  it('complete is a no-op when no goal is running', async () => {
+  it('complete gives plan-only guidance when no goal is running', async () => {
     const result = await callTool({
       command: 'complete',
       reason: 'I think I am done.',
     });
     expect(result.isError).toBeFalsy();
-    expect(result.summary).toMatch(/no-op/i);
+    expect(result.summary).toBe(
+      'Plan-only work complete — summarize the result.',
+    );
+    expect(result.output).toContain(
+      'do not call plan(command="complete") again',
+    );
   });
 
-  it('pause is a no-op when no goal is running', async () => {
+  it('pause gives direct-response guidance when no goal is running', async () => {
     const result = await callTool({
       command: 'pause',
       reason: 'Need user input.',
     });
     expect(result.isError).toBeFalsy();
-    expect(result.summary).toMatch(/no-op/i);
+    expect(result.summary).toBe('No autonomous goal to pause.');
+    expect(result.output).toContain('ask the user directly');
   });
 
   it('rejects whitespace-only reason on pause', async () => {
