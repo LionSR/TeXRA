@@ -48,4 +48,18 @@ describe('review agent prompt', () => {
     expect(agent.settings.tools).toContain('write_file');
     expect(agent.settings.tools).toContain('edit_file');
   });
+
+  it('prefers direct review over computation for elementary facts', () => {
+    const agent = readReviewAgent();
+    const systemPrompt = agent.prompts.systemPrompt;
+
+    expect(systemPrompt).toContain(
+      'Prefer direct mathematical review when a claim can be checked by hand',
+    );
+    expect(systemPrompt).toContain(
+      'do not request external computation for elementary facts',
+    );
+    expect(agent.settings.tools).toContain('wolfram');
+    expect(agent.settings.tools).toContain('bash');
+  });
 });
