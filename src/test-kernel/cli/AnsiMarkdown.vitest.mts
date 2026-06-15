@@ -198,6 +198,24 @@ describe('renderAnsiMarkdown', () => {
     }
   });
 
+  it('wraps quoted list prefixes after C1-ST OSC hyperlinks', () => {
+    const esc = String.fromCharCode(27);
+    const c1StringTerminator = String.fromCharCode(0x9c);
+    const link = `${esc}]8;;https://example.test${c1StringTerminator}`;
+    const out = wrapAnsiToWidth(`${link}│   • abcdef ghijkl mnopqr`, 10, true);
+    const plain = stripAnsi(out);
+    const lines = plain.split('\n');
+
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines[0]).toBe('│   • abcd');
+    expect(lines.slice(1).every((line) => line.startsWith('│     '))).toBe(
+      true,
+    );
+    for (const wrappedLine of lines) {
+      expect(displayWidthForTest(wrappedLine)).toBeLessThanOrEqual(10);
+    }
+  });
+
   it('styles heading text across inline code boundaries', () => {
     _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('## Use `git` correctly');

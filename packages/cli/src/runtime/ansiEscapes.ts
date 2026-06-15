@@ -1,6 +1,7 @@
 export const ANSI_ESCAPE_START = String.fromCharCode(27);
 
 const ANSI_BEL = String.fromCharCode(7);
+const ANSI_C1_STRING_TERMINATOR = String.fromCharCode(0x9c);
 
 /** A CSI sequence (`ESC [`) ends at its final byte, in the range `@`–`~`. */
 const CSI_FINAL_BYTE_MIN = 0x40; // '@'
@@ -31,9 +32,13 @@ export function ansiEscapeEnd(text: string, index: number): number {
   if (next === ']') {
     const belEnd = text.indexOf(ANSI_BEL, index + 2);
     const stEnd = text.indexOf(OSC_STRING_TERMINATOR, index + 2);
-    if (belEnd === -1 && stEnd === -1) return text.length;
-    if (belEnd !== -1 && (stEnd === -1 || belEnd < stEnd)) return belEnd + 1;
-    return stEnd + OSC_STRING_TERMINATOR.length;
+    const c1End = text.indexOf(ANSI_C1_STRING_TERMINATOR, index + 2);
+    const ends = [
+      belEnd === -1 ? undefined : belEnd + 1,
+      stEnd === -1 ? undefined : stEnd + OSC_STRING_TERMINATOR.length,
+      c1End === -1 ? undefined : c1End + 1,
+    ].filter((end): end is number => end !== undefined);
+    return ends.length === 0 ? text.length : Math.min(...ends);
   }
 
   if (isAnsiIntermediateByte(next)) {
