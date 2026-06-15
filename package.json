@@ -100,7 +100,7 @@
     "zod-v3-to-v4": "^1.21.2"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.170",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.177",
     "@anthropic-ai/sdk": "^0.104.1",
     "@awesome.me/webawesome": "^3.8.0",
     "@cantoo/pdf-lib": "^2.7.1",
@@ -121,7 +121,7 @@
     "@xterm/xterm": "^6.0.0",
     "arxiv-client": "^0.0.9",
     "async-mutex": "^0.5.0",
-    "axios": "^1.17.0",
+    "axios": "^1.18.0",
     "bibtex": "^0.9.0",
     "deepmerge": "^4.3.1",
     "delay": "^7.0.0",
@@ -130,7 +130,7 @@
     "escape-string-regexp": "^5.0.0",
     "execa": "^9.6.1",
     "fast-json-stable-stringify": "^2.1.0",
-    "fast-xml-parser": "^5.8.0",
+    "fast-xml-parser": "^5.9.0",
     "fastest-levenshtein": "^1.0.16",
     "fs-extra": "^11.3.5",
     "glob": "^13.0.6",
