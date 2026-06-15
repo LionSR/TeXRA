@@ -113,6 +113,8 @@ const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
+const SHOW_REPEATED_BASH_APPROVAL =
+  process.env.HARNESS_REPEATED_BASH_APPROVAL === '1';
 const SHOW_RETRY_APPROVAL = process.env.HARNESS_RETRY_APPROVAL === '1';
 const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
 const SHOW_USER_QUESTION = process.env.HARNESS_USER_QUESTION === '1';
@@ -735,9 +737,10 @@ function makeEditApprovalRequest() {
   };
 }
 
-function makeBashApprovalPayload() {
+function makeBashApprovalPayload(index = 1) {
   return {
-    requestId: 'harness-bash-approval',
+    requestId:
+      index === 1 ? 'harness-bash-approval' : `harness-bash-approval-${index}`,
     command: BASH_APPROVAL_COMMAND,
     cwd: HARNESS_CWD,
     allowBypass: true,
@@ -1126,14 +1129,32 @@ if (SHOW_EDIT_APPROVAL) {
 }
 
 if (SHOW_BASH_APPROVAL) {
-  const showApproval = () =>
-    void enqueueApproval(
+  const showApproval = (index = 1) =>
+    enqueueApproval(
       {
         kind: 'bash',
-        payload: makeBashApprovalPayload(),
+        payload: makeBashApprovalPayload(index),
       },
       { onPresent: () => notify({ kind: 'approvalNeeded' }) },
-    ).then(applyHarnessApprovalDecision);
+    );
+  const showRepeatedApprovals = () =>
+    void showApproval(1)
+      .then((decision) => {
+        applyHarnessApprovalDecision(decision);
+        if (!decision.accepted) return decision;
+        return showApproval(2).then((secondDecision) => {
+          applyHarnessApprovalDecision(secondDecision);
+          appendHarnessAssistantTranscript(
+            secondDecision.accepted
+              ? 'SECOND-BASH-APPROVED'
+              : 'SECOND-BASH-REJECTED',
+          );
+          return secondDecision;
+        });
+      })
+      .catch(() => undefined);
+  const showSingleApproval = () =>
+    void showApproval(1).then(applyHarnessApprovalDecision);
 
   if (SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS) {
     let pollCount = 0;
@@ -1145,11 +1166,13 @@ if (SHOW_BASH_APPROVAL) {
         return;
       }
       clearInterval(timer);
-      showApproval();
+      if (SHOW_REPEATED_BASH_APPROVAL) showRepeatedApprovals();
+      else showSingleApproval();
     }, 25);
     timer.unref?.();
   } else {
-    showApproval();
+    if (SHOW_REPEATED_BASH_APPROVAL) showRepeatedApprovals();
+    else showSingleApproval();
   }
 }
 
