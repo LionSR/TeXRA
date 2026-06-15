@@ -4,7 +4,10 @@ import { platform } from '@platform/platform';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as logger from '@logger/logUtils';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { AgentSource } from '@shared/schemas/agent';
+import type {
+  AgentCategory as AgentCategoryType,
+  AgentSource,
+} from '@shared/schemas/agent';
 import { agentKey as createKey, agentName } from '@shared/schemas/agent';
 import { getAgentDirectories } from './agentDirectoriesRegistry';
 import {
@@ -228,23 +231,25 @@ const LEGACY_AGENT_ALIASES: Record<string, string> = {
 /**
  * Canonical agent resolver: look up an agent by identifier.
  *
- * Supports "source:name" format or just "name". Plain names are matched
- * against {@link LOOKUP_PRIORITY} (or {@link TOOL_USE_LOOKUP_PRIORITY} when
- * `preferToolUse` is true), returning the first hit. This handles name
- * collisions where, e.g., a workflow agent shadows a tool-use agent.
+ * Supports "source:name" format or just "name". Plain names use the default
+ * source priority unless the lookup is for a tool-use session, where built-in
+ * tool-use agents outrank built-in workflow agents.
  *
  * All other lookups in this module (`resolveAgent`, `resolveAgentKey`,
  * `isRemoteAgent`, `updateAgent*`) delegate here.
  */
 export function getAgent(
   identifier: string,
-  preferToolUse = false,
+  category?: AgentCategoryType,
 ): AgentEntry | undefined {
   // Direct lookup for source:name format (already resolved)
   if (cache.has(identifier)) return cache.get(identifier);
 
   // Find first match using session-appropriate priority
-  const priority = preferToolUse ? TOOL_USE_LOOKUP_PRIORITY : LOOKUP_PRIORITY;
+  const priority =
+    category === AgentCategory.ToolUse
+      ? TOOL_USE_LOOKUP_PRIORITY
+      : LOOKUP_PRIORITY;
   for (const source of priority) {
     const entry = cache.get(`${source}:${identifier}`);
     if (entry) return entry;
@@ -257,7 +262,7 @@ export function getAgent(
   const alias = LEGACY_AGENT_ALIASES[name];
   if (alias) {
     const prefix = identifier.slice(0, identifier.length - name.length);
-    return getAgent(`${prefix}${alias}`, preferToolUse);
+    return getAgent(`${prefix}${alias}`, category);
   }
   return undefined;
 }
@@ -353,10 +358,10 @@ export async function refresh(options: LoadAgentsOptions = {}): Promise<void> {
  */
 export function resolveAgentKey(
   agentIdentifier: string,
-  preferToolUse = false,
+  category?: AgentCategoryType,
 ): string {
   if (!agentIdentifier) return agentIdentifier;
-  const entry = getAgent(agentIdentifier, preferToolUse);
+  const entry = getAgent(agentIdentifier, category);
   if (!entry) return agentIdentifier;
   return createKey(entry.source, entry.name);
 }
@@ -413,7 +418,7 @@ export function getVisibleAgent(
   );
   if (exact) return exact;
 
-  const entry = getAgent(identifier, category === AgentCategory.ToolUse);
+  const entry = getAgent(identifier, category);
   if (!entry) return undefined;
   return entries.find((visible) => visible.name === entry.name);
 }
@@ -458,9 +463,7 @@ function filterVisible(
     configured.flatMap((value) => {
       const name = agentName(value);
       if (entries.some((entry) => entry.name === name)) return [name];
-      return [
-        getAgent(value, category === AgentCategory.ToolUse)?.name ?? name,
-      ];
+      return [getAgent(value, category)?.name ?? name];
     }),
   );
   return entries.filter((entry) => enabledNames.has(entry.name));

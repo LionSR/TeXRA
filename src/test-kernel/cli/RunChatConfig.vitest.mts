@@ -163,7 +163,10 @@ describe('CLI chat run config', () => {
     mockedGetAgent.mockReturnValueOnce(registryAgent(AgentCategory.ToolUse));
 
     expect(chatToolUseAgentUsageError('assistant')).toBeUndefined();
-    expect(mockedGetAgent).toHaveBeenCalledWith('assistant', true);
+    expect(mockedGetAgent).toHaveBeenCalledWith(
+      'assistant',
+      AgentCategory.ToolUse,
+    );
   });
 
   it('rejects missing root chat agents before a prompt is submitted', () => {

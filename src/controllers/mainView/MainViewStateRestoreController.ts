@@ -1,5 +1,6 @@
 // Local imports - agent registry
 import { resolveAgentKey } from '@agent/index';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 // Local imports - task state
 import {
@@ -23,11 +24,13 @@ export function buildMainViewState(
   const isWorkflow = isWorkflowTaskState(taskState);
   const toolConfig = agentConfig.toolConfig ?? {};
 
+  const agentCategory = isToolUse
+    ? AgentCategory.ToolUse
+    : AgentCategory.Workflow;
+
   // Resolve agent name to full key (e.g., "criticize" -> "builtIn:criticize").
   // This ensures the frontend receives the exact key used in dropdown options.
-  // Pass isToolUse to prefer builtInToolUse source for tool-use sessions,
-  // preventing workflow agents from shadowing tool-use agents with same name.
-  const resolvedAgent = resolveAgentKey(agentConfig.agent, isToolUse);
+  const resolvedAgent = resolveAgentKey(agentConfig.agent, agentCategory);
 
   // Build partial state from agentConfig and toolConfig, then parse with schema
   // to apply prefault defaults for any missing fields.

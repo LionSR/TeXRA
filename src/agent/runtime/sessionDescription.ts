@@ -10,6 +10,7 @@
 import { getAgent } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors';
@@ -84,7 +85,7 @@ export async function generateSessionDescription(
     const instruction = getSessionDescriptionInstruction(config);
     if (!instruction) return;
 
-    const agentEntry = getAgent(config.agent, true);
+    const agentEntry = getAgent(config.agent, AgentCategory.ToolUse);
     const agentDescription = agentEntry?.description;
 
     const helperResult = await createHelperModelKit();
