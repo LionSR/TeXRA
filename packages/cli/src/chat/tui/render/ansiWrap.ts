@@ -1,9 +1,17 @@
 import stripAnsi from 'strip-ansi';
 import wrapAnsi from 'wrap-ansi';
 
-import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
+import {
+  ANSI_C1_CSI_START,
+  ANSI_ESCAPE_START,
+  ansiEscapeEnd,
+} from '@cli/runtime/ansiEscapes';
 
 const MIN_WRAP_WIDTH = 1;
+
+function isAnsiControlStart(char: string | undefined): boolean {
+  return char === ANSI_ESCAPE_START || char === ANSI_C1_CSI_START;
+}
 
 function splitRawAtVisiblePrefix(
   line: string,
@@ -12,14 +20,14 @@ function splitRawAtVisiblePrefix(
   let visible = 0;
   let index = 0;
   while (index < line.length && visible < visiblePrefixLength) {
-    if (line[index] === ANSI_ESCAPE_START) {
+    if (isAnsiControlStart(line[index])) {
       index = ansiEscapeEnd(line, index);
     } else {
       visible += 1;
       index += 1;
     }
   }
-  while (line[index] === ANSI_ESCAPE_START) {
+  while (isAnsiControlStart(line[index])) {
     index = ansiEscapeEnd(line, index);
   }
   return {

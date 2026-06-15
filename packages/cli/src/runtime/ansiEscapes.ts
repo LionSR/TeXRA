@@ -1,4 +1,5 @@
 export const ANSI_ESCAPE_START = String.fromCharCode(27);
+export const ANSI_C1_CSI_START = String.fromCharCode(0x9b);
 
 const ANSI_BEL = String.fromCharCode(7);
 const ANSI_C1_STRING_TERMINATOR = String.fromCharCode(0x9c);
@@ -15,18 +16,23 @@ function isAnsiIntermediateByte(char: string | undefined): boolean {
   return char === '(' || char === ')' || char === '#';
 }
 
+function csiEscapeEnd(text: string, start: number): number {
+  for (let end = start; end < text.length; end += 1) {
+    const code = text.charCodeAt(end);
+    if (code >= CSI_FINAL_BYTE_MIN && code <= CSI_FINAL_BYTE_MAX) {
+      return end + 1;
+    }
+  }
+  return text.length;
+}
+
 export function ansiEscapeEnd(text: string, index: number): number {
+  if (text[index] === ANSI_C1_CSI_START) return csiEscapeEnd(text, index + 1);
   if (text[index] !== ANSI_ESCAPE_START) return index;
 
   const next = text[index + 1];
   if (next === '[') {
-    for (let end = index + 2; end < text.length; end += 1) {
-      const code = text.charCodeAt(end);
-      if (code >= CSI_FINAL_BYTE_MIN && code <= CSI_FINAL_BYTE_MAX) {
-        return end + 1;
-      }
-    }
-    return text.length;
+    return csiEscapeEnd(text, index + 2);
   }
 
   if (next === ']') {
