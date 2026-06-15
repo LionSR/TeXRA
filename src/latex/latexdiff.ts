@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
-import { tryGetWorkspaceState } from '@agent/core/stateStore';
+import { tryWorkspaceState } from '@platform/platform';
 import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -78,7 +78,7 @@ export class LaTeXdiffService {
    */
   private getLatexdiffTimeout(): number {
     return (
-      tryGetWorkspaceState()?.get<number>(
+      tryWorkspaceState()?.get<number>(
         WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
         DEFAULT_LATEXDIFF_TIMEOUT_MS,
       ) ?? DEFAULT_LATEXDIFF_TIMEOUT_MS
