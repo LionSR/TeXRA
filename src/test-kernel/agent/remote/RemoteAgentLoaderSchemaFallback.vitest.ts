@@ -9,7 +9,9 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 function installRemoteAgentListClient(
   ...results: Array<{
     data: unknown[] | null;
-    error: { code?: string; message?: string } | null;
+    error: Partial<
+      Record<'code' | 'message' | 'details' | 'hint', string | null>
+    > | null;
   }>
 ): string[] {
   const selectedColumns: string[] = [];
@@ -100,6 +102,41 @@ describe('remote agent schema compatibility', () => {
 
     expect(agents).toHaveLength(1);
     expect(agents[0]?.name).toBe('legacy-agent');
+    expect(selectedColumns).toEqual([
+      'id, name, description, visibility, tools, agent_category',
+      'id, name, description, visibility, agent_category',
+    ]);
+  });
+
+  it('keeps the missing-tools fallback when PostgREST sends null details', async () => {
+    const selectedColumns = installRemoteAgentListClient(
+      {
+        data: null,
+        error: {
+          code: 'PGRST204',
+          message: 'tools',
+          details: null,
+          hint: null,
+        },
+      },
+      {
+        data: [
+          {
+            id: 'agent-1',
+            name: 'nullable-error-agent',
+            description: 'Legacy row',
+            visibility: ['public'],
+            agent_category: null,
+          },
+        ],
+        error: null,
+      },
+    );
+
+    const agents = await RemoteAgentLoader.listRemoteAgents();
+
+    expect(agents).toHaveLength(1);
+    expect(agents[0]?.name).toBe('nullable-error-agent');
     expect(selectedColumns).toEqual([
       'id, name, description, visibility, tools, agent_category',
       'id, name, description, visibility, agent_category',
