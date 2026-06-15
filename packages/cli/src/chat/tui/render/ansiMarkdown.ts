@@ -96,8 +96,7 @@ const TABLE_FALLBACK_WIDTH = 80;
 // cli-table3 pads every cell with one space on each side, so a column's total
 // width is its content width + 2.
 const TABLE_CELL_PADDING = 2;
-const KNOWN_HTML_TAG_RE =
-  /<\/?(?:blockquote|strong|b|em|i|code|p|div|br)\b/i;
+const KNOWN_HTML_TAG_RE = /<\/?(?:blockquote|strong|b|em|i|code|p|div|br)\b/i;
 
 // Size each column to its widest cell (display width, ANSI-aware) so a compact
 // table stays compact instead of being stretched to fill the terminal. Only
