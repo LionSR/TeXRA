@@ -83,6 +83,8 @@ export interface ReviewInstructionInput {
   diff: string;
   truncated: boolean;
   approach: ReviewApproach;
+  /** Optional free-text focus supplied per run via the "Find Issues" options. */
+  userInstructions?: string;
 }
 
 const QUICK_GUIDANCE =
@@ -97,13 +99,21 @@ const THOROUGH_GUIDANCE =
  * untracked files appear as synthesized `new file (untracked)` entries.
  */
 export function buildReviewInstruction(input: ReviewInstructionInput): string {
-  return [
+  const sections = [
     `Review the working tree's diff with the ${input.baseDescription}.`,
     input.approach === 'thorough' ? THOROUGH_GUIDANCE : QUICK_GUIDANCE,
+  ];
+  if (input.userInstructions) {
+    sections.push(
+      `The user gave extra instructions for this review — prioritize them, but still report any other critical issues you find:\n<reviewer-instructions>\n${input.userInstructions}\n</reviewer-instructions>`,
+    );
+  }
+  sections.push(
     `Report each confirmed finding with the report_review_issue tool, using the repository-relative path exactly as it appears in the diff.${input.truncated ? ' The diff was truncated to fit; read the listed files for the full picture.' : ''}`,
     `<changed-files>\n${input.changedFiles.join('\n')}\n</changed-files>`,
     `<diff>\n${input.diff}\n</diff>`,
-  ].join('\n\n');
+  );
+  return sections.join('\n\n');
 }
 
 /**

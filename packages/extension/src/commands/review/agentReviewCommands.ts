@@ -26,13 +26,16 @@ import {
   openReviewIssue,
   type AgentReviewNode,
 } from '@frontend/review/AgentReviewTreeProvider';
+import { promptReviewOptions } from '@frontend/review/promptReviewOptions';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { setReportReviewIssueSink } from '@tools/ReportReviewIssueTool';
+import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'AgentReview';
 
 const agentReviewCommands = {
   run: 'texra.agentReview.run',
+  runWithOptions: 'texra.agentReview.runWithOptions',
   fixAll: 'texra.agentReview.fixAllIssues',
   fixIssue: 'texra.agentReview.fixIssue',
   dismissIssue: 'texra.agentReview.dismissIssue',
@@ -68,6 +71,20 @@ async function handleOpenIssue(node: AgentReviewNode): Promise<void> {
   }
 }
 
+/** "Find Issues" split-button options: gather per-run choices, then run. */
+async function handleRunWithOptions(): Promise<void> {
+  const cwd = WorkspaceFS.getPath();
+  if (!cwd) {
+    void vscode.window.showErrorMessage(
+      'Agent review needs an open workspace folder.',
+    );
+    return;
+  }
+  const options = await promptReviewOptions(cwd);
+  if (!options) return; // Cancelled at one of the QuickPick steps.
+  await AgentReviewService.runReview('manual', options);
+}
+
 export function registerAgentReviewCommands(
   context: vscode.ExtensionContext,
 ): void {
@@ -78,6 +95,8 @@ export function registerAgentReviewCommands(
     AgentReviewService.addIssueReport(report),
   );
 
+  // The Agent Review tree lives in VS Code's Source Control (git) panel,
+  // GitKraken/Cursor-style.
   const treeProvider = new AgentReviewTreeProvider();
   const treeView = vscode.window.createTreeView(AGENT_REVIEW_VIEW_ID, {
     treeDataProvider: treeProvider,
@@ -112,6 +131,10 @@ export function registerAgentReviewCommands(
     {
       id: agentReviewCommands.run,
       handler: () => void AgentReviewService.runReview('manual'),
+    },
+    {
+      id: agentReviewCommands.runWithOptions,
+      handler: () => void handleRunWithOptions(),
     },
     {
       id: agentReviewCommands.fixAll,
