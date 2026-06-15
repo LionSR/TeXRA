@@ -9,6 +9,19 @@ const CSI_FINAL_BYTE_MAX = 0x7e; // '~'
 /** An OSC sequence (`ESC ]`) ends with BEL or the two-char ST (`ESC \`). */
 const OSC_STRING_TERMINATOR = `${ANSI_ESCAPE_START}\\`;
 
+function isAnsiIntermediateByte(char: string | undefined): boolean {
+  return (
+    char === '[' ||
+    char === ']' ||
+    char === '\\' ||
+    char === '(' ||
+    char === ')' ||
+    char === '#' ||
+    char === ';' ||
+    char === '?'
+  );
+}
+
 export function ansiEscapeEnd(text: string, index: number): number {
   if (text[index] !== ANSI_ESCAPE_START) return index;
 
@@ -29,6 +42,12 @@ export function ansiEscapeEnd(text: string, index: number): number {
     if (belEnd === -1 && stEnd === -1) return text.length;
     if (belEnd !== -1 && (stEnd === -1 || belEnd < stEnd)) return belEnd + 1;
     return stEnd + OSC_STRING_TERMINATOR.length;
+  }
+
+  if (isAnsiIntermediateByte(next)) {
+    let end = index + 1;
+    while (end < text.length && isAnsiIntermediateByte(text[end])) end += 1;
+    return Math.min(end + 1, text.length);
   }
 
   return Math.min(index + 2, text.length);

@@ -180,6 +180,24 @@ describe('renderAnsiMarkdown', () => {
     }
   });
 
+  it('keeps quoted list prefixes aligned across ANSI charset escapes', () => {
+    const esc = String.fromCharCode(27);
+    const line = `${esc}(0│ ${esc}(B  • abcdef ghijkl mnopqr`;
+    const out = wrapAnsiToWidth(line, 10, true);
+    const plain = stripAnsi(out);
+    const lines = plain.split('\n');
+
+    expect(lines[0]).toBe('│   • abcd');
+    expect(lines.slice(1).every((line) => line.startsWith('│     '))).toBe(
+      true,
+    );
+    expect(plain).not.toContain('0│');
+    expect(plain).not.toContain('B  •');
+    for (const wrappedLine of lines) {
+      expect(displayWidthForTest(wrappedLine)).toBeLessThanOrEqual(10);
+    }
+  });
+
   it('styles heading text across inline code boundaries', () => {
     _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('## Use `git` correctly');
