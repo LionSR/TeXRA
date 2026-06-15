@@ -259,6 +259,26 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     expect(shared.endTurn).toBe(true);
   });
 
+  it('does not mark a blank tool-result continuation until append succeeds', async () => {
+    const { createUserFollowUpMessages, services } = createBlankTurnServices([
+      { id: 'blank', text: '' },
+    ]);
+    const originalToolResult = toolResultMessage('executions-1');
+    const shared = createShared([originalToolResult]);
+
+    createUserFollowUpMessages.mockRejectedValueOnce(
+      new Error('follow-up append failed'),
+    );
+
+    await expect(
+      createToolUseRoundFlow().setServices(services).run(shared),
+    ).rejects.toThrow('follow-up append failed');
+
+    expect(createUserFollowUpMessages).toHaveBeenCalledTimes(1);
+    expect(shared.blankToolResultContinuationMessageIndex).toBeUndefined();
+    expect(shared.messages).toEqual([originalToolResult]);
+  });
+
   it('retries again for a later blank turn after a different tool result', async () => {
     const { createResponse, createUserFollowUpMessages, services } =
       createBlankTurnServices([
