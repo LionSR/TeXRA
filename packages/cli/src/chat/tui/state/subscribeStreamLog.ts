@@ -13,7 +13,10 @@ import {
 } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 
-import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import {
+  summarizeEmbeddedSubagentFollowups,
+  summarizeFollowupMessage,
+} from '@shared/subagentFollowup';
 import {
   isRenderableTranscriptEntry,
   trimAssistantTranscriptLead,
@@ -155,7 +158,9 @@ function renderLogEntryText(
 ): string {
   switch (role) {
     case 'assistant':
-      return trimAssistantTranscriptLead(text);
+      return summarizeEmbeddedSubagentFollowups(
+        trimAssistantTranscriptLead(text),
+      );
     case 'error':
       return appendCliApiSwitchHint(text);
     case 'user':
