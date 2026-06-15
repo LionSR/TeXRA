@@ -1,5 +1,7 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
+import { StatusCodes } from 'http-status-codes';
+
 import { Node, type NonIterableObject } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -13,7 +15,6 @@ import {
   toErrorMessage,
 } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
-import { StatusCodes } from 'http-status-codes';
 import { STREAM_STATUS, type RetryErrorInfo } from '@shared/schemas';
 import { getConfig } from '@utils/config/configUtils';
 
