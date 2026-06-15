@@ -18,6 +18,8 @@ const SUBAGENT_TAG_RE = /^<subagent-(?:progress|result|error)\b/;
 const EMBEDDED_SUBAGENT_BLOCK_RE =
   /<subagent-(?:progress|result|error)\b[^>]*\/>|<subagent-(progress|result|error)\b[^>]*>[\s\S]*?<\/subagent-\1>/g;
 const EMPTY_FOLLOW_UP_SUMMARY = '(empty follow-up)';
+const RESULT_RESPONSE_PREVIEW_LINES = 12;
+const RESULT_RESPONSE_PREVIEW_CHARS = 1400;
 
 function followupText(text: unknown): string | undefined {
   return typeof text === 'string' ? text : undefined;
@@ -129,6 +131,26 @@ function progressDetail(xml: string): string {
   }
 }
 
+function resultResponsePreview(response: string): string {
+  const decoded = decodeXmlEntities(response).trim();
+  if (decoded === '') return '';
+
+  const lines = decoded.split('\n');
+  const lineLimited = lines.length > RESULT_RESPONSE_PREVIEW_LINES;
+  let preview = lines.slice(0, RESULT_RESPONSE_PREVIEW_LINES).join('\n');
+  const charLimited = preview.length > RESULT_RESPONSE_PREVIEW_CHARS;
+  if (charLimited) {
+    preview = preview.slice(0, RESULT_RESPONSE_PREVIEW_CHARS).trimEnd();
+  }
+
+  if (!lineLimited && !charLimited) return decoded;
+
+  const hidden = lineLimited
+    ? `${lines.length - RESULT_RESPONSE_PREVIEW_LINES} more line${lines.length - RESULT_RESPONSE_PREVIEW_LINES === 1 ? '' : 's'}`
+    : 'more text';
+  return `${preview}\n… ${hidden}; open the subagent transcript for the full response`;
+}
+
 /**
  * Collapse a subagent follow-up XML block into a one-line (or, for results,
  * status + response) human-readable summary. Returns `text` unchanged when it
@@ -153,7 +175,8 @@ export function summarizeSubagentFollowup(text: unknown): string {
     const wall = innerTag(trimmed, 'wall-time');
     const response = innerTag(trimmed, 'response');
     const head = `✓ ${agent} ${status}${wall ? ` · ${wall}` : ''}`;
-    return response ? `${head}\n${decodeXmlEntities(response)}` : head;
+    const preview = response ? resultResponsePreview(response) : '';
+    return preview ? `${head}\n${preview}` : head;
   }
 
   // <subagent-error>
@@ -170,7 +193,7 @@ export function summarizeFollowupMessage(text: unknown): string {
 
 export function summarizeEmbeddedSubagentFollowups(text: string): string {
   if (!text.includes('<subagent-')) return text;
-  return text.replace(EMBEDDED_SUBAGENT_BLOCK_RE, (block) =>
+  return text.replaceAll(EMBEDDED_SUBAGENT_BLOCK_RE, (block) =>
     summarizeSubagentFollowup(block),
   );
 }
