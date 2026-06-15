@@ -1,9 +1,16 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Local imports - agent
+import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
+
 // Local imports - tools
 import { ToolResult, ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
+import {
+  buildBashApprovalRejectedResult,
+  requestBashApproval,
+} from '@tools/approval/bashApproval';
 
 // Local imports - utils
 import {
@@ -29,6 +36,10 @@ export function wolframRunSummary(code: string): string {
   return preview ? `Executed: ${preview}` : 'Executed';
 }
 
+export function wolframApprovalCommand(code: string): string {
+  return `wolframscript -code ${JSON.stringify(code)}`;
+}
+
 const WolframInputSchema = z.strictObject({
   code: z.string(),
   timeout: z
@@ -45,10 +56,18 @@ export type WolframInput = z.infer<typeof WolframInputSchema>;
 
 export class WolframTool extends defineTool({
   name: 'wolfram',
-  description: `Execute Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations. Sessions do NOT persist between calls - each execution starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. IMPORTANT: Never hardcode expected values in Print statements - always compute and display actual results dynamically. Write tests using VerificationTest or assertions to verify properties, printing computed values rather than predetermined strings.`,
+  description: `Execute approval-gated Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations only when Wolfram/external computation is allowed by the user. Do not use it when the user requested a specific verification method or prohibited external computation. Sessions do NOT persist between calls - each execution starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. IMPORTANT: Never hardcode expected values in Print statements - always compute and display actual results dynamically. Write tests using VerificationTest or assertions to verify properties, printing computed values rather than predetermined strings.`,
   schema: WolframInputSchema,
 }) {
   protected async execute(input: WolframInput): Promise<ToolResult> {
+    const command = wolframApprovalCommand(input.code);
+    const approval = await requestBashApproval({ command });
+    if (!approval.accepted) {
+      return buildBashApprovalRejectedResult(command, approval.userMessage);
+    }
+
+    getCurrentToolContexts()?.callContext?.onExecutionReady?.();
+
     const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
     const result = await executeWolframCode(input.code, {
       timeout: effectiveTimeout,
