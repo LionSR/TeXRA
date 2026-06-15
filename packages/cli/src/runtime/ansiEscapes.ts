@@ -9,17 +9,9 @@ const CSI_FINAL_BYTE_MAX = 0x7e; // '~'
 /** An OSC sequence (`ESC ]`) ends with BEL or the two-char ST (`ESC \`). */
 const OSC_STRING_TERMINATOR = `${ANSI_ESCAPE_START}\\`;
 
+/** ISO-2022 intermediate bytes for charset/line-size designators (`ESC ( 0`, `ESC # 3`, etc.). */
 function isAnsiIntermediateByte(char: string | undefined): boolean {
-  return (
-    char === '[' ||
-    char === ']' ||
-    char === '\\' ||
-    char === '(' ||
-    char === ')' ||
-    char === '#' ||
-    char === ';' ||
-    char === '?'
-  );
+  return char === '(' || char === ')' || char === '#';
 }
 
 export function ansiEscapeEnd(text: string, index: number): number {
