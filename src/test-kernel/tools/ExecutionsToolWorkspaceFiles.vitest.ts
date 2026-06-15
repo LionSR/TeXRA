@@ -9,6 +9,10 @@ import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
+  readMeta: vi.fn(),
+  readChildren: vi.fn(),
+  readTodos: vi.fn(),
+  readReport: vi.fn(),
   readWorkspaceFiles: vi.fn(),
   listExecutions: vi.fn(),
 }));
@@ -20,6 +24,10 @@ vi.mock('@agent/storage', async () => {
     ...actual,
     getExecutionStore: vi.fn(() => ({
       readConfig: mocks.readConfig,
+      readMeta: mocks.readMeta,
+      readChildren: mocks.readChildren,
+      readTodos: mocks.readTodos,
+      readReport: mocks.readReport,
       readWorkspaceFiles: mocks.readWorkspaceFiles,
     })),
     listExecutions: mocks.listExecutions,
@@ -54,6 +62,10 @@ describe('ExecutionsTool', () => {
     initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
     vi.clearAllMocks();
     mocks.listExecutions.mockResolvedValue([]);
+    mocks.readMeta.mockResolvedValue(null);
+    mocks.readChildren.mockResolvedValue([]);
+    mocks.readTodos.mockResolvedValue([]);
+    mocks.readReport.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
   });
 
@@ -90,6 +102,35 @@ describe('ExecutionsTool', () => {
 
     expect(result.isError).toBe(true);
     expect(result.error).toContain('Invalid input');
+  });
+
+  it('does not duplicate auto-delivered subagent reports from wait summaries', async () => {
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-06-15T09:36:02.345Z',
+      category: 'toolUse',
+      parentExecutionId: 'parent123',
+    });
+    mocks.readConfig.mockResolvedValue(config);
+    mocks.readReport.mockResolvedValue(
+      '<subagent-result>full report</subagent-result>',
+    );
+
+    const waitResult = await new ExecutionsTool().call({
+      path: '/executions/abc123',
+      action: 'wait',
+    });
+    const reportResult = await new ExecutionsTool().call({
+      path: '/executions/abc123/report',
+    });
+
+    expect(waitResult.output).toContain(
+      'Result: delivered automatically as a follow-up message.',
+    );
+    expect(waitResult.output).toContain('/executions/abc123/report');
+    expect(waitResult.output).not.toContain('<subagent-result>full report');
+    expect(reportResult.output).toBe(
+      '<subagent-result>full report</subagent-result>',
+    );
   });
 
   it('lists and reads persisted workspace files for tool-use executions', async () => {
