@@ -39,8 +39,8 @@ export {
  *
  * Flow structure:
  *   Prep → Call → Process → Dispatch
- *     ↑                        |
- *     └────── CONTINUE ────────┘
+ *     ↑           |            |
+ *     └───────────┴ CONTINUE ──┘
  *
  * Queued user messages (typed during tool execution) are injected in PrepNode
  * BEFORE calling the model, so the model's thinking/response considers the
@@ -74,6 +74,7 @@ export function createToolUseRoundFlow<C>(): Flow<
   prepNode.next(callNode);
   callNode.next(processNode);
   processNode.next(dispatchNode);
+  processNode.on(FlowTransition.CONTINUE, prepNode);
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
   return new Flow<ToolUseRoundShared, CycleParams, ToolUseRoundServices<C>>(
