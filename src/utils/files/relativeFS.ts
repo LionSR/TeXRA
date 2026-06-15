@@ -46,6 +46,7 @@ export abstract class RelativeFS extends BaseFS {
     if (!result.ok) {
       throw new Error(
         `Failed to parse JSON from ${target}: ${result.error.message}`,
+        { cause: result.error },
       );
     }
     return result.value as T;
