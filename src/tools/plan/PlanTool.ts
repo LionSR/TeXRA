@@ -9,8 +9,8 @@
  *
  * `command: 'pause'` and `command: 'complete'` drive the lifecycle of the
  * goal pursuing this plan: pause when user input is needed, complete when
- * the objective is verifiably done. Both are no-ops if no goal is in
- * flight on the current stream.
+ * the objective is verifiably done. When no autonomous goal is in flight,
+ * they return plain guidance for ordinary turn-by-turn chat.
  */
 
 // Third-party imports
@@ -102,7 +102,7 @@ Best practices:
 - Write the objective BEFORE starting implementation.
 - State a stopping condition that can be checked against external evidence (file contents, command output, test results).
 - Track execution steps with the todo tool; update the plan only when the objective or approach genuinely changes (every update requires re-approval).
-- pause/complete are no-ops if no goal is running on this stream.`,
+- pause/complete only affect autonomous goals; if no goal is running, they return guidance for ordinary chat.`,
   schema: PlanToolInputSchema,
 }) {
   protected async execute(input: PlanToolInput): Promise<ToolResult> {
@@ -180,11 +180,10 @@ Best practices:
     const goal = GoalStore.getForStream(streamId);
     if (!goal) {
       return {
-        summary: 'No goal running — pause is a no-op.',
+        summary: 'No autonomous goal to pause.',
         output:
-          'No autonomous goal is currently running on this stream. ' +
-          'If you need user input, return a message describing what you need; ' +
-          'no pause is necessary.',
+          'No autonomous goal is currently running on this stream, so there is nothing to pause. ' +
+          'If you need user input, ask the user directly in your next message; do not call plan(command="pause") again.',
       };
     }
     if (goal.status !== 'active') {
@@ -223,10 +222,10 @@ Best practices:
     const goal = GoalStore.getForStream(streamId);
     if (!goal) {
       return {
-        summary: 'No goal running — complete is a no-op.',
+        summary: 'Plan-only work complete — summarize the result.',
         output:
-          'No autonomous goal is currently running on this stream. ' +
-          'The plan is the only artifact; you may simply summarize the result for the user.',
+          'No autonomous goal is currently running on this stream, so there is nothing to mark complete. ' +
+          'The plan work is otherwise finished; return the final answer to the user and do not call plan(command="complete") again.',
       };
     }
     // Completing forgets the record — a goal is a live pursuit, not an
