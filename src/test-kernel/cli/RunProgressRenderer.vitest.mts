@@ -670,6 +670,37 @@ describe('CLI run progress renderer', () => {
     ]);
   });
 
+  it('does not write late ndjson progress after the runtime host closes', async () => {
+    const output = await captureStreamWrites(process.stdout, async () => {
+      const host = createCliRuntimeHost(
+        context({ outputFormat: 'ndjson', renderRunProgress: false }),
+      );
+      host.emit('updateStreamStatus', {
+        streamId: 'stream-1',
+        status: STREAM_STATUS.RUNNING,
+        previousStatus: STREAM_STATUS.READY,
+      });
+      await host.close();
+      host.emit('updateStreamDescription', {
+        streamId: 'stream-1',
+        description: 'late helper label',
+      });
+    });
+
+    expect(output).not.toBe('');
+    const records = output
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+    expect(records).toEqual([
+      expect.objectContaining({
+        kind: 'progress',
+        event: 'updateStreamStatus',
+      }),
+    ]);
+  });
+
   it('maps the global quiet flag into CLI context args', () => {
     expect(
       pickGlobalArgs({

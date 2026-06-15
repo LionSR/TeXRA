@@ -23,6 +23,7 @@ export type CliRuntimeHost = AgentRuntimeHost & {
 export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let sink: LogSink | undefined;
   let logger: Logger | undefined;
+  let closed = false;
   const runProgress = createRunProgressRenderer(context);
   function ensureLogger(): Logger {
     if (logger) return logger;
@@ -38,6 +39,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   return {
     prepareInteractivePrompt,
     emit(event, payload) {
+      if (closed) return;
+
       if (
         handleCliApprovalEvent(event, payload, context, {
           beforePrompt: prepareInteractivePrompt,
@@ -80,6 +83,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       ensureLogger().debug(`Progress event: ${String(event)}`);
     },
     async close() {
+      closed = true;
       runProgress?.clear();
       await sink?.flush?.();
       await sink?.close?.();
