@@ -142,7 +142,10 @@ export abstract class RetryableInvocationNode<
       return result;
     } catch (retryErr) {
       const retryFormatted = normalizeProviderError(retryErr);
-      if (retryFormatted.isRelayError && retryFormatted.statusCode === StatusCodes.UNAUTHORIZED) {
+      if (
+        retryFormatted.isRelayError &&
+        retryFormatted.statusCode === StatusCodes.UNAUTHORIZED
+      ) {
         services.logger.debug(
           'Still 401 after token refresh, skipping auto-retries',
         );

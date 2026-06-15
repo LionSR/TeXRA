@@ -148,7 +148,10 @@ async function callZoteroConnector(
         headers: { 'Content-Type': 'application/json' },
       },
     );
-    if (response.status === StatusCodes.OK || response.status === StatusCodes.CREATED) {
+    if (
+      response.status === StatusCodes.OK ||
+      response.status === StatusCodes.CREATED
+    ) {
       return { status: 'success' };
     }
     return {

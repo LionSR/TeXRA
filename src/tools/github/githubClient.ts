@@ -112,7 +112,10 @@ export async function ghGet<T>(
       // the cached/unchanged response so callers can distinguish from 4xx.
       if (status === StatusCodes.NOT_MODIFIED) return { status: 304 };
 
-      if (status === StatusCodes.UNAUTHORIZED || status === StatusCodes.FORBIDDEN) {
+      if (
+        status === StatusCodes.UNAUTHORIZED ||
+        status === StatusCodes.FORBIDDEN
+      ) {
         // Primary rate limit: x-ratelimit-remaining hits 0 with an
         // epoch-seconds reset timestamp. Only applies when credentials were
         // otherwise valid.
@@ -126,7 +129,10 @@ export async function ghGet<T>(
         // "non-zero remaining". Without this branch we'd misclassify as an
         // auth error and stop the subscription permanently.
         const retryAfter = responseHeaders?.['retry-after'];
-        if (status === StatusCodes.FORBIDDEN && typeof retryAfter === 'string') {
+        if (
+          status === StatusCodes.FORBIDDEN &&
+          typeof retryAfter === 'string'
+        ) {
           const secs = Number(retryAfter);
           if (Number.isFinite(secs) && secs > 0) {
             throw new GitHubRateLimitError(
@@ -140,7 +146,11 @@ export async function ghGet<T>(
       }
       // Permanent HTTP failures — retrying won't help; surface immediately so
       // callers can halt rather than burning a slot for 24 h.
-      if (status === StatusCodes.NOT_FOUND || status === StatusCodes.GONE || status === StatusCodes.UNPROCESSABLE_ENTITY) {
+      if (
+        status === StatusCodes.NOT_FOUND ||
+        status === StatusCodes.GONE ||
+        status === StatusCodes.UNPROCESSABLE_ENTITY
+      ) {
         throw new GitHubPermanentError(
           status,
           `GitHub returned ${status}: ${extractApiMessage(responseData, err.message)}`,
