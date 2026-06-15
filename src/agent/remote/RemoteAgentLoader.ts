@@ -1,5 +1,6 @@
 import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
+import { z } from 'zod';
 
 import {
   type AgentSetting,
@@ -15,6 +16,7 @@ import {
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ensureError, toErrorMessage } from '@common/errors/errorMessage';
+import { parseJsonWith } from '@common/parsing/safeParseJson';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
 
@@ -43,12 +45,13 @@ interface RemoteAgentListRow {
   agent_category?: string | null;
 }
 
-interface RemoteAgentListQueryError {
-  code?: string;
-  message?: string;
-  details?: string;
-  hint?: string;
-}
+const RemoteAgentListQueryErrorSchema = z.object({
+  code: z.string().optional(),
+  message: z.string().optional(),
+  details: z.string().optional(),
+  hint: z.string().optional(),
+});
+type RemoteAgentListQueryError = z.infer<typeof RemoteAgentListQueryErrorSchema>;
 
 /**
  * True only for the pre-migration database shape where `remote_agents.tools`
@@ -265,11 +268,8 @@ function parseRemoteAgentListErrorBody(
   rawBody: string,
 ): RemoteAgentListQueryError {
   if (!rawBody) return {};
-  try {
-    return JSON.parse(rawBody) as RemoteAgentListQueryError;
-  } catch {
-    return { message: rawBody };
-  }
+  const result = parseJsonWith(rawBody, RemoteAgentListQueryErrorSchema);
+  return result.ok ? result.value : { message: rawBody };
 }
 
 /** Fetch and parse agent config from edge function. */
