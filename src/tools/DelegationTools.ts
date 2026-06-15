@@ -140,6 +140,11 @@ const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
   '- Include the substantive result requested: answer, findings, evidence/checks, and unresolved caveats.',
   '- Do not finish with only status/process notes such as "done", "complete", or "no files were edited"; if no files were edited, state that after the task result.',
 ].join('\n');
+const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
+  'No feedback provided.',
+  'Do not retry the same or equivalent delegation unless the user explicitly asks for it;',
+  'continue directly with available context, or ask the user a clarifying question.',
+].join(' ');
 
 function withToolUseSubagentHandoffInstruction(instruction: string): string {
   const trimmed = instruction.trimEnd();
@@ -760,7 +765,7 @@ function proposalResultToToolResult(
       const feedback = result.feedback?.trim();
       const feedbackLine = feedback
         ? `\nUser feedback: ${feedback}`
-        : '\nNo feedback provided. Consider asking the user for guidance.';
+        : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
       return {
         summary: `User rejected delegation to '${agentName}'`,
         output: `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
