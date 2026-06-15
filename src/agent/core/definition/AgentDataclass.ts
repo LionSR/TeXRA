@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { isNonEmptyString } from '@utils/core';
 import { ToolDefinitionSchema } from '@model';
 import { AgentCategory } from '@shared/schemas/agent';
 
@@ -8,6 +9,7 @@ export { AgentCategory };
 export const AgentSettingBaseSchema = z.strictObject({
   documentTag: z
     .string()
+    .trim()
     .min(1, 'documentTag cannot be empty')
     .prefault('documents'),
   endTag: z.string().prefault('</documents>'),
@@ -58,10 +60,9 @@ function deriveEndTag(input: unknown): unknown {
   if (typeof input !== 'object' || input === null) return input;
   const obj = input as Record<string, unknown>;
   if (obj.endTag !== undefined) return obj;
-  const docTag =
-    typeof obj.documentTag === 'string' && obj.documentTag.length > 0
-      ? obj.documentTag
-      : 'documents';
+  const docTag = isNonEmptyString(obj.documentTag)
+    ? obj.documentTag.trim()
+    : 'documents';
   return { ...obj, endTag: `</${docTag}>` };
 }
 

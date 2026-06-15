@@ -16,6 +16,25 @@ describe('AgentSettingSchema', () => {
     expect(setting.agentCategory).toBe(AgentCategory.Workflow);
     expect(Object.hasOwn(setting, 'outputExt')).toBe(false);
   });
+
+  it('trims documentTag before deriving endTag', () => {
+    const setting = AgentSettingSchema.parse({
+      agentCategory: AgentCategory.Workflow,
+      documentTag: '  latex_document  ',
+    });
+
+    expect(setting.documentTag).toBe('latex_document');
+    expect(setting.endTag).toBe('</latex_document>');
+  });
+
+  it('rejects blank documentTag values', () => {
+    expect(() =>
+      AgentSettingSchema.parse({
+        agentCategory: AgentCategory.Workflow,
+        documentTag: '   ',
+      }),
+    ).toThrow('documentTag cannot be empty');
+  });
 });
 
 describe('AgentDefinitionSchema', () => {

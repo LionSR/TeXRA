@@ -46,6 +46,7 @@ import replacementEngine from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 // Local imports - utils
+import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import {
@@ -200,10 +201,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     for (const entry of entries) {
       const fileName = entry.file_name ?? 'unnamed-file';
       const mimeType = entry.media_type ?? DEFAULT_ATTACHMENT_MIME_TYPE;
-      const inlinePayload =
-        typeof entry.data === 'string' && entry.data.length > 0
-          ? entry.data
-          : null;
+      const inlinePayload = isNonEmptyString(entry.data) ? entry.data : null;
 
       if (inlinePayload) {
         const payloadBytes = Buffer.byteLength(inlinePayload, 'base64');
