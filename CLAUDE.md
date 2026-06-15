@@ -300,11 +300,10 @@ mouse-scroll for finalized history, so don't reinvent them.
   in-flight content belongs in the redrawn `<Box>` below `<Static>`: the
   streaming tail, spinners, side panels, input bar, and the active approval
   modal. In child focus, the same live region renders only the focused child's
-  pending entries and may overflow into native scrollback while the child is
-  still running; finalized child history belongs to that child's Static
-  scrollback owner. Cap root panels (`BOTTOM_PANEL_MAX_ROWS`) so chrome never
-  pushes the input off-screen. Don't park finalized content in the live region
-  "for now."
+  pending entries through the bounded row-budgeted path; full child history
+  belongs to that child's Static scrollback owner and Ctrl-T transcript viewer.
+  Cap root panels (`BOTTOM_PANEL_MAX_ROWS`) so chrome never pushes the input
+  off-screen. Don't park finalized content in the live region "for now."
 - **Stateless renderers.** Tool / diff / markdown components are props-in → JSX-out (the "Render-Time Workarounds" rule, applied to the TUI). No `Date.now()`, synthetic ids, or dedup at render time. Any view-level toggle (collapse/expand, focus) belongs in shared signal state (`state/cliState.ts`), not per-component local state.
 - **Defer non-terminal content to the host.** The TUI does not render PDFs, LaTeX figures, or inline images (iTerm2 / Kitty / Sixel). Hand previews to the webview/desktop or the OS opener. The terminal is for chat, text, and diffs; rebuilding a document viewer in cells is out of scope.
 - **Capability-gate terminal features.** Negotiate support via the DA1-sentinel discovery (`state/terminalCapabilities.ts`) before emitting Kitty-keyboard, OSC color, bracketed-paste, or notification sequences. No "assume a modern terminal" feature use.
