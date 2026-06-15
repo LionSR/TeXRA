@@ -14,7 +14,10 @@ import {
   liveChildExecutionElapsedKey,
   processTailLines,
 } from '../state/childControls';
-import { visibleSubagentRows } from '../state/childStreamMerge';
+import {
+  childExecutionLabel,
+  visibleSubagentRows,
+} from '../state/childExecutions';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { CHILD_STATUS_MARKER, childStatusColor } from './SubagentListDisplay';
 import type { ProcessOutputTail, StreamSlice } from '../state/cliState';
@@ -49,7 +52,7 @@ export function compactChildRowText({
 }): string {
   const tailSummary = processTailLines(tail).at(-1);
   const elapsed = childElapsed(child, nowMs);
-  const label = child.agentName || child.toolName || child.executionId;
+  const label = childExecutionLabel(child);
   const statusLabel = childStatusLabel(child.status);
   return [
     `${label}${statusLabel ? ` ${statusLabel}` : ''}`,
@@ -71,7 +74,7 @@ function Row({
   // pulling the last `TAIL_LINES` non-blank lines is bounded work.
   const tailLines = compact ? [] : processTailLines(tail).slice(-TAIL_LINES);
   const elapsed = childElapsed(child, nowMs);
-  const label = child.agentName || child.toolName || child.executionId;
+  const label = childExecutionLabel(child);
   const statusLabel = childStatusLabel(child.status);
   return (
     <Box
