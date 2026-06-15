@@ -6,6 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
+import { z } from 'zod';
 
 // Local imports - test support
 import { createFakePlatform } from '@test/support/FakePlatform';
@@ -62,5 +63,34 @@ describe('RelativeFS JSON helpers', () => {
     const result = await TestRelativeFS.readJson<typeof payload>('sample.json');
 
     assert.deepStrictEqual(result, payload);
+  });
+
+  it('validates readJson results with a schema', async () => {
+    await TestRelativeFS.writeJson('typed.json', {
+      name: 'alpha',
+      extra: true,
+    });
+
+    const result = await TestRelativeFS.readJson(
+      'typed.json',
+      z.object({ name: z.string() }),
+    );
+
+    assert.deepStrictEqual(result, { name: 'alpha' });
+  });
+
+  it('preserves malformed JSON errors as the readJson cause', async () => {
+    await TestRelativeFS.write('broken.json', '{not json');
+
+    await assert.rejects(
+      () =>
+        TestRelativeFS.readJson('broken.json', z.object({ name: z.string() })),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /Failed to parse JSON from broken\.json:/);
+        assert.ok(error.cause instanceof SyntaxError);
+        return true;
+      },
+    );
   });
 });
