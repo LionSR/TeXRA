@@ -137,6 +137,10 @@ export function splitTranscriptEntries(
       pending.push(entry);
       continue;
     }
+    if (entry.pendingSubagentResultEcho) {
+      pending.push(entry);
+      continue;
+    }
     if (entry.role === 'process') {
       finalized.push(entry);
       continue;

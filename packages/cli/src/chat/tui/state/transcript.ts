@@ -193,6 +193,7 @@ export function finalizeAssistantTranscriptEntries(
     let changed = false;
     const entries = slice.entries.map((entry) => {
       if (entry.finalized) return entry;
+      if (entry.pendingSubagentResultEcho) return entry;
       if (entry.role !== 'assistant' && entry.role !== 'tool') return entry;
       changed = true;
       return { ...entry, finalized: true };

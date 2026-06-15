@@ -193,6 +193,29 @@ export function summarizeFollowupMessage(text: unknown): string {
   return summarizeSubagentFollowup(stripOrchestratorFollowup(text));
 }
 
+export type SubagentFollowupKind = 'progress' | 'result' | 'error';
+
+export interface SubagentFollowupIdentity {
+  readonly kind: SubagentFollowupKind;
+  readonly id: string | undefined;
+}
+
+export function readSubagentFollowupIdentity(
+  text: unknown,
+): SubagentFollowupIdentity | undefined {
+  const normalized = followupText(text);
+  if (normalized === undefined) return undefined;
+
+  const stripped = stripOrchestratorFollowup(normalized).trim();
+  const match = /^<subagent-(progress|result|error)\b/.exec(stripped);
+  if (!match) return undefined;
+
+  return {
+    kind: match[1] as SubagentFollowupKind,
+    id: attr(stripped, 'id'),
+  };
+}
+
 type IncompleteEmbeddedSubagentFollowup = {
   readonly index: number;
   readonly block: string;

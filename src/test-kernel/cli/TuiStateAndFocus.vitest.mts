@@ -1684,6 +1684,37 @@ describe('finalizeSettledPrefix', () => {
     expect(finalizedIds(out)).toEqual([]);
   });
 
+  it('keeps assistant subagent result echoes pending while stream runs', () => {
+    const out = finalizeSettledPrefix(
+      [
+        {
+          ...assistant('a1'),
+          pendingSubagentResultEcho: true,
+        },
+        tool('t1', 'completed'),
+        assistant('a2'),
+      ],
+      false,
+    );
+
+    expect(finalizedIds(out)).toEqual([]);
+  });
+
+  it('keeps only assistant subagent result echoes pending after stream finality', () => {
+    const out = finalizeSettledPrefix(
+      [
+        {
+          ...assistant('a1'),
+          pendingSubagentResultEcho: true,
+        },
+        assistant('a2'),
+      ],
+      true,
+    );
+
+    expect(finalizedIds(out)).toEqual(['a2']);
+  });
+
   it('does not promote past a still-running tool (preserves Static order)', () => {
     const out = finalizeSettledPrefix(
       [assistant('a1'), tool('t1', 'in_progress'), tool('t2', 'completed')],
@@ -1815,6 +1846,137 @@ describe('CLI transcript state', () => {
         '… 8 more lines; open the subagent transcript for the full response',
       );
       expect(entries[0]?.text).not.toContain('<subagent-result');
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('suppresses assistant subagent result echoes when structured delivery follows', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info(
+        [
+          "👤 Subagent `prover' (550e8400-e29b-41d4-a716-446655440000) says:",
+          '',
+          'Here is the proof.',
+        ].join('\n'),
+        { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
+      );
+      logger.info(
+        [
+          '<subagent-result id="550e8400-e29b-41d4-a716-446655440000" agent="prover" category="toolUse" status="completed">',
+          '<response>',
+          'Here is the proof.',
+          '</response>',
+          '</subagent-result>',
+        ].join('\n'),
+        { messageType: MESSAGE_TYPES.USER_MESSAGE },
+      );
+
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        '✓ prover completed\nHere is the proof.',
+      ]);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('does not finalize a live subagent echo before delayed structured delivery', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info(
+        ["👤 Subagent `prover' (abc123) says:", '', 'Here is the proof.'].join(
+          '\n',
+        ),
+        { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
+      );
+      logger.info('Waiting for canonical delivery.', {
+        messageType: MESSAGE_TYPES.USER_MESSAGE,
+      });
+
+      syncStreamLog(root);
+
+      let entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries[0]).toMatchObject({
+        pendingSubagentResultEcho: true,
+        finalized: false,
+      });
+
+      logger.info(
+        [
+          '<subagent-result id="abc123" agent="prover" category="toolUse" status="completed">',
+          '<response>',
+          'Here is the proof.',
+          '</response>',
+          '</subagent-result>',
+        ].join('\n'),
+        { messageType: MESSAGE_TYPES.USER_MESSAGE },
+      );
+
+      syncStreamLog(root);
+
+      entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        'Waiting for canonical delivery.',
+        '✓ prover completed\nHere is the proof.',
+      ]);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('keeps assistant narration that only contains a later subagent echo', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info(
+        [
+          'I checked the result before summarizing it.',
+          '',
+          "👤 Subagent `prover' (abc123) says:",
+          '',
+          'Here is the proof.',
+        ].join('\n'),
+        { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
+      );
+      logger.info(
+        [
+          '<subagent-result id="abc123" agent="prover" category="toolUse" status="completed">',
+          '<response>',
+          'Here is the proof.',
+          '</response>',
+          '</subagent-result>',
+        ].join('\n'),
+        { messageType: MESSAGE_TYPES.USER_MESSAGE },
+      );
+
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        [
+          'I checked the result before summarizing it.',
+          '',
+          "👤 Subagent `prover' (abc123) says:",
+          '',
+          'Here is the proof.',
+        ].join('\n'),
+        '✓ prover completed\nHere is the proof.',
+      ]);
     } finally {
       setDefaultStreamLogStore(previousStore);
     }

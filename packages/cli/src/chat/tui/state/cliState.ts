@@ -31,6 +31,8 @@ export interface ConversationEntry {
   readonly text: string;
   /** True while rendered assistant text is hiding an incomplete protocol block. */
   readonly pendingEmbeddedSubagentFollowup?: boolean;
+  /** True while an assistant subagent echo is waiting for canonical delivery. */
+  readonly pendingSubagentResultEcho?: boolean;
   /** True once the stream transitions to `WAITING`/`COMPLETED`. */
   readonly finalized: boolean;
   /** Populated only when `role === 'tool'`. */

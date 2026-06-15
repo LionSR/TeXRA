@@ -15,6 +15,7 @@ import { normalizeToolUseData } from '@shared/toolUse';
 
 import {
   hasIncompleteEmbeddedSubagentFollowup,
+  readSubagentFollowupIdentity,
   summarizeEmbeddedSubagentFollowups,
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
@@ -133,6 +134,7 @@ function entriesEqual(
     prev.text !== next.text ||
     prev.pendingEmbeddedSubagentFollowup !==
       next.pendingEmbeddedSubagentFollowup ||
+    prev.pendingSubagentResultEcho !== next.pendingSubagentResultEcho ||
     prev.finalized !== next.finalized
   ) {
     return false;
@@ -145,6 +147,16 @@ function entriesEqual(
     return prev.process === next.process;
   }
   return true;
+}
+
+function withSubagentEchoPending(
+  entry: ConversationEntry,
+  echo: SubagentResultRef | undefined,
+): ConversationEntry {
+  if (echo) return { ...entry, pendingSubagentResultEcho: true };
+  if (!entry.pendingSubagentResultEcho) return entry;
+  const { pendingSubagentResultEcho: _pending, ...rest } = entry;
+  return rest;
 }
 
 function logEntryRole(
@@ -258,7 +270,9 @@ function isSettledEntry(
       return entry.toolUse?.status === TOOL_USE_STATUS.COMPLETED;
     case 'assistant':
       return (
-        !entry.pendingEmbeddedSubagentFollowup && index < entries.length - 1
+        !entry.pendingEmbeddedSubagentFollowup &&
+        !entry.pendingSubagentResultEcho &&
+        index < entries.length - 1
       );
   }
 }
@@ -269,8 +283,10 @@ function isSettledEntry(
 // viewport would clip the round's earlier content). Only a contiguous
 // prefix is promoted: `<Static>` is append-only, so an entry must not
 // finalize while any earlier entry is still pending, or insertion order
-// would reverse. When the stream reaches a final status every remaining
-// entry settles, including the trailing live block.
+// would reverse. Pending subagent echoes stay retractable because a canonical
+// <subagent-result> can still arrive after parent exit; after stream finality,
+// later entries may still settle so an unresolved echo does not strand the
+// whole tail in the live pane.
 export function finalizeSettledPrefix(
   entries: readonly ConversationEntry[],
   streamFinal: boolean,
@@ -280,7 +296,11 @@ export function finalizeSettledPrefix(
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index];
     if (!entry || entry.finalized) continue;
-    if (!streamFinal && (sealed || !isSettledEntry(entry, index, entries))) {
+    if (entry.pendingSubagentResultEcho) {
+      if (!streamFinal) sealed = true;
+      continue;
+    }
+    if (sealed || (!streamFinal && !isSettledEntry(entry, index, entries))) {
       sealed = true;
       continue;
     }
@@ -309,7 +329,41 @@ type TranscriptCandidate = {
   readonly rendered: ConversationEntry;
   readonly sortSeq: number;
   readonly tieBreak: number;
+  readonly subagentEcho?: SubagentResultRef;
+  readonly subagentResult?: SubagentResultRef;
 };
+
+type SubagentResultRef = {
+  readonly id: string;
+};
+
+// Models sometimes echo a delegated result in the parent stream just before
+// the canonical <subagent-result> follow-up lands. Treat only whole entries
+// whose first visible line is the echo header as suppressible; mixed entries
+// with assistant prose before the header remain visible. There is no delimiter
+// for prose after the header, so the rest of the entry is the echoed block.
+const ASSISTANT_SUBAGENT_ECHO_RE =
+  /^\s*(?:👤\s*)?Subagent\s+[`'"]?[^`'"\n(]+?[`'"]?\s*\(([0-9a-f][-0-9a-f]*)\)\s+says:\s*\n[\s\S]*\S\s*$/i;
+
+function subagentResultRefFromLogEntry(
+  entry: StreamLogEntry,
+): SubagentResultRef | undefined {
+  if (entry.messageType !== MESSAGE_TYPES.USER_MESSAGE) return undefined;
+  const identity = readSubagentFollowupIdentity(entry.text);
+  if (identity?.kind !== 'result' || !identity.id) return undefined;
+  return { id: identity.id };
+}
+
+function subagentEchoRefFromLogEntry(
+  entry: StreamLogEntry,
+): SubagentResultRef | undefined {
+  if (entry.messageType !== MESSAGE_TYPES.MODEL_RESPONSE) return undefined;
+  const text = trimAssistantTranscriptLead(entry.text ?? '');
+  const match = ASSISTANT_SUBAGENT_ECHO_RE.exec(text);
+  const id = match?.[1];
+  if (!id) return undefined;
+  return { id };
+}
 
 function compareTranscriptCandidates(
   left: TranscriptCandidate,
@@ -333,6 +387,34 @@ function sortTranscriptCandidatesIfNeeded(
     }
   }
   return candidates;
+}
+
+function dropAssistantSubagentResultEchoes(
+  candidates: TranscriptCandidate[],
+): TranscriptCandidate[] {
+  let resultSeenAfter: Set<string> | undefined;
+  let filtered: TranscriptCandidate[] | undefined;
+
+  for (let index = candidates.length - 1; index >= 0; index -= 1) {
+    const candidate = candidates[index];
+    if (!candidate) continue;
+
+    const echo = candidate.subagentEcho;
+    if (echo && resultSeenAfter?.has(echo.id)) {
+      filtered ??= candidates.slice(index + 1);
+      continue;
+    }
+
+    if (filtered) filtered.unshift(candidate);
+
+    const result = candidate.subagentResult;
+    if (result) {
+      resultSeenAfter ??= new Set();
+      resultSeenAfter.add(result.id);
+    }
+  }
+
+  return filtered ?? candidates;
 }
 
 export function subscribeStreamLog(): () => void {
@@ -386,9 +468,16 @@ export function syncStreamLog(streamId: StreamTabId): void {
     const streamFinal = isFinalTranscriptStatus(slice.status);
     const logCandidates: TranscriptCandidate[] = [];
     for (const entry of responses) {
-      const rendered = renderLogEntry(entry, existing.get(entry.id));
-      if (!rendered) continue;
-      logCandidates.push({ rendered, sortSeq: entry.seqNo, tieBreak: 0 });
+      const baseRendered = renderLogEntry(entry, existing.get(entry.id));
+      if (!baseRendered) continue;
+      const subagentEcho = subagentEchoRefFromLogEntry(entry);
+      logCandidates.push({
+        rendered: withSubagentEchoPending(baseRendered, subagentEcho),
+        sortSeq: entry.seqNo,
+        tieBreak: 0,
+        subagentEcho,
+        subagentResult: subagentResultRefFromLogEntry(entry),
+      });
     }
     // The synthetic loop's duplicate check scans `logCandidates`, so synthetics
     // push into a copy; without synthetics the log list is used as-is.
@@ -413,9 +502,9 @@ export function syncStreamLog(streamId: StreamTabId): void {
       });
     }
 
-    const ordered = sortTranscriptCandidatesIfNeeded(candidates).map(
-      (candidate) => candidate.rendered,
-    );
+    const ordered = dropAssistantSubagentResultEchoes(
+      sortTranscriptCandidatesIfNeeded(candidates),
+    ).map((candidate) => candidate.rendered);
     // Promote the settled prefix only after sorting: "is there a later
     // entry" and Static append order are both defined on the final stream
     // order, not the per-entry render order.

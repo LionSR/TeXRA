@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   hasIncompleteEmbeddedSubagentFollowup,
+  readSubagentFollowupIdentity,
   stripOrchestratorFollowup,
   summarizeEmbeddedSubagentFollowups,
   summarizeFollowupMessage,
@@ -27,6 +28,15 @@ describe('summarizeSubagentFollowup', () => {
     expect(stripOrchestratorFollowup('ordinary user text')).toBe(
       'ordinary user text',
     );
+  });
+
+  it('reads subagent follow-up identity through orchestrator wrappers', () => {
+    expect(
+      readSubagentFollowupIdentity(
+        '<orchestrator-followup><subagent-result id="abc" agent="prover" category="toolUse" status="completed">Done.</subagent-result></orchestrator-followup>',
+      ),
+    ).toEqual({ kind: 'result', id: 'abc' });
+    expect(readSubagentFollowupIdentity('ordinary user text')).toBeUndefined();
   });
 
   it('summarizes malformed non-string follow-up payloads without throwing', () => {

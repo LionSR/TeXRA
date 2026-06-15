@@ -149,6 +149,18 @@ describe('CLI conversation transcript splitting', () => {
     expect(waitingBeforeFinalize.pending).toEqual([]);
   });
 
+  it('keeps pending subagent echoes visible after waiting status', () => {
+    const echo = {
+      ...entry('a1', 'assistant', 'Subagent says...', false),
+      pendingSubagentResultEcho: true,
+    };
+
+    const split = splitTranscriptEntries([echo], STREAM_STATUS.WAITING);
+
+    expect(split.finalized).toEqual([]);
+    expect(split.pending).toEqual([echo]);
+  });
+
   it('freezes assistant entries before they enter static scrollback', () => {
     resetCliState();
     patchStream(STREAM_ID, (slice) => ({
@@ -169,6 +181,25 @@ describe('CLI conversation transcript splitting', () => {
     );
     expect(split.finalized.map((item) => item.id)).toEqual(['u1', 'a1']);
     expect(split.pending).toEqual([]);
+  });
+
+  it('keeps pending subagent echoes out of stream-level finalization', () => {
+    resetCliState();
+    patchStream(STREAM_ID, (slice) => ({
+      ...slice,
+      entries: [
+        {
+          ...entry('a1', 'assistant', 'Subagent says...', false),
+          pendingSubagentResultEcho: true,
+        },
+        entry('a2', 'assistant', 'Ordinary final text.', false),
+      ],
+    }));
+
+    finalizeAssistantTranscriptEntries(STREAM_ID);
+
+    const entries = cliState.streams.get().get(STREAM_ID)?.entries ?? [];
+    expect(entries.map((item) => item.finalized)).toEqual([false, true]);
   });
 
   it('freezes assistant entries when a stream returns to ready', () => {
