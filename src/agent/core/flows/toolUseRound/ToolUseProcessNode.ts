@@ -3,7 +3,9 @@ import { BaseNode } from '@agent/node';
 import { logWebFetch, logWebSearch } from '@agent/trace';
 import { recordCycleMetrics } from '@agent/core/execution/AgentState';
 import { extractModelResponse } from '@agent/core/flows/CommonCycleTypes';
+import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -17,6 +19,35 @@ import { formatContent } from '@utils/text/xmlUtils';
 import { FlowTransition } from '../FlowTransitions';
 import type { CycleParams, ToolUseRoundServices } from '../CycleServices';
 import type { ToolUseRoundShared } from './roundShared';
+
+const BLANK_TOOL_RESULT_CONTINUATION =
+  'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function hasToolResultContent(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  return value.some((item) => {
+    if (!isRecord(item)) return false;
+    return item.type === 'tool_result' || isRecord(item.functionResponse);
+  });
+}
+
+function isToolResultMessage(message: ProviderMessage | undefined): boolean {
+  if (!isRecord(message)) return false;
+  const record: Record<string, unknown> = message;
+
+  if (record['type'] === 'function_call_output') return true;
+  if (record['role'] === 'tool') return true;
+
+  return (
+    record['role'] === 'user' &&
+    (hasToolResultContent(record['content']) ||
+      hasToolResultContent(record['parts']))
+  );
+}
 
 /** Result of exec() containing extracted data needed for post() side effects. */
 type ToolUseProcessExecResult =
@@ -157,6 +188,30 @@ export class ToolUseProcessNode<C> extends BaseNode<
     shared.stopReason = execRes.stopReason;
 
     if (execRes.endTurn) {
+      const lastMessageIndex = shared.messages.length - 1;
+      const blankAfterToolResult =
+        !execRes.text?.trim() && isToolResultMessage(shared.messages.at(-1));
+      if (
+        blankAfterToolResult &&
+        shared.blankToolResultContinuationMessageIndex !== lastMessageIndex
+      ) {
+        shared.blankToolResultContinuationMessageIndex = lastMessageIndex;
+        shared.messages = await appendFollowUpAsUserMessage(
+          shared.messages,
+          {
+            text: BLANK_TOOL_RESULT_CONTINUATION,
+            origin: 'synthetic',
+          },
+          this.services,
+        );
+        workspace.resetServerToolContent();
+        workspace.resetReasoning();
+        shared.roundIndex += 1;
+        shared.roundResponseTimeMs = 0;
+        shared.roundNormalizedUsage = undefined;
+        return FlowTransition.CONTINUE;
+      }
+
       shared.toolCalls = undefined;
       shared.shouldStop = true;
       shared.endTurn = true;
