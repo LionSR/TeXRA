@@ -118,6 +118,25 @@ describe('CLI session status formatter', () => {
     expect(status).toContain('resume later with: texra-local resume abc123');
   });
 
+  it('includes cwd in the resume status line when the session uses another workspace', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'harness-model',
+      api: 'personal',
+      approval: 'ask',
+      status: 'running',
+      sessionId: 'abc123',
+      commandName: 'texra-local',
+      cwd: '/tmp/paper',
+      processCwd: '/tmp/launcher',
+      queuedFollowUpMessages: [],
+    });
+
+    expect(status).toContain(
+      "resume later with: texra-local resume abc123 --cwd '/tmp/paper'",
+    );
+  });
+
   it('omits session lines before the first run starts', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',

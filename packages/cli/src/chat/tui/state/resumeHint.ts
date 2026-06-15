@@ -11,6 +11,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { quotePosixShellArg } from '@utils/system/shellQuote';
 
 import type { StreamSlice } from './cliState';
 
@@ -30,13 +31,26 @@ export type ResumeUsageStats = TokenUsageStats & {
   readonly reasoningTokens?: number;
 };
 
+export interface ResumeCommandOptions {
+  /** Effective workspace for the session being resumed. */
+  readonly cwd?: string;
+  /** Ambient shell cwd where the printed command will be copy-pasted. */
+  readonly processCwd?: string;
+}
+
 const DEFAULT_RESUME_COMMAND_NAME = 'texra';
 
 export function formatResumeCommand(
   commandName: string | undefined,
   executionId: string,
+  options: ResumeCommandOptions = {},
 ): string {
-  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}`;
+  const cwd = options.cwd?.trim();
+  const cwdArg =
+    cwd && cwd !== options.processCwd?.trim()
+      ? ` --cwd ${quotePosixShellArg(cwd)}`
+      : '';
+  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}`;
 }
 
 function formatInteger(value: number): string {
@@ -136,6 +150,7 @@ export function formatResumeHint(
   targets: readonly ResumeTarget[],
   usage?: ResumeUsageStats,
   commandName?: string,
+  commandOptions?: ResumeCommandOptions,
 ): string | undefined {
   if (targets.length === 0) return undefined;
   const lines = [formatResumeUsage(usage), 'Resume this session with:'].filter(
@@ -143,7 +158,11 @@ export function formatResumeHint(
   );
   for (const target of targets) {
     lines.push(
-      `  ${formatResumeCommand(commandName, target.executionId)}  (${target.label})`,
+      `  ${formatResumeCommand(
+        commandName,
+        target.executionId,
+        commandOptions,
+      )}  (${target.label})`,
     );
   }
   return lines.join('\n');
