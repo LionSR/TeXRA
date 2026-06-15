@@ -29,6 +29,10 @@ export const BASH_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
 
 export type BashApprovalAction = (typeof BASH_APPROVAL_ACTIONS)[number];
 
+const DEFAULT_BASH_REJECTION_INSTRUCTION =
+  'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
+  'Continue without running it, use a non-shell method, or explain what approval would be needed.';
+
 export const bashApprovalController =
   createStreamApprovalController<BashApprovalResult>({
     rejectionResult: () => ({ accepted: false }),
@@ -164,6 +168,8 @@ export function buildBashApprovalRejectedResult(
   };
   if (feedback) {
     result.userInstruction = feedback;
+  } else {
+    result.userInstruction = DEFAULT_BASH_REJECTION_INSTRUCTION;
   }
   return result;
 }
