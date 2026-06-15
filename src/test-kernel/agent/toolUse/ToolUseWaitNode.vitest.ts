@@ -17,6 +17,7 @@ import {
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
+import { cleanupApprovalsForStream } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 
 describe('ToolUseWaitNode', () => {
@@ -262,12 +263,13 @@ describe('ToolUseWaitNode', () => {
         'updateBashApprovalBypassState',
         { streamId, bypassActive: false },
       );
-      expect(runtimeHost.emit).toHaveBeenCalledWith(
+      expect(runtimeHost.emit).not.toHaveBeenCalledWith(
         'updateToolEditApprovalBypassState',
         { streamId, bypassActive: false },
       );
     } finally {
       await GoalStore.forget(streamId);
+      cleanupApprovalsForStream(streamId);
     }
   });
 

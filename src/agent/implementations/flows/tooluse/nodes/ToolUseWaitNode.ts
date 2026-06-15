@@ -7,7 +7,7 @@ import {
   followUpDisplayText,
 } from '@agent/toolUse/followUpMessages';
 import { STREAM_STATUS } from '@shared/schemas';
-import { GoalStore, setGoalSessionAutoApprovals } from '@tools/goal';
+import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
@@ -91,7 +91,7 @@ export class ToolUseWaitNode<C> extends Node<
       const goal = GoalStore.getForStream(streamId);
       if (goal?.status === 'active') {
         await GoalStore.setStatus(streamId, 'paused');
-        await setGoalSessionAutoApprovals(streamId, false, runtimeHost);
+        await setGoalSessionBashAutoApproval(streamId, false, runtimeHost);
         runtimeHost.emit('goalPaused', { streamId });
       }
     }
