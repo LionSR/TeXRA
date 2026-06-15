@@ -1,14 +1,13 @@
-import { isInFlightStatus } from '@common/constants/streamStatus';
-import type { StreamStatus, StreamTabId } from '@shared/schemas';
-
 import {
   defaultShortcutModifierLabel,
   metaChordLabel,
-} from '../shortcutLabels';
+} from '@cli/runtime/shortcutLabels';
+import { isInFlightStatus } from '@common/constants/streamStatus';
+import type { StreamStatus, StreamTabId } from '@shared/schemas';
 
 import { resolveChildControlDisplayTargets } from './childControls';
-import type { StreamSlice } from './cliState';
 import { activeStreamScope } from './streamViews';
+import type { StreamSlice } from './cliState';
 
 export type FocusedChildFollowUpRoute =
   | { readonly kind: 'none' }

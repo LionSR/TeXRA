@@ -1,6 +1,10 @@
 import { defineCommand } from 'citty';
 
 import { assertExplicitModelKnown } from '../runtime/runModel';
+import {
+  defaultShortcutModifierLabel,
+  metaChordLabel,
+} from '../runtime/shortcutLabels';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 
 import { contextFromArgs } from './_helpers/context';
@@ -11,6 +15,25 @@ import {
   optString,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
+
+const shortcutModifierLabel = defaultShortcutModifierLabel();
+const alternateShortcutModifierLabel =
+  shortcutModifierLabel === 'Esc' ? 'Alt' : 'Esc';
+const tasksShortcut = metaChordLabel(shortcutModifierLabel, 'p');
+const alternateTasksShortcut = metaChordLabel(
+  alternateShortcutModifierLabel,
+  'p',
+);
+const subagentsShortcut = metaChordLabel(shortcutModifierLabel, 's');
+const alternateSubagentsShortcut = metaChordLabel(
+  alternateShortcutModifierLabel,
+  's',
+);
+const focusShortcut = metaChordLabel(shortcutModifierLabel, '1..9');
+const alternateFocusShortcut = metaChordLabel(
+  alternateShortcutModifierLabel,
+  '1..9',
+);
 
 export const chatCommand = withUsageSections(
   defineCommand({
@@ -46,9 +69,18 @@ export const chatCommand = withUsageSections(
         ['/login, /logout', 'sign in or out of included access'],
         ['Ctrl-T', 'open the transcript viewer'],
         ['Tab', 'cycle visible streams when subagents are active'],
-        ['Esc p', 'open tasks and sub-workflows (Alt-p when configured)'],
-        ['Esc s', 'open subagents (Alt-s when configured)'],
-        ['Esc 1..9', 'focus a visible stream by number'],
+        [
+          tasksShortcut,
+          `open tasks and sub-workflows when available (${alternateTasksShortcut} when configured)`,
+        ],
+        [
+          subagentsShortcut,
+          `open subagents when available (${alternateSubagentsShortcut} when configured)`,
+        ],
+        [
+          focusShortcut,
+          `focus a visible stream by number (${alternateFocusShortcut} when configured)`,
+        ],
         ['approvals', 'answer tool prompts when --approval-policy=ask'],
         ['Ctrl-C', 'stop the running task or exit from the TUI'],
       ],
