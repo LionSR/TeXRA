@@ -1878,12 +1878,17 @@ barrel, or run-entry indirection:
   channel, `:99`) and `result: Promise<ResultEvent>` (`:86`) — an always-resolving deferred
   settled exactly once via the idempotent `settleResult` (`:108`), in both lifecycle arms; and
   `onRun?(handle)` fires once after the handle is tracked. The return type is **unchanged**
-  (still `Promise<AgentFlowResult>`), so this is purely additive. `@texra/core` re-exports
-  `AgentExecutionHandle` / `AgentRunHandle` / `ResultEvent` (`packages/core/src/index.ts:77-109`),
-  so an SDK consumer can now await a run's typed terminal outcome and read its event channel by
-  handle — the SDK `query() → Query` handle shape, over the existing engine rather than a
-  rewrite. The §10/Step-6 "infeasible-as-scoped without Step 7" note is now overtaken: Step 7d
-  landed and the handle followed.
+  (still `Promise<AgentFlowResult>`), so this is purely additive. `@texra/core` re-exports the
+  **narrowed** `type AgentRunHandle` (`packages/core/src/index.ts:80`) + `type ResultEvent`
+  (`:105`) — _not_ the concrete `AgentExecutionHandle` class, which stays internal (re-exported
+  only from `executionRegistry`). The public handle is deliberately a
+  `Pick<AgentExecutionHandle, 'executionId' | … | 'trace' | 'result' | 'getProgress'>`
+  (`ExecutionHandle.ts:148`), and `onRun` itself hands consumers that `AgentRunHandle`, not the
+  impl class (`AgentRunLifecycle.ts:47`) — the narrowed-surface-over-impl distinction is the
+  point. So an SDK consumer can now await a run's typed terminal outcome and read its event
+  channel by handle — the SDK `query() → Query` handle shape, over the existing engine rather
+  than a rewrite. The §10/Step-6 "infeasible-as-scoped without Step 7" note is now overtaken:
+  Step 7d landed and the handle followed.
 - **`96f63e8` "SDK Step 7d: per-session `SessionHandle` + terminal `result` event
   (consolidated) (#5960)"** and **`c0b7478` "Extract `IToolUseSession` to core/flows module
   (#5968)."** Step 7d's consolidated train is in this lineage's history (the proposal already
@@ -1926,7 +1931,8 @@ barrel, or run-entry indirection:
 barrels (no new one); `src/agent/runtime/index.ts` still absent (§3.1); `grep` for `vscode`
 imports over `src/agent`/`src/model`/`src/latex`/`src/tools` is **clean**; `@logger` imports
 nothing from `@platform` (decoupled); `@texra/core` is still the curated host-neutral barrel
-(now 16 `export` statements — grew only by the additive F-2 handle re-exports).
+(now 16 `export` statements — grown only by additive handle/session re-exports: the narrowed
+`AgentRunHandle` (F-2) and the Step-7d `SessionHandle`/`defaultSession`; no surface removed).
 
 ### Two long-standing ledger items close/advance this period
 
