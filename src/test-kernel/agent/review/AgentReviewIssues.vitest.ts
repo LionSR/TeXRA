@@ -94,6 +94,28 @@ describe('buildReviewInstruction', () => {
     expect(quick).toContain('QUICK');
     expect(quick).not.toContain('truncated');
   });
+
+  it('weaves in per-run user instructions when provided', () => {
+    const focused = buildReviewInstruction({
+      baseDescription: 'main',
+      changedFiles: ['a.tex'],
+      diff: 'x',
+      truncated: false,
+      approach: 'quick',
+      userInstructions: 'Focus on error handling',
+    });
+    expect(focused).toContain('<reviewer-instructions>');
+    expect(focused).toContain('Focus on error handling');
+
+    const plain = buildReviewInstruction({
+      baseDescription: 'main',
+      changedFiles: ['a.tex'],
+      diff: 'x',
+      truncated: false,
+      approach: 'quick',
+    });
+    expect(plain).not.toContain('reviewer-instructions');
+  });
 });
 
 describe('buildFixInstruction', () => {
