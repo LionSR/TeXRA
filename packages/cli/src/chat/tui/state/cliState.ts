@@ -29,6 +29,8 @@ export interface ConversationEntry {
   readonly role: 'assistant' | 'error' | 'process' | 'tool' | 'user';
   /** Concatenated text for `MODEL_RESPONSE` entries. Empty for tool rows. */
   readonly text: string;
+  /** True while rendered assistant text is hiding an incomplete protocol block. */
+  readonly pendingEmbeddedSubagentFollowup?: boolean;
   /** True once the stream transitions to `WAITING`/`COMPLETED`. */
   readonly finalized: boolean;
   /** Populated only when `role === 'tool'`. */
