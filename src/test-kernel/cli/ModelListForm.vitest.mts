@@ -348,6 +348,10 @@ describe('CLI ModelListForm row budget', () => {
       showOverflow: false,
     });
     expect(modelSelectWindow({ availableRows: 7, itemCount: 8 })).toEqual({
+      maxVisibleItems: 1,
+      showOverflow: false,
+    });
+    expect(modelSelectWindow({ availableRows: 8, itemCount: 8 })).toEqual({
       maxVisibleItems: 2,
       showOverflow: false,
     });
@@ -355,7 +359,7 @@ describe('CLI ModelListForm row budget', () => {
 
   it('spends overflow rows only when the budget can fit them', () => {
     expect(modelSelectWindow({ availableRows: 12, itemCount: 8 })).toEqual({
-      maxVisibleItems: 5,
+      maxVisibleItems: 4,
       showOverflow: true,
     });
   });
