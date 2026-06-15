@@ -47,7 +47,6 @@ function ThinkingRow(): React.JSX.Element {
 export interface ConversationPaneProps {
   readonly width?: number;
   readonly maxRows?: number;
-  readonly allowNativeScrollbackOverflow?: boolean;
   readonly colorEnabled?: boolean;
 }
 
@@ -123,20 +122,6 @@ export function ConversationPane(
   const entries = slice?.entries ?? [];
   const displayEntries = splitTranscriptEntries(entries, slice?.status).pending;
   const showThinking = thinkingIndicatorVisible(slice);
-  if (props.allowNativeScrollbackOverflow) {
-    return (
-      <Box flexDirection="column">
-        {displayEntries.map((entry) =>
-          renderConversationPaneEntry({
-            colorEnabled: props.colorEnabled,
-            entry,
-            width: props.width,
-          }),
-        )}
-        {showThinking ? <ThinkingRow /> : null}
-      </Box>
-    );
-  }
 
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
   // The thinking liveness row is budgeted like any other live content: it
