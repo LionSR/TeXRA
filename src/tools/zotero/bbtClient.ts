@@ -9,6 +9,7 @@
 
 // Third-party imports
 import axios from 'axios';
+import { StatusCodes } from 'http-status-codes';
 
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
@@ -219,7 +220,7 @@ export async function callBetterBibTeX<T = unknown>(
             `Ask the user to start Zotero or verify the port (setting: texra.bib.zoteroPort).`,
         );
       }
-      if (error.response?.status === 404) {
+      if (error.response?.status === StatusCodes.NOT_FOUND) {
         throw new ToolError(
           'Better BibTeX plugin is not installed in Zotero. ' +
             'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',
