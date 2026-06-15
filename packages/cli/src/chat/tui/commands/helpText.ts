@@ -5,8 +5,9 @@
 // markdown (bold section headers + list items) so each command stays on
 // its own row in the transcript.
 
+import { metaChordLabel } from '@cli/runtime/shortcutLabels';
+
 import { textInputEditingHelp } from '../input/textInputBindings';
-import { metaChordLabel } from '../shortcutLabels';
 
 import type { SlashCommand, SlashCommandCategory } from './slashRegistry';
 

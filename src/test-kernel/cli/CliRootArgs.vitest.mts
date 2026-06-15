@@ -1278,8 +1278,10 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('cycle visible streams');
     expect(stdout).toContain('Esc p');
     expect(stdout).toContain('Alt-p');
+    expect(stdout).toContain('open tasks and sub-workflows when available');
     expect(stdout).toContain('Esc s');
     expect(stdout).toContain('Alt-s');
+    expect(stdout).toContain('open subagents when available');
     expect(stdout).toContain('Esc 1..9');
     expect(stdout).toContain('focus a visible stream');
     expect(stdout).toContain('approvals');
@@ -1378,6 +1380,7 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('USAGE texra chat');
     expect(stdout).toContain('INTERACTIVE CONTROLS');
     expect(stdout).toContain('Esc s');
+    expect(stdout).toContain('open subagents when available');
     expect(stdout).toContain('Esc 1..9');
     expect(stderr).toBe('');
   });

@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react';
 
+import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { isActiveStatus } from '@common/constants/streamStatus';
 import {
   LIVE_ELAPSED_STREAM_STATUSES,
@@ -58,7 +59,6 @@ import { cliState } from './state/cliState';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { streamDisplayLabel } from './state/streamViews';
-import { defaultShortcutModifierLabel } from './shortcutLabels';
 import {
   isScopedTranscriptViewport,
   transcriptViewportChange,
