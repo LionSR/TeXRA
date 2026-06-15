@@ -12,7 +12,11 @@ import {
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 
 describe('ToolUseWaitNode', () => {
@@ -388,5 +392,11 @@ describe('ToolUseWaitNode', () => {
       { role: 'user', content: '<subagent-result>done</subagent-result>' },
       { role: 'user', content: 'please revise the theorem' },
     ]);
+    expect(info).toHaveBeenCalledWith('✓ subagent completed', {
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
+    expect(info).toHaveBeenCalledWith('please revise the theorem', {
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
   });
 });
