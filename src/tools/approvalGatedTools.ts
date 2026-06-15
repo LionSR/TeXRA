@@ -23,6 +23,7 @@ const APPROVAL_GATED_TOOL_NAME_LIST = [
   'str_replace_editor',
   'unset_api_key',
   'update_config',
+  'wolfram',
   'write_file',
 ] as const satisfies readonly RegisteredToolName[];
 
