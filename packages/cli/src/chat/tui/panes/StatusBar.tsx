@@ -4,6 +4,10 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import stringWidth from 'string-width';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
+import {
+  defaultShortcutModifierLabel,
+  metaChordLabel,
+} from '@cli/runtime/shortcutLabels';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
   LIVE_ELAPSED_STREAM_STATUSES,
@@ -18,10 +22,6 @@ import { filterNotNullish } from '@utils/core';
 
 import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
-import {
-  defaultShortcutModifierLabel,
-  metaChordLabel,
-} from '../shortcutLabels';
 import {
   approvalQueueStatus,
   type ApprovalQueueStatusKind,
