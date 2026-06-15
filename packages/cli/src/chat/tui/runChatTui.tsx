@@ -486,7 +486,7 @@ interface SlashCommandContext {
 
 function agentSupportsDelegation(agentName: string): boolean {
   return (
-    getAgent(agentName, true)?.tools?.some((toolName) =>
+    getAgent(agentName, AgentCategory.ToolUse)?.tools?.some((toolName) =>
       DELEGATION_TOOLS.has(toolName),
     ) ?? false
   );
@@ -495,7 +495,7 @@ function agentSupportsDelegation(agentName: string): boolean {
 export function chatToolUseAgentUsageError(
   agentName: string,
 ): string | undefined {
-  const agent = getAgent(agentName, true);
+  const agent = getAgent(agentName, AgentCategory.ToolUse);
   if (!agent) {
     return missingToolUseAgentMessage(agentName);
   }
