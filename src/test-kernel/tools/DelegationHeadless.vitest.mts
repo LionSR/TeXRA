@@ -197,6 +197,40 @@ describe('headless delegation', () => {
       expect.any(String),
       expect.anything(),
     );
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instruction: expect.stringContaining(
+          'Follow any tool, network, file, approval',
+        ),
+      }),
+      expect.any(String),
+      expect.anything(),
+    );
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instruction: expect.stringContaining(
+          'report the conflict instead of guessing permission',
+        ),
+      }),
+      expect.any(String),
+      expect.anything(),
+    );
+  });
+
+  it('tells orchestrators that delegated instructions must carry parent constraints', () => {
+    const parameters = new DelegateAgentTool().definition.parameters as {
+      properties?: Record<string, { description?: string }>;
+    };
+    const instructionDescription =
+      parameters.properties?.instruction?.description ?? '';
+
+    expect(instructionDescription).toContain(
+      'copy every relevant parent constraint',
+    );
+    expect(instructionDescription).toContain('tool/network/file/approval');
+    expect(instructionDescription).toContain(
+      'does not automatically inherit the parent conversation',
+    );
   });
 
   it('formats returned child error results as subagent errors', async () => {
