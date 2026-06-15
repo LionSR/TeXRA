@@ -101,4 +101,30 @@ describe('WolframTool approval', () => {
     });
     expect(execute).not.toHaveBeenCalled();
   });
+
+  it('tells the model not to retry after rejection without feedback', async () => {
+    const explicit = createRecordingHost();
+    const streamId = 'stream:wolfram-rejected-default' as StreamTabId;
+    const execute = vi.spyOn(wolframScriptUtils, 'executeWolframCode');
+
+    const result = withRunContext(
+      createRunContext({ runtimeHost: explicit.host, streamId }),
+      () => new WolframTool().call({ code: 'Factor[n^7 - n]' }),
+    );
+
+    const show = await waitForRecordedEvent(
+      explicit.events,
+      'showBashPermission',
+    );
+    await handleProgressViewBashApprovalAction({
+      requestId: show.payload.requestId,
+      action: 'reject',
+    });
+
+    await expect(result).resolves.toMatchObject({
+      isError: true,
+      userInstruction: expect.stringContaining('Do not retry'),
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
 });
