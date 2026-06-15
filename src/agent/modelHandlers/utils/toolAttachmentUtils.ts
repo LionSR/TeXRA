@@ -118,7 +118,7 @@ export function extractToolAttachments(
 
   // Build sanitized result, stripping binary data, undefined values, and redundant error fields
   const sanitizedResult: ToolResultPayload = {};
-  const hasError = typeof parsed.error === 'string' && parsed.error.length > 0;
+  const hasError = isNonEmptyString(parsed.error);
 
   for (const [key, value] of Object.entries(parsed)) {
     if (value === undefined) continue;
