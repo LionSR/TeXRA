@@ -99,11 +99,7 @@ describe('maybeBuildGoalContinuation', () => {
       STREAM_ID,
       'Complete the refactor until pnpm test passes',
     );
-    const out = await maybeBuildGoalContinuation({
-      streamId: STREAM_ID,
-      isSubagent: false,
-      hasQueuedFollowUp: false,
-    });
+    const out = await maybeBuildGoalContinuation(STREAM_ID);
     expect(out).toMatch(/<goal_context>/);
     expect(out).toContain('Complete the refactor until pnpm test passes');
     expect(out).toContain('Autonomous objective active');
@@ -113,68 +109,32 @@ describe('maybeBuildGoalContinuation', () => {
     expect(out).not.toContain('plan(command="pause")');
   });
 
-  it('returns null in subagent mode (parent owns continuation)', async () => {
-    await GoalStore.start(STREAM_ID, 'objective');
-    const out = await maybeBuildGoalContinuation({
-      streamId: STREAM_ID,
-      isSubagent: true,
-      hasQueuedFollowUp: false,
-    });
-    expect(out).toBeNull();
-  });
-
-  it('returns null when user already queued a follow-up', async () => {
-    await GoalStore.start(STREAM_ID, 'objective');
-    const out = await maybeBuildGoalContinuation({
-      streamId: STREAM_ID,
-      isSubagent: false,
-      hasQueuedFollowUp: true,
-    });
-    expect(out).toBeNull();
-  });
-
   it('returns null when the feature flag is off (with an active goal present)', async () => {
     await GoalStore.start(STREAM_ID, 'objective');
     // Flip just the flag — keep the same workspaceState so the active
     // goal is still on disk. Otherwise the test passes trivially.
     (platform.config as FakeConfigProvider).set(GOAL_FEATURE_FLAG_KEY, false);
-    const out = await maybeBuildGoalContinuation({
-      streamId: STREAM_ID,
-      isSubagent: false,
-      hasQueuedFollowUp: false,
-    });
+    const out = await maybeBuildGoalContinuation(STREAM_ID);
     expect(out).toBeNull();
     // Sanity: the record still exists; only the flag stopped the loop.
     expect(GoalStore.getForStream(STREAM_ID)?.status).toBe('active');
   });
 
   it('returns null when no goal exists for the stream', async () => {
-    const out = await maybeBuildGoalContinuation({
-      streamId: STREAM_ID,
-      isSubagent: false,
-      hasQueuedFollowUp: false,
-    });
+    const out = await maybeBuildGoalContinuation(STREAM_ID);
     expect(out).toBeNull();
   });
 
   it('returns null when the goal is paused', async () => {
     await GoalStore.start(STREAM_ID, 'objective');
     await GoalStore.setStatus(STREAM_ID, 'paused');
-    const out = await maybeBuildGoalContinuation({
-      streamId: STREAM_ID,
-      isSubagent: false,
-      hasQueuedFollowUp: false,
-    });
+    const out = await maybeBuildGoalContinuation(STREAM_ID);
     expect(out).toBeNull();
   });
 
   it('is a pure read — leaves the record untouched', async () => {
     const before = await GoalStore.start(STREAM_ID, 'objective');
-    await maybeBuildGoalContinuation({
-      streamId: STREAM_ID,
-      isSubagent: false,
-      hasQueuedFollowUp: false,
-    });
+    await maybeBuildGoalContinuation(STREAM_ID);
     const after = GoalStore.getForStream(STREAM_ID);
     // No counter, no audit log: the helper only reads. The loop runs until
     // the model completes or the user stops it.

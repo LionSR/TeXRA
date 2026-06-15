@@ -114,12 +114,8 @@ export class ToolUseWaitNode<C> extends Node<
     // failed/cancelled cycle so the user-recovery path still fires. The
     // post-build re-check of `hasQueuedFollowUp` lets user input that arrived
     // during the build win the race.
-    if (!prepRes.afterError) {
-      const followUp = await maybeBuildGoalContinuation({
-        streamId,
-        isSubagent: !!isSubagent,
-        hasQueuedFollowUp: session.hasQueuedFollowUp(),
-      });
+    if (!prepRes.afterError && !isSubagent && !session.hasQueuedFollowUp()) {
+      const followUp = await maybeBuildGoalContinuation(streamId);
       if (followUp && !session.hasQueuedFollowUp()) {
         return {
           kind: 'continue',
