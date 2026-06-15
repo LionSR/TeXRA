@@ -30,7 +30,11 @@ import { currentSession } from '@agent/runtime/SessionHandle';
 
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
-import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
+import {
+  ExecutionIdSchema,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
@@ -184,23 +188,25 @@ const normalizeExecutionsToolInput = (input: unknown): unknown => {
   return { ...record, timeout: normalizeWaitTimeout(timeout) };
 };
 
-function isToolUseSubagentHandle(handle: unknown): boolean {
+function isCallerParentOfToolUseSubagent(
+  handle: unknown,
+  callerStreamId: StreamTabId | undefined,
+): boolean {
   return (
+    callerStreamId != null &&
     handle instanceof AgentExecutionHandle &&
     handle.category === 'toolUse' &&
-    handle.parentStreamId !== handle.childStreamId
+    handle.parentStreamId !== handle.childStreamId &&
+    handle.parentStreamId === callerStreamId
   );
 }
 
-function shouldSuppressAutoDeliveredSubagentReport(input: {
-  readonly options: ExecutionSummaryOptions;
-  readonly category: string | undefined;
-  readonly parentExecutionId: string | undefined;
-  readonly handle?: unknown;
-}): boolean {
-  if (!input.options.suppressAutoDeliveredSubagentReport) return false;
-  if (input.handle) return isToolUseSubagentHandle(input.handle);
-  return input.category === 'toolUse' && input.parentExecutionId != null;
+function shouldSuppressAutoDeliveredSubagentReport(
+  options: ExecutionSummaryOptions,
+  handle: unknown,
+): boolean {
+  if (!options.suppressAutoDeliveredSubagentReport) return false;
+  return isCallerParentOfToolUseSubagent(handle, tryUseRunContext()?.streamId);
 }
 
 export class ExecutionsTool extends defineTool({
@@ -485,12 +491,10 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         todos,
         report,
         {
-          suppressReport: shouldSuppressAutoDeliveredSubagentReport({
+          suppressReport: shouldSuppressAutoDeliveredSubagentReport(
             options,
-            category: handle.category,
-            parentExecutionId: meta?.parentExecutionId,
             handle,
-          }),
+          ),
         },
       );
 
@@ -549,11 +553,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       todos,
       report,
       {
-        suppressReport: shouldSuppressAutoDeliveredSubagentReport({
-          options,
-          category,
-          parentExecutionId: meta?.parentExecutionId,
-        }),
+        suppressReport: false,
       },
     );
 
@@ -582,7 +582,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     if (report && options.suppressReport) {
       lines.push(
         '',
-        `Result: delivered automatically as a follow-up message. Use /executions/${executionId}/report to read the persisted report explicitly.`,
+        `Result: delivered automatically to this parent stream as a follow-up message. Use /executions/${executionId}/report to read the persisted report explicitly.`,
       );
     } else if (report) {
       lines.push('', 'Result:', report);
