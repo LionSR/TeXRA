@@ -51,6 +51,8 @@ export const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
    * Reset after finalization when continuing to next round.
    */
   roundNormalizedUsage: NormalizedUsageSchema.optional(),
+  /** Last tool-result message index that received a blank-turn continuation. */
+  blankToolResultContinuationMessageIndex: z.int().nonnegative().optional(),
 });
 
 /** Tool-use round fields derived from schema */
@@ -71,4 +73,6 @@ export interface ToolUseRoundShared extends ToolUseRoundFields {
   toolCalls?: SdkToolCall[];
   /** Normalized usage with proper typing */
   roundNormalizedUsage?: NormalizedUsage;
+  /** Last tool-result message index that received a blank-turn continuation. */
+  blankToolResultContinuationMessageIndex?: number;
 }
