@@ -22,6 +22,7 @@ import {
   type MarkdownItInstance,
   type MarkdownProcessor,
 } from '@shared/markdown';
+import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
 
 import { wrapAnsiToWidth } from './ansiWrap';
 
@@ -172,9 +173,10 @@ function quoteHtmlBlock(body: string): string {
 }
 
 function normalizeKnownHtmlForAnsiMarkdown(content: string): string {
-  if (!KNOWN_HTML_TAG_RE.test(content)) return content;
+  const summarized = summarizeEmbeddedSubagentFollowups(content);
+  if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
 
-  return content
+  return summarized
     .replaceAll(
       /<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi,
       (_match, body: string) => quoteHtmlBlock(body),
