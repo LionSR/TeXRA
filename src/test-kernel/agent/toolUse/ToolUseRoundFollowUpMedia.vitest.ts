@@ -92,4 +92,192 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       { absolutePath: '/tmp/figure.png' },
     ]);
   });
+
+  function toolResultMessage(callId: string): ProviderMessage {
+    return {
+      type: 'function_call_output',
+      call_id: callId,
+      output: 'tool completed',
+    } as ProviderMessage;
+  }
+
+  function createShared(messages: ProviderMessage[]): ToolUseRoundShared {
+    return {
+      messages,
+      shouldStop: false,
+      endTurn: false,
+      response: undefined,
+      responseTimeMs: undefined,
+      stopReason: undefined,
+      lastError: undefined,
+      toolCalls: undefined,
+      text: undefined,
+      roundIndex: 0,
+      roundResponseTimeMs: 0,
+      roundNormalizedUsage: undefined,
+    };
+  }
+
+  function createBlankTurnServices(
+    responses: Array<{ id: string; text?: string; toolCall?: boolean }>,
+  ): {
+    createResponse: ReturnType<typeof vi.fn>;
+    createUserFollowUpMessages: ReturnType<typeof vi.fn>;
+    services: ToolUseRoundServices;
+  } {
+    const createUserFollowUpMessages = vi.fn(
+      async (messages: ProviderMessage[], userMessage: string) =>
+        [
+          ...messages,
+          { type: 'message', role: 'user', content: userMessage },
+        ] as ProviderMessage[],
+    );
+    const createResponse = vi.fn(async () => ({
+      response: responses.shift() ?? { id: 'unexpected-blank', text: '' },
+    }));
+    const createToolUseFollowUpMessages = vi.fn(
+      async (_client, call: { callId: string; name: string }) =>
+        [
+          {
+            type: 'function_call',
+            call_id: call.callId,
+            name: call.name,
+            arguments: '{}',
+          },
+          toolResultMessage(call.callId),
+        ] as ProviderMessage[],
+    );
+
+    const services = {
+      checkInterruption: () => false,
+      client: {},
+      config: { agent: 'test-agent', model: 'test-model' },
+      executionId: 'test-exec',
+      fileService: {
+        createLocation: (filePath: string) => ({ absolutePath: filePath }),
+      },
+      logger: createRunTrace('ToolUseRoundBlankToolResult').trace,
+      modelHandler: {
+        addMediaToUserMessage: vi.fn(async () => {}),
+        capabilities: { supportsVision: true },
+        createAssistantMessageFromResponse: vi.fn(
+          (_response: unknown, text: string) =>
+            ({ type: 'message', role: 'assistant', content: text }) as never,
+        ),
+        createResponse,
+        createToolUseFollowUpMessages,
+        createUserFollowUpMessages,
+        extractAssistantContent: () => [],
+        extractResponse: (response: { text?: string; toolCall?: boolean }) => ({
+          text: response.text ?? '',
+          usage: null,
+          stopReason: response.toolCall ? 'tool_calls' : 'stop',
+        }),
+        extractServerToolData: () => ({
+          contentBlocks: [],
+          webFetchResults: [],
+          webSearchResults: [],
+        }),
+        extractToolUse: (response: { toolCall?: boolean }) =>
+          response.toolCall
+            ? [
+                {
+                  callId: 'again-1',
+                  input: {},
+                  name: 'again',
+                  provider: 'test',
+                  raw: {},
+                },
+              ]
+            : [],
+        getStreamingConfig: () => false,
+        isEndTurnStop: (stopReason: string) => stopReason === 'stop',
+        processThinkingBlock: () => null,
+        setOutputStreaming: vi.fn(),
+      },
+      prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
+      run: AgentRunStateSnapshotSchema.parse({}),
+      runtimeHost: noopAgentRuntimeHost,
+      session: {
+        hasQueuedFollowUp: () => false,
+      },
+      setAbortController: () => {},
+      setting: { temperature: 0, tools: [{ name: 'again' }] },
+      streamId: 'test-stream',
+      streamStatus: new StreamStatusRegistry(),
+      toolRegistry: new MapToolRegistry({
+        again: {
+          call: vi.fn(async () => ({ output: 'again result' })),
+          definition: { name: 'again' },
+        } as never,
+      }),
+      userVarChannels: { input: {}, transient: {} },
+      workspace: AgentWorkspaceState.create(),
+    } as unknown as ToolUseRoundServices;
+
+    return { createResponse, createUserFollowUpMessages, services };
+  }
+
+  it('continues when the model returns blank text after a tool result', async () => {
+    const { createResponse, createUserFollowUpMessages, services } =
+      createBlankTurnServices([
+        { id: 'blank', text: '' },
+        { id: 'final', text: 'Final answer: 3842.' },
+      ]);
+    const shared = createShared([toolResultMessage('executions-1')]);
+
+    await createToolUseRoundFlow().setServices(services).run(shared);
+
+    expect(createResponse).toHaveBeenCalledTimes(2);
+    expect(createUserFollowUpMessages).toHaveBeenCalledWith(
+      [expect.objectContaining({ type: 'function_call_output' })],
+      expect.stringContaining('previous assistant turn after a tool result'),
+    );
+    expect(shared.messages.at(-1)).toEqual({
+      type: 'message',
+      role: 'assistant',
+      content: 'Final answer: 3842.',
+    });
+    expect(shared.endTurn).toBe(true);
+  });
+
+  it('does not retry repeatedly for the same blank tool result', async () => {
+    const { createResponse, createUserFollowUpMessages, services } =
+      createBlankTurnServices([
+        { id: 'blank', text: '' },
+        { id: 'still-blank', text: '' },
+      ]);
+    const shared = createShared([toolResultMessage('executions-1')]);
+
+    await createToolUseRoundFlow().setServices(services).run(shared);
+
+    expect(createResponse).toHaveBeenCalledTimes(2);
+    expect(createUserFollowUpMessages).toHaveBeenCalledTimes(1);
+    expect(shared.messages.at(-1)).toEqual(
+      expect.objectContaining({ role: 'user' }),
+    );
+    expect(shared.endTurn).toBe(true);
+  });
+
+  it('retries again for a later blank turn after a different tool result', async () => {
+    const { createResponse, createUserFollowUpMessages, services } =
+      createBlankTurnServices([
+        { id: 'first-blank', text: '' },
+        { id: 'tool-call', text: 'checking again', toolCall: true },
+        { id: 'second-blank', text: '' },
+        { id: 'final', text: 'Final answer after second retry.' },
+      ]);
+    const shared = createShared([toolResultMessage('executions-1')]);
+
+    await createToolUseRoundFlow().setServices(services).run(shared);
+
+    expect(createResponse).toHaveBeenCalledTimes(4);
+    expect(createUserFollowUpMessages).toHaveBeenCalledTimes(2);
+    expect(shared.messages.at(-1)).toEqual({
+      type: 'message',
+      role: 'assistant',
+      content: 'Final answer after second retry.',
+    });
+    expect(shared.endTurn).toBe(true);
+  });
 });
