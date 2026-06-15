@@ -59,7 +59,9 @@ function deriveEndTag(input: unknown): unknown {
   if (typeof input !== 'object' || input === null) return input;
   const obj = input as Record<string, unknown>;
   if (obj.endTag !== undefined) return obj;
-  const docTag = isNonEmptyString(obj.documentTag) ? obj.documentTag : 'documents';
+  const docTag = isNonEmptyString(obj.documentTag)
+    ? obj.documentTag
+    : 'documents';
   return { ...obj, endTag: `</${docTag}>` };
 }
 
