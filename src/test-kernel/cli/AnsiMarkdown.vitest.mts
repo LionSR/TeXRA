@@ -70,6 +70,28 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('<code>');
   });
 
+  it('summarizes embedded subagent result XML before HTML rendering', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown(
+      [
+        '<blockquote>',
+        '<subagent-result id="abc" agent="review" category="toolUse" status="completed">',
+        '<wall-time>2m</wall-time>',
+        '<response>All good &lt;ok&gt;</response>',
+        '</subagent-result>',
+        '</blockquote>',
+      ].join('\n'),
+      { colorEnabled: false, width: 80 },
+    );
+    const plain = stripAnsi(out);
+
+    expect(plain).toContain('│ ✓ review completed · 2m');
+    expect(plain).toContain('│ All good <ok>');
+    expect(plain).not.toContain('<subagent-result');
+    expect(plain).not.toContain('<response>');
+    expect(plain).not.toContain('<blockquote>');
+  });
+
   it('passes typed code through cli-highlight without leaking sentinels', () => {
     _resetAnsiMarkdownForTests();
     const md = '```ts\nconst x: number = 1;\n```';
