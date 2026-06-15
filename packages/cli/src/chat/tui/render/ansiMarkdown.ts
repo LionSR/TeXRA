@@ -22,9 +22,8 @@ import {
   type MarkdownItInstance,
   type MarkdownProcessor,
 } from '@shared/markdown';
-import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
-
 import { wrapAnsiToWidth } from './ansiWrap';
+import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
 
 import type { RenderRule } from 'markdown-it/lib/renderer.mjs';
 
@@ -97,7 +96,6 @@ const TABLE_FALLBACK_WIDTH = 80;
 // cli-table3 pads every cell with one space on each side, so a column's total
 // width is its content width + 2.
 const TABLE_CELL_PADDING = 2;
-const KNOWN_HTML_TAG_RE = /<\/?(?:blockquote|strong|b|em|i|code|p|div|br)\b/i;
 
 // Size each column to its widest cell (display width, ANSI-aware) so a compact
 // table stays compact instead of being stretched to fill the terminal. Only
@@ -161,39 +159,6 @@ function renderAnsiTable(
   });
   for (const row of rows) table.push([...row]);
   return table.toString();
-}
-
-function quoteHtmlBlock(body: string): string {
-  const trimmed = body.trim();
-  if (trimmed === '') return '';
-  return trimmed
-    .split(/\r?\n/)
-    .map((line) => (line.trim() === '' ? '>' : `> ${line}`))
-    .join('\n');
-}
-
-function normalizeKnownHtmlForAnsiMarkdown(content: string): string {
-  const summarized = summarizeEmbeddedSubagentFollowups(content);
-  if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
-
-  return summarized
-    .replaceAll(
-      /<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi,
-      (_match, body: string) => quoteHtmlBlock(body),
-    )
-    .replaceAll(/<br\s*\/?>/gi, '\n')
-    .replaceAll(/<\/(?:p|div)>/gi, '\n\n')
-    .replaceAll(/<(?:p|div)\b[^>]*>/gi, '')
-    .replaceAll(/<strong\b[^>]*>/gi, '**')
-    .replaceAll(/<\/strong>/gi, '**')
-    .replaceAll(/<b\b[^>]*>/gi, '**')
-    .replaceAll(/<\/b>/gi, '**')
-    .replaceAll(/<em\b[^>]*>/gi, '_')
-    .replaceAll(/<\/em>/gi, '_')
-    .replaceAll(/<i\b[^>]*>/gi, '_')
-    .replaceAll(/<\/i>/gi, '_')
-    .replaceAll(/<code\b[^>]*>/gi, '`')
-    .replaceAll(/<\/code>/gi, '`');
 }
 
 function restoreProtectedLatexInCell(cell: string, env: unknown): string {
@@ -494,7 +459,7 @@ export function renderAnsiMarkdown(
 ): string {
   const processor = processorFor(options.width, options.colorEnabled ?? true);
   return wrapAnsiToWidth(
-    processor(normalizeKnownHtmlForAnsiMarkdown(content)),
+    processor(normalizeKnownHtmlForCliMarkdown(content)),
     options.width,
     true,
   ).trimEnd();

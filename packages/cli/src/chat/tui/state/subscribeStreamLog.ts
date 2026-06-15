@@ -15,9 +15,9 @@ import { normalizeToolUseData } from '@shared/toolUse';
 
 import {
   hasIncompleteEmbeddedSubagentFollowup,
-  summarizeEmbeddedSubagentFollowups,
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
+import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 import {
   isRenderableTranscriptEntry,
   trimAssistantTranscriptLead,
@@ -161,7 +161,7 @@ function renderLogEntryText(
 ): string {
   switch (role) {
     case 'assistant':
-      return summarizeEmbeddedSubagentFollowups(
+      return normalizeKnownHtmlForCliMarkdown(
         trimAssistantTranscriptLead(text),
       );
     case 'error':

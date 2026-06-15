@@ -1781,6 +1781,31 @@ describe('CLI transcript state', () => {
     }
   });
 
+  it('normalizes common HTML before assistant text reaches the live transcript', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info(
+        '<h3>Verification Report</h3>The proof is <b>fully verified</b>.',
+        { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
+      );
+
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        '### Verification Report\n\nThe proof is **fully verified**.',
+      ]);
+      expect(entries[0]?.text).not.toContain('<h3>');
+      expect(entries[0]?.text).not.toContain('<b>');
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
   it('bounds long subagent result responses in the visible transcript', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
