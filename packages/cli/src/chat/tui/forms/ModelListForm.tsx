@@ -48,8 +48,8 @@ export function modelSelectWindow(args: {
   readonly availableRows: number | undefined;
   readonly itemCount: number;
 }): SelectWindowSize {
-  // Border, title, description, and key hints are the irreducible chrome.
-  return computeSelectWindowSize({ ...args, chromeRows: 5 });
+  // Border, title, description, footer spacer, and key hints are the chrome.
+  return computeSelectWindowSize({ ...args, chromeRows: 6 });
 }
 
 export function modelListDescription({
@@ -205,7 +205,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           />
         </Box>
       )}
-      <Box>
+      <Box marginTop={1}>
         {props.selectable && items.length > 0 ? (
           <KeyHints
             hints={[
