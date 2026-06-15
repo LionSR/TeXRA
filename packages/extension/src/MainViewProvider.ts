@@ -14,6 +14,7 @@ import {
   createKey,
   getAgent,
 } from '@agent/index';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - common
@@ -203,7 +204,7 @@ export class MainViewProvider
       this.pendingSetupAgentSelection = false;
       // Resolve the qualified registry key so the dropdown matches by value;
       // the plain name still resolves by label if the registry isn't loaded.
-      const entry = getAgent('setup', true);
+      const entry = getAgent('setup', AgentCategory.ToolUse);
       view.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
         agentId: entry ? createKey(entry.source, entry.name) : 'setup',

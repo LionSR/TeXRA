@@ -10,6 +10,7 @@ import { ProgressAgentProposalController } from '@controllers/progressView/Progr
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { getAgent } from '@agent/index';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   validateExecutionRequest,
@@ -554,7 +555,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
-      getAgentCategory: (agent) => getAgent(agent, true)?.category,
+      getAgentCategory: (agent) =>
+        getAgent(agent, AgentCategory.ToolUse)?.category,
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
         exists: (relativePath) => WorkspaceFS.exists(relativePath),
