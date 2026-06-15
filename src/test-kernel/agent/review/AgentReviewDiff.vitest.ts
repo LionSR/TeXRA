@@ -13,6 +13,7 @@ import {
   buildUntrackedFileDiff,
   collectReviewDiff,
   isPathInChangeSet,
+  listBaseBranchCandidates,
 } from '@agent/review/reviewDiff';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -224,6 +225,68 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(result.value.diff).toContain('-original line');
   });
 
+  it('diffs against a chosen base branch (merge-base) from the picker', async () => {
+    // A second long-lived branch the user can pick as the diff base.
+    await git('checkout', '-b', 'develop');
+    await writeFile(path.join(repo, 'dev-only.txt'), 'develop work\n');
+    await git('add', '.');
+    await git('commit', '-m', 'develop work');
+
+    await git('checkout', 'main');
+    await git('checkout', '-b', 'feature');
+    await writeFile(path.join(repo, 'paper.tex'), 'feature line\n');
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: false,
+      includeSubmodules: true,
+      baseBranch: 'develop',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Merge-base with develop is the initial commit, so develop's own work
+    // is not part of the review — only the feature change is.
+    expect(result.value.baseDescription).toBe('branch develop');
+    expect(result.value.diff).toContain('+feature line');
+    expect(result.value.diff).not.toContain('develop work');
+    expect(result.value.changedFiles).toEqual(['paper.tex']);
+  });
+
+  it('diffs against an explicitly chosen remote ref even on the matching local branch', async () => {
+    await git('update-ref', 'refs/remotes/origin/main', 'refs/heads/main');
+    await writeFile(path.join(repo, 'notes.txt'), 'first unpushed commit\n');
+    await git('add', '.');
+    await git('commit', '-m', 'first unpushed');
+    await writeFile(path.join(repo, 'paper.tex'), 'second unpushed commit\n');
+    await git('commit', '-am', 'second unpushed');
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: false,
+      includeSubmodules: true,
+      baseBranch: 'origin/main',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.baseDescription).toBe('branch origin/main');
+    expect(result.value.diff).toContain('+first unpushed commit');
+    expect(result.value.diff).toContain('+second unpushed commit');
+    expect(result.value.changedFiles).toEqual(['notes.txt', 'paper.tex']);
+  });
+
+  it('fails clearly when the chosen base branch does not exist', async () => {
+    await git('checkout', '-b', 'feature');
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: false,
+      includeSubmodules: true,
+      baseBranch: 'no-such-branch',
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain('no-such-branch');
+  });
+
   it('uses an explicit base ref for commit-triggered reviews', async () => {
     await writeFile(path.join(repo, 'notes.txt'), 'notes before\n');
     await git('add', '.');
@@ -273,6 +336,32 @@ describe('collectReviewDiff (real git repository)', () => {
         ok: false,
         reason: 'The workspace is not a git repository.',
       });
+    } finally {
+      await rm(plain, { recursive: true, force: true });
+    }
+  });
+
+  it('lists local and origin branches for the picker, flagging the current one', async () => {
+    await git('branch', 'develop');
+    await git('update-ref', 'refs/remotes/origin/release', 'refs/heads/main');
+    await git('update-ref', 'refs/remotes/origin/HEAD', 'refs/heads/main');
+    await git('checkout', '-b', 'feature');
+
+    const candidates = await listBaseBranchCandidates(repo);
+    const byRef = new Map(candidates.map((c) => [c.ref, c]));
+    expect([...byRef.keys()]).toEqual(
+      expect.arrayContaining(['main', 'develop', 'feature', 'origin/release']),
+    );
+    // origin/HEAD is a symbolic alias, not a diffable branch.
+    expect(byRef.has('origin/HEAD')).toBe(false);
+    expect(byRef.get('feature')?.current).toBe(true);
+    expect(byRef.get('main')?.current).toBe(false);
+  });
+
+  it('returns no branch candidates outside a git repository', async () => {
+    const plain = await mkdtemp(path.join(tmpdir(), 'texra-plain-'));
+    try {
+      expect(await listBaseBranchCandidates(plain)).toEqual([]);
     } finally {
       await rm(plain, { recursive: true, force: true });
     }

@@ -24,6 +24,7 @@ import {
   buildFixInstruction,
   buildReviewInstruction,
   createReviewIssue,
+  type ReviewApproach,
   type ReviewIssue,
   type ReviewIssueReport,
   type ReviewSeverity,
@@ -53,13 +54,20 @@ const FIX_AGENT = 'coder';
  */
 const MAX_ISSUES_PER_REVIEW = 25;
 
-export const AGENT_REVIEW_VIEW_ID = 'texra.agentReviewView';
+/** The Agent Review tree lives in VS Code's Source Control (git) panel. */
+export const AGENT_REVIEW_VIEW_ID = 'texra.scmAgentReviewView';
 
 type AgentReviewTrigger = 'manual' | 'commit';
 
 interface AgentReviewRunOptions {
   baseRef?: string;
   baseDescription?: string;
+  /** Per-run base branch (merge-base) from the "Diff Against…" picker. */
+  baseBranch?: string;
+  /** Per-run approach override; falls back to the configured default. */
+  approach?: ReviewApproach;
+  /** Optional free-text focus from the "Find Issues" options. */
+  userInstructions?: string;
 }
 
 interface AgentReviewStateSnapshot {
@@ -226,6 +234,7 @@ class AgentReviewServiceImpl {
       ),
       baseRef: options.baseRef,
       baseDescription: options.baseDescription,
+      baseBranch: options.baseBranch,
     });
     if (generation !== this.reviewGeneration) return;
 
@@ -282,17 +291,20 @@ class AgentReviewServiceImpl {
         changedFiles,
         diff,
         truncated,
-        approach: getValidatedConfig(
-          'agentReview.approach',
-          z.enum(AGENT_REVIEW_APPROACHES),
-          'quick',
-        ),
+        approach:
+          options.approach ??
+          getValidatedConfig(
+            'agentReview.approach',
+            z.enum(AGENT_REVIEW_APPROACHES),
+            'quick',
+          ),
+        userInstructions: options.userInstructions,
       });
       const model = getConfig<string>('agentReview.model', '').trim();
       const config = AgentConfigSchema.parse({
         agent: REVIEW_AGENT,
         instruction,
-        displayInstruction: `Agent review: diff with ${baseDescription} (${changedFiles.length} file${changedFiles.length === 1 ? '' : 's'})`,
+        displayInstruction: `Agent review: diff with ${baseDescription} (${changedFiles.length} file${changedFiles.length === 1 ? '' : 's'})${options.userInstructions ? ' · custom focus' : ''}`,
         // The instruction's paths are repo-relative; anchor the session's
         // tool calls (read_file, grep, bash) to the repository root, which
         // may sit above the opened workspace folder.

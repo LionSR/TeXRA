@@ -1041,9 +1041,17 @@
       },
       {
         "command": "texra.agentReview.run",
-        "title": "Run Agent Review",
+        "title": "Find Issues (Agent Review)",
+        "shortTitle": "Find Issues",
         "category": "TeXRA",
-        "icon": "$(refresh)"
+        "icon": "$(search)"
+      },
+      {
+        "command": "texra.agentReview.runWithOptions",
+        "title": "Find Issues with Options (Agent Review)",
+        "shortTitle": "Options…",
+        "category": "TeXRA",
+        "icon": "$(ellipsis)"
       },
       {
         "command": "texra.agentReview.fixAllIssues",
@@ -1210,20 +1218,23 @@
           "id": "texra.mainView",
           "name": "TeXRA",
           "contextualTitle": "TeXRA"
-        },
+        }
+      ],
+      "scm": [
         {
           "type": "tree",
-          "id": "texra.agentReviewView",
+          "id": "texra.scmAgentReviewView",
           "name": "Agent Review",
           "contextualTitle": "Agent Review",
-          "visibility": "collapsed"
+          "visibility": "collapsed",
+          "when": "texra.activated"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "texra.agentReviewView",
-        "contents": "Review your working-tree changes against the main branch with an AI agent. Issues also appear in the Problems panel with quick fixes.\n[Run Agent Review](command:texra.agentReview.run)",
+        "view": "texra.scmAgentReviewView",
+        "contents": "Review changes against the main branch for issues.\n[Find Issues](command:texra.agentReview.run)\n[Find Issues with Options…](command:texra.agentReview.runWithOptions)",
         "when": "texra.activated && !texra.agentReview.running"
       }
     ],
@@ -1293,28 +1304,34 @@
         },
         {
           "command": "texra.agentReview.run",
-          "when": "texra.activated && view == texra.agentReviewView",
+          "when": "texra.activated && view == texra.scmAgentReviewView",
           "group": "navigation@1"
         },
         {
-          "command": "texra.agentReview.fixAllIssues",
-          "when": "texra.activated && view == texra.agentReviewView && texra.agentReview.hasIssues",
+          "command": "texra.agentReview.runWithOptions",
+          "when": "texra.activated && view == texra.scmAgentReviewView",
           "group": "navigation@2"
         },
         {
+          "command": "texra.agentReview.fixAllIssues",
+          "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.hasIssues",
+          "group": "navigation@3"
+        },
+        {
           "command": "texra.agentReview.clear",
-          "when": "texra.activated && view == texra.agentReviewView && texra.agentReview.hasIssues"
+          "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.hasIssues",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
         {
           "command": "texra.agentReview.fixIssue",
-          "when": "view == texra.agentReviewView && viewItem == texraReviewIssue",
+          "when": "view == texra.scmAgentReviewView && viewItem == texraReviewIssue",
           "group": "inline@1"
         },
         {
           "command": "texra.agentReview.dismissIssue",
-          "when": "view == texra.agentReviewView && viewItem == texraReviewIssue",
+          "when": "view == texra.scmAgentReviewView && viewItem == texraReviewIssue",
           "group": "inline@2"
         }
       ],
@@ -1345,6 +1362,10 @@
       "commandPalette": [
         {
           "command": "texra.agentReview.run",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.agentReview.runWithOptions",
           "when": "texra.activated"
         },
         {
