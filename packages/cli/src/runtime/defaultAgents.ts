@@ -4,7 +4,7 @@ export const BUILTIN_DEFAULT_CHAT_AGENT = 'assistant';
 
 const NON_IMPLICIT_DEFAULT_TOOL_USE_AGENTS = new Set(['simplifier']);
 
-export function isImplicitDefaultToolUseAgentAllowed(agent: string): boolean {
+function isImplicitDefaultToolUseAgentAllowed(agent: string): boolean {
   return !NON_IMPLICIT_DEFAULT_TOOL_USE_AGENTS.has(
     agentName(agent.trim()).toLowerCase(),
   );
