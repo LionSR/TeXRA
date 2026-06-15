@@ -1,8 +1,6 @@
-import {
-  ANSI_ESCAPE_START,
-  ansiEscapeEnd,
-  stripAnsiSequences,
-} from '@cli/runtime/ansiEscapes';
+import stripAnsi from 'strip-ansi';
+
+import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import {
   LIVE_ELAPSED_STREAM_STATUSES,
   type StreamStatus,
@@ -25,7 +23,7 @@ function isInvisibleTranscriptChar(char: string | undefined): boolean {
 
 export function terminalVisibleTranscriptText(text: string): string {
   let out = '';
-  for (const char of stripAnsiSequences(text)) {
+  for (const char of stripAnsi(text)) {
     if (!isInvisibleTranscriptChar(char)) out += char;
   }
   return out;

@@ -1,5 +1,7 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
+import { StatusCodes } from 'http-status-codes';
+
 import { Node, type NonIterableObject } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -141,7 +143,10 @@ export abstract class RetryableInvocationNode<
       return result;
     } catch (retryErr) {
       const retryFormatted = normalizeProviderError(retryErr);
-      if (retryFormatted.isRelayError && retryFormatted.statusCode === 401) {
+      if (
+        retryFormatted.isRelayError &&
+        retryFormatted.statusCode === StatusCodes.UNAUTHORIZED
+      ) {
         services.logger.debug(
           'Still 401 after token refresh, skipping auto-retries',
         );
@@ -183,7 +188,7 @@ export abstract class RetryableInvocationNode<
       const formatted = normalizeProviderError(err);
       if (
         formatted.isRelayError &&
-        formatted.statusCode === 401 &&
+        formatted.statusCode === StatusCodes.UNAUTHORIZED &&
         !this._hasAttemptedTokenRefresh
       ) {
         return this.attemptRelay401Recovery(err, operation);
@@ -205,7 +210,7 @@ export abstract class RetryableInvocationNode<
     if (formatted.isCredentialExhausted) return false;
     if (!formatted.userRetryable) return false;
     const code = formatted.statusCode;
-    return code !== 401 && code !== 403;
+    return code !== StatusCodes.UNAUTHORIZED && code !== StatusCodes.FORBIDDEN;
   }
 
   protected isBackgroundModeActive(): boolean {

@@ -1,8 +1,8 @@
 import { renderUsage } from 'citty';
+import stripAnsi from 'strip-ansi';
 
 import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
 import { readCliAmbientState } from '@cli/runtime/cliContext';
-import { stripAnsiSequences } from '@cli/runtime/ansiEscapes';
 
 import { resolveCommandMeta, type AnyCommand } from './commandTree';
 import { knownGlobalFlagTokenCount } from './argTokens';
@@ -104,7 +104,7 @@ async function renderUsageWithSections(
     ? `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`
     : usage;
   return usageColorEnabled(stream) === false
-    ? stripAnsiSequences(usageWithSections)
+    ? stripAnsi(usageWithSections)
     : usageWithSections;
 }
 
