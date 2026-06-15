@@ -17,6 +17,8 @@ import escapeRegExp from 'escape-string-regexp';
 const SUBAGENT_TAG_RE = /^<subagent-(?:progress|result|error)\b/;
 const EMBEDDED_SUBAGENT_BLOCK_RE =
   /<subagent-(?:progress|result|error)\b[^>]*\/>|<subagent-(progress|result|error)\b[^>]*>[\s\S]*?<\/subagent-\1>/g;
+const EMBEDDED_SUBAGENT_OPEN_RE =
+  /<subagent-(progress|result|error)\b[^>]*(?:\/>|>)/g;
 const EMPTY_FOLLOW_UP_SUMMARY = '(empty follow-up)';
 const RESULT_RESPONSE_PREVIEW_LINES = 12;
 const RESULT_RESPONSE_PREVIEW_CHARS = 1400;
@@ -191,9 +193,45 @@ export function summarizeFollowupMessage(text: unknown): string {
   return summarizeSubagentFollowup(stripOrchestratorFollowup(text));
 }
 
+type IncompleteEmbeddedSubagentFollowup = {
+  readonly index: number;
+  readonly block: string;
+};
+
+function findIncompleteEmbeddedSubagentFollowup(
+  text: string,
+): IncompleteEmbeddedSubagentFollowup | undefined {
+  for (const match of text.matchAll(EMBEDDED_SUBAGENT_OPEN_RE)) {
+    const index = match.index;
+    const tag = match[1];
+    const opening = match[0];
+    if (index === undefined || tag === undefined || opening.endsWith('/>')) {
+      continue;
+    }
+
+    const closing = new RegExp(`</subagent-${tag}>`, 'g');
+    closing.lastIndex = index + opening.length;
+    if (!closing.exec(text)) {
+      return { index, block: text.slice(index) };
+    }
+  }
+  return undefined;
+}
+
+export function hasIncompleteEmbeddedSubagentFollowup(text: string): boolean {
+  return (
+    text.includes('<subagent-') &&
+    findIncompleteEmbeddedSubagentFollowup(text) !== undefined
+  );
+}
+
 export function summarizeEmbeddedSubagentFollowups(text: string): string {
   if (!text.includes('<subagent-')) return text;
-  return text.replaceAll(EMBEDDED_SUBAGENT_BLOCK_RE, (block) =>
-    summarizeSubagentFollowup(block),
+  const completeSummarized = text.replaceAll(
+    EMBEDDED_SUBAGENT_BLOCK_RE,
+    (block) => summarizeSubagentFollowup(block),
   );
+  const incomplete = findIncompleteEmbeddedSubagentFollowup(completeSummarized);
+  if (!incomplete) return completeSummarized;
+  return `${completeSummarized.slice(0, incomplete.index)}${summarizeSubagentFollowup(incomplete.block)}`;
 }

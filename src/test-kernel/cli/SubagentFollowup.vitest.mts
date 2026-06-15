@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  hasIncompleteEmbeddedSubagentFollowup,
   stripOrchestratorFollowup,
   summarizeEmbeddedSubagentFollowups,
   summarizeFollowupMessage,
@@ -106,6 +107,45 @@ describe('summarizeSubagentFollowup', () => {
         'after',
       ].join('\n'),
     );
+  });
+
+  it('summarizes incomplete embedded subagent blocks while streaming', () => {
+    const text = [
+      'before',
+      '<subagent-result id="abc" agent="prover" category="toolUse" status="completed">',
+      'The response is still streaming.',
+    ].join('\n');
+
+    expect(summarizeEmbeddedSubagentFollowups(text)).toBe(
+      ['before', '✓ prover completed'].join('\n'),
+    );
+  });
+
+  it('detects incomplete embedded subagent blocks', () => {
+    expect(
+      hasIncompleteEmbeddedSubagentFollowup(
+        [
+          'before',
+          '<subagent-result id="abc" agent="prover" category="toolUse" status="completed">',
+          'The response is still streaming.',
+        ].join('\n'),
+      ),
+    ).toBe(true);
+    expect(
+      hasIncompleteEmbeddedSubagentFollowup(
+        [
+          'before',
+          '<subagent-result id="abc" agent="prover" category="toolUse" status="completed">',
+          '<response>Done.</response>',
+          '</subagent-result>',
+        ].join('\n'),
+      ),
+    ).toBe(false);
+    expect(
+      hasIncompleteEmbeddedSubagentFollowup(
+        '<subagent-progress id="abc" agent="review" type="started" />',
+      ),
+    ).toBe(false);
   });
 
   it('summarizes a completed result with wall time and response', () => {
