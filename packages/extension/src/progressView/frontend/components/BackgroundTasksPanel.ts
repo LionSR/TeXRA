@@ -1,9 +1,12 @@
 /**
  * Collapsible panel for displaying background tasks (processes and subagents).
  *
- * Uses `<wa-details>` for consistent styling with other panels (Todos,
- * Files, etc.). Each active subagent is clickable to navigate to its stream tab.
- * Processes don't have their own tab so they are not clickable.
+ * Uses `<wa-details>` for the outer panel and for each nested section
+ * (Processes, Subagents, Inquiries) and per-task output, for consistent
+ * styling with other panels (Todos, Files, etc.) — the nested sections use the
+ * `.collapsible-quiet` variant. Each active subagent is clickable to navigate
+ * to its stream tab. Processes don't have their own tab so they are not
+ * clickable.
  */
 
 // Third-party imports
@@ -162,23 +165,23 @@ export class BackgroundTasksPanel extends LitElement {
         line-height: 1;
       }
 
+      /* Nested sections use Web Awesome <wa-details class="collapsible-quiet">
+         in place of a hand-rolled <details>; the section label lives in the
+         summary slot and keeps the uppercase small-caps look. wa-details
+         supplies the disclosure chevron, so no hand-rolled toggle icon. */
+      wa-details.collapsible-quiet::part(header) {
+        padding-inline: 0;
+      }
+
       .section-label {
         display: flex;
         align-items: center;
         gap: var(--wa-space-2xs);
-        padding: var(--wa-space-2xs) 0 var(--wa-space-3xs);
         font-size: var(--font-size-xs);
         font-weight: var(--font-weight-semibold);
         color: var(--color-text-secondary);
         text-transform: uppercase;
         letter-spacing: var(--letter-spacing-caps);
-        cursor: pointer;
-        list-style: none;
-        user-select: none;
-      }
-
-      .section-label::-webkit-details-marker {
-        display: none;
       }
 
       .section-label:hover {
@@ -196,18 +199,14 @@ export class BackgroundTasksPanel extends LitElement {
         font-style: italic;
       }
 
-      /* Collapsible output per task */
-      details.task-output {
+      /* Collapsible output per task — also a <wa-details>. */
+      wa-details.task-output {
         margin-left: calc(var(--wa-space-2xs) + var(--font-size-sm));
       }
 
-      details.task-output > summary {
-        padding: var(--wa-space-3xs) 0;
+      wa-details.task-output::part(header) {
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
-        cursor: pointer;
-        list-style: none;
-        user-select: none;
       }
 
       .output-container {
@@ -299,14 +298,8 @@ export class BackgroundTasksPanel extends LitElement {
     ).length;
 
     return html`
-      <details open>
-        <summary class="section-label">
-          <wa-icon
-            library="texra"
-            name="chevron-right"
-            class="toggle-icon"
-            aria-hidden="true"
-          ></wa-icon>
+      <wa-details class="collapsible-quiet" open>
+        <div slot="summary" class="section-label">
           <wa-icon library="texra" name="comments" aria-hidden="true"></wa-icon>
           <span
             >Inquiries${openCount
@@ -317,7 +310,7 @@ export class BackgroundTasksPanel extends LitElement {
               ? html` &middot; ${droppedCount} dropped`
               : nothing}</span
           >
-        </summary>
+        </div>
         <div class="section-content">
           ${repeat(
             this.inquiries,
@@ -325,7 +318,7 @@ export class BackgroundTasksPanel extends LitElement {
             (thread) => this.renderInquiryItem(thread),
           )}
         </div>
-      </details>
+      </wa-details>
     `;
   }
 
@@ -375,14 +368,8 @@ export class BackgroundTasksPanel extends LitElement {
     const label = kind === 'process' ? 'Processes' : 'Subagents';
 
     return html`
-      <details>
-        <summary class="section-label">
-          <wa-icon
-            library="texra"
-            name="chevron-right"
-            class="toggle-icon"
-            aria-hidden="true"
-          ></wa-icon>
+      <wa-details class="collapsible-quiet">
+        <div slot="summary" class="section-label">
           <wa-icon library="texra" name=${icon} aria-hidden="true"></wa-icon>
           <span
             >${label}${hasActive
@@ -391,7 +378,7 @@ export class BackgroundTasksPanel extends LitElement {
               ? html` &middot; ${finishedCount} done`
               : nothing}</span
           >
-        </summary>
+        </div>
         <div class="section-content">
           ${hasActive
             ? repeat(
@@ -406,7 +393,7 @@ export class BackgroundTasksPanel extends LitElement {
               </div>`
             : nothing}
         </div>
-      </details>
+      </wa-details>
     `;
   }
 
@@ -483,20 +470,12 @@ export class BackgroundTasksPanel extends LitElement {
 
   private renderOutputStream(label: string, text: string): TemplateResult {
     return html`
-      <details class="task-output" open>
-        <summary>
-          <wa-icon
-            library="texra"
-            name="chevron-right"
-            class="toggle-icon"
-            aria-hidden="true"
-          ></wa-icon>
-          ${label}
-        </summary>
+      <wa-details class="collapsible-quiet task-output" open>
+        <span slot="summary">${label}</span>
         <div class="output-container">
           <terminal-output .text=${text}></terminal-output>
         </div>
-      </details>
+      </wa-details>
     `;
   }
 
