@@ -51,6 +51,25 @@ describe('renderAnsiMarkdown', () => {
     expect(out).not.toContain('&gt;');
   });
 
+  it('renders common HTML formatting without leaking tags', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown(
+      [
+        '<blockquote><strong>Subagent <code>prover</code> finished execution abc:</strong>',
+        '',
+        'Done.</blockquote>',
+      ].join('\n'),
+      { colorEnabled: false, width: 80 },
+    );
+    const plain = stripAnsi(out);
+
+    expect(plain).toContain('│ Subagent `prover` finished execution abc:');
+    expect(plain).toContain('│ Done.');
+    expect(plain).not.toContain('<blockquote>');
+    expect(plain).not.toContain('<strong>');
+    expect(plain).not.toContain('<code>');
+  });
+
   it('passes typed code through cli-highlight without leaking sentinels', () => {
     _resetAnsiMarkdownForTests();
     const md = '```ts\nconst x: number = 1;\n```';
