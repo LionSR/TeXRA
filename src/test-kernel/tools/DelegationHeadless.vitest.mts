@@ -3,11 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   AgentExecutionHandle,
   executionRegistry,
 } from '@agent/runtime/executionRegistry';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
+import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
+import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
@@ -365,6 +369,51 @@ describe('headless delegation', () => {
       expect.any(String),
       expect.not.objectContaining({ stopAfterCycle: true }),
     );
+  });
+
+  it('discourages equivalent delegation retries after a no-feedback rejection', async () => {
+    mocks.isProposalBypassed.mockReturnValue(false);
+    const host = runtimeHost();
+    const coordinators = {
+      plan: new PlanApprovalCoordinator(host),
+      proposal: new AgentProposalCoordinator(host),
+      retry: new RetryRequestCoordinatorImpl(host),
+    };
+    host.emit.mockImplementation((event, payload) => {
+      if (event !== 'showAgentProposal') return;
+      runCoordinatorBridge.resolveProposal(
+        (payload as { proposalId: string }).proposalId,
+        { action: 'reject' },
+      );
+    });
+
+    const result = await withRunContext(
+      createRunContext({
+        runtimeHost: host,
+        streamId: 'parent-stream',
+        executionId: 'parent-exec',
+        model: 'deepseekT',
+        coordinators,
+      }),
+      () =>
+        new DelegateAgentTool().call({
+          agent: 'review',
+          model: null,
+          instruction: 'Check the proof.',
+          memories: [],
+          working_directory: null,
+          execution_id: null,
+        }),
+    );
+
+    expect(result.summary).toBe("User rejected delegation to 'review'");
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain('No feedback provided.');
+    expect(result.output).toContain(
+      'Do not retry the same or equivalent delegation',
+    );
+    expect(result.output).toContain('continue directly with available context');
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
   it('canonicalizes legacy tool-use agent names before launch', async () => {
