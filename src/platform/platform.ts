@@ -78,3 +78,8 @@ export function tryPlatform(): Readonly<Platform> | null {
 export function tryGlobalState(): StateStore | null {
   return _platform?.globalState ?? null;
 }
+
+/** Get workspace state if the platform has been initialized. */
+export function tryWorkspaceState(): StateStore | null {
+  return _platform?.workspaceState ?? null;
+}

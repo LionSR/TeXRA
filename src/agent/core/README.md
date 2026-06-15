@@ -29,9 +29,11 @@ depend on neither. Don't introduce imports that point back outward (e.g.
 Files kept at the `core/` root are limited infrastructure helpers or shared
 constants, not domain types:
 
-- `stateStore.ts` — pre-init tolerant workspace-state access; after platform
-  init, use `platform().workspaceState` / `platform().globalState` directly.
 - `constants.ts` — shared preview/threshold constants.
+
+For bootstrap-tolerant state access before `initPlatform()` runs, use
+`tryWorkspaceState()` / `tryGlobalState()` from `@platform/platform` — they
+are the single home for all pre-init platform accessors.
 
 ## Importing
 

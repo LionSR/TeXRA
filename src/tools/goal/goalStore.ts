@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-import { platform } from '@platform/platform';
-import { tryGetWorkspaceState } from '@agent/core/stateStore';
+import { platform, tryWorkspaceState } from '@platform/platform';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import {
   type ExecutionId,
@@ -76,11 +75,11 @@ function normalizeGoalRecord(raw: unknown): Goal | null {
 }
 
 function readRaw(streamId: StreamTabId): Goal | null {
-  // tryGetWorkspaceState — bootstrap-tolerant: read-only paths called before
+  // tryWorkspaceState — bootstrap-tolerant: read-only paths called before
   // initPlatform() (e.g. early-stream syncs in some tests) return null
   // rather than throwing. Write paths still use platform().workspaceState which
   // does throw, surfacing the misuse.
-  const state = tryGetWorkspaceState();
+  const state = tryWorkspaceState();
   if (!state) return null;
   // Prefer the current key; fall back to the pre-rename "odyssey" key.
   const current = normalizeGoalRecord(state.get<unknown>(streamKey(streamId)));
@@ -99,7 +98,7 @@ function parseIndex(raw: unknown): StreamTabId[] {
 }
 
 function readIndex(): StreamTabId[] {
-  const state = tryGetWorkspaceState();
+  const state = tryWorkspaceState();
   if (!state) return [];
   // Union of the current and pre-rename indexes. `readRaw` filters out any
   // dangling entry whose record no longer exists under either key.
@@ -115,7 +114,7 @@ async function addToIndex(streamId: StreamTabId): Promise<void> {
 }
 
 async function removeFromIndex(streamId: StreamTabId): Promise<void> {
-  const state = tryGetWorkspaceState();
+  const state = tryWorkspaceState();
   if (!state) return;
   // `readIndex` unions in the legacy index, so a removal must also migrate
   // that union into the new key and drop the legacy one — otherwise the
@@ -257,7 +256,7 @@ export const GoalStore = {
    *  Bootstrap-tolerant — cleanup paths shouldn't fail loudly if state isn't
    *  wired yet. */
   async forget(streamId: StreamTabId): Promise<void> {
-    const state = tryGetWorkspaceState();
+    const state = tryWorkspaceState();
     if (!state) return;
     // Gate on raw key presence, not parse success — an unparseable or
     // terminal-status legacy blob (which `readRaw` normalizes to null) must
@@ -285,7 +284,7 @@ export const GoalStore = {
    * write so concurrent `forget()` calls don't race on it.
    */
   async forgetMany(streamIds: readonly StreamTabId[]): Promise<void> {
-    const state = tryGetWorkspaceState();
+    const state = tryWorkspaceState();
     if (!state) return;
     // Same raw-presence gate as `forget` so unparseable blobs are cleaned.
     const toRemove = streamIds.filter(
