@@ -52,11 +52,11 @@ export function formatToolDescriptionForTui(tool: CliToolStatusRecord): string {
   ].join(' · ');
 }
 
-function toolsSelectWindow(args: {
+export function toolsSelectWindow(args: {
   readonly availableRows: number | undefined;
   readonly itemCount: number;
 }): SelectWindowSize {
-  return computeSelectWindowSize({ ...args, chromeRows: 5 });
+  return computeSelectWindowSize({ ...args, chromeRows: 6 });
 }
 
 export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
