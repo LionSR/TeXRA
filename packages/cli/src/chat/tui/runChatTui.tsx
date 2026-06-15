@@ -83,6 +83,7 @@ import {
   cliTerminalStatus,
   terminalStatusExitCode,
 } from '@cli/runtime/terminalStatus';
+import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
@@ -156,7 +157,6 @@ import {
   onStreamStatusChange,
   streamStatusFromState,
 } from './state/streamStatus';
-import { defaultShortcutModifierLabel } from './shortcutLabels';
 import {
   discoverTerminalCapabilities,
   terminalCapabilities,

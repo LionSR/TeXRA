@@ -79,7 +79,7 @@ import {
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { streamStatusFromState } from '../src/chat/tui/state/streamStatus';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
-import { defaultShortcutModifierLabel } from '../src/chat/tui/shortcutLabels';
+import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
 import {
   formatCliApiMode,
