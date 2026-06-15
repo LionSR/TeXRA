@@ -1,10 +1,7 @@
+import stripAnsi from 'strip-ansi';
 import wrapAnsi from 'wrap-ansi';
 
-import {
-  ANSI_ESCAPE_START,
-  ansiEscapeEnd,
-  stripAnsiSequences,
-} from '@cli/runtime/ansiEscapes';
+import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 
 const MIN_WRAP_WIDTH = 1;
 
@@ -39,7 +36,7 @@ function markdownContinuationPrefix(line: string):
       width: number;
     }
   | undefined {
-  const plain = stripAnsiSequences(line);
+  const plain = stripAnsi(line);
   const list = plain.match(/^((?:│ )*)( {2}(?:•|\d+[.)]) )/);
   if (list) {
     const quote = list[1] ?? '';

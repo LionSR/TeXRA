@@ -1,5 +1,3 @@
-import stripAnsi from 'strip-ansi';
-
 export const ANSI_ESCAPE_START = String.fromCharCode(27);
 
 const ANSI_BEL = String.fromCharCode(7);
@@ -34,8 +32,4 @@ export function ansiEscapeEnd(text: string, index: number): number {
   }
 
   return Math.min(index + 2, text.length);
-}
-
-export function stripAnsiSequences(text: string): string {
-  return stripAnsi(text);
 }
