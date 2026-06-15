@@ -285,6 +285,19 @@ function outputDisplayLines(
   return out;
 }
 
+function userFeedbackDisplayLines(
+  toolUse: NormalizedToolUse,
+): readonly string[] {
+  const feedback = collapseWhitespace(toolUse.userInstructionText);
+  if (!feedback) return [];
+  return [
+    `${OUTPUT_CORNER} User feedback: ${truncateWithEllipsis(
+      feedback,
+      MAX_ERROR_PREVIEW,
+    )}`,
+  ];
+}
+
 function universalToolUseDisplayLines(
   toolUse: NormalizedToolUse,
   options: {
@@ -318,6 +331,7 @@ function universalToolUseDisplayLines(
           )}`,
         ]
       : []),
+    ...userFeedbackDisplayLines(toolUse),
     ...(showNoOutput ? [`${OUTPUT_CORNER} (no output)`] : []),
   ];
 }
@@ -343,6 +357,7 @@ function bashToolUseDisplayLines(
           )}`,
         ]
       : []),
+    ...userFeedbackDisplayLines(toolUse),
     ...(toolUse.status === TOOL_USE_STATUS.COMPLETED &&
     !toolUse.isError &&
     outputLines.length === 0
@@ -475,10 +490,12 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     visibleOutput.length === 0 &&
     !patchGroups &&
     !toolUse.isError;
+  const userFeedback = collapseWhitespace(toolUse.userInstructionText);
   const hasDetails =
     visibleOutput.length > 0 ||
     (patchGroups?.length ?? 0) > 0 ||
     toolUse.isError ||
+    userFeedback.length > 0 ||
     showNoOutput;
 
   return (
@@ -505,6 +522,14 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
             collapseWhitespace(errorText),
             MAX_ERROR_PREVIEW,
           )}
+        </CornerLine>
+      ) : null}
+      {userFeedback ? (
+        <CornerLine>
+          {`User feedback: ${truncateWithEllipsis(
+            userFeedback,
+            MAX_ERROR_PREVIEW,
+          )}`}
         </CornerLine>
       ) : null}
       {showNoOutput ? <CornerLine>(no output)</CornerLine> : null}

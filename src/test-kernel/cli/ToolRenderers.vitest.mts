@@ -117,6 +117,30 @@ describe('CLI tool renderer registry', () => {
     `);
   });
 
+  it('surfaces user feedback on collapsed approval rejections', () => {
+    const message = 'User rejected bash command: wolframscript -code "check"';
+    const entry = toolUse(
+      'wolfram',
+      { code: 'check' },
+      {
+        errorText: message,
+        isError: true,
+        isUserFeedback: true,
+        outputText: message,
+        userInstructionText:
+          'Skip external computation; prove it directly from the identity.',
+      },
+    );
+
+    expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
+      [
+        "● wolfram (check)",
+        "⎿ User rejected bash command: wolframscript -code "check"",
+        "⎿ User feedback: Skip external computation; prove it directly from the identity.",
+      ]
+    `);
+  });
+
   it('keeps long duplicate error output in the full transcript view', () => {
     const message = `User rejected bash command: ${'diagnostic detail '.repeat(30)}`;
     const entry = toolUse(
