@@ -74,6 +74,12 @@ All notable changes to this project will be documented in this file.
 - **Sharper Marketplace icon** — the extension icon is now shipped at 512×512 instead of 128×128, so it no longer looks blurry on the Marketplace listing and high-DPI displays.
 - **Tidier webview controls** — the LaTeX diff operations move out of cramped icon rows into labeled button groups beneath the file they act on, main-view actions gain hover tooltips, settings actions use consistent buttons, and the sign-in and workflow banners are laid out more clearly.
 
+### Extension (VS Code)
+
+#### Features
+
+- **Agent Review in the Source Control panel** — the agent review that scans your changes for issues now lives as a **Find Issues** section right in VS Code's Source Control (git) view, next to Changes and Commits (it moved out of the TeXRA sidebar). A new **Find Issues with Options…** action opens quick prompts to set optional free-text instructions, the review approach (Quick / Thorough) for this run, and the branch to diff against — so you can target a one-off review without changing your saved settings. Findings still stream into the panel and the Problems view with the same Fix-with-Agent and Dismiss actions.
+
 ## [0.38.7] - 2026-06-11
 
 ### Shared (all surfaces)

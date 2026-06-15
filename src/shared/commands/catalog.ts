@@ -370,9 +370,17 @@ export const commandCatalog = [
   },
   {
     id: 'texra.agentReview.run',
-    title: 'Run Agent Review',
+    title: 'Find Issues (Agent Review)',
+    shortTitle: 'Find Issues',
     category: 'TeXRA',
-    icon: '$(refresh)',
+    icon: '$(search)',
+  },
+  {
+    id: 'texra.agentReview.runWithOptions',
+    title: 'Find Issues with Options (Agent Review)',
+    shortTitle: 'Options…',
+    category: 'TeXRA',
+    icon: '$(ellipsis)',
   },
   {
     id: 'texra.agentReview.fixAllIssues',
