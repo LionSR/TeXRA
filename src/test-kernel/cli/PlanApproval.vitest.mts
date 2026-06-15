@@ -127,7 +127,8 @@ describe('CLI plan approval layout', () => {
   });
 
   it('keeps the autonomous warning concise enough for the approval card', () => {
-    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('Bash + file edits');
+    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('Press r');
+    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('bash + file edits');
     expect(PLAN_APPROVAL_GOAL_NOTICE.length).toBeLessThanOrEqual(56);
   });
 
@@ -135,7 +136,7 @@ describe('CLI plan approval layout', () => {
     const notice = planApprovalGoalNoticeLine(40);
 
     expect(textDisplayWidth(notice)).toBe(40);
-    expect(notice).toContain('Bash + file edits');
+    expect(notice).toContain('Press r');
     expect(notice).toContain('…');
   });
 
