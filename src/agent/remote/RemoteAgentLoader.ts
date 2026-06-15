@@ -51,7 +51,9 @@ const RemoteAgentListQueryErrorSchema = z.object({
   details: z.string().optional(),
   hint: z.string().optional(),
 });
-type RemoteAgentListQueryError = z.infer<typeof RemoteAgentListQueryErrorSchema>;
+type RemoteAgentListQueryError = z.infer<
+  typeof RemoteAgentListQueryErrorSchema
+>;
 
 /**
  * True only for the pre-migration database shape where `remote_agents.tools`
