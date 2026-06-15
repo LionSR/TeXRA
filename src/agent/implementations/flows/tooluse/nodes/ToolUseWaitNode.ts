@@ -2,7 +2,10 @@ import { maybeBuildGoalContinuation } from '@agent/goal';
 import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
+import {
+  appendFollowUpAsUserMessage,
+  followUpDisplayText,
+} from '@agent/toolUse/followUpMessages';
 import { STREAM_STATUS } from '@shared/schemas';
 import { GoalStore, setGoalSessionAutoApprovals } from '@tools/goal';
 
@@ -189,7 +192,7 @@ export class ToolUseWaitNode<C> extends Node<
       shared.deliveredToOrchestrator = undefined;
       onFollowUpConsumed?.();
       for (const followUp of execRes.followUps) {
-        logUserMessage(logger, followUp.displayText ?? followUp.text);
+        logUserMessage(logger, followUpDisplayText(followUp));
       }
     }
 
