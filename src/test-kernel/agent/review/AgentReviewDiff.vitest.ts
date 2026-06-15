@@ -252,6 +252,28 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(result.value.changedFiles).toEqual(['paper.tex']);
   });
 
+  it('diffs against an explicitly chosen remote ref even on the matching local branch', async () => {
+    await git('update-ref', 'refs/remotes/origin/main', 'refs/heads/main');
+    await writeFile(path.join(repo, 'notes.txt'), 'first unpushed commit\n');
+    await git('add', '.');
+    await git('commit', '-m', 'first unpushed');
+    await writeFile(path.join(repo, 'paper.tex'), 'second unpushed commit\n');
+    await git('commit', '-am', 'second unpushed');
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: false,
+      includeSubmodules: true,
+      baseBranch: 'origin/main',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.baseDescription).toBe('branch origin/main');
+    expect(result.value.diff).toContain('+first unpushed commit');
+    expect(result.value.diff).toContain('+second unpushed commit');
+    expect(result.value.changedFiles).toEqual(['notes.txt', 'paper.tex']);
+  });
+
   it('fails clearly when the chosen base branch does not exist', async () => {
     await git('checkout', '-b', 'feature');
     const result = await collectReviewDiff({

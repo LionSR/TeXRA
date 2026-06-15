@@ -158,8 +158,8 @@ async function detectBaseBranch(cwd: string): Promise<BaseBranch | null> {
 /**
  * Resolve a user-chosen base branch (from the "Diff Against…" picker). The ref
  * is verified so a stale pick degrades to a clear failure rather than a
- * confusing empty diff. The short name drops a leading `origin/` so the
- * "branch already checked out" comparison still matches.
+ * confusing empty diff. The short name drops a leading `origin/` for
+ * user-facing labels in on-branch fallback descriptions.
  */
 async function resolveBaseBranch(
   cwd: string,
@@ -375,7 +375,10 @@ export async function collectReviewDiff(
     const head = (
       await git(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD'])
     )?.trim();
-    if (head === base.shortName) {
+    const checkedOutBase = options.baseBranch
+      ? head === base.ref
+      : head === base.shortName;
+    if (checkedOutBase) {
       ({ baseRef, baseDescription } = await resolveOnBaseBranch(
         repoRoot,
         base.shortName,
