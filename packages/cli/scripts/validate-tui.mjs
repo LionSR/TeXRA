@@ -1000,6 +1000,7 @@ const SCENARIOS = [
     name: 'edit-approval',
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
+    frame: 'tail',
     expect: [
       'Apply edit to draft.tex?',
       'y approve',
@@ -1008,6 +1009,23 @@ const SCENARIOS = [
       'Use foreground panel shortcuts',
     ],
     unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
+  },
+  {
+    name: 'edit-approval-feedback',
+    rows: 24,
+    cols: 80,
+    env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
+    bootExpect: '[Ctrl-C]',
+    keys: ['e', 'needs direct proof'],
+    frame: 'tail',
+    expect: [
+      'Apply edit to draft.tex?',
+      '> needs direct proof',
+      'Enter send note',
+      'Esc back',
+      '1 approval',
+    ],
+    unexpect: ['[/model]models'],
   },
   {
     name: 'narrow-edit-approval',
