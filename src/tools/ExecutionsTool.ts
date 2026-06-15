@@ -30,7 +30,11 @@ import { currentSession } from '@agent/runtime/SessionHandle';
 
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
-import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
+import {
+  ExecutionIdSchema,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
@@ -154,6 +158,10 @@ const ExecutionsToolInputSchema = z.strictObject({
 
 export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 
+interface ExecutionSummaryOptions {
+  readonly suppressAutoDeliveredSubagentReport?: boolean;
+}
+
 const normalizeWaitTimeout = (timeout: number | null | undefined): number =>
   clamp(
     timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
@@ -179,6 +187,27 @@ const normalizeExecutionsToolInput = (input: unknown): unknown => {
 
   return { ...record, timeout: normalizeWaitTimeout(timeout) };
 };
+
+function isCallerParentOfToolUseSubagent(
+  handle: unknown,
+  callerStreamId: StreamTabId | undefined,
+): boolean {
+  return (
+    callerStreamId != null &&
+    handle instanceof AgentExecutionHandle &&
+    handle.category === 'toolUse' &&
+    handle.parentStreamId !== handle.childStreamId &&
+    handle.parentStreamId === callerStreamId
+  );
+}
+
+function shouldSuppressAutoDeliveredSubagentReport(
+  options: ExecutionSummaryOptions,
+  handle: unknown,
+): boolean {
+  if (!options.suppressAutoDeliveredSubagentReport) return false;
+  return isCallerParentOfToolUseSubagent(handle, tryUseRunContext()?.streamId);
+}
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
@@ -255,7 +284,9 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
           executionId,
           normalizeWaitTimeout(input.timeout),
         );
-      return this.showSummary(executionId);
+      return this.showSummary(executionId, {
+        suppressAutoDeliveredSubagentReport: input.action === 'wait',
+      });
     }
 
     switch (resource) {
@@ -419,7 +450,10 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     };
   }
 
-  private async showSummary(executionId: ExecutionId): Promise<ToolResult> {
+  private async showSummary(
+    executionId: ExecutionId,
+    options: ExecutionSummaryOptions = {},
+  ): Promise<ToolResult> {
     // Check in-memory handle first (free) — running executions have everything we need
     const handle = currentSession().executions.getHandle(executionId);
 
@@ -456,6 +490,12 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         children,
         todos,
         report,
+        {
+          suppressReport: shouldSuppressAutoDeliveredSubagentReport(
+            options,
+            handle,
+          ),
+        },
       );
 
       return { output: lines.join('\n') };
@@ -512,6 +552,9 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       children,
       todos,
       report,
+      {
+        suppressReport: false,
+      },
     );
 
     return { output: lines.join('\n') };
@@ -528,6 +571,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     children: ChildRecord[],
     todos: TodoEntry[],
     report: string | null,
+    options: { readonly suppressReport?: boolean } = {},
   ): Promise<void> {
     await this.appendChildren(lines, children);
 
@@ -535,7 +579,12 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       lines.push('', ...formatTodoSection(todos));
     }
 
-    if (report) {
+    if (report && options.suppressReport) {
+      lines.push(
+        '',
+        `Result: delivered automatically to this parent stream as a follow-up message. Use /executions/${executionId}/report to read the persisted report explicitly.`,
+      );
+    } else if (report) {
       lines.push('', 'Result:', report);
     }
 
