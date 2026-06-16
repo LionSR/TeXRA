@@ -50,7 +50,8 @@ import {
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
-import { validateCliAgentLaunch } from '@cli/commands/_helpers/agentLookupText';
+import { assertCliAgentLaunch } from '@cli/commands/_helpers/agentLookupText';
+import { CliUsageError } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
@@ -496,12 +497,17 @@ function agentSupportsDelegation(agentName: string): boolean {
 export function chatToolUseAgentUsageError(
   agentName: string,
 ): string | undefined {
-  const launchTarget = validateCliAgentLaunch(
-    agentName,
-    getAgent(agentName, AgentCategory.ToolUse),
-    'chat',
-  );
-  return launchTarget.ok ? undefined : launchTarget.error;
+  try {
+    assertCliAgentLaunch(
+      agentName,
+      getAgent(agentName, AgentCategory.ToolUse),
+      'chat',
+    );
+    return undefined;
+  } catch (error) {
+    if (error instanceof CliUsageError) return error.message;
+    throw error;
+  }
 }
 
 function applyInitialCliAgentSelection(

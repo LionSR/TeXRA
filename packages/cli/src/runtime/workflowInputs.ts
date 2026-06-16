@@ -4,8 +4,11 @@ import * as path from 'node:path';
 import { glob, hasMagic } from 'glob';
 import { nanoid } from 'nanoid';
 
+import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import { tryPlatform } from '@platform/platform';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import type { Disposable } from '@platform/interfaces/disposable';
 import type { Stats } from 'node:fs';
 
 const STDIN_INPUT_TOKEN = '-';
@@ -94,17 +97,37 @@ export function createStdinWorkflowInputMaterializer(options: {
   readonly tempDir: string;
 }): StdinWorkflowInputMaterializer {
   let materialized: Promise<string> | undefined;
+  let materializedPath: string | undefined;
+  let shutdownCleanup: Disposable | undefined;
+  let cleanupStarted = false;
+  let cleanupPromise: Promise<void> | undefined;
   const inputFile = (() => {
-    materialized ??= materializeStdinWorkflowInput(options);
+    materialized ??= materializeStdinWorkflowInput(options).then(
+      (inputPath) => {
+        materializedPath = inputPath;
+        if (cleanupStarted) {
+          void fs.rm(inputPath, { force: true }).catch(() => undefined);
+        }
+        return inputPath;
+      },
+    );
     return materialized;
   }) as StdinWorkflowInputMaterializer;
   inputFile.cleanup = async () => {
-    if (!materialized) return;
-    const inputPath = await materialized.catch(() => undefined);
-    if (inputPath) {
-      await fs.rm(inputPath, { force: true });
-    }
+    cleanupStarted = true;
+    cleanupPromise ??= (async () => {
+      shutdownCleanup?.dispose();
+      shutdownCleanup = undefined;
+      if (materializedPath) {
+        await fs.rm(materializedPath, { force: true });
+      }
+    })();
+    await cleanupPromise;
   };
+  shutdownCleanup = tryPlatform()?.lifecycle.onShutdown(
+    SHUTDOWN_PHASE.BEFORE,
+    inputFile.cleanup,
+  );
   return inputFile;
 }
 
