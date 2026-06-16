@@ -162,6 +162,29 @@ describe('CLI session status formatter', () => {
     expect(status).not.toContain('all privileged actions');
   });
 
+  it('surfaces an active goal in status details', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'harness-model',
+      api: 'included relay',
+      approval: 'ask before privileged actions',
+      status: 'stopped',
+      goal: {
+        status: 'active',
+        objective:
+          'Solve the autonomous goal problem and produce a verifier before stopping.',
+      },
+      sessionId: 'goal123',
+      queuedFollowUpMessages: [],
+    });
+
+    expect(status).toContain('status: stopped');
+    expect(status).toContain('goal: active');
+    expect(status).toContain(
+      'goal objective: Solve the autonomous goal problem and produce a verifier before stopping.',
+    );
+  });
+
   it('includes team identity when a chat was launched from a preset', () => {
     expect(
       formatCliSessionStatus({
