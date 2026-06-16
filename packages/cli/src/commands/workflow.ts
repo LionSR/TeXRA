@@ -65,42 +65,6 @@ interface WorkflowRunInit {
   readonly instructionFile?: string;
 }
 
-/**
- * Resolve the workflow output, mapping a failure to an exit code: an
- * interrupted run yields `Interrupted`, otherwise the run is marked errored and
- * `AgentError` is returned. Returns the display result on success; callers
- * branch on `typeof result === 'number'`.
- */
-async function resolveWorkflowDisplayResultOrExit(
-  executionId: ReturnType<typeof generateExecutionId>,
-  output: Parameters<typeof resolveWorkflowOutput>[0],
-  outputDir: Parameters<typeof resolveWorkflowOutput>[1],
-  result: Parameters<typeof resolveWorkflowOutput>[2],
-  runContext: Parameters<typeof resolveWorkflowOutput>[3],
-  options: Parameters<typeof resolveWorkflowOutput>[4],
-): Promise<CliRunResult | CliExitCode> {
-  const { terminalStatus } = options;
-  try {
-    return (
-      await resolveWorkflowOutput(
-        output,
-        outputDir,
-        result,
-        runContext,
-        options,
-      )
-    ).displayResult;
-  } catch (error) {
-    if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-      writeErrorStderr(error);
-      return CliExitCode.Interrupted;
-    }
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-    writeErrorStderr(error);
-    return CliExitCode.AgentError;
-  }
-}
-
 export async function runWorkflowAgent(
   context: CliContext,
   init: WorkflowRunInit,
@@ -185,20 +149,32 @@ export async function runWorkflowAgent(
         markErrorOnThrow: true,
       },
     );
-    const displayResult = await resolveWorkflowDisplayResultOrExit(
-      executionId,
-      init.output,
-      init.outputDir,
-      result,
-      runContext,
-      {
-        expectedOutputFiles: init.outputDir
-          ? expectedOutputFilesForOutputDir(agent, inputFiles)
-          : undefined,
-        terminalStatus,
-      },
-    );
-    if (typeof displayResult === 'number') return displayResult;
+    let displayResult: CliRunResult;
+    try {
+      displayResult = (
+        await resolveWorkflowOutput(
+          init.output,
+          init.outputDir,
+          result,
+          runContext,
+          {
+            expectedOutputFiles: init.outputDir
+              ? expectedOutputFilesForOutputDir(agent, inputFiles)
+              : undefined,
+            terminalStatus,
+          },
+        )
+      ).displayResult;
+    } catch (error) {
+      if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+        writeErrorStderr(error);
+        return CliExitCode.Interrupted;
+      }
+
+      await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+      writeErrorStderr(error);
+      return CliExitCode.AgentError;
+    }
 
     emitCliResult(runContext, {
       json: displayResult,
