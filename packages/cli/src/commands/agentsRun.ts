@@ -99,15 +99,16 @@ export async function runToolUseAgent(
   if (typeof instruction === 'number') return instruction;
 
   await initLocalCliPlatform(context);
+  const launchMode = 'agentsRun';
   const agentEntry = await resolveCliAgent(
     init.agent,
-    cliAgentLaunchCategory('agentsRun'),
+    cliAgentLaunchCategory(launchMode),
   );
 
   const launchTarget = validateCliAgentLaunch(
     init.agent,
     agentEntry,
-    'agentsRun',
+    launchMode,
   );
   if (!launchTarget.ok) {
     writeTextStderr(launchTarget.error);
