@@ -475,6 +475,7 @@ function stoppedFocusedChildFollowUpMessage(streamId: StreamTabId): string {
 interface SlashCommandContext {
   readonly session: TuiSession;
   readonly commandName?: string;
+  readonly cwd: string;
   readonly initialAgent: string;
   readonly initialModel: string;
   readonly interruptActive: () => void;
@@ -935,6 +936,8 @@ async function handleTuiSlashCommand(
           // a "not started" status.
           sessionId: slice ? context.session.executionId : undefined,
           commandName: context.commandName,
+          cwd: context.cwd,
+          processCwd: process.cwd(),
           queuedFollowUpMessages:
             activeStreamId === undefined
               ? []
@@ -1113,6 +1116,7 @@ export async function runChat(
   const slashCommandContext = (): SlashCommandContext => ({
     session,
     commandName: context.commandName,
+    cwd: context.cwd,
     initialAgent: agent,
     initialModel: model,
     interruptActive,
@@ -1780,6 +1784,7 @@ export async function runChat(
       }),
       collectResumeUsage(streams),
       context.commandName,
+      { cwd: context.cwd, processCwd: process.cwd() },
     );
     if (hint) writeTextStdout(`\n${hint}`);
   };

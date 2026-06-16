@@ -27,6 +27,8 @@ export interface CliSessionStatusInput {
    *  mid-session instead of only in the exit hint. */
   readonly sessionId?: string;
   readonly commandName?: string;
+  readonly cwd?: string;
+  readonly processCwd?: string;
 }
 
 export function formatCliStatusLabel(status: string | undefined): string {
@@ -89,6 +91,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
           `resume later with: ${formatResumeCommand(
             input.commandName,
             input.sessionId,
+            { cwd: input.cwd, processCwd: input.processCwd },
           )}`,
         ]
       : []),
