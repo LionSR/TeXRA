@@ -6,6 +6,12 @@ import { formatResumeCommand } from './state/resumeHint';
 import type { BypassState } from './state/cliState';
 
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
+const GOAL_OBJECTIVE_STATUS_LENGTH = 160;
+
+export interface CliSessionGoalStatus {
+  readonly status: string;
+  readonly objective: string;
+}
 
 export interface CliSessionStatusInput {
   readonly agent: string;
@@ -15,6 +21,7 @@ export interface CliSessionStatusInput {
   readonly approval: string;
   readonly approvalBypasses?: Partial<BypassState>;
   readonly status: string;
+  readonly goal?: CliSessionGoalStatus | null;
   readonly queuedFollowUpMessages: readonly string[];
   /** Root execution id, when a run has started. Surfaces the resume command
    *  mid-session instead of only in the exit hint. */
@@ -67,6 +74,15 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),
     `status: ${formatCliStatusLabel(input.status)}`,
+    ...(input.goal
+      ? [
+          `goal: ${input.goal.status}`,
+          `goal objective: ${truncateSummary(
+            input.goal.objective,
+            GOAL_OBJECTIVE_STATUS_LENGTH,
+          )}`,
+        ]
+      : []),
     ...(input.sessionId
       ? [
           `session: ${input.sessionId}`,
