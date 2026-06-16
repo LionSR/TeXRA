@@ -23,7 +23,8 @@ import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import {
   TOOL_USE_AGENT_NAME_DESCRIPTION,
-  missingToolUseAgentMessage,
+  cliAgentLaunchCategory,
+  validateCliAgentLaunch,
 } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
@@ -98,18 +99,22 @@ export async function runToolUseAgent(
   if (typeof instruction === 'number') return instruction;
 
   await initLocalCliPlatform(context);
-  const agent = await resolveCliAgent(init.agent, AgentCategory.ToolUse);
+  const launchMode = 'agentsRun';
+  const agentEntry = await resolveCliAgent(
+    init.agent,
+    cliAgentLaunchCategory(launchMode),
+  );
 
-  if (!agent) {
-    writeTextStderr(missingToolUseAgentMessage(init.agent));
+  const launchTarget = validateCliAgentLaunch(
+    init.agent,
+    agentEntry,
+    launchMode,
+  );
+  if (!launchTarget.ok) {
+    writeTextStderr(launchTarget.error);
     return CliExitCode.Usage;
   }
-  if (agent.category !== AgentCategory.ToolUse) {
-    writeTextStderr(
-      `Agent "${init.agent}" is a ${agent.category} agent; \`texra agents run\` only handles tool-use agents. Use \`texra run ${init.agent}\` for workflow agents.`,
-    );
-    return CliExitCode.Usage;
-  }
+  const agent = launchTarget.agent;
 
   const model = await resolveCliRunModel(context, init.model, 'chat');
   const runContext = buildHeadlessRunContext(context, model);
