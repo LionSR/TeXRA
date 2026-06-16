@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildStreamTabInfo } from '@agent/index';
+import { buildStreamTabInfo } from '@shared/progressView/backend/streamTabInfo';
 import { AgentCategory } from '@shared/schemas';
 import { isProcessAgent } from '@shared/streams/agentKind';
 
