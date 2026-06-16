@@ -938,6 +938,7 @@ async function handleTuiSlashCommand(
           commandName: context.commandName,
           cwd: context.cwd,
           processCwd: process.cwd(),
+          approvalPolicy: context.getApprovalPolicy(),
           queuedFollowUpMessages:
             activeStreamId === undefined
               ? []
@@ -1784,7 +1785,11 @@ export async function runChat(
       }),
       collectResumeUsage(streams),
       context.commandName,
-      { cwd: context.cwd, processCwd: process.cwd() },
+      {
+        cwd: context.cwd,
+        processCwd: process.cwd(),
+        approvalPolicy: activeApprovalPolicy,
+      },
     );
     if (hint) writeTextStdout(`\n${hint}`);
   };
