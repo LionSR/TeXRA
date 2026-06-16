@@ -23,7 +23,10 @@ import {
 import { resolveCliAgent } from '../runtime/agents';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 
-import { missingAgentMessage } from './_helpers/agentLookupText';
+import {
+  cliAgentLaunchCategory,
+  validateCliAgentLaunch,
+} from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
 import {
@@ -115,17 +118,20 @@ export async function runWorkflowAgent(
   const instruction = await resolveFileBackedInstruction(init, context.cwd);
 
   await initLocalCliPlatform(context);
-  const agent = await resolveCliAgent(init.agent, AgentCategory.Workflow);
+  const launchMode = 'run';
+  const agentEntry = await resolveCliAgent(
+    init.agent,
+    cliAgentLaunchCategory(launchMode),
+  );
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
-  if (!agent) {
-    throw new CliUsageError(missingAgentMessage(init.agent));
-  }
-  if (agent.category !== AgentCategory.Workflow) {
-    throw new CliUsageError(
-      `Agent "${init.agent}" is a ${agent.category} agent; \`texra run\` only handles workflow agents. Start it interactively with \`texra chat --agent ${init.agent}\`, or run a headless team with \`texra multi-agent run\`.`,
-    );
-  }
+  const launchTarget = validateCliAgentLaunch(
+    init.agent,
+    agentEntry,
+    launchMode,
+  );
+  if (!launchTarget.ok) throw new CliUsageError(launchTarget.error);
+  const agent = launchTarget.agent;
   if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
     throw new CliUsageError(
       'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
