@@ -43,10 +43,7 @@ import {
   type CliToolUseRunResult,
 } from '../runtime/terminalStatus';
 import { formatToolUseAgentRunInstruction } from './_helpers/toolUseRunInstruction';
-import {
-  createStdinWorkflowInputMaterializer,
-  expandRunInputs,
-} from '../runtime/workflowInputs';
+import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
 export interface ToolUseAgentRunInit {
   readonly agent: string;
@@ -72,8 +69,6 @@ export async function runToolUseAgent(
   context: CliContext,
   init: ToolUseAgentRunInit,
 ): Promise<number> {
-  let inputFiles: string[];
-  let contextFiles: string[];
   const instruction = await resolveToolUseInstruction(init, context.cwd);
 
   await initLocalCliPlatform(context);
@@ -88,74 +83,67 @@ export async function runToolUseAgent(
   const model = await resolveCliRunModel(context, init.model, 'chat');
   const runContext = buildHeadlessRunContext(context, model);
 
-  const stdinInputFile = createStdinWorkflowInputMaterializer({
-    readStdinText: readCliStdinText,
-    tempDir: runContext.cwd,
-  });
-  try {
-    const expanded = await expandRunInputs(
-      init.inputFiles,
-      init.contextFiles,
-      runContext.cwd,
-      {
-        allowEmptyInput: true,
-        requireWorkspaceFiles: true,
-        stdinInputFile,
-      },
-    );
-    inputFiles = expanded.inputFiles;
-    contextFiles = expanded.contextFiles;
-
-    const config: AgentConfigPayload = {
-      agent: init.agent,
-      model,
-      inputFiles,
-      contextFiles,
-      instruction: formatToolUseAgentRunInstruction({
+  return withExpandedRunInputs(
+    init.inputFiles,
+    init.contextFiles,
+    runContext.cwd,
+    {
+      allowEmptyInput: true,
+      requireWorkspaceFiles: true,
+      readStdinText: readCliStdinText,
+    },
+    async ({ inputFiles, contextFiles }) => {
+      const config: AgentConfigPayload = {
+        agent: init.agent,
+        model,
         inputFiles,
         contextFiles,
-        instruction,
-      }),
-      displayInstruction: instruction,
-      workingDirectory: runContext.cwd,
-      agentCategory: AgentCategory.ToolUse,
-    };
-
-    const executionId = generateExecutionId();
-    const registeredConfig = AgentConfigSchema.parse(config);
-    const { result, terminalStatus } = await executeCliRequest(
-      { config: registeredConfig, executionId },
-      runContext,
-      {
-        enforceCategory: true,
-        registerExecution: true,
-        markErrorOnThrow: true,
-        stopAfterCycle: true,
-      },
-    );
-    if (result.category !== AgentCategory.ToolUse) {
-      await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-      writeTextStderr(`Agent "${init.agent}" resolved to a non tool-use run.`);
-      return CliExitCode.AgentError;
-    }
-
-    const displayResult: CliToolUseRunResult = createCliRunResult(
-      result,
-      terminalStatus,
-      {
+        instruction: formatToolUseAgentRunInstruction({
+          inputFiles,
+          contextFiles,
+          instruction,
+        }),
+        displayInstruction: instruction,
         workingDirectory: runContext.cwd,
-      },
-    );
-    emitCliResult(runContext, {
-      json: displayResult,
-      ndjson: { kind: 'agent-result', result: displayResult },
-      text: toolUseResultText(displayResult),
-    });
+        agentCategory: AgentCategory.ToolUse,
+      };
 
-    return terminalStatusExitCode(terminalStatus, runContext);
-  } finally {
-    await stdinInputFile.cleanup();
-  }
+      const executionId = generateExecutionId();
+      const registeredConfig = AgentConfigSchema.parse(config);
+      const { result, terminalStatus } = await executeCliRequest(
+        { config: registeredConfig, executionId },
+        runContext,
+        {
+          enforceCategory: true,
+          registerExecution: true,
+          markErrorOnThrow: true,
+          stopAfterCycle: true,
+        },
+      );
+      if (result.category !== AgentCategory.ToolUse) {
+        await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+        writeTextStderr(
+          `Agent "${init.agent}" resolved to a non tool-use run.`,
+        );
+        return CliExitCode.AgentError;
+      }
+
+      const displayResult: CliToolUseRunResult = createCliRunResult(
+        result,
+        terminalStatus,
+        {
+          workingDirectory: runContext.cwd,
+        },
+      );
+      emitCliResult(runContext, {
+        json: displayResult,
+        ndjson: { kind: 'agent-result', result: displayResult },
+        text: toolUseResultText(displayResult),
+      });
+
+      return terminalStatusExitCode(terminalStatus, runContext);
+    },
+  );
 }
 
 export const agentsRunCommand = defineCliCommand({

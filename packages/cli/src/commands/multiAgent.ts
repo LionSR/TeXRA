@@ -68,10 +68,7 @@ import {
   toolUseResultText,
   type CliToolUseRunResult,
 } from '../runtime/terminalStatus';
-import {
-  createStdinWorkflowInputMaterializer,
-  expandRunInputs,
-} from '../runtime/workflowInputs';
+import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
 interface MultiAgentRunInit {
   readonly preset: string;
@@ -318,81 +315,75 @@ export async function runMultiAgentPreset(
   // model after agent validation so usage errors stay focused on bad agents.
   const model = await resolveCliRunModel(context, init.model, 'chat');
   const runContext = buildHeadlessRunContext(context, model);
-  const stdinInputFile = createStdinWorkflowInputMaterializer({
-    readStdinText: readCliStdinText,
-    tempDir: runContext.cwd,
-  });
-  try {
-    const { inputFiles, contextFiles } = await expandRunInputs(
-      init.inputFiles,
-      init.contextFiles,
-      runContext.cwd,
-      {
-        allowEmptyInput: hasInstruction,
-        requireWorkspaceFiles: true,
-        stdinInputFile,
-      },
-    );
-    if (approvalPromptsUnavailable(runContext)) {
-      const reason =
-        runContext.approvalPolicy === 'never'
-          ? 'approval policy "never" denies approval-gated delegation tools'
-          : 'headless approval policy "ask" cannot show delegation prompts';
-      writeTextStderr(
-        `WARN preset ${plan.preset.id} may run without subagent delegation because ${reason}. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
-      );
-    }
+  return withExpandedRunInputs(
+    init.inputFiles,
+    init.contextFiles,
+    runContext.cwd,
+    {
+      allowEmptyInput: hasInstruction,
+      requireWorkspaceFiles: true,
+      readStdinText: readCliStdinText,
+    },
+    async ({ inputFiles, contextFiles }) => {
+      if (approvalPromptsUnavailable(runContext)) {
+        const reason =
+          runContext.approvalPolicy === 'never'
+            ? 'approval policy "never" denies approval-gated delegation tools'
+            : 'headless approval policy "ask" cannot show delegation prompts';
+        writeTextStderr(
+          `WARN preset ${plan.preset.id} may run without subagent delegation because ${reason}. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+        );
+      }
 
-    const config: AgentConfigPayload = {
-      agent: rootAgent.name,
-      model,
-      inputFiles,
-      contextFiles,
-      instruction: formatMultiAgentRunInstruction(plan.preset, {
+      const config: AgentConfigPayload = {
+        agent: rootAgent.name,
+        model,
         inputFiles,
         contextFiles,
-        instruction,
-        approvalContext: runContext,
+        instruction: formatMultiAgentRunInstruction(plan.preset, {
+          inputFiles,
+          contextFiles,
+          instruction,
+          approvalContext: runContext,
+          workingDirectory: runContext.cwd,
+        }),
         workingDirectory: runContext.cwd,
-      }),
-      workingDirectory: runContext.cwd,
-      agentCategory: AgentCategory.ToolUse,
-      cliMultiAgentPresetId: plan.preset.id,
-    };
+        agentCategory: AgentCategory.ToolUse,
+        cliMultiAgentPresetId: plan.preset.id,
+      };
 
-    const executionId = generateExecutionId();
-    const registeredConfig = AgentConfigSchema.parse(config);
-    const { result, terminalStatus } = await executeCliRequest(
-      { config: registeredConfig, executionId },
-      runContext,
-      {
-        enforceCategory: true,
-        registerExecution: true,
-        markErrorOnThrow: true,
-        stopAfterCycle: true,
-        wrap: (run) => withCliMultiAgentPresetVisibility(plan, run),
-      },
-    );
-    if (result.category !== AgentCategory.ToolUse) {
-      await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-      writeTextStderr(
-        `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
+      const executionId = generateExecutionId();
+      const registeredConfig = AgentConfigSchema.parse(config);
+      const { result, terminalStatus } = await executeCliRequest(
+        { config: registeredConfig, executionId },
+        runContext,
+        {
+          enforceCategory: true,
+          registerExecution: true,
+          markErrorOnThrow: true,
+          stopAfterCycle: true,
+          wrap: (run) => withCliMultiAgentPresetVisibility(plan, run),
+        },
       );
-      return CliExitCode.AgentError;
-    }
-    const displayResult: CliToolUseRunResult = createCliRunResult(
-      result,
-      terminalStatus,
-      {
-        workingDirectory: runContext.cwd,
-      },
-    );
-    writeMultiAgentRunResult(runContext, plan, displayResult);
+      if (result.category !== AgentCategory.ToolUse) {
+        await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+        writeTextStderr(
+          `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
+        );
+        return CliExitCode.AgentError;
+      }
+      const displayResult: CliToolUseRunResult = createCliRunResult(
+        result,
+        terminalStatus,
+        {
+          workingDirectory: runContext.cwd,
+        },
+      );
+      writeMultiAgentRunResult(runContext, plan, displayResult);
 
-    return terminalStatusExitCode(terminalStatus, runContext);
-  } finally {
-    await stdinInputFile.cleanup();
-  }
+      return terminalStatusExitCode(terminalStatus, runContext);
+    },
+  );
 }
 
 const multiAgentListCommand = defineCliCommand({

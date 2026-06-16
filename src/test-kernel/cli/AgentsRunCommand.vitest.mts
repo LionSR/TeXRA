@@ -5,14 +5,12 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => {
-  const stdinInputFile = Object.assign(vi.fn(), { cleanup: vi.fn() });
   return {
     executeCliRequest: vi.fn(),
-    expandRunInputs: vi.fn(),
+    withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
     resolveCliAgent: vi.fn(),
     resolveCliRunModel: vi.fn(),
-    stdinInputFile,
     writeErrorStderr: vi.fn(),
     writeTextStderr: vi.fn(),
   };
@@ -58,8 +56,7 @@ vi.mock('@cli/runtime/runExecution', () => ({
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
-  createStdinWorkflowInputMaterializer: vi.fn(() => mocks.stdinInputFile),
-  expandRunInputs: mocks.expandRunInputs,
+  withExpandedRunInputs: mocks.withExpandedRunInputs,
 }));
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -83,10 +80,18 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 describe('CLI agents run command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.expandRunInputs.mockResolvedValue({
-      inputFiles: ['problem.md'],
-      contextFiles: ['notes.md'],
-    });
+    mocks.withExpandedRunInputs.mockImplementation(
+      async (
+        _inputSpecs: readonly string[],
+        _contextSpecs: readonly string[],
+        _cwd: string,
+        _options: unknown,
+        run: (inputs: {
+          readonly inputFiles: string[];
+          readonly contextFiles: string[];
+        }) => Promise<unknown>,
+      ) => run({ inputFiles: ['problem.md'], contextFiles: ['notes.md'] }),
+    );
     mocks.resolveCliAgent.mockResolvedValue({
       name: 'chat',
       category: AgentCategory.ToolUse,
@@ -131,15 +136,16 @@ describe('CLI agents run command', () => {
       'chat',
       AgentCategory.ToolUse,
     );
-    expect(mocks.expandRunInputs).toHaveBeenCalledWith(
+    expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
       ['problem.md'],
       ['notes.md'],
       '/tmp/project',
       {
         allowEmptyInput: true,
         requireWorkspaceFiles: true,
-        stdinInputFile: mocks.stdinInputFile,
+        readStdinText: expect.any(Function),
       },
+      expect.any(Function),
     );
     const request = mocks.executeCliRequest.mock.calls[0]?.[0];
     expect(request?.config.inputFiles).toEqual(['problem.md']);
@@ -175,7 +181,7 @@ describe('CLI agents run command', () => {
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.resolveCliAgent).not.toHaveBeenCalled();
-    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('reports missing agents before resolving the model', async () => {
@@ -202,7 +208,7 @@ describe('CLI agents run command', () => {
       AgentCategory.ToolUse,
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('reports workflow agents before resolving the model', async () => {
@@ -235,6 +241,6 @@ describe('CLI agents run command', () => {
       AgentCategory.ToolUse,
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 });
