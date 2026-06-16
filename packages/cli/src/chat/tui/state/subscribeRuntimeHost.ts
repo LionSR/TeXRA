@@ -19,7 +19,7 @@ import {
   setParentStream,
   type ProcessOutputTail,
 } from './cliState';
-import { mergeChildStreams } from './childStreamMerge';
+import { mergeChildStreams } from './childExecutions';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
 import { appendLocalAssistantTranscript } from './transcript';

@@ -1,8 +1,16 @@
 // Local imports - shared schemas
 import type { ActiveChildInfo } from '@shared/schemas';
 
-function childKey(child: ActiveChildInfo): string {
+export function childExecutionKey(
+  child: Pick<ActiveChildInfo, 'childStreamId' | 'executionId'>,
+): string {
   return child.childStreamId ?? child.executionId;
+}
+
+export function childExecutionLabel(
+  child: Pick<ActiveChildInfo, 'agentName' | 'toolName' | 'executionId'>,
+): string {
+  return child.agentName || child.toolName || child.executionId;
 }
 
 export function mergeChildStreams(
@@ -11,7 +19,7 @@ export function mergeChildStreams(
 ): readonly ActiveChildInfo[] {
   const byStream = new Map<string, ActiveChildInfo>();
   for (const child of [...current, ...next]) {
-    byStream.set(childKey(child), child);
+    byStream.set(childExecutionKey(child), child);
   }
   return [...byStream.values()];
 }
@@ -22,9 +30,11 @@ export function visibleSubagentRows(slice: {
   readonly activeSubagents: readonly ActiveChildInfo[];
   readonly childStreams: readonly ActiveChildInfo[];
 }): readonly ActiveChildInfo[] {
-  const activeKeys = new Set(slice.activeSubagents.map(childKey));
+  const activeKeys = new Set(slice.activeSubagents.map(childExecutionKey));
   return [
     ...slice.activeSubagents,
-    ...slice.childStreams.filter((child) => !activeKeys.has(childKey(child))),
+    ...slice.childStreams.filter(
+      (child) => !activeKeys.has(childExecutionKey(child)),
+    ),
   ];
 }
