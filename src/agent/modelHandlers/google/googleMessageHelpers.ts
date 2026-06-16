@@ -23,7 +23,8 @@ export function extractNonThinkingText(parts: Part[], trim = false): string {
     )
     .filter(
       (part) =>
-        !hasFunctionCall || !GOOGLE_TOOL_CALL_CONTROL_TEXT.has(part.text.trim()),
+        !hasFunctionCall ||
+        !GOOGLE_TOOL_CALL_CONTROL_TEXT.has(part.text.trim()),
     )
     .map((part) => part.text)
     .join('');
