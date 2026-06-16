@@ -114,3 +114,12 @@ export function isInFlightStatus(status: StreamStatus | undefined): boolean {
 export function isTerminalStatus(status: StreamStatus | undefined): boolean {
   return status !== undefined && STREAM_STATUS_TRAITS[status].terminal;
 }
+
+/** Check if elapsed-time displays should keep advancing for this status. */
+export function isLiveElapsedStatus(status: string | undefined): boolean {
+  return (
+    status !== undefined &&
+    Object.hasOwn(STREAM_STATUS_TRAITS, status) &&
+    STREAM_STATUS_TRAITS[status as StreamStatus].liveElapsed
+  );
+}

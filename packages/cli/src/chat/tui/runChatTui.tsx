@@ -98,12 +98,12 @@ import {
   formatCliMemoryList,
   formatCliMemoryPreview,
 } from '@cli/runtime/memory';
+import { isLiveElapsedStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { bus } from '@eventBus/ProgressEventBus';
 import { sumUsageStats } from '@shared/schemas';
 import {
   EXECUTION_STATUS,
-  LIVE_ELAPSED_STREAM_STATUSES,
   STREAM_STATUS,
   type StreamStatus,
   type ExecutionId,
@@ -362,7 +362,7 @@ export function chatTuiCanStopActiveRun(
 ): boolean {
   if (!session.runPromise || session.runCompleted) return false;
   if (!session.streamId) return true;
-  return status === undefined || LIVE_ELAPSED_STREAM_STATUSES.has(status);
+  return status === undefined || isLiveElapsedStatus(status);
 }
 
 export function chatTuiCanStopVisibleRun(
@@ -371,7 +371,7 @@ export function chatTuiCanStopVisibleRun(
 ): boolean {
   return (
     chatTuiCanStopActiveRun(session, status) ||
-    Boolean(session.streamId && LIVE_ELAPSED_STREAM_STATUSES.has(status ?? ''))
+    Boolean(session.streamId && isLiveElapsedStatus(status))
   );
 }
 
@@ -1250,8 +1250,7 @@ export async function runChat(
 
     if (
       (isRunPending && activeStatus !== STREAM_STATUS.WAITING) ||
-      (activeStatus !== undefined &&
-        LIVE_ELAPSED_STREAM_STATUSES.has(activeStatus))
+      isLiveElapsedStatus(activeStatus)
     ) {
       appendLocalAssistantTranscript(
         'Wait for the active response to finish, or press Ctrl-C before /clear.',

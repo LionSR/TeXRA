@@ -1,8 +1,9 @@
 // Pure state helpers for App-level child execution shortcuts and pickers.
 
+import { isLiveElapsedStatus } from '@common/constants/streamStatus';
+
 // Local imports - shared schemas
 import {
-  LIVE_ELAPSED_STREAM_STATUSES,
   STREAM_STATUS,
   type ActiveChildInfo,
   type StreamTabId,
@@ -95,7 +96,7 @@ function hasLiveChildElapsed(
 ): boolean {
   return (
     child.startedAt !== undefined &&
-    LIVE_ELAPSED_STREAM_STATUSES.has(child.status ?? STREAM_STATUS.RUNNING)
+    isLiveElapsedStatus(child.status ?? STREAM_STATUS.RUNNING)
   );
 }
 
