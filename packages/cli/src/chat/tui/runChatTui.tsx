@@ -50,7 +50,7 @@ import {
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
-import { missingToolUseAgentMessage } from '@cli/commands/_helpers/agentLookupText';
+import { validateCliAgentLaunch } from '@cli/commands/_helpers/agentLookupText';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
@@ -496,14 +496,12 @@ function agentSupportsDelegation(agentName: string): boolean {
 export function chatToolUseAgentUsageError(
   agentName: string,
 ): string | undefined {
-  const agent = getAgent(agentName, AgentCategory.ToolUse);
-  if (!agent) {
-    return missingToolUseAgentMessage(agentName);
-  }
-  if (agent.category !== AgentCategory.ToolUse) {
-    return `Agent "${agentName}" is a ${agent.category} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${agentName}\` for workflow agents, or \`texra multi-agent run <preset>\` for teams.`;
-  }
-  return undefined;
+  const launchTarget = validateCliAgentLaunch(
+    agentName,
+    getAgent(agentName, AgentCategory.ToolUse),
+    'chat',
+  );
+  return launchTarget.ok ? undefined : launchTarget.error;
 }
 
 function applyInitialCliAgentSelection(
