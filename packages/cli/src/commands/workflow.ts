@@ -24,8 +24,8 @@ import { resolveCliAgent } from '../runtime/agents';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import {
+  assertCliAgentLaunch,
   cliAgentLaunchLookupCategory,
-  validateCliAgentLaunch,
 } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
@@ -89,13 +89,7 @@ export async function runWorkflowAgent(
   );
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
-  const launchTarget = validateCliAgentLaunch(
-    init.agent,
-    agentEntry,
-    launchMode,
-  );
-  if (!launchTarget.ok) throw new CliUsageError(launchTarget.error);
-  const agent = launchTarget.agent;
+  const agent = assertCliAgentLaunch(init.agent, agentEntry, launchMode);
   if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
     throw new CliUsageError(
       'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
