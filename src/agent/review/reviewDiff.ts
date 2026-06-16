@@ -14,10 +14,7 @@ import * as path from 'node:path';
 // Local imports
 import { platform } from '@platform/platform';
 import { executeCommand } from '@utils/system/execUtils';
-import {
-  splitContentLines,
-  splitOutputLines,
-} from '@utils/text/stringUtils';
+import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
 
 import { normalizeReviewFilePath } from './reviewIssues';
 
