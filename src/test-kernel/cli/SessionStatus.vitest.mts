@@ -137,6 +137,44 @@ describe('CLI session status formatter', () => {
     );
   });
 
+  it('includes the active non-default approval policy in the resume status line', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'harness-model',
+      api: 'personal',
+      approval: 'deny privileged actions',
+      approvalPolicy: 'never',
+      status: 'waiting',
+      sessionId: 'abc123',
+      commandName: 'texra-local',
+      queuedFollowUpMessages: [],
+    });
+
+    expect(status).toContain(
+      'resume later with: texra-local resume abc123 --approval-policy never',
+    );
+  });
+
+  it('includes cwd and approval policy when both affect the resume status line', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'harness-model',
+      api: 'personal',
+      approval: 'deny privileged actions',
+      approvalPolicy: 'never',
+      status: 'waiting',
+      sessionId: 'abc123',
+      commandName: 'texra-local',
+      cwd: '/tmp/paper',
+      processCwd: '/tmp/launcher',
+      queuedFollowUpMessages: [],
+    });
+
+    expect(status).toContain(
+      "resume later with: texra-local resume abc123 --cwd '/tmp/paper' --approval-policy never",
+    );
+  });
+
   it('omits session lines before the first run starts', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
