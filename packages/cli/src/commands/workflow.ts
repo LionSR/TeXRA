@@ -115,7 +115,7 @@ export async function runWorkflowAgent(
   const instruction = await resolveFileBackedInstruction(init, context.cwd);
 
   await initLocalCliPlatform(context);
-  const agent = await resolveCliAgent(init.agent);
+  const agent = await resolveCliAgent(init.agent, AgentCategory.Workflow);
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
   if (!agent) {
