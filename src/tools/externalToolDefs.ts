@@ -39,6 +39,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import { isGitRepository } from '@utils/system/isGitRepository';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { isWSL } from '@utils/system/wslDetect';
+import { BinaryResolver } from '@utils/system/binaryResolver';
 
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 const TEXRA_CLI_CHECK = {
@@ -305,7 +306,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  3. The extension will auto-install elan and Lean toolchain\n\n' +
       'Setup (CLI / desktop):\n' +
       '  1. Install elan: `curl https://elan.lean-lang.org/elan-init.sh -sSf | sh`\n' +
-      '  2. Make sure `lake --version` works in a fresh shell\n' +
+      '  2. Make sure `lake` is on PATH in a fresh shell\n' +
       '  3. Open a folder containing a lakefile.lean / lakefile.toml',
     installUrl:
       'https://marketplace.visualstudio.com/items?itemName=leanprover.lean4',
@@ -318,10 +319,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         platform().toolAvailability.isVscodeExtensionInstalled(
           LEAN4_EXTENSION_ID,
         );
-      const lakeAvailable = await checkToolInstalled(
-        { command: 'lake --version', errorMessage: 'lake not on PATH' },
-        false,
-      );
+      const lakeAvailable = BinaryResolver.findPath('lake') !== null;
       return { extensionAvailable, lakeAvailable };
     },
     check: async (probeResult) => {
