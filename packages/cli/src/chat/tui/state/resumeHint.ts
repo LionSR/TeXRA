@@ -12,6 +12,7 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 
+import { childExecutionLabel } from './childExecutions';
 import type { StreamSlice } from './cliState';
 
 export interface ResumeTarget {
@@ -122,7 +123,7 @@ export function collectResumeTargets({
       seen.add(child.executionId);
       targets.push({
         executionId: child.executionId,
-        label: child.agentName || child.toolName || child.executionId,
+        label: childExecutionLabel(child),
         isRoot: false,
       });
     }
