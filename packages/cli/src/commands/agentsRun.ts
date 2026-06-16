@@ -23,7 +23,7 @@ import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import {
   TOOL_USE_AGENT_NAME_DESCRIPTION,
-  cliAgentLaunchCategory,
+  cliAgentLaunchLookupCategory,
   validateCliAgentLaunch,
 } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -102,7 +102,7 @@ export async function runToolUseAgent(
   const launchMode = 'agentsRun';
   const agentEntry = await resolveCliAgent(
     init.agent,
-    cliAgentLaunchCategory(launchMode),
+    cliAgentLaunchLookupCategory(launchMode),
   );
 
   const launchTarget = validateCliAgentLaunch(

@@ -14,19 +14,19 @@ type CliAgentLaunchValidation =
 
 const CLI_AGENT_LAUNCH_TARGETS = {
   chat: {
-    category: AgentCategory.ToolUse,
+    requiredCategory: AgentCategory.ToolUse,
     missing: missingToolUseAgentMessage,
     mismatch: (name: string, actual: AgentEntry['category']) =>
       `Agent "${name}" is a ${actual} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents, or \`texra multi-agent run <preset>\` for teams.`,
   },
   run: {
-    category: AgentCategory.Workflow,
+    requiredCategory: AgentCategory.Workflow,
     missing: missingAgentMessage,
     mismatch: (name: string, actual: AgentEntry['category']) =>
       `Agent "${name}" is a ${actual} agent; \`texra run\` only handles workflow agents. Start it interactively with \`texra chat --agent ${name}\`, or run a headless team with \`texra multi-agent run\`.`,
   },
   agentsRun: {
-    category: AgentCategory.ToolUse,
+    requiredCategory: AgentCategory.ToolUse,
     missing: missingToolUseAgentMessage,
     mismatch: (name: string, actual: AgentEntry['category']) =>
       `Agent "${name}" is a ${actual} agent; \`texra agents run\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents.`,
@@ -51,10 +51,10 @@ export function missingMultiAgentPresetMessage(name: string): string {
   return `Multi-agent preset not found: ${name}. ${MULTI_AGENT_PRESET_LOOKUP_HINT}`;
 }
 
-export function cliAgentLaunchCategory(
+export function cliAgentLaunchLookupCategory(
   mode: CliAgentLaunchMode,
 ): AgentCategory {
-  return CLI_AGENT_LAUNCH_TARGETS[mode].category;
+  return CLI_AGENT_LAUNCH_TARGETS[mode].requiredCategory;
 }
 
 export function validateCliAgentLaunch(
@@ -64,7 +64,7 @@ export function validateCliAgentLaunch(
 ): CliAgentLaunchValidation {
   const target = CLI_AGENT_LAUNCH_TARGETS[mode];
   if (!agent) return { ok: false, error: target.missing(name) };
-  if (agent.category !== target.category) {
+  if (agent.category !== target.requiredCategory) {
     return { ok: false, error: target.mismatch(name, agent.category) };
   }
   return { ok: true, agent };
