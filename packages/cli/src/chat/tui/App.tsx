@@ -16,7 +16,12 @@ import {
   isActiveStatus,
   isLiveElapsedStatus,
 } from '@common/constants/streamStatus';
-import { type StreamStatus, type StreamTabId } from '@shared/schemas';
+import {
+  TODO_STATUS,
+  type StreamStatus,
+  type StreamTabId,
+  type TodoItem,
+} from '@shared/schemas';
 
 import { assertNever } from './assertNever';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
@@ -305,16 +310,23 @@ export function shouldShowTipRow({
 export function shouldShowTodosPlanPanel({
   foregroundOpen,
   hasPlan,
-  hasTodos,
   status,
+  todos,
 }: {
   readonly foregroundOpen: boolean;
   readonly hasPlan: boolean;
-  readonly hasTodos: boolean;
   readonly status: StreamStatus | undefined;
+  readonly todos: readonly TodoItem[];
 }): boolean {
   if (foregroundOpen) return false;
+  const hasTodos = todos.length > 0;
   if (!hasTodos && !hasPlan) return false;
+  if (
+    hasTodos &&
+    todos.every((todo) => todo.status === TODO_STATUS.COMPLETED)
+  ) {
+    return false;
+  }
   return isLiveElapsedStatus(status);
 }
 
@@ -673,8 +685,8 @@ export function App(props: AppProps): React.JSX.Element {
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
     foregroundOpen,
     hasPlan: activeSlice?.plan != null,
-    hasTodos: (activeSlice?.todos.length ?? 0) > 0,
     status: activeSlice?.status,
+    todos: activeSlice?.todos ?? [],
   });
   const transcriptWidth = Math.max(MIN_TRANSCRIPT_WIDTH, columns);
   const foregroundKind = foregroundSurfaceKind({

@@ -2611,6 +2611,20 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'completed-todos-hidden-while-running',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_TODOS: '1',
+      HARNESS_TODOS_COMPLETED: '1',
+    },
+    frame: 'tail',
+    expect: ['◆ running'],
+    unexpect: [
+      'Split theorem into algebraic and analytic checks',
+      'Coordinate a small math proof through nested CLI work.',
+    ],
+  },
+  {
     name: 'idle-todos-hidden',
     env: {
       HARNESS_ENTRIES: '4',
