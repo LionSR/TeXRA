@@ -1,3 +1,5 @@
+import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import { tryPlatform } from '@platform/platform';
 import { writeTerminalStatus } from '@agent/storage';
 import { runAgent } from '@agent/runtime/runAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -60,6 +62,19 @@ export async function executeCliRequest(
   const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
     beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
   });
+  const ownedExecutionId = options.registerExecution
+    ? request.executionId
+    : undefined;
+  let shutdownInterrupted = false;
+  const disposeShutdownStatus = ownedExecutionId
+    ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
+        shutdownInterrupted = true;
+        await writeTerminalStatus(
+          ownedExecutionId,
+          EXECUTION_STATUS.INTERRUPTED,
+        );
+      })
+    : undefined;
   const invoke = (): Promise<ExecuteAgentResult> =>
     runAgent(request, {
       runtimeHost,
@@ -82,6 +97,12 @@ export async function executeCliRequest(
     }
     throw error;
   } finally {
+    disposeShutdownStatus?.dispose();
+    // If the run settles while shutdown is in progress, keep the
+    // signal-owned interrupted status as the final write.
+    if (shutdownInterrupted && ownedExecutionId) {
+      await writeTerminalStatus(ownedExecutionId, EXECUTION_STATUS.INTERRUPTED);
+    }
     detachResultToast();
     uninstallApprovalHandlers();
     await runtimeHost.close();
