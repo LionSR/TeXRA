@@ -232,22 +232,23 @@ const LEGACY_AGENT_ALIASES: Record<string, string> = {
  * Canonical agent resolver: look up an agent by identifier.
  *
  * Supports "source:name" format or just "name". Plain names use the default
- * source priority unless the lookup is for a tool-use session, where built-in
- * tool-use agents outrank built-in workflow agents.
+ * source priority unless `lookupCategory` requests a category-specific
+ * priority. This is not a category filter: callers that require a category
+ * must check the returned entry.
  *
  * All other lookups in this module (`resolveAgent`, `resolveAgentKey`,
  * `isRemoteAgent`, `updateAgent*`) delegate here.
  */
 export function getAgent(
   identifier: string,
-  category?: AgentCategoryType,
+  lookupCategory?: AgentCategoryType,
 ): AgentEntry | undefined {
   // Direct lookup for source:name format (already resolved)
   if (cache.has(identifier)) return cache.get(identifier);
 
   // Find first match using session-appropriate priority
   const priority =
-    category === AgentCategory.ToolUse
+    lookupCategory === AgentCategory.ToolUse
       ? TOOL_USE_LOOKUP_PRIORITY
       : LOOKUP_PRIORITY;
   for (const source of priority) {
@@ -262,7 +263,7 @@ export function getAgent(
   const alias = LEGACY_AGENT_ALIASES[name];
   if (alias) {
     const prefix = identifier.slice(0, identifier.length - name.length);
-    return getAgent(`${prefix}${alias}`, category);
+    return getAgent(`${prefix}${alias}`, lookupCategory);
   }
   return undefined;
 }
@@ -358,10 +359,10 @@ export async function refresh(options: LoadAgentsOptions = {}): Promise<void> {
  */
 export function resolveAgentKey(
   agentIdentifier: string,
-  category?: AgentCategoryType,
+  lookupCategory?: AgentCategoryType,
 ): string {
   if (!agentIdentifier) return agentIdentifier;
-  const entry = getAgent(agentIdentifier, category);
+  const entry = getAgent(agentIdentifier, lookupCategory);
   if (!entry) return agentIdentifier;
   return createKey(entry.source, entry.name);
 }

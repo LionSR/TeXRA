@@ -24,7 +24,7 @@ import { resolveCliAgent } from '../runtime/agents';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import {
-  cliAgentLaunchCategory,
+  cliAgentLaunchLookupCategory,
   validateCliAgentLaunch,
 } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -121,7 +121,7 @@ export async function runWorkflowAgent(
   const launchMode = 'run';
   const agentEntry = await resolveCliAgent(
     init.agent,
-    cliAgentLaunchCategory(launchMode),
+    cliAgentLaunchLookupCategory(launchMode),
   );
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
