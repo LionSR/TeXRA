@@ -266,7 +266,6 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       if (idx != null && idx < props.items.length) {
         const choice = props.items[idx];
         if (choice && !choice.disabled) {
-          setHighlight(idx);
           props.onSelect(choice.value);
         }
       }

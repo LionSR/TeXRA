@@ -169,6 +169,7 @@ export function registerBuiltinSlashCommands(options?: {
             action: () => options?.onApprovalPolicySelect?.(value),
             value,
             onDone: props.onDone,
+            completion: 'beforeAction',
           })
         }
         onCancel={() => props.onDone(undefined)}
