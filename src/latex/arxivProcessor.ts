@@ -332,10 +332,10 @@ class ArxivSourceProcessor {
       }
 
       const isArchive =
-        downloadedPath.endsWith('.tar') ||
+        hasExtension(downloadedPath, '.tar') ||
         downloadedPath.endsWith('.tar.gz') ||
-        downloadedPath.endsWith('.tgz');
-      const isGzipOnly = !isArchive && downloadedPath.endsWith('.gz');
+        hasExtension(downloadedPath, '.tgz');
+      const isGzipOnly = !isArchive && hasExtension(downloadedPath, '.gz');
 
       if (isArchive) {
         progressCallback?.('Extracting source files...', 60);
