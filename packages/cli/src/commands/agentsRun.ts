@@ -114,7 +114,6 @@ export async function runToolUseAgent(
     writeTextStderr(launchTarget.error);
     return CliExitCode.Usage;
   }
-  const agent = launchTarget.agent;
 
   const model = await resolveCliRunModel(context, init.model, 'chat');
   const runContext = buildHeadlessRunContext(context, model);
