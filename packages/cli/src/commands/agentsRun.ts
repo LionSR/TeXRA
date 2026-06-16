@@ -24,7 +24,6 @@ import { initLocalCliPlatform } from '../runtime/initPlatform';
 import {
   TOOL_USE_AGENT_NAME_DESCRIPTION,
   assertCliAgentLaunch,
-  cliAgentLaunchLookupCategory,
 } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
@@ -72,13 +71,9 @@ export async function runToolUseAgent(
   const instruction = await resolveToolUseInstruction(init, context.cwd);
 
   await initLocalCliPlatform(context);
-  const launchMode = 'agentsRun';
-  const agentEntry = await resolveCliAgent(
-    init.agent,
-    cliAgentLaunchLookupCategory(launchMode),
-  );
+  const agentEntry = await resolveCliAgent(init.agent, AgentCategory.ToolUse);
 
-  assertCliAgentLaunch(init.agent, agentEntry, launchMode);
+  assertCliAgentLaunch(init.agent, agentEntry, 'agentsRun');
 
   const model = await resolveCliRunModel(context, init.model, 'chat');
   const runContext = buildHeadlessRunContext(context, model);
