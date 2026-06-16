@@ -20,6 +20,7 @@ import {
 } from '@cli/chat/tui/commands/slashForms';
 import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -447,6 +448,34 @@ describe('slashRegistry', () => {
     await settleFormSelection();
 
     expect(apiNode.isClosed()).toBe(true);
+  });
+
+  it('closes the approval policy picker before applying the new policy', async () => {
+    let closed = false;
+    let sawClosedBeforePolicySelect = false;
+    registerBuiltinSlashCommands({
+      onApprovalPolicySelect: () => {
+        sawClosedBeforePolicySelect = closed;
+      },
+    });
+    const approval = listSlashCommands().find((cmd) => cmd.name === 'approval');
+
+    if (!approval) throw new Error('Expected /approval to be registered');
+
+    expect(openRegisteredCliSlashForm(approval, '')).toBe(true);
+
+    const approvalNode = renderFormAdapter<{
+      onSelect?: (value: CliApprovalPolicy) => void;
+    }>(
+      cliState.activeForm.get()?.render(() => {
+        closed = true;
+      }, 20),
+    );
+    approvalNode.props?.onSelect?.('yolo');
+    await settleFormSelection();
+
+    expect(closed).toBe(true);
+    expect(sawClosedBeforePolicySelect).toBe(true);
   });
 
   it('closes the resume picker before running the resume action', async () => {
