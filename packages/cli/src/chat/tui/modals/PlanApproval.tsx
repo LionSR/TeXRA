@@ -22,7 +22,8 @@ export interface PlanApprovalProps {
 export const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
 const MIN_PLAN_APPROVAL_CONTENT_WIDTH = 20;
 const PLAN_APPROVAL_TITLE = 'Approve plan?';
-export const PLAN_APPROVAL_GOAL_NOTICE = 'Bash auto-approved; edits still ask.';
+export const PLAN_APPROVAL_GOAL_NOTICE =
+  'Run auto-approves bash; edits still ask.';
 const PLAN_APPROVAL_GOAL_NOTICE_ROWS = 2;
 const PLAN_APPROVAL_NON_COMPACT_FIXED_ROWS = 7;
 const PLAN_APPROVAL_FEEDBACK_MARGIN_ROWS = 1;
