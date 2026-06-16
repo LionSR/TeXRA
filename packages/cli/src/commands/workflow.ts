@@ -20,6 +20,7 @@ import {
   buildHeadlessRunContext,
   resolveCliRunModel,
 } from '../runtime/runModel';
+import { resolveCliAgent } from '../runtime/agents';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import { missingAgentMessage } from './_helpers/agentLookupText';
@@ -32,7 +33,6 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { resolveCliAgent } from '../runtime/agentResolution';
 import { executeCliRequest } from '../runtime/runExecution';
 import {
   terminalStatusExitCode,
