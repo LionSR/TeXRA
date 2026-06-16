@@ -14,7 +14,7 @@ import * as path from 'node:path';
 // Local imports
 import { platform } from '@platform/platform';
 import { executeCommand } from '@utils/system/execUtils';
-import { splitOutputLines } from '@utils/text/stringUtils';
+import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
 
 import { normalizeReviewFilePath } from './reviewIssues';
 
@@ -266,9 +266,7 @@ export function buildUntrackedFileDiff(
   const text = new TextDecoder().decode(
     content.subarray(0, MAX_UNTRACKED_FILE_BYTES),
   );
-  const lines = text.split('\n');
-  // Drop the empty trailing element from a final newline.
-  if (lines.at(-1) === '') lines.pop();
+  const lines = splitContentLines(text);
   if (lines.length === 0) {
     return `${header}(empty file)\n`;
   }
