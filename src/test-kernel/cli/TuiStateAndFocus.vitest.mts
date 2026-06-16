@@ -94,8 +94,10 @@ import {
   DEFAULT_TOOL_CONFIG,
   MESSAGE_TYPES,
   STREAM_STATUS,
+  TODO_STATUS,
   type StorageKey,
   type StreamTabId,
+  type TodoItem,
 } from '@shared/schemas';
 import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 
@@ -668,52 +670,71 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('shows todo and plan chrome only while a stream is active', () => {
+    const openTodo = {
+      content: 'Check the live proof',
+      activeForm: 'Checking the live proof',
+      status: TODO_STATUS.IN_PROGRESS,
+    } satisfies TodoItem;
     expect(
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: false,
-        hasTodos: true,
         status: STREAM_STATUS.RUNNING,
+        todos: [openTodo],
       }),
     ).toBe(true);
     expect(
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: true,
-        hasTodos: false,
         status: STREAM_STATUS.RESUMING,
+        todos: [],
       }),
     ).toBe(true);
     expect(
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: false,
-        hasTodos: true,
         status: STREAM_STATUS.WAITING,
+        todos: [openTodo],
       }),
     ).toBe(false);
     expect(
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: false,
-        hasTodos: true,
         status: STREAM_STATUS.STOPPED,
+        todos: [openTodo],
       }),
     ).toBe(false);
     expect(
       shouldShowTodosPlanPanel({
         foregroundOpen: true,
         hasPlan: false,
-        hasTodos: true,
         status: STREAM_STATUS.RUNNING,
+        todos: [openTodo],
       }),
     ).toBe(false);
     expect(
       shouldShowTodosPlanPanel({
         foregroundOpen: false,
         hasPlan: false,
-        hasTodos: false,
         status: STREAM_STATUS.RUNNING,
+        todos: [],
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowTodosPlanPanel({
+        foregroundOpen: false,
+        hasPlan: true,
+        status: STREAM_STATUS.RUNNING,
+        todos: [
+          {
+            content: 'Finish the old goal',
+            activeForm: 'Finishing the old goal',
+            status: TODO_STATUS.COMPLETED,
+          },
+        ],
       }),
     ).toBe(false);
   });
