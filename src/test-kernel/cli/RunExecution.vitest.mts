@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createFakePlatform } from '@test/support/FakePlatform';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { EXECUTION_STATUS } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -196,5 +198,67 @@ describe('executeCliRequest', () => {
     expect(uninstall.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.close.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
+  });
+
+  it('marks owned executions interrupted during platform shutdown', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    const platform = createFakePlatform();
+    initPlatform(platform);
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = {
+      config: {},
+      executionId: 'exec-1',
+    } as Parameters<typeof executeCliRequest>[0];
+    let resolveRun:
+      | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
+      | undefined;
+    mocks.runAgent.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRun = resolve;
+      }),
+    );
+
+    const run = executeCliRequest(request, cliContext(), {
+      registerExecution: true,
+    });
+    await Promise.resolve();
+    await platform.lifecycle.runShutdown();
+
+    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
+      'exec-1',
+      EXECUTION_STATUS.INTERRUPTED,
+    );
+
+    resolveRun?.({
+      category: 'toolUse',
+      executionId: 'exec-1',
+      status: 'completed',
+      streamId: 'stream-1',
+    });
+    await run;
+    expect(mocks.writeTerminalStatus).toHaveBeenCalledTimes(2);
+    expect(mocks.writeTerminalStatus).toHaveBeenLastCalledWith(
+      'exec-1',
+      EXECUTION_STATUS.INTERRUPTED,
+    );
+  });
+
+  it('removes the shutdown status hook after owned executions finish', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    const platform = createFakePlatform();
+    initPlatform(platform);
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = {
+      config: {},
+      executionId: 'exec-1',
+    } as Parameters<typeof executeCliRequest>[0];
+
+    await executeCliRequest(request, cliContext(), {
+      registerExecution: true,
+    });
+    mocks.writeTerminalStatus.mockClear();
+    await platform.lifecycle.runShutdown();
+
+    expect(mocks.writeTerminalStatus).not.toHaveBeenCalled();
   });
 });
