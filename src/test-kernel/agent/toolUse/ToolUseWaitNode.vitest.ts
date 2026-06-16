@@ -352,6 +352,79 @@ describe('ToolUseWaitNode', () => {
     }
   });
 
+  it('keeps injecting active goal continuations across repeated cycles', async () => {
+    const streamId = 'wait-node-long-goal' as StreamTabId;
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({}));
+
+    await GoalStore.start(
+      streamId,
+      'Keep solving the hard problem until verification is complete.',
+    );
+
+    const shared: ToolUseRunShared = {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const createUserFollowUpMessages = vi.fn(
+      async (messages: unknown[], userMessage: string) => [
+        ...messages,
+        { role: 'user', content: userMessage },
+      ],
+    );
+    const waitForFollowUp = vi.fn(async () => null);
+    const services = {
+      checkInterruption: () => false,
+      isSubagent: false,
+      logger: { error: vi.fn(), info: vi.fn() },
+      modelHandler: {
+        createUserFollowUpMessages,
+        extractAssistantText: () => undefined,
+      },
+      runtimeHost: { emit: vi.fn() },
+      session: {
+        hasQueuedFollowUp: () => false,
+        waitForFollowUp,
+      },
+      streamId,
+      streamStatus: new StreamStatusRegistry(),
+    } as unknown as ToolUseServices;
+    const node = new ToolUseWaitNode().setServices(services);
+
+    try {
+      for (const cycle of [0, 1, 2]) {
+        const prep = await node.prep(shared);
+        const exec = await node.exec(prep);
+
+        expect(exec.kind).toBe('continue');
+        if (exec.kind !== 'continue') return;
+        expect(exec.synthetic).toBe(true);
+        expect(exec.followUps[0]?.text).toContain(
+          'Keep solving the hard problem until verification is complete.',
+        );
+
+        const transition = await node.post(shared, prep, exec);
+        expect(transition).toBe(FlowTransition.CONTINUE);
+        expect(createUserFollowUpMessages).toHaveBeenCalledTimes(cycle + 1);
+      }
+
+      expect(waitForFollowUp).not.toHaveBeenCalled();
+      expect(createUserFollowUpMessages).toHaveBeenCalledTimes(3);
+      expect(shared.messages).toHaveLength(3);
+
+      await GoalStore.setStatus(streamId, 'paused');
+
+      const prep = await node.prep(shared);
+      const exec = await node.exec(prep);
+
+      expect(waitForFollowUp).toHaveBeenCalledOnce();
+      expect(exec.kind).toBe('stop');
+    } finally {
+      await GoalStore.forget(streamId);
+    }
+  });
+
   it('lets queued user follow-up win over an active goal continuation', async () => {
     const streamId = 'wait-node-goal-user-queued' as StreamTabId;
     const { initPlatform } = await import('@platform/platform');
