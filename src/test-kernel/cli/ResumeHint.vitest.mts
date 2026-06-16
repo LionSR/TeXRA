@@ -133,6 +133,24 @@ describe('formatResumeHint', () => {
     );
   });
 
+  it('adds a quoted cwd when the session workspace differs from the shell cwd', () => {
+    expect(
+      formatResumeCommand('texra-local', 'root', {
+        cwd: "/tmp/texra user's paper",
+        processCwd: '/tmp/launcher',
+      }),
+    ).toBe("texra-local resume root --cwd '/tmp/texra user'\\''s paper'");
+  });
+
+  it('omits cwd when the resume command is already printed from that workspace', () => {
+    expect(
+      formatResumeCommand('texra-local', 'root', {
+        cwd: '/tmp/paper',
+        processCwd: '/tmp/paper',
+      }),
+    ).toBe('texra-local resume root');
+  });
+
   it('renders one resume line per target', () => {
     expect(
       formatResumeHint([
@@ -163,6 +181,26 @@ describe('formatResumeHint', () => {
         'Resume this session with:',
         '  texra-local resume root  (main)',
         '  texra-local resume rev  (reviewer)',
+      ].join('\n'),
+    );
+  });
+
+  it('includes cwd on every resume target when needed', () => {
+    expect(
+      formatResumeHint(
+        [
+          { executionId: 'root', label: 'main', isRoot: true },
+          { executionId: 'rev', label: 'reviewer', isRoot: false },
+        ],
+        undefined,
+        'texra-local',
+        { cwd: '/tmp/paper', processCwd: '/tmp/launcher' },
+      ),
+    ).toBe(
+      [
+        'Resume this session with:',
+        "  texra-local resume root --cwd '/tmp/paper'  (main)",
+        "  texra-local resume rev --cwd '/tmp/paper'  (reviewer)",
       ].join('\n'),
     );
   });
