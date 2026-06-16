@@ -112,6 +112,7 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { escapeText } from '@shared/utils/xmlEscape';
+import { GoalStore } from '@tools/goal';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 import { generateExecutionId } from '@utils/core/executionId';
 
@@ -923,6 +924,9 @@ async function handleTuiSlashCommand(
           approval: formatApprovalPolicy(context.getApprovalPolicy()),
           approvalBypasses: slice?.bypass,
           status: slice?.status ?? 'not started',
+          goal: activeStreamId
+            ? GoalStore.getForStream(activeStreamId)
+            : undefined,
           // Only surface the resume id once a stream exists — never next to
           // a "not started" status.
           sessionId: slice ? context.session.executionId : undefined,
