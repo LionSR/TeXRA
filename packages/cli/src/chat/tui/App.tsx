@@ -12,12 +12,11 @@ import {
 } from 'react';
 
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { isActiveStatus } from '@common/constants/streamStatus';
 import {
-  LIVE_ELAPSED_STREAM_STATUSES,
-  type StreamStatus,
-  type StreamTabId,
-} from '@shared/schemas';
+  isActiveStatus,
+  isLiveElapsedStatus,
+} from '@common/constants/streamStatus';
+import { type StreamStatus, type StreamTabId } from '@shared/schemas';
 
 import { assertNever } from './assertNever';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
@@ -316,7 +315,7 @@ export function shouldShowTodosPlanPanel({
 }): boolean {
   if (foregroundOpen) return false;
   if (!hasTodos && !hasPlan) return false;
-  return status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status);
+  return isLiveElapsedStatus(status);
 }
 
 export function appFocusShortcutsActive({

@@ -6,6 +6,7 @@ import {
   deriveRunOutcome,
   isActiveStatus,
   isInFlightStatus,
+  isLiveElapsedStatus,
   isTerminalStatus,
   projectRunOutcome,
   RUN_OUTCOME_PROJECTION,
@@ -104,11 +105,17 @@ describe('stream status trait table', () => {
     expect(isActiveStatus(STREAM_STATUS.INITIALIZING)).toBe(false);
     expect(isTerminalStatus(STREAM_STATUS.INITIALIZING)).toBe(false);
     expect(isInFlightStatus(STREAM_STATUS.INITIALIZING)).toBe(true);
+    expect(isLiveElapsedStatus(STREAM_STATUS.INITIALIZING)).toBe(true);
   });
 
   it('treats undefined as no status for every predicate', () => {
     expect(isActiveStatus(undefined)).toBe(false);
     expect(isInFlightStatus(undefined)).toBe(false);
+    expect(isLiveElapsedStatus(undefined)).toBe(false);
     expect(isTerminalStatus(undefined)).toBe(false);
+  });
+
+  it('treats unknown child execution statuses as not live elapsed', () => {
+    expect(isLiveElapsedStatus('completed')).toBe(false);
   });
 });
