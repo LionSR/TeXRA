@@ -6,12 +6,24 @@ export function isTextPart(part: Part): part is Part & { text: string } {
   return typeof part.text === 'string';
 }
 
+const GOOGLE_TOOL_CALL_CONTROL_TEXT = new Set([
+  '\u25c0',
+  '\u25c4',
+  '\u25b6',
+  '\u25ba',
+]);
+
 /** Extract concatenated text from parts, excluding thought parts. */
 export function extractNonThinkingText(parts: Part[], trim = false): string {
+  const hasFunctionCall = parts.some((part) => part.functionCall);
   const text = parts
     .filter(
       (part): part is Part & { text: string } =>
         isTextPart(part) && !part.thought,
+    )
+    .filter(
+      (part) =>
+        !hasFunctionCall || !GOOGLE_TOOL_CALL_CONTROL_TEXT.has(part.text.trim()),
     )
     .map((part) => part.text)
     .join('');
