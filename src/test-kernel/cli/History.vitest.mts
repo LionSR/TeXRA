@@ -346,6 +346,92 @@ describe('CLI history runtime', () => {
     expect(text).toContain('[assistant #6]\nFinal proof analysis.');
   });
 
+  it('can show Gemini parts-based conversations', async () => {
+    mocks.readConversation.mockResolvedValue([
+      {
+        role: 'user',
+        parts: [{ text: 'Solve the finite Pell check.' }],
+      },
+      {
+        role: 'model',
+        parts: [
+          { text: 'I will inspect the workspace first.' },
+          {
+            functionCall: {
+              name: 'ls',
+              args: { path: '.' },
+              id: 'tool-1',
+            },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        parts: [
+          {
+            functionResponse: {
+              id: 'tool-1',
+              name: 'ls',
+              response: { result: 'file problem.tex' },
+            },
+          },
+        ],
+      },
+      {
+        role: 'model',
+        parts: [{ text: 'Final answer: (9, 4) and (-9, 4).' }],
+      },
+    ]);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId, {
+      includeFullConversation: true,
+    });
+    const text = formatCliHistoryDetailsText(details!);
+
+    expect(details?.conversationPreview?.messages).toEqual([
+      {
+        index: 4,
+        role: 'model',
+        content: 'Final answer: (9, 4) and (-9, 4).',
+        truncated: false,
+      },
+    ]);
+    expect(details?.conversation).toEqual({
+      messageCount: 4,
+      messages: [
+        {
+          index: 1,
+          role: 'user',
+          content: 'Solve the finite Pell check.',
+          truncated: false,
+        },
+        {
+          index: 2,
+          role: 'model',
+          content: 'I will inspect the workspace first.\n[tool_use: ls]',
+          truncated: false,
+        },
+        {
+          index: 3,
+          role: 'user',
+          content: '[tool_result: file problem.tex]',
+          truncated: false,
+        },
+        {
+          index: 4,
+          role: 'model',
+          content: 'Final answer: (9, 4) and (-9, 4).',
+          truncated: false,
+        },
+      ],
+    });
+    expect(text).toContain('[model #2]');
+    expect(text).toContain('I will inspect the workspace first.');
+    expect(text).toContain('[tool_use: ls]');
+    expect(text).toContain('[user #3]\n[tool_result: file problem.tex]');
+    expect(text).toContain('[model #4]\nFinal answer: (9, 4) and (-9, 4).');
+  });
+
   it('uses the stored report instead of duplicating conversation preview text', async () => {
     mocks.readReport.mockResolvedValue('Structured report.');
     mocks.readConversation.mockResolvedValue([
