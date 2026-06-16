@@ -151,6 +151,30 @@ describe('formatResumeHint', () => {
     ).toBe('texra-local resume root');
   });
 
+  it('preserves non-default approval policies in resume commands', () => {
+    expect(
+      formatResumeCommand('texra-local', 'root', { approvalPolicy: 'ask' }),
+    ).toBe('texra-local resume root');
+    expect(
+      formatResumeCommand('texra-local', 'root', { approvalPolicy: 'never' }),
+    ).toBe('texra-local resume root --approval-policy never');
+    expect(
+      formatResumeCommand(undefined, 'root', { approvalPolicy: 'yolo' }),
+    ).toBe('texra resume root --approval-policy yolo');
+  });
+
+  it('includes both cwd and approval policy when both are needed', () => {
+    expect(
+      formatResumeCommand('texra-local', 'root', {
+        cwd: '/tmp/paper',
+        processCwd: '/tmp/launcher',
+        approvalPolicy: 'never',
+      }),
+    ).toBe(
+      "texra-local resume root --cwd '/tmp/paper' --approval-policy never",
+    );
+  });
+
   it('renders one resume line per target', () => {
     expect(
       formatResumeHint([
@@ -175,12 +199,13 @@ describe('formatResumeHint', () => {
         ],
         undefined,
         'texra-local',
+        { approvalPolicy: 'never' },
       ),
     ).toBe(
       [
         'Resume this session with:',
-        '  texra-local resume root  (main)',
-        '  texra-local resume rev  (reviewer)',
+        '  texra-local resume root --approval-policy never  (main)',
+        '  texra-local resume rev --approval-policy never  (reviewer)',
       ].join('\n'),
     );
   });

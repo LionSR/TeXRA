@@ -51,6 +51,7 @@ export async function runResumeExecution(
         headlessMessage: `Resuming continues an interactive chat session — run \`${formatResumeCommand(
           commandName,
           id,
+          { approvalPolicy: context.approvalPolicy },
         )}\` in a terminal. For scripting, use \`${runCommand}\`.`,
         dumbTerminalCommand: 'resume',
         dumbTerminalOptions: {

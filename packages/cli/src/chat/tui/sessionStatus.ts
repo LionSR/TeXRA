@@ -1,3 +1,4 @@
+import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -29,6 +30,7 @@ export interface CliSessionStatusInput {
   readonly commandName?: string;
   readonly cwd?: string;
   readonly processCwd?: string;
+  readonly approvalPolicy?: CliApprovalPolicy;
 }
 
 export function formatCliStatusLabel(status: string | undefined): string {
@@ -91,7 +93,11 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
           `resume later with: ${formatResumeCommand(
             input.commandName,
             input.sessionId,
-            { cwd: input.cwd, processCwd: input.processCwd },
+            {
+              cwd: input.cwd,
+              processCwd: input.processCwd,
+              approvalPolicy: input.approvalPolicy,
+            },
           )}`,
         ]
       : []),
