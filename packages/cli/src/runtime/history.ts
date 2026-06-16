@@ -398,8 +398,8 @@ function createConversationPreview(
   });
   if (!transcript) return null;
 
-  const lastAssistant = transcript.messages.findLast(
-    (message) => message.role === 'assistant',
+  const lastAssistant = transcript.messages.findLast((message) =>
+    isAssistantMessageRole(message.role),
   );
   const selected = lastAssistant
     ? [lastAssistant]
@@ -460,11 +460,16 @@ function formatConversationMessage(
 ): string {
   const parts = [
     formatConversationMessageContent(raw.content, options),
+    formatConversationMessageContent(raw.parts, options),
     ...(options.includeToolUseMarkers === true
       ? formatTopLevelToolCalls(raw.tool_calls)
       : []),
   ].filter((part) => part.trim().length > 0);
   return parts.join('\n').trim();
+}
+
+function isAssistantMessageRole(role: string): boolean {
+  return role === 'assistant' || role === 'model';
 }
 
 function formatConversationPreview(
@@ -523,6 +528,19 @@ function formatConversationContentBlock(
   if (!isObject(block)) return formatJsonish(block);
   if (typeof block.text === 'string') return block.text;
 
+  if (isObject(block.functionCall)) {
+    if (options.includeToolUseMarkers !== true) return '';
+    const name =
+      typeof block.functionCall.name === 'string'
+        ? block.functionCall.name
+        : 'unknown';
+    return `[tool_use: ${name}]`;
+  }
+
+  if (isObject(block.functionResponse)) {
+    return `[tool_result: ${formatGoogleFunctionResponse(block.functionResponse, options)}]`;
+  }
+
   switch (block.type) {
     case 'tool_use':
       if (options.includeToolUseMarkers !== true) return '';
@@ -532,6 +550,22 @@ function formatConversationContentBlock(
     default:
       return formatJsonish(block);
   }
+}
+
+function formatGoogleFunctionResponse(
+  functionResponse: Record<string, unknown>,
+  options: ConversationMessageFormatOptions,
+): string {
+  const response = isObject(functionResponse.response)
+    ? functionResponse.response
+    : undefined;
+  if (response && Object.hasOwn(response, 'result')) {
+    return formatConversationMessageContent(response.result, options);
+  }
+  if (response !== undefined) {
+    return formatConversationMessageContent(response, options);
+  }
+  return formatJsonish(functionResponse);
 }
 
 function formatTopLevelToolCalls(toolCalls: unknown): string[] {
