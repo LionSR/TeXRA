@@ -153,6 +153,10 @@ describe('CLI workflow run command', () => {
     expect(mocks.initLocalCliPlatform.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.resolveCliAgent.mock.invocationCallOrder[0],
     );
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
+      'missing-agent',
+      AgentCategory.Workflow,
+    );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
   });
@@ -179,6 +183,10 @@ describe('CLI workflow run command', () => {
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
+      'chat',
+      AgentCategory.Workflow,
+    );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
   });
@@ -199,7 +207,10 @@ describe('CLI workflow run command', () => {
     );
 
     expect(mocks.initLocalCliPlatform).toHaveBeenCalled();
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('polish');
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
+      'polish',
+      AgentCategory.Workflow,
+    );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
   });
