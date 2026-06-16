@@ -1,12 +1,17 @@
 // Third-party imports
 import * as assert from 'node:assert';
-import { describe, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Node.js built-in imports
 
 // Local imports - platform/test support/tools
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { findExternalToolDef } from '@tools/externalToolDefs';
+import { BinaryResolver } from '@utils/system/binaryResolver';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('external tool definitions', () => {
   it('keeps Zotero visible as a user-toggleable tool group', () => {
@@ -65,6 +70,51 @@ describe('external tool definitions', () => {
         await texraCli.statusLabel?.(probeResult),
         'Detected; integration coming soon',
       );
+    } finally {
+      initPlatform(previousPlatform ?? createFakePlatform());
+    }
+  });
+
+  it('detects Lean direct mode from the lake binary without running lake', async () => {
+    const lean = findExternalToolDef('lean4');
+    assert.ok(lean, 'Lean tool definition should exist');
+    const findPath = vi
+      .spyOn(BinaryResolver, 'findPath')
+      .mockReturnValue('/usr/local/bin/lake');
+    // Dynamic import: the no-platform-init-outside-composition-root lint rule
+    // reserves static initPlatform imports for composition roots.
+    const { initPlatform, tryPlatform } = await import('@platform/platform');
+    const previousPlatform = tryPlatform();
+    initPlatform(
+      createFakePlatform(
+        {},
+        {
+          toolAvailability: {
+            isVscodeExtensionInstalled: () => false,
+            isTexraCliEntrypoint: () => false,
+          },
+        },
+      ),
+    );
+
+    try {
+      const probeResult = await lean.probe?.();
+
+      expect(findPath).toHaveBeenCalledWith('lake');
+      expect(probeResult).toEqual({
+        extensionAvailable: false,
+        lakeAvailable: true,
+      });
+      await expect(lean.check(probeResult)).resolves.toBe(true);
+
+      findPath.mockReturnValue(null);
+      const missingProbeResult = await lean.probe?.();
+
+      expect(missingProbeResult).toEqual({
+        extensionAvailable: false,
+        lakeAvailable: false,
+      });
+      await expect(lean.check(missingProbeResult)).resolves.toBe(false);
     } finally {
       initPlatform(previousPlatform ?? createFakePlatform());
     }
