@@ -360,3 +360,41 @@ export async function expandRunInputs(
   );
   return { inputFiles, contextFiles };
 }
+
+export interface ExpandedRunInputs {
+  readonly inputFiles: string[];
+  readonly contextFiles: string[];
+}
+
+/**
+ * Own the stdin-temp-file lifecycle for headless runs that accept --input /
+ * --context. Callers get already-expanded paths; this module creates and
+ * removes the temporary stdin file whether expansion, execution, or output
+ * handling fails.
+ */
+export async function withExpandedRunInputs<T>(
+  inputSpecs: readonly string[],
+  contextSpecs: readonly string[],
+  cwd: string,
+  options: {
+    readonly readStdinText: () => Promise<string>;
+    readonly allowEmptyInput?: boolean;
+    readonly requireWorkspaceFiles?: boolean;
+  },
+  run: (inputs: ExpandedRunInputs) => Promise<T>,
+): Promise<T> {
+  const stdinInputFile = createStdinWorkflowInputMaterializer({
+    readStdinText: options.readStdinText,
+    tempDir: cwd,
+  });
+  try {
+    const inputs = await expandRunInputs(inputSpecs, contextSpecs, cwd, {
+      allowEmptyInput: options.allowEmptyInput,
+      requireWorkspaceFiles: options.requireWorkspaceFiles,
+      stdinInputFile,
+    });
+    return await run(inputs);
+  } finally {
+    await stdinInputFile.cleanup();
+  }
+}

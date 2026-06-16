@@ -9,6 +9,7 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   createStdinWorkflowInputMaterializer,
   expandWorkflowInputSpecs,
+  withExpandedRunInputs,
 } from '@cli/runtime/workflowInputs';
 
 describe('CLI workflow input lifecycle', () => {
@@ -66,6 +67,36 @@ describe('CLI workflow input lifecycle', () => {
       ]);
 
       expect(result).toBe('shutdown');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('removes materialized stdin input when the headless run callback fails', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    await installFakePlatform(root);
+    let materializedPath = '';
+
+    try {
+      await expect(
+        withExpandedRunInputs(
+          ['-'],
+          [],
+          root,
+          { readStdinText: async () => 'body from stdin' },
+          async ({ inputFiles }) => {
+            const inputPath = inputFiles.at(0);
+            if (!inputPath) throw new Error('missing materialized input');
+            materializedPath = path.resolve(root, inputPath);
+            await expect(fs.readFile(materializedPath, 'utf8')).resolves.toBe(
+              'body from stdin',
+            );
+            throw new Error('run failed');
+          },
+        ),
+      ).rejects.toThrow('run failed');
+
+      await expect(fs.stat(materializedPath)).rejects.toThrow();
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
