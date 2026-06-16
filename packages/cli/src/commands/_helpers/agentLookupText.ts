@@ -49,12 +49,6 @@ export function missingMultiAgentPresetMessage(name: string): string {
   return `Multi-agent preset not found: ${name}. ${MULTI_AGENT_PRESET_LOOKUP_HINT}`;
 }
 
-export function cliAgentLaunchLookupCategory(
-  mode: CliAgentLaunchMode,
-): AgentCategory {
-  return CLI_AGENT_LAUNCH_TARGETS[mode].requiredCategory;
-}
-
 export function assertCliAgentLaunch(
   name: string,
   agent: AgentEntry | undefined,
