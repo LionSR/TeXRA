@@ -127,6 +127,10 @@ describe('CLI agents run command', () => {
     expect(mocks.initLocalCliPlatform.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.resolveCliAgent.mock.invocationCallOrder[0],
     );
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
+      'chat',
+      AgentCategory.ToolUse,
+    );
     expect(mocks.expandRunInputs).toHaveBeenCalledWith(
       ['problem.md'],
       ['notes.md'],
@@ -194,6 +198,10 @@ describe('CLI agents run command', () => {
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
+      'missing-agent',
+      AgentCategory.ToolUse,
+    );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
@@ -222,6 +230,10 @@ describe('CLI agents run command', () => {
     expect(exitCode).toBe(2);
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
+    );
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
+      'polish',
+      AgentCategory.ToolUse,
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();

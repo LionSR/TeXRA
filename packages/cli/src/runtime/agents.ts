@@ -55,17 +55,19 @@ export function parseCliAgentCategoryFilter(
  * CLI commands start with a local-only load so signed-out users avoid remote
  * auth/network work. Missing agents still get a remote-inclusive fallback, and
  * authenticated relay sessions reload bare names so the registry's normal
- * source priority can prefer remote definitions.
+ * source priority can prefer remote definitions. Category-specific commands
+ * pass their category through to keep lookup priority owned by the registry.
  */
 export async function resolveCliAgent(
   name: string,
+  category?: AgentCategory,
 ): Promise<AgentEntry | undefined> {
   await loadAgents({ includeRemote: false });
-  const agent = getAgent(name);
+  const agent = getAgent(name, category);
 
   if (!agent) {
     await loadAgents();
-    return getAgent(name);
+    return getAgent(name, category);
   }
 
   if (name.includes(':') || !(await getCliAuthProvider().isAuthenticated())) {
@@ -73,7 +75,7 @@ export async function resolveCliAgent(
   }
 
   await loadAgents();
-  return getAgent(name);
+  return getAgent(name, category);
 }
 
 export async function loadCliAgentList(
