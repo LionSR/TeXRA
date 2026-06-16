@@ -118,13 +118,18 @@ export async function runWorkflowAgent(
   const instruction = await resolveFileBackedInstruction(init, context.cwd);
 
   await initLocalCliPlatform(context);
+  const launchMode = 'run';
   const agentEntry = await resolveCliAgent(
     init.agent,
-    cliAgentLaunchCategory('run'),
+    cliAgentLaunchCategory(launchMode),
   );
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
-  const launchTarget = validateCliAgentLaunch(init.agent, agentEntry, 'run');
+  const launchTarget = validateCliAgentLaunch(
+    init.agent,
+    agentEntry,
+    launchMode,
+  );
   if (!launchTarget.ok) throw new CliUsageError(launchTarget.error);
   const agent = launchTarget.agent;
   if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
