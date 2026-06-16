@@ -1086,6 +1086,8 @@ export class DelegateAgentTool extends defineTool({
 
 **Resume** (with execution_id): Sends follow-up instructions to a WAITING or still-running subagent. If the subagent is busy, the instruction is queued for its next turn. The subagent keeps its full history. Result arrives asynchronously like the original delegation.
 
+When a subagent result is delivered, preserve its stated evidence, tool names, and caveats accurately; do not substitute or invent methods while summarizing it for the user.
+
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
 
