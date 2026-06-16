@@ -12,6 +12,7 @@ import * as tar from 'tar';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
 
@@ -286,7 +287,7 @@ class ArxivSourceProcessor {
     let needsDownload = true;
     if (!isRoot && (await WorkspaceFS.exists(paperDirRelative))) {
       const entries = await WorkspaceFS.readDir(paperDirRelative);
-      const hasTexFiles = entries.some(([name]) => name.endsWith('.tex'));
+      const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
       if (hasTexFiles) {
         needsDownload = false;
         logger.info(
@@ -316,7 +317,7 @@ class ArxivSourceProcessor {
       );
 
       // Detect PDF-only submissions (no LaTeX source available)
-      if (downloadedPath.endsWith('.pdf')) {
+      if (hasExtension(downloadedPath, '.pdf')) {
         await AbsoluteFS.delete(downloadedPath);
         await this.cleanUpBestEffort(downloadDirFull, 'download dir', {
           recursive: true,
