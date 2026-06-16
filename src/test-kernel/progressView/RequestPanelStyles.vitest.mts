@@ -27,28 +27,47 @@ describe('request panel styles', () => {
     const actionStart = source.indexOf(
       '.approval-request__actions wa-button[data-action] {',
     );
+    const boundedChildrenStart = source.indexOf(':is(${ACTIONS}) > * {');
+    const primaryActionsCommentStart = source.indexOf(
+      '/* The primary action buttons',
+    );
     const baseStart = source.indexOf(
       '.approval-request__actions wa-button[data-action]::part(base)',
     );
+    const labelStart = source.indexOf(
+      '.approval-request__actions wa-button[data-action]::part(label)',
+    );
+    const colorsStart = source.indexOf('/* Shared action button colors */');
     const actionRule = source.slice(actionStart, baseStart);
     const baseRule = source.slice(baseStart, source.indexOf('}', baseStart));
+    const boundedChildrenRule = source.slice(
+      boundedChildrenStart,
+      primaryActionsCommentStart,
+    );
+    const labelRule = source.slice(labelStart, colorsStart);
 
     expect(hostStart).toBeGreaterThanOrEqual(0);
     expect(containersStart).toBeGreaterThan(hostStart);
     expect(hostRule).toContain('min-width: 0');
     expect(hostRule).toContain('max-width: 100%');
+    expect(boundedChildrenStart).toBeGreaterThanOrEqual(0);
+    expect(primaryActionsCommentStart).toBeGreaterThan(boundedChildrenStart);
+    expect(boundedChildrenRule).toContain('min-width: 0');
+    expect(boundedChildrenRule).toContain('max-width: 100%');
     expect(actionStart).toBeGreaterThanOrEqual(0);
     expect(baseStart).toBeGreaterThan(actionStart);
-    expect(actionRule).toContain('display: inline-flex');
-    expect(actionRule).toContain('flex: 0 0 auto');
-    expect(actionRule).toContain('inline-size: max-content');
+    expect(actionRule).toContain('flex: 0 1 7rem');
     expect(actionRule).toContain('min-width: min(5.5rem, 100%)');
     expect(actionRule).toContain('max-width: min(7rem, 100%)');
-    expect(actionRule).toContain('max-inline-size: min(7rem, 100%)');
     expect(baseRule).toContain('justify-content: center');
-    expect(baseRule).toContain('width: auto');
-    expect(baseRule).toContain('inline-size: auto');
+    expect(baseRule).toContain('width: 100%');
+    expect(baseRule).toContain('inline-size: 100%');
     expect(baseRule).toContain('max-width: 100%');
+    expect(labelStart).toBeGreaterThan(baseStart);
+    expect(colorsStart).toBeGreaterThan(labelStart);
+    expect(labelRule).toContain('overflow: hidden');
+    expect(labelRule).toContain('text-overflow: ellipsis');
+    expect(labelRule).toContain('white-space: nowrap');
   });
 
   it('lets the tool edit diff dropdown shrink inside narrow panels', () => {
@@ -67,9 +86,9 @@ describe('request panel styles', () => {
 
     expect(dropdownStart).toBeGreaterThanOrEqual(0);
     expect(dropdownButtonStart).toBeGreaterThan(dropdownStart);
-    expect(dropdownRule).toContain('flex: 0 1 8.25rem');
+    expect(dropdownRule).toContain('flex: 1 1 7rem');
     expect(dropdownRule).toContain('min-width: 0');
-    expect(dropdownRule).toContain('max-width: 100%');
+    expect(dropdownRule).toContain('max-width: min(8.25rem, 100%)');
     expect(dropdownRule).toContain('max-inline-size: 100%');
     expect(dropdownButtonRule).toContain('flex: 1 1 auto');
     expect(dropdownButtonRule).toContain('width: auto');
