@@ -148,6 +148,11 @@ export const requestPanelStyles: CSSResult = css`
     max-width: 100%;
   }
 
+  :is(${ACTIONS}) > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   /* The primary action buttons (which carry data-action) fill the row
      equally; the diff dropdown's own buttons keep their bespoke sizing. */
   :is(${ACTIONS}) wa-button[data-action] {
@@ -168,13 +173,10 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .approval-request__actions wa-button[data-action] {
-    display: inline-flex;
-    flex: 0 0 auto;
+    flex: 0 1 7rem;
     width: auto;
-    inline-size: max-content;
     min-width: min(5.5rem, 100%);
     max-width: min(7rem, 100%);
-    max-inline-size: min(7rem, 100%);
   }
 
   :is(${ACTIONS}) wa-button[data-action]::part(base) {
@@ -184,10 +186,18 @@ export const requestPanelStyles: CSSResult = css`
 
   .approval-request__actions wa-button[data-action]::part(base) {
     justify-content: center;
-    width: auto;
-    inline-size: auto;
+    width: 100%;
+    inline-size: 100%;
     min-width: 0;
     max-width: 100%;
+  }
+
+  .approval-request__actions wa-button[data-action]::part(label),
+  .approval-request__actions .diff-dropdown .diff-main-button::part(label) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Shared action button colors */
@@ -284,9 +294,9 @@ export const requestPanelStyles: CSSResult = css`
     position: relative;
     display: inline-flex;
     align-items: center;
-    flex: 0 1 8.25rem;
+    flex: 1 1 7rem;
     min-width: 0;
-    max-width: 100%;
+    max-width: min(8.25rem, 100%);
     max-inline-size: 100%;
   }
 
