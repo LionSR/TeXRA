@@ -13,7 +13,7 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
+import { writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
   resolveCliRunModel,
@@ -68,35 +68,13 @@ async function resolveToolUseInstruction(
   return instruction;
 }
 
-/**
- * Run a thunk, mapping a `CliUsageError` to the `Usage` exit code (after writing
- * it to stderr) and re-throwing anything else. Returns the thunk's value on
- * success; callers branch on `typeof result === 'number'` for the exit code.
- */
-async function withUsageExit<T>(
-  thunk: () => Promise<T>,
-): Promise<T | CliExitCode> {
-  try {
-    return await thunk();
-  } catch (error: unknown) {
-    if (!(error instanceof CliUsageError)) {
-      throw error;
-    }
-    writeErrorStderr(error);
-    return CliExitCode.Usage;
-  }
-}
-
 export async function runToolUseAgent(
   context: CliContext,
   init: ToolUseAgentRunInit,
 ): Promise<number> {
   let inputFiles: string[];
   let contextFiles: string[];
-  const instruction = await withUsageExit(() =>
-    resolveToolUseInstruction(init, context.cwd),
-  );
-  if (typeof instruction === 'number') return instruction;
+  const instruction = await resolveToolUseInstruction(init, context.cwd);
 
   await initLocalCliPlatform(context);
   const launchMode = 'agentsRun';
@@ -111,8 +89,7 @@ export async function runToolUseAgent(
     launchMode,
   );
   if (!launchTarget.ok) {
-    writeTextStderr(launchTarget.error);
-    return CliExitCode.Usage;
+    throw new CliUsageError(launchTarget.error);
   }
 
   const model = await resolveCliRunModel(context, init.model, 'chat');
@@ -123,14 +100,16 @@ export async function runToolUseAgent(
     tempDir: runContext.cwd,
   });
   try {
-    const expanded = await withUsageExit(() =>
-      expandRunInputs(init.inputFiles, init.contextFiles, runContext.cwd, {
+    const expanded = await expandRunInputs(
+      init.inputFiles,
+      init.contextFiles,
+      runContext.cwd,
+      {
         allowEmptyInput: true,
         requireWorkspaceFiles: true,
         stdinInputFile,
-      }),
+      },
     );
-    if (typeof expanded === 'number') return expanded;
     inputFiles = expanded.inputFiles;
     contextFiles = expanded.contextFiles;
 
