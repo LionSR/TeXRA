@@ -9,14 +9,12 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => {
-  const stdinInputFile = Object.assign(vi.fn(), { cleanup: vi.fn() });
   return {
     executeCliRequest: vi.fn(),
-    expandRunInputs: vi.fn(),
+    withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
     resolveCliAgent: vi.fn(),
     resolveCliRunModel: vi.fn(),
-    stdinInputFile,
   };
 });
 
@@ -55,8 +53,7 @@ vi.mock('@cli/runtime/runExecution', () => ({
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
-  createStdinWorkflowInputMaterializer: vi.fn(() => mocks.stdinInputFile),
-  expandRunInputs: mocks.expandRunInputs,
+  withExpandedRunInputs: mocks.withExpandedRunInputs,
   hasMixedStdinWorkflowInputSpecs: vi.fn((inputFiles: readonly string[]) => {
     const specs = new Set(
       inputFiles.map((spec) => spec.trim()).filter(Boolean),
@@ -97,10 +94,18 @@ describe('CLI workflow run command', () => {
       async (_context: CliContext, model: string | undefined) =>
         model ?? 'deepseekT',
     );
-    mocks.expandRunInputs.mockResolvedValue({
-      inputFiles: ['paper.tex'],
-      contextFiles: [],
-    });
+    mocks.withExpandedRunInputs.mockImplementation(
+      async (
+        _inputSpecs: readonly string[],
+        _contextSpecs: readonly string[],
+        _cwd: string,
+        _options: unknown,
+        run: (inputs: {
+          readonly inputFiles: string[];
+          readonly contextFiles: string[];
+        }) => Promise<unknown>,
+      ) => run({ inputFiles: ['paper.tex'], contextFiles: [] }),
+    );
     mocks.executeCliRequest.mockResolvedValue({
       result: {
         category: AgentCategory.Workflow,
@@ -131,7 +136,7 @@ describe('CLI workflow run command', () => {
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
     expect(mocks.resolveCliAgent).not.toHaveBeenCalled();
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('reports missing workflow agents before resolving the model', async () => {
@@ -158,7 +163,7 @@ describe('CLI workflow run command', () => {
       AgentCategory.Workflow,
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('reports tool-use agents before resolving the model', async () => {
@@ -188,7 +193,7 @@ describe('CLI workflow run command', () => {
       AgentCategory.Workflow,
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('reports single-output mixed stdin usage before resolving the model', async () => {
@@ -212,7 +217,7 @@ describe('CLI workflow run command', () => {
       AgentCategory.Workflow,
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('passes instruction file contents before inline workflow instructions', async () => {
@@ -234,17 +239,17 @@ describe('CLI workflow run command', () => {
       });
 
       expect(exitCode).toBe(0);
-      expect(mocks.expandRunInputs).toHaveBeenCalledWith(
+      expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
         ['paper.tex'],
         [],
         root,
-        { stdinInputFile: mocks.stdinInputFile },
+        { readStdinText: expect.any(Function) },
+        expect.any(Function),
       );
       const request = mocks.executeCliRequest.mock.calls[0]?.[0];
       expect(request?.config.instruction).toBe(
         'Read this prompt from disk.\n\nThen keep the final response concise.',
       );
-      expect(mocks.stdinInputFile.cleanup).toHaveBeenCalledTimes(1);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -266,6 +271,6 @@ describe('CLI workflow run command', () => {
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
     expect(mocks.resolveCliAgent).not.toHaveBeenCalled();
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 });

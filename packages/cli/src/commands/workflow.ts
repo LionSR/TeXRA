@@ -42,9 +42,8 @@ import {
   type CliRunResult,
 } from '../runtime/terminalStatus';
 import {
-  createStdinWorkflowInputMaterializer,
-  expandRunInputs,
   hasMixedStdinWorkflowInputSpecs,
+  withExpandedRunInputs,
 } from '../runtime/workflowInputs';
 import {
   assertOutputDirAvailable,
@@ -99,90 +98,84 @@ export async function runWorkflowAgent(
   const model = await resolveCliRunModel(context, init.model, 'run');
   const runContext = buildHeadlessRunContext(context, model);
 
-  const stdinInputFile = createStdinWorkflowInputMaterializer({
-    readStdinText: readCliStdinText,
-    tempDir: runContext.cwd,
-  });
-  try {
-    const { inputFiles, contextFiles } = await expandRunInputs(
-      init.inputFiles,
-      init.contextFiles,
-      runContext.cwd,
-      { stdinInputFile },
-    );
-    if (init.output && inputFiles.length > 1) {
-      throw new CliUsageError(
-        'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
-      );
-    }
-
-    const modelOutputFile =
-      init.output && path.isAbsolute(init.output)
-        ? path.basename(init.output)
-        : init.output;
-    const config: AgentConfigPayload = {
-      agent: init.agent,
-      model,
-      inputFiles,
-      contextFiles,
-      outputFiles: modelOutputFile ? [modelOutputFile] : [],
-      cliOutputFile: init.output,
-      instruction,
-      workingDirectory: runContext.cwd,
-      agentCategory: AgentCategory.Workflow,
-    };
-
-    const executionId = generateExecutionId();
-    const registeredConfig = AgentConfigSchema.parse(config);
-    const { result, terminalStatus } = await executeCliRequest(
-      { config: registeredConfig, executionId },
-      runContext,
-      {
-        enforceCategory: true,
-        registerExecution: true,
-        markErrorOnThrow: true,
-      },
-    );
-    let displayResult: CliRunResult;
-    try {
-      displayResult = (
-        await resolveWorkflowOutput(
-          init.output,
-          init.outputDir,
-          result,
-          runContext,
-          {
-            expectedOutputFiles: init.outputDir
-              ? expectedOutputFilesForOutputDir(agent, inputFiles)
-              : undefined,
-            terminalStatus,
-          },
-        )
-      ).displayResult;
-    } catch (error) {
-      if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-        writeErrorStderr(error);
-        return CliExitCode.Interrupted;
+  return withExpandedRunInputs(
+    init.inputFiles,
+    init.contextFiles,
+    runContext.cwd,
+    { readStdinText: readCliStdinText },
+    async ({ inputFiles, contextFiles }) => {
+      if (init.output && inputFiles.length > 1) {
+        throw new CliUsageError(
+          'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
+        );
       }
 
-      await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-      writeErrorStderr(error);
-      return CliExitCode.AgentError;
-    }
+      const modelOutputFile =
+        init.output && path.isAbsolute(init.output)
+          ? path.basename(init.output)
+          : init.output;
+      const config: AgentConfigPayload = {
+        agent: init.agent,
+        model,
+        inputFiles,
+        contextFiles,
+        outputFiles: modelOutputFile ? [modelOutputFile] : [],
+        cliOutputFile: init.output,
+        instruction,
+        workingDirectory: runContext.cwd,
+        agentCategory: AgentCategory.Workflow,
+      };
 
-    emitCliResult(runContext, {
-      json: displayResult,
-      ndjson: { kind: 'result', result: displayResult },
-      text:
-        displayResult.category === AgentCategory.Workflow
-          ? formatWorkflowTextResult(displayResult)
-          : terminalStatus,
-    });
+      const executionId = generateExecutionId();
+      const registeredConfig = AgentConfigSchema.parse(config);
+      const { result, terminalStatus } = await executeCliRequest(
+        { config: registeredConfig, executionId },
+        runContext,
+        {
+          enforceCategory: true,
+          registerExecution: true,
+          markErrorOnThrow: true,
+        },
+      );
+      let displayResult: CliRunResult;
+      try {
+        displayResult = (
+          await resolveWorkflowOutput(
+            init.output,
+            init.outputDir,
+            result,
+            runContext,
+            {
+              expectedOutputFiles: init.outputDir
+                ? expectedOutputFilesForOutputDir(agent, inputFiles)
+                : undefined,
+              terminalStatus,
+            },
+          )
+        ).displayResult;
+      } catch (error) {
+        if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+          writeErrorStderr(error);
+          return CliExitCode.Interrupted;
+        }
 
-    return terminalStatusExitCode(terminalStatus, runContext);
-  } finally {
-    await stdinInputFile.cleanup();
-  }
+        await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+        writeErrorStderr(error);
+        return CliExitCode.AgentError;
+      }
+
+      emitCliResult(runContext, {
+        json: displayResult,
+        ndjson: { kind: 'result', result: displayResult },
+        text:
+          displayResult.category === AgentCategory.Workflow
+            ? formatWorkflowTextResult(displayResult)
+            : terminalStatus,
+      });
+
+      return terminalStatusExitCode(terminalStatus, runContext);
+    },
+  );
 }
 
 export const runWorkflowCommand = defineCliCommand({
