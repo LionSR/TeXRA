@@ -98,7 +98,7 @@ export async function runToolUseAgent(
   if (typeof instruction === 'number') return instruction;
 
   await initLocalCliPlatform(context);
-  const agent = await resolveCliAgent(init.agent);
+  const agent = await resolveCliAgent(init.agent, AgentCategory.ToolUse);
 
   if (!agent) {
     writeTextStderr(missingToolUseAgentMessage(init.agent));
