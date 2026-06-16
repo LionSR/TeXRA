@@ -55,19 +55,7 @@ vi.mock('@cli/runtime/supabaseAuth', () => ({
 }));
 
 vi.mock('@cli/runtime/multiAgentPresets', () => {
-  const delegationTools = new Set([
-    'delegate_workflow',
-    'delegate_agent',
-    'resume_agent',
-    'propose_workflow',
-    'propose_agent',
-  ]);
-
   return {
-    agentHasDelegationTools: vi.fn(
-      (agent: { tools?: readonly string[] }) =>
-        agent.tools?.some((tool) => delegationTools.has(tool)) ?? false,
-    ),
     cliMultiAgentPlanHasGaps: mocks.cliMultiAgentPlanHasGaps,
     cliMultiAgentPresetCanLaunchTeam: mocks.cliMultiAgentPresetCanLaunchTeam,
     cliMultiAgentPresetNdjsonRecords: vi.fn(() => []),

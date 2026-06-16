@@ -552,7 +552,7 @@ function formatAvailableTeamAgentCount(count: number): string {
     : `${count} available team agents`;
 }
 
-export function agentHasDelegationTools(agent: AgentEntry): boolean {
+function agentHasDelegationTools(agent: AgentEntry): boolean {
   return hasDelegationTool(agent.tools);
 }
 

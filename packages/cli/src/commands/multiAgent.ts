@@ -20,7 +20,6 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
-  agentHasDelegationTools,
   cliMultiAgentPlanHasGaps,
   cliMultiAgentPresetCanLaunchTeam,
   cliMultiAgentPresetNdjsonRecords,
@@ -191,27 +190,6 @@ export function writeMissingPresetAgents(
   }
 }
 
-function writeApprovalUnavailableDelegationWarning(
-  context: CliContext,
-  plan: CliMultiAgentPresetRunPlan,
-): void {
-  if (
-    !plan.rootAgent ||
-    !agentHasDelegationTools(plan.rootAgent) ||
-    !approvalPromptsUnavailable(context)
-  ) {
-    return;
-  }
-
-  const reason =
-    context.approvalPolicy === 'never'
-      ? 'approval policy "never" denies approval-gated delegation tools'
-      : 'headless approval policy "ask" cannot show delegation prompts';
-  writeTextStderr(
-    `WARN preset ${plan.preset.id} may run without subagent delegation because ${reason}. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
-  );
-}
-
 function writeMultiAgentRunResult(
   context: CliContext,
   plan: CliMultiAgentPresetRunPlan,
@@ -355,7 +333,15 @@ export async function runMultiAgentPreset(
         stdinInputFile,
       },
     );
-    writeApprovalUnavailableDelegationWarning(runContext, plan);
+    if (approvalPromptsUnavailable(runContext)) {
+      const reason =
+        runContext.approvalPolicy === 'never'
+          ? 'approval policy "never" denies approval-gated delegation tools'
+          : 'headless approval policy "ask" cannot show delegation prompts';
+      writeTextStderr(
+        `WARN preset ${plan.preset.id} may run without subagent delegation because ${reason}. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+      );
+    }
 
     const config: AgentConfigPayload = {
       agent: rootAgent.name,
