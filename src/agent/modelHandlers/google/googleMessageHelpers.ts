@@ -13,19 +13,14 @@ const GOOGLE_TOOL_CALL_CONTROL_TEXT = new Set([
   '\u25ba',
 ]);
 
-/** Extract concatenated text from parts, excluding thought parts. */
+/** Extract concatenated text from parts, excluding thought/control parts. */
 export function extractNonThinkingText(parts: Part[], trim = false): string {
-  const hasFunctionCall = parts.some((part) => part.functionCall);
   const text = parts
     .filter(
       (part): part is Part & { text: string } =>
         isTextPart(part) && !part.thought,
     )
-    .filter(
-      (part) =>
-        !hasFunctionCall ||
-        !GOOGLE_TOOL_CALL_CONTROL_TEXT.has(part.text.trim()),
-    )
+    .filter((part) => !GOOGLE_TOOL_CALL_CONTROL_TEXT.has(part.text.trim()))
     .map((part) => part.text)
     .join('');
   return trim ? text.trim() : text;

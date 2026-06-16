@@ -210,4 +210,78 @@ describe('ModelHandlerGoogleGenAI streaming text extraction', () => {
       path: '/executions/example',
     });
   });
+
+  it('drops Google tool-call control glyphs split before streamed function calls', async () => {
+    const streamRecords: StreamRecord[] = [];
+    const handler = createStreamingHandler(streamRecords);
+
+    const glyphChunk = new GenerateContentResponse();
+    glyphChunk.candidates = [
+      {
+        content: {
+          role: 'model',
+          parts: [createPartFromText('\u25c4')],
+        },
+      } as any,
+    ];
+
+    const toolChunk = new GenerateContentResponse();
+    toolChunk.candidates = [
+      {
+        content: {
+          role: 'model',
+          parts: [
+            {
+              functionCall: {
+                id: 'google-call-1',
+                name: 'executions',
+                args: { action: 'wait', path: '/executions/example' },
+              },
+            },
+          ],
+        },
+        finishReason: FinishReason.STOP,
+      } as any,
+    ];
+
+    const fakeClient = {
+      chats: {
+        create: () => ({
+          sendMessageStream: async () =>
+            (async function* () {
+              yield glyphChunk;
+              yield toolChunk;
+            })(),
+          sendMessage: async () => {
+            throw new Error(
+              'sendMessage should not be called when streaming is enabled',
+            );
+          },
+        }),
+      },
+      models: {},
+    } as any;
+
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('wait for subagent')] },
+    ];
+
+    const response = await handler.createResponse({
+      client: fakeClient,
+      messages,
+      temperature: 0,
+    });
+
+    expect(handler.extractResponse(response.response, '').text).toBe('');
+    expect(streamRecords[1]?.appends).toEqual([]);
+    expect(streamRecords[1]?.finalized).toBe('');
+
+    const [toolInfo] = handler.extractToolUse(response.response);
+    expect(toolInfo?.callId).toBe('google-call-1');
+    expect(toolInfo?.name).toBe('executions');
+    expect(toolInfo?.input).toEqual({
+      action: 'wait',
+      path: '/executions/example',
+    });
+  });
 });
