@@ -8,11 +8,15 @@ const mocks = vi.hoisted(() => ({
     isAuthenticated: vi.fn(),
   },
   getAgent: vi.fn(),
+  getAgentsByCategory: vi.fn(),
+  getVisibleAgents: vi.fn(),
   loadAgents: vi.fn(),
 }));
 
 vi.mock('@agent/index', () => ({
   getAgent: mocks.getAgent,
+  getAgentsByCategory: mocks.getAgentsByCategory,
+  getVisibleAgents: mocks.getVisibleAgents,
   loadAgents: mocks.loadAgents,
 }));
 
@@ -37,13 +41,15 @@ describe('CLI agent resolution', () => {
     mocks.authProvider.isAuthenticated.mockReset();
     mocks.authProvider.isAuthenticated.mockResolvedValue(false);
     mocks.getAgent.mockReset();
+    mocks.getAgentsByCategory.mockReset();
+    mocks.getVisibleAgents.mockReset();
     mocks.loadAgents.mockReset();
   });
 
   it('loads the local registry and returns a local agent for signed-out users', async () => {
     const local = agent('lean');
     mocks.getAgent.mockReturnValue(local);
-    const { resolveCliAgent } = await import('@cli/runtime/agentResolution');
+    const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('lean')).resolves.toBe(local);
 
@@ -55,7 +61,7 @@ describe('CLI agent resolution', () => {
   it('does a full registry load when the local registry misses', async () => {
     const remote = agent('orchestrator', 'remote');
     mocks.getAgent.mockReturnValueOnce(undefined).mockReturnValueOnce(remote);
-    const { resolveCliAgent } = await import('@cli/runtime/agentResolution');
+    const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('orchestrator')).resolves.toBe(remote);
 
@@ -71,7 +77,7 @@ describe('CLI agent resolution', () => {
     const remote = agent('lean', 'remote');
     mocks.authProvider.isAuthenticated.mockResolvedValue(true);
     mocks.getAgent.mockReturnValueOnce(local).mockReturnValueOnce(remote);
-    const { resolveCliAgent } = await import('@cli/runtime/agentResolution');
+    const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('lean')).resolves.toBe(remote);
 
@@ -86,7 +92,7 @@ describe('CLI agent resolution', () => {
     const local = agent('local:lean');
     mocks.authProvider.isAuthenticated.mockResolvedValue(true);
     mocks.getAgent.mockReturnValue(local);
-    const { resolveCliAgent } = await import('@cli/runtime/agentResolution');
+    const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('local:lean')).resolves.toBe(local);
 
