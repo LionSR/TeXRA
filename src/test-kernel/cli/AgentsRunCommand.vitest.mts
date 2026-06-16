@@ -162,39 +162,38 @@ describe('CLI agents run command', () => {
   it('reports missing instruction before resolving the model', async () => {
     const { runToolUseAgent } = await import('@cli/commands/agentsRun');
 
-    const exitCode = await runToolUseAgent(cliContext(), {
-      agent: 'chat',
-      inputFiles: [],
-      contextFiles: [],
-      model: 'gpt54',
-      instruction: '',
-    });
+    await expect(
+      runToolUseAgent(cliContext(), {
+        agent: 'chat',
+        inputFiles: [],
+        contextFiles: [],
+        model: 'gpt54',
+        instruction: '',
+      }),
+    ).rejects.toThrow('Provide --instruction or --instruction-file.');
 
-    expect(exitCode).toBe(2);
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.resolveCliAgent).not.toHaveBeenCalled();
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
-    expect(mocks.writeErrorStderr).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: 'Provide --instruction or --instruction-file.',
-      }),
-    );
   });
 
   it('reports missing agents before resolving the model', async () => {
     mocks.resolveCliAgent.mockResolvedValueOnce(undefined);
     const { runToolUseAgent } = await import('@cli/commands/agentsRun');
 
-    const exitCode = await runToolUseAgent(cliContext(), {
-      agent: 'missing-agent',
-      inputFiles: [],
-      contextFiles: [],
-      model: 'gpt54',
-      instruction: 'Check this.',
-    });
+    await expect(
+      runToolUseAgent(cliContext(), {
+        agent: 'missing-agent',
+        inputFiles: [],
+        contextFiles: [],
+        model: 'gpt54',
+        instruction: 'Check this.',
+      }),
+    ).rejects.toThrow(
+      'Tool-use agent not found: missing-agent. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
+    );
 
-    expect(exitCode).toBe(2);
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
@@ -204,9 +203,6 @@ describe('CLI agents run command', () => {
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Tool-use agent not found: missing-agent. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
-    );
   });
 
   it('reports workflow agents before resolving the model', async () => {
@@ -219,15 +215,18 @@ describe('CLI agents run command', () => {
     });
     const { runToolUseAgent } = await import('@cli/commands/agentsRun');
 
-    const exitCode = await runToolUseAgent(cliContext(), {
-      agent: 'polish',
-      inputFiles: [],
-      contextFiles: [],
-      model: 'gpt54',
-      instruction: 'Check this.',
-    });
+    await expect(
+      runToolUseAgent(cliContext(), {
+        agent: 'polish',
+        inputFiles: [],
+        contextFiles: [],
+        model: 'gpt54',
+        instruction: 'Check this.',
+      }),
+    ).rejects.toThrow(
+      'Agent "polish" is a workflow agent; `texra agents run` only handles tool-use agents. Use `texra run polish` for workflow agents.',
+    );
 
-    expect(exitCode).toBe(2);
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
@@ -237,8 +236,5 @@ describe('CLI agents run command', () => {
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Agent "polish" is a workflow agent; `texra agents run` only handles tool-use agents. Use `texra run polish` for workflow agents.',
-    );
   });
 });
