@@ -352,7 +352,7 @@ describe('ToolUseWaitNode', () => {
     }
   });
 
-  it('keeps injecting active goal continuations across repeated cycles', async () => {
+  it('keeps injecting active goal continuations across a long run', async () => {
     const streamId = 'wait-node-long-goal' as StreamTabId;
     const { initPlatform } = await import('@platform/platform');
     initPlatform(createFakePlatform({}));
@@ -393,7 +393,11 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      for (const cycle of [0, 1, 2]) {
+      const continuationCycles = 25;
+      for (const cycle of Array.from(
+        { length: continuationCycles },
+        (_, index) => index,
+      )) {
         const prep = await node.prep(shared);
         const exec = await node.exec(prep);
 
@@ -410,8 +414,10 @@ describe('ToolUseWaitNode', () => {
       }
 
       expect(waitForFollowUp).not.toHaveBeenCalled();
-      expect(createUserFollowUpMessages).toHaveBeenCalledTimes(3);
-      expect(shared.messages).toHaveLength(3);
+      expect(createUserFollowUpMessages).toHaveBeenCalledTimes(
+        continuationCycles,
+      );
+      expect(shared.messages).toHaveLength(continuationCycles);
 
       await GoalStore.setStatus(streamId, 'paused');
 
