@@ -33,7 +33,11 @@ export {
 
 export { toRemoteAgentProfileData } from './remoteAgentProfileData';
 
-export { buildStreamTabInfo, type StreamTabInfoInputs } from './streamTabInfo';
+export {
+  // Re-exported from new canonical location for backward compatibility.
+  buildStreamTabInfo,
+  type StreamTabInfoInputs,
+} from '@shared/progressView/backend/streamTabInfo';
 
 export {
   // Types
