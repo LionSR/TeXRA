@@ -34,12 +34,6 @@ export {
 export { toRemoteAgentProfileData } from './remoteAgentProfileData';
 
 export {
-  // Re-exported from new canonical location for backward compatibility.
-  buildStreamTabInfo,
-  type StreamTabInfoInputs,
-} from '@shared/progressView/backend/streamTabInfo';
-
-export {
   // Types
   type AgentEntry,
   type ResolvedAgent,
