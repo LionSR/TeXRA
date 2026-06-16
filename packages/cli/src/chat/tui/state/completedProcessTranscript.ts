@@ -5,6 +5,7 @@ import {
   completedChildExecutionStatus,
   isChildExecutionErrorStatus,
 } from './childExecutionStatus';
+import { childExecutionLabel } from './childExecutions';
 import type {
   CompletedProcessTranscript,
   ConversationEntry,
@@ -32,7 +33,7 @@ export function buildCompletedProcessTranscript(
   const status = completedChildExecutionStatus(info.status);
   return {
     executionId: info.executionId,
-    title: info.agentName || info.toolName || info.executionId,
+    title: childExecutionLabel(info),
     status,
     elapsed: info.elapsed,
     isError: isChildExecutionErrorStatus(status),

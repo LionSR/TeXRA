@@ -7,7 +7,11 @@
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
 // Local imports - CLI state
-import { visibleSubagentRows } from './childStreamMerge';
+import {
+  childExecutionKey,
+  childExecutionLabel,
+  visibleSubagentRows,
+} from './childExecutions';
 import { orderedDescendantsFromTree } from './focusCycle';
 import type { StreamSlice } from './cliState';
 
@@ -92,14 +96,6 @@ export function nearestActiveStreamAncestor<T>(init: {
   return undefined;
 }
 
-function childReferenceKey(child: ActiveChildInfo): string {
-  return child.childStreamId ?? child.executionId;
-}
-
-function childReferenceLabel(child: ActiveChildInfo): string {
-  return child.agentName || child.toolName || child.executionId;
-}
-
 const emptyChildReferenceSlice = {
   activeSubagents: [],
   childStreams: [],
@@ -114,8 +110,8 @@ function childStreamReferenceLabel(
   const child = [
     ...visibleSubagentRows(parent ?? emptyChildReferenceSlice),
     ...(parent?.activeProcesses ?? []),
-  ].find((entry) => childReferenceKey(entry) === streamId);
-  return child ? childReferenceLabel(child) : streamId;
+  ].find((entry) => childExecutionKey(entry) === streamId);
+  return child ? childExecutionLabel(child) : streamId;
 }
 
 export function streamDisplayLabel(init: {
