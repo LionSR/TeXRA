@@ -88,6 +88,33 @@ describe('CLI agent resolution', () => {
     expect(mocks.authProvider.isAuthenticated).toHaveBeenCalledOnce();
   });
 
+  it('passes command category through authenticated remote-priority reloads', async () => {
+    const local = agent('lean');
+    const remote = agent('lean', 'remote');
+    mocks.authProvider.isAuthenticated.mockResolvedValue(true);
+    mocks.getAgent.mockReturnValueOnce(local).mockReturnValueOnce(remote);
+    const { resolveCliAgent } = await import('@cli/runtime/agents');
+
+    await expect(resolveCliAgent('lean', AgentCategory.ToolUse)).resolves.toBe(
+      remote,
+    );
+
+    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+      1,
+      'lean',
+      AgentCategory.ToolUse,
+    );
+    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+      2,
+      'lean',
+      AgentCategory.ToolUse,
+    );
+    expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
+      includeRemote: false,
+    });
+    expect(mocks.loadAgents).toHaveBeenNthCalledWith(2);
+  });
+
   it('does not apply remote priority to source-qualified agent names', async () => {
     const local = agent('local:lean');
     mocks.authProvider.isAuthenticated.mockResolvedValue(true);
@@ -99,5 +126,26 @@ describe('CLI agent resolution', () => {
     expect(mocks.loadAgents).toHaveBeenCalledOnce();
     expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
     expect(mocks.authProvider.isAuthenticated).not.toHaveBeenCalled();
+  });
+
+  it('passes command category through local and remote-fallback lookups', async () => {
+    const remote = agent('assistant', 'remote');
+    mocks.getAgent.mockReturnValueOnce(undefined).mockReturnValueOnce(remote);
+    const { resolveCliAgent } = await import('@cli/runtime/agents');
+
+    await expect(
+      resolveCliAgent('assistant', AgentCategory.ToolUse),
+    ).resolves.toBe(remote);
+
+    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+      1,
+      'assistant',
+      AgentCategory.ToolUse,
+    );
+    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+      2,
+      'assistant',
+      AgentCategory.ToolUse,
+    );
   });
 });
