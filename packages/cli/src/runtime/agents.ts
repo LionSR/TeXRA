@@ -56,18 +56,20 @@ export function parseCliAgentCategoryFilter(
  * auth/network work. Missing agents still get a remote-inclusive fallback, and
  * authenticated relay sessions reload bare names so the registry's normal
  * source priority can prefer remote definitions. Category-specific commands
- * pass their category through to keep lookup priority owned by the registry.
+ * pass their lookup category through to keep name priority owned by the
+ * registry; category enforcement stays with the command-specific launch
+ * validation.
  */
 export async function resolveCliAgent(
   name: string,
-  category?: AgentCategory,
+  lookupCategory?: AgentCategory,
 ): Promise<AgentEntry | undefined> {
   await loadAgents({ includeRemote: false });
-  const agent = getAgent(name, category);
+  const agent = getAgent(name, lookupCategory);
 
   if (!agent) {
     await loadAgents();
-    return getAgent(name, category);
+    return getAgent(name, lookupCategory);
   }
 
   if (name.includes(':') || !(await getCliAuthProvider().isAuthenticated())) {
@@ -75,7 +77,7 @@ export async function resolveCliAgent(
   }
 
   await loadAgents();
-  return getAgent(name, category);
+  return getAgent(name, lookupCategory);
 }
 
 export async function loadCliAgentList(
