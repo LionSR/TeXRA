@@ -207,6 +207,7 @@ const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
 const SHOW_IDLE_TODOS = process.env.HARNESS_TODOS_IDLE === '1';
+const SHOW_COMPLETED_TODOS_ONLY = process.env.HARNESS_TODOS_COMPLETED === '1';
 const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
@@ -1093,12 +1094,16 @@ if (SHOW_TODOS) {
       {
         content: 'Ask leanSolver to verify the finite case',
         activeForm: 'Waiting for leanSolver',
-        status: TODO_STATUS.IN_PROGRESS,
+        status: SHOW_COMPLETED_TODOS_ONLY
+          ? TODO_STATUS.COMPLETED
+          : TODO_STATUS.IN_PROGRESS,
       },
       {
         content: 'Merge subagent conclusions into final answer',
         activeForm: 'Merging subagent conclusions',
-        status: TODO_STATUS.PENDING,
+        status: SHOW_COMPLETED_TODOS_ONLY
+          ? TODO_STATUS.COMPLETED
+          : TODO_STATUS.PENDING,
       },
     ],
     plan: {
