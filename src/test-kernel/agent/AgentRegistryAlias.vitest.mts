@@ -11,6 +11,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform } from '@platform/platform';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { setAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import {
   getAgent,
@@ -70,6 +71,12 @@ describe('agent registry legacy aliases', () => {
     expect(getAgent('builtInToolUse:chat')?.name).toBe('assistant');
     expect(getAgent('builtInToolUse:assistant')?.name).toBe('assistant');
     expect(getAgent('custom:no-such-agent')).toBeUndefined();
+  });
+
+  it('treats lookup category as priority, not a filter', () => {
+    const workflow = getAgent('builtInWorkflow:polish', AgentCategory.ToolUse);
+    expect(workflow?.name).toBe('polish');
+    expect(workflow?.category).toBe(AgentCategory.Workflow);
   });
 
   it('migrates persisted legacy keys at load time', () => {

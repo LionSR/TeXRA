@@ -88,7 +88,7 @@ describe('CLI agent resolution', () => {
     expect(mocks.authProvider.isAuthenticated).toHaveBeenCalledOnce();
   });
 
-  it('passes command category through authenticated remote-priority reloads', async () => {
+  it('passes lookup category through authenticated remote-priority reloads', async () => {
     const local = agent('lean');
     const remote = agent('lean', 'remote');
     mocks.authProvider.isAuthenticated.mockResolvedValue(true);
@@ -128,7 +128,7 @@ describe('CLI agent resolution', () => {
     expect(mocks.authProvider.isAuthenticated).not.toHaveBeenCalled();
   });
 
-  it('passes command category through local and remote-fallback lookups', async () => {
+  it('passes lookup category through local and remote-fallback lookups', async () => {
     const remote = agent('assistant', 'remote');
     mocks.getAgent.mockReturnValueOnce(undefined).mockReturnValueOnce(remote);
     const { resolveCliAgent } = await import('@cli/runtime/agents');
