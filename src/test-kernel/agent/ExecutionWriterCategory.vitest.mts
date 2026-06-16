@@ -9,8 +9,8 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 const state = { ready: true };
 vi.mock('@agent/index/agentRegistry', () => ({
   isAgentRegistryReady: vi.fn(() => state.ready),
-  getAgent: vi.fn((name: string, category?: AgentCategory) =>
-    name === 'research' && category === AgentCategory.ToolUse
+  getAgent: vi.fn((name: string, lookupCategory?: AgentCategory) =>
+    name === 'research' && lookupCategory === AgentCategory.ToolUse
       ? { name, category: AgentCategory.ToolUse }
       : undefined,
   ),
