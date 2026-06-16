@@ -762,6 +762,7 @@ export function buildStatusBarDisplay(
         ? `Resume this session with: ${formatResumeCommand(
             input.commandName,
             input.pendingExitResumeId,
+            { approvalPolicy: input.approvalPolicy },
           )}`
         : input.shortcutsActive === false
           ? foregroundBindingsText(

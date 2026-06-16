@@ -5,6 +5,7 @@
 // (only tool-use agents do). Reads only the in-memory stream tree, which still
 // holds finished subagents for the session, so no exit-time disk I/O is needed.
 
+import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
   AgentCategory,
   sumUsageStats,
@@ -37,6 +38,7 @@ export interface ResumeCommandOptions {
   readonly cwd?: string;
   /** Ambient shell cwd where the printed command will be copy-pasted. */
   readonly processCwd?: string;
+  readonly approvalPolicy?: CliApprovalPolicy;
 }
 
 const DEFAULT_RESUME_COMMAND_NAME = 'texra';
@@ -51,7 +53,11 @@ export function formatResumeCommand(
     cwd && cwd !== options.processCwd?.trim()
       ? ` --cwd ${quotePosixShellArg(cwd)}`
       : '';
-  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}`;
+  const policyFlag =
+    options.approvalPolicy && options.approvalPolicy !== 'ask'
+      ? ` --approval-policy ${options.approvalPolicy}`
+      : '';
+  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}${policyFlag}`;
 }
 
 function formatInteger(value: number): string {
