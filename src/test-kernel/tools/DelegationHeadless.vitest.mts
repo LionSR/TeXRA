@@ -233,6 +233,14 @@ describe('headless delegation', () => {
     );
   });
 
+  it('tells orchestrators to preserve delegated result evidence when summarizing', () => {
+    const description = new DelegateAgentTool().definition.description;
+
+    expect(description).toContain('preserve its stated evidence');
+    expect(description).toContain('tool names');
+    expect(description).toContain('do not substitute or invent methods');
+  });
+
   it('formats returned child error results as subagent errors', async () => {
     const recordSubagentCost = vi.fn();
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
