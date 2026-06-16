@@ -593,8 +593,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
         const responseParts =
           baseResponse.candidates?.[0]?.content?.parts ?? [];
-        const finalOutputText =
-          aggregatedText || extractNonThinkingText(responseParts);
+        const finalOutputText = extractNonThinkingText(responseParts);
         output.finalize(finalOutputText);
 
         // Ensure text field excludes thinking content
