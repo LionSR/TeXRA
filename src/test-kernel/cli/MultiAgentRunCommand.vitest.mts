@@ -8,10 +8,9 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => {
-  const stdinInputFile = Object.assign(vi.fn(), { cleanup: vi.fn() });
   return {
     executeCliRequest: vi.fn(),
-    expandRunInputs: vi.fn(),
+    withExpandedRunInputs: vi.fn(),
     cliMultiAgentPlanHasGaps: vi.fn(),
     cliMultiAgentPresetCanLaunchTeam: vi.fn(),
     formatCliMultiAgentPresetRunWarnings: vi.fn(),
@@ -22,7 +21,6 @@ const mocks = vi.hoisted(() => {
     loadAgents: vi.fn(),
     planCliMultiAgentPresets: vi.fn(),
     planCliMultiAgentPresetRun: vi.fn(),
-    stdinInputFile,
     writeTextStderr: vi.fn(),
     writeTextStdout: vi.fn(),
   };
@@ -104,8 +102,7 @@ vi.mock('@cli/runtime/runExecution', () => ({
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
-  createStdinWorkflowInputMaterializer: vi.fn(() => mocks.stdinInputFile),
-  expandRunInputs: mocks.expandRunInputs,
+  withExpandedRunInputs: mocks.withExpandedRunInputs,
 }));
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -126,6 +123,24 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   };
 }
 
+function mockExpandedRunInputs(inputs: {
+  readonly inputFiles: string[];
+  readonly contextFiles: string[];
+}): void {
+  mocks.withExpandedRunInputs.mockImplementation(
+    async (
+      _inputSpecs: readonly string[],
+      _contextSpecs: readonly string[],
+      _cwd: string,
+      _options: unknown,
+      run: (expanded: {
+        readonly inputFiles: string[];
+        readonly contextFiles: string[];
+      }) => Promise<unknown>,
+    ) => run(inputs),
+  );
+}
+
 describe('CLI multi-agent run command', () => {
   const approvalUnavailableWarning =
     'WARN preset mathematician may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
@@ -134,7 +149,7 @@ describe('CLI multi-agent run command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.expandRunInputs.mockResolvedValue({
+    mockExpandedRunInputs({
       inputFiles: ['problem.tex'],
       contextFiles: [],
     });
@@ -214,15 +229,16 @@ describe('CLI multi-agent run command', () => {
       markErrorOnThrow: true,
       stopAfterCycle: true,
     });
-    expect(mocks.expandRunInputs).toHaveBeenCalledWith(
+    expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
       ['problem.tex'],
       [],
       '/tmp/project',
       {
         allowEmptyInput: true,
         requireWorkspaceFiles: true,
-        stdinInputFile: mocks.stdinInputFile,
+        readStdinText: expect.any(Function),
       },
+      expect.any(Function),
     );
     const request = mocks.executeCliRequest.mock.calls[0]?.[0];
     expect(request?.config.instruction).toContain('Primary user input files:');
@@ -233,7 +249,6 @@ describe('CLI multi-agent run command', () => {
     expect(request?.config.instruction).toContain(
       'Do not end by asking the user whether to perform more work',
     );
-    expect(mocks.stdinInputFile.cleanup).toHaveBeenCalledTimes(1);
   });
 
   it('marks run-plan resolution when authenticated gaps triggered a remote load', async () => {
@@ -378,7 +393,7 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('allows instruction-only team runs without input files', async () => {
-    mocks.expandRunInputs.mockResolvedValue({
+    mockExpandedRunInputs({
       inputFiles: [],
       contextFiles: [],
     });
@@ -393,22 +408,27 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.expandRunInputs).toHaveBeenCalledWith([], [], '/tmp/project', {
-      allowEmptyInput: true,
-      requireWorkspaceFiles: true,
-      stdinInputFile: mocks.stdinInputFile,
-    });
+    expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
+      [],
+      [],
+      '/tmp/project',
+      {
+        allowEmptyInput: true,
+        requireWorkspaceFiles: true,
+        readStdinText: expect.any(Function),
+      },
+      expect.any(Function),
+    );
     const request = mocks.executeCliRequest.mock.calls[0]?.[0];
     expect(request?.config.inputFiles).toEqual([]);
     expect(request?.config.instruction).toContain('User instruction:');
     expect(request?.config.instruction).toContain(
       'Prove that every odd square is congruent to 1 modulo 8.',
     );
-    expect(mocks.stdinInputFile.cleanup).toHaveBeenCalledTimes(1);
   });
 
   it('allows instruction-file-only team runs without input files', async () => {
-    mocks.expandRunInputs.mockResolvedValue({
+    mockExpandedRunInputs({
       inputFiles: [],
       contextFiles: [],
     });
@@ -430,11 +450,17 @@ describe('CLI multi-agent run command', () => {
       });
 
       expect(exitCode).toBe(0);
-      expect(mocks.expandRunInputs).toHaveBeenCalledWith([], [], root, {
-        allowEmptyInput: true,
-        requireWorkspaceFiles: true,
-        stdinInputFile: mocks.stdinInputFile,
-      });
+      expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
+        [],
+        [],
+        root,
+        {
+          allowEmptyInput: true,
+          requireWorkspaceFiles: true,
+          readStdinText: expect.any(Function),
+        },
+        expect.any(Function),
+      );
       const request = mocks.executeCliRequest.mock.calls[0]?.[0];
       expect(request?.config.inputFiles).toEqual([]);
       expect(request?.config.instruction).toContain('User instruction:');
@@ -461,7 +487,7 @@ describe('CLI multi-agent run command', () => {
     ).rejects.toThrow(
       /--instruction-file: file not found: missing-prompt\.txt/,
     );
-    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('still requires an input file or instruction text', async () => {
@@ -478,7 +504,7 @@ describe('CLI multi-agent run command', () => {
     ).rejects.toThrow(
       /Provide --input, --instruction, or --instruction-file for the team task\. Example: texra multi-agent run physicist --instruction "Check this derivation"/,
     );
-    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('refuses built-in presets without a runnable root agent', async () => {
