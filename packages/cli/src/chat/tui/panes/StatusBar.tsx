@@ -9,8 +9,8 @@ import {
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import { isLiveElapsedStatus } from '@common/constants/streamStatus';
 import {
-  LIVE_ELAPSED_STREAM_STATUSES,
   STREAM_STATUS,
   type ConversationProgress,
   type StreamStatus,
@@ -550,17 +550,11 @@ export function ctrlCActionForFocus({
     : 'stop';
 }
 
-/** In-flight run statuses — stoppable, and live enough to represent a
- *  focused child's ancestor in the bar. */
-function isLiveStreamStatus(status: string | undefined): boolean {
-  return status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status);
-}
-
 function hasPendingOrLiveStream(
   streams: ReadonlyMap<StreamTabId, StatusBarVisibleStream>,
 ): boolean {
   for (const stream of streams.values()) {
-    if (stream.status === undefined || isLiveStreamStatus(stream.status)) {
+    if (stream.status === undefined || isLiveElapsedStatus(stream.status)) {
       return true;
     }
   }
@@ -570,7 +564,7 @@ function hasPendingOrLiveStream(
 function rootActiveSegment(
   input: StatusBarDisplayInput,
 ): StatusBarSegment | undefined {
-  return input.ctrlCAction === 'stop root' && !isLiveStreamStatus(input.status)
+  return input.ctrlCAction === 'stop root' && !isLiveElapsedStatus(input.status)
     ? {
         text: 'root active',
         color: 'yellow',
@@ -631,7 +625,7 @@ export function statusBarStreamTarget({
     parentStream,
     values: streams,
     canUseValue: (stream: StatusBarVisibleStream) =>
-      isLiveStreamStatus(stream.status),
+      isLiveElapsedStatus(stream.status),
   });
   const canStopVisibleRun =
     canStopActiveRun &&
