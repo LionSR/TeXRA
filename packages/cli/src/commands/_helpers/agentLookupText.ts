@@ -1,16 +1,14 @@
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
+import { CliUsageError } from '@cli/runtime/cliContext';
+
 const AGENT_LOOKUP_HINT =
   'Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.';
 const MULTI_AGENT_PRESET_LOOKUP_HINT =
   'Use `texra multi-agent list` for available team presets, then run `texra multi-agent inspect <preset>` to check a team before launch.';
 
 type CliAgentLaunchMode = 'chat' | 'run' | 'agentsRun';
-
-type CliAgentLaunchValidation =
-  | { readonly ok: true; readonly agent: AgentEntry }
-  | { readonly ok: false; readonly error: string };
 
 const CLI_AGENT_LAUNCH_TARGETS = {
   chat: {
@@ -57,15 +55,15 @@ export function cliAgentLaunchLookupCategory(
   return CLI_AGENT_LAUNCH_TARGETS[mode].requiredCategory;
 }
 
-export function validateCliAgentLaunch(
+export function assertCliAgentLaunch(
   name: string,
   agent: AgentEntry | undefined,
   mode: CliAgentLaunchMode,
-): CliAgentLaunchValidation {
+): AgentEntry {
   const target = CLI_AGENT_LAUNCH_TARGETS[mode];
-  if (!agent) return { ok: false, error: target.missing(name) };
+  if (!agent) throw new CliUsageError(target.missing(name));
   if (agent.category !== target.requiredCategory) {
-    return { ok: false, error: target.mismatch(name, agent.category) };
+    throw new CliUsageError(target.mismatch(name, agent.category));
   }
-  return { ok: true, agent };
+  return agent;
 }
