@@ -1,10 +1,8 @@
 import stripAnsi from 'strip-ansi';
 
 import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
-import {
-  LIVE_ELAPSED_STREAM_STATUSES,
-  type StreamStatus,
-} from '@shared/schemas';
+import { isLiveElapsedStatus } from '@common/constants/streamStatus';
+import { type StreamStatus } from '@shared/schemas';
 
 import type { ConversationEntry } from '../state/cliState';
 
@@ -94,8 +92,7 @@ export function userPromptAwaitsLiveContinuation(
     entry?.role !== 'user' ||
     isInquiryContinuationText(entry.text) ||
     !isRenderableTranscriptEntry(entry) ||
-    status === undefined ||
-    !LIVE_ELAPSED_STREAM_STATUSES.has(status)
+    !isLiveElapsedStatus(status)
   ) {
     return false;
   }
@@ -117,8 +114,7 @@ export function splitTranscriptEntries(
    *  fixed. */
   readonly pending: ConversationEntry[];
 } {
-  const showLiveAssistant =
-    status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status);
+  const showLiveAssistant = isLiveElapsedStatus(status);
   const finalized: ConversationEntry[] = [];
   const pending: ConversationEntry[] = [];
   for (const [index, entry] of entries.entries()) {
