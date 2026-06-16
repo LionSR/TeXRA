@@ -18,6 +18,7 @@ import {
   buildHeadlessRunContext,
   resolveCliRunModel,
 } from '../runtime/runModel';
+import { resolveCliAgent } from '../runtime/agents';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import {
@@ -33,7 +34,6 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { emitCliResult } from './_helpers/output';
-import { resolveCliAgent } from '../runtime/agentResolution';
 import { executeCliRequest } from '../runtime/runExecution';
 import {
   createCliRunResult,
