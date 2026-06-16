@@ -78,7 +78,7 @@ three divergent accept→approve / reject+feedback copies collapse to one.
   next to `LIVE_ELAPSED_STREAM_STATUSES` in the shared stream schema. Add
   `TERMINAL_STREAM_STATUSES` + `isTerminalStreamStatus()` there and delegate.
 - **Child-stream selectors** (small): move `mergeChildStreams` +
-  `visibleSubagentRows` (`childStreamMerge.ts`) and `childElapsed` /
+  `visibleSubagentRows` (`childExecutions.ts`) and `childElapsed` /
   `hasLiveChildElapsed` (`childControls.ts`) into
   `src/shared/selectors/` (they depend only on `ActiveChildInfo`), leaving thin
   re-exports so CLI call sites/tests are untouched; the webview adopts them in a

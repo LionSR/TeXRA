@@ -43,7 +43,7 @@ import {
 } from '@cli/chat/tui/state/focusCycle';
 import { hasChildControlItems } from '@cli/chat/tui/state/childControls';
 import { focusedChildInputDisabledMessage } from '@cli/chat/tui/state/focusedChildFollowUp';
-import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
+import { visibleSubagentRows } from '@cli/chat/tui/state/childExecutions';
 import {
   finalizeSettledPrefix,
   syncStreamLog,

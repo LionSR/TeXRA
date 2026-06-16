@@ -12,7 +12,11 @@ import { formatDuration } from '@utils/core';
 
 // Local imports - CLI state
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
-import { visibleSubagentRows } from './childStreamMerge';
+import {
+  childExecutionKey,
+  childExecutionLabel,
+  visibleSubagentRows,
+} from './childExecutions';
 import {
   activeStreamTreeEntries,
   nearestActiveStreamAncestor,
@@ -106,20 +110,6 @@ export function childElapsed(
   return formatDuration(Math.max(0, nowMs - startedAt));
 }
 
-function childLabel(child: {
-  readonly agentName?: string;
-  readonly toolName?: string;
-  readonly executionId: string;
-}): string {
-  return child.agentName || child.toolName || child.executionId;
-}
-
-function childKey(
-  child: Pick<ActiveChildInfo, 'childStreamId' | 'executionId'>,
-): string {
-  return child.childStreamId ?? child.executionId;
-}
-
 function streamDescription(
   child: Pick<ActiveChildInfo, 'childStreamId'>,
   streamsById: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'description'>>,
@@ -162,7 +152,7 @@ function buildSubagentItem(
   nowMs?: number,
   killable = true,
 ): ChildControlItem {
-  const label = childLabel(child);
+  const label = childExecutionLabel(child);
   const command = streamDescription(child, streamsById) ?? label;
   const elapsed = childElapsed(child, nowMs);
   const statusLabel = childStatusDescription(child.status);
@@ -187,7 +177,7 @@ function buildProcessItem(
 ): ChildControlItem {
   const tailLines = processTailLines(tail);
   const lastLine = tailLines.at(-1);
-  const label = childLabel(child);
+  const label = childExecutionLabel(child);
   const elapsed = childElapsed(child, nowMs);
   const statusLabel = childStatusDescription(child.status);
   return {
@@ -239,13 +229,13 @@ export function buildChildControlItems(
   > = new Map(),
   nowMs?: number,
 ): readonly ChildControlItem[] {
-  const activeKeys = new Set(slice.activeSubagents.map(childKey));
+  const activeKeys = new Set(slice.activeSubagents.map(childExecutionKey));
   const subagentItems = visibleSubagentRows(slice).map((child) =>
     buildSubagentItem(
       child,
       streamsById,
       nowMs,
-      activeKeys.has(childKey(child)),
+      activeKeys.has(childExecutionKey(child)),
     ),
   );
   if (mode === 'subagents') {

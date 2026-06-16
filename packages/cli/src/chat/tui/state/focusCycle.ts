@@ -12,7 +12,7 @@
 
 import { type StreamTabId } from '@shared/schemas';
 
-import { visibleSubagentRows } from './childStreamMerge';
+import { visibleSubagentRows } from './childExecutions';
 import { cliState, type StreamSlice } from './cliState';
 
 function orderedDescendantsFromSlice(
