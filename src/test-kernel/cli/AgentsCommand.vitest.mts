@@ -33,7 +33,8 @@ vi.mock('@cli/commands/_helpers/output', () => ({
   emitCliResult: mocks.emitCliResult,
 }));
 
-vi.mock('@cli/runtime/agentResolution', () => ({
+vi.mock('@cli/runtime/agents', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
   resolveCliAgent: mocks.resolveCliAgent,
 }));
 

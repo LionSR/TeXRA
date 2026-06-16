@@ -1,10 +1,13 @@
 import {
+  getAgent,
   getAgentsByCategory,
   getVisibleAgents,
   loadAgents,
 } from '@agent/index';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+
+import { getCliAuthProvider } from './supabaseAuth';
 
 export interface CliAgentListOptions {
   readonly includeHidden?: boolean;
@@ -44,6 +47,33 @@ export function parseCliAgentCategoryFilter(
   const normalized = input?.trim();
   if (!normalized) return undefined;
   return AGENT_CATEGORY_FILTERS.get(normalized.toLowerCase());
+}
+
+/**
+ * Resolve a CLI launch target from the agent registry.
+ *
+ * CLI commands start with a local-only load so signed-out users avoid remote
+ * auth/network work. Missing agents still get a remote-inclusive fallback, and
+ * authenticated relay sessions reload bare names so the registry's normal
+ * source priority can prefer remote definitions.
+ */
+export async function resolveCliAgent(
+  name: string,
+): Promise<AgentEntry | undefined> {
+  await loadAgents({ includeRemote: false });
+  const agent = getAgent(name);
+
+  if (!agent) {
+    await loadAgents();
+    return getAgent(name);
+  }
+
+  if (name.includes(':') || !(await getCliAuthProvider().isAuthenticated())) {
+    return agent;
+  }
+
+  await loadAgents();
+  return getAgent(name);
 }
 
 export async function loadCliAgentList(
