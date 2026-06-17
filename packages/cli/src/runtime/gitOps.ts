@@ -61,7 +61,8 @@ export function remoteUrl(cwd: string, remote = 'origin'): string | null {
 
 export function currentBranch(cwd: string): string | null {
   const result = git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD');
-  return result.ok && result.stdout ? result.stdout : null;
+  if (!result.ok || !result.stdout || result.stdout === 'HEAD') return null;
+  return result.stdout;
 }
 
 /** Default branch of `origin`, e.g. "main" — null if it can't be resolved. */
@@ -92,8 +93,11 @@ export interface GitHubSlug {
 
 /** Parse `owner/repo` from an https or ssh GitHub remote URL. */
 export function parseGitHubSlug(url: string): GitHubSlug | null {
-  const cleaned = url.trim().replace(/\.git$/, '');
-  const match = cleaned.match(/github\.com[/:]([^/]+)\/(.+)$/);
+  const cleaned = url
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\.git$/, '');
+  const match = cleaned.match(/github\.com[/:]([^/]+)\/([^/]+)$/);
   if (!match) return null;
   const [, owner, repo] = match;
   if (!owner || !repo) return null;

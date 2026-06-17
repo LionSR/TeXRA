@@ -175,7 +175,14 @@ async function runInstallGithubAction(
 
   const add = git(root, 'add', '--', WORKFLOW_RELATIVE_PATH);
   const commit = add.ok
-    ? git(root, 'commit', '-m', 'ci: add TeXRA code-review workflow')
+    ? git(
+        root,
+        'commit',
+        '-m',
+        'ci: add TeXRA code-review workflow',
+        '--',
+        WORKFLOW_RELATIVE_PATH,
+      )
     : add;
   if (!commit.ok) {
     writeTextStderr(`Failed to commit the workflow: ${commit.stderr}`);
@@ -211,7 +218,7 @@ async function runInstallGithubAction(
     writeTextStdout(`Open a PR manually: ${compareUrl(slug, base, branch)}`);
     restoreBranch(root, startBranch);
     printSecretChecklist(slug);
-    return CliExitCode.Success;
+    return CliExitCode.AgentError;
   }
 
   if (ghAvailable(root)) {
@@ -233,6 +240,9 @@ async function runInstallGithubAction(
     } else {
       writeTextStderr(`gh pr create failed: ${pr.stderr}`);
       writeTextStdout(`Open a PR manually: ${compareUrl(slug, base, branch)}`);
+      restoreBranch(root, startBranch);
+      printSecretChecklist(slug);
+      return CliExitCode.AgentError;
     }
   } else {
     writeTextStdout(
