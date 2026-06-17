@@ -2,8 +2,8 @@ import { css, unsafeCSS, type CSSResult } from 'lit';
 
 /**
  * Shared selector groups for :is() consolidation.
- * To add a new request panel type, add its class names to these two arrays
- * and the shared layout rules apply automatically.
+ * To add a new request panel type, add an entry to the PANEL_TYPES table below
+ * and the shared layout, accent, and icon rules all follow automatically.
  */
 
 /**
@@ -269,7 +269,7 @@ export const requestPanelStyles: CSSResult = css`
     white-space: nowrap;
   }
 
-  /* Type-specific item accent + matching header icon color (see ACCENT_COLORS) */
+  /* Type-specific item accent + matching header icon color (see PANEL_TYPES / ACCENT_RULES) */
   ${ACCENT_RULES}
 
   /* ================================================================
