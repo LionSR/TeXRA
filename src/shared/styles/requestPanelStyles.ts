@@ -6,27 +6,56 @@ import { css, unsafeCSS, type CSSResult } from 'lit';
  * and the shared layout rules apply automatically.
  */
 
-/** Container class names (plural, used as the outer wrapper). */
-const CONTAINER_NAMES = [
-  'approval-requests',
-  'bash-approval-requests',
-  'retry-requests',
-  'workflow-proposals',
-  'plan-approval-requests',
-  'external-inquiry-requests',
-  'user-question-requests',
+/**
+ * Single source of truth for request panel types. Each entry pairs the outer
+ * container class (plural), the item class (singular, used for cards and BEM
+ * children), and the accent color used for the item's left border and its
+ * matching header icon. Add a panel type here and the shared layout, accent,
+ * and icon rules all follow — no parallel arrays to keep in sync.
+ */
+const PANEL_TYPES = [
+  {
+    container: 'approval-requests',
+    item: 'approval-request',
+    accent: 'var(--wa-color-text-normal)',
+  },
+  {
+    container: 'bash-approval-requests',
+    item: 'bash-approval-request',
+    accent: 'var(--wa-color-terminal-ansi-yellow)',
+  },
+  {
+    container: 'retry-requests',
+    item: 'retry-request',
+    accent: 'var(--color-warning)',
+  },
+  {
+    container: 'workflow-proposals',
+    item: 'workflow-proposal',
+    accent: 'var(--wa-color-text-link)',
+  },
+  {
+    container: 'plan-approval-requests',
+    item: 'plan-approval-request',
+    accent: 'var(--wa-color-text-link)',
+  },
+  {
+    container: 'external-inquiry-requests',
+    item: 'external-inquiry-request',
+    accent: 'var(--wa-color-focus)',
+  },
+  {
+    container: 'user-question-requests',
+    item: 'user-question-request',
+    accent: 'var(--wa-color-focus)',
+  },
 ] as const;
 
+/** Container class names (plural, used as the outer wrapper). */
+const CONTAINER_NAMES = PANEL_TYPES.map((p) => p.container);
+
 /** Item class names (singular, used for individual cards and BEM children). */
-const ITEM_NAMES = [
-  'approval-request',
-  'bash-approval-request',
-  'retry-request',
-  'workflow-proposal',
-  'plan-approval-request',
-  'external-inquiry-request',
-  'user-question-request',
-] as const;
+const ITEM_NAMES = PANEL_TYPES.map((p) => p.item);
 
 /** Build a :is()-ready selector group from class names with an optional BEM suffix. */
 function selectorGroup(
@@ -51,32 +80,17 @@ const SCROLLABLE_DETAILS = selectorGroup(
   '__details',
 );
 
-/**
- * Accent color per panel type. Drives both the item's left border and the
- * header icon color (which always match). Keyed by item class name so adding a
- * panel type is a single entry the type checker enforces.
- */
-const ACCENT_COLORS: Record<(typeof ITEM_NAMES)[number], string> = {
-  'approval-request': 'var(--wa-color-text-normal)',
-  'bash-approval-request': 'var(--wa-color-terminal-ansi-yellow)',
-  'retry-request': 'var(--color-warning)',
-  'workflow-proposal': 'var(--wa-color-text-link)',
-  'plan-approval-request': 'var(--wa-color-text-link)',
-  'external-inquiry-request': 'var(--wa-color-focus)',
-  'user-question-request': 'var(--wa-color-focus)',
-};
-
 /** Per-type accent rules: item left-border plus matching header icon color. */
 const ACCENT_RULES = unsafeCSS(
-  ITEM_NAMES.map((item, i) => {
-    const color = ACCENT_COLORS[item];
-    return `.${item} {
-    border-left: var(--border-medium) solid ${color};
+  PANEL_TYPES.map(
+    ({ item, container, accent }) =>
+      `.${item} {
+    border-left: var(--border-medium) solid ${accent};
   }
-  .${CONTAINER_NAMES[i]}__header wa-icon {
-    color: ${color};
-  }`;
-  }).join('\n  '),
+  .${container}__header wa-icon {
+    color: ${accent};
+  }`,
+  ).join('\n  '),
 );
 
 const sp = {
