@@ -73,10 +73,12 @@ export const MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION =
   'Root agent for the team run (defaults to the preset orchestrator)';
 export const MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION =
   'Model for the team root agent';
-const MULTI_AGENT_INSPECT_HINT = `Hint: run \`${formatCliMultiAgentInspectCommand('<preset>')}\` to see missing agents for degraded or unavailable presets.`;
+const MULTI_AGENT_INSPECT_HINT =
+  'Hint: run `texra multi-agent inspect <team-id>` to see missing agents for degraded or unavailable presets.';
 const MULTI_AGENT_LOGIN_HINT =
   'Hint: built-in teams may load additional relay-served agents after `texra login`.';
-const MULTI_AGENT_LAUNCHER_INSPECT_HINT = `Team setup: run ${formatCliMultiAgentInspectCommand('<preset>')}.`;
+const MULTI_AGENT_LAUNCHER_INSPECT_HINT =
+  'Team setup: run `texra multi-agent inspect <team-id>` for the unavailable team.';
 const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
   'Relay teams may unlock more agents after texra login.';
 
