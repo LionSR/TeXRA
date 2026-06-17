@@ -15,7 +15,7 @@ import type { LogLevel } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 /**
- * Font Awesome icon name per log level, rendered via {@link waIcon}. Replaces
+ * Font Awesome icon name per log level, rendered via `waIcon`. Replaces
  * the former emoji map so log levels use the same icon set as the rest of the
  * UI; per-level color is applied through the `log-level-icon--{level}` classes
  * in logEntryStyles.
