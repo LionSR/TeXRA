@@ -143,10 +143,7 @@ describe('CLI agents run command', () => {
     expect(mocks.initLocalCliPlatform.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.resolveCliAgent.mock.invocationCallOrder[0],
     );
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
-      'chat',
-      AgentCategory.ToolUse,
-    );
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('chat', 'agentsRun');
     expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
       ['problem.md'],
       ['notes.md'],
@@ -196,7 +193,11 @@ describe('CLI agents run command', () => {
   });
 
   it('reports missing agents before resolving the model', async () => {
-    mocks.resolveCliAgent.mockResolvedValueOnce(undefined);
+    mocks.resolveCliAgent.mockRejectedValueOnce(
+      new Error(
+        'Tool-use agent not found: missing-agent. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
+      ),
+    );
     const { runToolUseAgent } = await import('@cli/commands/agentsRun');
 
     await expect(
@@ -216,20 +217,18 @@ describe('CLI agents run command', () => {
     );
     expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
       'missing-agent',
-      AgentCategory.ToolUse,
+      'agentsRun',
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('reports workflow agents before resolving the model', async () => {
-    mocks.resolveCliAgent.mockResolvedValueOnce({
-      name: 'polish',
-      category: AgentCategory.Workflow,
-      source: 'builtInWorkflow',
-      path: '/agents/polish.yaml',
-      tools: [],
-    });
+    mocks.resolveCliAgent.mockRejectedValueOnce(
+      new Error(
+        'Agent "polish" is a workflow agent; `texra agents run` only handles tool-use agents. Use `texra run polish` for workflow agents.',
+      ),
+    );
     const { runToolUseAgent } = await import('@cli/commands/agentsRun');
 
     await expect(
@@ -247,10 +246,7 @@ describe('CLI agents run command', () => {
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
-      'polish',
-      AgentCategory.ToolUse,
-    );
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('polish', 'agentsRun');
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
