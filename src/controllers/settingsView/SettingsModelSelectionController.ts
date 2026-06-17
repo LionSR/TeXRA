@@ -22,6 +22,7 @@ import {
   type ModelSelectionItem,
   type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
+import { byName } from '@utils/core';
 
 export interface SettingsModelSelectionState {
   getEnabledModels(): string[] | undefined;
@@ -171,7 +172,7 @@ export class SettingsModelSelectionController {
       items.push(item);
     }
 
-    return items.sort((a, b) => a.name.localeCompare(b.name));
+    return items.sort(byName);
   }
 
   private getEffectiveHelperModel(visibleModels: readonly string[]): string {
