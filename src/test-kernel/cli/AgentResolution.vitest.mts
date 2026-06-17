@@ -27,12 +27,13 @@ vi.mock('@cli/runtime/supabaseAuth', () => ({
 function agent(
   name: string,
   source: AgentEntry['source'] = 'builtInToolUse',
+  category: AgentEntry['category'] = AgentCategory.ToolUse,
 ): AgentEntry {
   return {
     name,
     source,
     path: `/agents/${name}.yaml`,
-    category: AgentCategory.ToolUse,
+    category,
   };
 }
 
@@ -88,16 +89,14 @@ describe('CLI agent resolution', () => {
     expect(mocks.authProvider.isAuthenticated).toHaveBeenCalledOnce();
   });
 
-  it('passes lookup category through authenticated remote-priority reloads', async () => {
+  it('uses launch mode category for authenticated remote-priority reloads', async () => {
     const local = agent('lean');
     const remote = agent('lean', 'remote');
     mocks.authProvider.isAuthenticated.mockResolvedValue(true);
     mocks.getAgent.mockReturnValueOnce(local).mockReturnValueOnce(remote);
     const { resolveCliAgent } = await import('@cli/runtime/agents');
 
-    await expect(resolveCliAgent('lean', AgentCategory.ToolUse)).resolves.toBe(
-      remote,
-    );
+    await expect(resolveCliAgent('lean', 'chat')).resolves.toBe(remote);
 
     expect(mocks.getAgent).toHaveBeenNthCalledWith(
       1,
@@ -128,14 +127,12 @@ describe('CLI agent resolution', () => {
     expect(mocks.authProvider.isAuthenticated).not.toHaveBeenCalled();
   });
 
-  it('passes lookup category through local and remote-fallback lookups', async () => {
+  it('uses launch mode category for local and remote-fallback lookups', async () => {
     const remote = agent('assistant', 'remote');
     mocks.getAgent.mockReturnValueOnce(undefined).mockReturnValueOnce(remote);
     const { resolveCliAgent } = await import('@cli/runtime/agents');
 
-    await expect(
-      resolveCliAgent('assistant', AgentCategory.ToolUse),
-    ).resolves.toBe(remote);
+    await expect(resolveCliAgent('assistant', 'chat')).resolves.toBe(remote);
 
     expect(mocks.getAgent).toHaveBeenNthCalledWith(
       1,
@@ -146,6 +143,20 @@ describe('CLI agent resolution', () => {
       2,
       'assistant',
       AgentCategory.ToolUse,
+    );
+  });
+
+  it('validates launch mode category before returning an agent', async () => {
+    const workflow = agent(
+      'correct',
+      'builtInWorkflow',
+      AgentCategory.Workflow,
+    );
+    mocks.getAgent.mockReturnValue(workflow);
+    const { resolveCliAgent } = await import('@cli/runtime/agents');
+
+    await expect(resolveCliAgent('correct', 'chat')).rejects.toThrow(
+      'Agent "correct" is a workflow agent; `texra chat` only handles tool-use agents.',
     );
   });
 });
