@@ -281,22 +281,34 @@ async function runInstallGithubAction(
   // `gh pr create --web` (it prefills the title/body) and fall back to opening
   // the compare URL directly when gh is not installed.
   const prPageUrl = compareUrl(slug, base, branch);
-  const opened = ghAvailable(root)
-    ? gh(
-        root,
-        'pr',
-        'create',
-        '--web',
-        '--base',
-        base,
-        '--head',
-        branch,
-        '--title',
-        'Add TeXRA code review',
-        '--body',
-        PR_BODY,
-      ).ok
-    : await tryOpenBrowser(prPageUrl);
+  let opened = false;
+  if (ghAvailable(root)) {
+    const pr = gh(
+      root,
+      'pr',
+      'create',
+      '--web',
+      '--base',
+      base,
+      '--head',
+      branch,
+      '--title',
+      'Add TeXRA code review',
+      '--body',
+      PR_BODY,
+    );
+    opened = pr.ok;
+    if (!pr.ok) {
+      const diagnostic = (pr.stderr || pr.stdout).trim();
+      writeTextStderr(
+        diagnostic
+          ? `gh pr create --web failed: ${diagnostic}`
+          : 'gh pr create --web failed; falling back to the compare URL.',
+      );
+    }
+  } else {
+    opened = await tryOpenBrowser(prPageUrl);
+  }
 
   restoreBranch(root, startBranch);
   if (opened) {
