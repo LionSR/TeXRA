@@ -173,7 +173,9 @@ describe('CLI platform init', () => {
     expect(mocks.bootstrapPlatformAgentDirectories).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: 'cli',
-        bundleSource: expect.objectContaining({ constructor: expect.any(Function) }),
+        bundleSource: expect.objectContaining({
+          constructor: expect.any(Function),
+        }),
         currentVersion: '1.2.3',
       }),
     );

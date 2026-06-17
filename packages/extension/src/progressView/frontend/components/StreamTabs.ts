@@ -1,5 +1,11 @@
 // Third-party imports
-import { LitElement, html, nothing, type PropertyValues, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -114,7 +120,12 @@ export class StreamTab extends LitElement {
   private _tooltip = '';
 
   protected override willUpdate(changed: PropertyValues): void {
-    if (!changed.has('info') && !changed.has('status') && !changed.has('lastTimestamp')) return;
+    if (
+      !changed.has('info') &&
+      !changed.has('status') &&
+      !changed.has('lastTimestamp')
+    )
+      return;
     if (changed.has('info')) {
       this._agentDecorator = getAgentCategoryDecorator(this.info.agentCategory);
     }
