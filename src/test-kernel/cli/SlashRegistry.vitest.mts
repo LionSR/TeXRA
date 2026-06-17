@@ -85,6 +85,7 @@ describe('slashRegistry', () => {
         'approval',
         'yolo',
         'status',
+        'goal',
         'resume',
         'memory',
         'skills',
@@ -671,6 +672,10 @@ describe('parseSlashInput', () => {
   it('accepts the historical clear spelling without treating TeX as commands', () => {
     expect(parseSlashInput('\\clear')).toEqual({
       name: 'clear',
+      remainder: '',
+    });
+    expect(parseSlashInput('\\goal')).toEqual({
+      name: 'goal',
       remainder: '',
     });
     expect(parseSlashInput('\\alpha + \\beta')).toBeUndefined();
