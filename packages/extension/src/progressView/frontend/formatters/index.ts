@@ -32,7 +32,8 @@ import {
   type FormatResult,
 } from './litTemplates';
 
-// Local imports - shared schemas
+// Local imports - shared utilities
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 type TemplateFormatterFn = (
   message: LogMessageData,
@@ -57,7 +58,7 @@ const NULLABLE_TYPES: Set<MessageType> = new Set([
 /** Create an error fallback template when formatting fails. */
 function formatRenderError(label: string, errorMsg: string): TemplateResult {
   // prettier-ignore
-  return html`<div class="log-line log-line--render-error"><span class="render-error-icon">⚠️</span><span class="render-error-text">Failed to render ${label}: ${errorMsg}</span></div>`;
+  return html`<div class="log-line log-line--render-error"><span class="render-error-icon">${waIcon('warning')}</span><span class="render-error-text">Failed to render ${label}: ${errorMsg}</span></div>`;
 }
 
 /** Wrap a formatter function with error handling for graceful degradation. */
