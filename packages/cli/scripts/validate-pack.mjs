@@ -48,8 +48,7 @@ function assertNoForbiddenTarballEntries(entries) {
       relative.startsWith('dist/resources/walkthroughs/') ||
       relative.startsWith('dist/resources/examples/') ||
       relative.startsWith('dist/resources/logo-') ||
-      // Bundled skills and reference agents are not part of the public CLI.
-      relative.startsWith('dist/resources/skills/') ||
+      // Reference agents are not part of the public CLI.
       relative.startsWith('dist/resources/reference-agents/') ||
       relative === 'dist/resources/templates/chatExport.tex'
     );
@@ -60,6 +59,23 @@ function assertNoForbiddenTarballEntries(entries) {
     `npm package contains entries excluded from the public CLI artifact:\n${forbidden.join(
       '\n',
     )}`,
+  );
+}
+
+function assertBundledSkillsIncluded(entries) {
+  const hasBundledSkillManifest = entries.some((entry) => {
+    const relative = entry.startsWith(packageDir)
+      ? entry.slice(packageDir.length)
+      : entry;
+    return (
+      relative.startsWith('dist/resources/skills/') &&
+      relative.endsWith('/SKILL.md')
+    );
+  });
+
+  assert(
+    hasBundledSkillManifest,
+    'npm package should include bundled CLI skill manifests.',
   );
 }
 
@@ -107,6 +123,7 @@ try {
     .filter(Boolean)
     .sort();
   assertNoForbiddenTarballEntries(entries);
+  assertBundledSkillsIncluded(entries);
 
   const installRoot = path.join(tmp, 'install');
   run('npm', ['install', '--prefix', installRoot, tarballPath]);
