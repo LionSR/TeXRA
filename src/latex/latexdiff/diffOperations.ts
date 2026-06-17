@@ -25,7 +25,7 @@ import {
   pathToLocation,
 } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
-import { isDirectory, isFile } from '@utils/files/fsEntryType';
+import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 
 import { CHANNEL, service } from './service';
 import type {
@@ -230,8 +230,12 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       model,
     );
     for (const [fileName, fileType] of dirEntries) {
+      // Skip symlinks (mirrored dependency copies, not revised outputs) so
+      // behavior matches the prior strict `=== FileType.File` check; the
+      // platform FS reports a symlink as `SymbolicLink | targetType`.
       if (
         !isFile(fileType) ||
+        isSymlink(fileType) ||
         !hasExtension(fileName, '.tex') ||
         fileName.includes('_diff')
       ) {
@@ -253,7 +257,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       model,
     })}.tex`;
     for (const [entryName, entryType] of dirEntries) {
-      if (!isDirectory(entryType)) continue;
+      if (!isDirectory(entryType) || isSymlink(entryType)) continue;
       const round = parseWorkflowOutputRoundDir(entryName);
       if (round == null) continue;
       if (roundOutputsMap.has(round)) continue;
@@ -273,7 +277,9 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       }
       const match = roundEntries.find(
         ([fileName, nestedType]) =>
-          isFile(nestedType) && fileName === midEraFilename,
+          isFile(nestedType) &&
+          !isSymlink(nestedType) &&
+          fileName === midEraFilename,
       );
       if (!match) continue;
       roundOutputsMap.set(
