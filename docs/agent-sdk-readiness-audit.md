@@ -1,6 +1,6 @@
 # Agent SDK Readiness Audit
 
-_Audit date: 2026-05-28 · Re-verified through 2026-06-14 (§18) · Scope: `src/agent/**`, `src/logger/**`, `src/eventBus/**`, `src/platform/**`, `packages/core/src/**`, plus extension/CLI entrypoints._
+_Audit date: 2026-05-28 · Re-verified through 2026-06-17 (§20) · Scope: `src/agent/**`, `src/logger/**`, `src/eventBus/**`, `src/platform/**`, `packages/core/src/**`, plus extension/CLI entrypoints._
 
 This is a **review + refactoring plan**, not an applied refactor. It identifies the
 texra agent core, model handlers, logger, and surface areas; flags abstractions
@@ -2024,3 +2024,126 @@ shim/barrel** to remove, so — consistent with the discipline — **no refactor
 only remaining items are behavior-sensitive (§4 producer de-dup, §16 #4 cycle) or a multi-day
 primitive (§5 `delegateTo`). The codebase continues to acquire exactly the SDK-shaped surface
 the original audit projected, by its own team, without a rewrite.
+
+## 20. Re-verification addendum — 2026-06-17 (fifteenth pass — confirmation; two dead re-export lines removed from the `agent/index` barrel, UI-altitude helpers relocated out of the registry)
+
+A fifteenth pass — a fresh four-agent fan-out (independent, no sight of this document): a
+Claude Agent SDK reference pass, a structural map + abstraction audit of `agent/core` +
+`implementations/flows` + `runtime` + `node`, a model-handler + logger + `model/` audit, and a
+public-surface (`@agent/*` consumer) map — plus a direct re-check of every open-ledger item and
+the guardrail greps against branch `claude/eager-noether-pfab9a` at HEAD `df0ca92` (baseline for
+drift: §19's `00d2414`, **reachable** from this branch, so the range `00d2414..df0ca92` is exactly
+computable). That range is **61** non-merge commits (`git rev-list --no-merges --count
+00d2414..df0ca92` = 61). As in §14/§19, the **Drift** section below enumerates only the
+SDK-_structural_ subset (the new run-entry/handle/emit/state work); it is **not** the full list of
+commits touching the audited dirs. The unenumerated remainder is behavior fixes (subagent
+handoffs, goal-continuation, remote-loader null-tolerance such as `ea0f239`) and DRY/shared-helper
+adoption (e.g. `a47b7c7`, `0b8d549` over `src/tools`) — **none adding a wrapper, barrel, or
+abstraction** (the guardrail greps below — no new `index.ts`, vscode-free, unchanged `@texra/core`
+surface — are what back the "no new structural over-abstraction" conclusion, not the enumerated
+list). **All 2026-05-28 → 06-15 findings hold without change. No new structural over-abstraction
+surfaced.** TeXRA remains well-architected and SDK-aligned; the gaps are
+incremental, not structural. Like §15/§17/§18/§19 this is a **confirmation-only pass — no refactor
+applied** — because no pure dead-shim/barrel item remains (the one that did surface this period the
+team already removed itself; see `75154a3` below).
+
+### The four independent agents re-reached the standing verdict (recorded, not re-flagged)
+
+Consistent with §14/§16/§17, the fresh-eyes agents — given only the source, not this audit —
+re-converged on "well-layered, incremental not structural" and re-surfaced the documented traps:
+
+- The core/runtime agent flagged the `ToolUseCycleNode`/`ResponseCycleNode` "`exec()` marshals
+  state → runs the inner cycle flow → interprets the outcome" shape as a removable wrapper
+  (Medium). **Re-rebutted** (consistent with the proposal's "PocketFlow flow layer — do NOT
+  refactor" row): `ToolUseCycleNode.exec` (`tooluse/nodes/ToolUseCycleNode.ts:44-132`) is not
+  trivial indirection — it owns real per-round orchestration (the `getClient`/`refreshClient`
+  closure pair, the `workPlan.setOnUpdate` todo/plan wiring with a drained `todoPersistChain`,
+  and the outcome→`shared` state mapping in `post`). This is the legitimate node-runs-subflow
+  composition, not a layer to inline.
+- The model-handler agent re-flagged `IModelHandler` (471 LOC / ~50 methods) as a "large /
+  could-be-partitioned" surface — the **eighth** re-surfacing of the `IModelHandler`-is-redundant
+  family. **Re-rebutted** (consistent with §9–§19): the interface is typed into
+  `AgentCore.modelHandler` (`core/flows/BaseFlowServices.ts:24-30`) and declares the optional
+  `createBatchedToolUseFollowUpMessages?` (`IModelHandler.ts:392`) the abstract class omits and
+  `ToolUseDispatchNode` feature-detects (`ToolUseDispatchNode.ts:434`, `!!modelHandler.…`) —
+  load-bearing, not a `ModelHandler` duplicate. Surface size is SDK-maturity,
+  not redundancy; no member is dead.
+- The public-surface agent reported the `core/`/`runtime/` "no-barrel" deep-import sprawl
+  (~178 files, hundreds of deep `@agent/*` imports) as a surface-narrowing opportunity via new
+  barrels. **Re-rebutted** (consistent with §3.1 / Step 4 / Step 5): the team's anti-shim
+  convention is deliberate, `@texra/core` _is_ the curated barrel, and a `core/`/`runtime/index.ts`
+  was explicitly rejected as "pure churn" without a lint gate (risks TS init-order cycles on the
+  value exports). The one runtime barrel proposed every pass stays unbuilt by design.
+
+### Drift since the §19 baseline (`00d2414` → `df0ca92`) — moves with the audit; one team-applied anti-shim removal
+
+None of the audited-dir commits add a wrapper, barrel, or run-entry indirection:
+
+- **`75154a3` "move stream metadata helpers out of agent registry" (2026-06-16).** **Advances
+  §16 #1** and applies the audit's own anti-shim discipline: it **removed the two now-dead
+  `streamTabInfo`/`worktreeInfo` re-export lines from the `agent/index` barrel**
+  (`src/agent/index/index.ts` −2 lines; the barrel file itself stays — it is one of the eight
+  live barrels counted in the guardrails below) and relocated `streamTabInfo.ts`
+  → `shared/progressView/backend/` (next to the progress-view backend that consumes it) and
+  `worktreeInfo.ts` → `utils/git/`, so callers hit the canonical locations directly. UI-altitude
+  stream/worktree display logic no longer sits in the SDK-exported agent registry — exactly the
+  §16 #1 "move the UI-altitude helpers off the core surface" prescription, applied by the team.
+- **`8ff982f` / `b7164d8` "make agent lookup context explicit" / "clarify CLI agent lookup
+  priority"** and **`1454787` "centralize CLI agent launch validation."** Clarity/DRY refactors of
+  the agent-lookup + CLI launch-validation paths; `git show --stat` shows **no** new `index.ts`
+  and no new file in the audited dirs — naming/centralization, not new abstraction.
+- **`e18f842` / `2a0ea45` "keep goal continuation guards in wait node" / "simplify goal
+  continuation rendering"**, **`ee6a27a` "summarize subagent XML in CLI transcript"**, **`68989e7`
+  "drop google tool-call control glyphs"**, **`efcc228` "adopt shared text and extension
+  helpers."** Behavior fixes + DRY (shared-helper adoption) — move _with_ the audit; no wrapper.
+
+**Guardrails intact:** `find src/agent -name index.ts` shows the **same eight** pre-existing
+barrels (no new one); `src/agent/runtime/index.ts` still absent (§3.1); `grep` for `vscode`
+imports over `src/agent`/`src/model`/`src/latex`/`src/tools`/`src/controllers`/`src/shared`/
+`src/eventBus`/`src/hosts` is **clean**; `@logger` imports nothing from `@platform`; `@texra/core`
+is still **16** `export` statements (unchanged — no surface added or removed this period). The lone
+`export … from` in the audited dirs (`runtime/executionRegistry.ts:37`,
+`export type { ExecutionHandle } from './ExecutionHandle'`) is a **type-only** re-export of the
+§19-documented F-2 handle — load-bearing narrowed surface, not a dead shim (§19 already noted
+`ExecutionHandle` is "re-exported only from `executionRegistry`").
+
+### Open ledger at HEAD `df0ca92` (line numbers refreshed; all still present unless noted)
+
+- **§2.6** — `modelHandlers/modelHandlerValidation.ts` still in the production handler dir
+  (`TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL`-gated); relocate-with-injection still low priority.
+- **§4** — `UsageMonitor` two-sink fan-out **unchanged**: `runtimeHost.emit('updateStreamUsage', …)`
+  (`UsageMonitor.ts:167`, all agents) + `logger.usage(…)` gated to `AgentCategory.Workflow`
+  (`:172/:176`). Two audiences, not a duplicate; producer-side de-dup (criterion (b)) still
+  deferred as behavior-touching; `emitRuntimeEvent` remains the routing primitive it will ride.
+- **§5 / Step 7** — still no `delegateTo(...)` primitive (`grep` over `src/**` + `packages/**`
+  empty); delegation remains a tool call inside the LLM loop — the one structurally-open item,
+  multi-day by design. Cross-window reset-sweep bug stays fixed (§19, `cf1479d`).
+- **§3.1** — still no `@agent/runtime/index.ts`; still optional polish, re-rejected this pass.
+- **§13 finding #1** (`AgentRuntimeHost.emit` mixes UI + essential events) — unchanged; two-tier
+  headless-contract TSDoc present; structural split deferred.
+- **§16 #1** (`agentRegistry` UI-altitude) — **advanced** by `75154a3` (stream/worktree helpers
+  relocated out, dead re-export shim removed); only the thin `computeAgentOptionsData` orchestrator
+  (`agentRegistry.ts:481`) still sits beside the SDK-exported core. Closer to closed.
+- **§16 #2** — RESOLVED (§19); unchanged.
+- **§16 #4** (`@logger`↔`@agent/trace` cycle) — still present (`src/logger/runTrace.ts:10`
+  imports `TraceEmitter` from `@agent/trace`); latent, low; for the eventual package-extraction
+  step.
+- **SDK-008** — CLOSED and deepened (§19); unchanged.
+
+**Subagent split points — unchanged and accurate** (§5 + proposal): config-driven YAML agents over
+the two flows (reflection / `ToolUseRoundFlow`) + the `delegate_*` tools are the existing subagent
+mechanism; the `agentCategory` dispatch in `executeAgent` is the cleanest internal seam; the
+helper-model tasks and node-level candidates stay the lowest-risk extractions, gated behind the
+delegation-as-primitive (§5) work. The F-2 per-run handle (`trace` + `result` + `onRun`) remains
+the consumer-facing surface a future `delegateTo(...)` would return.
+
+**Net for 2026-06-17:** thesis reaffirmed for the fifteenth pass — incremental, not structural.
+The intervening drift is small and moves entirely _with_ the audit: the team removed two dead
+re-export lines from the `agent/index` barrel and relocated those UI-altitude stream/worktree
+helpers out of the SDK-exported registry (`75154a3`, advancing §16 #1), plus clarity/DRY refactors
+that add no abstraction. Four independent fresh-eyes agents re-reached the standing verdict and re-surfaced
+the recurring traps (node-runs-subflow "wrapper", `IModelHandler` redundant for the eighth time,
+`core/runtime` barrels) — all re-rebutted as in prior passes. Guardrails are intact; no dead
+shim/barrel remains for a tidy pass to remove, so no refactor was applied. The remaining open
+items are behavior-sensitive (§4 producer de-dup, §16 #4 cycle) or the multi-day §5 `delegateTo`
+primitive — exactly the residue the original audit projected.
