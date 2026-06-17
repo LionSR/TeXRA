@@ -1411,7 +1411,7 @@ const SCENARIOS = [
     ],
     unexpect: [
       'r approve & run',
-      'Run auto-approves bash; edits still ask',
+      'Approve & run only auto-approves bash',
       '[/model]models',
     ],
     maxBlankLinesBetween: [
@@ -1430,7 +1430,7 @@ const SCENARIOS = [
       'Approve plan?',
       'Coordinate a short math proof through CLI chat.',
       'Split the finite and symbolic cases',
-      'Run auto-approves bash; edits still ask',
+      'Approve & run only auto-approves bash',
       'r approve & run',
       'y approve',
       'n reject',
@@ -1461,7 +1461,7 @@ const SCENARIOS = [
     bootExpect: '[Ctrl-C]',
     expect: [
       'Approve plan?',
-      'Run auto-approves bash; edits still ask',
+      'Approve & run only auto-approves bash',
       'observations. Do not edit any files',
       'r approve & run',
       'y approve',
@@ -1500,7 +1500,7 @@ const SCENARIOS = [
     bootExpect: '[Ctrl-C]',
     expect: [
       'Approve plan?',
-      'Run auto-approves bash; edits still ask',
+      'Approve & run only auto-approves bash',
       '4. Delegate a brief independent verification to the `review` subagent to',
       "check the derivation's correctness.",
       'r approve & run',
@@ -1523,7 +1523,11 @@ const SCENARIOS = [
       'e feedback',
       'Esc cancel',
     ],
-    unexpect: ['Run auto-approves bash; edits still ask', '[/model]models'],
+    unexpect: [
+      'Approve & run only auto-approves bash',
+      'Run auto-approves bash; edits still ask',
+      '[/model]models',
+    ],
   },
   {
     name: 'compact-plan-approval-goal',
@@ -1539,7 +1543,7 @@ const SCENARIOS = [
       'Approve plan?',
       'Coordinate a short math proof through CLI chat.',
       'Split the finite and symbolic cases',
-      'Run auto-approves bash; edits still ask',
+      'Approve & run only auto-approves bash',
       'r approve & run',
       'y approve',
       'n reject',
