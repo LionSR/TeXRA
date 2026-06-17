@@ -34,6 +34,9 @@ describe('formatSlashCommandHelp', () => {
     // Each command renders as its own markdown list item — single newlines
     // collapse in the transcript's markdown renderer, list items do not.
     expect(help).toContain('- `/clear` — Start a fresh chat session');
+    expect(help).toContain(
+      '- `/goal` (`/goals`) — Explain autonomous goal mode',
+    );
     expect(help).toContain('- `/exit` (`/quit`) — Exit the CLI session');
     expect(help).toContain('- `/model` (`/models`) — List available models');
   });
