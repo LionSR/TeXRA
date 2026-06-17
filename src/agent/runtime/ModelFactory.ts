@@ -49,7 +49,6 @@ type ModelHandlerCompatibilityTagged = object & {
     | undefined;
 };
 
-
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
 // A new enum value in llm-zoo without an entry here will fail typecheck.
 // `null` route fields mark providers that have no direct handler.
@@ -199,7 +198,8 @@ function applyShortModelNamePreference(
 // TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL gate is set, which only happens
 // in the packaged-build validation pipeline.
 function shouldUseInternalValidationModelHandler(): boolean {
-  if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1') return false;
+  if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1')
+    return false;
 
   const handlerEnv =
     process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV ?? '';
@@ -230,7 +230,9 @@ function shouldUseInternalValidationModelHandler(): boolean {
   }
 
   if (flagContent !== expectedFlagContent) {
-    throw new Error(`${handlerEnv}=1 received an invalid validation flag file.`);
+    throw new Error(
+      `${handlerEnv}=1 received an invalid validation flag file.`,
+    );
   }
 
   return true;
