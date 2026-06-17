@@ -319,6 +319,12 @@ describe('CLI child execution controls', () => {
       },
     ]);
     expect(childElapsed(state.activeProcesses[0], 62_000)).toBe('1s');
+    expect(
+      childElapsed(
+        { startedAt: 0, status: STREAM_STATUS.RUNNING, elapsed: '1s' },
+        7_501_234,
+      ),
+    ).toBe('2h 5m');
   });
 
   it('uses CLI-facing labels in picker descriptions', () => {
