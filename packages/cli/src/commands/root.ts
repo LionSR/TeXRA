@@ -48,6 +48,7 @@ import { doctorCommand } from './doctor';
 import { helpCommand } from './help';
 import { historyCommand } from './history';
 import { initCommand } from './init';
+import { installGithubActionCommand } from './installGithubAction';
 import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
 import { multiAgentCommand } from './multiAgent';
@@ -89,6 +90,7 @@ export const rootCommand = withUsageSections(
       resume: resumeCommand,
       setup: setupCommand,
       init: initCommand,
+      'install-github-action': installGithubActionCommand,
       history: historyCommand,
       memory: memoryCommand,
       agents: agentsCommand,
@@ -121,6 +123,10 @@ export const rootCommand = withUsageSections(
         ['texra run <agent> --input file.tex', 'run a workflow agent headless'],
         ['texra agents list', 'list the available agents'],
         ['texra init', 'save workspace defaults to .texra/config.json'],
+        [
+          'texra install-github-action',
+          'add the TeXRA code-review workflow and open a PR',
+        ],
         ['texra doctor', 'check your environment and configuration'],
       ],
     },
