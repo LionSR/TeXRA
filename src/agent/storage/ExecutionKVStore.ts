@@ -162,7 +162,10 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     return this.executionId;
   }
 
-  private async readParsed<T>(key: string, schema: z.ZodType<T>): Promise<T | null> {
+  private async readParsed<T>(
+    key: string,
+    schema: z.ZodType<T>,
+  ): Promise<T | null> {
     const raw = await this.read(key);
     if (!raw) return null;
     const result = schema.safeParse(raw);
