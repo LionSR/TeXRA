@@ -11,6 +11,11 @@ import {
   isToolMessage,
 } from 'openai/lib/chatCompletionUtils';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
+import {
+  extractTextContentPart,
+  isFunctionCallOutputItem,
+} from '@agent/modelHandlers/openai/openAIResponseContent';
+import { isResponseFunctionToolCallItem } from '@agent/modelHandlers/openai/responseStreamEvents';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,
@@ -200,15 +205,21 @@ export function normalizeMessages(messages: unknown[]): ExportNode[] {
   let lastAssistantHadToolUse = false;
 
   for (const raw of messages) {
-    const item = raw as Record<string, unknown>;
+    const item = asObject(raw);
+    if (!item) {
+      continue;
+    }
 
     // OpenAI Response API: top-level function_call items (not wrapped in a message)
-    if (isResponseFunctionCallItem(item)) {
+    const responseToolCall = item as unknown as
+      | ResponseFunctionToolCallItem
+      | undefined;
+    if (isResponseFunctionToolCallItem(responseToolCall)) {
       const args =
-        typeof item.arguments === 'string'
-          ? item.arguments
-          : JSON.stringify(item.arguments ?? {}, null, 2);
-      const name = item.name ?? 'unknown';
+        typeof responseToolCall.arguments === 'string'
+          ? responseToolCall.arguments
+          : JSON.stringify(responseToolCall.arguments ?? {}, null, 2);
+      const name = responseToolCall.name ?? 'unknown';
       nodes.push({ kind: 'tool-call', name, input: args });
       lastAssistantHadToolUse = true;
       continue;
@@ -216,19 +227,17 @@ export function normalizeMessages(messages: unknown[]): ExportNode[] {
 
     // OpenAI Response API: top-level function_call_output items.
     // output can be a string OR an array of input_text/input_file/input_image parts.
-    if (isResponseFunctionCallOutputItem(item)) {
-      const output = item.output;
+    const responseInputItem = item as unknown as ResponseInputItem | undefined;
+    if (isFunctionCallOutputItem(responseInputItem)) {
+      const output = responseInputItem.output;
       if (Array.isArray(output)) {
-        const textParts: string[] = [];
-        for (const part of output) {
-          if (part.type === 'input_text' && typeof part.text === 'string') {
-            textParts.push(part.text);
-          } else if (part.type === 'input_image') {
-            textParts.push('[image attachment]');
-          } else if (part.type === 'input_file') {
-            textParts.push('[file attachment]');
-          }
-        }
+        const textParts = output.flatMap((part) => {
+          const text = extractTextContentPart(part);
+          if (text !== undefined) return [text];
+          if (part.type === 'input_image') return ['[image attachment]'];
+          if (part.type === 'input_file') return ['[file attachment]'];
+          return [];
+        });
         if (textParts.length) {
           nodes.push({ kind: 'tool-result', text: textParts.join('\n') });
         }
@@ -288,7 +297,7 @@ export function normalizeMessages(messages: unknown[]): ExportNode[] {
     }
 
     // OpenAI Chat Completions tool role
-    const openaiMsg = toChatCompletionMessageParam(item);
+    const openaiMsg = item as unknown as ChatCompletionMessageParam;
     if (role === 'tool' || isToolMessage(openaiMsg)) {
       const text =
         typeof openaiMsg.content === 'string'
@@ -302,38 +311,16 @@ export function normalizeMessages(messages: unknown[]): ExportNode[] {
   return nodes;
 }
 
-function isResponseFunctionCallItem(
-  item: unknown,
-): item is ResponseFunctionToolCallItem {
-  return (
-    typeof item === 'object' &&
-    item !== null &&
-    'type' in item &&
-    item.type === 'function_call'
-  );
-}
-
-function isResponseFunctionCallOutputItem(
-  item: unknown,
-): item is ResponseInputItem.FunctionCallOutput {
-  return (
-    typeof item === 'object' &&
-    item !== null &&
-    'type' in item &&
-    item.type === 'function_call_output'
-  );
-}
-
-function toChatCompletionMessageParam(
-  item: unknown,
-): ChatCompletionMessageParam {
-  return item as ChatCompletionMessageParam;
+function asObject(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 function getAssistantToolCalls(
   item: unknown,
 ): ChatCompletionMessageFunctionToolCall[] {
-  const message = toChatCompletionMessageParam(item);
+  const message = item as ChatCompletionMessageParam;
   if (!isAssistantMessage(message) || !Array.isArray(message.tool_calls)) {
     return [];
   }
