@@ -15,7 +15,9 @@ const mocks = vi.hoisted(() => {
     cliMultiAgentPresetCanLaunchTeam: vi.fn(),
     formatCliMultiAgentPresetRunWarnings: vi.fn(),
     formatCliMultiAgentTeamLaunchBlockMessage: vi.fn(),
+    getAgent: vi.fn(),
     getAgentsByCategory: vi.fn(),
+    getVisibleAgents: vi.fn(),
     initCliPlatform: vi.fn(),
     isAuthenticated: vi.fn(),
     loadAgents: vi.fn(),
@@ -27,7 +29,9 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@agent/index', () => ({
+  getAgent: mocks.getAgent,
   getAgentsByCategory: mocks.getAgentsByCategory,
+  getVisibleAgents: mocks.getVisibleAgents,
   loadAgents: mocks.loadAgents,
 }));
 

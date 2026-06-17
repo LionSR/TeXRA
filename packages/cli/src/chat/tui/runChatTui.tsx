@@ -50,7 +50,7 @@ import {
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
-import { assertCliAgentLaunch } from '@cli/commands/_helpers/agentLookupText';
+import { assertCliAgentLaunch } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
