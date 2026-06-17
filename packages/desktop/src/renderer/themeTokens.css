@@ -79,9 +79,9 @@
   --wa-font-family-heading: var(--wa-font-family-body);
   --wa-font-family-mono:
     ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --wa-font-size-m: var(--desktop-font-size);
-  --wa-font-weight-normal: var(--desktop-font-weight);
-  --wa-editor-font-size: var(--desktop-font-size);
+  --wa-font-size-m: var(--desktop-font-size, 1rem);
+  --wa-font-weight-normal: var(--desktop-font-weight, 400);
+  --wa-editor-font-size: var(--desktop-font-size, 13px);
 
   /* Surface / text. */
   --wa-color-text-normal: var(--desktop-color-foreground);

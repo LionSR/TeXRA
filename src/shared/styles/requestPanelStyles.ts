@@ -368,15 +368,15 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .bash-approval-request__cwd {
-    color: var(--text-muted);
+    color: var(--wa-color-text-quiet);
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-xs);
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: var(--wa-space-xs);
     overflow-wrap: anywhere;
   }
 
   .bash-approval-request__cwd span {
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
   }
 
   .bash-approval-request__command .code-block {
