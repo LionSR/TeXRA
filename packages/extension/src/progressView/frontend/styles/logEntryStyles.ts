@@ -215,6 +215,30 @@ export const logEntryStyles = css`
     color: var(--color-text-secondary);
   }
 
+  /* Per-level log icons (replaces the former emoji map). Font Awesome glyphs
+     render in currentColor, so each level sets its own color to preserve the
+     at-a-glance severity coding the colored emoji used to carry. */
+  .log-level-icon {
+    font-size: var(--font-size-sm);
+    vertical-align: -0.1em;
+  }
+
+  .log-level-icon--error {
+    color: var(--color-error);
+  }
+
+  .log-level-icon--warn {
+    color: var(--color-warning);
+  }
+
+  .log-level-icon--info {
+    color: var(--color-success);
+  }
+
+  .log-level-icon--debug {
+    color: var(--color-text-secondary);
+  }
+
   /* Log level badges */
   :is(.level-debug, .level-info, .level-warn, .level-error) {
     font-weight: var(--font-weight-bold);
