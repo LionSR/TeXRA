@@ -19,21 +19,19 @@ describe('resolveBrowserLaunch', () => {
     });
   });
 
-  it('uses verbatim cmd start quoting on Windows', () => {
+  it('uses the Windows URL handler without cmd reparsing', () => {
     expect(
       resolveBrowserLaunch(
         'https://example.com/compare/feature%2Fdefault...topic%2Fpr?title=a"b',
         'win32',
       ),
     ).toEqual({
-      command: 'cmd',
+      command: 'rundll32',
       args: [
-        '/d',
-        '/s',
-        '/c',
-        'start "" "https://example.com/compare/feature^%2Fdefault...topic^%2Fpr?title=a^%22b"',
+        'url.dll,FileProtocolHandler',
+        'https://example.com/compare/feature%2Fdefault...topic%2Fpr?title=a"b',
       ],
-      windowsVerbatimArguments: true,
+      windowsVerbatimArguments: false,
     });
   });
 });
