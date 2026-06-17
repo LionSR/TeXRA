@@ -73,8 +73,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private rootStreamId: string | undefined;
   private rootStreamTerminal = false;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
-  private activeProcessCount = 0;
-  private activeSubagentCount = 0;
 
   constructor(init: RunProgressRendererInit) {
     this.write = init.write ?? writeRawStderr;
@@ -93,6 +91,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         if (
           this.applyTaskState(payload as ProgressEventPayloads['setTaskState'])
         ) {
+          this.updateHeartbeat();
           this.render(true);
         }
         return true;
@@ -103,6 +102,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
             payload as ProgressEventPayloads['updateConversationProgress'],
           )
         ) {
+          this.updateHeartbeat();
           this.render();
         }
         return true;
@@ -135,8 +135,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           if (this.rootStreamTerminal) {
             this.state.activeProcesses = undefined;
             this.state.activeSubagents = undefined;
-            this.activeProcessCount = 0;
-            this.activeSubagentCount = 0;
           }
           this.updateHeartbeat();
           this.render(true);
@@ -153,6 +151,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           this.state.phase = (
             payload as ProgressEventPayloads['updateStreamDescription']
           ).description;
+          this.updateHeartbeat();
           this.render(true);
         }
         return true;
@@ -205,7 +204,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   ): void {
     if (!this.claimRootStream(payload.parentStreamId)) return;
 
-    this.activeProcessCount = payload.processes.length;
     this.state.activeProcesses = formatActiveChildren(
       'tool',
       payload.processes.map(
@@ -219,7 +217,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   ): void {
     if (!this.claimRootStream(payload.parentStreamId)) return;
 
-    this.activeSubagentCount = payload.children.length;
     this.state.activeSubagents = formatActiveChildren(
       'subagent',
       payload.children.map((child) => child.agentName),
@@ -253,7 +250,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private updateHeartbeat(): void {
-    if (this.rootStreamTerminal || !this.hasActiveChildren()) {
+    if (this.rootStreamTerminal || !this.rootStreamId) {
       this.stopHeartbeat();
       return;
     }
@@ -269,10 +266,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!this.heartbeatTimer) return;
     this.clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = undefined;
-  }
-
-  private hasActiveChildren(): boolean {
-    return this.activeSubagentCount > 0 || this.activeProcessCount > 0;
   }
 
   private formatLine(now: number): string {
