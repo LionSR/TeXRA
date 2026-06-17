@@ -57,6 +57,7 @@ export function formatProgressStatusTemplate(
   const detailText = stringifyWithLanguage(data).text;
   const levelIcon = waIcon(ICON_BY_LEVEL[level], {
     className: `log-level-icon log-level-icon--${level}`,
+    label: level === 'error' || level === 'warn' ? level : undefined,
   });
 
   // prettier-ignore
@@ -164,6 +165,7 @@ export function formatDefaultLogMessageTemplate(
   const { id, text, level, timestamp, groupId, verbose } = logMessage;
   const levelIcon = waIcon(ICON_BY_LEVEL[level], {
     className: `log-level-icon log-level-icon--${level}`,
+    label: level === 'error' || level === 'warn' ? level : undefined,
   });
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
