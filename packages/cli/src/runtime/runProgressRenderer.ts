@@ -21,7 +21,7 @@ interface RenderState {
   round?: number;
   toolCallCount?: number;
   agent?: string;
-  inputFile?: string;
+  inputLabel?: string;
   phase?: string;
   activeProcesses?: string;
   activeSubagents?: string;
@@ -184,7 +184,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
     const config = payload.taskState.agentConfig;
     this.state.agent = config.agent;
-    this.state.inputFile = safeBasename(config.inputFiles.at(0));
+    this.state.inputLabel = formatInputLabel(config.inputFiles);
     this.state.phase ??= 'running';
     return true;
   }
@@ -279,7 +279,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const parts: string[] = [];
     if (this.state.round != null) parts.push(`[r${this.state.round}]`);
 
-    const subject = [this.state.agent, this.state.inputFile]
+    const subject = [this.state.agent, this.state.inputLabel]
       .filter(Boolean)
       .join(' ');
     const phase = this.state.phase;
@@ -314,8 +314,12 @@ function formatRunProgressStatus(
   return status;
 }
 
-function safeBasename(file: string | undefined): string | undefined {
-  return file ? path.basename(file) : undefined;
+function formatInputLabel(files: readonly string[]): string | undefined {
+  const first = files.at(0);
+  if (!first) return undefined;
+
+  const firstName = path.basename(first);
+  return files.length === 1 ? firstName : `${firstName} +${files.length - 1}`;
 }
 
 function formatActiveChildren(

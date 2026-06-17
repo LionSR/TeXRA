@@ -132,6 +132,29 @@ describe('CLI run progress renderer', () => {
     expect(output.endsWith('\r\x1b[2K')).toBe(true);
   });
 
+  it('summarizes multi-input workflow progress without hiding extra files', () => {
+    let output = '';
+    const renderer = createRunProgressRenderer(
+      context({ colorEnabled: false }),
+      {
+        colorEnabled: false,
+        write: (text) => {
+          output += text;
+        },
+        nowMs: () => 0,
+      },
+    );
+
+    renderer?.handle(
+      'setTaskState',
+      workflowTaskState({
+        inputFiles: ['number-theory.tex', 'algebra.tex'],
+      }),
+    );
+
+    expect(output).toBe('polish number-theory.tex +1 · 0s\n');
+  });
+
   it('prints phase changes on separate lines when ANSI is disabled', () => {
     let output = '';
     const renderer = createRunProgressRenderer(
