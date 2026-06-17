@@ -88,7 +88,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 > {
   // ── Client-side compaction state ──────────────────────────────────────
   private lastKnownInputTokens = 0;
-  private compactionRequested = false;
 
   override get supportsManualCompaction(): boolean {
     return this.isToolUseMode();
@@ -113,10 +112,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       this.capabilities.supportsReasoningEffort ||
       (this.isDeepSeek && this.capabilities.supportsReasoning)
     );
-  }
-
-  override requestCompaction(): void {
-    this.compactionRequested = true;
   }
 
   protected get usageProvider(): NormalizedUsage['provider'] {
@@ -291,16 +286,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // ---------------------------------------------------------------------------
 
   private shouldCompact(): boolean {
-    if (!this.isToolUseMode()) return false;
-    if (this.compactionRequested) return true;
-
-    const thresholdPercent = this.getCompactionThresholdPercent();
-    if (thresholdPercent <= 0) return false;
-
-    const threshold = Math.floor(
-      (thresholdPercent / 100) * this.config.contextWindow,
-    );
-    return this.lastKnownInputTokens > threshold;
+    return this.shouldCompactByInputTokens(this.lastKnownInputTokens);
   }
 
   private async compactConversation(

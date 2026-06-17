@@ -51,6 +51,34 @@ const SCROLLABLE_DETAILS = selectorGroup(
   '__details',
 );
 
+/**
+ * Accent color per panel type. Drives both the item's left border and the
+ * header icon color (which always match). Keyed by item class name so adding a
+ * panel type is a single entry the type checker enforces.
+ */
+const ACCENT_COLORS: Record<(typeof ITEM_NAMES)[number], string> = {
+  'approval-request': 'var(--wa-color-text-normal)',
+  'bash-approval-request': 'var(--wa-color-terminal-ansi-yellow)',
+  'retry-request': 'var(--color-warning)',
+  'workflow-proposal': 'var(--wa-color-text-link)',
+  'plan-approval-request': 'var(--wa-color-text-link)',
+  'external-inquiry-request': 'var(--wa-color-focus)',
+  'user-question-request': 'var(--wa-color-focus)',
+};
+
+/** Per-type accent rules: item left-border plus matching header icon color. */
+const ACCENT_RULES = unsafeCSS(
+  ITEM_NAMES.map((item, i) => {
+    const color = ACCENT_COLORS[item];
+    return `.${item} {
+    border-left: var(--border-medium) solid ${color};
+  }
+  .${CONTAINER_NAMES[i]}__header wa-icon {
+    color: ${color};
+  }`;
+  }).join('\n  '),
+);
+
 const sp = {
   tiny: unsafeCSS('var(--wa-space-3xs)'),
   small: unsafeCSS('var(--wa-space-2xs)'),
@@ -227,36 +255,12 @@ export const requestPanelStyles: CSSResult = css`
     white-space: nowrap;
   }
 
-  /* Type-specific item accent */
-  .approval-request {
-    border-left: var(--border-medium) solid var(--wa-color-text-normal);
-  }
-  .bash-approval-request {
-    border-left: var(--border-medium) solid var(--wa-color-terminal-ansi-yellow);
-  }
-  .retry-request {
-    border-left: var(--border-medium) solid var(--color-warning);
-  }
-  .workflow-proposal {
-    border-left: var(--border-medium) solid var(--wa-color-text-link);
-  }
-  .plan-approval-request {
-    border-left: var(--border-medium) solid var(--wa-color-text-link);
-  }
-  .external-inquiry-request {
-    border-left: var(--border-medium) solid var(--wa-color-focus);
-  }
-  .user-question-request {
-    border-left: var(--border-medium) solid var(--wa-color-focus);
-  }
+  /* Type-specific item accent + matching header icon color (see ACCENT_COLORS) */
+  ${ACCENT_RULES}
 
   /* ================================================================
    * Approval requests (tool edits)
    * ================================================================ */
-
-  .approval-requests__header wa-icon {
-    color: var(--wa-color-text-normal);
-  }
 
   .approval-request__path {
     font-family: var(--wa-font-family-mono);
@@ -344,10 +348,6 @@ export const requestPanelStyles: CSSResult = css`
    * Bash approval requests
    * ================================================================ */
 
-  .bash-approval-requests__header wa-icon {
-    color: var(--wa-color-terminal-ansi-yellow);
-  }
-
   .bash-approval-request__command {
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
@@ -377,10 +377,6 @@ export const requestPanelStyles: CSSResult = css`
   /* ================================================================
    * Retry requests
    * ================================================================ */
-
-  .retry-requests__header wa-icon {
-    color: var(--color-warning);
-  }
 
   .retry-request__operation {
     font-family: var(--wa-font-family-mono);
@@ -448,10 +444,6 @@ export const requestPanelStyles: CSSResult = css`
   /* ================================================================
    * Workflow proposals
    * ================================================================ */
-
-  .workflow-proposals__header wa-icon {
-    color: var(--wa-color-text-link);
-  }
 
   .workflow-proposal__header-row {
     display: flex;
@@ -582,10 +574,6 @@ export const requestPanelStyles: CSSResult = css`
    * Plan approval requests
    * ================================================================ */
 
-  .plan-approval-requests__header wa-icon {
-    color: var(--wa-color-text-link);
-  }
-
   .plan-approval-request__objective {
     margin: ${sp.small} 0;
     color: var(--wa-color-text-normal);
@@ -608,10 +596,6 @@ export const requestPanelStyles: CSSResult = css`
   /* ================================================================
    * External inquiry requests
    * ================================================================ */
-
-  .external-inquiry-requests__header wa-icon {
-    color: var(--wa-color-focus);
-  }
 
   /* Carousel navigation for multiple external inquiries */
   .external-inquiry-requests__nav {
@@ -928,10 +912,6 @@ export const requestPanelStyles: CSSResult = css`
   /* ================================================================
    * User question requests
    * ================================================================ */
-
-  .user-question-requests__header wa-icon {
-    color: var(--wa-color-focus);
-  }
 
   .user-question-request__context {
     font-size: var(--font-size-sm);

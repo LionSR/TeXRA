@@ -155,9 +155,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   OpenAI,
   Response
 > {
-  /** Flag to force compaction on the next API call, set by requestCompaction(). */
-  private compactionRequested = false;
-
   private isOpenRouterRoutingEnabled(): boolean {
     return this.config.openRouterOnly || getUseOpenRouter();
   }
@@ -205,10 +202,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   override get supportsManualCompaction(): boolean {
     return !this.isOpenRouterRoutingEnabled();
-  }
-
-  override requestCompaction(): void {
-    this.compactionRequested = true;
   }
 
   /**
