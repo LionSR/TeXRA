@@ -317,7 +317,9 @@ async function runInstallGithubAction(
       'Opened the pull-request page in your browser — review the diff and click "Create pull request".',
     );
   } else {
-    writeTextStdout(`Open this page to propose the PR:\n${prPageUrl}`);
+    writeTextStdout(
+      `Branch pushed, but the browser did not open. Open this page to propose the PR:\n${prPageUrl}`,
+    );
   }
   printSecretChecklist(slug);
   return CliExitCode.Success;

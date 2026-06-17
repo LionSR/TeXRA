@@ -11,10 +11,6 @@ interface BrowserLog {
   debug(channel: string, message: string): void;
 }
 
-function quoteWindowsStartUrl(url: string): string {
-  return url.replaceAll('"', '%22').replaceAll('%', '^%');
-}
-
 export function resolveBrowserLaunch(
   url: string,
   platform: NodeJS.Platform = process.platform,
@@ -27,10 +23,12 @@ export function resolveBrowserLaunch(
         windowsVerbatimArguments: false,
       };
     case 'win32':
+      // Avoid `cmd /c start` so percent-encoded OAuth and compare URLs are not
+      // reparsed as cmd environment-variable expansions.
       return {
-        command: 'cmd',
-        args: ['/d', '/s', '/c', `start "" "${quoteWindowsStartUrl(url)}"`],
-        windowsVerbatimArguments: true,
+        command: 'rundll32',
+        args: ['url.dll,FileProtocolHandler', url],
+        windowsVerbatimArguments: false,
       };
     default:
       return {
