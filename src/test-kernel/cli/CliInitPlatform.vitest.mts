@@ -184,7 +184,9 @@ describe('CLI platform init', () => {
     // Verify the bundle source is the right class AND was constructed with the
     // forwarded resourcesPath — not just that some PathAgentDirectoryBundleSource
     // was passed.
-    expect(options?.bundleSource).toBeInstanceOf(PathAgentDirectoryBundleSource);
+    expect(options?.bundleSource).toBeInstanceOf(
+      PathAgentDirectoryBundleSource,
+    );
     expect(
       (options?.bundleSource as { resourcesBasePath?: string })
         .resourcesBasePath,
