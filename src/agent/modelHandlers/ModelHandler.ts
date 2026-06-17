@@ -490,9 +490,16 @@ export abstract class ModelHandler<
     return false;
   }
 
-  /** Request compaction on the next API call. Override in subclasses that support it. */
+  /**
+   * Flag to force compaction on the next API call, set by {@link requestCompaction}.
+   * Read by the per-provider compaction paths and cleared once compaction is
+   * attempted. Inert for handlers that don't run compaction.
+   */
+  protected compactionRequested = false;
+
+  /** Request compaction on the next API call. */
   requestCompaction(): void {
-    // No-op by default
+    this.compactionRequested = true;
   }
 
   /**
@@ -780,6 +787,25 @@ export abstract class ModelHandler<
       'texra.model.compactionThresholdPercent',
       DEFAULT_COMPACTION_THRESHOLD_PERCENT,
     );
+  }
+
+  /**
+   * Shared threshold check for input-token-based compaction, used by handlers
+   * that track a single last-known input-token count. Compaction triggers only
+   * in tool-use mode, on a manual request, or when `inputTokens` exceeds the
+   * configured percentage of the context window.
+   */
+  protected shouldCompactByInputTokens(inputTokens: number): boolean {
+    if (!this.isToolUseMode()) return false;
+    if (this.compactionRequested) return true;
+
+    const thresholdPercent = this.getCompactionThresholdPercent();
+    if (thresholdPercent <= 0) return false;
+
+    const threshold = Math.floor(
+      (thresholdPercent / 100) * this.config.contextWindow,
+    );
+    return inputTokens > threshold;
   }
 
   /**
