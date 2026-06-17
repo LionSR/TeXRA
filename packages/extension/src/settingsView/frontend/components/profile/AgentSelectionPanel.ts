@@ -2,6 +2,7 @@
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import {
   LitElement,
   html,
@@ -15,6 +16,7 @@ import { classMap } from 'lit/directives/class-map.js';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas and events
 import {
@@ -265,10 +267,10 @@ export class AgentSelectionPanel extends LitElement {
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
           ${agent.source === AGENT_SOURCE.REMOTE
-            ? html`<span title="Remote agent">☁</span>`
+            ? html`<span title="Remote agent">${waIcon('cloud')}</span>`
             : nothing}
           ${agent.source === AGENT_SOURCE.CUSTOM
-            ? html`<span title="Custom agent">★</span>`
+            ? html`<span title="Custom agent">${waIcon('star')}</span>`
             : nothing}
         </span>
       </div>
@@ -352,12 +354,12 @@ export class AgentSelectionPanel extends LitElement {
             : nothing}
           ${isCustom
             ? html`<wa-tag variant="neutral" size="small" title="Custom agent"
-                >★ Custom</wa-tag
+                >${waIcon('star')} Custom</wa-tag
               >`
             : nothing}
           ${agent.source === AGENT_SOURCE.REMOTE
             ? html`<wa-tag variant="neutral" size="small" title="Remote agent"
-                >☁ Remote</wa-tag
+                >${waIcon('cloud')} Remote</wa-tag
               >`
             : nothing}
         </div>
