@@ -74,7 +74,9 @@ export function defaultBranch(cwd: string): string | null {
     'refs/remotes/origin/HEAD',
   );
   if (!result.ok || !result.stdout) return null;
-  return result.stdout.split('/').at(-1) ?? null;
+  return result.stdout.startsWith('origin/')
+    ? result.stdout.slice('origin/'.length)
+    : result.stdout;
 }
 
 export function localBranchExists(cwd: string, branch: string): boolean {

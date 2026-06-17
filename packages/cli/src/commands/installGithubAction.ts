@@ -292,7 +292,6 @@ async function runInstallGithubAction(
     } else {
       writeTextStderr(`gh pr create failed: ${pr.stderr}`);
       writeTextStdout(`Open a PR manually: ${compareUrl(slug, base, branch)}`);
-      restoreBranch(root, startBranch);
       printSecretChecklist(slug);
       return CliExitCode.AgentError;
     }

@@ -1,13 +1,15 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { runCli } from '@cli/commands/root';
-import { parseGitHubSlug } from '@cli/runtime/gitOps';
+import { defaultBranch, parseGitHubSlug } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+
+const repos: string[] = [];
 
 function git(cwd: string, ...args: readonly string[]): string {
   return execFileSync('git', [...args], {
@@ -19,6 +21,7 @@ function git(cwd: string, ...args: readonly string[]): string {
 
 function makeRepo(): string {
   const repo = mkdtempSync(path.join(tmpdir(), 'texra-install-action-'));
+  repos.push(repo);
   git(repo, 'init');
   git(repo, 'config', 'user.email', 'texra@example.com');
   git(repo, 'config', 'user.name', 'TeXRA Test');
@@ -29,11 +32,14 @@ function makeRepo(): string {
   return repo;
 }
 
-describe('install-github-action command', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+afterEach(() => {
+  vi.restoreAllMocks();
+  for (const repo of repos.splice(0)) {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
 
+describe('install-github-action command', () => {
   it('commits only the generated workflow file', async () => {
     const repo = makeRepo();
     writeFileSync(path.join(repo, 'already-staged.txt'), 'keep staged\n');
@@ -130,5 +136,20 @@ describe('parseGitHubSlug', () => {
 
   it('rejects remotes outside GitHub', () => {
     expect(parseGitHubSlug('https://gitlab.com/owner/repo.git')).toBeNull();
+  });
+});
+
+describe('defaultBranch', () => {
+  it('preserves slash-containing origin default branch names', () => {
+    const repo = makeRepo();
+    git(repo, 'update-ref', 'refs/remotes/origin/feature/default', 'HEAD');
+    git(
+      repo,
+      'symbolic-ref',
+      'refs/remotes/origin/HEAD',
+      'refs/remotes/origin/feature/default',
+    );
+
+    expect(defaultBranch(repo)).toBe('feature/default');
   });
 });
