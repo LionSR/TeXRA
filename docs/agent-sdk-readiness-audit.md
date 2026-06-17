@@ -2064,8 +2064,9 @@ re-converged on "well-layered, incremental not structural" and re-surfaced the d
   could-be-partitioned" surface — the **eighth** re-surfacing of the `IModelHandler`-is-redundant
   family. **Re-rebutted** (consistent with §9–§19): the interface is typed into
   `AgentCore.modelHandler` (`core/flows/BaseFlowServices.ts:24-30`) and declares the optional
-  `createBatchedToolUseFollowUpMessages?` the abstract class omits and `ToolUseCycleFlow`
-  feature-detects — load-bearing, not a `ModelHandler` duplicate. Surface size is SDK-maturity,
+  `createBatchedToolUseFollowUpMessages?` (`IModelHandler.ts:392`) the abstract class omits and
+  `ToolUseDispatchNode` feature-detects (`ToolUseDispatchNode.ts:434`, `!!modelHandler.…`) —
+  load-bearing, not a `ModelHandler` duplicate. Surface size is SDK-maturity,
   not redundancy; no member is dead.
 - The public-surface agent reported the `core/`/`runtime/` "no-barrel" deep-import sprawl
   (~178 files, hundreds of deep `@agent/*` imports) as a surface-narrowing opportunity via new
@@ -2124,8 +2125,9 @@ is still **16** `export` statements (unchanged — no surface added or removed t
   relocated out, dead re-export shim removed); only the thin `computeAgentOptionsData` orchestrator
   (`agentRegistry.ts:481`) still sits beside the SDK-exported core. Closer to closed.
 - **§16 #2** — RESOLVED (§19); unchanged.
-- **§16 #4** (`@logger`↔`@agent/trace` cycle) — still present (`runTrace.ts:10` imports
-  `TraceEmitter` from `@agent/trace`); latent, low; for the eventual package-extraction step.
+- **§16 #4** (`@logger`↔`@agent/trace` cycle) — still present (`src/logger/runTrace.ts:10`
+  imports `TraceEmitter` from `@agent/trace`); latent, low; for the eventual package-extraction
+  step.
 - **SDK-008** — CLOSED and deepened (§19); unchanged.
 
 **Subagent split points — unchanged and accurate** (§5 + proposal): config-driven YAML agents over
