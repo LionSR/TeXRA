@@ -2293,7 +2293,7 @@ const SCENARIOS = [
     bootExpect: 'TeXRA',
     keys: [ESC + 's'], // Esc/Alt-s
     frame: 'tail',
-    expect: ['◆ running 75s keys 3 sub'],
+    expect: ['◆ running 1m 15s keys 3 sub'],
     unexpect: ['◆running', 'keys3', '3 sub 1 proc'],
   },
   {
