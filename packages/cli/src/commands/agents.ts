@@ -1,11 +1,13 @@
 import { defineCommand } from 'citty';
 
 import {
+  AGENT_NAME_DESCRIPTION,
   CLI_AGENT_CATEGORY_FILTER_VALUES,
   formatCliAgentDetails,
   formatCliAgentList,
   formatCliHiddenAgentsNotice,
   loadCliAgentList,
+  missingAgentMessage,
   parseCliAgentCategoryFilter,
   resolveCliAgent,
   type CliAgentListOptions,
@@ -14,10 +16,6 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 
-import {
-  AGENT_NAME_DESCRIPTION,
-  missingAgentMessage,
-} from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
