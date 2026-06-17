@@ -1,6 +1,6 @@
 # Agent SDK Readiness Audit
 
-_Audit date: 2026-05-28 · Re-verified through 2026-06-14 (§18) · Scope: `src/agent/**`, `src/logger/**`, `src/eventBus/**`, `src/platform/**`, `packages/core/src/**`, plus extension/CLI entrypoints._
+_Audit date: 2026-05-28 · Re-verified through 2026-06-17 (§20) · Scope: `src/agent/**`, `src/logger/**`, `src/eventBus/**`, `src/platform/**`, `packages/core/src/**`, plus extension/CLI entrypoints._
 
 This is a **review + refactoring plan**, not an applied refactor. It identifies the
 texra agent core, model handlers, logger, and surface areas; flags abstractions
@@ -2025,7 +2025,7 @@ only remaining items are behavior-sensitive (§4 producer de-dup, §16 #4 cycle)
 primitive (§5 `delegateTo`). The codebase continues to acquire exactly the SDK-shaped surface
 the original audit projected, by its own team, without a rewrite.
 
-## 20. Re-verification addendum — 2026-06-17 (fifteenth pass — confirmation; a dead re-export shim removed by the team, UI-altitude helpers relocated out of the registry)
+## 20. Re-verification addendum — 2026-06-17 (fifteenth pass — confirmation; two dead re-export lines removed from the `agent/index` barrel, UI-altitude helpers relocated out of the registry)
 
 A fifteenth pass — a fresh four-agent fan-out (independent, no sight of this document): a
 Claude Agent SDK reference pass, a structural map + abstraction audit of `agent/core` +
@@ -2033,9 +2033,16 @@ Claude Agent SDK reference pass, a structural map + abstraction audit of `agent/
 public-surface (`@agent/*` consumer) map — plus a direct re-check of every open-ledger item and
 the guardrail greps against branch `claude/eager-noether-pfab9a` at HEAD `df0ca92` (baseline for
 drift: §19's `00d2414`, **reachable** from this branch, so the range `00d2414..df0ca92` is exactly
-computable). That range is 61 non-merge commits; the **~8** touching the audited surfaces are
-enumerated below. **All 2026-05-28 → 06-15 findings hold without change. No new structural
-over-abstraction surfaced.** TeXRA remains well-architected and SDK-aligned; the gaps are
+computable). That range is **61** non-merge commits (`git rev-list --no-merges --count
+00d2414..df0ca92` = 61). As in §14/§19, the **Drift** section below enumerates only the
+SDK-_structural_ subset (the new run-entry/handle/emit/state work); it is **not** the full list of
+commits touching the audited dirs. The unenumerated remainder is behavior fixes (subagent
+handoffs, goal-continuation, remote-loader null-tolerance such as `ea0f239`) and DRY/shared-helper
+adoption (e.g. `a47b7c7`, `0b8d549` over `src/tools`) — **none adding a wrapper, barrel, or
+abstraction** (the guardrail greps below — no new `index.ts`, vscode-free, unchanged `@texra/core`
+surface — are what back the "no new structural over-abstraction" conclusion, not the enumerated
+list). **All 2026-05-28 → 06-15 findings hold without change. No new structural over-abstraction
+surfaced.** TeXRA remains well-architected and SDK-aligned; the gaps are
 incremental, not structural. Like §15/§17/§18/§19 this is a **confirmation-only pass — no refactor
 applied** — because no pure dead-shim/barrel item remains (the one that did surface this period the
 team already removed itself; see `75154a3` below).
@@ -2072,8 +2079,10 @@ re-converged on "well-layered, incremental not structural" and re-surfaced the d
 None of the audited-dir commits add a wrapper, barrel, or run-entry indirection:
 
 - **`75154a3` "move stream metadata helpers out of agent registry" (2026-06-16).** **Advances
-  §16 #1** and applies the audit's own anti-shim discipline: it **removed the dead `agent/index`
-  re-export shim** (`src/agent/index/index.ts` −2 lines) and relocated `streamTabInfo.ts`
+  §16 #1** and applies the audit's own anti-shim discipline: it **removed the two now-dead
+  `streamTabInfo`/`worktreeInfo` re-export lines from the `agent/index` barrel**
+  (`src/agent/index/index.ts` −2 lines; the barrel file itself stays — it is one of the eight
+  live barrels counted in the guardrails below) and relocated `streamTabInfo.ts`
   → `shared/progressView/backend/` (next to the progress-view backend that consumes it) and
   `worktreeInfo.ts` → `utils/git/`, so callers hit the canonical locations directly. UI-altitude
   stream/worktree display logic no longer sits in the SDK-exported agent registry — exactly the
@@ -2127,10 +2136,10 @@ delegation-as-primitive (§5) work. The F-2 per-run handle (`trace` + `result` +
 the consumer-facing surface a future `delegateTo(...)` would return.
 
 **Net for 2026-06-17:** thesis reaffirmed for the fifteenth pass — incremental, not structural.
-The intervening drift is small and moves entirely _with_ the audit: the team removed a dead
-`agent/index` re-export shim and relocated UI-altitude stream/worktree helpers out of the
-SDK-exported registry (`75154a3`, advancing §16 #1), plus clarity/DRY refactors that add no
-abstraction. Four independent fresh-eyes agents re-reached the standing verdict and re-surfaced
+The intervening drift is small and moves entirely _with_ the audit: the team removed two dead
+re-export lines from the `agent/index` barrel and relocated those UI-altitude stream/worktree
+helpers out of the SDK-exported registry (`75154a3`, advancing §16 #1), plus clarity/DRY refactors
+that add no abstraction. Four independent fresh-eyes agents re-reached the standing verdict and re-surfaced
 the recurring traps (node-runs-subflow "wrapper", `IModelHandler` redundant for the eighth time,
 `core/runtime` barrels) — all re-rebutted as in prior passes. Guardrails are intact; no dead
 shim/barrel remains for a tidy pass to remove, so no refactor was applied. The remaining open
