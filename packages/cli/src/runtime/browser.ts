@@ -12,7 +12,7 @@ interface BrowserLog {
 }
 
 function quoteWindowsStartUrl(url: string): string {
-  return url.replaceAll('"', '%22');
+  return url.replaceAll('"', '%22').replaceAll('%', '^%');
 }
 
 export function resolveBrowserLaunch(
