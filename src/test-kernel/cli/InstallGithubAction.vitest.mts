@@ -25,6 +25,7 @@ function makeRepo(): string {
   writeFileSync(path.join(repo, 'README.md'), '# Test\n');
   git(repo, 'add', 'README.md');
   git(repo, 'commit', '-m', 'initial');
+  git(repo, 'branch', '-M', 'main');
   return repo;
 }
 
@@ -56,6 +57,65 @@ describe('install-github-action command', () => {
     expect(git(repo, 'diff', '--cached', '--name-only')).toBe(
       'already-staged.txt',
     );
+  });
+
+  it('creates the install branch from the requested base', async () => {
+    const repo = makeRepo();
+    git(repo, 'checkout', '-b', 'feature');
+    writeFileSync(path.join(repo, 'feature.txt'), 'feature work\n');
+    git(repo, 'add', 'feature.txt');
+    git(repo, 'commit', '-m', 'feature work');
+
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const result = await runCli([
+      '--cwd',
+      repo,
+      'install-github-action',
+      '--branch',
+      'texra/install-from-main',
+      '--base',
+      'main',
+      '--no-pr',
+      '--no-color',
+    ]);
+
+    expect(result.exitCode).toBe(CliExitCode.Success);
+    expect(git(repo, 'diff', '--name-only', 'main...HEAD')).toBe(
+      '.github/workflows/texra-code-review.yml',
+    );
+  });
+
+  it('reuses an existing branch under --force without resetting its commits', async () => {
+    const repo = makeRepo();
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    await expect(
+      runCli(['--cwd', repo, 'install-github-action', '--no-pr', '--no-color']),
+    ).resolves.toEqual({ exitCode: CliExitCode.Success });
+
+    writeFileSync(path.join(repo, 'custom.txt'), 'keep me\n');
+    git(repo, 'add', 'custom.txt');
+    git(repo, 'commit', '-m', 'custom branch edit');
+    const customCommit = git(repo, 'rev-parse', 'HEAD');
+
+    git(repo, 'checkout', 'main');
+
+    await expect(
+      runCli([
+        '--cwd',
+        repo,
+        'install-github-action',
+        '--force',
+        '--no-pr',
+        '--no-color',
+      ]),
+    ).resolves.toEqual({ exitCode: CliExitCode.Success });
+
+    expect(git(repo, 'rev-parse', 'HEAD')).toBe(customCommit);
+    expect(git(repo, 'log', '--format=%s', '-1')).toBe('custom branch edit');
   });
 });
 

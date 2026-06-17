@@ -63,8 +63,10 @@ const WORKFLOW_TEMPLATE = [
   '        with:',
   '          # Provide at least one provider key; the review model is auto-selected.',
   '          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}',
-  '          # openai-api-key: ${{ secrets.OPENAI_API_KEY }}',
-  '          # deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}',
+  '          openai-api-key: ${{ secrets.OPENAI_API_KEY }}',
+  '          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}',
+  '          google-api-key: ${{ secrets.GOOGLE_API_KEY }}',
+  '          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}',
   '          # Optional: pin the review model and CLI version.',
   '          # model: ${{ vars.TEXRA_REVIEW_MODEL }}',
   '          # texra-version: 0.38.5',
@@ -97,7 +99,18 @@ async function pathExists(target: string): Promise<boolean> {
 }
 
 function compareUrl(slug: GitHubSlug, base: string, branch: string): string {
-  return `https://github.com/${slug.owner}/${slug.repo}/compare/${base}...${branch}?expand=1`;
+  const range = `${encodeURIComponent(base)}...${encodeURIComponent(branch)}`;
+  return `https://github.com/${slug.owner}/${slug.repo}/compare/${range}?expand=1`;
+}
+
+function refExists(cwd: string, ref: string): boolean {
+  return git(cwd, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`).ok;
+}
+
+function resolveBaseRef(cwd: string, base: string): string | null {
+  if (refExists(cwd, base)) return base;
+  const originRef = `origin/${base}`;
+  return refExists(cwd, originRef) ? originRef : null;
 }
 
 function restoreBranch(cwd: string, branch: string | null): void {
@@ -154,11 +167,21 @@ async function runInstallGithubAction(
     return CliExitCode.Usage;
   }
 
+  const baseRef = branchExists ? null : resolveBaseRef(root, base);
+  if (!branchExists && !baseRef) {
+    writeTextStderr(
+      `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
+    );
+    return CliExitCode.Usage;
+  }
+
   const checkout = branchExists
-    ? git(root, 'checkout', '-B', branch)
-    : git(root, 'checkout', '-b', branch);
+    ? git(root, 'checkout', branch)
+    : git(root, 'checkout', '-b', branch, baseRef ?? base);
   if (!checkout.ok) {
-    writeTextStderr(`Failed to create branch "${branch}": ${checkout.stderr}`);
+    writeTextStderr(
+      `Failed to check out branch "${branch}": ${checkout.stderr}`,
+    );
     return CliExitCode.AgentError;
   }
 
@@ -174,23 +197,54 @@ async function runInstallGithubAction(
   }
 
   const add = git(root, 'add', '--', WORKFLOW_RELATIVE_PATH);
-  const commit = add.ok
-    ? git(
-        root,
-        'commit',
-        '-m',
-        'ci: add TeXRA code-review workflow',
-        '--',
-        WORKFLOW_RELATIVE_PATH,
-      )
-    : add;
-  if (!commit.ok) {
-    writeTextStderr(`Failed to commit the workflow: ${commit.stderr}`);
+  if (!add.ok) {
+    writeTextStderr(`Failed to stage the workflow: ${add.stderr}`);
     restoreBranch(root, startBranch);
     return CliExitCode.AgentError;
   }
 
-  writeTextStdout(`Created ${WORKFLOW_RELATIVE_PATH} on branch "${branch}".`);
+  const diff = git(
+    root,
+    'diff',
+    '--cached',
+    '--quiet',
+    '--',
+    WORKFLOW_RELATIVE_PATH,
+  );
+  if (diff.status !== 0 && diff.status !== 1) {
+    writeTextStderr(
+      `Failed to inspect staged workflow changes: ${diff.stderr}`,
+    );
+    restoreBranch(root, startBranch);
+    return CliExitCode.AgentError;
+  }
+
+  const hasWorkflowChanges = diff.status === 1;
+  if (hasWorkflowChanges) {
+    const commit = git(
+      root,
+      'commit',
+      '-m',
+      'ci: add TeXRA code-review workflow',
+      '--',
+      WORKFLOW_RELATIVE_PATH,
+    );
+    if (!commit.ok) {
+      writeTextStderr(`Failed to commit the workflow: ${commit.stderr}`);
+      restoreBranch(root, startBranch);
+      return CliExitCode.AgentError;
+    }
+    writeTextStdout(`Created ${WORKFLOW_RELATIVE_PATH} on branch "${branch}".`);
+  } else {
+    writeTextStdout(
+      `${WORKFLOW_RELATIVE_PATH} already matches the TeXRA template on branch "${branch}".`,
+    );
+    if (!branchExists) {
+      restoreBranch(root, startBranch);
+      printSecretChecklist(slug);
+      return CliExitCode.Success;
+    }
+  }
 
   if (!opts.openPr) {
     writeTextStdout(
@@ -207,7 +261,6 @@ async function runInstallGithubAction(
     writeTextStdout(
       `Push "${branch}" to your GitHub remote and open a PR manually.`,
     );
-    restoreBranch(root, startBranch);
     printSecretChecklist(slug);
     return CliExitCode.Success;
   }
@@ -216,7 +269,6 @@ async function runInstallGithubAction(
   if (!push.ok) {
     writeTextStderr(`Failed to push "${branch}": ${push.stderr}`);
     writeTextStdout(`Open a PR manually: ${compareUrl(slug, base, branch)}`);
-    restoreBranch(root, startBranch);
     printSecretChecklist(slug);
     return CliExitCode.AgentError;
   }
