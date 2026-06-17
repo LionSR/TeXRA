@@ -255,6 +255,59 @@ describe('CLI workflow run command', () => {
     }
   });
 
+  it('keeps the single-output copy target separate from workflow output names', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
+    try {
+      const generated = path.join(root, 'run', 'r1', 'paper.tex');
+      await fs.mkdir(path.dirname(generated), { recursive: true });
+      await fs.writeFile(generated, 'polished');
+      mocks.executeCliRequest.mockResolvedValueOnce({
+        result: {
+          category: AgentCategory.Workflow,
+          executionId: 'exec-output',
+          streamId: 'stream-output',
+          outcome: RUN_OUTCOME.COMPLETED,
+          outputs: [
+            {
+              round: 1,
+              relativePath: 'r1/paper.tex',
+              absolutePath: generated,
+              location: 'runStorage',
+              originalPath: path.join(root, 'paper.tex'),
+              added: null,
+              removed: null,
+            },
+          ],
+          compileFailures: [],
+        },
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+      });
+
+      const { runWorkflowAgent } = await import('@cli/commands/workflow');
+
+      const exitCode = await runWorkflowAgent(cliContext({ cwd: root }), {
+        agent: 'polish',
+        inputFiles: ['paper.tex'],
+        contextFiles: [],
+        output: 'polished.tex',
+        instruction: '',
+      });
+
+      expect(exitCode).toBe(0);
+      const request = mocks.executeCliRequest.mock.calls[0]?.[0];
+      expect(request?.config).toMatchObject({
+        inputFiles: ['paper.tex'],
+        outputFiles: [],
+        cliOutputFile: 'polished.tex',
+      });
+      await expect(
+        fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
+      ).resolves.toBe('polished');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('reports missing instruction files before starting platform or input work', async () => {
     const { runWorkflowAgent } = await import('@cli/commands/workflow');
 
