@@ -103,7 +103,7 @@ src/logger/                       ← TeXRA host integration
 ├── noopTexraTrace.ts             ← default for `RunContext.trace`
 ├── TexraTranscriptRecorder.ts    ← subscriber → StreamLogStore (transcript)
 ├── logUtils.ts                   ← channel-output sink + subscriber
-├── runTrace.ts                   ← createChannelTrace / createRunTrace factories
+├── channelTrace.ts               ← createChannelTrace factory (channel output only)
 ├── StreamLogStore.ts             ← transcript persistence (file-backed)
 ├── AgentUsageReporter.ts         ← Supabase usage subscriber
 ├── UsageLogService.ts            ← Supabase write path
