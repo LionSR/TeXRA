@@ -4,6 +4,7 @@ import path from 'node:path';
 import { toErrorMessage } from '@common/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
+import { tryOpenBrowser } from '../runtime/browser';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import {
   currentBranch,
@@ -268,16 +269,25 @@ async function runInstallGithubAction(
   const push = git(root, 'push', '-u', 'origin', branch);
   if (!push.ok) {
     writeTextStderr(`Failed to push "${branch}": ${push.stderr}`);
-    writeTextStdout(`Open a PR manually: ${compareUrl(slug, base, branch)}`);
+    writeTextStdout(
+      `Once pushed, open ${compareUrl(slug, base, branch)} to propose the PR.`,
+    );
     printSecretChecklist(slug);
     return CliExitCode.AgentError;
   }
 
+  // Open the PR-creation page in the browser and let the user review the diff
+  // and propose the PR themselves, rather than creating it headlessly. Prefer
+  // `gh pr create --web` (it prefills the title/body) and fall back to opening
+  // the compare URL directly when gh is unavailable or cannot open the page.
+  const prPageUrl = compareUrl(slug, base, branch);
+  let opened = false;
   if (ghAvailable(root)) {
     const pr = gh(
       root,
       'pr',
       'create',
+      '--web',
       '--base',
       base,
       '--head',
@@ -287,21 +297,30 @@ async function runInstallGithubAction(
       '--body',
       PR_BODY,
     );
-    if (pr.ok) {
-      writeTextStdout(`Opened pull request:\n${pr.stdout}`);
-    } else {
-      writeTextStderr(`gh pr create failed: ${pr.stderr}`);
-      writeTextStdout(`Open a PR manually: ${compareUrl(slug, base, branch)}`);
-      printSecretChecklist(slug);
-      return CliExitCode.AgentError;
+    opened = pr.ok;
+    if (!pr.ok) {
+      const diagnostic = (pr.stderr || pr.stdout).trim();
+      writeTextStderr(
+        diagnostic
+          ? `gh pr create --web failed: ${diagnostic}`
+          : 'gh pr create --web failed; trying the compare URL fallback.',
+      );
+      opened = await tryOpenBrowser(prPageUrl);
     }
   } else {
-    writeTextStdout(
-      `gh CLI not found. Branch pushed — open a PR here:\n${compareUrl(slug, base, branch)}`,
-    );
+    opened = await tryOpenBrowser(prPageUrl);
   }
 
   restoreBranch(root, startBranch);
+  if (opened) {
+    writeTextStdout(
+      'Opened the pull-request page in your browser — review the diff and click "Create pull request".',
+    );
+  } else {
+    writeTextStdout(
+      `Branch pushed, but the browser did not open. Open this page to propose the PR:\n${prPageUrl}`,
+    );
+  }
   printSecretChecklist(slug);
   return CliExitCode.Success;
 }
