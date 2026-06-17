@@ -12,6 +12,7 @@ import type { StreamTabId } from '@shared/schemas';
 import { clamp, clampIndex } from '@utils/core';
 
 import {
+  CHILD_CONTROL_MODE_COPY,
   buildChildControlItems,
   childPickerKeyAction,
   liveChildExecutionElapsedKey,
@@ -54,13 +55,11 @@ const PICKER_HORIZONTAL_CHROME_COLUMNS = 4;
 const MIN_COLUMNS_FOR_KILL_HINT = 44;
 
 export function pickerTitle(mode: ChildControlMode): string {
-  return mode === 'subagents' ? 'Subagents' : 'Tasks and sub-workflows';
+  return CHILD_CONTROL_MODE_COPY[mode].title;
 }
 
 export function emptyPickerText(mode: ChildControlMode): string {
-  return mode === 'subagents'
-    ? 'No active subagents.'
-    : 'No active tasks or sub-workflows.';
+  return CHILD_CONTROL_MODE_COPY[mode].emptyText;
 }
 
 export function isUltraCompactPickerRows(
