@@ -367,7 +367,23 @@ export async function activate(context: vscode.ExtensionContext) {
         'Supabase authentication is enabled but credentials are not configured. Please configure credentials in src/auth/config.ts before building.',
       );
     } else {
-      const authProvider = new SupabaseAuthProvider(context);
+      const authProvider = new SupabaseAuthProvider(context, {
+        showError: (msg) => void vscode.window.showErrorMessage(msg),
+        showInfo: (msg) => void vscode.window.showInformationMessage(msg),
+        showSignInPrompt: async (reason) => {
+          const message =
+            reason === 'expired'
+              ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
+              : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
+          const action = await vscode.window.showWarningMessage(message, 'Sign In');
+          if (action === 'Sign In') {
+            await vscode.commands.executeCommand('texra.auth.signIn').then(
+              undefined,
+              (err: unknown) => logger.error('extension', `Failed to trigger sign-in: ${String(err)}`),
+            );
+          }
+        },
+      });
       context.subscriptions.push(
         vscode.authentication.registerAuthenticationProvider(
           AUTH_PROVIDER_ID,
