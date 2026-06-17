@@ -74,6 +74,26 @@ describe('normalizeToolUseData', () => {
     expect(normalized?.headerSummary).toBe('no such file');
   });
 
+  it('normalizes legacy `tool` alias to `toolName`', () => {
+    const normalized = normalizeToolUseData({
+      tool: 'Bash',
+      input: { command: 'ls' },
+      output: 'foo\nbar',
+      status: 'completed',
+    });
+    expect(normalized?.toolName).toBe('Bash');
+    expect(normalized?.outputText).toBe('foo\nbar');
+  });
+
+  it('prefers `toolName` over `tool` when both are present', () => {
+    const normalized = normalizeToolUseData({
+      toolName: 'Bash',
+      tool: 'LegacyName',
+      input: {},
+    });
+    expect(normalized?.toolName).toBe('Bash');
+  });
+
   it('treats userInstruction as a feedback marker', () => {
     const normalized = normalizeToolUseData({
       toolName: 'AskUserQuestion',
