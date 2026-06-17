@@ -12,6 +12,10 @@ import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 import { approvalPromptsUnavailable } from '../runtime/approvalPolicyAvailability';
 import {
+  missingMultiAgentPresetMessage,
+  missingToolUseAgentMessage,
+} from '../runtime/agents';
+import {
   CliUsageError,
   readCliStdinText,
   type CliContext,
@@ -45,10 +49,6 @@ import {
 } from '../runtime/runModel';
 import { getCliAuthProvider } from '../runtime/supabaseAuth';
 
-import {
-  missingMultiAgentPresetMessage,
-  missingToolUseAgentMessage,
-} from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch/usage';
 import { formatMultiAgentRunInstruction } from './_helpers/multiAgentInstruction';
