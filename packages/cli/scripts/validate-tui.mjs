@@ -1100,6 +1100,23 @@ const SCENARIOS = [
     unexpect: [' · …', 'a session'],
   },
   {
+    name: 'bash-approval-feedback',
+    rows: 24,
+    cols: 80,
+    env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
+    bootExpect: '[Ctrl-C]',
+    keys: ['e', 'use portable python3 instead'],
+    frame: 'tail',
+    expect: [
+      'Run bash command?',
+      '> use portable python3 instead',
+      'Enter send note',
+      'Esc back',
+      '1 approval',
+    ],
+    unexpect: ['[/model]models'],
+  },
+  {
     name: 'long-bash-approval',
     rows: 24,
     env: {
