@@ -192,9 +192,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
   Anthropic,
   BetaMessage
 > {
-  /** Flag to force compaction on the next API call, set by requestCompaction(). */
-  private compactionRequested = false;
-
   /** Tracks PDF page counts for files uploaded to the Anthropic Files API. */
   private uploadedPdfPageCounts = new Map<string, number>();
 
@@ -242,10 +239,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return (
       isCompactionEligibleModel(this.config.fullName) && this.isToolUseMode()
     );
-  }
-
-  override requestCompaction(): void {
-    this.compactionRequested = true;
   }
 
   /**
