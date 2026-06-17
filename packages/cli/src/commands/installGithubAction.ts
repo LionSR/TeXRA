@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -101,6 +102,23 @@ async function pathExists(target: string): Promise<boolean> {
 function compareUrl(slug: GitHubSlug, base: string, branch: string): string {
   const range = `${encodeURIComponent(base)}...${encodeURIComponent(branch)}`;
   return `https://github.com/${slug.owner}/${slug.repo}/compare/${range}?expand=1`;
+}
+
+// Open a URL in the platform's default browser. Returns false when the launcher
+// can't be started (e.g. a headless environment), so the caller can fall back
+// to printing the link.
+function openInBrowser(url: string): boolean {
+  const [command, args]: [string, string[]] =
+    process.platform === 'darwin'
+      ? ['open', [url]]
+      : process.platform === 'win32'
+        ? [
+            'cmd',
+            ['/d', '/s', '/c', `start "" "${url.replaceAll('"', '%22')}"`],
+          ]
+        : ['xdg-open', [url]];
+  const result = spawnSync(command, args, { stdio: 'ignore' });
+  return !result.error && result.status === 0;
 }
 
 function refExists(cwd: string, ref: string): boolean {
@@ -268,40 +286,43 @@ async function runInstallGithubAction(
   const push = git(root, 'push', '-u', 'origin', branch);
   if (!push.ok) {
     writeTextStderr(`Failed to push "${branch}": ${push.stderr}`);
-    writeTextStdout(`Open a PR manually: ${compareUrl(slug, base, branch)}`);
+    writeTextStdout(
+      `Once pushed, open ${compareUrl(slug, base, branch)} to propose the PR.`,
+    );
     printSecretChecklist(slug);
     return CliExitCode.AgentError;
   }
 
-  if (ghAvailable(root)) {
-    const pr = gh(
-      root,
-      'pr',
-      'create',
-      '--base',
-      base,
-      '--head',
-      branch,
-      '--title',
-      'Add TeXRA code review',
-      '--body',
-      PR_BODY,
-    );
-    if (pr.ok) {
-      writeTextStdout(`Opened pull request:\n${pr.stdout}`);
-    } else {
-      writeTextStderr(`gh pr create failed: ${pr.stderr}`);
-      writeTextStdout(`Open a PR manually: ${compareUrl(slug, base, branch)}`);
-      printSecretChecklist(slug);
-      return CliExitCode.AgentError;
-    }
-  } else {
-    writeTextStdout(
-      `gh CLI not found. Branch pushed — open a PR here:\n${compareUrl(slug, base, branch)}`,
-    );
-  }
+  // Open the PR-creation page in the browser and let the user review the diff
+  // and propose the PR themselves, rather than creating it headlessly. Prefer
+  // `gh pr create --web` (it prefills the title/body) and fall back to opening
+  // the compare URL directly when gh is not installed.
+  const prPageUrl = compareUrl(slug, base, branch);
+  const opened = ghAvailable(root)
+    ? gh(
+        root,
+        'pr',
+        'create',
+        '--web',
+        '--base',
+        base,
+        '--head',
+        branch,
+        '--title',
+        'Add TeXRA code review',
+        '--body',
+        PR_BODY,
+      ).ok
+    : openInBrowser(prPageUrl);
 
   restoreBranch(root, startBranch);
+  if (opened) {
+    writeTextStdout(
+      'Opened the pull-request page in your browser — review the diff and click "Create pull request".',
+    );
+  } else {
+    writeTextStdout(`Open this page to propose the PR:\n${prPageUrl}`);
+  }
   printSecretChecklist(slug);
   return CliExitCode.Success;
 }
