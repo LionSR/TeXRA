@@ -384,8 +384,8 @@ export async function activate(context: vscode.ExtensionContext) {
               .executeCommand('texra.auth.signIn')
               .then(undefined, (err: unknown) =>
                 logger.error(
-                  'extension',
-                  `Failed to trigger sign-in: ${String(err)}`,
+                  'SupabaseAuthProvider',
+                  `Failed to trigger sign-in: ${toErrorMessage(err)}`,
                 ),
               );
           }
