@@ -162,20 +162,21 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     return this.executionId;
   }
 
-  // -- Typed readers --------------------------------------------------------
-
-  async readMeta(): Promise<ExecutionMeta | null> {
-    const raw = await this.read(KEYS.META);
+  private async readParsed<T>(key: string, schema: z.ZodType<T>): Promise<T | null> {
+    const raw = await this.read(key);
     if (!raw) return null;
-    const result = ExecutionMetaSchema.safeParse(raw);
+    const result = schema.safeParse(raw);
     return result.success ? result.data : null;
   }
 
+  // -- Typed readers --------------------------------------------------------
+
+  async readMeta(): Promise<ExecutionMeta | null> {
+    return this.readParsed(KEYS.META, ExecutionMetaSchema);
+  }
+
   async readConfig(): Promise<AgentConfig | null> {
-    const raw = await this.read(KEYS.CONFIG);
-    if (!raw) return null;
-    const result = AgentConfigSchema.safeParse(raw);
-    return result.success ? result.data : null;
+    return this.readParsed(KEYS.CONFIG, AgentConfigSchema);
   }
 
   async readReport(): Promise<string | null> {
@@ -201,25 +202,19 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   /** Read children: per-child KV keys with schema validation. */
   async readChildren(): Promise<ChildRecord[]> {
     const childKeys = await this.listKeys('child-');
-
     if (childKeys.length === 0) return [];
-
     const entries = await Promise.all(
       childKeys.map(async (key) => {
         const id = key.replace('child-', '') as ExecutionId;
-        const raw = await this.read(key);
-        const result = ChildRecordDataSchema.safeParse(raw);
-        return result.success ? { id, ...result.data } : null;
+        const data = await this.readParsed(key, ChildRecordDataSchema);
+        return data ? { id, ...data } : null;
       }),
     );
     return entries.filter(filterNotNull);
   }
 
   async readResultMeta(): Promise<ResultMeta | null> {
-    const raw = await this.read(KEYS.RESULT_META);
-    if (!raw) return null;
-    const result = ResultMetaSchema.safeParse(raw);
-    return result.success ? result.data : null;
+    return this.readParsed(KEYS.RESULT_META, ResultMetaSchema);
   }
 
   // -- Typed writers --------------------------------------------------------

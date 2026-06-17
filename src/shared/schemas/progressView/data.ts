@@ -40,17 +40,22 @@ const ToolUseStatusSchema = z.enum([
   TOOL_USE_STATUS.COMPLETED,
 ]);
 
-export const ToolUseLogSchema = z.object({
-  toolName: z.string().optional(),
-  tool: z.string().optional(),
-  input: z.unknown().optional(),
-  output: z.unknown().optional(),
-  summary: z.string().optional(),
-  error: z.string().optional(),
-  isError: z.boolean().optional(),
-  userInstruction: z.string().optional(),
-  status: ToolUseStatusSchema.optional(),
-});
+export const ToolUseLogSchema = z
+  .object({
+    toolName: z.string().optional(),
+    tool: z.string().optional(), // legacy alias — normalized to toolName at parse time
+    input: z.unknown().optional(),
+    output: z.unknown().optional(),
+    summary: z.string().optional(),
+    error: z.string().optional(),
+    isError: z.boolean().optional(),
+    userInstruction: z.string().optional(),
+    status: ToolUseStatusSchema.optional(),
+  })
+  .transform(({ tool, toolName, ...rest }) => ({
+    ...rest,
+    toolName: toolName ?? tool,
+  }));
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
 const NormalizedToolUseSchema = z.object({
