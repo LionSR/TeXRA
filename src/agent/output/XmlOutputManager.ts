@@ -221,7 +221,7 @@ export class XmlOutputManager {
       const texLocation = isExternal
         ? createExternalLocation(texFile)
         : this.fileService.createLocation(texFile);
-      const cleanedContent = this.removeTrailingEndDocument(
+      const cleanedContent = this.cleanExtractedDocumentContent(
         doc.content.trim(),
         texFile,
       );
@@ -268,17 +268,22 @@ export class XmlOutputManager {
     }
   }
 
-  private removeTrailingEndDocument(content: string, fileName: string): string {
+  private cleanExtractedDocumentContent(
+    content: string,
+    fileName: string,
+  ): string {
     const trimmed = content.trimEnd();
 
-    if (
+    const cleaned =
       trimmed.includes('\\begin{document}') ||
       !trimmed.endsWith('\\end{document}')
-    ) {
-      return trimmed;
+        ? trimmed
+        : trimmed.replace(/\\end{document}\s*$/, '').trimEnd();
+
+    if (cleaned !== trimmed) {
+      this.logger.debug(`Removed trailing \\end{document} from ${fileName}`);
     }
 
-    this.logger.debug(`Removed trailing \\end{document} from ${fileName}`);
-    return trimmed.replace(/\\end{document}\s*$/, '');
+    return cleaned === '' ? '' : `${cleaned}\n`;
   }
 }
