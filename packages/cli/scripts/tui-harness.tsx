@@ -979,7 +979,7 @@ if (SHOW_CHILDREN) {
       agentName: 'leanSolver',
       childStreamId: 'harness-child-lean-stream',
       status: STREAM_STATUS.WAITING,
-      elapsed: '2m 03s',
+      elapsed: '2m 3s',
     },
     {
       executionId: 'harness-child-review',

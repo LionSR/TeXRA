@@ -18,7 +18,7 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
-import { filterNotNullish } from '@utils/core';
+import { filterNotNullish, formatCompactDuration } from '@utils/core';
 
 import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
@@ -678,7 +678,7 @@ export function buildStatusBarDisplay(
       input.elapsedMs !== undefined
     ) {
       left.push({
-        text: `${Math.floor(Math.max(0, input.elapsedMs) / 1000)}s`,
+        text: formatCompactDuration(input.elapsedMs),
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.elapsed,
       });
