@@ -8,7 +8,6 @@ import type {
   ResponseInputContent,
   ResponseInputFile,
   ResponseInputItem,
-  ResponseOutputItem,
   ResponseOutputMessage,
 } from 'openai/resources/responses/responses';
 
@@ -55,13 +54,6 @@ export function extractTextContentPart(part: unknown): string | undefined {
     typeof candidate.text === 'string'
     ? candidate.text
     : undefined;
-}
-
-/** Type guard for ResponseOutputMessage items from the SDK. */
-export function isOutputMessage(
-  item: ResponseOutputItem,
-): item is ResponseOutputMessage {
-  return item.type === 'message';
 }
 
 /** Type guard for input_file content parts. */
