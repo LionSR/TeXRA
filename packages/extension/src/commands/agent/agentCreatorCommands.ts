@@ -11,9 +11,7 @@ import {
   createAgentCreatorFlow,
 } from '@agent/implementations/flows/agentCreator/agentCreatorFlow';
 import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
-import {
-  showLoggedErrorMessage,
-} from '@frontend/ui/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
@@ -29,15 +27,24 @@ interface ParsedCreatorYaml {
 /** Cached after first load. Templates are bundled resources — stable for the session. */
 let creatorConfig: CreatorConfig | null = null;
 
-async function loadCreatorConfig(context: vscode.ExtensionContext): Promise<CreatorConfig> {
+async function loadCreatorConfig(
+  context: vscode.ExtensionContext,
+): Promise<CreatorConfig> {
   if (creatorConfig) return creatorConfig;
-  const templatesDir = path.join(context.extensionPath, 'resources', 'templates');
-  const [workflowYaml, toolUseYaml, workflowSingle, toolUseTpl] = await Promise.all([
-    AbsoluteFS.read(path.join(templatesDir, 'agentCreatorWorkflow.yaml')),
-    AbsoluteFS.read(path.join(templatesDir, 'agentCreatorToolUse.yaml')),
-    AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-workflowSingle.yaml')),
-    AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
-  ]);
+  const templatesDir = path.join(
+    context.extensionPath,
+    'resources',
+    'templates',
+  );
+  const [workflowYaml, toolUseYaml, workflowSingle, toolUseTpl] =
+    await Promise.all([
+      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorWorkflow.yaml')),
+      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorToolUse.yaml')),
+      AbsoluteFS.read(
+        path.join(templatesDir, 'agentTemplate-workflowSingle.yaml'),
+      ),
+      AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
+    ]);
   const wf = yaml.parse(workflowYaml) as ParsedCreatorYaml;
   const tu = yaml.parse(toolUseYaml) as ParsedCreatorYaml;
   const defaultRetry =
@@ -75,7 +82,8 @@ function buildVSCodeUI(): AgentCreatorUI {
       const lower = description.toLowerCase();
       const suggested = new Set<string>(['File Operations']);
       for (const [name, group] of Object.entries(TOOL_GROUPS)) {
-        if (group.keywords.some((kw) => lower.includes(kw))) suggested.add(name);
+        if (group.keywords.some((kw) => lower.includes(kw)))
+          suggested.add(name);
       }
       const selected = await vscode.window.showQuickPick(
         Object.entries(TOOL_GROUPS).map(([label, group]) => ({
@@ -86,7 +94,8 @@ function buildVSCodeUI(): AgentCreatorUI {
         })),
         {
           title: `Tool Use Agent: ${agentName}`,
-          placeHolder: 'Select tool groups (pre-selected based on your description)',
+          placeHolder:
+            'Select tool groups (pre-selected based on your description)',
           canPickMany: true,
         },
       );
@@ -116,7 +125,9 @@ function buildVSCodeUI(): AgentCreatorUI {
     },
 
     async openCreatedFile(filePath) {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+      const doc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(filePath),
+      );
       await vscode.window.showTextDocument(doc);
     },
 

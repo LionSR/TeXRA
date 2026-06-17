@@ -389,7 +389,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       return this.toVSCodeSession(session);
     } catch (error) {
-      this.notifier.showError(`Authentication failed: ${toErrorMessage(error)}`);
+      this.notifier.showError(
+        `Authentication failed: ${toErrorMessage(error)}`,
+      );
       throw error;
     }
   }
@@ -449,7 +451,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
       return sessions[0];
     } catch (error) {
-      this.notifier.showError(`Authentication failed: ${toErrorMessage(error)}`);
+      this.notifier.showError(
+        `Authentication failed: ${toErrorMessage(error)}`,
+      );
       throw error;
     } finally {
       // Reset flag after entire OAuth flow completes (success or failure)
