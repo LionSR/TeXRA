@@ -21,10 +21,18 @@ describe('resolveBrowserLaunch', () => {
 
   it('uses verbatim cmd start quoting on Windows', () => {
     expect(
-      resolveBrowserLaunch('https://example.com/pr?title=a"b', 'win32'),
+      resolveBrowserLaunch(
+        'https://example.com/compare/feature%2Fdefault...topic%2Fpr?title=a"b',
+        'win32',
+      ),
     ).toEqual({
       command: 'cmd',
-      args: ['/d', '/s', '/c', 'start "" "https://example.com/pr?title=a%22b"'],
+      args: [
+        '/d',
+        '/s',
+        '/c',
+        'start "" "https://example.com/compare/feature^%2Fdefault...topic^%2Fpr?title=a^%22b"',
+      ],
       windowsVerbatimArguments: true,
     });
   });
