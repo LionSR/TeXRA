@@ -1,1 +1,1 @@
-export { createChannelTrace } from './runTrace';
+export { createChannelTrace } from './channelTrace';
