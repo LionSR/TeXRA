@@ -26,8 +26,21 @@ export const UsageProviderSchema = z.enum([
 
 export type UsageProvider = z.infer<typeof UsageProviderSchema>;
 
-/** Normalized usage statistics from any model provider. */
-export const NormalizedUsageSchema = TokenUsageStatsSchema.extend({
+/**
+ * Normalized usage statistics from any model provider.
+ *
+ * Reuses only the required base fields via `.pick()` — the optional cache
+ * fields on `TokenUsageStatsSchema` (`cacheReadInputTokens` /
+ * `cacheCreationInputTokens`) are never populated for a NormalizedUsage; the
+ * live cache metrics below (`cachedInputTokens` / `cacheCreationTokens`) are
+ * the authoritative names. Extending the full base instead would inherit
+ * those dead fields and duplicate `cacheMissInputTokens`.
+ */
+export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
+  inputTokens: true,
+  outputTokens: true,
+  cost: true,
+}).extend({
   /** Response time in milliseconds */
   responseTimeMs: z.number().nonnegative(),
   /** Provider that generated this usage data */
