@@ -78,12 +78,7 @@ function wrapWithErrorHandling(
 function getToolUseRenderLabel(message: LogMessageData): string {
   const data = message.data;
   if (!isObject(data)) return 'tool use';
-  const toolName =
-    typeof data.toolName === 'string'
-      ? data.toolName
-      : typeof data.tool === 'string'
-        ? data.tool
-        : '';
+  const toolName = typeof data.toolName === 'string' ? data.toolName : '';
   return toolName.trim() ? `tool use (${toolName.trim()})` : 'tool use';
 }
 
