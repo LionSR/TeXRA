@@ -126,9 +126,6 @@ export class ModelHandlerOpenAI<
   /** Tracks prompt_tokens from the last API response for compaction threshold checks. */
   private lastKnownInputTokens = 0;
 
-  /** Flag to force compaction on the next API call, set by requestCompaction(). */
-  private compactionRequested = false;
-
   protected useReasoningStreamAggregator: boolean = false;
 
   // ── Compaction interface overrides ────────────────────────────────────
@@ -136,10 +133,6 @@ export class ModelHandlerOpenAI<
   /** Client-side compaction is available for tool-use sessions. */
   override get supportsManualCompaction(): boolean {
     return this.isToolUseMode();
-  }
-
-  override requestCompaction(): void {
-    this.compactionRequested = true;
   }
 
   // ── Compaction internals ──────────────────────────────────────────────
@@ -152,19 +145,7 @@ export class ModelHandlerOpenAI<
    * - Last known input tokens exceed the configured threshold
    */
   private shouldCompact(): boolean {
-    if (!this.isToolUseMode()) return false;
-
-    if (this.compactionRequested) {
-      return true;
-    }
-
-    const thresholdPercent = this.getCompactionThresholdPercent();
-    if (thresholdPercent <= 0) return false;
-
-    const threshold = Math.floor(
-      (thresholdPercent / 100) * this.config.contextWindow,
-    );
-    return this.lastKnownInputTokens > threshold;
+    return this.shouldCompactByInputTokens(this.lastKnownInputTokens);
   }
 
   /**
