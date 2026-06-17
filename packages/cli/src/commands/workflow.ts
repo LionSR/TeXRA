@@ -18,7 +18,7 @@ import {
   buildHeadlessRunContext,
   resolveCliRunModel,
 } from '../runtime/runModel';
-import { resolveCliAgent } from '../runtime/agents';
+import { assertCliAgentLaunch, resolveCliAgent } from '../runtime/agents';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -77,7 +77,11 @@ export async function runWorkflowAgent(
   await initLocalCliPlatform(context);
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
-  const agent = await resolveCliAgent(init.agent, 'run');
+  const agent = assertCliAgentLaunch(
+    init.agent,
+    await resolveCliAgent(init.agent, AgentCategory.Workflow),
+    'run',
+  );
   if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
     throw new CliUsageError(
       'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
