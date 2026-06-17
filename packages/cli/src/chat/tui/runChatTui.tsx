@@ -125,7 +125,7 @@ import {
   openCliSlashCommandForm,
   openRegisteredCliSlashForm,
 } from './commands/slashForms';
-import { formatSlashCommandHelp } from './commands/helpText';
+import { formatSlashCommandHelp, GOAL_MODE_HELP } from './commands/helpText';
 import {
   findSlashCommand,
   listSlashCommands,
@@ -947,6 +947,10 @@ async function handleTuiSlashCommand(
       );
       return true;
     }
+    case 'goal':
+    case 'goals':
+      appendLocalAssistantTranscript(GOAL_MODE_HELP);
+      return true;
     case 'resume': {
       if (!rest) {
         openCliSlashCommandForm('resume', rest);

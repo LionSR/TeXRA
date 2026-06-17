@@ -170,7 +170,7 @@ export function slashPickIntent(
 
 /**
  * Parse a `"/cmd remainder"` input into `{ name, remainder }`.
- * Also accepts `\clear` as a compatibility alias.
+ * Also accepts a small set of backslash compatibility aliases.
  * Returns `undefined` if `text` is not a slash command. Only command-shaped
  * tokens qualify: command names are plain identifiers (letters, digits, `_`,
  * `-`), so a leading token with any other character — `/Users/me/figure.pdf`,
@@ -185,6 +185,7 @@ export function parseSlashInput(
   if (!text.startsWith('/')) {
     const trimmed = text.trim();
     if (trimmed === '\\clear') return { name: 'clear', remainder: '' };
+    if (trimmed === '\\goal') return { name: 'goal', remainder: '' };
     return undefined;
   }
   const body = text.slice(1);

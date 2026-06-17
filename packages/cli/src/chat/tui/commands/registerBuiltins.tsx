@@ -326,6 +326,12 @@ export function registerBuiltinSlashCommands(options?: {
     category: 'session',
   });
   registerSlashCommand({
+    name: 'goal',
+    description: 'Explain autonomous goal mode',
+    aliases: ['goals'],
+    category: 'session',
+  });
+  registerSlashCommand({
     name: 'resume',
     description: 'Resume a previous session',
     category: 'session',
