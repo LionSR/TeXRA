@@ -95,26 +95,36 @@ export const LogDeltaMessageSchema = z.object({
   updates: z.array(StreamLogEntrySchema).prefault([]),
 });
 
-export const UpdateFilesMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FILES),
-  stream: StreamTabIdSchema,
-  rounds: z.record(z.string(), z.array(OutputFileInfoSchema)).optional(),
-  reset: z.boolean().optional(),
-});
+// Round-keyed update messages share one shape: a stream id, an optional
+// `rounds` record of per-round arrays, and an optional `reset` flag. The
+// generic `command`/element params keep each `command` literal distinct so the
+// outbound discriminated union still narrows.
+function RoundUpdateMessageSchema<C extends string, T extends z.ZodType>(
+  command: C,
+  elementSchema: T,
+) {
+  return z.object({
+    command: z.literal(command),
+    stream: StreamTabIdSchema,
+    rounds: z.record(z.string(), z.array(elementSchema)).optional(),
+    reset: z.boolean().optional(),
+  });
+}
 
-export const UpdateMissingOutputsMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS),
-  stream: StreamTabIdSchema,
-  rounds: z.record(z.string(), z.array(z.string())).optional(),
-  reset: z.boolean().optional(),
-});
+export const UpdateFilesMessageSchema = RoundUpdateMessageSchema(
+  PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
+  OutputFileInfoSchema,
+);
 
-export const UpdateCompileFailuresMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES),
-  stream: StreamTabIdSchema,
-  rounds: z.record(z.string(), z.array(CompileFailureSchema)).optional(),
-  reset: z.boolean().optional(),
-});
+export const UpdateMissingOutputsMessageSchema = RoundUpdateMessageSchema(
+  PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
+  z.string(),
+);
+
+export const UpdateCompileFailuresMessageSchema = RoundUpdateMessageSchema(
+  PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
+  CompileFailureSchema,
+);
 
 export const UpdateTodosMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TODOS),

@@ -79,6 +79,9 @@ function wrapWithErrorHandling(
 function getToolUseRenderLabel(message: LogMessageData): string {
   const data = message.data;
   if (!isObject(data)) return 'tool use';
+  // Reads the raw (unparsed) payload, so fall back to the legacy `tool` field
+  // — older persisted streams stored the name there — to keep error labels
+  // actionable. The main render path normalizes this via ToolUseLogSchema.
   const toolName =
     typeof data.toolName === 'string'
       ? data.toolName
