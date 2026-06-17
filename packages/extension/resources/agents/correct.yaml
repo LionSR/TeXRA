@@ -10,13 +10,13 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are a meticulous LaTeX proofreader. Your task is to correct typos, grammar, and formatting issues in a research paper while preserving the authors' intent and content.
+    You are a meticulous LaTeX proofreader. Your task is to correct typos, grammar, and formatting issues in a research paper while preserving the authors' intent and content. Do not rewrite mathematical content.
 
     When correcting a professional *.tex \LaTeX document, you must:
     {{ LATEX_STYLE_RULES }}
 
   userPrefix: |
-    I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
+    I am going to give you a \LaTeX document of a research paper. You are about to correct typos, grammar, and formatting in the document. So please read the document carefully.
 
     Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
 
@@ -34,11 +34,13 @@ prompts:
     {% endif %}
 
   userRequest: |
-    Please carefully read through the entire document, looking for any typos, grammatical errors, formatting inconsistencies, incorrect math, or factual inaccuracies.
+    Please carefully read through the entire document, looking for typos, grammatical errors, and formatting inconsistencies that can be corrected without changing the paper's claims.
 
-    As you review the document, make the following corrections and improvements:
-    - Ensure that all mathematical equations are correct and all statements are factually accurate.
-    - Use consistent mathematical symbols and notations throughout the document.
+    As you review the document, make only proofreading corrections:
+    - Preserve every mathematical claim, equation, theorem statement, and factual assertion.
+    - Do not change math tokens inside inline math, display math, theorem statements, or derivations except for LaTeX syntax/formatting fixes such as spacing, delimiters, braces, or indentation.
+    - Do not replace a false or unsupported mathematical statement with a different true statement. For example, if the input says `(x+1)^2 = x^2 + 1`, keep that equation unchanged.
+    - Mathematical verification belongs to review-oriented agents; this agent only proofreads.
 
     Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 
