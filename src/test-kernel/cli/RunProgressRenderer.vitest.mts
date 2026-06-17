@@ -132,6 +132,45 @@ describe('CLI run progress renderer', () => {
     expect(output.endsWith('\r\x1b[2K')).toBe(true);
   });
 
+  it('ticks the ANSI status line while a root workflow is quiet', () => {
+    let now = 0;
+    let output = '';
+    let heartbeat: (() => void) | undefined;
+    let clearCount = 0;
+    const renderer = createRunProgressRenderer(context(), {
+      colorEnabled: true,
+      write: (text) => {
+        output += text;
+      },
+      nowMs: () => now,
+      setInterval: ((callback: () => void) => {
+        heartbeat = callback;
+        return { unref() {} } as unknown as ReturnType<typeof setInterval>;
+      }) as unknown as typeof setInterval,
+      clearInterval: (() => {
+        clearCount += 1;
+      }) as typeof clearInterval,
+    });
+
+    renderer?.handle('setTaskState', workflowTaskState());
+
+    expect(heartbeat).toBeDefined();
+    now = 1000;
+    heartbeat?.();
+    now = 2300;
+    heartbeat?.();
+
+    expect(output).toContain('\r\x1b[2Kpolish paper.tex · 1s');
+    expect(output).toContain('\r\x1b[2Kpolish paper.tex · 2s');
+
+    renderer?.handle('updateStreamStatus', {
+      streamId: 'stream-1',
+      status: STREAM_STATUS.STOPPED,
+      previousStatus: STREAM_STATUS.RUNNING,
+    });
+    expect(clearCount).toBe(1);
+  });
+
   it('summarizes multi-input workflow progress without hiding extra files', () => {
     let output = '';
     const renderer = createRunProgressRenderer(
