@@ -279,7 +279,7 @@ async function runInstallGithubAction(
   // Open the PR-creation page in the browser and let the user review the diff
   // and propose the PR themselves, rather than creating it headlessly. Prefer
   // `gh pr create --web` (it prefills the title/body) and fall back to opening
-  // the compare URL directly when gh is not installed.
+  // the compare URL directly when gh is unavailable or cannot open the page.
   const prPageUrl = compareUrl(slug, base, branch);
   let opened = false;
   if (ghAvailable(root)) {
@@ -303,8 +303,9 @@ async function runInstallGithubAction(
       writeTextStderr(
         diagnostic
           ? `gh pr create --web failed: ${diagnostic}`
-          : 'gh pr create --web failed; falling back to the compare URL.',
+          : 'gh pr create --web failed; trying the compare URL fallback.',
       );
+      opened = await tryOpenBrowser(prPageUrl);
     }
   } else {
     opened = await tryOpenBrowser(prPageUrl);
