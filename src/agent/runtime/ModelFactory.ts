@@ -321,7 +321,7 @@ export async function createModelHandler(
     // a user-facing model selector or an injected command-layer substitute.
     logger.warn(
       CHANNEL,
-      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is replacing provider handlers with the internal validation handler.`,
+      'Internal validation model handler is replacing provider handlers.',
     );
     const { ModelHandlerValidation } =
       await import('@agent/modelHandlers/modelHandlerValidation');
