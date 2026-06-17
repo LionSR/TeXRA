@@ -21,6 +21,7 @@ import {
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 
 // Local imports - auth
 import {
@@ -266,7 +267,7 @@ export async function initCliPlatform(
       GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION;
     await bootstrapPlatformAgentDirectories({
       channel: 'cli',
-      resourcesPath: context.resourcesPath,
+      bundleSource: new PathAgentDirectoryBundleSource(context.resourcesPath),
       currentVersion: context.version,
       customDirectoryStore: { get: () => undefined },
       versionStore: {
