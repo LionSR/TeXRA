@@ -42,7 +42,6 @@ const ToolUseStatusSchema = z.enum([
 
 export const ToolUseLogSchema = z.object({
   toolName: z.string().optional(),
-  tool: z.string().optional(),
   input: z.unknown().optional(),
   output: z.unknown().optional(),
   summary: z.string().optional(),
