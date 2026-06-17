@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
@@ -107,6 +107,33 @@ describe('maybeBuildGoalContinuation', () => {
     // it steers toward persistence instead.
     expect(out).not.toContain('plan(command="complete")');
     expect(out).not.toContain('plan(command="pause")');
+  });
+
+  it('continues rendering after more than two hours elapsed', async () => {
+    const startedAt = new Date('2026-06-17T00:00:00.000Z');
+    const afterTwoHours = new Date(
+      startedAt.getTime() + 2 * 60 * 60 * 1000 + 5 * 60 * 1000 + 1234,
+    );
+
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(startedAt);
+      await GoalStore.start(
+        STREAM_ID,
+        'Keep solving the hard problem until verification is complete.',
+      );
+
+      vi.setSystemTime(afterTwoHours);
+      const out = await maybeBuildGoalContinuation(STREAM_ID);
+
+      expect(out).toContain('<goal_context>');
+      expect(out).toContain(
+        'Keep solving the hard problem until verification is complete.',
+      );
+      expect(out).toContain('Time elapsed: 2h 5m');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('returns null when the feature flag is off (with an active goal present)', async () => {
