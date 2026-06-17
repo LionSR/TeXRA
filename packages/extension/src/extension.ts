@@ -375,12 +375,19 @@ export async function activate(context: vscode.ExtensionContext) {
             reason === 'expired'
               ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
               : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
-          const action = await vscode.window.showWarningMessage(message, 'Sign In');
+          const action = await vscode.window.showWarningMessage(
+            message,
+            'Sign In',
+          );
           if (action === 'Sign In') {
-            await vscode.commands.executeCommand('texra.auth.signIn').then(
-              undefined,
-              (err: unknown) => logger.error('extension', `Failed to trigger sign-in: ${String(err)}`),
-            );
+            await vscode.commands
+              .executeCommand('texra.auth.signIn')
+              .then(undefined, (err: unknown) =>
+                logger.error(
+                  'extension',
+                  `Failed to trigger sign-in: ${String(err)}`,
+                ),
+              );
           }
         },
       });

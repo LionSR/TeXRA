@@ -67,7 +67,15 @@ export interface ToolGroup {
 export const TOOL_GROUPS: Record<string, ToolGroup> = {
   'File Operations': {
     description: 'Read, write, edit, search files and run shell commands',
-    tools: ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls'],
+    tools: [
+      'bash',
+      'read_file',
+      'write_file',
+      'edit_file',
+      'glob',
+      'grep',
+      'ls',
+    ],
     keywords: ['file', 'edit', 'code', 'write', 'read', 'script', 'shell'],
   },
   'Web & Search': {
@@ -77,13 +85,42 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
   },
   'Academic Research': {
     description: 'Search arXiv, CrossRef, and download papers',
-    tools: ['arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi'],
-    keywords: ['arxiv', 'paper', 'research', 'literature', 'review', 'survey', 'cite', 'doi', 'journal'],
+    tools: [
+      'arxiv_search',
+      'arxiv_metadata',
+      'download_arxiv_source',
+      'crossref_search',
+      'crossref_doi',
+    ],
+    keywords: [
+      'arxiv',
+      'paper',
+      'research',
+      'literature',
+      'review',
+      'survey',
+      'cite',
+      'doi',
+      'journal',
+    ],
   },
   'LaTeX Processing': {
     description: 'Extract figures, bibliography, TikZ, and count words',
-    tools: ['extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'texcount'],
-    keywords: ['latex', 'figure', 'tikz', 'bibliography', 'bib', 'word count', 'extract'],
+    tools: [
+      'extract_figures',
+      'extract_bib_entries',
+      'extract_tikz_figures',
+      'texcount',
+    ],
+    keywords: [
+      'latex',
+      'figure',
+      'tikz',
+      'bibliography',
+      'bib',
+      'word count',
+      'extract',
+    ],
   },
   'Citation Management': {
     description: 'Manage references with Zotero',
@@ -93,16 +130,34 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
   Computation: {
     description: 'Mathematical computation with Wolfram Alpha',
     tools: ['wolfram'],
-    keywords: ['math', 'compute', 'calculate', 'wolfram', 'symbolic', 'equation'],
+    keywords: [
+      'math',
+      'compute',
+      'calculate',
+      'wolfram',
+      'symbolic',
+      'equation',
+    ],
   },
   'Agent Delegation': {
     description: 'Delegate tasks to other agents and manage executions',
-    tools: ['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files'],
+    tools: [
+      'delegate_workflow',
+      'delegate_agent',
+      'executions',
+      'accept_run_files',
+    ],
     keywords: ['delegate', 'orchestrat', 'pipeline', 'multi-agent', 'chain'],
   },
   'Lean 4': {
     description: 'Lean 4 proof assistant integration',
-    tools: ['lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle'],
+    tools: [
+      'lean_diagnostics',
+      'lean_file',
+      'lean_project',
+      'lean_inspect',
+      'lean_loogle',
+    ],
     keywords: ['lean', 'proof', 'theorem', 'formal', 'verification'],
   },
   Utility: {
@@ -119,10 +174,17 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
 export interface AgentCreatorUI {
   promptAgentName(categoryLabel: string): Promise<string | undefined>;
   promptDescription(title: string, prompt: string): Promise<string | undefined>;
-  pickTools(agentName: string, description: string): Promise<{ tools: string[]; groups: string[] } | undefined>;
+  pickTools(
+    agentName: string,
+    description: string,
+  ): Promise<{ tools: string[]; groups: string[] } | undefined>;
   getCustomAgentDir(): Promise<string>;
   showCreatedInfo(filePath: string): void;
-  promptAddToConfig(agentName: string, isEdited: boolean, category: AgentCategory): Promise<void>;
+  promptAddToConfig(
+    agentName: string,
+    isEdited: boolean,
+    category: AgentCategory,
+  ): Promise<void>;
   openCreatedFile(filePath: string): Promise<void>;
   renderTemplate(template: string, vars: Record<string, unknown>): string;
 }
@@ -147,8 +209,10 @@ const WORKFLOW_VARS = [
 ];
 
 const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
-  toolUse: 'What should this agent do? Mention capabilities it needs (e.g., search papers, edit files, browse the web)',
-  workflow: 'What should this agent do? Mention whether it rewrites existing documents or creates new ones',
+  toolUse:
+    'What should this agent do? Mention capabilities it needs (e.g., search papers, edit files, browse the web)',
+  workflow:
+    'What should this agent do? Mention whether it rewrites existing documents or creates new ones',
 };
 
 function buildPassthrough(vars: string[]): Record<string, string> {
@@ -353,7 +417,9 @@ class GenerateNode extends Node<AgentCreatorShared> {
       ...blueprint.aiVars,
     };
     const systemPrompt =
-      nunjucksEnv.renderString(prompts.systemPrompt, renderVars) + '\n' + schemaRef;
+      nunjucksEnv.renderString(prompts.systemPrompt, renderVars) +
+      '\n' +
+      schemaRef;
 
     let userMessage = nunjucksEnv.renderString(prompts.userRequest, renderVars);
     if (this.lastValidationError) {
@@ -364,8 +430,18 @@ class GenerateNode extends Node<AgentCreatorShared> {
         });
     }
 
-    const messages = await handler.initializeMessages('', userMessage, undefined, systemPrompt);
-    const result = await handler.createResponse({ client, messages, temperature: 0, systemPrompt });
+    const messages = await handler.initializeMessages(
+      '',
+      userMessage,
+      undefined,
+      systemPrompt,
+    );
+    const result = await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+      systemPrompt,
+    });
     const { text } = handler.extractResponse(result.response, '');
 
     if (!isNonEmptyString(text)) {
@@ -378,20 +454,34 @@ class GenerateNode extends Node<AgentCreatorShared> {
       validateAgentYamlContent(candidate);
     } catch (err) {
       this.lastValidationError = toErrorMessage(err);
-      throw new Error(`Generated YAML was invalid: ${this.lastValidationError}`);
+      throw new Error(
+        `Generated YAML was invalid: ${this.lastValidationError}`,
+      );
     }
 
-    logger.info(CHANNEL, `AI generation succeeded for ${blueprint.category} agent`);
+    logger.info(
+      CHANNEL,
+      `AI generation succeeded for ${blueprint.category} agent`,
+    );
     return candidate;
   }
 
-  async execFallback(prepRes: GeneratePrepResult, error: Error): Promise<string> {
-    logger.warn(CHANNEL, `AI generation failed, using template: ${error.message}`);
+  async execFallback(
+    prepRes: GeneratePrepResult,
+    error: Error,
+  ): Promise<string> {
+    logger.warn(
+      CHANNEL,
+      `AI generation failed, using template: ${error.message}`,
+    );
     const { blueprint } = prepRes;
     // Route through the shared renderer so both the Settings "new from
     // template" flow and this fallback produce byte-identical output for
     // matching inputs.
-    return this.ui.renderTemplate(blueprint.fallbackTemplate, blueprint.fallbackVars);
+    return this.ui.renderTemplate(
+      blueprint.fallbackTemplate,
+      blueprint.fallbackVars,
+    );
   }
 
   async post(
@@ -417,7 +507,11 @@ class RegisterNode extends Node<AgentCreatorShared> {
     const { blueprint, yamlContent } = prepRes;
     await AbsoluteFS.write(blueprint.filePath, yamlContent);
     this.ui.showCreatedInfo(blueprint.filePath);
-    await this.ui.promptAddToConfig(blueprint.agentName, false, blueprint.category);
+    await this.ui.promptAddToConfig(
+      blueprint.agentName,
+      false,
+      blueprint.category,
+    );
     await this.ui.openCreatedFile(blueprint.filePath);
   }
 
@@ -428,7 +522,9 @@ class RegisterNode extends Node<AgentCreatorShared> {
 
 // ── Flow ────────────────────────────────────────────────────
 
-export function createAgentCreatorFlow(ui: AgentCreatorUI): Flow<AgentCreatorShared> {
+export function createAgentCreatorFlow(
+  ui: AgentCreatorUI,
+): Flow<AgentCreatorShared> {
   const gatherInput = new GatherInputNode(ui);
   const workflowBlueprint = new WorkflowBlueprintNode(ui);
   const toolUseBlueprint = new ToolUseBlueprintNode(ui);
