@@ -243,6 +243,109 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 });
 
+describe('ModelHandlerOpenAIResponse.extractResponse', () => {
+  it('fills missing output_text from output message parts', () => {
+    const handler = createHandler();
+    const result = handler.extractResponse(
+      {
+        id: 'resp-output-fallback',
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              { type: 'output_text', text: 'alpha ' },
+              { type: 'output_text', text: 'beta' },
+            ],
+          },
+        ],
+        usage: {
+          input_tokens: 1,
+          output_tokens: 2,
+          total_tokens: 3,
+          input_tokens_details: { cached_tokens: 0 },
+          output_tokens_details: { reasoning_tokens: 0 },
+        },
+      } as any,
+      '',
+    );
+
+    assert.equal(result.text, 'alpha beta');
+  });
+
+  it('preserves top-level output_text when output has no message text', () => {
+    const handler = createHandler();
+    const result = handler.extractResponse(
+      {
+        id: 'resp-top-level-text',
+        status: 'completed',
+        output_text: 'relay text',
+        output: [{ type: 'reasoning', id: 'rs_1', summary: [] }],
+        usage: {
+          input_tokens: 1,
+          output_tokens: 2,
+          total_tokens: 3,
+          input_tokens_details: { cached_tokens: 0 },
+          output_tokens_details: { reasoning_tokens: 0 },
+        },
+      } as any,
+      '',
+    );
+
+    assert.equal(result.text, 'relay text');
+  });
+
+  it('uses top-level output_text when output is absent', () => {
+    const handler = createHandler();
+    const result = handler.extractResponse(
+      {
+        id: 'resp-output-missing',
+        status: 'completed',
+        output_text: 'relay text',
+        usage: {
+          input_tokens: 1,
+          output_tokens: 2,
+          total_tokens: 3,
+          input_tokens_details: { cached_tokens: 0 },
+          output_tokens_details: { reasoning_tokens: 0 },
+        },
+      } as any,
+      '',
+    );
+
+    assert.equal(result.text, 'relay text');
+  });
+
+  it('fills blank output_text from output message parts', () => {
+    const handler = createHandler();
+    const result = handler.extractResponse(
+      {
+        id: 'resp-blank-output-text',
+        status: 'completed',
+        output_text: '   ',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'fallback text' }],
+          },
+        ],
+        usage: {
+          input_tokens: 1,
+          output_tokens: 2,
+          total_tokens: 3,
+          input_tokens_details: { cached_tokens: 0 },
+          output_tokens_details: { reasoning_tokens: 0 },
+        },
+      } as any,
+      '',
+    );
+
+    assert.equal(result.text, 'fallback text');
+  });
+});
+
 describe('ModelHandlerOpenAIResponse.extractAssistantText', () => {
   it('extracts assistant text from response output text parts', () => {
     const handler = createHandler();

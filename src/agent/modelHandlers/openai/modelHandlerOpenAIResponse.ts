@@ -1,5 +1,8 @@
 // Third-party imports
 import OpenAI from 'openai';
+// Exported by openai@6.x via the package's ./lib/* subpath; keep typecheck
+// coverage around SDK upgrades because this is not a top-level public helper.
+import { addOutputText } from 'openai/lib/ResponsesParser';
 
 // Local imports - agent
 import {
@@ -85,7 +88,6 @@ import {
   extractTextContentPart,
   isAssistantTextMessage,
   isMessageItem,
-  isOutputMessage,
 } from './openAIResponseContent';
 import {
   buildInlineAttachmentParts,
@@ -1734,26 +1736,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
     }
     let newResponse = responseObject.output_text?.trim() ?? '';
-
-    if (!newResponse && responseObject.output) {
-      const fallbackSegments: string[] = [];
-
-      for (const item of responseObject.output) {
-        if (!isOutputMessage(item)) {
-          continue;
-        }
-
-        for (const part of item.content) {
-          if (part.type === 'output_text') {
-            fallbackSegments.push(part.text);
-          }
-        }
-      }
-
-      const fallbackText = fallbackSegments.join('').trim();
-      if (fallbackText) {
-        newResponse = fallbackText;
-      }
+    if (!newResponse && Array.isArray(responseObject.output)) {
+      // Mutates responseObject.output_text from output message parts.
+      addOutputText(responseObject);
+      newResponse = responseObject.output_text?.trim() ?? '';
     }
 
     const stopReason =
