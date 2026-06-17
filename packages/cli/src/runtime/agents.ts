@@ -110,46 +110,33 @@ export function assertCliAgentLaunch(
 }
 
 /**
- * Resolve a CLI launch target from the agent registry.
+ * Resolve a CLI-visible agent from the registry.
  *
  * CLI commands start with a local-only load so signed-out users avoid remote
  * auth/network work. Missing agents still get a remote-inclusive fallback, and
  * authenticated relay sessions reload bare names so the registry's normal
- * source priority can prefer remote definitions. Launching commands pass their
- * mode so lookup priority and category enforcement share the same target.
+ * source priority can prefer remote definitions. The optional category only
+ * selects the registry lookup priority; launch commands must validate the
+ * returned entry explicitly with assertCliAgentLaunch().
  */
-export function resolveCliAgent(name: string): Promise<AgentEntry | undefined>;
-export function resolveCliAgent(
-  name: string,
-  launchMode: CliAgentLaunchMode,
-): Promise<AgentEntry>;
 export async function resolveCliAgent(
   name: string,
-  launchMode?: CliAgentLaunchMode,
+  lookupCategory?: AgentCategory,
 ): Promise<AgentEntry | undefined> {
-  const lookupCategory = launchMode
-    ? CLI_AGENT_LAUNCH_TARGETS[launchMode].requiredCategory
-    : undefined;
   await loadAgents({ includeRemote: false });
   const agent = getAgent(name, lookupCategory);
 
   if (!agent) {
     await loadAgents();
-    const remoteAgent = getAgent(name, lookupCategory);
-    return launchMode
-      ? assertCliAgentLaunch(name, remoteAgent, launchMode)
-      : remoteAgent;
+    return getAgent(name, lookupCategory);
   }
 
   if (name.includes(':') || !(await getCliAuthProvider().isAuthenticated())) {
-    return launchMode ? assertCliAgentLaunch(name, agent, launchMode) : agent;
+    return agent;
   }
 
   await loadAgents();
-  const remotePriorityAgent = getAgent(name, lookupCategory);
-  return launchMode
-    ? assertCliAgentLaunch(name, remotePriorityAgent, launchMode)
-    : remotePriorityAgent;
+  return getAgent(name, lookupCategory);
 }
 
 export async function loadCliAgentList(
