@@ -1,0 +1,101 @@
+// Thin wrappers over `git` and `gh` for the `install-github-action` command.
+// Mirrors the CLI's existing subprocess style (node:child_process spawnSync,
+// see runtime/pager.ts) so no extra dependency is needed. Every call captures
+// output and never throws — callers branch on `ok`.
+import { spawnSync } from 'node:child_process';
+
+export interface CommandResult {
+  readonly ok: boolean;
+  readonly status: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+function run(
+  command: string,
+  args: readonly string[],
+  cwd: string,
+): CommandResult {
+  const result = spawnSync(command, [...args], {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (result.error) {
+    return {
+      ok: false,
+      status: null,
+      stdout: '',
+      stderr: result.error.message,
+    };
+  }
+  return {
+    ok: result.status === 0,
+    status: result.status,
+    stdout: (result.stdout ?? '').trim(),
+    stderr: (result.stderr ?? '').trim(),
+  };
+}
+
+export function git(cwd: string, ...args: readonly string[]): CommandResult {
+  return run('git', args, cwd);
+}
+
+export function gh(cwd: string, ...args: readonly string[]): CommandResult {
+  return run('gh', args, cwd);
+}
+
+export function isGitRepo(cwd: string): boolean {
+  return git(cwd, 'rev-parse', '--is-inside-work-tree').ok;
+}
+
+export function repoRoot(cwd: string): string | null {
+  const result = git(cwd, 'rev-parse', '--show-toplevel');
+  return result.ok && result.stdout ? result.stdout : null;
+}
+
+export function remoteUrl(cwd: string, remote = 'origin'): string | null {
+  const result = git(cwd, 'remote', 'get-url', remote);
+  return result.ok && result.stdout ? result.stdout : null;
+}
+
+export function currentBranch(cwd: string): string | null {
+  const result = git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD');
+  return result.ok && result.stdout ? result.stdout : null;
+}
+
+/** Default branch of `origin`, e.g. "main" — null if it can't be resolved. */
+export function defaultBranch(cwd: string): string | null {
+  const result = git(
+    cwd,
+    'symbolic-ref',
+    '--short',
+    'refs/remotes/origin/HEAD',
+  );
+  if (!result.ok || !result.stdout) return null;
+  return result.stdout.split('/').at(-1) ?? null;
+}
+
+export function localBranchExists(cwd: string, branch: string): boolean {
+  return git(cwd, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`)
+    .ok;
+}
+
+export function ghAvailable(cwd: string): boolean {
+  return gh(cwd, '--version').ok;
+}
+
+export interface GitHubSlug {
+  readonly owner: string;
+  readonly repo: string;
+}
+
+/** Parse `owner/repo` from an https or ssh GitHub remote URL. */
+export function parseGitHubSlug(url: string): GitHubSlug | null {
+  const cleaned = url.trim().replace(/\.git$/, '');
+  const match = cleaned.match(/github\.com[/:]([^/]+)\/(.+)$/);
+  if (!match) return null;
+  const [, owner, repo] = match;
+  if (!owner || !repo) return null;
+  return { owner, repo };
+}
