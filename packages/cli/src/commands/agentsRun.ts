@@ -18,13 +18,13 @@ import {
   buildHeadlessRunContext,
   resolveCliRunModel,
 } from '../runtime/runModel';
-import { resolveCliAgent } from '../runtime/agents';
-import { initLocalCliPlatform } from '../runtime/initPlatform';
-
 import {
   TOOL_USE_AGENT_NAME_DESCRIPTION,
   assertCliAgentLaunch,
-} from './_helpers/agentLookupText';
+  resolveCliAgent,
+} from '../runtime/agents';
+import { initLocalCliPlatform } from '../runtime/initPlatform';
+
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
   AGENT_RUN_GLOBAL_ARGS,

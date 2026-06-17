@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     executeCliRequest: vi.fn(),
     withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
+    isAuthenticated: vi.fn(),
     resolveCliAgent: vi.fn(),
     resolveCliRunModel: vi.fn(),
   };
@@ -22,12 +23,25 @@ vi.mock('@agent/storage', () => ({
   writeTerminalStatus: vi.fn(),
 }));
 
+vi.mock('@agent/index', () => ({
+  getAgent: vi.fn(),
+  getAgentsByCategory: vi.fn(),
+  getVisibleAgents: vi.fn(),
+  loadAgents: vi.fn(),
+}));
+
 vi.mock('@utils/files', () => ({
   getRunDir: vi.fn((executionId: string) => `/tmp/runs/${executionId}`),
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
   initLocalCliPlatform: mocks.initLocalCliPlatform,
+}));
+
+vi.mock('@cli/runtime/supabaseAuth', () => ({
+  getCliAuthProvider: () => ({
+    isAuthenticated: mocks.isAuthenticated,
+  }),
 }));
 
 vi.mock('@cli/runtime/runModel', () => ({
@@ -44,7 +58,8 @@ vi.mock('@cli/commands/_helpers/output', () => ({
   emitCliResult: vi.fn(),
 }));
 
-vi.mock('@cli/runtime/agents', () => ({
+vi.mock('@cli/runtime/agents', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
   resolveCliAgent: mocks.resolveCliAgent,
 }));
 
