@@ -792,8 +792,8 @@ export abstract class ModelHandler<
   /**
    * Shared threshold check for input-token-based compaction, used by handlers
    * that track a single last-known input-token count. Compaction triggers only
-   * in tool-use mode, on a manual request, or when {@link inputTokens} exceeds
-   * the configured percentage of the context window.
+   * in tool-use mode, on a manual request, or when `inputTokens` exceeds the
+   * configured percentage of the context window.
    */
   protected shouldCompactByInputTokens(inputTokens: number): boolean {
     if (!this.isToolUseMode()) return false;
