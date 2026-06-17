@@ -89,14 +89,16 @@ describe('CLI agent resolution', () => {
     expect(mocks.authProvider.isAuthenticated).toHaveBeenCalledOnce();
   });
 
-  it('uses launch mode category for authenticated remote-priority reloads', async () => {
+  it('uses lookup category for authenticated remote-priority reloads', async () => {
     const local = agent('lean');
     const remote = agent('lean', 'remote');
     mocks.authProvider.isAuthenticated.mockResolvedValue(true);
     mocks.getAgent.mockReturnValueOnce(local).mockReturnValueOnce(remote);
     const { resolveCliAgent } = await import('@cli/runtime/agents');
 
-    await expect(resolveCliAgent('lean', 'chat')).resolves.toBe(remote);
+    await expect(resolveCliAgent('lean', AgentCategory.ToolUse)).resolves.toBe(
+      remote,
+    );
 
     expect(mocks.getAgent).toHaveBeenNthCalledWith(
       1,
@@ -127,12 +129,14 @@ describe('CLI agent resolution', () => {
     expect(mocks.authProvider.isAuthenticated).not.toHaveBeenCalled();
   });
 
-  it('uses launch mode category for local and remote-fallback lookups', async () => {
+  it('uses lookup category for local and remote-fallback lookups', async () => {
     const remote = agent('assistant', 'remote');
     mocks.getAgent.mockReturnValueOnce(undefined).mockReturnValueOnce(remote);
     const { resolveCliAgent } = await import('@cli/runtime/agents');
 
-    await expect(resolveCliAgent('assistant', 'chat')).resolves.toBe(remote);
+    await expect(
+      resolveCliAgent('assistant', AgentCategory.ToolUse),
+    ).resolves.toBe(remote);
 
     expect(mocks.getAgent).toHaveBeenNthCalledWith(
       1,
@@ -146,16 +150,15 @@ describe('CLI agent resolution', () => {
     );
   });
 
-  it('validates launch mode category before returning an agent', async () => {
+  it('validates launch mode category at the launch boundary', async () => {
     const workflow = agent(
       'correct',
       'builtInWorkflow',
       AgentCategory.Workflow,
     );
-    mocks.getAgent.mockReturnValue(workflow);
-    const { resolveCliAgent } = await import('@cli/runtime/agents');
+    const { assertCliAgentLaunch } = await import('@cli/runtime/agents');
 
-    await expect(resolveCliAgent('correct', 'chat')).rejects.toThrow(
+    expect(() => assertCliAgentLaunch('correct', workflow, 'chat')).toThrow(
       'Agent "correct" is a workflow agent; `texra chat` only handles tool-use agents.',
     );
   });
