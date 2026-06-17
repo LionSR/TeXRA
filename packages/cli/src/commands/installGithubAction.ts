@@ -1,10 +1,10 @@
-import { spawnSync } from 'node:child_process';
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { toErrorMessage } from '@common/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
+import { tryOpenBrowser } from '../runtime/browser';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import {
   currentBranch,
@@ -102,23 +102,6 @@ async function pathExists(target: string): Promise<boolean> {
 function compareUrl(slug: GitHubSlug, base: string, branch: string): string {
   const range = `${encodeURIComponent(base)}...${encodeURIComponent(branch)}`;
   return `https://github.com/${slug.owner}/${slug.repo}/compare/${range}?expand=1`;
-}
-
-// Open a URL in the platform's default browser. Returns false when the launcher
-// can't be started (e.g. a headless environment), so the caller can fall back
-// to printing the link.
-function openInBrowser(url: string): boolean {
-  const [command, args]: [string, string[]] =
-    process.platform === 'darwin'
-      ? ['open', [url]]
-      : process.platform === 'win32'
-        ? [
-            'cmd',
-            ['/d', '/s', '/c', `start "" "${url.replaceAll('"', '%22')}"`],
-          ]
-        : ['xdg-open', [url]];
-  const result = spawnSync(command, args, { stdio: 'ignore' });
-  return !result.error && result.status === 0;
 }
 
 function refExists(cwd: string, ref: string): boolean {
@@ -313,7 +296,7 @@ async function runInstallGithubAction(
         '--body',
         PR_BODY,
       ).ok
-    : openInBrowser(prPageUrl);
+    : await tryOpenBrowser(prPageUrl);
 
   restoreBranch(root, startBranch);
   if (opened) {

@@ -21,7 +21,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 // Local imports - CLI runtime
 import { readCliEnv } from './cliContext';
 import { getCliSecrets } from './cliSecrets';
-import { openBrowser } from './supabaseAuthBrowser';
+import { openBrowser } from './browser';
 import { startLoopbackCallbackServer } from './supabaseAuthCallbackServer';
 import {
   pollForDeviceSession,
