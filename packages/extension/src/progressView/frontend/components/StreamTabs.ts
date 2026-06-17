@@ -1,5 +1,5 @@
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -110,30 +110,21 @@ export class StreamTab extends LitElement {
   /** Whether the child list is expanded. */
   @property({ type: Boolean, reflect: true }) expanded = false;
 
-  // Cached derived values — only recomputed when inputs change
-  private _cachedInfo: StreamTabInfo | null = null;
   private _agentDecorator = getAgentCategoryDecorator('toolUse');
-  private _cachedTooltipKey = '';
   private _tooltip = '';
+
+  protected override willUpdate(changed: PropertyValues): void {
+    if (!changed.has('info') && !changed.has('status') && !changed.has('lastTimestamp')) return;
+    if (changed.has('info')) {
+      this._agentDecorator = getAgentCategoryDecorator(this.info.agentCategory);
+    }
+    const status = this.status || STREAM_STATUS.READY;
+    this._tooltip = buildTooltip(this.info, this.lastTimestamp, status);
+  }
 
   override render(): TemplateResult {
     const stream = this.info;
     const status = this.status || STREAM_STATUS.READY;
-
-    // Memoize info-derived values (only change when stream identity changes)
-    if (this._cachedInfo !== stream) {
-      this._cachedInfo = stream;
-      this._agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
-      this._cachedTooltipKey = ''; // invalidate tooltip when info changes
-    }
-
-    // Memoize tooltip (changes on info, status, or timestamp)
-    const tooltipKey = `${status}\0${this.lastTimestamp}`;
-    if (this._cachedTooltipKey !== tooltipKey) {
-      this._cachedTooltipKey = tooltipKey;
-      this._tooltip = buildTooltip(stream, this.lastTimestamp, status);
-    }
-
     const tooltip = this._tooltip;
     const agentDecorator = this._agentDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;

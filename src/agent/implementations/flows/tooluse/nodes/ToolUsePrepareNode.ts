@@ -188,28 +188,30 @@ async function refreshPersistedSystemMessage(
 
   const existing = first as Record<string, unknown>;
   const updated = [...persisted];
+
+  // For system-role messages: preserve existing content block type (OpenAI Chat
+  // uses 'text', OpenAI Responses uses 'input_text') so the resumed snapshot
+  // stays valid across providers.
+  const prevContent = existing.content;
+  const firstBlockType =
+    Array.isArray(prevContent) && prevContent.length > 0
+      ? (() => {
+          const f = prevContent[0];
+          if (typeof f !== 'object' || f === null) return null;
+          const t = (f as { type?: unknown }).type;
+          return typeof t === 'string' ? t : null;
+        })()
+      : null;
+  const systemContent = firstBlockType
+    ? [{ type: firstBlockType, text: systemText }]
+    : systemText;
+
   updated[0] = (
     supportsSystemPrompt
-      ? {
-          ...existing,
-          content: buildSystemContent(existing.content, systemText),
-        }
+      ? { ...existing, content: systemContent }
       : withFirstBlockReplaced(existing, systemText)
   ) as ProviderMessage;
   return updated;
-}
-
-/**
- * For system-role messages: replace the whole content. Preserves the
- * existing content shape AND block type (OpenAI Chat uses `'text'`,
- * OpenAI Responses uses `'input_text'`); stamping the wrong type would
- * make the resumed snapshot invalid for Responses providers.
- */
-function buildSystemContent(prevContent: unknown, systemText: string): unknown {
-  const firstBlockType = readFirstBlockType(prevContent);
-  return firstBlockType
-    ? [{ type: firstBlockType, text: systemText }]
-    : systemText;
 }
 
 /**
@@ -233,12 +235,4 @@ function withFirstBlockReplaced(
     ...content.slice(1),
   ];
   return { ...existing, content: newContent };
-}
-
-function readFirstBlockType(prevContent: unknown): string | null {
-  if (!Array.isArray(prevContent) || prevContent.length === 0) return null;
-  const first = prevContent[0];
-  if (typeof first !== 'object' || first === null) return null;
-  const type = (first as { type?: unknown }).type;
-  return typeof type === 'string' ? type : null;
 }
