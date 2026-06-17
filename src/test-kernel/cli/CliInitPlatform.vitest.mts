@@ -174,13 +174,22 @@ describe('CLI platform init', () => {
     expect(mocks.bootstrapPlatformAgentDirectories).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: 'cli',
-        bundleSource: expect.any(PathAgentDirectoryBundleSource),
         currentVersion: '1.2.3',
       }),
     );
 
     const options =
       mocks.bootstrapPlatformAgentDirectories.mock.calls.at(-1)?.[0];
+
+    // Verify the bundle source is the right class AND was constructed with the
+    // forwarded resourcesPath — not just that some PathAgentDirectoryBundleSource
+    // was passed.
+    expect(options?.bundleSource).toBeInstanceOf(PathAgentDirectoryBundleSource);
+    expect(
+      (options?.bundleSource as { resourcesBasePath?: string })
+        .resourcesBasePath,
+    ).toBe('/tmp/resources-versioned');
+
     expect(options?.versionStore.get()).toBe('1.2.2');
 
     await options?.versionStore.update('1.2.3');

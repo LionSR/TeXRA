@@ -197,9 +197,11 @@ function applyShortModelNamePreference(
 // extension host, Electron, or normal CLI invocations — only when the outer
 // TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL gate is set, which only happens
 // in the packaged-build validation pipeline.
-function shouldUseInternalValidationModelHandler(): boolean {
+// Returns the env-var name that enabled validation mode (for the caller's
+// diagnostic log), or null when the validation handler is not active.
+function internalValidationModelHandlerEnv(): string | null {
   if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1')
-    return false;
+    return null;
 
   const handlerEnv =
     process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV ?? '';
@@ -209,7 +211,7 @@ function shouldUseInternalValidationModelHandler(): boolean {
     process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT ?? '';
 
   if (process.env[handlerEnv] !== '1') {
-    return false;
+    return null;
   }
 
   const flagPath = process.env[flagEnv];
@@ -235,7 +237,7 @@ function shouldUseInternalValidationModelHandler(): boolean {
     );
   }
 
-  return true;
+  return handlerEnv;
 }
 
 /** Returns the conversation-history format used by the handler for this model. */
@@ -247,7 +249,7 @@ export function modelHandlerCompatibilityKey(
     false,
   ),
 ): ModelHandlerCompatibilityKey | undefined {
-  if (shouldUseInternalValidationModelHandler()) {
+  if (internalValidationModelHandlerEnv() !== null) {
     return 'ModelHandlerValidation';
   }
 
@@ -315,13 +317,14 @@ export async function createModelHandler(
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
 
-  if (shouldUseInternalValidationModelHandler()) {
+  const validationTriggerEnv = internalValidationModelHandlerEnv();
+  if (validationTriggerEnv !== null) {
     // Package validation still enters the real CLI and executeAgent path.
     // Only the provider boundary is deterministic, so this must not become
     // a user-facing model selector or an injected command-layer substitute.
     logger.warn(
       CHANNEL,
-      'Internal validation model handler is replacing provider handlers.',
+      `${validationTriggerEnv}=1 is replacing provider handlers with the internal validation handler.`,
     );
     const { ModelHandlerValidation } =
       await import('@agent/modelHandlers/modelHandlerValidation');
