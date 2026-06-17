@@ -127,17 +127,17 @@ describe('CLI plan approval layout', () => {
   });
 
   it('keeps the autonomous warning concise enough for the approval card', () => {
-    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('Run auto-approves bash');
-    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('edits still ask');
-    expect(PLAN_APPROVAL_GOAL_NOTICE.length).toBeLessThanOrEqual(56);
+    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('Approve & run only');
+    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('auto-approves bash');
+    expect(PLAN_APPROVAL_GOAL_NOTICE.length).toBeLessThanOrEqual(40);
   });
 
   it('keeps the autonomous warning to one display row on narrow cards', () => {
     const notice = planApprovalGoalNoticeLine(40);
 
     expect(textDisplayWidth(notice)).toBe(40);
-    expect(notice).toContain('Run auto-approves bash');
-    expect(notice).toContain('edits still ask');
+    expect(notice).toContain('Approve & run only');
+    expect(notice).toContain('auto-approves bash');
     expect(notice).not.toContain('…');
   });
 
