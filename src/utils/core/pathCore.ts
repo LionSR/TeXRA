@@ -7,21 +7,20 @@ import * as path from 'node:path';
 
 import slash from 'slash';
 
-/** Convert a path to POSIX style (forward slashes, collapsed separators). */
-export function toPosixPath(relativePath: string): string {
-  if (!relativePath || relativePath === '.') {
-    return '.';
-  }
-  return slash(relativePath.trim()).split('/').filter(Boolean).join('/');
-}
-
 /** Get path segments as an array. */
 export function getPathSegments(input: string): string[] {
   if (!input || input === '.') {
     return [];
   }
-  // slash+trim then split directly — avoids the redundant join/split inside toPosixPath.
   return slash(input.trim()).split('/').filter(Boolean);
+}
+
+/** Convert a path to POSIX style (forward slashes, collapsed separators). */
+export function toPosixPath(relativePath: string): string {
+  if (!relativePath || relativePath === '.') {
+    return '.';
+  }
+  return getPathSegments(relativePath).join('/');
 }
 
 /** Normalize a path for LaTeX \input commands (strips leading ./). */

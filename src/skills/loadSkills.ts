@@ -8,6 +8,7 @@ import {
   isNotADirectoryError,
   toErrorMessage,
 } from '@common/errors';
+import { byName } from '@utils/core';
 
 // Local imports - skill parsing
 import { type SkillLoadIssue, issue, loadSkillDirectory } from './skillLoader';
@@ -81,7 +82,7 @@ export async function discoverSkills(
     return { skills, errors };
   }
 
-  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const entry of entries.sort(byName)) {
     if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
 
     const skillDir = path.join(root, entry.name);
