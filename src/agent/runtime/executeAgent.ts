@@ -356,8 +356,11 @@ export async function executeAgent(
                   });
                   options.onFollowUpConsumed?.();
                 },
-                onModelChanged: (modelHandler, model) => {
-                  ctx.config.model = model;
+                onModelChanged: (modelHandler) => {
+                  // The tool-use flow already wrote services.config.model
+                  // (=== ctx.config.model, same object), so the live model is
+                  // updated before this fires; only the usage side-effect is
+                  // left to do here.
                   ctx.usageMonitor.setModelInfo({
                     capabilities: modelHandler.capabilities,
                     config: modelHandler.config,
