@@ -193,15 +193,14 @@ async function refreshPersistedSystemMessage(
   // uses 'text', OpenAI Responses uses 'input_text') so the resumed snapshot
   // stays valid across providers.
   const prevContent = existing.content;
-  const firstBlockType =
-    Array.isArray(prevContent) && prevContent.length > 0
-      ? (() => {
-          const f = prevContent[0];
-          if (typeof f !== 'object' || f === null) return null;
-          const t = (f as { type?: unknown }).type;
-          return typeof t === 'string' ? t : null;
-        })()
-      : null;
+  let firstBlockType: string | null = null;
+  if (Array.isArray(prevContent) && prevContent.length > 0) {
+    const firstBlock = prevContent[0];
+    if (typeof firstBlock === 'object' && firstBlock !== null) {
+      const type = (firstBlock as { type?: unknown }).type;
+      if (typeof type === 'string') firstBlockType = type;
+    }
+  }
   const systemContent = firstBlockType
     ? [{ type: firstBlockType, text: systemText }]
     : systemText;
