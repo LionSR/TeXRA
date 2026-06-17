@@ -155,7 +155,11 @@ describe('CLI workflow run command', () => {
   });
 
   it('reports missing workflow agents before resolving the model', async () => {
-    mocks.resolveCliAgent.mockResolvedValueOnce(undefined);
+    mocks.resolveCliAgent.mockRejectedValueOnce(
+      new Error(
+        'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
+      ),
+    );
     const { runWorkflowAgent } = await import('@cli/commands/workflow');
 
     await expect(
@@ -173,22 +177,17 @@ describe('CLI workflow run command', () => {
     expect(mocks.initLocalCliPlatform.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.resolveCliAgent.mock.invocationCallOrder[0],
     );
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
-      'missing-agent',
-      AgentCategory.Workflow,
-    );
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('missing-agent', 'run');
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('reports tool-use agents before resolving the model', async () => {
-    mocks.resolveCliAgent.mockResolvedValueOnce({
-      name: 'chat',
-      category: AgentCategory.ToolUse,
-      source: 'builtInToolUse',
-      path: '/agents/chat.yaml',
-      tools: [],
-    });
+    mocks.resolveCliAgent.mockRejectedValueOnce(
+      new Error(
+        'Agent "chat" is a toolUse agent; `texra run` only handles workflow agents. Start it interactively with `texra chat --agent chat`, or run a headless team with `texra multi-agent run`.',
+      ),
+    );
     const { runWorkflowAgent } = await import('@cli/commands/workflow');
 
     await expect(
@@ -203,10 +202,7 @@ describe('CLI workflow run command', () => {
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
-      'chat',
-      AgentCategory.Workflow,
-    );
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('chat', 'run');
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
@@ -227,10 +223,7 @@ describe('CLI workflow run command', () => {
     );
 
     expect(mocks.initLocalCliPlatform).toHaveBeenCalled();
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
-      'polish',
-      AgentCategory.Workflow,
-    );
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('polish', 'run');
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });

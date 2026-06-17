@@ -115,29 +115,41 @@ export function assertCliAgentLaunch(
  * CLI commands start with a local-only load so signed-out users avoid remote
  * auth/network work. Missing agents still get a remote-inclusive fallback, and
  * authenticated relay sessions reload bare names so the registry's normal
- * source priority can prefer remote definitions. Category-specific commands
- * pass their lookup category through to keep name priority owned by the
- * registry; category enforcement stays with the command-specific launch
- * validation.
+ * source priority can prefer remote definitions. Launching commands pass their
+ * mode so lookup priority and category enforcement share the same target.
  */
+export function resolveCliAgent(name: string): Promise<AgentEntry | undefined>;
+export function resolveCliAgent(
+  name: string,
+  launchMode: CliAgentLaunchMode,
+): Promise<AgentEntry>;
 export async function resolveCliAgent(
   name: string,
-  lookupCategory?: AgentCategory,
+  launchMode?: CliAgentLaunchMode,
 ): Promise<AgentEntry | undefined> {
+  const lookupCategory = launchMode
+    ? CLI_AGENT_LAUNCH_TARGETS[launchMode].requiredCategory
+    : undefined;
   await loadAgents({ includeRemote: false });
   const agent = getAgent(name, lookupCategory);
 
   if (!agent) {
     await loadAgents();
-    return getAgent(name, lookupCategory);
+    const remoteAgent = getAgent(name, lookupCategory);
+    return launchMode
+      ? assertCliAgentLaunch(name, remoteAgent, launchMode)
+      : remoteAgent;
   }
 
   if (name.includes(':') || !(await getCliAuthProvider().isAuthenticated())) {
-    return agent;
+    return launchMode ? assertCliAgentLaunch(name, agent, launchMode) : agent;
   }
 
   await loadAgents();
-  return getAgent(name, lookupCategory);
+  const remotePriorityAgent = getAgent(name, lookupCategory);
+  return launchMode
+    ? assertCliAgentLaunch(name, remotePriorityAgent, launchMode)
+    : remotePriorityAgent;
 }
 
 export async function loadCliAgentList(
