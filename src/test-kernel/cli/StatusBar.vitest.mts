@@ -596,7 +596,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
-      '75s',
+      '1m 15s',
       PERSONAL_API_MODE_LABEL,
       '3 sub',
     ]);
@@ -630,7 +630,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
-      '75s',
+      '1m 15s',
       PERSONAL_API_MODE_LABEL,
     ]);
   });
@@ -689,7 +689,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
-      '75s',
+      '1m 15s',
       PERSONAL_API_MODE_LABEL,
     ]);
     expect(display.right).toBeUndefined();
@@ -1225,7 +1225,7 @@ describe('CLI StatusBar display model', () => {
     expect(running.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
-      '110s',
+      '1m 50s',
       PERSONAL_API_MODE_LABEL,
     ]);
 
@@ -1247,7 +1247,7 @@ describe('CLI StatusBar display model', () => {
     expect(thinking.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
-      '110s',
+      '1m 50s',
       'thinking...',
       PERSONAL_API_MODE_LABEL,
     ]);
