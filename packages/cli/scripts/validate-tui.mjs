@@ -1018,7 +1018,7 @@ const SCENARIOS = [
       'Switch approval policy',
       '/status',
       'Show session details',
-      '… 5 more',
+      '… 6 more',
       'Esc close',
     ],
   },
