@@ -49,14 +49,6 @@ type ModelHandlerCompatibilityTagged = object & {
     | undefined;
 };
 
-const INCLUDE_INTERNAL_VALIDATION_MODEL_HANDLER =
-  process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
-const INTERNAL_VALIDATION_MODEL_HANDLER_ENV =
-  process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV ?? '';
-const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV =
-  process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV ?? '';
-const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT =
-  process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT ?? '';
 
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
 // A new enum value in llm-zoo without an entry here will fail typecheck.
@@ -201,15 +193,29 @@ function applyShortModelNamePreference(
   return { ...config, fullName: short };
 }
 
+// CI-only package-validation guard. All env var reads and the readFileSync are
+// intentionally lazy (inside the function) so they never execute in the VS Code
+// extension host, Electron, or normal CLI invocations — only when the outer
+// TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL gate is set, which only happens
+// in the packaged-build validation pipeline.
 function shouldUseInternalValidationModelHandler(): boolean {
-  if (process.env[INTERNAL_VALIDATION_MODEL_HANDLER_ENV] !== '1') {
+  if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1') return false;
+
+  const handlerEnv =
+    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV ?? '';
+  const flagEnv =
+    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV ?? '';
+  const expectedFlagContent =
+    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT ?? '';
+
+  if (process.env[handlerEnv] !== '1') {
     return false;
   }
 
-  const flagPath = process.env[INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV];
+  const flagPath = process.env[flagEnv];
   if (process.env.CI !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
     throw new Error(
-      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is restricted to package validation with CI=1 and an absolute ${INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV} path.`,
+      `${handlerEnv}=1 is restricted to package validation with CI=1 and an absolute ${flagEnv} path.`,
     );
   }
 
@@ -218,15 +224,13 @@ function shouldUseInternalValidationModelHandler(): boolean {
     flagContent = readFileSync(flagPath, 'utf8').trim();
   } catch (error) {
     throw new Error(
-      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 requires a readable validation flag file at ${flagPath}.`,
+      `${handlerEnv}=1 requires a readable validation flag file at ${flagPath}.`,
       { cause: error },
     );
   }
 
-  if (flagContent !== INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT) {
-    throw new Error(
-      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 received an invalid validation flag file.`,
-    );
+  if (flagContent !== expectedFlagContent) {
+    throw new Error(`${handlerEnv}=1 received an invalid validation flag file.`);
   }
 
   return true;
@@ -241,10 +245,7 @@ export function modelHandlerCompatibilityKey(
     false,
   ),
 ): ModelHandlerCompatibilityKey | undefined {
-  if (
-    INCLUDE_INTERNAL_VALIDATION_MODEL_HANDLER &&
-    shouldUseInternalValidationModelHandler()
-  ) {
+  if (shouldUseInternalValidationModelHandler()) {
     return 'ModelHandlerValidation';
   }
 
@@ -312,10 +313,7 @@ export async function createModelHandler(
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
 
-  if (
-    INCLUDE_INTERNAL_VALIDATION_MODEL_HANDLER &&
-    shouldUseInternalValidationModelHandler()
-  ) {
+  if (shouldUseInternalValidationModelHandler()) {
     // Package validation still enters the real CLI and executeAgent path.
     // Only the provider boundary is deterministic, so this must not become
     // a user-facing model selector or an injected command-layer substitute.
