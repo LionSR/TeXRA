@@ -42,7 +42,10 @@ import {
   type TranscriptViewportChange,
 } from '../src/chat/tui/state/transcriptViewportMode';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
-import { formatSlashCommandHelp } from '../src/chat/tui/commands/helpText';
+import {
+  formatSlashCommandHelp,
+  GOAL_MODE_HELP,
+} from '../src/chat/tui/commands/helpText';
 import {
   findSlashCommand,
   listSlashCommands,
@@ -1527,6 +1530,10 @@ function handleHarnessSlashCommand(line: string): boolean {
       return true;
     case 'status':
       appendHarnessStatus();
+      return true;
+    case 'goal':
+    case 'goals':
+      appendHarnessAssistantTranscript(GOAL_MODE_HELP);
       return true;
     case 'clear':
       resetHarnessForClear();

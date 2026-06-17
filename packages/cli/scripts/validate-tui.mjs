@@ -475,6 +475,32 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'slash-goal-help',
+    cols: 100,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/goal', '\r'],
+    frame: 'tail',
+    expect: [
+      'Goal mode starts from an approved plan',
+      'choose `r approve & run`',
+      'Goal mode auto-approves bash only',
+    ],
+    unexpect: ['Unknown command: /goal', 'running 1s'],
+  },
+  {
+    name: 'backslash-goal-help',
+    cols: 100,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['\\goal', '\r'],
+    frame: 'tail',
+    expect: [
+      'Goal mode starts from an approved plan',
+      'choose `r approve & run`',
+      'Goal mode auto-approves bash only',
+    ],
+    unexpect: ['Unknown command: /goal', 'running 1s'],
+  },
+  {
     name: 'slash-resume-empty',
     cols: 100,
     env: { HARNESS_ENTRIES: '4' },
