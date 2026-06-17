@@ -22,7 +22,7 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
-import { ToolUseDispatchNode } from '@agent/core/flows/toolUseCycle/ToolUseDispatchNode';
+import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
 import {
   createToolUseRoundFlow,
   type ToolUseRoundShared,
@@ -293,7 +293,7 @@ describe('BashTool', () => {
     const bashTool = new BashTool();
     const workspaceState = AgentWorkspaceState.create();
     const run = AgentRunStateSnapshotSchema.parse({});
-    const options: ToolUseCycleServices<OpenAI> = {
+    const options: ToolUseRoundServices<OpenAI> = {
       modelHandler: new BashMockHandler(config),
       config: config as any,
       setting: {
