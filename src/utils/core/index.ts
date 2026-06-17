@@ -9,6 +9,7 @@ export {
   isNonEmptyString,
   isString,
   extractErrorMessage,
+  formatCompactDuration,
   formatDuration,
   serializeError,
   type SerializedError,
