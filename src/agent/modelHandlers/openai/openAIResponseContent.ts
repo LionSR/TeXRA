@@ -45,6 +45,13 @@ export function isAssistantTextMessage(
   );
 }
 
+/** Type guard for function_call_output input items. */
+export function isFunctionCallOutputItem(
+  item?: ResponseInputItem,
+): item is ResponseInputItem.FunctionCallOutput {
+  return item?.type === 'function_call_output';
+}
+
 /** Extract the text from an input_text/output_text content part, if it is one. */
 export function extractTextContentPart(part: unknown): string | undefined {
   if (!part || typeof part !== 'object') return undefined;
