@@ -32,6 +32,26 @@ import type {
 
 export type ChildControlMode = 'subagents' | 'tasks';
 
+export const CHILD_CONTROL_MODE_COPY = {
+  subagents: {
+    emptyText: 'No active subagents.',
+    missingItemsText: 'has no subagents',
+    title: 'Subagents',
+  },
+  tasks: {
+    emptyText: 'No active tasks or sub-workflows.',
+    missingItemsText: 'has no tasks or sub-workflows',
+    title: 'Tasks and sub-workflows',
+  },
+} as const satisfies Record<
+  ChildControlMode,
+  {
+    readonly emptyText: string;
+    readonly missingItemsText: string;
+    readonly title: string;
+  }
+>;
+
 export interface ChildControlItem {
   readonly executionId: string;
   readonly childStreamId?: StreamTabId;
@@ -322,9 +342,7 @@ function childControlFallbackDetail(
   targetStreamLabel: string | undefined,
 ): string | undefined {
   if (!fallbackFromStreamLabel || !targetStreamLabel) return undefined;
-  return mode === 'subagents'
-    ? `${fallbackFromStreamLabel} has no subagents`
-    : `${fallbackFromStreamLabel} has no tasks or sub-workflows`;
+  return `${fallbackFromStreamLabel} ${CHILD_CONTROL_MODE_COPY[mode].missingItemsText}`;
 }
 
 function resolveChildControlDisplayTarget({
