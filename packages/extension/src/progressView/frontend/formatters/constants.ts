@@ -11,11 +11,20 @@ import {
 // Local imports - shared schemas
 import type { LogLevel } from '@shared/schemas';
 
-export const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
-  error: '🔴',
-  warn: '🟡',
-  info: '🟢',
-  debug: '🔍',
+// Local imports - shared utilities
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+
+/**
+ * Font Awesome icon name per log level, rendered via {@link waIcon}. Replaces
+ * the former emoji map so log levels use the same icon set as the rest of the
+ * UI; per-level color is applied through the `log-level-icon--{level}` classes
+ * in logEntryStyles.
+ */
+export const ICON_BY_LEVEL: Record<LogLevel, TeXRAIconName> = {
+  error: 'error',
+  warn: 'warning',
+  info: 'info',
+  debug: 'search',
 };
 
 // DateTimeFormat options for consistent timestamp formatting

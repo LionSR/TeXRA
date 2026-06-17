@@ -13,6 +13,7 @@ import { faBookmark } from '@fortawesome/free-solid-svg-icons/faBookmark';
 import { faBox } from '@fortawesome/free-solid-svg-icons/faBox';
 import { faBoxArchive } from '@fortawesome/free-solid-svg-icons/faBoxArchive';
 import { faBuilding } from '@fortawesome/free-solid-svg-icons/faBuilding';
+import { faBullseye } from '@fortawesome/free-solid-svg-icons/faBullseye';
 import { faCaretDown } from '@fortawesome/free-solid-svg-icons/faCaretDown';
 import { faChartLine } from '@fortawesome/free-solid-svg-icons/faChartLine';
 import { faChartPie } from '@fortawesome/free-solid-svg-icons/faChartPie';
@@ -97,6 +98,7 @@ import { faScrewdriverWrench } from '@fortawesome/free-solid-svg-icons/faScrewdr
 import { faServer } from '@fortawesome/free-solid-svg-icons/faServer';
 import { faShield } from '@fortawesome/free-solid-svg-icons/faShield';
 import { faSpinner } from '@fortawesome/free-solid-svg-icons/faSpinner';
+import { faStar } from '@fortawesome/free-solid-svg-icons/faStar';
 import { faTerminal } from '@fortawesome/free-solid-svg-icons/faTerminal';
 import { faThumbtack } from '@fortawesome/free-solid-svg-icons/faThumbtack';
 import { faThumbtackSlash } from '@fortawesome/free-solid-svg-icons/faThumbtackSlash';
@@ -153,6 +155,7 @@ const icons = {
   box: faBox,
   'box-archive': faBoxArchive,
   building: faBuilding,
+  bullseye: faBullseye,
   'caret-down': faCaretDown,
   'chart-line': faChartLine,
   'chart-pie': faChartPie,
@@ -237,6 +240,7 @@ const icons = {
   server: faServer,
   shield: faShield,
   spinner: faSpinner,
+  star: faStar,
   terminal: faTerminal,
   thumbtack: faThumbtack,
   'thumbtack-slash': faThumbtackSlash,
