@@ -12,7 +12,9 @@ import type { Disposable } from '@platform/interfaces/disposable';
 import type { Stats } from 'node:fs';
 
 const STDIN_INPUT_TOKEN = '-';
-const STDIN_TEMP_PREFIX = '.texra-stdin-';
+// LaTeX derives auxiliary filenames from the input basename; leading-dot
+// job names can be rejected by TeX's file-open policy when it writes `.aux`.
+const STDIN_TEMP_PREFIX = 'texra-stdin-';
 
 function resolveAgainstCwd(candidate: string, cwd: string): string {
   return path.isAbsolute(candidate)
