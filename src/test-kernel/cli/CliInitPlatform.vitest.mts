@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -173,9 +174,7 @@ describe('CLI platform init', () => {
     expect(mocks.bootstrapPlatformAgentDirectories).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: 'cli',
-        bundleSource: expect.objectContaining({
-          constructor: expect.any(Function),
-        }),
+        bundleSource: expect.any(PathAgentDirectoryBundleSource),
         currentVersion: '1.2.3',
       }),
     );
