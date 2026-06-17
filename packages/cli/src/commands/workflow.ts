@@ -1,5 +1,3 @@
-import * as path from 'node:path';
-
 import { writeTerminalStatus } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -103,16 +101,12 @@ export async function runWorkflowAgent(
         );
       }
 
-      const modelOutputFile =
-        init.output && path.isAbsolute(init.output)
-          ? path.basename(init.output)
-          : init.output;
       const config: AgentConfigPayload = {
         agent: init.agent,
         model,
         inputFiles,
         contextFiles,
-        outputFiles: modelOutputFile ? [modelOutputFile] : [],
+        outputFiles: [],
         cliOutputFile: init.output,
         instruction,
         workingDirectory: runContext.cwd,
