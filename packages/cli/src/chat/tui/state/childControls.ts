@@ -9,7 +9,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
-import { formatDuration } from '@utils/core';
+import { formatCompactDuration } from '@utils/core';
 
 // Local imports - CLI state
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
@@ -108,7 +108,7 @@ export function childElapsed(
   if (startedAt === undefined || !hasLiveChildElapsed(child)) {
     return child.elapsed;
   }
-  return formatDuration(Math.max(0, nowMs - startedAt));
+  return formatCompactDuration(nowMs - startedAt);
 }
 
 function streamDescription(
