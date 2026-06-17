@@ -4,6 +4,7 @@ import {
   AGENT_MODE_PRESETS_BY_ID,
   AgentModePresetSchema,
 } from '@shared/schemas/agentPresets';
+import { byName } from '@utils/core';
 import {
   agentKey,
   type AgentCategory,
@@ -188,7 +189,7 @@ export class SettingsAgentCatalogController {
     return this.deps.state
       .getAgents(category)
       .map((entry) => this.toSelectionItem(entry, enabledKeys))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort(byName);
   }
 
   private toSelectionItem(

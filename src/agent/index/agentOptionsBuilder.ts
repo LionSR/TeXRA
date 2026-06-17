@@ -4,6 +4,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentKey as createKey } from '@shared/schemas/agent';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
+import { byName } from '@utils/core';
 import type { AgentEntry } from './agentEntry';
 
 export interface AgentOptionsDataPayload {
@@ -41,6 +42,6 @@ export function sortAgentEntries(
     if (aIdx != null && bIdx != null) return aIdx - bIdx;
     if (aIdx != null) return -1;
     if (bIdx != null) return 1;
-    return a.name.localeCompare(b.name);
+    return byName(a, b);
   });
 }
