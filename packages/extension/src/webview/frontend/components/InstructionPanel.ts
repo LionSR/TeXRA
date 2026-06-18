@@ -16,6 +16,7 @@ import { keyed } from 'lit/directives/keyed.js';
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 
 // Local imports - shared styles
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { designTokens } from '@shared/styles';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { selectStyles } from '@shared/styles/selectStyles';
@@ -476,7 +477,7 @@ export class InstructionPanel extends LitElement {
             variant="brand"
             @click=${this.handleExecute}
           >
-            <wa-icon slot="start" library="texra" name="play"></wa-icon>
+            ${waIcon('play', { slot: 'start' })}
             <span class="execute-button__label">Run</span>
           </wa-button>
           <wa-tooltip for="executeButton">

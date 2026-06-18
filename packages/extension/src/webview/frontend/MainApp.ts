@@ -54,7 +54,7 @@ import {
 // Constants-only module: safe for the webview bundle (no platform imports).
 import {
   registerTeXRAWebAwesomeIcons,
-  TEXRA_ICON_LIBRARY,
+  waIcon,
 } from '@shared/wa/webAwesomeIcons';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { agentName } from '@shared/schemas/agent';
@@ -1700,19 +1700,11 @@ export class MainApp extends MainAppBase {
           @wa-tab-show=${this.onViewTabShow}
         >
           <wa-tab panel="launcher">
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="pencil"
-              variant="solid"
-            ></wa-icon>
+            ${waIcon('pencil')}
             Launcher
           </wa-tab>
           <wa-tab panel="progress">
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="robot"
-              variant="solid"
-            ></wa-icon>
+            ${waIcon('robot')}
             Progress
           </wa-tab>
           <wa-tab-panel name="launcher"></wa-tab-panel>
@@ -1726,11 +1718,7 @@ export class MainApp extends MainAppBase {
           size="small"
           @click=${this.onOpenDashboard}
         >
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="gear"
-            variant="solid"
-          ></wa-icon>
+          ${waIcon('gear')}
         </wa-button>
         <wa-tooltip for="openDashboardButton"> Open dashboard </wa-tooltip>
         <wa-button
@@ -1741,11 +1729,7 @@ export class MainApp extends MainAppBase {
           size="small"
           @click=${this.onPopOutProgress}
         >
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="picture-in-picture"
-            variant="solid"
-          ></wa-icon>
+          ${waIcon('picture-in-picture')}
         </wa-button>
         <wa-tooltip for="popOutProgressButton">
           Open progress sessions in editor
@@ -1880,11 +1864,7 @@ export class MainApp extends MainAppBase {
             }}
           >
             <span slot="summary" class="file-selection-summary">
-              <wa-icon
-                library=${TEXRA_ICON_LIBRARY}
-                name="folder-tree"
-                variant="solid"
-              ></wa-icon>
+              ${waIcon('folder-tree')}
               Files
             </span>
             <div class="file-selection-group">
