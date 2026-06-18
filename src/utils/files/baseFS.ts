@@ -80,6 +80,23 @@ export abstract class BaseFS {
     await platform().fs.writeFile(this.preparePath(target), toBuffer(content));
   }
 
+  /**
+   * Crash-safe variant of {@link write} — stages to a temp file and atomically
+   * renames over the target. Use for durable storage state (run/flow KV files)
+   * so an unclean exit can't leave a truncated file that fails to parse on
+   * resume. Not for workspace files (atomic rename would replace user symlinks).
+   */
+  public static async writeAtomic(
+    this: typeof BaseFS,
+    target: string,
+    content: string | Uint8Array,
+  ): Promise<void> {
+    await platform().fs.writeFileAtomic(
+      this.preparePath(target),
+      toBuffer(content),
+    );
+  }
+
   public static async appendFile(
     this: typeof BaseFS,
     target: string,

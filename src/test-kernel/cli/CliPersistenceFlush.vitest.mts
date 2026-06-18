@@ -36,13 +36,18 @@ function emptyStorage(): { writes: Map<string, unknown> } {
   vi.spyOn(StorageFS, 'readJson').mockRejectedValue(notFound());
   vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
   vi.spyOn(StorageFS, 'stat').mockRejectedValue(notFound());
-  vi.spyOn(StorageFS, 'write').mockImplementation(async (target, content) => {
+  const recordWrite = async (
+    target: string,
+    content: string | Uint8Array,
+  ): Promise<void> => {
     const text =
       typeof content === 'string'
         ? content
         : Buffer.from(content).toString('utf8');
     writes.set(target, JSON.parse(text));
-  });
+  };
+  vi.spyOn(StorageFS, 'write').mockImplementation(recordWrite);
+  vi.spyOn(StorageFS, 'writeAtomic').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'delete').mockResolvedValue(undefined);
   return { writes };
 }
