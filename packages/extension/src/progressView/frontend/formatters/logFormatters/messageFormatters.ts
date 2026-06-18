@@ -32,7 +32,7 @@ import {
 // Local imports - formatter helpers
 import { stringifyWithLanguage } from '../parseUtils';
 import { formatTimestamp } from '../timestampUtils';
-import { EMOJI_BY_LEVEL } from '../constants';
+import { ICON_BY_LEVEL } from '../constants';
 import { registerCopyContent } from '../copyContentStore';
 
 /** Format user message entry as TemplateResult. */
@@ -55,14 +55,16 @@ export function formatProgressStatusTemplate(
 
   const summaryText = (text ?? '').trim() || 'Status update';
   const detailText = stringifyWithLanguage(data).text;
-  const emoji = EMOJI_BY_LEVEL[level] ?? '•';
+  const levelIcon = waIcon(ICON_BY_LEVEL[level], {
+    className: `log-level-icon log-level-icon--${level}`,
+  });
 
   // prettier-ignore
   return html`<div
       data-log-id=${ifDefined(id)}
       data-group-id=${ifDefined(groupId)}
       data-timestamp=${ifDefined(fullTimestamp)}
-    ><div class="log-line"><span class="timestamp" title=${tooltipTimestamp}>${emoji} [${timeDisplay}]</span> <span class=${`message-${level}`}>${summaryText}</span></div>${when(
+    ><div class="log-line"><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class=${`message-${level}`}>${summaryText}</span></div>${when(
         detailText,
         () => html`<pre class=${`log-line message-${level}`}>${detailText}</pre>`,
       )}</div>`;
@@ -160,12 +162,16 @@ export function formatDefaultLogMessageTemplate(
   logMessage: LogMessageData,
 ): FormatResult {
   const { id, text, level, timestamp, groupId, verbose } = logMessage;
-  const emoji = EMOJI_BY_LEVEL[level] ?? '•';
+  const levelIcon = waIcon(ICON_BY_LEVEL[level], {
+    className: `log-level-icon log-level-icon--${level}`,
+  });
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp),
   );
 
-  const timestampContent = verbose ? `${emoji} [${timeDisplay}]` : emoji;
+  const timestampContent = verbose
+    ? html`${levelIcon} [${timeDisplay}]`
+    : levelIcon;
 
   // prettier-ignore
   return html`<div

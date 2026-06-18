@@ -35,3 +35,5 @@ export {
   getSdkErrorMessage,
   buildErrorLogData,
 } from './sdkError/providerErrorFormat';
+
+export { isRelayMonthlyLimitMessage } from './sdkError/relayDetection';
