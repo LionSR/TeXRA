@@ -300,6 +300,7 @@ export class FileList extends LitElement {
           id=${ELEMENT_IDS.GENERATED_FILES}
           class="files-container"
           @click=${this.handleFileClick}
+          @keydown=${this.handleFileKey}
         >
           ${repeat(
             this.sortedRounds,
@@ -452,6 +453,8 @@ export class FileList extends LitElement {
             title=${tooltipPath}
             data-command=${PROGRESS_VIEW_COMMANDS.OPEN_FILE}
             data-file=${filePath}
+            role="button"
+            tabindex="0"
           >
             <span class="file-dir">${dir}</span>
             <span class="file-basename">${basename}</span>
@@ -480,12 +483,33 @@ export class FileList extends LitElement {
    * All data is stored directly on command elements for unified delegation.
    */
   private handleFileClick(event: MouseEvent): void {
+    this.dispatchFileActionFrom(event);
+  }
+
+  // Keyboard activation parity for the clickable file rows (Enter/Space), so
+  // the generated-files list is reachable without a mouse — mirrors the click
+  // delegation for file-path spans without intercepting native wa-button keys.
+  private handleFileKey(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const actionEl = getComposedPathElement<HTMLElement>(
+      event,
+      '.file-path[data-command]',
+    );
+    if (!(actionEl instanceof HTMLElement)) return;
+    event.preventDefault();
+    this.dispatchFileAction(actionEl);
+  }
+
+  private dispatchFileActionFrom(event: Event): void {
     const actionEl = getComposedPathElement<HTMLElement>(
       event,
       '[data-command]',
     );
     if (!(actionEl instanceof HTMLElement)) return;
+    this.dispatchFileAction(actionEl);
+  }
 
+  private dispatchFileAction(actionEl: HTMLElement): void {
     const { command, file, base, prev } = actionEl.dataset;
     if (!command || !file) return;
 
