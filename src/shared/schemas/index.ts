@@ -1,6 +1,3 @@
-// Layer 0: Storage utilities (no dependencies)
-export * from './storage';
-
 // Layer 1: Base types (no dependencies on other schema files)
 export * from './identifiers';
 export * from './agent';
