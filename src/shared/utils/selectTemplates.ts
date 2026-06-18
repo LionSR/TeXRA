@@ -57,7 +57,9 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
         ? html`<span class="agent-icon">${waIcon('bullseye')} </span>`
         : nothing}${opt.label}
       ${opt.isRemote
-        ? html`<span class="agent-icon"> ${waIcon(AGENT_DECORATORS.properties.remote.icon)}</span>`
+        ? html`<span class="agent-icon">
+            ${waIcon(AGENT_DECORATORS.properties.remote.icon)}</span
+          >`
         : nothing}
     </wa-option>
   `;
