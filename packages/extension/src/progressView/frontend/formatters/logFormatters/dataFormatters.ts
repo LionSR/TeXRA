@@ -61,7 +61,7 @@ export function formatFileListTemplate(
 function renderXmlLink(xmlFile: string, documentTag: string | null) {
   const xmlFileName = getBasename(xmlFile);
   // prettier-ignore
-  return html`<div class="xml-link-container"><wa-icon library="texra" name="file-code" aria-hidden="true"></wa-icon> <span>Open XML to check tag consistency:</span> <span class="file-link clickable-link" data-file=${xmlFile}>${xmlFileName}</span>${documentTag ? html` <span class="document-tag">(Expected &lt;${documentTag}&gt; block)</span>` : ''}</div>`;
+  return html`<div class="xml-link-container"><wa-icon library="texra" name="file-code" aria-hidden="true"></wa-icon> <span>Open XML to check tag consistency:</span> <span class="file-link clickable-link" data-file=${xmlFile} role="button" tabindex="0">${xmlFileName}</span>${documentTag ? html` <span class="document-tag">(Expected &lt;${documentTag}&gt; block)</span>` : ''}</div>`;
 }
 
 /** Format missing outputs entry as TemplateResult. */
@@ -88,7 +88,7 @@ export function formatMissingOutputsTemplate(
   const listItems = missing.map((f) => {
     const filePath = String(f);
     const basename = getBasename(filePath);
-    return html`<li class="detail-item" title=${filePath}><wa-icon library="texra" name="warning" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${filePath}>${basename}</span></li>`;
+    return html`<li class="detail-item" title=${filePath}><wa-icon library="texra" name="warning" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${basename}</span></li>`;
   });
   // prettier-ignore
   return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
