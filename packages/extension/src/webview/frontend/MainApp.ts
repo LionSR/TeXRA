@@ -92,7 +92,6 @@ import {
   DEFAULT_CHECKBOX_VALUES,
   FILE_UPDATE_COMMANDS,
   MULTI_FILE_COMMAND_TO_KEY,
-  PLACEHOLDER_ROTATION_MS,
   ONBOARDING_PLACEHOLDERS,
   FILE_SELECT_CONFIGS,
 } from './store';
@@ -245,7 +244,6 @@ export class MainApp extends MainAppBase {
     MainViewPersistedStateSchema,
   );
   private saveBlockCount = 0;
-  private placeholderTimer: number | null = null;
 
   private readonly messageHandlers: MainViewHandlerRegistry = {
     [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (data) =>
@@ -353,7 +351,6 @@ export class MainApp extends MainAppBase {
   }
 
   override disconnectedCallback(): void {
-    this.stopPlaceholderRotation();
     if (this.instructionSaveTimer) {
       window.clearTimeout(this.instructionSaveTimer);
       this.instructionSaveTimer = null;
@@ -373,7 +370,7 @@ export class MainApp extends MainAppBase {
 
   protected override firstUpdated(): void {
     this.requestInitialData();
-    this.refreshInstructionPlaceholder(false);
+    this.refreshInstructionPlaceholder();
   }
 
   /**
@@ -1012,7 +1009,7 @@ export class MainApp extends MainAppBase {
     // `?open` template expression used to encode — but tracking it here
     // means subsequent user collapses survive re-renders.
     this.fileSelectionOpen.set(parsed === SESSION_TYPES.WORKFLOW);
-    this.refreshInstructionPlaceholder(false);
+    this.refreshInstructionPlaceholder();
     if (parsed === SESSION_TYPES.TOOL_USE) {
       this.outputFilesActive.set(false);
       this.updateMultiFiles('outputFiles', []);
@@ -1028,7 +1025,7 @@ export class MainApp extends MainAppBase {
     }
     this.swapModeInstruction(this.sessionType.get(), sessionType);
     this.sessionType.set(sessionType);
-    this.refreshInstructionPlaceholder(false);
+    this.refreshInstructionPlaceholder();
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
   }
@@ -1087,7 +1084,7 @@ export class MainApp extends MainAppBase {
         this.workflowAgent.set(message.agentId);
       }
     }
-    this.refreshInstructionPlaceholder(false);
+    this.refreshInstructionPlaceholder();
     this.saveState();
   }
 
@@ -1105,13 +1102,6 @@ export class MainApp extends MainAppBase {
     }, 300);
   }
 
-  private stopPlaceholderRotation(): void {
-    if (this.placeholderTimer) {
-      window.clearInterval(this.placeholderTimer);
-      this.placeholderTimer = null;
-    }
-  }
-
   private get primaryInputFile(): string {
     return this.multiFiles.get().inputFiles[0] ?? '';
   }
@@ -1123,7 +1113,7 @@ export class MainApp extends MainAppBase {
     return opt?.isOrchestrator ?? false;
   }
 
-  private refreshInstructionPlaceholder(advance: boolean): void {
+  private refreshInstructionPlaceholder(): void {
     const placeholderKey: keyof typeof ONBOARDING_PLACEHOLDERS =
       this.isSelectedAgentOrchestrator()
         ? 'orchestrator'
@@ -1132,10 +1122,7 @@ export class MainApp extends MainAppBase {
     if (!placeholders.length) return;
     const current = this.instructionPlaceholder.get();
     const currentIndex = placeholders.indexOf(current);
-    if (advance) {
-      const nextIndex = (currentIndex + 1) % placeholders.length;
-      this.instructionPlaceholder.set(placeholders[nextIndex]);
-    } else if (!current || currentIndex === -1) {
+    if (!current || currentIndex === -1) {
       this.instructionPlaceholder.set(placeholders[0]);
     }
   }
