@@ -132,8 +132,18 @@ async function detectBaseBranch(sg: SimpleGit): Promise<BaseBranch | null> {
   const verified = await Promise.all(
     BASE_BRANCH_CANDIDATES.map(async (candidate) => {
       const [local, origin] = await Promise.all([
-        rawGit(sg, ['rev-parse', '--verify', '--quiet', `refs/heads/${candidate}`]),
-        rawGit(sg, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${candidate}`]),
+        rawGit(sg, [
+          'rev-parse',
+          '--verify',
+          '--quiet',
+          `refs/heads/${candidate}`,
+        ]),
+        rawGit(sg, [
+          'rev-parse',
+          '--verify',
+          '--quiet',
+          `refs/remotes/origin/${candidate}`,
+        ]),
       ]);
       return { candidate, local, origin };
     }),
@@ -161,7 +171,12 @@ async function resolveBaseBranch(
   sg: SimpleGit,
   branch: string,
 ): Promise<BaseBranch | null> {
-  const verified = await rawGit(sg, ['rev-parse', '--verify', '--quiet', branch]);
+  const verified = await rawGit(sg, [
+    'rev-parse',
+    '--verify',
+    '--quiet',
+    branch,
+  ]);
   if (!verified) return null;
   return { ref: branch, shortName: branch.replace(/^origin\//, '') };
 }
@@ -348,9 +363,7 @@ export async function collectReviewDiff(
 
   // `git diff <commit>` always emits repo-relative paths; resolve the root
   // so file reads and editor locations agree with them.
-  const repoRoot = (
-    await rawGit(sg, ['rev-parse', '--show-toplevel'])
-  )?.trim();
+  const repoRoot = (await rawGit(sg, ['rev-parse', '--show-toplevel']))?.trim();
   if (!repoRoot) {
     return { ok: false, reason: 'The workspace is not a git repository.' };
   }
@@ -387,11 +400,7 @@ export async function collectReviewDiff(
         base.shortName,
       ));
     } else {
-      const mergeBase = await rawGit(sgRoot, [
-        'merge-base',
-        'HEAD',
-        base.ref,
-      ]);
+      const mergeBase = await rawGit(sgRoot, ['merge-base', 'HEAD', base.ref]);
       if (!mergeBase) {
         return {
           ok: false,
