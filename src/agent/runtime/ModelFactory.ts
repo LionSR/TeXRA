@@ -192,28 +192,20 @@ function applyShortModelNamePreference(
   return { ...config, fullName: short };
 }
 
-// Names of the env vars that gate the internal validation handler.
-// Kept as constants so error messages stay self-describing without
-// reading process.env at module load time.
-const INCLUDE_INTERNAL_VALIDATION_ENV =
-  'TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL';
-const INTERNAL_VALIDATION_MODEL_HANDLER_ENV_NAME =
-  'TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV';
-const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV_NAME =
-  'TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV';
-const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT_NAME =
-  'TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT';
-
 function shouldUseInternalValidationModelHandler(): boolean {
   // All env reads are lazy — evaluated at call time, not at module load, so
   // they happen after initPlatform() and can be overridden between test cases.
-  if (process.env[INCLUDE_INTERNAL_VALIDATION_ENV] !== '1') return false;
+  // Direct property access (not computed) is required so esbuild's `define`
+  // can inline these at bundle time for the CLI validation build.
+  if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1')
+    return false;
 
-  const envKey = process.env[INTERNAL_VALIDATION_MODEL_HANDLER_ENV_NAME] ?? '';
+  const envKey =
+    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV ?? '';
   const flagEnvKey =
-    process.env[INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV_NAME] ?? '';
+    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV ?? '';
   const expectedFlagContent =
-    process.env[INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT_NAME] ?? '';
+    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT ?? '';
 
   if (process.env[envKey] !== '1') return false;
 
@@ -324,7 +316,7 @@ export async function createModelHandler(
     // a user-facing model selector or an injected command-layer substitute.
     logger.warn(
       CHANNEL,
-      `${process.env[INTERNAL_VALIDATION_MODEL_HANDLER_ENV_NAME]}=1 is replacing provider handlers with the internal validation handler.`,
+      `${process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is replacing provider handlers with the internal validation handler.`,
     );
     const { ModelHandlerValidation } =
       await import('@agent/modelHandlers/modelHandlerValidation');

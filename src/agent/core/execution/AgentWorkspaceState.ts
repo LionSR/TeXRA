@@ -304,7 +304,7 @@ export class WorkPlanState {
     return (
       a.length === b.length &&
       a.every((ai, i) => {
-        const bi = b[i]!;
+        const bi = b[i]!; // safe: length equality checked above; TodoItem has required fields
         return (
           ai.content === bi.content &&
           ai.status === bi.status &&
