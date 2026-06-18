@@ -362,6 +362,41 @@ describe('CLI stream tabs strip', () => {
     ]);
   });
 
+  it('labels a focused error or ready stream like a focused stopped one', () => {
+    const root = streamId('root');
+    const child1 = streamId('child-1');
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        root,
+        slice('root', {
+          status: STREAM_STATUS.READY,
+          childStreams: [
+            child({
+              executionId: 'r1',
+              childStreamId: child1,
+              agentName: 'strategy',
+            }),
+          ],
+        }),
+      ],
+      [child1, slice('child-1', { status: STREAM_STATUS.ERROR })],
+    ]);
+
+    const items = streamTabsDisplayItems({
+      activeStreamId: child1,
+      streams,
+      parentStream: new Map([[child1, root]]),
+      width: 80,
+    });
+
+    // The focused (active) error tab surfaces its status, matching stopped;
+    // previously only 'stopped' was special-cased and error/ready showed bare.
+    expect(items.map(streamTabSegmentText)).toEqual([
+      'main(ready)',
+      '[1:strategy](error)',
+    ]);
+  });
+
   it('labels nested child stream roots with their friendly stream name', () => {
     const root = streamId('root');
     const child1 = streamId('child-1');
