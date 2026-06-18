@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import * as os from 'node:os';
@@ -6,6 +5,7 @@ import * as path from 'node:path';
 
 // Local imports - agent config
 import { platform } from '@platform/platform';
+import { executeCommandSync } from '@utils/system/execUtils';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -99,6 +99,17 @@ export const getClaudeAgentEffort: () => ClaudeAgentEffort =
 // ============================================================================
 
 /**
+ * True when `CLAUDE_CODE_OAUTH_TOKEN` is set in `env`. Exported so callers
+ * that only need the env-var check (e.g. display-only status strings) don't
+ * have to read `process.env` directly in VS Code-free zones.
+ */
+export function hasClaudeCodeOauthToken(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return !!env.CLAUDE_CODE_OAUTH_TOKEN;
+}
+
+/**
  * Detect an existing Claude Code OAuth credential — either the
  * `CLAUDE_CODE_OAUTH_TOKEN` env var (from `claude setup-token`) or a
  * `claude login` session (Pro/Max subscription).
@@ -108,23 +119,28 @@ export const getClaudeAgentEffort: () => ClaudeAgentEffort =
  * the login keychain on macOS. The macOS probes read metadata only (no
  * `-w`/`-g`) so they never trigger a keychain access prompt; any failure is
  * swallowed and treated as "no credential."
+ *
+ * All OS-level calls are injectable through parameters for testability.
  */
 function hasClaudeOauthCredential(
   env: NodeJS.ProcessEnv = process.env,
   currentPlatform: NodeJS.Platform = process.platform,
+  homeDir: string = os.homedir(),
 ): boolean {
-  if (env.CLAUDE_CODE_OAUTH_TOKEN) return true;
+  if (hasClaudeCodeOauthToken(env)) return true;
 
-  const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
+  const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR, homeDir);
   if (existsSync(path.join(configDir, '.credentials.json'))) return true;
 
   if (currentPlatform === 'darwin') {
-    for (const probe of claudeKeychainCredentialProbes(configDir)) {
-      try {
-        execFileSync('security', probe, { stdio: 'ignore', timeout: 1000 });
+    for (const probe of claudeKeychainCredentialProbes(configDir, homeDir)) {
+      // executeCommandSync swallows non-zero exits; success === true means found.
+      if (
+        executeCommandSync(['security', ...probe] as [string, ...string[]], {
+          timeout: 1000,
+        }).success
+      ) {
         return true;
-      } catch {
-        // Not found / `security` unavailable — try the next known service name.
       }
     }
   }
@@ -132,24 +148,31 @@ function hasClaudeOauthCredential(
   return false;
 }
 
-function resolveClaudeConfigDir(configDirInput: string | undefined): string {
+function resolveClaudeConfigDir(
+  configDirInput: string | undefined,
+  homeDir: string,
+): string {
   const configDir = configDirInput?.trim();
-  if (!configDir) return path.join(os.homedir(), '.claude');
-  return expandHomePath(configDir);
+  if (!configDir) return path.join(homeDir, '.claude');
+  return expandHomePath(configDir, homeDir);
 }
 
-function expandHomePath(filePath: string): string {
-  if (filePath === '~') return os.homedir();
+function expandHomePath(filePath: string, homeDir: string): string {
+  if (filePath === '~') return homeDir;
   if (filePath.startsWith('~/') || filePath.startsWith('~\\')) {
-    return path.join(os.homedir(), filePath.slice(2));
+    return path.join(homeDir, filePath.slice(2));
   }
   return filePath;
 }
 
-function claudeKeychainCredentialProbes(configDir: string): string[][] {
+function claudeKeychainCredentialProbes(
+  configDir: string,
+  homeDir: string,
+): string[][] {
   const normalizedConfigDir = path.resolve(configDir);
   const usesDefaultConfigDir =
-    normalizedConfigDir === path.resolve(resolveClaudeConfigDir(undefined));
+    normalizedConfigDir ===
+    path.resolve(resolveClaudeConfigDir(undefined, homeDir));
   const configDirHash = createHash('sha256')
     .update(normalizedConfigDir)
     .digest('hex');
@@ -212,7 +235,7 @@ export async function buildClaudeAgentEnv(
 
   // 1. OAuth wins: drop any inherited API key so it can't out-prioritize the
   //    OAuth credential, and skip injecting the managed secret entirely.
-  if (hasClaudeOauthCredential(env, options.platform ?? process.platform)) {
+  if (hasClaudeOauthCredential(env, options.platform ?? process.platform, os.homedir())) {
     delete env[apiKeyVar];
     return env;
   }
