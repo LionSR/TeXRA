@@ -49,15 +49,6 @@ type ModelHandlerCompatibilityTagged = object & {
     | undefined;
 };
 
-const INCLUDE_INTERNAL_VALIDATION_MODEL_HANDLER =
-  process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
-const INTERNAL_VALIDATION_MODEL_HANDLER_ENV =
-  process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV ?? '';
-const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV =
-  process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV ?? '';
-const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT =
-  process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT ?? '';
-
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
 // A new enum value in llm-zoo without an entry here will fail typecheck.
 // `null` route fields mark providers that have no direct handler.
@@ -202,14 +193,26 @@ function applyShortModelNamePreference(
 }
 
 function shouldUseInternalValidationModelHandler(): boolean {
-  if (process.env[INTERNAL_VALIDATION_MODEL_HANDLER_ENV] !== '1') {
+  // All env reads are lazy — evaluated at call time, not at module load, so
+  // they happen after initPlatform() and can be overridden between test cases.
+  // Direct property access (not computed) is required so esbuild's `define`
+  // can inline these at bundle time for the CLI validation build.
+  if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1')
     return false;
-  }
 
-  const flagPath = process.env[INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV];
+  const envKey =
+    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV ?? '';
+  const flagEnvKey =
+    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV ?? '';
+  const expectedFlagContent =
+    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT ?? '';
+
+  if (process.env[envKey] !== '1') return false;
+
+  const flagPath = process.env[flagEnvKey];
   if (process.env.CI !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
     throw new Error(
-      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is restricted to package validation with CI=1 and an absolute ${INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV} path.`,
+      `${envKey}=1 is restricted to package validation with CI=1 and an absolute ${flagEnvKey} path.`,
     );
   }
 
@@ -218,15 +221,13 @@ function shouldUseInternalValidationModelHandler(): boolean {
     flagContent = readFileSync(flagPath, 'utf8').trim();
   } catch (error) {
     throw new Error(
-      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 requires a readable validation flag file at ${flagPath}.`,
+      `${envKey}=1 requires a readable validation flag file at ${flagPath}.`,
       { cause: error },
     );
   }
 
-  if (flagContent !== INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT) {
-    throw new Error(
-      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 received an invalid validation flag file.`,
-    );
+  if (flagContent !== expectedFlagContent) {
+    throw new Error(`${envKey}=1 received an invalid validation flag file.`);
   }
 
   return true;
@@ -241,10 +242,7 @@ export function modelHandlerCompatibilityKey(
     false,
   ),
 ): ModelHandlerCompatibilityKey | undefined {
-  if (
-    INCLUDE_INTERNAL_VALIDATION_MODEL_HANDLER &&
-    shouldUseInternalValidationModelHandler()
-  ) {
+  if (shouldUseInternalValidationModelHandler()) {
     return 'ModelHandlerValidation';
   }
 
@@ -312,16 +310,13 @@ export async function createModelHandler(
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
 
-  if (
-    INCLUDE_INTERNAL_VALIDATION_MODEL_HANDLER &&
-    shouldUseInternalValidationModelHandler()
-  ) {
+  if (shouldUseInternalValidationModelHandler()) {
     // Package validation still enters the real CLI and executeAgent path.
     // Only the provider boundary is deterministic, so this must not become
     // a user-facing model selector or an injected command-layer substitute.
     logger.warn(
       CHANNEL,
-      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is replacing provider handlers with the internal validation handler.`,
+      `${process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is replacing provider handlers with the internal validation handler.`,
     );
     const { ModelHandlerValidation } =
       await import('@agent/modelHandlers/modelHandlerValidation');
