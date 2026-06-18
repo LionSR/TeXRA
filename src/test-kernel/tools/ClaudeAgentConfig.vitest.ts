@@ -2,24 +2,51 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from 'vitest';
 
 // Local imports - model
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import type { ExecResult } from '@shared/schemas/opResults';
 
 let secretStore: Map<string, string>;
 let cleanupDirs: string[];
-let execFileSyncMock: ReturnType<typeof vi.fn>;
+let executeCommandSyncMock: Mock<
+  (command: readonly [string, ...string[]], options?: object) => ExecResult
+>;
 let homedirMock: string;
+
+const EXEC_RESULT_NOT_FOUND: ExecResult = {
+  success: false,
+  stdout: null,
+  stderr: null,
+  timedOut: false,
+  exitCode: 1,
+};
+const EXEC_RESULT_FOUND: ExecResult = {
+  success: true,
+  stdout: null,
+  stderr: null,
+  timedOut: false,
+  exitCode: 0,
+};
 
 async function loadBuildClaudeAgentEnv(): Promise<
   typeof import('@tools/claudeAgentConfig').buildClaudeAgentEnv
 > {
-  vi.doMock('node:child_process', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('node:child_process')>();
+  vi.doMock('@utils/system/execUtils', async (importOriginal) => {
+    const actual =
+      await importOriginal<typeof import('@utils/system/execUtils')>();
     return {
       ...actual,
-      execFileSync: execFileSyncMock,
+      executeCommandSync: executeCommandSyncMock,
     };
   });
 
@@ -53,9 +80,7 @@ describe('Claude Code CLI configuration', () => {
     secretStore = new Map();
     cleanupDirs = [];
     homedirMock = os.homedir();
-    execFileSyncMock = vi.fn(() => {
-      throw new Error('not found');
-    });
+    executeCommandSyncMock = vi.fn(() => EXEC_RESULT_NOT_FOUND);
     vi.resetModules();
     invalidateApiKeyCache();
     // Deterministic baseline: no OAuth credential present. Point the config dir
@@ -71,7 +96,7 @@ describe('Claude Code CLI configuration', () => {
   });
 
   afterEach(() => {
-    vi.doUnmock('child_process');
+    vi.doUnmock('@utils/system/execUtils');
     vi.doUnmock('os');
     vi.doUnmock('@platform/platform');
     invalidateApiKeyCache();
@@ -164,14 +189,14 @@ describe('Claude Code CLI configuration', () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', configDir);
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
-    execFileSyncMock.mockImplementation((_command, args) => {
+    executeCommandSyncMock.mockImplementation((command) => {
       if (
-        Array.isArray(args) &&
-        args.includes(`${path.resolve(configDir)}-access-token`)
+        Array.isArray(command) &&
+        command.includes(`${path.resolve(configDir)}-access-token`)
       ) {
-        return Buffer.from('');
+        return EXEC_RESULT_FOUND;
       }
-      throw new Error('not found');
+      return EXEC_RESULT_NOT_FOUND;
     });
 
     const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
@@ -184,20 +209,23 @@ describe('Claude Code CLI configuration', () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', configDir);
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
-    execFileSyncMock.mockImplementation((_command, args) => {
-      if (Array.isArray(args) && args.includes('Claude Code-credentials')) {
-        return Buffer.from('');
+    executeCommandSyncMock.mockImplementation((command) => {
+      if (
+        Array.isArray(command) &&
+        command.includes('Claude Code-credentials')
+      ) {
+        return EXEC_RESULT_FOUND;
       }
-      throw new Error('not found');
+      return EXEC_RESULT_NOT_FOUND;
     });
 
     const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
     const env = await buildClaudeAgentEnv({ platform: 'darwin' });
     expect(env.ANTHROPIC_API_KEY).toBe('from-env');
     expect(
-      execFileSyncMock.mock.calls.some(
-        ([, args]) =>
-          Array.isArray(args) && args.includes('Claude Code-credentials'),
+      executeCommandSyncMock.mock.calls.some(
+        ([command]) =>
+          Array.isArray(command) && command.includes('Claude Code-credentials'),
       ),
     ).toBe(false);
   });
