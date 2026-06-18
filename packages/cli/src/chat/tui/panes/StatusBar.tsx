@@ -130,16 +130,21 @@ function formatUsage(
   model: string,
 ): StatusBarSegment | undefined {
   if (!usage) return undefined;
-  const total = usage.inputTokens + usage.outputTokens;
-  if (total <= 0) return undefined;
+  // Context-window occupancy is input tokens only — the prompt that fills the
+  // window. Output tokens are the generated response, not part of the context,
+  // so they must not inflate the gauge. This matches every other surface
+  // (ModelHandler utilizationPercent, trace, transcript recorder, the extension
+  // UsagePanel), which all compute inputTokens / contextWindow.
+  const used = usage.inputTokens;
+  if (used <= 0) return undefined;
 
   const base = { compactPriority: STATUS_BAR_COMPACT_PRIORITY.usage };
   const contextWindow = MODEL_CONFIGS[model]?.contextWindow;
   if (!contextWindow || contextWindow <= 0) {
-    return { ...base, text: formatCompactNumber(total), color: 'dim' };
+    return { ...base, text: formatCompactNumber(used), color: 'dim' };
   }
 
-  const ratio = total / contextWindow;
+  const ratio = used / contextWindow;
   const percent = Math.max(1, Math.round(ratio * 100));
   let color: StatusBarColor;
   if (ratio >= 0.9) color = 'red';
@@ -147,7 +152,7 @@ function formatUsage(
   else color = 'dim';
   return {
     ...base,
-    text: `${formatCompactNumber(total)}/${formatCompactNumber(
+    text: `${formatCompactNumber(used)}/${formatCompactNumber(
       contextWindow,
     )} (${percent}%)`,
     // Keep context visibility on narrow terminals: degrade to the bare
