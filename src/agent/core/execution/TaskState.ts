@@ -8,9 +8,7 @@ import {
 import { AgentCategory } from '../definition/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '../definition/AgentConfig';
 
-const ToolSessionStateSchema = z.object({
-  lastFollowUpAt: z.number().optional(),
-});
+const ToolSessionStateSchema = z.object({});
 
 const ActiveFilesSchema = z.partialRecord(
   z.enum(MULTIPLE_DOCUMENT_FILE_TYPES),
