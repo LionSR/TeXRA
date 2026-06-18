@@ -16,6 +16,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { historyStyles } from '@shared/styles/historyStyles';
 
 // Side-effect imports - register WA icon component
@@ -247,7 +248,7 @@ export class HistoryList extends LitElement {
   override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">
-        <wa-icon library="texra" name="history"></wa-icon>
+        ${waIcon('history')}
         <p>No history items found.</p>
         <p class="text-secondary">
           History is recorded when you run agent commands. Past results will
@@ -268,7 +269,7 @@ export class HistoryList extends LitElement {
     // container with no count or message — show explicit no-results feedback.
     if (this.searchTerm && displayItems.length === 0) {
       return html`<div class="empty-state">
-        <wa-icon library="texra" name="history"></wa-icon>
+        ${waIcon('history')}
         <p>No history items match your search.</p>
       </div>`;
     }

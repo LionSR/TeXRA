@@ -8,6 +8,7 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared events
 import { createEvent } from '@shared/utils/events';
@@ -180,7 +181,7 @@ export class ProviderKeyModal extends LitElement {
             type="submit"
             form="provider-key-form"
           >
-            <wa-icon library="texra" name="key" slot="start"></wa-icon>
+            ${waIcon('key', { slot: 'start' })}
             Save Key
           </wa-button>
         </div>
