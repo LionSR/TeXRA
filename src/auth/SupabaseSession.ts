@@ -1,5 +1,6 @@
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
+  parseAuthCallbackCode,
   parseAuthCallbackTokens,
   type AuthCallbackUriParts,
 } from './core/authCallback';
@@ -115,10 +116,45 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   }
 
   /**
-   * Parse auth callback URI parts, verify the user with Supabase, and build a
-   * host-neutral session record.
+   * Convert an OAuth callback into a host-neutral session record. PKCE callbacks
+   * carry a one-time ?code= that is exchanged for a session; a legacy
+   * implicit-flow token callback (tokens in the fragment or query) is kept as a
+   * fallback so an older redirect target still authenticates.
    */
   async createSessionFromCallback(
+    uri: AuthCallbackUriParts,
+  ): Promise<SupabaseCallbackResult> {
+    const parsedCode = parseAuthCallbackCode(uri);
+    if (parsedCode.success) {
+      return this.createSessionViaCodeExchange(parsedCode.code);
+    }
+    // An explicit error in the callback is terminal for either flow.
+    if (parsedCode.isAuthError) {
+      return parsedCode;
+    }
+    // No code present: fall back to the legacy implicit-flow token callback.
+    return this.createSessionViaTokens(uri);
+  }
+
+  private async createSessionViaCodeExchange(
+    code: string,
+  ): Promise<SupabaseCallbackResult> {
+    const { data, error } = await this.options
+      .getClient()
+      .auth.exchangeCodeForSession(code);
+
+    if (error || !data.session) {
+      return {
+        success: false,
+        error: error?.message || 'Code exchange failed',
+        isAuthError: true,
+      };
+    }
+
+    return { success: true, session: toStorableSupabaseSession(data.session) };
+  }
+
+  private async createSessionViaTokens(
     uri: AuthCallbackUriParts,
   ): Promise<SupabaseCallbackResult> {
     const parsedCallback = parseAuthCallbackTokens(uri);

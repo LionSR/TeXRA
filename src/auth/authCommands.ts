@@ -151,7 +151,9 @@ async function signInWithEmail(): Promise<void> {
   if (!email) return;
 
   try {
-    const supabase = SupabaseClient.getClient();
+    // Use the implicit-flow client so the magic link carries tokens directly
+    // (not a PKCE code), which completes wherever the email is opened.
+    const supabase = SupabaseClient.getOtpClient();
     const redirectUri = await getExternalAuthCallbackUri();
     const { error } = await supabase.auth.signInWithOtp({
       email,
