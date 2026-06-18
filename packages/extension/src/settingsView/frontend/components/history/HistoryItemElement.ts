@@ -15,6 +15,7 @@ import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -292,7 +293,7 @@ export class HistoryItemElement extends LitElement {
           Object.entries(config.toolConfig) as Array<[string, ConfigValue]>
         ).filter(([, value]) => this.hasValue(value));
         const toolSection = this.renderConfigSection(
-          html`<wa-icon library="texra" name="tools"></wa-icon> Config`,
+          html`${waIcon('tools')} Config`,
           toolEntries,
         );
         if (toolSection) extraDetails.push(toolSection);
