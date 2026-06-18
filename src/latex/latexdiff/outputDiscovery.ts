@@ -8,10 +8,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Local imports
+import { platform } from '@platform/platform';
 import { StreamSnapshotStore } from '@transcript';
 import { listExecutions } from '@agent/storage';
 import {
@@ -33,6 +31,7 @@ import {
   resolveRunDir,
 } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
+import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 
 import { CHANNEL } from './service';
 
@@ -44,9 +43,9 @@ export async function collectTexFiles(
   dir: string,
   prefix = '',
 ): Promise<string[]> {
-  let entries: [string, vscode.FileType][];
+  let entries: [string, number][];
   try {
-    entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+    entries = await platform().fs.readDirectory(dir);
   } catch (error) {
     // This is a recovery scan: a missing/unreadable subtree means this subtree
     // contributes no outputs, but other rounds/subtrees may still be useful.
@@ -66,13 +65,11 @@ export async function collectTexFiles(
     } catch {
       // lstat failed; fall through and include the entry
     }
-    const isFile = (type & vscode.FileType.File) !== 0;
-    const isDir = (type & vscode.FileType.Directory) !== 0;
-    if (isFile) {
+    if (isFile(type)) {
       if (hasExtension(name, '.tex')) {
         results.push(prefix ? `${prefix}/${name}` : name);
       }
-    } else if (isDir) {
+    } else if (isDirectory(type)) {
       const sub = await collectTexFiles(
         absPath,
         prefix ? `${prefix}/${name}` : name,
@@ -102,9 +99,7 @@ export async function scanRunDirForOutputs(
     const runDirAbsolute = await resolveRunDir(executionId);
     if (!runDirAbsolute) return null;
 
-    const dirEntries = await vscode.workspace.fs.readDirectory(
-      vscode.Uri.file(runDirAbsolute),
-    );
+    const dirEntries = await platform().fs.readDirectory(runDirAbsolute);
 
     const workspacePath = WorkspaceFS.getPath() ?? '';
     const toAbs = (f: string): string =>
@@ -127,7 +122,10 @@ export async function scanRunDirForOutputs(
     const rounds = new Map<number, OutputFileInfo[]>();
 
     for (const [entryName, fileType] of dirEntries) {
-      if (fileType !== vscode.FileType.Directory) continue;
+      // Skip symlinked round dirs, matching the prior strict
+      // `!== FileType.Directory` check (platform FS reports symlinks as
+      // `SymbolicLink | targetType`).
+      if (!isDirectory(fileType) || isSymlink(fileType)) continue;
       const round = parseWorkflowOutputRoundDir(entryName);
       if (round == null) continue;
 
