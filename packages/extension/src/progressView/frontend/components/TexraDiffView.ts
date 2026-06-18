@@ -171,7 +171,16 @@ export class TexraDiffView extends LitElement {
       changed.has('proposedText') ||
       changed.has('language')
     ) {
-      this.syncModels();
+      // If a prior editor load failed (or never completed), retry it when new
+      // diff content arrives instead of staying stuck on the error message for
+      // the rest of the session — the element is reused across re-opens. The
+      // `!this.loading` guard avoids a second concurrent load during the initial
+      // firstUpdated()+updated() cycle (firstUpdated sets loading synchronously).
+      if (!this.editor && !this.loading) {
+        void this.ensureEditor();
+      } else {
+        this.syncModels();
+      }
     }
     if (changed.has('hostTheme')) {
       this.applyTheme();
