@@ -316,6 +316,18 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     this.writeFileSync(target, content, { overwrite: true });
   }
 
+  async appendFile(target: string, content: Uint8Array): Promise<void> {
+    const existing = this.records.get(normalizePath(target));
+    if (existing && existing.type !== FileType.File) {
+      throw fakeFsError('EISDIR', `Path is a directory: ${target}`);
+    }
+    const base = existing?.content ?? new Uint8Array(0);
+    const merged = new Uint8Array(base.length + content.length);
+    merged.set(base, 0);
+    merged.set(content, base.length);
+    this.writeFileSync(target, merged, { overwrite: true });
+  }
+
   async delete(
     target: string,
     options?: { recursive?: boolean },
