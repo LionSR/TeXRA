@@ -12,7 +12,7 @@ import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
-import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse';
+import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
 import { DelegateAgentTool } from '@tools/DelegationTools';
