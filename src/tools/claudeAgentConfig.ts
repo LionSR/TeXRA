@@ -235,13 +235,7 @@ export async function buildClaudeAgentEnv(
 
   // 1. OAuth wins: drop any inherited API key so it can't out-prioritize the
   //    OAuth credential, and skip injecting the managed secret entirely.
-  if (
-    hasClaudeOauthCredential(
-      env,
-      options.platform ?? process.platform,
-      os.homedir(),
-    )
-  ) {
+  if (hasClaudeOauthCredential(env, options.platform ?? process.platform)) {
     delete env[apiKeyVar];
     return env;
   }
