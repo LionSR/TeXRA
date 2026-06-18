@@ -2,51 +2,24 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  type Mock,
-  vi,
-} from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - model
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
-import type { ExecResult } from '@shared/schemas/opResults';
 
 let secretStore: Map<string, string>;
 let cleanupDirs: string[];
-let executeCommandSyncMock: Mock<
-  (command: readonly [string, ...string[]], options?: object) => ExecResult
->;
+let execaMock: ReturnType<typeof vi.fn>;
 let homedirMock: string;
-
-const EXEC_RESULT_NOT_FOUND: ExecResult = {
-  success: false,
-  stdout: null,
-  stderr: null,
-  timedOut: false,
-  exitCode: 1,
-};
-const EXEC_RESULT_FOUND: ExecResult = {
-  success: true,
-  stdout: null,
-  stderr: null,
-  timedOut: false,
-  exitCode: 0,
-};
 
 async function loadBuildClaudeAgentEnv(): Promise<
   typeof import('@tools/claudeAgentConfig').buildClaudeAgentEnv
 > {
-  vi.doMock('@utils/system/execUtils', async (importOriginal) => {
-    const actual =
-      await importOriginal<typeof import('@utils/system/execUtils')>();
+  vi.doMock('execa', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('execa')>();
     return {
       ...actual,
-      executeCommandSync: executeCommandSyncMock,
+      execa: execaMock,
     };
   });
 
@@ -80,7 +53,7 @@ describe('Claude Code CLI configuration', () => {
     secretStore = new Map();
     cleanupDirs = [];
     homedirMock = os.homedir();
-    executeCommandSyncMock = vi.fn(() => EXEC_RESULT_NOT_FOUND);
+    execaMock = vi.fn().mockResolvedValue({ exitCode: 1 });
     vi.resetModules();
     invalidateApiKeyCache();
     // Deterministic baseline: no OAuth credential present. Point the config dir
@@ -96,8 +69,8 @@ describe('Claude Code CLI configuration', () => {
   });
 
   afterEach(() => {
-    vi.doUnmock('@utils/system/execUtils');
-    vi.doUnmock('os');
+    vi.doUnmock('execa');
+    vi.doUnmock('node:os');
     vi.doUnmock('@platform/platform');
     invalidateApiKeyCache();
     vi.unstubAllEnvs();
@@ -189,14 +162,14 @@ describe('Claude Code CLI configuration', () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', configDir);
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
-    executeCommandSyncMock.mockImplementation((command) => {
+    execaMock.mockImplementation(async (_command: string, args: string[]) => {
       if (
-        Array.isArray(command) &&
-        command.includes(`${path.resolve(configDir)}-access-token`)
+        Array.isArray(args) &&
+        args.includes(`${path.resolve(configDir)}-access-token`)
       ) {
-        return EXEC_RESULT_FOUND;
+        return { exitCode: 0 };
       }
-      return EXEC_RESULT_NOT_FOUND;
+      return { exitCode: 1 };
     });
 
     const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
@@ -209,23 +182,20 @@ describe('Claude Code CLI configuration', () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', configDir);
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
-    executeCommandSyncMock.mockImplementation((command) => {
-      if (
-        Array.isArray(command) &&
-        command.includes('Claude Code-credentials')
-      ) {
-        return EXEC_RESULT_FOUND;
+    execaMock.mockImplementation(async (_command: string, args: string[]) => {
+      if (Array.isArray(args) && args.includes('Claude Code-credentials')) {
+        return { exitCode: 0 };
       }
-      return EXEC_RESULT_NOT_FOUND;
+      return { exitCode: 1 };
     });
 
     const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
     const env = await buildClaudeAgentEnv({ platform: 'darwin' });
     expect(env.ANTHROPIC_API_KEY).toBe('from-env');
     expect(
-      executeCommandSyncMock.mock.calls.some(
-        ([command]) =>
-          Array.isArray(command) && command.includes('Claude Code-credentials'),
+      execaMock.mock.calls.some(
+        ([, args]) =>
+          Array.isArray(args) && args.includes('Claude Code-credentials'),
       ),
     ).toBe(false);
   });
