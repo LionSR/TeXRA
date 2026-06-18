@@ -8,7 +8,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderLoadingState } from '@shared/wa/loadingState';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -29,7 +29,7 @@ import '../components/tools/ToolCard';
 /** Per-category display metadata. */
 interface CategoryMeta {
   readonly label: string;
-  readonly icon: string;
+  readonly icon: TeXRAIconName;
 }
 
 /**
@@ -395,7 +395,7 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         <div class="category-header">
-          <wa-icon library="texra" name=${meta.icon}></wa-icon>
+          ${waIcon(meta.icon)}
           ${meta.label}
           <span class="category-count">(${items.length})</span>
         </div>
