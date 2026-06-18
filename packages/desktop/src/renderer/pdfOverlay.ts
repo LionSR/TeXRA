@@ -41,6 +41,9 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
   let frameEl: HTMLIFrameElement | null = null;
   let titleEl: HTMLElement | null = null;
   let subtitleEl: HTMLElement | null = null;
+  // Intent across the async hide animation: distinguishes a genuine close from
+  // a reopen that lands while the previous close is still animating.
+  let wantOpen = false;
 
   function ensure(): WaDialog {
     if (dialog) return dialog;
@@ -91,8 +94,21 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
     });
     d.append(close);
 
-    // Clear the iframe src on hide so the PDF isn't resident across closes.
+    // `wa-hide` fires for every close (close button, Escape, close()); open()
+    // sets wantOpen back to true. wa-after-hide runs after the hide animation
+    // — by which point a reopen during the animation has set a new src and
+    // wantOpen=true. In that case re-assert the open state (the dialog already
+    // flipped open=false internally as the close completed) so the new PDF
+    // shows instead of getting wiped. Otherwise clear the src so the PDF isn't
+    // resident across closes.
+    d.addEventListener('wa-hide', () => {
+      wantOpen = false;
+    });
     d.addEventListener('wa-after-hide', () => {
+      if (wantOpen) {
+        d.open = true;
+        return;
+      }
       if (frameEl) frameEl.removeAttribute('src');
     });
 
@@ -115,6 +131,7 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
     if (titleEl) titleEl.textContent = payload.title;
     if (subtitleEl) subtitleEl.textContent = payload.pdfPath;
     if (frameEl) frameEl.src = pdfPathToFileUrl(payload.pdfPath);
+    wantOpen = true;
     d.open = true;
   }
 
