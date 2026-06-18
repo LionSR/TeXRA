@@ -1,3 +1,4 @@
+import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { ApprovalDecision as SharedApprovalDecision } from '@shared/schemas';
 
@@ -35,14 +36,6 @@ export function hasCliApprovalDenied(context: CliContext): boolean {
   return deniedApprovalContexts.has(context);
 }
 
-function isCliMonthlySpendingLimitMessage(
-  message: string | undefined,
-): boolean {
-  return (
-    message?.toLowerCase().includes('monthly spending limit reached') ?? false
-  );
-}
-
 export function isCliApiSwitchableRetry(
   payload: ProgressEventPayloads['showRetryRequest'],
 ): boolean {
@@ -50,12 +43,12 @@ export function isCliApiSwitchableRetry(
   return (
     details?.isCredentialExhausted === true &&
     (details.isRelayError === true ||
-      isCliMonthlySpendingLimitMessage(payload.errorMessage))
+      isRelayMonthlyLimitMessage(payload.errorMessage))
   );
 }
 
 export function appendCliApiSwitchHint(text: string): string {
-  if (!isCliMonthlySpendingLimitMessage(text)) return text;
+  if (!isRelayMonthlyLimitMessage(text)) return text;
   if (text.includes('/api personal')) return text;
   return [text, CLI_PERSONAL_API_RETRY_HINT].join('\n');
 }
