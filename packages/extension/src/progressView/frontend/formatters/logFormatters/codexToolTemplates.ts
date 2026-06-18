@@ -143,7 +143,11 @@ function renderCodexFileChangeItem(
   return html`
     <li class="detail-item">
       <wa-icon library="texra" name="file" aria-hidden="true"></wa-icon>
-      <span class="file-link clickable-link" data-file=${change.path}
+      <span
+        class="file-link clickable-link"
+        data-file=${change.path}
+        role="button"
+        tabindex="0"
         >${change.path}</span
       >
       <span class="file-source">(${change.kind})</span>
