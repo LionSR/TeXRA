@@ -11,7 +11,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -240,7 +240,7 @@ export class ToolCard extends LitElement {
   private static readonly STATUS_CONFIG: Record<
     ToolDashboardItem['status'],
     {
-      icon: string;
+      icon: TeXRAIconName;
       variant: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
     }
   > = {
@@ -270,7 +270,7 @@ export class ToolCard extends LitElement {
         aria-label=${label}
         title=${label}
       >
-        <wa-icon library="texra" name=${config.icon}></wa-icon>
+        ${waIcon(config.icon)}
       </span>
     `;
   }
@@ -288,8 +288,7 @@ export class ToolCard extends LitElement {
         appearance="accent"
         size="small"
       >
-        <wa-icon library="texra" name=${config.icon}></wa-icon>
-        ${label}
+        ${waIcon(config.icon)} ${label}
       </wa-tag>
     `;
   }
