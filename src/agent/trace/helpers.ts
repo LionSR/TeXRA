@@ -194,8 +194,6 @@ export function logContextStateSnapshot(
     {
       inputTokens,
       contextWindow,
-      utilizationPercent:
-        contextWindow > 0 ? (inputTokens / contextWindow) * 100 : 0,
     },
     { stageId },
   );
