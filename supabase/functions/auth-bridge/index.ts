@@ -57,8 +57,12 @@ const ALLOWED_EXT_SCHEMES = [
   'pearai',
 ] as const;
 
-/** Extension id format: publisher.name with the usual id characters. */
-const EXTENSION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+/**
+ * Allowed deep-link target extension id. Locked to the TeXRA publisher so the
+ * bridge can only ever hand a code back to a TeXRA extension, never an arbitrary
+ * scheme://publisher.name that an attacker could place in redirect_to.
+ */
+const EXTENSION_ID_PATTERN = /^texra-ai\.[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 // =============================================================================
 // Validation
