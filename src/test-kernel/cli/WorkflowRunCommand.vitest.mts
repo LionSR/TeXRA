@@ -10,7 +10,7 @@ import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => {
   return {
-    executeCliRequest: vi.fn(),
+    executeCliConfig: vi.fn(),
     withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
     isAuthenticated: vi.fn(),
@@ -64,7 +64,7 @@ vi.mock('@cli/runtime/agents', async (importOriginal) => ({
 }));
 
 vi.mock('@cli/runtime/runExecution', () => ({
-  executeCliRequest: mocks.executeCliRequest,
+  executeCliConfig: mocks.executeCliConfig,
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
@@ -121,7 +121,9 @@ describe('CLI workflow run command', () => {
         }) => Promise<unknown>,
       ) => run({ inputFiles: ['paper.tex'], contextFiles: [] }),
     );
-    mocks.executeCliRequest.mockResolvedValue({
+    mocks.executeCliConfig.mockResolvedValue({
+      ok: true,
+      executionId: 'exec-1',
       result: {
         category: AgentCategory.Workflow,
         executionId: 'exec-1',
@@ -257,8 +259,8 @@ describe('CLI workflow run command', () => {
         { readStdinText: expect.any(Function) },
         expect.any(Function),
       );
-      const request = mocks.executeCliRequest.mock.calls[0]?.[0];
-      expect(request?.config.instruction).toBe(
+      const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+      expect(config?.instruction).toBe(
         'Read this prompt from disk.\n\nThen keep the final response concise.',
       );
     } finally {
@@ -272,7 +274,9 @@ describe('CLI workflow run command', () => {
       const generated = path.join(root, 'run', 'r1', 'paper.tex');
       await fs.mkdir(path.dirname(generated), { recursive: true });
       await fs.writeFile(generated, 'polished');
-      mocks.executeCliRequest.mockResolvedValueOnce({
+      mocks.executeCliConfig.mockResolvedValueOnce({
+        ok: true,
+        executionId: 'exec-output',
         result: {
           category: AgentCategory.Workflow,
           executionId: 'exec-output',
@@ -305,8 +309,8 @@ describe('CLI workflow run command', () => {
       });
 
       expect(exitCode).toBe(0);
-      const request = mocks.executeCliRequest.mock.calls[0]?.[0];
-      expect(request?.config).toMatchObject({
+      const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+      expect(config).toMatchObject({
         inputFiles: ['paper.tex'],
         outputFiles: [],
         cliOutputFile: 'polished.tex',
