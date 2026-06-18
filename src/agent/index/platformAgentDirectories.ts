@@ -6,7 +6,7 @@ import { AgentDirectoryService } from './AgentDirectoryService';
 import {
   BundledAgentDirectorySync,
   GlobalStorageAgentDirectoryStorage,
-  PathAgentDirectoryBundleSource,
+  type AgentDirectoryBundleSource,
   type AgentDirectoryVersionStore,
 } from './AgentDirectorySync';
 import { setAgentDirectories } from './agentDirectoriesRegistry';
@@ -21,7 +21,7 @@ interface PlatformAgentDirectoryOptions {
 }
 
 export interface PlatformAgentDirectoryBootstrapOptions extends PlatformAgentDirectoryOptions {
-  resourcesPath: string;
+  bundleSource: AgentDirectoryBundleSource;
   currentVersion: string | undefined;
   versionStore: AgentDirectoryVersionStore;
 }
@@ -62,7 +62,7 @@ export async function bootstrapPlatformAgentDirectories(
   options: PlatformAgentDirectoryBootstrapOptions,
 ): Promise<void> {
   const sync = new BundledAgentDirectorySync({
-    bundleSource: new PathAgentDirectoryBundleSource(options.resourcesPath),
+    bundleSource: options.bundleSource,
     storage: new GlobalStorageAgentDirectoryStorage(),
     versionStore: options.versionStore,
     logger: {
