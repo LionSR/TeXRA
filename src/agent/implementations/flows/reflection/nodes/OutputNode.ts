@@ -24,15 +24,17 @@ import {
   shouldUseCompileFailureRepairContext,
 } from '@agent/output/compileFailureRoundContext';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { toErrorMessage } from '@common/errors';
-import type {
-  CompileFailure,
-  CompileResult,
-  RoundOutput,
+import { tryOperation } from '@agent/output/outputOperations';
+import {
+  MESSAGE_TYPES,
+  type AgentFileLocation,
+  type CompileFailure,
+  type CompileResult,
+  type FileLocation,
+  type RoundOutput,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
-import type { AgentFileLocation, FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -54,19 +56,6 @@ interface OutputExecResult {
   compileResult?: CompileResult;
   compiledArtifacts: CompiledPdfArtifact[];
   emitCompileFailures: boolean;
-}
-
-/** Execute an operation that can fail gracefully (logs warnings, doesn't throw). */
-async function tryOperation(
-  label: string,
-  operation: () => Promise<void>,
-  logger: { warn: (msg: string) => void },
-): Promise<void> {
-  try {
-    await operation();
-  } catch (error) {
-    logger.warn(`${label} failed: ${toErrorMessage(error)}`);
-  }
 }
 
 export class OutputNode<C = unknown> extends Node<
@@ -111,17 +100,21 @@ export class OutputNode<C = unknown> extends Node<
       logger.debug(`Processing output for round ${currentRound}`);
 
       await tryOperation(
-        'XML structure',
         () =>
           xmlManager.ensureCorrectXmlStructure(
             outputLocation,
             setting.documentTag,
           ),
-        logger,
+        {
+          logger,
+          level: 'warn' as const,
+          label: 'XML structure',
+          messageType: MESSAGE_TYPES.DEFAULT,
+          recover: () => undefined,
+        },
       );
 
       await tryOperation(
-        'Output processing',
         () =>
           extractFilesFromXml(
             outputState,
@@ -130,14 +123,19 @@ export class OutputNode<C = unknown> extends Node<
             outputLocation,
             currentRound,
           ),
-        logger,
+        {
+          logger,
+          level: 'warn' as const,
+          label: 'Output processing',
+          messageType: MESSAGE_TYPES.DEFAULT,
+          recover: () => undefined,
+        },
       );
 
       if (hasRoundOutputs(outputState, currentRound)) {
         mapping = traceFileLineage(outputState, diffBaseFiles, currentRound);
 
         await tryOperation(
-          'Latexdiff',
           async () => {
             const diffArtifacts = await this.handleLatexdiff(
               currentRound,
@@ -147,11 +145,16 @@ export class OutputNode<C = unknown> extends Node<
             );
             compiledArtifacts.push(...diffArtifacts);
           },
-          logger,
+          {
+            logger,
+            level: 'warn' as const,
+            label: 'Latexdiff',
+            messageType: MESSAGE_TYPES.DEFAULT,
+            recover: () => undefined,
+          },
         );
 
         await tryOperation(
-          'Compile check',
           async () => {
             const hadCompileFailures = hasCompileFailures(
               outputState,
@@ -168,7 +171,13 @@ export class OutputNode<C = unknown> extends Node<
             emitCompileFailures =
               compileFailures.length > 0 || hadCompileFailures;
           },
-          logger,
+          {
+            logger,
+            level: 'warn' as const,
+            label: 'Compile check',
+            messageType: MESSAGE_TYPES.DEFAULT,
+            recover: () => undefined,
+          },
         );
       }
     }
@@ -312,7 +321,6 @@ export class OutputNode<C = unknown> extends Node<
     // Validate expected outputs if turn ended
     if (endTurn) {
       await tryOperation(
-        'Validate expected outputs',
         async () => {
           const validationResult = await checkExpectedOutputs(
             outputState,
@@ -334,7 +342,13 @@ export class OutputNode<C = unknown> extends Node<
             });
           }
         },
-        logger,
+        {
+          logger,
+          level: 'warn' as const,
+          label: 'Validate expected outputs',
+          messageType: MESSAGE_TYPES.DEFAULT,
+          recover: () => undefined,
+        },
       );
     }
 

@@ -1,6 +1,6 @@
 import type { AgentTrace } from '@agent/trace';
 import { toErrorMessage } from '@common/errors';
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { MESSAGE_TYPES, type MessageType } from '@shared/schemas';
 
 /** Trace levels that the output managers use for recoverable failures. */
 type OutputLogLevel = 'error' | 'warn' | 'debug';
@@ -16,6 +16,8 @@ export interface TryOperationOptions<T> {
    * `catch` blocks.
    */
   label: string;
+  /** Message category for the failure line. Defaults to INTERNAL. */
+  messageType?: MessageType;
   /** Produces the fallback value (and any side effects) after logging. */
   recover: (error: unknown) => T | Promise<T>;
 }
@@ -30,13 +32,19 @@ export interface TryOperationOptions<T> {
  */
 export async function tryOperation<T>(
   operation: () => Promise<T>,
-  { logger, level, label, recover }: TryOperationOptions<T>,
+  {
+    logger,
+    level,
+    label,
+    messageType = MESSAGE_TYPES.INTERNAL,
+    recover,
+  }: TryOperationOptions<T>,
 ): Promise<T> {
   try {
     return await operation();
   } catch (error) {
     logger[level](`${label}: ${toErrorMessage(error)}`, {
-      messageType: MESSAGE_TYPES.INTERNAL,
+      messageType,
     });
     return recover(error);
   }
