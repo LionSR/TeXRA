@@ -121,7 +121,8 @@ export function hasClaudeCodeOauthToken(
  * `-w`/`-g`) so they never trigger a keychain access prompt; any failure is
  * swallowed and treated as "no credential."
  *
- * All OS-level calls are injectable through parameters for testability.
+ * `env` and `currentPlatform` are injectable for testability; home-directory
+ * resolution goes through `safeHomedir()` (mockable via `node:os`).
  */
 async function hasClaudeOauthCredential(
   env: NodeJS.ProcessEnv = process.env,
