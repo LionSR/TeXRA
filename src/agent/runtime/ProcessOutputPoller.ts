@@ -1,5 +1,6 @@
 import { StringDecoder } from 'node:string_decoder';
 
+import delay from 'delay';
 import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
@@ -40,8 +41,7 @@ export class ProcessOutputPoller {
 
   private readonly processOutputs = new Map<string, ProcessOutputSource>();
   private readonly readingInProgress = new Map<string, Promise<void>>();
-  private outputPollTimer: ReturnType<typeof setTimeout> | null = null;
-  private pollInFlight = false;
+  private loopController: AbortController | null = null;
 
   register(
     handle: ProcessExecutionHandle,
@@ -96,14 +96,11 @@ export class ProcessOutputPoller {
   }
 
   dispose(): void {
-    if (this.outputPollTimer) {
-      clearTimeout(this.outputPollTimer);
-      this.outputPollTimer = null;
-    }
+    this.loopController?.abort();
+    this.loopController = null;
     this.outputStates.clear();
     this.processOutputs.clear();
     this.readingInProgress.clear();
-    this.pollInFlight = false;
   }
 
   private getOrCreateState(executionId: string): OutputState {
@@ -120,30 +117,44 @@ export class ProcessOutputPoller {
 
   private reconcile(): void {
     const active = this.processOutputs.size > 0;
-    if (active && !this.outputPollTimer) {
-      this.schedule();
-    } else if (!active && this.outputPollTimer) {
-      clearTimeout(this.outputPollTimer);
-      this.outputPollTimer = null;
+    if (active && !this.loopController) {
+      const controller = new AbortController();
+      this.loopController = controller;
+      void this.runPollLoop(controller.signal);
+    } else if (!active && this.loopController) {
+      // Abort but do NOT null loopController here: the loop may still be
+      // inside pollProcessOutputs(). Nulling immediately lets a concurrent
+      // register() start a second loop before the first exits, producing
+      // duplicate reads. runPollLoop's cleanup nulls the field after the
+      // loop body exits and then calls reconcile() to restart if needed.
+      this.loopController.abort();
     }
   }
 
-  /** Schedule the next poll cycle; the next poll waits for the current one. */
-  private schedule(): void {
-    this.outputPollTimer = setTimeout(async () => {
-      this.outputPollTimer = null;
-      if (this.pollInFlight) {
-        this.schedule();
-        return;
+  private async runPollLoop(signal: AbortSignal): Promise<void> {
+    while (!signal.aborted) {
+      try {
+        await delay(OUTPUT_POLL_INTERVAL_MS, { signal });
+      } catch {
+        break; // AbortError: stop requested
       }
-      this.pollInFlight = true;
       try {
         await this.pollProcessOutputs();
-      } finally {
-        this.pollInFlight = false;
-        this.reconcile();
+      } catch (err) {
+        logger.debug(
+          'ProcessOutputPoller',
+          `Poll tick failed unexpectedly: ${toErrorMessage(err)}`,
+        );
       }
-    }, OUTPUT_POLL_INTERVAL_MS);
+    }
+    // Null the controller so reconcile() can start a fresh loop if processes
+    // were registered while this loop was winding down after an abort.
+    // dispose() sets loopController = null before this runs, so the guard
+    // evaluates false and reconcile() is not called during teardown.
+    if (this.loopController?.signal === signal) {
+      this.loopController = null;
+      this.reconcile();
+    }
   }
 
   private async pollProcessOutputs(): Promise<void> {
