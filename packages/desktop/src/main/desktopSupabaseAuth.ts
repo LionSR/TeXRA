@@ -122,7 +122,11 @@ export function createDesktopAuthCallbackState(
     },
     matchesPendingNonce: (nonce: string | undefined) => {
       if (!nonce || !pendingState) return false;
-      if (isPendingOAuthStateExpired(pendingState)) return false;
+      if (isPendingOAuthStateExpired(pendingState)) {
+        pendingState = null;
+        void persistPendingState(null).catch(() => {});
+        return false;
+      }
       return pendingState.nonce === nonce;
     },
     async clearAwaitingCallback() {
@@ -225,6 +229,7 @@ export function createDesktopSupabaseAuth(
         const callbackUri = getAuthCallbackUri(TEXRA_PROTOCOL);
         const sep = callbackUri.includes('?') ? '&' : '?';
         const redirectTo = `${callbackUri}${sep}app_nonce=${nonce}`;
+        await callbackState.beginAuthAttempt(nonce);
         const { data, error } = await oauthClient.auth.signInWithOAuth({
           provider,
           options: { redirectTo },
@@ -235,7 +240,6 @@ export function createDesktopSupabaseAuth(
           );
         }
 
-        await callbackState.beginAuthAttempt(nonce);
         await options.openExternalUrl(data.url);
         await options.showInfoMessage?.(
           'Complete sign-in in your browser. TeXRA will update when the browser returns to the desktop app.',

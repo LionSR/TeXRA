@@ -5,10 +5,14 @@ import * as agentRegistry from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { setServerSideKeyService } from '@auth/serverKeys';
-import { createDesktopProtocolCallbackRouter } from '@desktop/main/desktopProtocolCallbacks';
+import {
+  createDesktopProtocolCallbackRouter,
+  parseDesktopProtocolCallback,
+} from '@desktop/main/desktopProtocolCallbacks';
 import {
   createDesktopAuthCallbackState,
   createDesktopSupabaseAuth,
+  type DesktopAuthCallbackState,
   type DesktopOAuthClient,
 } from '@desktop/main/desktopSupabaseAuth';
 import { buildProfileMessage } from '@shared/settingsView/handlers/profileHandlers';
@@ -104,7 +108,8 @@ function authCallbackUrl(input: {
 function nonceFor(oauthClient: ReturnType<typeof createOAuthClient>): string {
   const call = oauthClient.auth.signInWithOAuth.mock.calls.at(-1)?.[0];
   const redirectTo = call?.options?.redirectTo ?? '';
-  return new URL(redirectTo).searchParams.get('app_nonce') ?? '';
+  const callback = parseDesktopProtocolCallback(redirectTo);
+  return new URLSearchParams(callback?.query).get('app_nonce') ?? '';
 }
 
 function createDeferred<T>() {
@@ -169,6 +174,49 @@ describe('desktop Supabase auth', () => {
     expect(openExternalUrl).toHaveBeenCalledWith(
       'https://auth.example.test/start',
     );
+    auth.dispose();
+  });
+
+  it('persists the nonce before sending it to Supabase', async () => {
+    const events: string[] = [];
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const callbackState: DesktopAuthCallbackState = {
+      hasPendingSignIn: vi.fn(() => false),
+      beginAuthAttempt: vi.fn(async () => {
+        events.push('begin');
+      }),
+      matchesPendingNonce: vi.fn(() => false),
+      clearAwaitingCallback: vi.fn(async () => {
+        events.push('clear');
+      }),
+    };
+    const oauthClient: DesktopOAuthClient = {
+      auth: {
+        signInWithOAuth: vi.fn(async () => {
+          events.push('oauth');
+          return {
+            data: { url: 'https://auth.example.test/start' },
+            error: null,
+          };
+        }),
+      },
+    };
+    const openExternalUrl = vi.fn(async () => {
+      events.push('open');
+    });
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient,
+      callbackState,
+      secrets: createSecrets(),
+      openExternalUrl,
+    });
+
+    await auth.signIn();
+
+    expect(events).toEqual(['begin', 'oauth', 'open']);
     auth.dispose();
   });
 
@@ -398,6 +446,26 @@ describe('desktop Supabase auth', () => {
       expect(expiredCallbackState.hasPendingSignIn()).toBe(false);
       expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
       recreatedAuth.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears expired pending state when matching a nonce directly', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
+      const stateStore = createStateStore();
+      const callbackState = createDesktopAuthCallbackState(stateStore);
+
+      await callbackState.beginAuthAttempt('attempt-nonce');
+      vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+
+      expect(callbackState.matchesPendingNonce('attempt-nonce')).toBe(false);
+      expect(callbackState.hasPendingSignIn()).toBe(false);
+      expect(
+        createDesktopAuthCallbackState(stateStore).hasPendingSignIn(),
+      ).toBe(false);
     } finally {
       vi.useRealTimers();
     }
