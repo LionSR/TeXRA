@@ -64,7 +64,6 @@ export function getModelProviderDecorator(provider: string): ProviderDecorator {
 
 export interface AgentDecorator {
   icon: string;
-  unicode: string;
   label: string;
   hint?: string;
 }
@@ -73,20 +72,18 @@ export const AGENT_DECORATORS = {
   properties: {
     remote: {
       icon: 'cloud',
-      unicode: '☁',
       label: 'Remote',
       hint: 'Remote agent: Prompts loaded from cloud',
     },
     custom: {
       icon: 'account',
-      unicode: '★',
       label: 'Custom',
       hint: 'Custom agent: User-defined in your agents directory',
     },
   },
   agentCategories: {
-    workflow: { icon: 'symbol-method', unicode: '▷', label: 'Workflow' },
-    toolUse: { icon: 'tools', unicode: '🔧', label: 'Tool Use' },
+    workflow: { icon: 'symbol-method', label: 'Workflow' },
+    toolUse: { icon: 'tools', label: 'Tool Use' },
   },
 } as const;
 
