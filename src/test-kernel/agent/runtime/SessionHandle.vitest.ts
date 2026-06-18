@@ -5,9 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { getActiveFlushers } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
+import { AgentProposalCoordinator } from '@agent/runtime/coordinators/AgentProposalCoordinator';
+import { PlanApprovalCoordinator } from '@agent/runtime/coordinators/PlanApprovalCoordinator';
+import { RetryRequestCoordinatorImpl } from '@agent/runtime/coordinators/RetryRequestCoordinator';
 import {
   createRunContext,
   withRunContext,
@@ -23,7 +23,7 @@ import {
   executionRegistry,
 } from '@agent/runtime/executionRegistry';
 import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/coordinators/runCoordinators';
 import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 

@@ -10,7 +10,7 @@ import {
   FileInteractionState,
   WorkPlanState,
 } from '@agent/core/execution/AgentWorkspaceState';
-import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
+import { PlanApprovalCoordinator } from '@agent/runtime/coordinators/PlanApprovalCoordinator';
 import { type RunCoordinators } from '@agent/runtime/RunContext';
 import { withToolEnvironment } from '@agent/toolUse/ToolFileInteractionContext';
 import { planSummaryLine, type Plan, type StreamTabId } from '@shared/schemas';

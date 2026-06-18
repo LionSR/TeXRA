@@ -19,7 +19,7 @@ const coordinatorMocks = vi.hoisted(() => ({
   waitForRetry: vi.fn(),
 }));
 
-vi.mock('@agent/runtime/runCoordinators', () => ({
+vi.mock('@agent/runtime/coordinators/runCoordinators', () => ({
   runCoordinatorBridge: {
     waitForRetry: coordinatorMocks.waitForRetry,
   },

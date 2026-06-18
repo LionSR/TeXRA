@@ -10,9 +10,9 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
+import { AgentProposalCoordinator } from '@agent/runtime/coordinators/AgentProposalCoordinator';
+import { PlanApprovalCoordinator } from '@agent/runtime/coordinators/PlanApprovalCoordinator';
+import { RetryRequestCoordinatorImpl } from '@agent/runtime/coordinators/RetryRequestCoordinator';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import {
   SessionHandle,

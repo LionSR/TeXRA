@@ -4,9 +4,9 @@ import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
-import type { AgentProposalCoordinator } from './AgentProposalCoordinator';
-import type { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
-import type { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
+import type { AgentProposalCoordinator } from './coordinators/AgentProposalCoordinator';
+import type { PlanApprovalCoordinator } from './coordinators/PlanApprovalCoordinator';
+import type { RetryRequestCoordinatorImpl } from './coordinators/RetryRequestCoordinator';
 import type { SessionHandle } from './SessionHandle';
 
 export interface RunCoordinators {

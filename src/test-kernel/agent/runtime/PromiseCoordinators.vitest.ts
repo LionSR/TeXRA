@@ -6,7 +6,7 @@ import { describe, it } from 'vitest';
 
 // Local imports
 import { type AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
+import { PlanApprovalCoordinator } from '@agent/runtime/coordinators/PlanApprovalCoordinator';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { Plan } from '@shared/schemas';

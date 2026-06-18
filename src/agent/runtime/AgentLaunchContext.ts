@@ -38,9 +38,9 @@ import {
 } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
-import { AgentProposalCoordinator } from './AgentProposalCoordinator';
-import { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
-import { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
+import { AgentProposalCoordinator } from './coordinators/AgentProposalCoordinator';
+import { PlanApprovalCoordinator } from './coordinators/PlanApprovalCoordinator';
+import { RetryRequestCoordinatorImpl } from './coordinators/RetryRequestCoordinator';
 import {
   createRunContext,
   withRunContext,

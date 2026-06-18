@@ -13,7 +13,7 @@
 // it returns a typed Promise<ToolEditApprovalResult>, not a fire-and-forget
 // event).
 
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/coordinators/runCoordinators';
 import {
   approvalPromptAllowed,
   humanInputDenialFeedback,

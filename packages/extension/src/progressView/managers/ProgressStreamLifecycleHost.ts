@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/coordinators/runCoordinators';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';

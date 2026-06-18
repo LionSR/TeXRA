@@ -11,9 +11,9 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
-import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
+import { AgentProposalCoordinator } from '@agent/runtime/coordinators/AgentProposalCoordinator';
+import { PlanApprovalCoordinator } from '@agent/runtime/coordinators/PlanApprovalCoordinator';
+import { RetryRequestCoordinatorImpl } from '@agent/runtime/coordinators/RetryRequestCoordinator';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/executionRegistry';

@@ -1,4 +1,4 @@
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/coordinators/runCoordinators';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 import { handleProgressViewBashApprovalAction } from '@tools/approval/bashApproval';

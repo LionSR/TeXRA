@@ -5,7 +5,7 @@ import { StatusCodes } from 'http-status-codes';
 import { Node, type NonIterableObject } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { type RetryResult } from '@agent/runtime/RetryRequestCoordinator';
+import { type RetryResult } from '@agent/runtime/coordinators/RetryRequestCoordinator';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';

@@ -3,15 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
+import { AgentProposalCoordinator } from '@agent/runtime/coordinators/AgentProposalCoordinator';
 import {
   AgentExecutionHandle,
   executionRegistry,
 } from '@agent/runtime/executionRegistry';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/coordinators/runCoordinators';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
-import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
+import { PlanApprovalCoordinator } from '@agent/runtime/coordinators/PlanApprovalCoordinator';
+import { RetryRequestCoordinatorImpl } from '@agent/runtime/coordinators/RetryRequestCoordinator';
 import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';

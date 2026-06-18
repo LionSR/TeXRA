@@ -11,7 +11,7 @@ import { ProgressWorkflowActionsController } from '@controllers/progressView/Pro
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/coordinators/runCoordinators';
 import {
   validateExecutionRequest,
   type ExecutionRequest,

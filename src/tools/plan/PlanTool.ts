@@ -18,7 +18,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import type { WorkPlanState } from '@agent/core/execution/AgentWorkspaceState';
-import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
+import type { PlanApprovalResult } from '@agent/runtime/coordinators/PlanApprovalCoordinator';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import type { CurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';

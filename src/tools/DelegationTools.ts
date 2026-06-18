@@ -21,7 +21,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
+import type { ProposalResult } from '@agent/runtime/coordinators/AgentProposalCoordinator';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
   getAgentFlowErrorResult,
