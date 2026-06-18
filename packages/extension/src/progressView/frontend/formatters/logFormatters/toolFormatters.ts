@@ -197,7 +197,7 @@ export function formatToolUseTemplate(
       : null;
 
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration"><wa-icon library="texra" name="reply" aria-hidden="true"></wa-icon> Setup</span>` : nothing}`;
+  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration" role="button" tabindex="0"><wa-icon library="texra" name="reply" aria-hidden="true"></wa-icon> Setup</span>` : nothing}`;
 
   // prettier-ignore
   return html`<details class=${classMap({
