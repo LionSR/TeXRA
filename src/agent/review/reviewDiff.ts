@@ -19,6 +19,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
+import { extendEnvPath } from '@utils/system/platformPaths';
 
 import { normalizeReviewFilePath } from './reviewIssues';
 
@@ -73,7 +74,14 @@ export type CollectReviewDiffResult =
   | { ok: false; reason: string };
 
 function makeGit(cwd: string): SimpleGit {
-  return simpleGit(cwd, { timeout: { block: GIT_TIMEOUT_MS } });
+  // GUI-launched hosts (VS Code from the Dock, the Electron desktop app) start
+  // with a minimal PATH that omits Homebrew / /usr/local/bin, so `git` may be
+  // unresolvable. executeCommand previously ran git with extendEnvPath();
+  // preserve that here so simple-git can still locate the binary.
+  return simpleGit(cwd, { timeout: { block: GIT_TIMEOUT_MS } }).env({
+    ...process.env,
+    PATH: extendEnvPath(),
+  });
 }
 
 /** Run a git command, returning stdout on success and null on error. */
