@@ -19,7 +19,7 @@ export function getPathSegments(input: string): string[] {
   return input.trim().replace(/\\/g, '/').split('/').filter(Boolean);
 }
 
-/** Convert a path to POSIX style (forward slashes, collapsed separators). */
+/** Convert a path to POSIX style (forward slashes, collapsed separators, resolved `.` and `..`). */
 export function toPosixPath(relativePath: string): string {
   if (!relativePath || relativePath === '.') {
     return '.';
