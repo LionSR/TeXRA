@@ -386,6 +386,9 @@ interface WaIconOptions {
   readonly className?: string;
   readonly variant?: 'solid' | 'regular';
   readonly label?: string;
+  // Native `title` tooltip. Purely visual — a decorative icon with a hover
+  // tooltip stays `aria-hidden` (only `label` exposes it to assistive tech).
+  readonly title?: string;
 }
 
 // Lit template for <wa-icon>. Decorative icons stay hidden from assistive
@@ -401,6 +404,7 @@ export function waIcon(
     slot=${ifDefined(options.slot)}
     class=${ifDefined(options.className)}
     label=${ifDefined(options.label)}
+    title=${ifDefined(options.title)}
     aria-hidden=${ifDefined(options.label == null ? 'true' : undefined)}
   ></wa-icon>`;
 }
