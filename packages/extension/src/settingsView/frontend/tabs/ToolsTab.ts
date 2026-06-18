@@ -244,8 +244,7 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         <div class="category-header">
-          ${waIcon('shield')}
-          Approval &amp; Safety
+          ${waIcon('shield')} Approval &amp; Safety
         </div>
 
         <div class="setting-block">
@@ -265,8 +264,7 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         <div class="category-header">
-          ${waIcon('desktop-download')}
-          Desktop Diagnostics
+          ${waIcon('desktop-download')} Desktop Diagnostics
         </div>
         <div class="desktop-settings">
           <p class="desktop-settings-title">Native crash reporting</p>
@@ -374,14 +372,12 @@ export class ToolsTab extends LitElement {
           </svg>
           <div class="tools-health-labels">
             <span class="tools-summary-stat tools-stat-available">
-              ${waIcon('check')}
-              ${available} available
+              ${waIcon('check')} ${available} available
             </span>
             ${missing > 0
               ? html`
                   <span class="tools-summary-stat tools-stat-missing">
-                    ${waIcon('warning')}
-                    ${missing} need setup
+                    ${waIcon('warning')} ${missing} need setup
                   </span>
                 `
               : nothing}
@@ -436,8 +432,7 @@ export class ToolsTab extends LitElement {
               title="Re-check tool availability"
               @click=${this.handleRecheck}
             >
-              ${waIcon('refresh', { slot: 'start' })}
-              Re-check
+              ${waIcon('refresh', { slot: 'start' })} Re-check
             </wa-button>
           </div>
         </div>

@@ -67,8 +67,7 @@ export class MemoryTab extends LitElement {
               size="small"
               @click=${this.handleRefresh}
             >
-              ${waIcon('rotate-right', { slot: 'start' })}
-              Refresh
+              ${waIcon('rotate-right', { slot: 'start' })} Refresh
             </wa-button>
             <wa-button
               appearance="outlined"
@@ -77,8 +76,7 @@ export class MemoryTab extends LitElement {
               title="Open memory folder in file explorer"
               @click=${this.handleOpenFolder}
             >
-              ${waIcon('folder-open', { slot: 'start' })}
-              Open Folder
+              ${waIcon('folder-open', { slot: 'start' })} Open Folder
             </wa-button>
           </div>
         </div>

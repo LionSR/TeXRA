@@ -276,8 +276,7 @@ export class GitTab extends LitElement {
                           size="small"
                           @click=${this.handleRemoveGitHubToken}
                         >
-                          ${waIcon('trash', { slot: 'start' })}
-                          Remove
+                          ${waIcon('trash', { slot: 'start' })} Remove
                         </wa-button>`
                       : nothing}
                     <wa-button
@@ -286,8 +285,7 @@ export class GitTab extends LitElement {
                       size="small"
                       @click=${this.handleOpenGitHubTokenUrl}
                     >
-                      ${waIcon('github', { slot: 'start' })}
-                      Create on GitHub…
+                      ${waIcon('github', { slot: 'start' })} Create on GitHub…
                     </wa-button>
                   </span>
                 </div>
@@ -388,8 +386,7 @@ export class GitTab extends LitElement {
                           @click=${() =>
                             this.handleUnsubscribePR(subscription.key)}
                         >
-                          ${waIcon('debug-stop', { slot: 'start' })}
-                          Stop
+                          ${waIcon('debug-stop', { slot: 'start' })} Stop
                         </wa-button>
                       </li>
                     `,

@@ -240,15 +240,13 @@ export class AgentsTab extends LitElement {
             @wa-tab-show=${this.handleSubTabShow}
           >
             <wa-tab panel="workflow">
-              ${waIcon('symbol-method')}
-              Workflow
+              ${waIcon('symbol-method')} Workflow
               <span class="agents-sub-tab-count"
                 >(${this.workflowAgents.length})</span
               >
             </wa-tab>
             <wa-tab panel="toolUse">
-              ${waIcon('tools')}
-              Tool Use
+              ${waIcon('tools')} Tool Use
               <span class="agents-sub-tab-count"
                 >(${this.toolUseAgents.length})</span
               >
@@ -262,8 +260,7 @@ export class AgentsTab extends LitElement {
               title="Save current agent configuration as a team"
               @click=${this.handleSaveTeam}
             >
-              ${waIcon('save', { slot: 'start' })}
-              Save Team
+              ${waIcon('save', { slot: 'start' })} Save Team
             </wa-button>
             ${this.desktopHost
               ? nothing
@@ -275,8 +272,7 @@ export class AgentsTab extends LitElement {
                     title="Create a new agent from a blank YAML template"
                     @click=${this.handleCreateFromTemplate}
                   >
-                    ${waIcon('new-file', { slot: 'start' })}
-                    From Template
+                    ${waIcon('new-file', { slot: 'start' })} From Template
                   </wa-button>
                   <wa-button
                     class="agents-create-btn"
@@ -286,8 +282,7 @@ export class AgentsTab extends LitElement {
                     title="Create a new agent with AI"
                     @click=${this.handleCreateAgent}
                   >
-                    ${waIcon('add', { slot: 'start' })}
-                    New Agent
+                    ${waIcon('add', { slot: 'start' })} New Agent
                   </wa-button>
                 `}
           </div>

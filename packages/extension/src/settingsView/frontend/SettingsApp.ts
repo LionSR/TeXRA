@@ -785,8 +785,7 @@ export class SettingsApp extends SettingsAppBase {
               title="Sign out"
               @click=${this.handleSignOut}
             >
-              ${waIcon('xmark', { slot: 'start' })}
-              Sign out
+              ${waIcon('xmark', { slot: 'start' })} Sign out
             </wa-button>
           </div>
         </div>
@@ -808,8 +807,7 @@ export class SettingsApp extends SettingsAppBase {
             title="Set provider API key"
             @click=${this.handleSetDefaultProviderKey}
           >
-            ${waIcon('key', { slot: 'start' })}
-            Set API key
+            ${waIcon('key', { slot: 'start' })} Set API key
           </wa-button>
           <wa-button
             class="settings-header-auth-button"
@@ -819,8 +817,7 @@ export class SettingsApp extends SettingsAppBase {
             title="Sign in"
             @click=${this.handleSignIn}
           >
-            ${waIcon('user', { slot: 'start' })}
-            Sign in
+            ${waIcon('user', { slot: 'start' })} Sign in
           </wa-button>
         </div>
       </div>

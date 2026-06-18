@@ -417,8 +417,7 @@ export class ToolCard extends LitElement {
     if (!this.item.authNote) return nothing;
     return html`
       <span class="tool-auth-note">
-        ${waIcon('key')}
-        ${this.item.authNote}
+        ${waIcon('key')} ${this.item.authNote}
       </span>
     `;
   }

@@ -100,8 +100,7 @@ export class ModelsTab extends LitElement {
               size="small"
               @click=${this.handleScrollToApiConfig}
             >
-              ${waIcon('key', { slot: 'start' })}
-              Jump to API Configuration
+              ${waIcon('key', { slot: 'start' })} Jump to API Configuration
             </wa-button>
           </div>
         </div>
