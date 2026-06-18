@@ -16,6 +16,7 @@ import type { LogMessageData } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { isObject } from '@utils/core';
+import { truncateSummary } from '@utils/text/stringUtils';
 
 // Local imports - Lit template utilities
 import {
@@ -51,7 +52,6 @@ import {
   getToolTimeoutMs,
   joinWithSeparator,
   truncateHeaderSummary,
-  truncatePrompt,
   EXECUTIONS_DEFAULT_ACTION,
 } from './toolFormatters/helpers';
 import { dispatchToolSections } from './toolFormatters/toolSections';
@@ -108,13 +108,13 @@ export function formatToolUseTemplate(
       isObject(input) &&
       typeof input.prompt === 'string'
     ) {
-      headerSummary = truncatePrompt(input.prompt, 60);
+      headerSummary = truncateSummary(input.prompt, 60);
     } else if (
       toolName === 'bash' &&
       isObject(input) &&
       typeof input.command === 'string'
     ) {
-      headerSummary = truncatePrompt(input.command, 60);
+      headerSummary = truncateSummary(input.command, 60);
     }
   }
   headerSummary = truncateHeaderSummary(headerSummary, 120);
