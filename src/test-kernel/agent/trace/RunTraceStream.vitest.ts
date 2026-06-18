@@ -8,6 +8,7 @@ import {
   StreamLogStore,
 } from '@transcript';
 import {
+  emitToolUseCard,
   endToolUseCard,
   startToolUseCard,
   type AgentTrace,
@@ -225,6 +226,30 @@ describe('AgentTrace stream output', () => {
 });
 
 describe('tool-use card groupId resolution', () => {
+  it('redacts set_api_key input from fast-tool transcript persistence', () => {
+    withStore((store, logger) => {
+      const rawInput = { provider: 'openai', key: 'sk-secret-value' };
+      const ref = emitToolUseCard(logger, {
+        toolName: 'set_api_key',
+        input: rawInput,
+        summary: 'Stored OpenAI API key',
+        output: 'Stored API key for provider "openai".',
+        status: 'completed',
+      });
+
+      const entries = store.get('stream')?.getRange(0) ?? [];
+      const toolEntry = entries.find((e) => e.id === ref.logId);
+
+      expect(toolEntry?.data).toMatchObject({
+        toolName: 'set_api_key',
+        input: { provider: 'openai', key: '[redacted]' },
+        status: 'completed',
+      });
+      expect(JSON.stringify(toolEntry?.data)).not.toContain('sk-secret-value');
+      expect(rawInput.key).toBe('sk-secret-value');
+    });
+  });
+
   it('reuses the captured groupId when endToolUseCard is called with no explicit stage', async () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
