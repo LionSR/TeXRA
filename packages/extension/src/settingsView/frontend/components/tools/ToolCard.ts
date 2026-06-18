@@ -334,8 +334,7 @@ export class ToolCard extends LitElement {
                   @click=${this.handleRunInstallCommand}
                   title=${this.item.installCommand}
                 >
-                  ${waIcon('terminal', { slot: 'start', variant: 'solid' })}
-                  Install in Terminal
+                  ${waIcon('terminal', { slot: 'start' })} Install in Terminal
                 </wa-button>
               `
             : nothing}
@@ -348,11 +347,7 @@ export class ToolCard extends LitElement {
                   @click=${this.handleRunAuthCommand}
                   title=${this.item.authCommand}
                 >
-                  ${waIcon('right-to-bracket', {
-                    slot: 'start',
-                    variant: 'solid',
-                  })}
-                  Sign in
+                  ${waIcon('right-to-bracket', { slot: 'start' })} Sign in
                 </wa-button>
               `
             : nothing}
@@ -364,11 +359,8 @@ export class ToolCard extends LitElement {
                   size="small"
                   @click=${this.handleInstallExtension}
                 >
-                  ${waIcon('cloud-arrow-down', {
-                    slot: 'start',
-                    variant: 'solid',
-                  })}
-                  Install Extension
+                  ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
+                  Extension
                 </wa-button>
               `
             : nothing}
@@ -380,10 +372,7 @@ export class ToolCard extends LitElement {
                   size="small"
                   @click=${this.handleInstallUrl}
                 >
-                  ${waIcon('arrow-up-right-from-square', {
-                    slot: 'start',
-                    variant: 'solid',
-                  })}
+                  ${waIcon('arrow-up-right-from-square', { slot: 'start' })}
                   Open Install Page
                 </wa-button>
               `
