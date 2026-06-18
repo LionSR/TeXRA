@@ -558,11 +558,10 @@ export class TaskGroupList extends LitElement {
       `;
     }
 
-    if (
-      !this.terminal &&
-      this.messages.length === 0 &&
-      this.groups.length === 0
-    ) {
+    // Pre-output placeholder, including terminal-mode (process-agent) streams:
+    // with no messages the terminal buffer is empty and would render a blank
+    // <pre>, so show the same "Run is starting" / idle text instead.
+    if (this.messages.length === 0 && this.groups.length === 0) {
       const active = this.streamStatus
         ? ACTIVE_STREAM_STATUSES.has(this.streamStatus)
         : false;
