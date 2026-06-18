@@ -25,14 +25,16 @@ import {
 } from '@agent/output/compileFailureRoundContext';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { tryOperation } from '@agent/output/outputOperations';
-import type {
-  CompileFailure,
-  CompileResult,
-  RoundOutput,
+import {
+  MESSAGE_TYPES,
+  type AgentFileLocation,
+  type CompileFailure,
+  type CompileResult,
+  type FileLocation,
+  type RoundOutput,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
-import type { AgentFileLocation, FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -107,6 +109,7 @@ export class OutputNode<C = unknown> extends Node<
           logger,
           level: 'warn' as const,
           label: 'XML structure',
+          messageType: MESSAGE_TYPES.DEFAULT,
           recover: () => undefined,
         },
       );
@@ -124,6 +127,7 @@ export class OutputNode<C = unknown> extends Node<
           logger,
           level: 'warn' as const,
           label: 'Output processing',
+          messageType: MESSAGE_TYPES.DEFAULT,
           recover: () => undefined,
         },
       );
@@ -145,6 +149,7 @@ export class OutputNode<C = unknown> extends Node<
             logger,
             level: 'warn' as const,
             label: 'Latexdiff',
+            messageType: MESSAGE_TYPES.DEFAULT,
             recover: () => undefined,
           },
         );
@@ -170,6 +175,7 @@ export class OutputNode<C = unknown> extends Node<
             logger,
             level: 'warn' as const,
             label: 'Compile check',
+            messageType: MESSAGE_TYPES.DEFAULT,
             recover: () => undefined,
           },
         );
@@ -340,6 +346,7 @@ export class OutputNode<C = unknown> extends Node<
           logger,
           level: 'warn' as const,
           label: 'Validate expected outputs',
+          messageType: MESSAGE_TYPES.DEFAULT,
           recover: () => undefined,
         },
       );
