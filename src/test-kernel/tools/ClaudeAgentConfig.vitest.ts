@@ -2,7 +2,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 // Local imports - model
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
@@ -10,8 +10,8 @@ import type { ExecResult } from '@shared/schemas/opResults';
 
 let secretStore: Map<string, string>;
 let cleanupDirs: string[];
-let executeCommandSyncMock: ReturnType<
-  typeof vi.fn<[readonly [string, ...string[]], object?], ExecResult>
+let executeCommandSyncMock: Mock<
+  (command: readonly [string, ...string[]], options?: object) => ExecResult
 >;
 let homedirMock: string;
 
