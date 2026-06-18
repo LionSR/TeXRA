@@ -37,6 +37,7 @@ export interface FileSystemProvider {
     length: number,
   ): Promise<Uint8Array>;
   writeFile(path: string, content: Uint8Array): Promise<void>;
+  appendFile(path: string, content: Uint8Array): Promise<void>;
   delete(path: string, options?: { recursive?: boolean }): Promise<void>;
   createDirectory(path: string): Promise<void>;
   readDirectory(path: string): Promise<[string, number][]>;

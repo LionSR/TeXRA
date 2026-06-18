@@ -6,12 +6,21 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 
+import { isFileNotFoundError } from '@common/errors';
 import type {
   FileSystemProvider,
   FileStat,
 } from '@platform/interfaces/filesystem';
 
 export class VscodeFileSystem implements FileSystemProvider {
+  /**
+   * Per-path append chains. vscode.workspace.fs has no atomic append, so
+   * appendFile() does read-modify-write; serializing per path stops concurrent
+   * appends to the same file from racing (each reading the same bytes, the last
+   * write clobbering the others).
+   */
+  private readonly appendChains = new Map<string, Promise<void>>();
+
   async stat(target: string): Promise<FileStat> {
     const stat = await vscode.workspace.fs.stat(vscode.Uri.file(target));
     return {
@@ -47,6 +56,43 @@ export class VscodeFileSystem implements FileSystemProvider {
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
     await vscode.workspace.fs.writeFile(vscode.Uri.file(target), content);
+  }
+
+  async appendFile(target: string, content: Uint8Array): Promise<void> {
+    const prior = this.appendChains.get(target) ?? Promise.resolve();
+    const next = prior
+      .catch(() => {})
+      .then(() => this.appendFileUnsafe(target, content));
+    this.appendChains.set(target, next);
+    try {
+      await next;
+    } finally {
+      if (this.appendChains.get(target) === next) {
+        this.appendChains.delete(target);
+      }
+    }
+  }
+
+  private async appendFileUnsafe(
+    target: string,
+    content: Uint8Array,
+  ): Promise<void> {
+    // vscode.workspace.fs has no native append, so read-modify-write through
+    // the same virtual FS keeps appends on the one authority writeFile uses
+    // (a remote/web workspace is not the local node disk). appendFile()
+    // serializes these per path so the read-modify-write can't race.
+    const uri = vscode.Uri.file(target);
+    let existing: Uint8Array;
+    try {
+      existing = await vscode.workspace.fs.readFile(uri);
+    } catch (error) {
+      if (!isFileNotFoundError(error)) throw error;
+      existing = new Uint8Array(0);
+    }
+    const merged = new Uint8Array(existing.length + content.length);
+    merged.set(existing, 0);
+    merged.set(content, existing.length);
+    await vscode.workspace.fs.writeFile(uri, merged);
   }
 
   async delete(

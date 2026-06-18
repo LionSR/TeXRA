@@ -189,6 +189,7 @@ export class ModelSelectionList extends LitElement {
         class="reasoning-level-select"
         .value=${currentValue}
         title=${title}
+        ?disabled=${model.disabled}
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
       >
         <wa-option value=""> ${defaultLabel} </wa-option>
@@ -243,6 +244,7 @@ export class ModelSelectionList extends LitElement {
       <div class="model-row${unavailableClass}">
         <wa-checkbox
           ?checked=${model.enabled}
+          ?disabled=${!available && !model.enabled}
           @change=${(e: Event) => {
             const checked = (e.target as WaCheckbox).checked;
             this.dispatchEvent(
@@ -354,7 +356,6 @@ export class ModelSelectionList extends LitElement {
 
   private renderDeprecatedToggle(group: ProviderGroup): TemplateResult {
     const isOpen = this.expandedDeprecated.has(group.provider);
-    const chevron = isOpen ? '\u25BE' : '\u25B8';
 
     return html`
       <wa-button
@@ -363,7 +364,15 @@ export class ModelSelectionList extends LitElement {
         size="small"
         @click=${() => this.toggleDeprecated(group.provider)}
       >
-        ${chevron} ${group.deprecated.length} deprecated
+        <wa-icon
+          library="texra"
+          name="chevron-right"
+          class=${classMap({
+            'provider-group-chevron': true,
+            expanded: isOpen,
+          })}
+        ></wa-icon>
+        ${group.deprecated.length} deprecated
       </wa-button>
       ${isOpen
         ? html`<div class="deprecated-models">
