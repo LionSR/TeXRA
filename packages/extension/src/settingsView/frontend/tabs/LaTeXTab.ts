@@ -245,11 +245,9 @@ export class LaTeXTab extends LitElement {
     return html`
       <div class="dependency-card">
         <div class="dependency-row">
-          <wa-icon
-            library="texra"
-            name=${installed ? 'check' : 'warning'}
-            class="dependency-icon ${installed ? 'installed' : 'missing'}"
-          ></wa-icon>
+          ${waIcon(installed ? 'check' : 'warning', {
+            className: `dependency-icon ${installed ? 'installed' : 'missing'}`,
+          })}
           <div class="dependency-info">
             <div class="dependency-name">${dep.name}</div>
             <div class="dependency-description">
@@ -395,11 +393,9 @@ export class LaTeXTab extends LitElement {
     const isSet = this.settings[info.key];
     return html`
       <div class="setting-card">
-        <wa-icon
-          library="texra"
-          name=${isSet ? 'check' : 'warning'}
-          class="setting-status-icon ${isSet ? 'is-set' : 'not-set'}"
-        ></wa-icon>
+        ${waIcon(isSet ? 'check' : 'warning', {
+          className: `setting-status-icon ${isSet ? 'is-set' : 'not-set'}`,
+        })}
         <div class="setting-info">
           <div class="setting-name">${info.name}</div>
           <div class="setting-config-key">${info.configKey}</div>
@@ -489,13 +485,11 @@ export class LaTeXTab extends LitElement {
         ${waIcon('comment-discussion')} Inline Criticism
       </div>
       <div class="setting-card">
-        <wa-icon
-          library="texra"
-          name=${this.inlineCriticismEnabled ? 'check' : 'circle-slash'}
-          class="setting-status-icon ${this.inlineCriticismEnabled
-            ? 'is-set'
-            : 'not-set'}"
-        ></wa-icon>
+        ${waIcon(this.inlineCriticismEnabled ? 'check' : 'circle-slash', {
+          className: `setting-status-icon ${
+            this.inlineCriticismEnabled ? 'is-set' : 'not-set'
+          }`,
+        })}
         <div class="setting-info">
           <div class="setting-name">Surface \\criticize annotations</div>
           <div class="setting-description">
@@ -641,11 +635,9 @@ export class LaTeXTab extends LitElement {
     const isCustom = opts.currentValue !== undefined;
     return html`
       <div class="setting-card">
-        <wa-icon
-          library="texra"
-          name=${effective ? 'check' : 'circle-slash'}
-          class="setting-status-icon ${effective ? 'is-set' : 'not-set'}"
-        ></wa-icon>
+        ${waIcon(effective ? 'check' : 'circle-slash', {
+          className: `setting-status-icon ${effective ? 'is-set' : 'not-set'}`,
+        })}
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>
@@ -671,12 +663,10 @@ export class LaTeXTab extends LitElement {
    * Red is reserved for booleans that are Off, where it carries meaning.
    */
   private renderSettingStatusIcon(isCustom: boolean): TemplateResult {
-    return html`<wa-icon
-      library="texra"
-      name=${isCustom ? 'edit' : 'gear'}
-      class="setting-status-icon ${isCustom ? 'is-set' : 'is-default'}"
-      title=${isCustom ? 'Customized' : 'Using default'}
-    ></wa-icon>`;
+    return waIcon(isCustom ? 'edit' : 'gear', {
+      className: `setting-status-icon ${isCustom ? 'is-set' : 'is-default'}`,
+      title: isCustom ? 'Customized' : 'Using default',
+    });
   }
 
   /** Reset-to-default button shown when a config value has been customized. */
