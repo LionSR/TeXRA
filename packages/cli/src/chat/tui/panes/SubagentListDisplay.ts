@@ -4,6 +4,9 @@ export function childStatusColor(status: string | undefined): string {
   if (!status) return 'green';
   if (status === 'waiting' || status === 'idle') return 'yellow';
   if (isChildExecutionErrorStatus(status)) return 'red';
+  // A user stop is neither success nor error — show it neutral, matching the
+  // progress view / webview (gray), not green (which reads as completed).
+  if (status === 'stopped') return 'gray';
   return 'green';
 }
 

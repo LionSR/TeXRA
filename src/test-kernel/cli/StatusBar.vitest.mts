@@ -498,7 +498,7 @@ describe('CLI StatusBar display model', () => {
       'running',
       'relay',
       'r2',
-      '105k/1M (10%)',
+      '80k/1M (8%)',
       'queued 2',
       '2 sub',
       '1 proc',
@@ -1457,15 +1457,15 @@ describe('CLI StatusBar display model', () => {
       buildStatusBarDisplay({ ...input, width: 80 }).left.map(
         statusBarSegmentText,
       ),
-    ).toContain('105k/1M (10%)');
+    ).toContain('80k/1M (8%)');
 
     // Narrow: the segment degrades to the bare percentage instead of
     // disappearing, keeping context pressure visible.
     const narrow = buildStatusBarDisplay({ ...input, width: 24 }).left.map(
       statusBarSegmentText,
     );
-    expect(narrow).not.toContain('105k/1M (10%)');
-    expect(narrow).toContain('10%');
+    expect(narrow).not.toContain('80k/1M (8%)');
+    expect(narrow).toContain('8%');
   });
 
   it('keeps the exit confirmation visible in very narrow footers', () => {

@@ -1,6 +1,15 @@
-/** Shared types for the latexdiff command group. */
+/** Shared types for latexdiff output discovery and operation building. */
 
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
+
+/**
+ * Minimal progress sink for long-running diff runs. Host-neutral so the core
+ * latexdiff logic stays free of `vscode` — the VS Code command layer passes its
+ * `vscode.Progress<…>`, which structurally satisfies this interface.
+ */
+export interface DiffProgressReporter {
+  report(value: { message?: string; increment?: number }): void;
+}
 
 export interface RunLatexdiffCommandConfig {
   agent: string;

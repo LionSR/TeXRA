@@ -91,11 +91,6 @@ export function getToolTimeoutMs(
   return typeof input.timeout === 'number' ? input.timeout : defaultTimeout;
 }
 
-/** Truncate a prompt string for display in collapsed headers. */
-export function truncatePrompt(text: string, maxLength: number): string {
-  return truncateWithEllipsis(collapseWhitespace(text), maxLength);
-}
-
 /** Truncate tool header text without pulling streamed stdout/stderr into it. */
 export function truncateHeaderSummary(text: string, maxLength: number): string {
   const oneLine = collapseWhitespace(text);
