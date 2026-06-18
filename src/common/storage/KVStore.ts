@@ -65,7 +65,9 @@ function createStorageStore(dir: string): KeyvStoreAdapter {
         dirEnsured = true;
       }
       // Keyv has already run the serializer, so StorageFS receives raw JSON.
-      await StorageFS.write(keyToPath(dir, key), value as string);
+      // Atomic: a torn flow_{id}.json on an unclean exit makes the run fail to
+      // parse on resume and silently restart from scratch (losing applied edits).
+      await StorageFS.writeAtomic(keyToPath(dir, key), value as string);
     },
 
     async delete(key: string): Promise<boolean> {

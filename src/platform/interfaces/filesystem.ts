@@ -37,6 +37,13 @@ export interface FileSystemProvider {
     length: number,
   ): Promise<Uint8Array>;
   writeFile(path: string, content: Uint8Array): Promise<void>;
+  /**
+   * Crash-safe write: stage to a temp file and atomically rename over the
+   * target so a torn/partial file is never observable after an unclean exit.
+   * Used for durable run/flow state; plain `writeFile` remains for workspace
+   * files (where atomic rename would replace a user's symlink).
+   */
+  writeFileAtomic(path: string, content: Uint8Array): Promise<void>;
   appendFile(path: string, content: Uint8Array): Promise<void>;
   delete(path: string, options?: { recursive?: boolean }): Promise<void>;
   createDirectory(path: string): Promise<void>;
