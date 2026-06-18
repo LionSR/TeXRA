@@ -97,6 +97,24 @@ export abstract class BasePromiseCoordinator<
     };
     this.requests.set(id, pending);
 
+    // Start the timeout timer before emitting the show event, matching the
+    // original setTimeout-before-emit ordering so that synchronous work in
+    // show handlers is counted against the caller's timeoutMs budget.
+    let returnPromise: Promise<TResult> = deferred.promise;
+    if (options?.timeoutMs && options.timeoutMs > 0) {
+      const timedPromise = pTimeout(deferred.promise, {
+        milliseconds: options.timeoutMs,
+        fallback: () => {
+          const result = options.onTimeout?.() ?? this.getTimeoutResult();
+          this.resolveRequest(id, result);
+          return result;
+        },
+      });
+      // Store the clear fn so resolveRequest/clearRequest can cancel the timer.
+      pending.cancelTimeout = timedPromise.clear.bind(timedPromise);
+      returnPromise = timedPromise;
+    }
+
     // `showEventName` is a runtime-variable key into ProgressEventPayloads,
     // so TS can't correlate it with `payload`'s type. Cast to the payload
     // the emitter expects for that key set rather than discarding all
@@ -106,19 +124,7 @@ export abstract class BasePromiseCoordinator<
       payload as ProgressEventPayloads[keyof ProgressEventPayloads],
     );
 
-    if (!options?.timeoutMs || options.timeoutMs <= 0) return deferred.promise;
-
-    const timedPromise = pTimeout(deferred.promise, {
-      milliseconds: options.timeoutMs,
-      fallback: () => {
-        const result = options.onTimeout?.() ?? this.getTimeoutResult();
-        this.resolveRequest(id, result);
-        return result;
-      },
-    });
-    // Store the clear fn so resolveRequest/clearRequest can cancel the timer.
-    pending.cancelTimeout = timedPromise.clear.bind(timedPromise);
-    return timedPromise;
+    return returnPromise;
   }
 
   hasPendingRequest(id: string): boolean {
