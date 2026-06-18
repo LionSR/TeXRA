@@ -20,21 +20,13 @@ import {
 } from '../inquiry';
 import {
   AgentProposalSchema,
+  BASH_APPROVAL_ACTIONS,
   PLAN_APPROVAL_ACTIONS,
+  TOOL_EDIT_APPROVAL_ACTIONS,
   USER_QUESTION_ACTIONS,
   UserQuestionAnswersSchema,
 } from '../prompts';
 import { AgentCategoryFilterSchema } from './data';
-
-const TOOL_EDIT_APPROVAL_ACTIONS = [
-  'approve',
-  'reject',
-  'openDiff',
-  'showLatexdiff',
-  'previewProposed',
-] as const;
-
-const BASH_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
 
 const TrimmedStringSchema = z
   .string()
