@@ -23,6 +23,7 @@ import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from '@tools/claudeAgentImport';
+import { hasClaudeCodeOauthToken } from '@tools/claudeAgentConfig';
 import { getGitHubToken } from '@tools/github/githubAuth';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
@@ -591,7 +592,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         platform().secrets,
         'anthropic',
       ).catch(() => (process.env[anthropicApiKeyEnv] ? 'env' : 'none'));
-      const hasOauthToken = !!process.env.CLAUDE_CODE_OAUTH_TOKEN;
+      const hasOauthToken = hasClaudeCodeOauthToken();
       const authBits: string[] = [];
       if (keyOrigin === 'secret') {
         authBits.push(`${anthropicApiKeyEnv} (TeXRA Settings)`);
