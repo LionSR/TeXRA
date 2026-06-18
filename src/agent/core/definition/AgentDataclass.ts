@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import { isNonEmptyString } from '@utils/core';
 import { ToolDefinitionSchema } from '@model';
 import { AgentCategory } from '@shared/schemas/agent';
+import { isNonEmptyString } from '@utils/core';
 
 export { AgentCategory };
 

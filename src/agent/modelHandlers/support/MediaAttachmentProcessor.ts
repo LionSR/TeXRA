@@ -135,7 +135,7 @@ export class MediaAttachmentProcessor {
       this.logger.warn(
         `Audio file ${mediaFile} processed into multiple parts, using only the first.`,
       );
-      mediaData = mediaData[0];
+      mediaData = mediaData.at(0)!;
     }
 
     return { kind: 'audio', mediaType: mimeType, data: mediaData };

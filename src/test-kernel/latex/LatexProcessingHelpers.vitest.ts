@@ -19,8 +19,8 @@ import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 // Local imports - latex
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
-import type { ToolConfig } from '@shared/schemas/toolConfig';
 import type { FileLocation } from '@shared/schemas';
+import type { ToolConfig } from '@shared/schemas/toolConfig';
 import { createExternalLocation } from '@utils/files';
 
 const mocks = vi.hoisted(() => ({
