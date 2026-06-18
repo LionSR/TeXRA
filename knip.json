@@ -4,21 +4,12 @@
   "ignoreBinaries": [".*"],
   "workspaces": {
     ".": {
-      "entry": [
-        "src/test-kernel/**/*.vitest.{ts,mts}",
-        "scripts/**/*.mjs",
-        "vitest.config.mjs"
-      ],
+      "entry": ["src/test-kernel/**/*.vitest.{ts,mts}", "scripts/**/*.mjs"],
       "project": ["src/**/*.ts"],
       "ignore": ["src/platform/index.ts"]
     },
     "packages/extension": {
-      "entry": [
-        "src/extension.ts",
-        "src/**/frontend/index.ts",
-        "esbuild.config.mjs",
-        "vite.config.ts"
-      ],
+      "entry": ["src/extension.ts", "src/**/frontend/index.ts"],
       "project": ["src/**/*.{ts,tsx}"]
     },
     "packages/cli": {
@@ -30,18 +21,13 @@
         "src/main/bootstrap.ts",
         "src/main/index.ts",
         "src/preload/index.ts",
-        "esbuild.main.mjs",
-        "esbuild.preload.mjs",
         "src/renderer/main.ts",
-        "vite.config.ts",
-        "playwright.config.ts",
         "tests/**/*.{ts,tsx}"
       ],
       "project": ["src/**/*.{ts,tsx}"],
       "ignore": ["src/renderer/vite-env.d.ts"]
     },
     "packages/core": {
-      "entry": ["src/index.ts"],
       "project": ["src/**/*.ts"]
     }
   }
