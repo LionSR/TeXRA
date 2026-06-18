@@ -62,6 +62,26 @@ function debugModeEnabled(): boolean {
   return getConfig<boolean>('texra.logger.debugMode', false);
 }
 
+/**
+ * Redact secrets from a tool's recorded input before it is persisted. The
+ * set_api_key tool masks its own user-facing result, but tool.start/tool.end can
+ * carry the raw input — which would write the cleartext provider key to the
+ * on-disk transcript (and reload it via history/restorable state). Keep this in
+ * sync with SetApiKeyTool.name; new secret-bearing tool inputs must extend this
+ * guard.
+ */
+function redactToolInputForLog(toolName: string, input: unknown): unknown {
+  if (
+    toolName === 'set_api_key' &&
+    input !== null &&
+    typeof input === 'object' &&
+    'key' in input
+  ) {
+    return { ...(input as Record<string, unknown>), key: '[redacted]' };
+  }
+  return input;
+}
+
 interface StreamSinkState {
   buffer: string;
   pending: string[];
@@ -197,7 +217,7 @@ export function attachTranscriptRecorder(
           messageType: MESSAGE_TYPES.TOOL_USE,
           data: {
             toolName: event.toolName,
-            input: event.input,
+            input: redactToolInputForLog(event.toolName, event.input),
             status: 'in_progress',
           } satisfies ToolUseLog,
           verbose: debugModeEnabled(),
@@ -206,13 +226,20 @@ export function attachTranscriptRecorder(
 
       case 'tool.end': {
         const result = (event.result ?? {}) as Partial<ToolUseLog>;
+        const redactedResult =
+          typeof result.toolName === 'string'
+            ? {
+                ...result,
+                input: redactToolInputForLog(result.toolName, result.input),
+              }
+            : result;
         // Omit groupId on update — undefined would clobber the canonical
         // value stamped at tool.start (deferred tools never copy the
         // resolved id back into their ref).
         store.update(streamId, event.logId, {
           messageType: MESSAGE_TYPES.TOOL_USE,
           data: {
-            ...result,
+            ...redactedResult,
             status: event.status,
           } as ToolUseLog,
         });
