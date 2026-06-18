@@ -74,6 +74,27 @@ describe('normalizeToolUseData', () => {
     expect(normalized?.headerSummary).toBe('no such file');
   });
 
+  // Backward compat: streams persisted by older versions stored the tool name
+  // under the legacy `tool` key. `ToolUseLogSchema` folds it into `toolName` so
+  // resumed/replayed cards keep tool-specific headers, icons, and file links.
+  it('reads the legacy `tool` field when `toolName` is absent', () => {
+    const normalized = normalizeToolUseData({
+      tool: 'Bash',
+      input: { command: 'ls' },
+      status: 'completed',
+    });
+    expect(normalized?.toolName).toBe('Bash');
+  });
+
+  it('prefers `toolName` over the legacy `tool` field', () => {
+    const normalized = normalizeToolUseData({
+      toolName: 'Edit',
+      tool: 'Bash',
+      status: 'completed',
+    });
+    expect(normalized?.toolName).toBe('Edit');
+  });
+
   it('treats userInstruction as a feedback marker', () => {
     const normalized = normalizeToolUseData({
       toolName: 'AskUserQuestion',

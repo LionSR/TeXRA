@@ -1,4 +1,9 @@
-const ERROR_STATUSES = new Set(['error', 'failed', 'stopped']);
+// `stopped` is a user-initiated stop, not an error — the canonical run outcome
+// keeps `cancelled` a sibling of `failed`, never folded into it (see
+// RUN_OUTCOME in src/shared/schemas/stream.ts). Classifying it as an error made
+// a stopped subagent show a red dot in the CLI while the progress view / webview
+// show it neutral.
+const ERROR_STATUSES = new Set(['error', 'failed']);
 const IN_FLIGHT_STATUSES = new Set([
   'initializing',
   'resuming',

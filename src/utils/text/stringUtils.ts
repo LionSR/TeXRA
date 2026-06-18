@@ -85,15 +85,18 @@ export function countLines(text: string): number {
  * Returns the original string unchanged if it fits within the limit.
  *
  * The ellipsis is a single Unicode character (U+2026), so the truncated
- * result is exactly `maxLen` characters long.
+ * result is exactly `maxLen` code points long. Truncation operates on code
+ * points (not UTF-16 units) so an astral character (emoji, CJK extension, …)
+ * straddling the cut boundary is never split into a corrupted lone surrogate.
  *
  * @example
  * truncateWithEllipsis('short', 60)           // 'short'
  * truncateWithEllipsis('a very long text', 10) // 'a very lo…'
  */
 export function truncateWithEllipsis(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return `${text.slice(0, maxLen - 1)}…`;
+  const codePoints = [...text];
+  if (codePoints.length <= maxLen) return text;
+  return `${codePoints.slice(0, maxLen - 1).join('')}…`;
 }
 
 /**
@@ -119,10 +122,13 @@ export function truncateSummary(text: string, maxLength: number): string {
  * Keep the last `maxLen` characters; prepend an ellipsis when truncated.
  * Complement to `truncateWithEllipsis` for cases where the relevant content
  * is at the end (e.g. terminal installer output where success/error appears last).
+ * Like `truncateWithEllipsis`, this counts Unicode code points so the leading
+ * cut never leaves a dangling low surrogate.
  */
 export function tailWithEllipsis(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return `…${text.slice(-(maxLen - 1))}`;
+  const codePoints = [...text];
+  if (codePoints.length <= maxLen) return text;
+  return `…${codePoints.slice(-(maxLen - 1)).join('')}`;
 }
 
 /**

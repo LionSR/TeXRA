@@ -122,8 +122,8 @@ function parsePath(raw: string): ParsedPath {
   );
 }
 
-function requireToken(): void {
-  if (!getGitHubToken()) {
+async function requireToken(): Promise<void> {
+  if (!(await getGitHubToken())) {
     throw new ToolError(
       'No GitHub token configured. Open TeXRA settings → Git tab → "Set token" (or export GITHUB_TOKEN). Needs `repo` scope for private repos, `public_repo` for public.',
     );
@@ -176,7 +176,7 @@ function prSubscriptionActivitySentence(
 async function execSubscribe(
   input: GitHubSubscriptionInput,
 ): Promise<ToolResult> {
-  requireToken();
+  await requireToken();
   const { streamId, runtimeHost } = requireSubscriptionContext();
   const target = requirePath(input);
   const minAnnotationLevel = getMinAnnotationLevel(input);
@@ -459,7 +459,7 @@ async function getFindCurrentFallbackInfo(
 async function execFindCurrent(
   input: GitHubSubscriptionInput,
 ): Promise<ToolResult> {
-  requireToken();
+  await requireToken();
   const cwd =
     parseWorkingDirectory(input.working_directory) ??
     tryUseRunContext()?.workingDirectory;
