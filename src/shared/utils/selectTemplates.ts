@@ -9,6 +9,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
 
 /**
@@ -54,10 +55,10 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
       data-description=${opt.description || nothing}
     >
       ${isOrch
-        ? html`<span class="agent-icon">🎯 </span>`
+        ? html`<span class="agent-icon">${waIcon('bullseye')} </span>`
         : nothing}${opt.label}
       ${opt.isRemote
-        ? html`<span class="agent-icon"> ${properties.remote.unicode}</span>`
+        ? html`<span class="agent-icon"> ${waIcon('cloud')}</span>`
         : nothing}
     </wa-option>
   `;
