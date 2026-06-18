@@ -1,11 +1,14 @@
 import type { FileLocation } from '@shared/schemas';
 
-/** Internal mapping for file relationships (used by OutputHandler). All maps indexed by OUTPUT path. */
-export interface RoundFileMapping {
-  /** Output path → base FileLocation (for round-based diffs) */
-  baseToOutput: Map<string, FileLocation>;
-  /** Output path → previous round FileLocation (for inter-round diffs) */
-  prevToOutput: Map<string, FileLocation>;
-  /** Output path → original base FileLocation (for tracking lineage) */
-  originByOutput: Map<string, FileLocation | undefined>;
+/** File relationship facts for a single output path. All fields optional — absence means no match. */
+export interface RoundFileEntry {
+  /** Base FileLocation for round-based diffs (rewrite agents). */
+  base?: FileLocation;
+  /** Previous-round FileLocation for between-round diffs. */
+  prev?: FileLocation;
+  /** Original base FileLocation for lineage tracking. */
+  origin?: FileLocation;
 }
+
+/** Maps output paths to their file relationship facts. Used by LatexDiffManager and diffComputation. */
+export type RoundFileMapping = Map<string, RoundFileEntry>;
