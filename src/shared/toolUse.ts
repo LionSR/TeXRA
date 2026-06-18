@@ -67,7 +67,7 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
   const outputContent = extractOutputContent(validated.output);
   const outputText = formatOutputText(outputContent);
 
-  const toolName = trimmedOrNull(validated.toolName ?? validated.tool) ?? '';
+  const toolName = trimmedOrNull(validated.toolName) ?? '';
   const isUserFeedback = userInstructionText.length > 0;
 
   // Preserve unknown fields stripped by the schema for fallback rendering.

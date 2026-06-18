@@ -56,15 +56,15 @@ export class RelayQuotaMeter extends LitElement {
         padding: var(--wa-space-m) var(--wa-space-l);
         border: var(--border-thin) solid var(--wa-color-neutral-border-quiet);
         border-radius: var(--border-radius);
-        background: var(--wa-color-neutral-background-quiet);
+        background: var(--wa-color-neutral-fill-quiet);
       }
       .quota-meter[data-state='exhausted'] {
         border-color: var(--wa-color-danger-border-quiet);
-        background: var(--wa-color-danger-background-quiet);
+        background: var(--wa-color-danger-fill-quiet);
       }
       .quota-meter[data-state='warning'] {
         border-color: var(--wa-color-warning-border-quiet);
-        background: var(--wa-color-warning-background-quiet);
+        background: var(--wa-color-warning-fill-quiet);
       }
       .quota-row {
         display: flex;
@@ -80,7 +80,7 @@ export class RelayQuotaMeter extends LitElement {
       .quota-amount {
         font-variant-numeric: tabular-nums;
         font-size: var(--wa-font-size-s);
-        color: var(--wa-color-neutral-text-quiet);
+        color: var(--wa-color-neutral-on-quiet);
       }
       /* Native wa-progress-bar, compacted to a 6px track; colour the indicator
          per quota state via its --indicator-color custom property. */
@@ -98,7 +98,7 @@ export class RelayQuotaMeter extends LitElement {
       .quota-note {
         margin-top: var(--wa-space-xs);
         font-size: var(--wa-font-size-xs);
-        color: var(--wa-color-neutral-text-quiet);
+        color: var(--wa-color-neutral-on-quiet);
       }
     `,
   ];
