@@ -11,7 +11,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -334,13 +334,7 @@ export class ToolCard extends LitElement {
                   @click=${this.handleRunInstallCommand}
                   title=${this.item.installCommand}
                 >
-                  <wa-icon
-                    slot="start"
-                    library=${TEXRA_ICON_LIBRARY}
-                    name="terminal"
-                    variant="solid"
-                  ></wa-icon>
-                  Install in Terminal
+                  ${waIcon('terminal', { slot: 'start' })} Install in Terminal
                 </wa-button>
               `
             : nothing}
@@ -353,13 +347,7 @@ export class ToolCard extends LitElement {
                   @click=${this.handleRunAuthCommand}
                   title=${this.item.authCommand}
                 >
-                  <wa-icon
-                    slot="start"
-                    library=${TEXRA_ICON_LIBRARY}
-                    name="right-to-bracket"
-                    variant="solid"
-                  ></wa-icon>
-                  Sign in
+                  ${waIcon('right-to-bracket', { slot: 'start' })} Sign in
                 </wa-button>
               `
             : nothing}
@@ -371,13 +359,8 @@ export class ToolCard extends LitElement {
                   size="small"
                   @click=${this.handleInstallExtension}
                 >
-                  <wa-icon
-                    slot="start"
-                    library=${TEXRA_ICON_LIBRARY}
-                    name="cloud-arrow-down"
-                    variant="solid"
-                  ></wa-icon>
-                  Install Extension
+                  ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
+                  Extension
                 </wa-button>
               `
             : nothing}
@@ -389,12 +372,7 @@ export class ToolCard extends LitElement {
                   size="small"
                   @click=${this.handleInstallUrl}
                 >
-                  <wa-icon
-                    slot="start"
-                    library=${TEXRA_ICON_LIBRARY}
-                    name="arrow-up-right-from-square"
-                    variant="solid"
-                  ></wa-icon>
+                  ${waIcon('arrow-up-right-from-square', { slot: 'start' })}
                   Open Install Page
                 </wa-button>
               `
@@ -428,8 +406,7 @@ export class ToolCard extends LitElement {
     if (!this.item.authNote) return nothing;
     return html`
       <span class="tool-auth-note">
-        <wa-icon library="texra" name="key"></wa-icon>
-        ${this.item.authNote}
+        ${waIcon('key')} ${this.item.authNote}
       </span>
     `;
   }

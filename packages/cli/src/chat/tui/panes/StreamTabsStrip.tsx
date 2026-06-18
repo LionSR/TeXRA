@@ -1,11 +1,11 @@
 import { Box, Text } from 'ink';
 
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
-import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import {
   isInFlightStatus,
   isTerminalStatus,
 } from '@common/constants/streamStatus';
+import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
 import { textDisplayWidth, truncateToWidth } from '../render/terminalText';
 import { cliState, type StreamSlice } from '../state/cliState';

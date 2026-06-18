@@ -5,6 +5,7 @@
 
 // Local imports - formatter helpers
 import type { LogMessageData, MessageType } from '@shared/schemas';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { isObject } from '@utils/core';
 import { safeFormat, type FormatOptions } from './baseLogFormatter';
 import {
@@ -31,9 +32,6 @@ import {
   type TemplateResult,
   type FormatResult,
 } from './litTemplates';
-
-// Local imports - shared utilities
-import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 type TemplateFormatterFn = (
   message: LogMessageData,

@@ -271,7 +271,7 @@ function buildAcceptRunFilesSections(
         ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed" style="margin-left:var(--wa-space-2xs)">-${edit.lineChanges.removed}</span></span>`
         : nothing;
       // prettier-ignore
-      return html`<li class="detail-item"><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${dest}>${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
+      return html`<li class="detail-item"><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${dest} role="button" tabindex="0">${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
     })}`;
     // prettier-ignore
     sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
@@ -323,7 +323,7 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
   const fileGroups = getProposalFileGroups(delegateInput);
   if (fileGroups.length > 0) {
     // prettier-ignore
-    const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> <span class="${g.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(g.clickable ? f : undefined)}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
+    const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> <span class="${g.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(g.clickable ? f : undefined)} role=${ifDefined(g.clickable ? 'button' : undefined)} tabindex=${ifDefined(g.clickable ? '0' : undefined)}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
     // prettier-ignore
     sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
   }

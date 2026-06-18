@@ -184,7 +184,7 @@ export function buildFileListRender(files: FileListEntry[]): {
     const sourceText = file.sourceDisplay ?? source;
 
     // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}><wa-icon library="texra" name=${iconName} aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${filePath}>${fileName}</span>${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
+    return html`<li class="detail-item" title=${filePath}><wa-icon library="texra" name=${iconName} aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${fileName}</span>${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
   })}`;
 
   const loadedFiles = files.filter((file) => file.ok).length;
@@ -290,7 +290,7 @@ export function buildFileLinkWithLines(
   const displayText = fileName + lineInfo;
 
   // prettier-ignore
-  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(startLine)}><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> ${displayText}</span>`;
+  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(startLine)} role="button" tabindex="0"><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> ${displayText}</span>`;
 }
 
 // ============================================================================

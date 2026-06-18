@@ -4,6 +4,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import writeFileAtomicLib from 'write-file-atomic';
+
 import { isFileNotFoundError } from '@common/errors';
 
 import {
@@ -115,6 +117,12 @@ export const nodeFilesystem: FileSystemProvider = {
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
     await fs.promises.writeFile(target, content);
+  },
+
+  async writeFileAtomic(target: string, content: Uint8Array): Promise<void> {
+    // write-file-atomic stages to a sibling temp, fsyncs, and renames over the
+    // target — resolving the realpath first, so a symlinked path is preserved.
+    await writeFileAtomicLib(target, Buffer.from(content));
   },
 
   async appendFile(target: string, content: Uint8Array): Promise<void> {

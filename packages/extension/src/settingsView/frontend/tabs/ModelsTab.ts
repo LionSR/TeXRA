@@ -5,6 +5,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -87,11 +88,7 @@ export class ModelsTab extends LitElement {
 
     return html`
       <div class="settings-reminder">
-        <wa-icon
-          library="texra"
-          name="info"
-          class="settings-reminder-icon"
-        ></wa-icon>
+        ${waIcon('info', { className: 'settings-reminder-icon' })}
         <div class="settings-reminder-body">
           <div class="settings-reminder-title">API key settings</div>
           <div class="settings-reminder-description">${description}</div>
@@ -103,8 +100,7 @@ export class ModelsTab extends LitElement {
               size="small"
               @click=${this.handleScrollToApiConfig}
             >
-              <wa-icon slot="start" library="texra" name="key"></wa-icon>
-              Jump to API Configuration
+              ${waIcon('key', { slot: 'start' })} Jump to API Configuration
             </wa-button>
           </div>
         </div>
