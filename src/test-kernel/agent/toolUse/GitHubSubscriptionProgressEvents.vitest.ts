@@ -1,8 +1,18 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
+const sendFollowUpMock = vi.hoisted(() =>
+  vi.fn(async () => ({ status: 'sent' as const })),
+);
+
+vi.mock('@agent/toolUse/ToolUseFollowUp', () => ({
+  sendFollowUp: sendFollowUpMock,
+}));
+
 // Local imports - agent runtime
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared schemas
 import type { StreamTabId } from '@shared/schemas';
@@ -63,6 +73,7 @@ class TestPollingSource extends PollingSourceBase<
 class RegistryTestSource {
   private readonly keys = new Set<string>();
   private readonly keyListeners = new Set<(keys: readonly string[]) => void>();
+  private readonly onEventByKey = new Map<string, (text: string) => void>();
 
   has(key: string): boolean {
     return this.keys.has(key);
@@ -84,16 +95,21 @@ class RegistryTestSource {
     onEvent: (text: string) => void,
     runtimeHost: AgentRuntimeHost,
   ): { dispose(): void } {
-    void onEvent;
     void runtimeHost;
     this.keys.add(input);
+    this.onEventByKey.set(input, onEvent);
     this.emitKeysChanged();
     return {
       dispose: () => {
         this.keys.delete(input);
+        this.onEventByKey.delete(input);
         this.emitKeysChanged();
       },
     };
+  }
+
+  emit(input: string, text: string): void {
+    this.onEventByKey.get(input)?.(text);
   }
 
   private emitKeysChanged(): void {
@@ -198,5 +214,38 @@ describe('GitHub subscription progress events', () => {
     expect(host.events).toEqual([
       { event: 'repoSubscriptionBindingsChanged', payload: undefined },
     ]);
+  });
+
+  it('passes the bind-time session to detached subscription follow-ups', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const host = createRecordingHost();
+    const source = new RegistryTestSource();
+    const session = { tag: 'window-session' } as unknown as SessionHandle;
+    const registry = new StreamSubscriptionRegistry<string, string>({
+      name: 'test subscriptions',
+      source,
+      keyOf: (input) => input,
+      bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
+    });
+    sendFollowUpMock.mockClear();
+
+    withRunContext(
+      createRunContext({
+        runtimeHost: host.host,
+        streamId,
+        session,
+      }),
+      () => registry.bind(streamId, 'owner/repo', host.host),
+    );
+
+    source.emit('owner/repo', 'new github event');
+
+    expect(sendFollowUpMock).toHaveBeenCalledWith(
+      streamId,
+      'new github event',
+      undefined,
+      undefined,
+      session,
+    );
   });
 });
