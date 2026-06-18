@@ -38,14 +38,6 @@ export function evaluateCurrentDelegationGate(
 }
 
 /**
- * Sentinel returned when a resumed snapshot's lineage can't be trusted
- * (e.g. an ancestor's meta was deleted while a descendant survived).
- * `delegationAllowed(MAX_SAFE_INTEGER, { maxDepth })` is false for any
- * configured cap, so delegation is conservatively blocked.
- */
-const UNKNOWN_DEPTH_SENTINEL = UNKNOWN_DELEGATION_DEPTH;
-
-/**
  * Read meta without letting filesystem/IO errors bubble up — safeParse
  * already handles malformed JSON by returning null, but the underlying
  * storage layer can throw on permission or IO failures. Resume must
@@ -81,7 +73,7 @@ async function readMetaSafely(
  *
  * Fail-closed: any corrupted, unreadable, or missing meta in the lineage —
  * including the resumed execution's own meta — returns
- * `UNKNOWN_DEPTH_SENTINEL`. A valid resumable snapshot always has a valid
+ * `UNKNOWN_DELEGATION_DEPTH`. A valid resumable snapshot always has a valid
  * `meta.json`, so `null` here is corruption, not a legitimate root. Treating
  * it as depth 0 would let a broken-meta subagent bypass the delegation gate.
  * Resume itself still succeeds on the surviving message snapshot; the LLM
@@ -91,7 +83,8 @@ export async function computeDelegationDepthFromStorage(
   executionId: ExecutionId,
 ): Promise<number> {
   const rootMeta = await readMetaSafely(executionId);
-  if (rootMeta === 'error' || rootMeta === null) return UNKNOWN_DEPTH_SENTINEL;
+  if (rootMeta === 'error' || rootMeta === null)
+    return UNKNOWN_DELEGATION_DEPTH;
   if (rootMeta.delegationDepth !== undefined) return rootMeta.delegationDepth;
   if (!rootMeta.parentExecutionId) return 0;
 
@@ -105,10 +98,10 @@ export async function computeDelegationDepthFromStorage(
   const MAX_WALK = 32;
   while (depth < MAX_WALK) {
     if (!current) return depth; // clean terminus
-    if (visited.has(current)) return UNKNOWN_DEPTH_SENTINEL; // cycle
+    if (visited.has(current)) return UNKNOWN_DELEGATION_DEPTH; // cycle
     visited.add(current);
     const meta = await readMetaSafely(current);
-    if (meta === 'error' || meta === null) return UNKNOWN_DEPTH_SENTINEL;
+    if (meta === 'error' || meta === null) return UNKNOWN_DELEGATION_DEPTH;
     if (meta.delegationDepth !== undefined) return meta.delegationDepth + depth;
     const parent: ExecutionId | undefined = meta.parentExecutionId;
     if (!parent) return depth; // clean terminus
@@ -116,5 +109,5 @@ export async function computeDelegationDepthFromStorage(
     current = parent;
   }
   // MAX_WALK exceeded: chain longer than any legitimate depth — treat as corrupt.
-  return UNKNOWN_DEPTH_SENTINEL;
+  return UNKNOWN_DELEGATION_DEPTH;
 }
