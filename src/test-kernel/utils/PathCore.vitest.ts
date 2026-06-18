@@ -28,6 +28,10 @@ describe('toPosixPath', () => {
     ['foo/bar/', 'foo/bar'],
     ['  foo/bar  ', 'foo/bar'],
     ['a\\\\b\\c', 'a/b/c'],
+    // pathe.normalize resolves .. and . segments
+    ['foo/../bar', 'bar'],
+    ['./foo/bar', 'foo/bar'],
+    ['../shared/macros', '../shared/macros'],
   ])('converts %j → %j', (input, expected) => {
     expect(toPosixPath(input)).toBe(expected);
   });
