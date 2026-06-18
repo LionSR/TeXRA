@@ -37,8 +37,8 @@ import {
 } from '@auth/config';
 import { getAuthStatus } from '@auth/authCommands';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
-import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
 import { hasAnyUsableSetupCredential } from '@commands/setup';
+import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
@@ -86,7 +86,6 @@ import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
 import {
-  setGitHubTokenProvider,
   prPollingSource,
   repoPollingSource,
   issuePollingSource,
@@ -523,15 +522,6 @@ export async function activate(context: vscode.ExtensionContext) {
       runCommand: (args) => runTerminalCommand(args),
     },
   });
-  // GitHub token lives in SecretStorage (managed via the Git settings tab).
-  // The tool layer only supports a synchronous token lookup, so we cache here
-  // and refresh on secret changes.
-  let cachedGitHubToken: string | undefined;
-  const refreshGitHubToken = async () => {
-    cachedGitHubToken = await SecretManager.getGitHubToken();
-  };
-  setGitHubTokenProvider(() => cachedGitHubToken);
-  void refreshGitHubToken();
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this helper to log rejections
   // instead of letting them become unhandled promise rejections.
@@ -545,13 +535,11 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     context.secrets.onDidChange((e) => {
       if (e.key !== SecretManager.GITHUB_TOKEN_KEY) return;
-      // Refresh the cached token first so availability checks see the
-      // new value, then re-probe so any subscribed UI (Tools tab) and
-      // the runtime cache pick up the change automatically.
-      void (async () => {
-        await refreshGitHubToken();
-        await refreshToolAvailability(extensionAgentRuntimeHost);
-      })().catch(logRefreshFailure('secret change'));
+      // Re-probe so any subscribed UI (Tools tab) reflects the new token
+      // presence; getGitHubToken() now reads SecretStorage live (no cache).
+      void refreshToolAvailability(extensionAgentRuntimeHost).catch(
+        logRefreshFailure('secret change'),
+      );
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
