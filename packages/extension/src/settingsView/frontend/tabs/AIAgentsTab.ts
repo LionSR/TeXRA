@@ -12,6 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 
 // Local imports - shared schemas
@@ -313,7 +314,7 @@ export class AIAgentsTab extends LitElement {
             title="Re-check integration availability"
             @click=${this.handleRecheck}
           >
-            <wa-icon slot="start" library="texra" name="refresh"></wa-icon>
+            ${waIcon('refresh', { slot: 'start' })}
             Re-check
           </wa-button>
         </div>
