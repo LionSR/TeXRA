@@ -5,32 +5,33 @@
 // Standard library imports
 import * as path from 'node:path';
 
-import slash from 'slash';
+import { normalize } from 'pathe';
 
-/** Get path segments as an array. */
+/**
+ * Get path segments as an array.
+ * Only converts backslashes — does NOT resolve '..' so callers can detect
+ * traversal attempts (e.g. AcceptRunFilesTool's `includes('..')` guard).
+ */
 export function getPathSegments(input: string): string[] {
   if (!input || input === '.') {
     return [];
   }
-  return slash(input.trim()).split('/').filter(Boolean);
+  return input.trim().replace(/\\/g, '/').split('/').filter(Boolean);
 }
 
-/** Convert a path to POSIX style (forward slashes, collapsed separators). */
+/** Convert a path to POSIX style (forward slashes, collapsed separators, resolved `.` and `..`). */
 export function toPosixPath(relativePath: string): string {
   if (!relativePath || relativePath === '.') {
     return '.';
   }
-  return getPathSegments(relativePath).join('/');
+  return normalize(relativePath.trim()).split('/').filter(Boolean).join('/');
 }
 
-/** Normalize a path for LaTeX \input commands (strips leading ./). */
+/** Normalize a LaTeX \input path by trimming, converting separators, and resolving `.`/`..` segments. */
 export function normalizeLatexPath(value: string): string {
   const trimmed = value?.trim();
   if (!trimmed) return '';
-
-  const posix = toPosixPath(trimmed);
-  // Strip leading ./ for LaTeX compatibility
-  return posix.startsWith('./') ? posix.slice(2) : posix;
+  return toPosixPath(trimmed);
 }
 
 /** Get the file extension in lowercase (e.g. `'.tex'` for `'Paper.TEX'`). */

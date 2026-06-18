@@ -179,6 +179,9 @@ importers:
       openai:
         specifier: ^6.42.0
         version: 6.42.0(ws@8.21.0)(zod@4.4.3)
+      p-defer:
+        specifier: ^4.0.1
+        version: 4.0.1
       p-map:
         specifier: ^7.0.4
         version: 7.0.4
@@ -194,6 +197,9 @@ importers:
       p-timeout:
         specifier: ^7.0.1
         version: 7.0.1
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
       pdf2pic:
         specifier: ^3.2.0
         version: 3.2.0
@@ -221,9 +227,6 @@ importers:
       signal-polyfill:
         specifier: ^0.2.2
         version: 0.2.2
-      slash:
-        specifier: ^5.1.0
-        version: 5.1.0
       sortablejs:
         specifier: ^1.15.7
         version: 1.15.7
@@ -4936,6 +4939,10 @@ packages:
   p-cancelable@2.1.1:
     resolution: {integrity: sha512-BZOr3nRQHOntUjTrH8+Lh54smKHoHyur8We1V8DSMVrl5A2malOOwuJRnKRDjSnkoeBh4at6BwEnb5I7Jl31wg==}
     engines: {node: '>=8'}
+
+  p-defer@4.0.1:
+    resolution: {integrity: sha512-Mr5KC5efvAK5VUptYEIopP1bakB85k2IWXaRC0rsh1uwn1L6M0LVml8OIQ4Gudg4oyZakf7FmeRLkMMtZW1i5A==}
+    engines: {node: '>=12'}
 
   p-limit@3.1.0:
     resolution: {integrity: sha512-TYOanM3wGwNGsZN2cVTYPArw454xnXj5qmWF1bEoAc4+cU/ol7GVh7odevjp1FNHduHc3KZMcFduxU5Xc6uJRQ==}
@@ -10704,6 +10711,8 @@ snapshots:
       '@oxc-resolver/binding-win32-x64-msvc': 11.20.0
 
   p-cancelable@2.1.1: {}
+
+  p-defer@4.0.1: {}
 
   p-limit@3.1.0:
     dependencies:
