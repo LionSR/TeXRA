@@ -222,7 +222,9 @@ export function createDesktopSupabaseAuth(
         // so the nonce returns in the texra:// callback query — letting us reject
         // a foreign token deeplink delivered while a sign-in is merely pending.
         const nonce = randomBytes(16).toString('hex');
-        const redirectTo = `${getAuthCallbackUri(TEXRA_PROTOCOL)}?app_nonce=${nonce}`;
+        const callbackUri = getAuthCallbackUri(TEXRA_PROTOCOL);
+        const sep = callbackUri.includes('?') ? '&' : '?';
+        const redirectTo = `${callbackUri}${sep}app_nonce=${nonce}`;
         const { data, error } = await oauthClient.auth.signInWithOAuth({
           provider,
           options: { redirectTo },
