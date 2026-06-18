@@ -374,7 +374,7 @@ describe('CLI orchestration items', () => {
         disabled: true,
         description: 'unavailable; no runnable team root; 1/2 tool-use agents',
         footerHints: [
-          'Team setup: run `texra multi-agent inspect <team-id>` for the unavailable team.',
+          'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
           'Relay teams may unlock more agents after texra login.',
         ],
       }),
@@ -392,7 +392,7 @@ describe('CLI orchestration items', () => {
     });
 
     expect(orchestrationFooterHints(items)).toEqual([
-      'Team setup: run `texra multi-agent inspect <team-id>` for the unavailable team.',
+      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
       'Relay teams may unlock more agents after texra login.',
     ]);
   });
@@ -406,7 +406,7 @@ describe('CLI orchestration items', () => {
     });
 
     expect(orchestrationFooterHints(items)).toEqual([
-      'Team setup: run `texra multi-agent inspect <team-id>` for the unavailable team.',
+      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
     ]);
   });
 
