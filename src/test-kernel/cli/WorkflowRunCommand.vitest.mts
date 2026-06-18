@@ -159,7 +159,7 @@ describe('CLI workflow run command', () => {
   it('reports missing workflow agents before resolving the model', async () => {
     mocks.resolveCliLaunchAgent.mockRejectedValueOnce(
       new Error(
-        'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
+        'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.',
       ),
     );
     const { runWorkflowAgent } = await import('@cli/commands/workflow');
