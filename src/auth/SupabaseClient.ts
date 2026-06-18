@@ -25,6 +25,7 @@ import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
  */
 export class SupabaseClient {
   private static instance: Client | null = null;
+  private static otpInstance: Client | null = null;
   private static config: { url: string; publicKey: string } | null = null;
   private static authProvider: AuthTokenProvider | null = null;
 
@@ -53,6 +54,7 @@ export class SupabaseClient {
   /** Reset singleton state between unit tests. */
   static resetForTests(): void {
     this.instance = null;
+    this.otpInstance = null;
     this.config = null;
     this.authProvider = null;
     this.initError = null;
@@ -129,11 +131,29 @@ export class SupabaseClient {
         'Supabase credentials missing. Check extension configuration.',
       );
     }
+    // Idempotent re-init: returning the existing client preserves the in-memory
+    // PKCE code_verifier (persistSession:false) across the OAuth round-trip even
+    // if a host wires up the auth coordinator more than once.
+    if (
+      this.instance &&
+      this.config?.url === url &&
+      this.config?.publicKey === publicKey
+    ) {
+      return;
+    }
     this.config = { url, publicKey };
+    this.otpInstance = null;
     this.instance = createClient(url, publicKey, {
       auth: {
         persistSession: false, // VS Code manages session storage
         autoRefreshToken: false, // Manual refresh via auth provider
+        // PKCE: browser OAuth returns a one-time ?code= (not tokens) to the
+        // callback. The code_verifier stays in this client and is consumed by
+        // exchangeCodeForSession, so no access/refresh token ever transits the
+        // browser or the auth-bridge page. detectSessionInUrl is off because
+        // every host parses its own callback and exchanges the code explicitly.
+        flowType: 'pkce',
+        detectSessionInUrl: false,
       },
     });
   }
@@ -148,6 +168,33 @@ export class SupabaseClient {
       );
     }
     return this.instance;
+  }
+
+  /**
+   * Dedicated implicit-flow client for email magic links. The main client uses
+   * PKCE so browser OAuth keeps tokens off the bridge, but a PKCE magic link can
+   * only be completed by the same in-memory client instance, so it breaks when
+   * the email is opened later or on another device. Implicit magic links carry
+   * tokens directly in the callback, which the token-fallback path handles
+   * wherever the link is opened.
+   */
+  static getOtpClient(): Client {
+    if (!this.config) {
+      throw new Error(
+        'Supabase client not initialized. Restart the extension.',
+      );
+    }
+    if (!this.otpInstance) {
+      this.otpInstance = createClient(this.config.url, this.config.publicKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          flowType: 'implicit',
+          detectSessionInUrl: false,
+        },
+      });
+    }
+    return this.otpInstance;
   }
 
   /**

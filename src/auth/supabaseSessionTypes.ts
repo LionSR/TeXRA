@@ -133,6 +133,7 @@ type StorableSessionInput = {
   access_token: string;
   refresh_token: string;
   expires_at?: number;
+  expires_in?: number;
   token_type?: string;
   user: {
     id: string;
@@ -166,8 +167,10 @@ export function toStorableSupabaseSession(
     },
     expiresAt: nativeSession.expires_at
       ? nativeSession.expires_at * 1000
-      : Date.now() +
-        (options?.defaultExpiryMs ?? DEFAULT_SUPABASE_SESSION_EXPIRY_MS),
+      : nativeSession.expires_in
+        ? Date.now() + nativeSession.expires_in * 1000
+        : Date.now() +
+          (options?.defaultExpiryMs ?? DEFAULT_SUPABASE_SESSION_EXPIRY_MS),
     ...(options?.useCustomRefresh === undefined
       ? {}
       : { useCustomRefresh: options.useCustomRefresh }),
