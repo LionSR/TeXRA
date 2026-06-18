@@ -1,3 +1,4 @@
+import pDefer, { type DeferredPromise } from 'p-defer';
 import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -43,8 +44,7 @@ const pendingQuestions = new Map<
   {
     streamId?: StreamTabId;
     runtimeHost?: AgentRuntimeHost;
-    settle: (result: UserQuestionResult) => void;
-    isSettled: () => boolean;
+    deferred: DeferredPromise<UserQuestionResult>;
   }
 >();
 
@@ -54,33 +54,26 @@ async function awaitUserQuestionResponse(params: {
   runtimeHost: AgentRuntimeHost;
   streamId?: StreamTabId;
 }): Promise<UserQuestionResult> {
-  return new Promise<UserQuestionResult>((resolve) => {
-    let settled = false;
-    const settle = (result: UserQuestionResult) => {
-      if (settled) return;
-      settled = true;
-      resolve(result);
-    };
-
-    pendingQuestions.set(params.requestId, {
-      streamId: params.streamId,
-      runtimeHost: params.runtimeHost,
-      settle,
-      isSettled: () => settled,
-    });
-
-    params.runtimeHost.emit('requestEnsureProgressView', {});
-    if (params.streamId) {
-      params.runtimeHost.emit('setActiveStream', { streamId: params.streamId });
-    }
-    params.runtimeHost.emit('showUserQuestion', {
-      requestId: params.requestId,
-      questions: params.input.questions,
-      context: params.input.context ?? undefined,
-      allowBypass: false,
-      streamId: params.streamId ?? '',
-    });
+  const deferred = pDefer<UserQuestionResult>();
+  pendingQuestions.set(params.requestId, {
+    streamId: params.streamId,
+    runtimeHost: params.runtimeHost,
+    deferred,
   });
+
+  params.runtimeHost.emit('requestEnsureProgressView', {});
+  if (params.streamId) {
+    params.runtimeHost.emit('setActiveStream', { streamId: params.streamId });
+  }
+  params.runtimeHost.emit('showUserQuestion', {
+    requestId: params.requestId,
+    questions: params.input.questions,
+    context: params.input.context ?? undefined,
+    allowBypass: false,
+    streamId: params.streamId ?? '',
+  });
+
+  return deferred.promise;
 }
 
 export async function handleUserQuestionAction(payload: {
@@ -90,9 +83,9 @@ export async function handleUserQuestionAction(payload: {
   feedback?: string;
 }): Promise<void> {
   const entry = pendingQuestions.get(payload.requestId);
-  if (!entry || entry.isSettled()) return;
+  if (!entry) return;
 
-  entry.settle({
+  entry.deferred.resolve({
     submitted: payload.action === 'submit',
     answers: payload.action === 'submit' ? payload.answers : undefined,
     feedback: payload.action === 'submit' ? undefined : payload.feedback,
@@ -104,8 +97,8 @@ export function _rejectPendingUserQuestionsForStream(
   streamId: StreamTabId,
 ): void {
   for (const entry of pendingQuestions.values()) {
-    if (entry.streamId === streamId && !entry.isSettled()) {
-      entry.settle({ submitted: false });
+    if (entry.streamId === streamId) {
+      entry.deferred.resolve({ submitted: false });
     }
   }
 }
@@ -113,9 +106,7 @@ export function _rejectPendingUserQuestionsForStream(
 /** @internal Called by unified cleanup. */
 export function _rejectAllPendingUserQuestions(): void {
   for (const entry of pendingQuestions.values()) {
-    if (!entry.isSettled()) {
-      entry.settle({ submitted: false });
-    }
+    entry.deferred.resolve({ submitted: false });
   }
 }
 
@@ -126,10 +117,9 @@ export function _rejectUnscopedUserQuestions(
   for (const entry of pendingQuestions.values()) {
     if (
       !entry.streamId &&
-      !entry.isSettled() &&
       (runtimeHost === undefined || entry.runtimeHost === runtimeHost)
     ) {
-      entry.settle({ submitted: false });
+      entry.deferred.resolve({ submitted: false });
     }
   }
 }

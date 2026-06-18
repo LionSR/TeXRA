@@ -5,6 +5,8 @@
  * describe themselves. Termination policy lives with the owning registry.
  */
 
+import pDefer from 'p-defer';
+
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
@@ -83,9 +85,8 @@ export class AgentExecutionHandle implements ExecutionHandle {
    * failed run cannot produce an unhandled rejection. SDK consumers awaiting a
    * specific run's outcome use this; the host-wide stream is `session.onResult`.
    */
-  readonly result: Promise<ResultEvent>;
-  private settle!: (event: ResultEvent) => void;
-  private settled = false;
+  private readonly _deferred = pDefer<ResultEvent>();
+  readonly result = this._deferred.promise;
 
   constructor(
     readonly executionId: string,
@@ -99,16 +100,11 @@ export class AgentExecutionHandle implements ExecutionHandle {
     readonly trace?: AgentTrace,
   ) {
     this._parentStreamId = parentStreamId;
-    this.result = new Promise<ResultEvent>((resolve) => {
-      this.settle = resolve;
-    });
   }
 
   /** Settle {@link result} with the terminal outcome (idempotent). */
   settleResult(event: ResultEvent): void {
-    if (this.settled) return;
-    this.settled = true;
-    this.settle(event);
+    this._deferred.resolve(event);
   }
 
   get parentStreamId(): StreamTabId {
