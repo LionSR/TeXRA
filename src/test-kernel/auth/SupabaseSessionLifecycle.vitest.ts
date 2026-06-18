@@ -332,6 +332,62 @@ describe('SupabaseSession', () => {
       assert.ok(result.session.expiresAt > Date.now());
     });
 
+    it('exchanges a PKCE code from the query for a session', async () => {
+      const client = {
+        auth: {
+          exchangeCodeForSession: async () => ({
+            data: {
+              session: {
+                access_token: 'pkce-access',
+                refresh_token: 'pkce-refresh',
+                expires_at: Math.floor(Date.now() / 1000) + 3600,
+                user: { id: 'user-id', email: 'user@example.com' },
+              },
+            },
+            error: null,
+          }),
+        },
+      } as unknown as Client;
+      const { coordinator } = createCoordinator({ client });
+
+      const result = await coordinator.createSessionFromCallback({
+        path: '/auth-callback',
+        query: 'code=pkce-code',
+      });
+
+      assert.equal(result.success, true);
+      if (!result.success) return;
+      assert.equal(result.session.accessToken, 'pkce-access');
+      assert.equal(result.session.refreshToken, 'pkce-refresh');
+      assert.deepEqual(result.session.account, {
+        id: 'user-id',
+        label: 'user@example.com',
+      });
+      assert.ok(result.session.expiresAt > Date.now());
+    });
+
+    it('returns an auth error when PKCE code exchange fails', async () => {
+      const client = {
+        auth: {
+          exchangeCodeForSession: async () => ({
+            data: { session: null },
+            error: { message: 'invalid code' },
+          }),
+        },
+      } as unknown as Client;
+      const { coordinator } = createCoordinator({ client });
+
+      const result = await coordinator.createSessionFromCallback({
+        path: '/auth-callback',
+        query: 'code=bad-code',
+      });
+
+      assert.equal(result.success, false);
+      if (result.success) return;
+      assert.equal(result.error, 'invalid code');
+      assert.equal(result.isAuthError, true);
+    });
+
     it('falls back to default callback expiry when expires_in is invalid', async () => {
       const { coordinator } = createCoordinator();
       const earliestExpiry = Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;

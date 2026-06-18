@@ -13,6 +13,7 @@ import {
   type OAuthProvider,
 } from './sharedConfig';
 export {
+  AUTH_BRIDGE_URL,
   DEVICE_AUTH_BASE_URL,
   FREE_TIER,
   GITHUB_TOKEN_EXCHANGE_URL,
@@ -108,7 +109,7 @@ export function setRuntimeExtensionId(id: string): void {
  * Get the extension ID for OAuth redirects.
  * Returns the runtime ID if set, otherwise falls back to the default.
  */
-function getExtensionId(): string {
+export function getExtensionId(): string {
   return runtimeExtensionId ?? EXTENSION_ID;
 }
 

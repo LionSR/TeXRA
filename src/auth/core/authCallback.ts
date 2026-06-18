@@ -47,7 +47,8 @@ function getQueryFromPath(path: string): string {
 
 /**
  * Extract Supabase callback tokens or auth errors from host-neutral URI parts.
- * Fragment params win over query params, matching the implicit-flow callback.
+ * Fragment params win over query params, matching the legacy implicit-flow
+ * callback. PKCE callbacks use parseAuthCallbackCode instead.
  */
 export function parseAuthCallbackTokens(
   uri: AuthCallbackUriParts,
@@ -89,4 +90,51 @@ export function parseAuthCallbackTokens(
       expiresIn,
     },
   };
+}
+
+export interface AuthCallbackCodeParseSuccess {
+  success: true;
+  code: string;
+}
+
+export type AuthCallbackCodeParseResult =
+  | AuthCallbackCodeParseSuccess
+  | AuthCallbackTokenParseError;
+
+/**
+ * Extract the PKCE authorization code (or an auth error) from host-neutral URI
+ * parts. The code arrives in the query string for the PKCE flow, so query wins
+ * here, with the fragment as a defensive fallback.
+ */
+export function parseAuthCallbackCode(
+  uri: AuthCallbackUriParts,
+): AuthCallbackCodeParseResult {
+  const queryParams = new URLSearchParams(
+    uri.query || getQueryFromPath(uri.path),
+  );
+  const fragmentParams = new URLSearchParams(uri.fragment ?? '');
+
+  const getParam = (name: string): string | null =>
+    queryParams.get(name) ?? fragmentParams.get(name);
+
+  const error = getParam('error');
+  const errorDescription = getParam('error_description');
+
+  if (error) {
+    return {
+      success: false,
+      error: errorDescription || error,
+      isAuthError: true,
+    };
+  }
+
+  const code = getParam('code');
+  if (!code) {
+    return {
+      success: false,
+      error: 'Missing authorization code in callback',
+    };
+  }
+
+  return { success: true, code };
 }

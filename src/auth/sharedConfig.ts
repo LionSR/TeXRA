@@ -50,6 +50,22 @@ export const GITHUB_TOKEN_REFRESH_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/funct
 export const DEVICE_AUTH_BASE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-device`;
 
 /**
+ * URL of the OAuth bridge edge function (the auth-bridge HTML page).
+ * Desktop browser-OAuth redirects GoTrue here instead of straight to a raw
+ * vscode:// deep link, so browsers that drop custom-scheme server redirects
+ * (Firefox on Linux) can finish sign-in: the page reconstructs the editor
+ * deep link from the URL and offers a real-click "Open in your editor" button.
+ * With PKCE the page only ever carries a one-time ?code= (no tokens).
+ *
+ * The editor scheme and extension id ride as PATH segments
+ * (/auth-bridge/<scheme>/<id>) so redirect_to carries no '?' that an OAuth
+ * round-trip could mangle. The Supabase Redirect URLs allow-list entry is the
+ * globstar https://remote.texra.ai/functions/v1/auth-bridge** (it must span the
+ * '/' and '.' in the path, which a single '*' cannot).
+ */
+export const AUTH_BRIDGE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-bridge`;
+
+/**
  * Base URL for the CI relay token management edge function
  * (texra setup-token / texra auth token).
  */

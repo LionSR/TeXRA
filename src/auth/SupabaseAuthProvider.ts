@@ -4,8 +4,9 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
 import {
+  AUTH_BRIDGE_URL,
   DEFAULT_OAUTH_PROVIDER,
-  getAuthCallbackUri,
+  getExtensionId,
   getExternalAuthCallbackInfo,
   AUTH_CALLBACK_TIMEOUT_MS,
   GITHUB_TOKEN_EXCHANGE_URL,
@@ -254,13 +255,20 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       // the callback fail with bad_oauth_state ("OAuth state not found or
       // expired"). With no tunnel state, fullUrl is just the bare callback URL,
       // so this is also correct for plain web.
-      // NOTE: assumes the implicit flow (tokens in the URL fragment). If the
-      // client is ever switched to PKCE, tokens arrive as ?code= and the
-      // fragment-first callback parser would need to exchange the code instead.
+      // PKCE flow: the callback carries a one-time ?code= (query), which the
+      // shared createSessionFromCallback exchanges for a session.
       return { redirectTo: callbackInfo.fullUrl };
     }
 
-    const redirectTo = getAuthCallbackUri(vscode.env.uriScheme);
+    // Desktop: redirect GoTrue to the https bridge page instead of straight to
+    // the raw vscode:// deep link, which Firefox on Linux drops (bad_oauth_state).
+    // With PKCE the bridge only ever sees a one-time ?code= (no tokens); it
+    // forwards that to ${scheme}://${id}/auth-callback for a real-click handoff.
+    // ext/id ride in the PATH (not a query) so redirect_to carries no '?' that an
+    // OAuth round-trip could mangle into the function name.
+    const redirectTo =
+      `${AUTH_BRIDGE_URL}/${encodeURIComponent(vscode.env.uriScheme)}` +
+      `/${encodeURIComponent(getExtensionId())}`;
     logger.info(
       'SupabaseAuthProvider',
       `OAuth callback URI (desktop): ${redirectTo}`,
