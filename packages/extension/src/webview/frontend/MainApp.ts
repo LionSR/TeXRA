@@ -1699,14 +1699,8 @@ export class MainApp extends MainAppBase {
           without-scroll-controls
           @wa-tab-show=${this.onViewTabShow}
         >
-          <wa-tab panel="launcher">
-            ${waIcon('pencil')}
-            Launcher
-          </wa-tab>
-          <wa-tab panel="progress">
-            ${waIcon('robot')}
-            Progress
-          </wa-tab>
+          <wa-tab panel="launcher"> ${waIcon('pencil')} Launcher </wa-tab>
+          <wa-tab panel="progress"> ${waIcon('robot')} Progress </wa-tab>
           <wa-tab-panel name="launcher"></wa-tab-panel>
           <wa-tab-panel name="progress"></wa-tab-panel>
         </wa-tab-group>
@@ -1864,8 +1858,7 @@ export class MainApp extends MainAppBase {
             }}
           >
             <span slot="summary" class="file-selection-summary">
-              ${waIcon('folder-tree')}
-              Files
+              ${waIcon('folder-tree')} Files
             </span>
             <div class="file-selection-group">
               ${repeat(

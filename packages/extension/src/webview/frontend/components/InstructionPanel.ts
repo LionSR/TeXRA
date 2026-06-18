@@ -16,10 +16,10 @@ import { keyed } from 'lit/directives/keyed.js';
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 
 // Local imports - shared styles
-import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { designTokens } from '@shared/styles';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { selectStyles } from '@shared/styles/selectStyles';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared utils
 import {
