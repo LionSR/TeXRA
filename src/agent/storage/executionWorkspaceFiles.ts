@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { byStringProp } from '@utils/core/comparators';
 import { AbsoluteFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 
@@ -61,7 +62,7 @@ export async function listExecutionWorkspaceFiles(
       isDirectory: isDirectory(stat.type),
     });
   }
-  return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
+  return [...files.values()].sort(byStringProp((f) => f.path));
 }
 
 function executionWorkspaceRoot(
