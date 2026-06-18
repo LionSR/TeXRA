@@ -6,7 +6,7 @@ import { RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => {
   return {
-    executeCliRequest: vi.fn(),
+    executeCliConfig: vi.fn(),
     withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
     isAuthenticated: vi.fn(),
@@ -63,7 +63,7 @@ vi.mock('@cli/runtime/agents', async (importOriginal) => ({
 }));
 
 vi.mock('@cli/runtime/runExecution', () => ({
-  executeCliRequest: mocks.executeCliRequest,
+  executeCliConfig: mocks.executeCliConfig,
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
@@ -114,7 +114,9 @@ describe('CLI agents run command', () => {
       async (_context: CliContext, model: string | undefined) =>
         model ?? 'gpt54',
     );
-    mocks.executeCliRequest.mockResolvedValue({
+    mocks.executeCliConfig.mockResolvedValue({
+      ok: true,
+      executionId: 'exec-1',
       result: {
         category: AgentCategory.ToolUse,
         executionId: 'exec-1',
@@ -158,22 +160,16 @@ describe('CLI agents run command', () => {
       },
       expect.any(Function),
     );
-    const request = mocks.executeCliRequest.mock.calls[0]?.[0];
-    expect(request?.config.inputFiles).toEqual(['problem.md']);
-    expect(request?.config.contextFiles).toEqual(['notes.md']);
-    expect(request?.config.displayInstruction).toBe(
-      'Assess the proof concisely.',
-    );
-    expect(request?.config.instruction).toContain('Primary user input files:');
-    expect(request?.config.instruction).toContain('- "problem.md"');
-    expect(request?.config.instruction).toContain('Read-only context files:');
-    expect(request?.config.instruction).toContain('- "notes.md"');
-    expect(request?.config.instruction).toContain(
-      'Additional user instruction:',
-    );
-    expect(request?.config.instruction).toContain(
-      'Assess the proof concisely.',
-    );
+    const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+    expect(config?.inputFiles).toEqual(['problem.md']);
+    expect(config?.contextFiles).toEqual(['notes.md']);
+    expect(config?.displayInstruction).toBe('Assess the proof concisely.');
+    expect(config?.instruction).toContain('Primary user input files:');
+    expect(config?.instruction).toContain('- "problem.md"');
+    expect(config?.instruction).toContain('Read-only context files:');
+    expect(config?.instruction).toContain('- "notes.md"');
+    expect(config?.instruction).toContain('Additional user instruction:');
+    expect(config?.instruction).toContain('Assess the proof concisely.');
   });
 
   it('reports missing instruction before resolving the model', async () => {

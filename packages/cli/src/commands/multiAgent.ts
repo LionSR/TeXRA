@@ -1,13 +1,9 @@
 import { defineCommand } from 'citty';
 
 import { getAgentsByCategory, loadAgents } from '@agent/index';
-import { writeTerminalStatus } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { validateExecutionRequest } from '@agent/core/execution/executionRequests';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
-import { EXECUTION_STATUS } from '@shared/schemas';
-import { generateExecutionId } from '@utils/core/executionId';
 import { approvalPromptsUnavailable } from '../runtime/approvalPolicyAvailability';
 import {
   missingMultiAgentPresetMessage,
@@ -59,7 +55,7 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliRequest } from '../runtime/runExecution';
+import { executeCliConfig } from '../runtime/runExecution';
 import {
   createCliRunResult,
   terminalStatusExitCode,
@@ -350,30 +346,18 @@ export async function runMultiAgentPreset(
         cliMultiAgentPresetId: plan.preset.id,
       };
 
-      const executionId = generateExecutionId();
-      const validation = validateExecutionRequest({ config, executionId });
-      if (!validation.valid) {
-        writeTextStderr(validation.message);
-        return CliExitCode.Usage;
-      }
-      const { result, terminalStatus } = await executeCliRequest(
-        validation.request,
-        runContext,
-        {
-          enforceCategory: true,
-          registerExecution: true,
-          markErrorOnThrow: true,
-          stopAfterCycle: true,
-          wrap: (run) => withCliMultiAgentPresetVisibility(plan, run),
-        },
-      );
-      if (result.category !== AgentCategory.ToolUse) {
-        await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-        writeTextStderr(
-          `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
-        );
-        return CliExitCode.AgentError;
-      }
+      const execution = await executeCliConfig(config, runContext, {
+        enforceCategory: true,
+        registerExecution: true,
+        markErrorOnThrow: true,
+        stopAfterCycle: true,
+        wrap: (run) => withCliMultiAgentPresetVisibility(plan, run),
+        expectedCategory: AgentCategory.ToolUse,
+        categoryMismatchMessage: `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
+      });
+      if (!execution.ok) return execution.exitCode;
+
+      const { result, terminalStatus } = execution;
       const displayResult: CliToolUseRunResult = createCliRunResult(
         result,
         terminalStatus,

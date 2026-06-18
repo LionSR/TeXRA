@@ -9,7 +9,7 @@ import { RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => {
   return {
-    executeCliRequest: vi.fn(),
+    executeCliConfig: vi.fn(),
     withExpandedRunInputs: vi.fn(),
     cliMultiAgentPlanHasGaps: vi.fn(),
     cliMultiAgentPresetCanLaunchTeam: vi.fn(),
@@ -102,7 +102,7 @@ vi.mock('@cli/runtime/runModel', () => ({
 }));
 
 vi.mock('@cli/runtime/runExecution', () => ({
-  executeCliRequest: mocks.executeCliRequest,
+  executeCliConfig: mocks.executeCliConfig,
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
@@ -203,7 +203,9 @@ describe('CLI multi-agent run command', () => {
       toolUseAgentKeys: ['builtInToolUse:orchestrator'],
     });
     mocks.isAuthenticated.mockResolvedValue(false);
-    mocks.executeCliRequest.mockResolvedValue({
+    mocks.executeCliConfig.mockResolvedValue({
+      ok: true,
+      executionId: 'exec-1',
       result: {
         category: 'toolUse',
         executionId: 'exec-1',
@@ -226,8 +228,8 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.executeCliRequest).toHaveBeenCalledTimes(1);
-    expect(mocks.executeCliRequest.mock.calls[0]?.[2]).toMatchObject({
+    expect(mocks.executeCliConfig).toHaveBeenCalledTimes(1);
+    expect(mocks.executeCliConfig.mock.calls[0]?.[2]).toMatchObject({
       enforceCategory: true,
       registerExecution: true,
       markErrorOnThrow: true,
@@ -244,13 +246,13 @@ describe('CLI multi-agent run command', () => {
       },
       expect.any(Function),
     );
-    const request = mocks.executeCliRequest.mock.calls[0]?.[0];
-    expect(request?.config.instruction).toContain('Primary user input files:');
-    expect(request?.config.instruction).toContain('- "problem.tex"');
-    expect(request?.config.instruction).toContain(
+    const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+    expect(config?.instruction).toContain('Primary user input files:');
+    expect(config?.instruction).toContain('- "problem.tex"');
+    expect(config?.instruction).toContain(
       'This CLI run exits after your final response.',
     );
-    expect(request?.config.instruction).toContain(
+    expect(config?.instruction).toContain(
       'Do not end by asking the user whether to perform more work',
     );
   });
@@ -423,10 +425,10 @@ describe('CLI multi-agent run command', () => {
       },
       expect.any(Function),
     );
-    const request = mocks.executeCliRequest.mock.calls[0]?.[0];
-    expect(request?.config.inputFiles).toEqual([]);
-    expect(request?.config.instruction).toContain('User instruction:');
-    expect(request?.config.instruction).toContain(
+    const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+    expect(config?.inputFiles).toEqual([]);
+    expect(config?.instruction).toContain('User instruction:');
+    expect(config?.instruction).toContain(
       'Prove that every odd square is congruent to 1 modulo 8.',
     );
   });
@@ -465,10 +467,10 @@ describe('CLI multi-agent run command', () => {
         },
         expect.any(Function),
       );
-      const request = mocks.executeCliRequest.mock.calls[0]?.[0];
-      expect(request?.config.inputFiles).toEqual([]);
-      expect(request?.config.instruction).toContain('User instruction:');
-      expect(request?.config.instruction).toContain(
+      const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+      expect(config?.inputFiles).toEqual([]);
+      expect(config?.instruction).toContain('User instruction:');
+      expect(config?.instruction).toContain(
         'Read the prompt from disk.\n\nThen summarize the plan.',
       );
     } finally {
@@ -542,7 +544,7 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(exitCode).toBe(2);
-    expect(mocks.executeCliRequest).not.toHaveBeenCalled();
+    expect(mocks.executeCliConfig).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(message);
     expect(
       mocks.formatCliMultiAgentTeamLaunchBlockMessage,
@@ -629,7 +631,7 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(exitCode).toBe(2);
-    expect(mocks.executeCliRequest).not.toHaveBeenCalled();
+    expect(mocks.executeCliConfig).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(message);
     expect(
       mocks.formatCliMultiAgentTeamLaunchBlockMessage,

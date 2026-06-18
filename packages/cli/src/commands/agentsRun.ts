@@ -1,9 +1,5 @@
-import { writeTerminalStatus } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { validateExecutionRequest } from '@agent/core/execution/executionRequests';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { EXECUTION_STATUS } from '@shared/schemas';
-import { generateExecutionId } from '@utils/core/executionId';
 
 import {
   CliUsageError,
@@ -11,7 +7,6 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
   resolveCliRunModel,
@@ -31,7 +26,7 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { emitCliResult } from './_helpers/output';
-import { executeCliRequest } from '../runtime/runExecution';
+import { executeCliConfig } from '../runtime/runExecution';
 import {
   createCliRunResult,
   terminalStatusExitCode,
@@ -98,29 +93,17 @@ export async function runToolUseAgent(
         agentCategory: AgentCategory.ToolUse,
       };
 
-      const executionId = generateExecutionId();
-      const validation = validateExecutionRequest({ config, executionId });
-      if (!validation.valid) {
-        writeTextStderr(validation.message);
-        return CliExitCode.Usage;
-      }
-      const { result, terminalStatus } = await executeCliRequest(
-        validation.request,
-        runContext,
-        {
-          enforceCategory: true,
-          registerExecution: true,
-          markErrorOnThrow: true,
-          stopAfterCycle: true,
-        },
-      );
-      if (result.category !== AgentCategory.ToolUse) {
-        await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-        writeTextStderr(
-          `Agent "${init.agent}" resolved to a non tool-use run.`,
-        );
-        return CliExitCode.AgentError;
-      }
+      const execution = await executeCliConfig(config, runContext, {
+        enforceCategory: true,
+        registerExecution: true,
+        markErrorOnThrow: true,
+        stopAfterCycle: true,
+        expectedCategory: AgentCategory.ToolUse,
+        categoryMismatchMessage: `Agent "${init.agent}" resolved to a non tool-use run.`,
+      });
+      if (!execution.ok) return execution.exitCode;
+
+      const { result, terminalStatus } = execution;
 
       const displayResult: CliToolUseRunResult = createCliRunResult(
         result,
