@@ -20,6 +20,7 @@ import {
 } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 import { StorageFS } from '@utils/files';
+import { byStringProp } from '@utils/core/comparators';
 import { isObject } from '@utils/core/typeGuards';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
@@ -630,7 +631,7 @@ async function walkStorageDirectory(
       );
     }
   }
-  return files.sort((a, b) => a.path.localeCompare(b.path));
+  return files.sort(byStringProp((f) => f.path));
 }
 
 async function listWorkspaceToolFiles(
@@ -759,5 +760,5 @@ function mergeHistoryFiles(
       if (!files.has(file.path)) files.set(file.path, file);
     }
   }
-  return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
+  return [...files.values()].sort(byStringProp((f) => f.path));
 }
