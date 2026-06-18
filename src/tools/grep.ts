@@ -120,7 +120,19 @@ export class GrepTool extends defineTool({
       ignoreFile,
     ]);
 
-    const command = ['rg', ...args, ...ignoreArgs, input.pattern, path.fsPath];
+    // `--` ends rg option parsing so the LLM-controlled pattern can't be read as
+    // a flag — e.g. `--pre=<cmd>` would run <cmd> as a preprocessor on every
+    // searched file (code execution via this non-approval-gated tool). Our own
+    // flags in args/ignoreArgs precede it and are unaffected; a leading-dash
+    // literal pattern (e.g. "-foo") now searches correctly instead of erroring.
+    const command = [
+      'rg',
+      ...args,
+      ...ignoreArgs,
+      '--',
+      input.pattern,
+      path.fsPath,
+    ];
 
     const result = await executeCommand(command, {
       cwd: root,
