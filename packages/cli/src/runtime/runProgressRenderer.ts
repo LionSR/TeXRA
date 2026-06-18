@@ -10,6 +10,7 @@ import {
   type ExecutionStatus,
   type StreamStatus,
 } from '@shared/schemas';
+import { formatCompactDuration } from '@utils/core';
 
 // Local imports - CLI runtime
 import { writeRawStderr } from './logSinks';
@@ -288,7 +289,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     ) {
       parts.push(`tools: ${this.state.toolCallCount}`);
     }
-    parts.push(formatElapsed(now - this.startedAt));
+    parts.push(formatCompactDuration(now - this.startedAt));
     return parts.join(' · ');
   }
 }
@@ -328,12 +329,4 @@ function formatActiveChildren(
   const suffix =
     namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
   return `${label}: ${first}${suffix}`;
-}
-
-function formatElapsed(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  if (minutes === 0) return `${remainingSeconds}s`;
-  return `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`;
 }
