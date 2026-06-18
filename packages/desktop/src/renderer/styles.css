@@ -470,6 +470,13 @@ wa-input.desktop-command-palette-input::part(base) {
   padding: var(--wa-space-2xs);
 }
 
+.desktop-command-palette-empty {
+  padding: var(--wa-space-s) var(--wa-space-m);
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-s);
+  text-align: center;
+}
+
 .desktop-command-palette-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
