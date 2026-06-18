@@ -122,10 +122,13 @@ export function truncateSummary(text: string, maxLength: number): string {
  * Keep the last `maxLen` characters; prepend an ellipsis when truncated.
  * Complement to `truncateWithEllipsis` for cases where the relevant content
  * is at the end (e.g. terminal installer output where success/error appears last).
+ * Like `truncateWithEllipsis`, this counts Unicode code points so the leading
+ * cut never leaves a dangling low surrogate.
  */
 export function tailWithEllipsis(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return `…${text.slice(-(maxLen - 1))}`;
+  const codePoints = [...text];
+  if (codePoints.length <= maxLen) return text;
+  return `…${codePoints.slice(-(maxLen - 1)).join('')}`;
 }
 
 /**
