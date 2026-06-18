@@ -109,6 +109,15 @@ describe('ExecutionsTool', () => {
     expect(result.error).toContain('Invalid input');
   });
 
+  it("rejects '..' path traversal in /executions/{id}/files/{path}", async () => {
+    const result = await new ExecutionsTool().call({
+      path: '/executions/abc123def456/files/../../../../../../etc/passwd',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.error).toContain("must not contain '..'");
+  });
+
   it('does not duplicate auto-delivered live subagent reports for the parent stream', async () => {
     const explicit = createRecordingHost();
     const session = new SessionHandle();
