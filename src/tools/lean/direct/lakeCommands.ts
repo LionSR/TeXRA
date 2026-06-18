@@ -7,9 +7,9 @@
  * concurrent `lake build` invocations against the same `.lake/build`.
  */
 
-import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 
+import { execa } from 'execa';
 import { Mutex } from 'async-mutex';
 
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
@@ -28,12 +28,11 @@ function getWorkspaceMutex(key: string): Mutex {
   return mutex;
 }
 
-function appendCapped(existing: string, chunk: string): string {
-  const combined = existing + chunk;
-  if (combined.length <= LAKE_MAX_OUTPUT_CHARS) return combined;
+function capOutput(output: string): string {
+  if (output.length <= LAKE_MAX_OUTPUT_CHARS) return output;
   return (
     '…[output truncated]…\n' +
-    combined.slice(combined.length - LAKE_MAX_OUTPUT_CHARS)
+    output.slice(output.length - LAKE_MAX_OUTPUT_CHARS)
   );
 }
 
@@ -69,38 +68,26 @@ export async function runLakeCommand(
   );
 }
 
-function executeLake(options: LakeCommandOptions): Promise<LakeCommandResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(options.lakeCommand, [...options.args], {
-      cwd: options.workspaceRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
-      stdout = appendCapped(stdout, chunk);
-    });
-    child.stderr.on('data', (chunk: string) => {
-      stderr = appendCapped(stderr, chunk);
-    });
-    const timer = setTimeout(() => {
-      child.kill();
-    }, options.timeoutMs ?? LAKE_RUN_TIMEOUT_MS);
-    let settled = false;
-    function finish(action: () => void): void {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      action();
-    }
-    child.on('error', (error) => {
-      finish(() => reject(error));
-    });
-    child.on('close', (code) => {
-      finish(() => resolve({ exitCode: code ?? -1, stdout, stderr }));
-    });
+async function executeLake(
+  options: LakeCommandOptions,
+): Promise<LakeCommandResult> {
+  // execa buffers stdout/stderr up to its default maxBuffer before resolving.
+  // capOutput() then trims the returned strings to LAKE_MAX_OUTPUT_CHARS. This
+  // avoids aborting chatty-but-successful builds at the cost of buffering more
+  // during the run.
+  const result = await execa(options.lakeCommand, [...options.args], {
+    cwd: options.workspaceRoot,
+    timeout: options.timeoutMs ?? LAKE_RUN_TIMEOUT_MS,
+    reject: false,
+    windowsHide: true,
+    stdin: 'ignore',
   });
+  const stderr = result.stderr ?? '';
+  const stderrOrMessage =
+    stderr || result.stdout ? stderr : (result.shortMessage ?? '');
+  return {
+    exitCode: result.exitCode ?? -1,
+    stdout: capOutput(result.stdout ?? ''),
+    stderr: capOutput(stderrOrMessage),
+  };
 }
