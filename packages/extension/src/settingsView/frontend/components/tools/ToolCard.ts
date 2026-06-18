@@ -288,8 +288,7 @@ export class ToolCard extends LitElement {
         appearance="accent"
         size="small"
       >
-        ${waIcon(config.icon)}
-        ${label}
+        ${waIcon(config.icon)} ${label}
       </wa-tag>
     `;
   }

@@ -314,8 +314,7 @@ export class HistoryItemElement extends LitElement {
     const metaParts: Array<string | TemplateResult> = [
       timestamp,
       html`<wa-tag variant=${categoryVariant} size="small">
-        ${decorator.icon ? waIcon(decorator.icon) : nothing}
-        ${decorator.label}
+        ${decorator.icon ? waIcon(decorator.icon) : nothing} ${decorator.label}
       </wa-tag>`,
       `Agent: ${config.agent ?? 'Unknown'}`,
       `Model: ${config.model ?? 'Unknown'}`,

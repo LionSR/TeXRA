@@ -395,8 +395,7 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         <div class="category-header">
-          ${waIcon(meta.icon)}
-          ${meta.label}
+          ${waIcon(meta.icon)} ${meta.label}
           <span class="category-count">(${items.length})</span>
         </div>
         ${repeat(
