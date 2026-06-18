@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   prepareInteractivePrompt: vi.fn(),
   readCliTerminalStatus: vi.fn(),
   runAgent: vi.fn(),
+  writeTextStderr: vi.fn(),
   writeTerminalStatus: vi.fn(),
 }));
 
@@ -32,6 +33,10 @@ vi.mock('@cli/runtime/approvalAdapter', () => ({
 
 vi.mock('@cli/runtime/terminalStatus', () => ({
   readCliTerminalStatus: mocks.readCliTerminalStatus,
+}));
+
+vi.mock('@cli/runtime/logSinks', () => ({
+  writeTextStderr: mocks.writeTextStderr,
 }));
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -260,5 +265,77 @@ describe('executeCliRequest', () => {
     await platform.lifecycle.runShutdown();
 
     expect(mocks.writeTerminalStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('executeCliConfig', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.close.mockResolvedValue(undefined);
+    mocks.installCliApprovalHandlers.mockReturnValue(vi.fn());
+    mocks.createCliRuntimeHost.mockReturnValue({
+      emit: vi.fn(),
+      prepareInteractivePrompt: mocks.prepareInteractivePrompt,
+      close: mocks.close,
+    });
+    mocks.readCliTerminalStatus.mockResolvedValue('completed');
+    mocks.runAgent.mockResolvedValue({
+      category: 'toolUse',
+      executionId: 'exec-1',
+      status: 'completed',
+      streamId: 'stream-1',
+    });
+  });
+
+  it('reports invalid configs without starting the runtime host', async () => {
+    const { executeCliConfig } = await import('@cli/runtime/runExecution');
+    const invalidConfig = { agentCategory: 'invalid' } as unknown as Parameters<
+      typeof executeCliConfig
+    >[0];
+
+    const result = await executeCliConfig(invalidConfig, cliContext());
+
+    expect(result).toMatchObject({ ok: false });
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(expect.any(String));
+    expect(mocks.createCliRuntimeHost).not.toHaveBeenCalled();
+    expect(mocks.runAgent).not.toHaveBeenCalled();
+  });
+
+  it('marks executions errored when the resolved category is unexpected', async () => {
+    const { AgentCategory } =
+      await import('@agent/core/definition/AgentDataclass');
+    const { executeCliConfig } = await import('@cli/runtime/runExecution');
+    mocks.runAgent.mockResolvedValueOnce({
+      category: AgentCategory.Workflow,
+      executionId: 'exec-1',
+      outcome: 'completed',
+      outputs: [],
+      compileFailures: [],
+    });
+
+    const result = await executeCliConfig(
+      {
+        agent: 'chat',
+        model: 'gpt54',
+        inputFiles: [],
+        contextFiles: [],
+        instruction: 'Check this.',
+        workingDirectory: '/tmp/project',
+        agentCategory: AgentCategory.ToolUse,
+      },
+      cliContext(),
+      {
+        expectedCategory: AgentCategory.ToolUse,
+        categoryMismatchMessage: 'wrong category',
+      },
+    );
+
+    expect(result).toMatchObject({ ok: false });
+    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
+      expect.any(String),
+      EXECUTION_STATUS.ERROR,
+    );
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith('wrong category');
+    expect(mocks.close).toHaveBeenCalledOnce();
   });
 });
