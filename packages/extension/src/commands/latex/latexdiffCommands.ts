@@ -26,6 +26,19 @@ import {
   describeMathMarkupOption,
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
+import { CHANNEL, service } from '@latex/latexdiff/service';
+import {
+  discoverLatestExecutionOutputs,
+  scanRunDirForOutputs,
+} from '@latex/latexdiff/outputDiscovery';
+import {
+  runLatexdiffFromMetadata,
+  runLatexdiffViaWorkspaceScan,
+} from '@latex/latexdiff/diffOperations';
+import type {
+  DiffRunOutcome,
+  RunLatexdiffCommandConfig,
+} from '@latex/latexdiff/types';
 import * as logger from '@logger/logUtils';
 import { ExecutionIdSchema, RoundKeySchema } from '@shared/schemas';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
@@ -37,19 +50,6 @@ import {
   getLatexdiffPackNotifications,
   type LatexHousekeepingNotification,
 } from './latexHousekeepingNotifications';
-import { CHANNEL, service } from './latexdiff/service';
-import {
-  discoverLatestExecutionOutputs,
-  scanRunDirForOutputs,
-} from './latexdiff/outputDiscovery';
-import {
-  runLatexdiffFromMetadata,
-  runLatexdiffViaWorkspaceScan,
-} from './latexdiff/diffOperations';
-import type {
-  DiffRunOutcome,
-  RunLatexdiffCommandConfig,
-} from './latexdiff/types';
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 
