@@ -1,6 +1,5 @@
-import pRetry from 'p-retry';
-
 import * as logger from '@logger/logUtils';
+import { delay } from '@utils/core';
 
 export type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
@@ -180,6 +179,7 @@ class Node<
     return cloned;
   }
   async _exec(prepRes: unknown): Promise<unknown> {
+    // Guard against infinite loop: ensure at least 1 retry attempt
     if (this.maxRetries < 1) {
       logger.warn(
         CHANNEL,
@@ -187,30 +187,57 @@ class Node<
       );
     }
     const effectiveMaxRetries = Math.max(1, this.maxRetries);
-    const MAX_MANUAL_RETRIES = 100;
 
-    // Outer loop: restarts the auto-retry cycle when the user clicks "retry".
-    for (let manualRetry = 0; manualRetry < MAX_MANUAL_RETRIES; manualRetry++) {
-      try {
-        return await pRetry(() => this.exec(prepRes), {
-          retries: effectiveMaxRetries - 1,
-          minTimeout: this.wait * 1000,
-          factor: 1, // fixed backoff (no exponential growth)
-          signal: this.signal,
-          // Read this.signal dynamically: subclasses (e.g. RetryState) set it
-          // inside exec() via withAbortController, so it may be undefined here.
-          shouldRetry: ({ error }) =>
-            !this.signal?.aborted && this.shouldAutoRetry(error),
-        });
-      } catch (e) {
-        const shouldRetry =
-          !this.signal?.aborted &&
-          (await this.retryPrompt(prepRes, e as Error));
-        if (shouldRetry) continue;
-        return await this.execFallback(prepRes, e as Error);
+    // Safety limit for manual retries to prevent infinite loops from buggy retryPrompt
+    const MAX_MANUAL_RETRIES = 100;
+    let manualRetryCount = 0;
+
+    // Outer loop for manual retry (restarts auto-retry cycle)
+    while (manualRetryCount < MAX_MANUAL_RETRIES) {
+      for (
+        let currentRetry = 0;
+        currentRetry < effectiveMaxRetries;
+        currentRetry++
+      ) {
+        // Check abort at start of each retry for responsive cancellation
+        // This ensures we don't attempt exec when the user has already cancelled
+        if (this.signal?.aborted) {
+          const cancelError = new Error('Operation cancelled by user');
+          return await this.execFallback(prepRes, cancelError);
+        }
+        try {
+          return await this.exec(prepRes);
+        } catch (e) {
+          // If abort signal is set and aborted, skip retries and go to fallback
+          // This prevents unnecessary retries when the user intentionally cancelled
+          const isAborted = this.signal?.aborted;
+          const isLastAutoRetry = currentRetry === effectiveMaxRetries - 1;
+          const skipAutoRetry = !this.shouldAutoRetry(e as Error);
+
+          if (isLastAutoRetry || isAborted || skipAutoRetry) {
+            // Auto-retries exhausted - try manual retry (unless aborted)
+            if (!isAborted) {
+              const shouldRetry = await this.retryPrompt(prepRes, e as Error);
+              if (shouldRetry) {
+                manualRetryCount++;
+                break; // Break inner loop to restart auto-retries
+              }
+            }
+            return await this.execFallback(prepRes, e as Error);
+          }
+          if (this.wait > 0) {
+            await delay(this.wait * 1000);
+            // Check abort after delay to exit quickly if cancelled during wait
+            if (this.signal?.aborted) {
+              return await this.execFallback(prepRes, e as Error);
+            }
+          }
+        }
       }
+      // If we broke from inner loop, continue outer loop to restart auto-retries
     }
 
+    // Safeguard: if we somehow exit the loop without returning, throw
     throw new Error(
       `Node exceeded maximum manual retry limit (${MAX_MANUAL_RETRIES})`,
     );
