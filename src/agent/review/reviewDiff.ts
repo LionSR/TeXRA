@@ -15,6 +15,8 @@ import * as path from 'node:path';
 import simpleGit, { type SimpleGit } from 'simple-git';
 
 // Local imports
+import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
 
@@ -78,7 +80,8 @@ function makeGit(cwd: string): SimpleGit {
 async function rawGit(sg: SimpleGit, args: string[]): Promise<string | null> {
   try {
     return await sg.raw(args);
-  } catch {
+  } catch (err) {
+    logger.debug('reviewDiff', `git ${args.join(' ')} failed: ${toErrorMessage(err)}`);
     return null;
   }
 }
@@ -149,8 +152,8 @@ async function detectBaseBranch(sg: SimpleGit): Promise<BaseBranch | null> {
     }),
   );
   for (const { candidate, local, origin } of verified) {
-    // simple-git returns "" for --quiet non-existent refs (exit 1, no stdout);
-    // truthy check correctly treats "" as "not found" and a SHA as "found".
+    // rawGit returns null for non-existent refs: simple-git's .raw() rejects on
+    // any non-zero exit, caught and converted to null; a truthy SHA means "found".
     if (local) {
       return { ref: candidate, shortName: candidate };
     }
@@ -197,7 +200,12 @@ export interface BaseBranchCandidate {
 export async function listBaseBranchCandidates(
   cwd: string,
 ): Promise<BaseBranchCandidate[]> {
-  const sg = makeGit(cwd);
+  let sg: SimpleGit;
+  try {
+    sg = makeGit(cwd);
+  } catch {
+    return [];
+  }
   const repoRoot = (await rawGit(sg, ['rev-parse', '--show-toplevel']))?.trim();
   if (!repoRoot) return [];
   const sgRoot = makeGit(repoRoot);
@@ -239,8 +247,10 @@ async function resolveOnBaseBranch(
   // lists changed files on a dirty tree (exit 0, non-empty output). This
   // avoids relying on exit code 1 from `diff --quiet`, which simple-git does
   // not surface as an error for --quiet commands.
-  const dirtyFiles = (await rawGit(sg, ['diff', '--name-only', 'HEAD'])) ?? '';
-  const treeClean = !dirtyFiles.trim();
+  // Treat a git failure (null) conservatively as dirty: better to include HEAD
+  // (possibly redundant) than to silently skip uncommitted changes by picking HEAD^.
+  const dirtyFiles = await rawGit(sg, ['diff', '--name-only', 'HEAD']);
+  const treeClean = dirtyFiles !== null && !dirtyFiles.trim();
   if (!treeClean) {
     return {
       baseRef: 'HEAD',
@@ -359,7 +369,12 @@ export async function collectReviewDiff(
 ): Promise<CollectReviewDiffResult> {
   const { includeUntracked, includeSubmodules } = options;
 
-  const sg = makeGit(options.cwd);
+  let sg: SimpleGit;
+  try {
+    sg = makeGit(options.cwd);
+  } catch {
+    return { ok: false, reason: 'The workspace is not a git repository.' };
+  }
 
   // `git diff <commit>` always emits repo-relative paths; resolve the root
   // so file reads and editor locations agree with them.

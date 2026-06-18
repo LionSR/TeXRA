@@ -134,7 +134,14 @@ export class ProcessOutputPoller {
       } catch {
         break; // AbortError: stop requested
       }
-      await this.pollProcessOutputs();
+      try {
+        await this.pollProcessOutputs();
+      } catch (err) {
+        logger.debug(
+          'ProcessOutputPoller',
+          `Poll tick failed unexpectedly: ${toErrorMessage(err)}`,
+        );
+      }
     }
     // Clear the reference so a future register() can start a new loop.
     if (this.loopController?.signal === signal) {
