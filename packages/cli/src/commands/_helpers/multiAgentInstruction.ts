@@ -10,7 +10,7 @@ interface MultiAgentInstructionPreset {
 }
 
 const COMPLETENESS_GUIDANCE =
-  'Before claiming a result is complete, check the full domain stated by the user, including sign choices, zero and boundary cases, and symmetry branches.';
+  'Before claiming a result is complete, internally check the full domain stated by the user, including sign choices, zero and boundary cases, and symmetry branches. Use this as a correctness checklist; do not add a separate checklist or case analysis to the final answer unless the user asks for it, and keep the final answer within the user-requested scope and length.';
 
 export function formatMultiAgentRunInstruction(
   preset: MultiAgentInstructionPreset,
