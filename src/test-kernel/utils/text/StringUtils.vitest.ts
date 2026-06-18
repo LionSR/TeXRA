@@ -6,6 +6,8 @@ import {
   pluralize,
   splitContentLines,
   splitOutputLines,
+  tailWithEllipsis,
+  truncateWithEllipsis,
 } from '@utils/text/stringUtils';
 
 describe('splitContentLines', () => {
@@ -57,5 +59,15 @@ describe('pluralize', () => {
 
   it('honors explicit plural overrides', () => {
     expect(pluralize(2, 'person', 'people')).toBe('people');
+  });
+});
+
+describe('Unicode-safe ellipsis helpers', () => {
+  it('does not split a surrogate pair at the trailing truncation boundary', () => {
+    expect(truncateWithEllipsis('abc🍕def', 5)).toBe('abc🍕…');
+  });
+
+  it('does not split a surrogate pair at the leading truncation boundary', () => {
+    expect(tailWithEllipsis('abc🍕def', 5)).toBe('…🍕def');
   });
 });

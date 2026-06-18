@@ -25,7 +25,9 @@ describe('CLI SubagentList display model', () => {
     expect(childStatusColor('error')).toBe('red');
     expect(childStatusColor('failed')).toBe('red');
     expect(childStatusColor('exit 2')).toBe('red');
-    expect(childStatusColor('stopped')).toBe('red');
+    // A user stop is not an error: neutral (gray), not red, matching the
+    // progress view / webview and the canonical RUN_OUTCOME (cancelled ≠ failed).
+    expect(childStatusColor('stopped')).toBe('gray');
   });
 
   it('uses a compact child row budget instead of clipping nested sections', () => {

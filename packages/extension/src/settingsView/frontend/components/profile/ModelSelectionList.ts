@@ -189,6 +189,7 @@ export class ModelSelectionList extends LitElement {
         class="reasoning-level-select"
         .value=${currentValue}
         title=${title}
+        ?disabled=${model.disabled}
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
       >
         <wa-option value=""> ${defaultLabel} </wa-option>
@@ -243,6 +244,7 @@ export class ModelSelectionList extends LitElement {
       <div class="model-row${unavailableClass}">
         <wa-checkbox
           ?checked=${model.enabled}
+          ?disabled=${!available && !model.enabled}
           @change=${(e: Event) => {
             const checked = (e.target as WaCheckbox).checked;
             this.dispatchEvent(

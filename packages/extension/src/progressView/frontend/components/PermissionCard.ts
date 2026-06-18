@@ -314,7 +314,11 @@ export class PermissionCard extends LitElement {
     if (files.length === 0) return nothing;
 
     return html`
-      <div class="file-list" @click=${this.handleFileClick}>
+      <div
+        class="file-list"
+        @click=${this.handleFileClick}
+        @keydown=${this.handleFileKey}
+      >
         <span class="file-list-label">${label}:</span>
         ${repeat(
           files,
@@ -324,6 +328,8 @@ export class PermissionCard extends LitElement {
                 class="${clickable ? 'file-link' : 'file-label'}"
                 title=${file}
                 data-file=${ifDefined(clickable ? file : undefined)}
+                role=${ifDefined(clickable ? 'button' : undefined)}
+                tabindex=${ifDefined(clickable ? '0' : undefined)}
                 >${getBasename(file)}</span
               >`,
         )}
@@ -332,7 +338,21 @@ export class PermissionCard extends LitElement {
   }
 
   private handleFileClick(event: MouseEvent): void {
-    const file = (event.target as HTMLElement).dataset.file;
+    this.openFileFromTarget(event.target);
+  }
+
+  // Keyboard activation parity for the clickable file spans (Enter/Space),
+  // matching the GoalTab row pattern so keyboard / screen-reader users can
+  // open a proposed file, not just mouse users.
+  private handleFileKey(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.openFileFromTarget(event.target);
+    }
+  }
+
+  private openFileFromTarget(target: EventTarget | null): void {
+    const file = (target as HTMLElement | null)?.dataset.file;
     if (file) {
       postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file });
     }
