@@ -488,16 +488,16 @@ export class FileList extends LitElement {
 
   // Keyboard activation parity for the clickable file rows (Enter/Space), so
   // the generated-files list is reachable without a mouse — mirrors the click
-  // delegation, including the composed-path lookup for the nested span.
+  // delegation for file-path spans without intercepting native wa-button keys.
   private handleFileKey(event: KeyboardEvent): void {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const actionEl = getComposedPathElement<HTMLElement>(
       event,
-      '[data-command]',
+      '.file-path[data-command]',
     );
     if (!(actionEl instanceof HTMLElement)) return;
     event.preventDefault();
-    this.dispatchFileActionFrom(event);
+    this.dispatchFileAction(actionEl);
   }
 
   private dispatchFileActionFrom(event: Event): void {
@@ -506,7 +506,10 @@ export class FileList extends LitElement {
       '[data-command]',
     );
     if (!(actionEl instanceof HTMLElement)) return;
+    this.dispatchFileAction(actionEl);
+  }
 
+  private dispatchFileAction(actionEl: HTMLElement): void {
     const { command, file, base, prev } = actionEl.dataset;
     if (!command || !file) return;
 
