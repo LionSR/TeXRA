@@ -80,7 +80,7 @@ const REF_PLACEHOLDER = /@@LATEX-REF-(\d+)@@/g;
 function defaultFormatLatexReference(refType: string, label: string): string {
   const safeAttrLabel = escapeAttr(label);
   const safeTextLabel = escapeText(label);
-  return `<span class="latex-ref clickable-link" data-label="${safeAttrLabel}">\\${refType}{${safeTextLabel}}</span>`;
+  return `<span class="latex-ref clickable-link" data-label="${safeAttrLabel}" role="button" tabindex="0">\\${refType}{${safeTextLabel}}</span>`;
 }
 
 function protectLatexReferences(content: string): {
