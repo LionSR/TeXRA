@@ -1,9 +1,7 @@
 import { writeTerminalStatus } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { validateExecutionRequest } from '@agent/core/execution/executionRequests';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { EXECUTION_STATUS } from '@shared/schemas';
-import { generateExecutionId } from '@utils/core/executionId';
 
 import {
   CliUsageError,
@@ -11,7 +9,7 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
+import { writeErrorStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
   resolveCliRunModel,
@@ -28,7 +26,7 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliRequest } from '../runtime/runExecution';
+import { executeCliConfig } from '../runtime/runExecution';
 import {
   terminalStatusExitCode,
   type CliRunResult,
@@ -109,21 +107,14 @@ export async function runWorkflowAgent(
         agentCategory: AgentCategory.Workflow,
       };
 
-      const executionId = generateExecutionId();
-      const validation = validateExecutionRequest({ config, executionId });
-      if (!validation.valid) {
-        writeTextStderr(validation.message);
-        return CliExitCode.Usage;
-      }
-      const { result, terminalStatus } = await executeCliRequest(
-        validation.request,
-        runContext,
-        {
-          enforceCategory: true,
-          registerExecution: true,
-          markErrorOnThrow: true,
-        },
-      );
+      const execution = await executeCliConfig(config, runContext, {
+        enforceCategory: true,
+        registerExecution: true,
+        markErrorOnThrow: true,
+      });
+      if (!execution.ok) return execution.exitCode;
+
+      const { executionId, result, terminalStatus } = execution;
       let displayResult: CliRunResult;
       try {
         displayResult = (

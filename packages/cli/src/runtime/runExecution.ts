@@ -1,15 +1,23 @@
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { tryPlatform } from '@platform/platform';
 import { writeTerminalStatus } from '@agent/storage';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  validateExecutionRequest,
+  type ValidatedExecutionRequest,
+} from '@agent/core/execution/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
+import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import { generateExecutionId } from '@utils/core/executionId';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
 import { installCliApprovalHandlers } from './approvalAdapter';
 import { createCliRuntimeHost } from './runtimeHost';
+import { CliExitCode } from './exitCodes';
+import { writeTextStderr } from './logSinks';
 import {
   readCliTerminalStatus,
   type ExecuteAgentResult,
@@ -37,6 +45,76 @@ export interface CliExecuteOptions {
   readonly wrap?: (
     run: () => Promise<ExecuteAgentResult>,
   ) => Promise<ExecuteAgentResult>;
+}
+
+type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
+  C extends AgentCategory
+    ? Extract<ExecuteAgentResult, { category: C }>
+    : ExecuteAgentResult;
+
+export interface CliConfigExecuteOptions<
+  C extends AgentCategory | undefined = undefined,
+> extends CliExecuteOptions {
+  /** Defensive post-run guard for command paths that must stay in one category. */
+  readonly expectedCategory?: C;
+  readonly categoryMismatchMessage?: string;
+}
+
+export type CliConfigExecuteResult<C extends AgentCategory | undefined> =
+  | {
+      readonly ok: true;
+      readonly executionId: string;
+      readonly result: ExecuteAgentResultForCategory<C>;
+      readonly terminalStatus: ExecutionStatus;
+    }
+  | {
+      readonly ok: false;
+      readonly exitCode: CliExitCode;
+    };
+
+/**
+ * Build and validate a headless CLI execution request, then run it. Command
+ * handlers own command-specific config construction; this module owns the
+ * common request lifecycle so workflow, tool-use, and multi-agent runs cannot
+ * drift on validation, execution ids, or category-mismatch status writes.
+ */
+export async function executeCliConfig<
+  C extends AgentCategory | undefined = undefined,
+>(
+  config: AgentConfigPayload,
+  runContext: CliContext,
+  options: CliConfigExecuteOptions<C> = {},
+): Promise<CliConfigExecuteResult<C>> {
+  const { expectedCategory, categoryMismatchMessage, ...executeOptions } =
+    options;
+  const executionId = generateExecutionId();
+  const validation = validateExecutionRequest({ config, executionId });
+  if (!validation.valid) {
+    writeTextStderr(validation.message);
+    return { ok: false, exitCode: CliExitCode.Usage };
+  }
+
+  const { result, terminalStatus } = await executeCliRequest(
+    validation.request,
+    runContext,
+    executeOptions,
+  );
+
+  if (expectedCategory !== undefined && result.category !== expectedCategory) {
+    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+    writeTextStderr(
+      categoryMismatchMessage ??
+        `Agent resolved to a non ${expectedCategory} run.`,
+    );
+    return { ok: false, exitCode: CliExitCode.AgentError };
+  }
+
+  return {
+    ok: true,
+    executionId,
+    result: result as ExecuteAgentResultForCategory<C>,
+    terminalStatus,
+  };
 }
 
 /**
