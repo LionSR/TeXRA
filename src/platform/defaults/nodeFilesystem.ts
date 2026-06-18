@@ -117,6 +117,10 @@ export const nodeFilesystem: FileSystemProvider = {
     await fs.promises.writeFile(target, content);
   },
 
+  async appendFile(target: string, content: Uint8Array): Promise<void> {
+    await fs.promises.appendFile(target, content);
+  },
+
   async delete(
     target: string,
     options?: { recursive?: boolean },
