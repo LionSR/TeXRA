@@ -78,7 +78,7 @@ const MULTI_AGENT_INSPECT_HINT =
 const MULTI_AGENT_LOGIN_HINT =
   'Hint: built-in teams may load additional relay-served agents after `texra login`.';
 const MULTI_AGENT_LAUNCHER_INSPECT_HINT =
-  'Team setup: run `texra multi-agent inspect <team-id>` for the unavailable team.';
+  'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.';
 const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
   'Relay teams may unlock more agents after texra login.';
 
