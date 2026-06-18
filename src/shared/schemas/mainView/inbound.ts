@@ -14,6 +14,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
+import { SwitchViewMessageSchema } from '../commonViewMessages';
 import {
   commandOnly,
   withFilesArray,
@@ -29,11 +30,7 @@ const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.WEBVIEW_READY),
   commandOnly(MAIN_VIEW_COMMANDS.GET_THEME),
   commandOnly(MAIN_VIEW_COMMANDS.GET_DEBUG_MODE),
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.SWITCH_VIEW),
-    view: z.enum(['main', 'progress', 'dashboard']),
-    openInEditor: z.boolean().nullish(),
-  }),
+  SwitchViewMessageSchema,
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.THEME_SET),
     theme: z.enum(['dark', 'light']),

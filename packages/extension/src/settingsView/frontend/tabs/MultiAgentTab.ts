@@ -15,6 +15,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared utils
 import { createEvent } from '@shared/utils/events';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import {
@@ -325,7 +326,7 @@ export class MultiAgentTab extends LitElement {
                     title="${name} is the orchestrator for this team"
                   >
                     <span class="preset-orchestrator-icon" aria-hidden="true"
-                      >🎯</span
+                      >${waIcon('bullseye')}</span
                     >
                     ${name}
                   </wa-tag>
