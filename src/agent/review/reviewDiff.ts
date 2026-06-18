@@ -248,8 +248,8 @@ async function resolveOnBaseBranch(
 ): Promise<Pick<ReviewDiff, 'baseRef' | 'baseDescription'>> {
   // `diff --name-only HEAD` is empty on a clean tree (exit 0, no output) and
   // lists changed files on a dirty tree (exit 0, non-empty output). This
-  // avoids relying on exit code 1 from `diff --quiet`, which simple-git does
-  // not surface as an error for --quiet commands.
+  // avoids `diff --quiet`, whose exit code 1 ("differences found") simple-git
+  // cannot distinguish from a genuine command failure (both throw GitResponseError).
   // Treat a git failure (null) conservatively as dirty: better to include HEAD
   // (possibly redundant) than to silently skip uncommitted changes by picking HEAD^.
   const dirtyFiles = await rawGit(sg, ['diff', '--name-only', 'HEAD']);
