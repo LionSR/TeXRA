@@ -1191,6 +1191,24 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
+  it('points run-command agent arguments at the full agent catalog', async () => {
+    let result = await runCli(['run', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain(
+      'Workflow agent name from `texra agents list --category workflow --all`',
+    );
+    expect(stderr).toBe('');
+
+    stdout = '';
+    stderr = '';
+    result = await runCli(['agents', 'run', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain(
+      'Tool-use agent name from `texra agents list --category toolUse --all`',
+    );
+    expect(stderr).toBe('');
+  });
+
   it('rejects unknown flags before running command bodies', async () => {
     const result = await runCli(['doctor', '--bogus', '--no-input']);
     expect(result.exitCode).toBe(2);
