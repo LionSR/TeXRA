@@ -854,6 +854,12 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     viewRange?: [number, number],
   ): Promise<ToolResult> {
     const displayPath = `/executions/${executionId}/files/${filePath}`;
+    // Contain the read to the run's storage dir: resolveStoragePath joins
+    // filePath under executions/{id}, so a `..` segment would escape the storage
+    // root and read arbitrary host files. Mirrors AcceptRunFilesTool's guard.
+    if (getPathSegments(filePath).includes('..')) {
+      throw new ToolError(`path must not contain '..': ${filePath}`);
+    }
     const fullPath = await resolveStoragePath(executionId, filePath);
     if (!fullPath) {
       throw new ToolError(`File not found: ${displayPath}`);
