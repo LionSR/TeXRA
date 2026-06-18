@@ -310,7 +310,7 @@ export class MultiAgentTab extends LitElement {
                 variant="brand"
                 size="small"
               >
-                <wa-icon library="texra" name="check"></wa-icon> Active
+                ${waIcon('check')} Active
               </wa-tag>`
             : nothing}
         </div>
@@ -351,7 +351,7 @@ export class MultiAgentTab extends LitElement {
               @click=${(e: Event) => this.handleDeletePreset(e, preset)}
               title="Delete team"
             >
-              <wa-icon library="texra" name="trash"></wa-icon>
+              ${waIcon('trash')}
             </button>`
           : nothing}
       </div>
@@ -362,11 +362,7 @@ export class MultiAgentTab extends LitElement {
     return html`
       <div class="multi-agent-container tab-content-container">
         <div class="settings-reminder">
-          <wa-icon
-            library="texra"
-            name="organization"
-            class="settings-reminder-icon"
-          ></wa-icon>
+          ${waIcon('organization', { className: 'settings-reminder-icon' })}
           <div class="settings-reminder-body">
             <div class="settings-reminder-title">Multi-agent workflow</div>
             <div class="settings-reminder-description">

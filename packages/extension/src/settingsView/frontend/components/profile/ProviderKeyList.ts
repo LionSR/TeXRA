@@ -7,6 +7,7 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import {
   renderSetStatusIcon,
@@ -221,7 +222,7 @@ export class ProviderKeyList extends LitElement {
               title="${isExpanded ? 'Collapse settings' : 'Expand settings'}"
               @click=${() => this.toggleExpanded(entry.provider)}
             >
-              <wa-icon library="texra" name="chevron-right"></wa-icon>
+              ${waIcon('chevron-right')}
             </wa-button>
             <span class="provider-name">${entry.displayName}</span>
           </div>
