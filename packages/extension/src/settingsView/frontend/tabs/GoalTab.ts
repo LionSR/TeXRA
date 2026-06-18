@@ -12,6 +12,7 @@ import {
 } from '@shared/schemas';
 import type { Goal, GoalStatus } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { MetaPart } from '@shared/wa/metaStrip';
 import { capitalize } from '@utils/text/stringUtils';
 
@@ -112,11 +113,7 @@ export class GoalTab extends LitElement {
   private renderReminder(): TemplateResult {
     return html`
       <div class="settings-reminder">
-        <wa-icon
-          library="texra"
-          name="info"
-          class="settings-reminder-icon"
-        ></wa-icon>
+        ${waIcon('info', { className: 'settings-reminder-icon' })}
         <div class="settings-reminder-body">
           <div class="settings-reminder-title">Goal</div>
           <div class="settings-reminder-description">
@@ -133,12 +130,7 @@ export class GoalTab extends LitElement {
               size="small"
               @click=${this.handleRefresh}
             >
-              <wa-icon
-                slot="start"
-                library="texra"
-                name="rotate-right"
-              ></wa-icon>
-              Refresh
+              ${waIcon('rotate-right', { slot: 'start' })} Refresh
             </wa-button>
           </div>
         </div>
@@ -176,9 +168,7 @@ export class GoalTab extends LitElement {
             ${renderDotMeta(metaParts)}
           </div>
         </div>
-        ${inFlight
-          ? html`<wa-icon library="texra" name="chevron-right"></wa-icon>`
-          : nothing}
+        ${inFlight ? waIcon('chevron-right') : nothing}
       </div>
     `;
   }
@@ -189,7 +179,7 @@ export class GoalTab extends LitElement {
         ${this.renderReminder()}
         ${this.items.length === 0
           ? html`<div class="empty-state">
-              <wa-icon library="texra" name="compass"></wa-icon>
+              ${waIcon('compass')}
               <p>No Goals yet.</p>
             </div>`
           : html`
