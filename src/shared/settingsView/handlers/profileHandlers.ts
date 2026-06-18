@@ -84,11 +84,19 @@ export async function buildProfileMessage(
   let quotaAutoSwitched = false;
   try {
     const serverSideKeyService = getServerSideKeyService();
+    // Prime included-access ONLY when it is actually enabled. canUseServerSideKeys()
+    // refreshes (and can clear) the tier cache including the spending snapshot, so
+    // priming in personal mode would blank the relay quota UI on every refresh.
+    // (This mirrors the extension's prior primeIncludedAccessIfEnabled gating.)
+    if (serverSideKeyService.getUseIncludedModelAccess()) {
+      await serverSideKeyService.canUseServerSideKeys();
+    }
+    // Read AFTER priming, so a quota-exhaustion auto-switch (included -> personal,
+    // flipped inside canUseServerSideKeys) is reflected in apiAccessMode /
+    // quotaAutoSwitched rather than reporting the pre-switch mode.
     apiAccessMode = serverSideKeyService.getUseIncludedModelAccess()
       ? 'included'
       : 'personal';
-    // Prime the server-side key cache so the reads below see fresh values.
-    await serverSideKeyService.canUseServerSideKeys();
     accessExpiresAt =
       serverSideKeyService.getAccessExpirationDate()?.toISOString() ?? null;
     quotaAutoSwitched = serverSideKeyService.wasQuotaAutoSwitched();
