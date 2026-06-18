@@ -645,7 +645,7 @@ wa-input.desktop-command-palette-input::part(base) {
   overflow: auto;
   background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
-  font-family: var(--wa-font-family-body-monospace);
+  font-family: var(--wa-font-family-code, monospace);
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
