@@ -60,6 +60,7 @@ import {
   cliHistoryNdjsonRecords,
   deleteCliHistory,
   formatCliHistoryDetailsText,
+  formatCliHistoryNotFoundText,
   formatCliHistoryText,
   listCliHistoryEntries,
   parseCliHistoryId,
@@ -141,6 +142,27 @@ describe('CLI history runtime', () => {
     expect(parseHistoryListLimit('abc')).toBeUndefined();
     expect(parseHistoryListLimit('')).toBeUndefined();
     expect(parseHistoryListLimit(undefined)).toBeUndefined();
+  });
+
+  it('explains missing history ids as workspace-scoped', () => {
+    expect(formatCliHistoryNotFoundText('a9ce2eb983bc' as ExecutionId)).toBe(
+      [
+        'Execution not found: a9ce2eb983bc',
+        'History is scoped by --cwd; use the workspace from the original run or run `texra history list --cwd <workspace>`.',
+      ].join('\n'),
+    );
+
+    expect(
+      formatCliHistoryNotFoundText(
+        'a9ce2eb983bc' as ExecutionId,
+        '/tmp/texra-workflow-correct-yM0MOz',
+      ),
+    ).toBe(
+      [
+        'Execution not found in workspace /tmp/texra-workflow-correct-yM0MOz: a9ce2eb983bc',
+        'History is scoped by --cwd; use the workspace from the original run or run `texra history list --cwd <workspace>`.',
+      ].join('\n'),
+    );
   });
 
   it('returns null for ids without persisted metadata, config, or flow state', async () => {
