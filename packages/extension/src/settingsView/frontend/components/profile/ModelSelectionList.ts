@@ -8,6 +8,7 @@ import { classMap } from 'lit/directives/class-map.js';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   renderSetStatusIcon,
   statusCheckIconStyles,
@@ -202,13 +203,10 @@ export class ModelSelectionList extends LitElement {
         )}
       </wa-select>
       ${includedAccessCap
-        ? html`<wa-icon
-            library="texra"
-            name="warning"
-            class="model-row-icon model-row-icon--warning"
-            title=${title}
-            aria-hidden="true"
-          ></wa-icon>`
+        ? waIcon('warning', {
+            className: 'model-row-icon model-row-icon--warning',
+            title,
+          })
         : nothing}
     `;
   }
@@ -226,14 +224,7 @@ export class ModelSelectionList extends LitElement {
       ? 'model-row-icon'
       : 'model-row-icon model-row-icon--warning';
 
-    return html`
-      <wa-icon
-        library="texra"
-        name=${iconName}
-        class=${className}
-        title=${title}
-      ></wa-icon>
-    `;
+    return waIcon(iconName, { className, title });
   }
 
   private renderModelRow(model: ModelSelectionItem): TemplateResult {
@@ -259,12 +250,10 @@ export class ModelSelectionList extends LitElement {
           <span class="model-shortname">(${model.name})</span>
           ${this.renderAvailabilityIcon(model)}
           ${isExpensiveModel(model.provider, model.name)
-            ? html`<wa-icon
-                library="texra"
-                name="warning"
-                class="model-row-icon model-row-icon--warning"
-                title=${EXPENSIVE_MODEL_HINT}
-              ></wa-icon>`
+            ? waIcon('warning', {
+                className: 'model-row-icon model-row-icon--warning',
+                title: EXPENSIVE_MODEL_HINT,
+              })
             : nothing}
         </wa-checkbox>
         ${this.renderReasoningDropdown(model)}
