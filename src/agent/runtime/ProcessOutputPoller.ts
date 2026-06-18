@@ -122,8 +122,12 @@ export class ProcessOutputPoller {
       this.loopController = controller;
       void this.runPollLoop(controller.signal);
     } else if (!active && this.loopController) {
+      // Abort but do NOT null loopController here: the loop may still be
+      // inside pollProcessOutputs(). Nulling immediately lets a concurrent
+      // register() start a second loop before the first exits, producing
+      // duplicate reads. runPollLoop's cleanup nulls the field after the
+      // loop body exits and then calls reconcile() to restart if needed.
       this.loopController.abort();
-      this.loopController = null;
     }
   }
 
@@ -143,9 +147,13 @@ export class ProcessOutputPoller {
         );
       }
     }
-    // Clear the reference so a future register() can start a new loop.
+    // Null the controller so reconcile() can start a fresh loop if processes
+    // were registered while this loop was winding down after an abort.
+    // dispose() sets loopController = null before this runs, so the guard
+    // evaluates false and reconcile() is not called during teardown.
     if (this.loopController?.signal === signal) {
       this.loopController = null;
+      this.reconcile();
     }
   }
 
