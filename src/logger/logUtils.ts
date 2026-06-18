@@ -39,11 +39,11 @@ export interface LogUtilsOptions {
   data?: unknown;
 }
 
-const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
-  [LOG_LEVELS.ERROR]: '🔴',
-  [LOG_LEVELS.WARN]: '🟡',
-  [LOG_LEVELS.INFO]: '🟢',
-  [LOG_LEVELS.DEBUG]: '🔍',
+const LEVEL_TAG: Record<LogLevel, string> = {
+  [LOG_LEVELS.ERROR]: 'ERROR',
+  [LOG_LEVELS.WARN]: 'WARN ',
+  [LOG_LEVELS.INFO]: 'INFO ',
+  [LOG_LEVELS.DEBUG]: 'DEBUG',
 };
 
 interface OutputSink {
@@ -107,7 +107,7 @@ function writeLine(
   const sink = ensureChannel(channel, isAgent);
   const prefix = isAgent ? '' : `[${channel}] `;
   sink.appendLine(
-    `${EMOJI_BY_LEVEL[level]} [${getTimestamp()}] ${prefix}${message}`,
+    `${LEVEL_TAG[level]} [${getTimestamp()}] ${prefix}${message}`,
   );
 
   if (data === null || data === undefined) return;
