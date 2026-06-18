@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import { z } from 'zod';
 
 import { platform } from '@platform/platform';
@@ -30,6 +32,7 @@ const DESKTOP_PENDING_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 const DesktopPendingOAuthStateSchema = z.object({
   createdAt: z.number(),
+  nonce: z.string(),
 });
 type DesktopPendingOAuthState = z.infer<typeof DesktopPendingOAuthStateSchema>;
 
@@ -41,7 +44,13 @@ export interface DesktopSupabaseAuth {
 
 export interface DesktopAuthCallbackState {
   hasPendingSignIn(): boolean;
-  beginAuthAttempt(): Promise<void>;
+  beginAuthAttempt(nonce: string): Promise<void>;
+  /**
+   * True only when a sign-in is pending AND its stored nonce equals `nonce`.
+   * Binds an inbound callback to the attempt THIS client started, so a verified
+   * but foreign-account token deeplink can't complete a sign-in (login-CSRF).
+   */
+  matchesPendingNonce(nonce: string | undefined): boolean;
   clearAwaitingCallback(): Promise<void>;
 }
 
@@ -107,9 +116,14 @@ export function createDesktopAuthCallbackState(
       }
       return true;
     },
-    async beginAuthAttempt() {
-      pendingState = { createdAt: Date.now() };
+    async beginAuthAttempt(nonce: string) {
+      pendingState = { createdAt: Date.now(), nonce };
       await persistPendingState(pendingState);
+    },
+    matchesPendingNonce: (nonce: string | undefined) => {
+      if (!nonce || !pendingState) return false;
+      if (isPendingOAuthStateExpired(pendingState)) return false;
+      return pendingState.nonce === nonce;
     },
     async clearAwaitingCallback() {
       pendingState = null;
@@ -177,6 +191,14 @@ export function createDesktopSupabaseAuth(
       );
       return;
     }
+    const callbackNonce =
+      new URLSearchParams(callback.query).get('app_nonce') ?? undefined;
+    if (!callbackState.matchesPendingNonce(callbackNonce)) {
+      options.log?.warn?.(
+        'Desktop auth callback rejected: nonce mismatch (possible login-CSRF or stale callback)',
+      );
+      return;
+    }
     void callbackState.clearAwaitingCallback().catch((error: unknown) => {
       options.log?.debug?.(
         `Desktop auth callback state clear failed: ${toErrorMessage(error)}`,
@@ -194,7 +216,13 @@ export function createDesktopSupabaseAuth(
   return {
     async signIn(provider = DEFAULT_OAUTH_PROVIDER) {
       try {
-        const redirectTo = getAuthCallbackUri(TEXRA_PROTOCOL);
+        // Bind this attempt to a one-time nonce carried on the callback URL.
+        // Supabase preserves redirect_to query params through to the callback
+        // (the same mechanism the Codespaces ?state= routing token relies on),
+        // so the nonce returns in the texra:// callback query — letting us reject
+        // a foreign token deeplink delivered while a sign-in is merely pending.
+        const nonce = randomBytes(16).toString('hex');
+        const redirectTo = `${getAuthCallbackUri(TEXRA_PROTOCOL)}?app_nonce=${nonce}`;
         const { data, error } = await oauthClient.auth.signInWithOAuth({
           provider,
           options: { redirectTo },
@@ -205,7 +233,7 @@ export function createDesktopSupabaseAuth(
           );
         }
 
-        await callbackState.beginAuthAttempt();
+        await callbackState.beginAuthAttempt(nonce);
         await options.openExternalUrl(data.url);
         await options.showInfoMessage?.(
           'Complete sign-in in your browser. TeXRA will update when the browser returns to the desktop app.',
