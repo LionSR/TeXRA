@@ -66,6 +66,7 @@ export const chatCommand = withUsageSections(
       rows: [
         ['/help', 'show slash commands inside chat'],
         ['/status', 'show session state'],
+        ['/goal', 'explain autonomous goal mode and approved-plan startup'],
         ['/login, /logout', 'sign in or out of included access'],
         ['Ctrl-T', 'open the transcript viewer'],
         ['Tab', 'cycle visible streams when subagents are active'],
