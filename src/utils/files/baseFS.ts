@@ -85,7 +85,7 @@ export abstract class BaseFS {
     target: string,
     content: string | Uint8Array,
   ): Promise<void> {
-    await fs.promises.appendFile(this.preparePath(target), toBuffer(content));
+    await platform().fs.appendFile(this.preparePath(target), toBuffer(content));
   }
 
   public static async delete(

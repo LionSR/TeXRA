@@ -1,5 +1,4 @@
 export { GitHubSubscriptionTool } from './githubSubscriptionTool';
-export { setGitHubTokenProvider } from './githubAuth';
 export { prPollingSource } from './PRPollingSource';
 export { repoPollingSource } from './RepoPollingSource';
 export { issuePollingSource } from './IssuePollingSource';
