@@ -320,7 +320,7 @@ export class FileSelectGroup extends LitElement {
           </div>
           <div class="file-select-actions">
             ${renderIconActionButton({
-              id: `addOpened${config.type[0].toUpperCase()}${config.type.slice(
+              id: `addOpened${config.type.at(0)!.toUpperCase()}${config.type.slice(
                 1,
               )}FilesButton`,
               icon: 'folder-opened',
@@ -329,7 +329,7 @@ export class FileSelectGroup extends LitElement {
               onClick: this.handleAddOpenedFiles,
             })}
             ${renderIconActionButton({
-              id: `empty${config.type[0].toUpperCase()}${config.type.slice(
+              id: `empty${config.type.at(0)!.toUpperCase()}${config.type.slice(
                 1,
               )}FilesButton`,
               icon: 'trash',
@@ -338,7 +338,7 @@ export class FileSelectGroup extends LitElement {
               onClick: this.handleEmptyFiles,
             })}
             ${renderIconActionButton({
-              id: `select${config.type[0].toUpperCase()}${config.type.slice(
+              id: `select${config.type.at(0)!.toUpperCase()}${config.type.slice(
                 1,
               )}FilesButton`,
               icon: 'add',

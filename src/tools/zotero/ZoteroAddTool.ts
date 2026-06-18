@@ -23,13 +23,13 @@ import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
 // Local imports - core
+import pTimeout from 'p-timeout';
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
 import { isTimeoutErrorCode } from '@tools/timeouts';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { CROSSREF_CONSTANTS, crossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
-import pTimeout from 'p-timeout';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - zotero

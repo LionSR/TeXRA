@@ -10,7 +10,8 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Local imports - shared styles
+// Local imports - shared
+import type { MemoryViewItem } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -19,9 +20,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - memory view components (side-effect: register)
 import './MemoryItem';
-
-// Local imports - shared schemas
-import type { MemoryViewItem } from '@shared/schemas';
 
 // Local imports - pagination
 import {
