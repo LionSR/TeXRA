@@ -115,11 +115,30 @@ export function assertCliAgentLaunch(
  * CLI commands start with a local-only load so signed-out users avoid remote
  * auth/network work. Missing agents still get a remote-inclusive fallback, and
  * authenticated relay sessions reload bare names so the registry's normal
- * source priority can prefer remote definitions. The optional category only
- * selects the registry lookup priority; launch commands must validate the
- * returned entry explicitly with assertCliAgentLaunch().
+ * source priority can prefer remote definitions.
  */
 export async function resolveCliAgent(
+  name: string,
+): Promise<AgentEntry | undefined> {
+  return resolveCliAgentEntry(name);
+}
+
+/**
+ * Resolve and validate an agent for a CLI launch command.
+ */
+export async function resolveCliLaunchAgent(
+  name: string,
+  mode: CliAgentLaunchMode,
+): Promise<AgentEntry> {
+  const target = CLI_AGENT_LAUNCH_TARGETS[mode];
+  return assertCliAgentLaunch(
+    name,
+    await resolveCliAgentEntry(name, target.requiredCategory),
+    mode,
+  );
+}
+
+async function resolveCliAgentEntry(
   name: string,
   lookupCategory?: AgentCategory,
 ): Promise<AgentEntry | undefined> {

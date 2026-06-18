@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => {
     withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
     isAuthenticated: vi.fn(),
-    resolveCliAgent: vi.fn(),
+    resolveCliLaunchAgent: vi.fn(),
     resolveCliRunModel: vi.fn(),
     writeErrorStderr: vi.fn(),
     writeTextStderr: vi.fn(),
@@ -59,7 +59,7 @@ vi.mock('@cli/commands/_helpers/output', () => ({
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
-  resolveCliAgent: mocks.resolveCliAgent,
+  resolveCliLaunchAgent: mocks.resolveCliLaunchAgent,
 }));
 
 vi.mock('@cli/runtime/runExecution', () => ({
@@ -103,7 +103,7 @@ describe('CLI agents run command', () => {
         }) => Promise<unknown>,
       ) => run({ inputFiles: ['problem.md'], contextFiles: ['notes.md'] }),
     );
-    mocks.resolveCliAgent.mockResolvedValue({
+    mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'chat',
       category: AgentCategory.ToolUse,
       source: 'builtInToolUse',
@@ -141,11 +141,11 @@ describe('CLI agents run command', () => {
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
     expect(mocks.initLocalCliPlatform.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.resolveCliAgent.mock.invocationCallOrder[0],
+      mocks.resolveCliLaunchAgent.mock.invocationCallOrder[0],
     );
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
+    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
       'chat',
-      AgentCategory.ToolUse,
+      'agentsRun',
     );
     expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
       ['problem.md'],
@@ -191,12 +191,16 @@ describe('CLI agents run command', () => {
 
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.resolveCliAgent).not.toHaveBeenCalled();
+    expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('reports missing agents before resolving the model', async () => {
-    mocks.resolveCliAgent.mockResolvedValueOnce(undefined);
+    mocks.resolveCliLaunchAgent.mockRejectedValueOnce(
+      new Error(
+        'Tool-use agent not found: missing-agent. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
+      ),
+    );
     const { runToolUseAgent } = await import('@cli/commands/agentsRun');
 
     await expect(
@@ -214,22 +218,20 @@ describe('CLI agents run command', () => {
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
+    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
       'missing-agent',
-      AgentCategory.ToolUse,
+      'agentsRun',
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('reports workflow agents before resolving the model', async () => {
-    mocks.resolveCliAgent.mockResolvedValueOnce({
-      name: 'polish',
-      category: AgentCategory.Workflow,
-      source: 'builtInWorkflow',
-      path: '/agents/polish.yaml',
-      tools: [],
-    });
+    mocks.resolveCliLaunchAgent.mockRejectedValueOnce(
+      new Error(
+        'Agent "polish" is a workflow agent; `texra agents run` only handles tool-use agents. Use `texra run polish` for workflow agents.',
+      ),
+    );
     const { runToolUseAgent } = await import('@cli/commands/agentsRun');
 
     await expect(
@@ -247,9 +249,9 @@ describe('CLI agents run command', () => {
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
+    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
       'polish',
-      AgentCategory.ToolUse,
+      'agentsRun',
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
