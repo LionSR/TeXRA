@@ -1,16 +1,7 @@
-// Third-party imports
 import { type ZodType } from 'zod';
 
-// Local imports
 import { ensureError } from '@common/errors/errorMessage';
-
-/**
- * Outcome of a non-throwing JSON parse. Mirrors the shape of Zod's
- * `safeParse` so call sites can branch on `ok` without try/catch.
- */
-export type JsonParseResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: Error };
+import { type Result, ok, err } from '@common/result';
 
 /**
  * Parse JSON text without throwing.
@@ -20,11 +11,11 @@ export type JsonParseResult<T> =
  * `SyntaxError` raised by `JSON.parse`. Use this instead of a bare
  * `JSON.parse(...)` wrapped in try/catch.
  */
-export function safeParseJson(text: string): JsonParseResult<unknown> {
+export function safeParseJson(text: string): Result<unknown, Error> {
   try {
-    return { ok: true, value: JSON.parse(text) as unknown };
+    return ok(JSON.parse(text) as unknown);
   } catch (error) {
-    return { ok: false, error: ensureError(error) };
+    return err(ensureError(error));
   }
 }
 
@@ -40,11 +31,11 @@ export function safeParseJson(text: string): JsonParseResult<unknown> {
 export function parseJsonWith<T>(
   text: string,
   schema: ZodType<T>,
-): JsonParseResult<T> {
+): Result<T, Error> {
   const parsed = safeParseJson(text);
   if (!parsed.ok) return parsed;
 
   const result = schema.safeParse(parsed.value);
-  if (result.success) return { ok: true, value: result.data };
-  return { ok: false, error: result.error };
+  if (result.success) return ok(result.data);
+  return err(result.error);
 }
