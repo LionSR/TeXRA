@@ -1312,7 +1312,6 @@ export async function runChat(
       wrapped,
     );
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
-    disposers.push(unbindApprovals);
     const executionId = generateExecutionId();
     let waitingTurn = 0;
     let executionRegistered = false;
@@ -1391,6 +1390,10 @@ export async function runChat(
       })
       .finally(() => {
         detachResultToast();
+        // Per-run: restore host.emit + clear the global tool-edit handler now,
+        // not at session teardown — otherwise a stale handler bound to this dead
+        // run's host survives between turns and disposers[] grows each turn.
+        unbindApprovals();
         if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
         markChatTuiRunCompleted(session);
         void runtimeHost.close();
@@ -1479,7 +1482,6 @@ export async function runChat(
       wrapped,
     );
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
-    disposers.push(unbindApprovals);
     const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
 
     session.runPromise = setCliHelperModel(currentModel)
@@ -1508,6 +1510,10 @@ export async function runChat(
       })
       .finally(() => {
         detachResultToast();
+        // Per-run: restore host.emit + clear the global tool-edit handler now,
+        // not at session teardown — otherwise a stale handler bound to this dead
+        // run's host survives between turns and disposers[] grows each turn.
+        unbindApprovals();
         if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
         markChatTuiRunCompleted(session);
         void runtimeHost.close();
