@@ -1,22 +1,20 @@
 /**
- * Injectable GitHub token provider.
+ * GitHub personal access token lookup.
  *
- * This module is VS Code-free. The extension host registers an implementation
- * during activation (see `setGitHubTokenProvider`) that reads from VS Code's
- * SecretStorage (or `GITHUB_TOKEN` env fallback). Tools and the polling
- * service read the token lazily via `getGitHubToken()` so they never depend on
- * VS Code APIs directly.
+ * Host-neutral: reads from the platform secrets port (each host wires its own
+ * secret store) with a `GITHUB_TOKEN` environment-variable fallback. The token
+ * is persisted under `github.token` (set via the Git settings tab), while the
+ * conventional env var is `GITHUB_TOKEN` — a different name — hence the explicit
+ * second fallback. Because every host wires `platform().secrets`, GitHub tools
+ * now work in the CLI and desktop too, not just the extension.
  */
+import { tryPlatform } from '@platform/platform';
 
-export type GitHubTokenProvider = () => string | undefined;
+/** SecretStorage key under which the GitHub PAT is persisted. */
+export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';
 
-let provider: GitHubTokenProvider = () => undefined;
-
-export function setGitHubTokenProvider(p: GitHubTokenProvider): void {
-  provider = p;
-}
-
-export function getGitHubToken(): string | undefined {
-  const token = provider();
+export async function getGitHubToken(): Promise<string | undefined> {
+  const stored = await tryPlatform()?.secrets.get(GITHUB_TOKEN_STORAGE_KEY);
+  const token = stored ?? process.env.GITHUB_TOKEN;
   return token && token.length > 0 ? token : undefined;
 }

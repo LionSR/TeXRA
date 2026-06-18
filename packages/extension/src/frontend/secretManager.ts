@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 
 export type { ApiProvider };
 
@@ -39,16 +40,10 @@ export class SecretManager {
 
   public static readonly API_PROVIDERS = API_PROVIDERS;
 
-  public static readonly GITHUB_TOKEN_KEY = 'github.token';
+  public static readonly GITHUB_TOKEN_KEY = GITHUB_TOKEN_STORAGE_KEY;
 
   public static getApiKeySecretName(provider: ApiProvider): string {
     return `apiKey.${provider}`;
-  }
-
-  /** Read the GitHub personal access token from secret storage, env fallback. */
-  public static async getGitHubToken(): Promise<string | undefined> {
-    const stored = await this.get(this.GITHUB_TOKEN_KEY);
-    return stored ?? process.env.GITHUB_TOKEN ?? undefined;
   }
 
   public static async gitHubTokenExists(): Promise<'secret' | 'env' | 'none'> {

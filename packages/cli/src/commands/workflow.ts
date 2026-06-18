@@ -1,8 +1,6 @@
 import { writeTerminalStatus } from '@agent/storage';
-import {
-  AgentConfigSchema,
-  type AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import { validateExecutionRequest } from '@agent/core/execution/executionRequests';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -13,7 +11,7 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { writeErrorStderr } from '../runtime/logSinks';
+import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
   resolveCliRunModel,
@@ -116,9 +114,13 @@ export async function runWorkflowAgent(
       };
 
       const executionId = generateExecutionId();
-      const registeredConfig = AgentConfigSchema.parse(config);
+      const validation = validateExecutionRequest({ config, executionId });
+      if (!validation.valid) {
+        writeTextStderr(validation.message);
+        return CliExitCode.Usage;
+      }
       const { result, terminalStatus } = await executeCliRequest(
-        { config: registeredConfig, executionId },
+        validation.request,
         runContext,
         {
           enforceCategory: true,
