@@ -68,7 +68,7 @@ TeXRA 就是把这套流程做成了产品：VS Code 插件（Cursor、Windsurf 
 
 1. 改完一节初稿，跑 polish agent 润色；只想修错别字语法就用 correct agent，它刻意不动你的行文风格。输出不直接写文件，而是进入版本化暂存区并自动生成 latexdiff PDF：红色删除线、蓝色新增，只显示有改动的页。看完逐条接受或拒绝。
 2. 编译挂了，latexFixer agent 读编译日志定位修复，连 latexdiff 产生的 DIF 标记损坏也能修。
-3. 终端党可以全程命令行：texra run polish --input - 支持 stdin 管道，能写进脚本；texra chat 是交互式 TUI，/model 可以中途换模型。
+3. 终端党可以全程命令行：texra run polish --input - 支持 stdin 管道，能写进脚本；texra chat 是交互式 TUI。
 4. 想被狠狠批一顿，criticize agent 用 \criticize{意见}{严重度}{置信度} 在源码里插入行内批注，像一位不留情面的审稿人。
 
 成本（国内同学最常问）：支持 DeepSeek、GLM、Kimi、Qwen、MiniMax 等自带 key（加密存储），GitHub 或 Google 登录含免费额度（用量在设置里可见），学术研究者可申请 Researcher Access Program 的免费托管额度，免费额度用完会自动回落到你自己的 key。
