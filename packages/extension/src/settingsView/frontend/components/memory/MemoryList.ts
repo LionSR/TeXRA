@@ -12,6 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -79,7 +80,7 @@ export class MemoryList extends LitElement {
   override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">
-        <wa-icon library="texra" name="database"></wa-icon>
+        ${waIcon('database')}
         <p>No saved memories yet.</p>
         <p class="text-secondary">
           Memories are created automatically when the assistant learns something
