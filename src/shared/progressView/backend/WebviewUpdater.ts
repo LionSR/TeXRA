@@ -52,15 +52,15 @@ export interface LogContentExtras {
   contextState?: ContextStateData;
 }
 
-/** Payload for batched stream content hydration (tab switch). */
-export interface SyncStreamContentPayload {
+/**
+ * Payload for batched stream content hydration (tab switch).
+ *
+ * Extends {@link LogContentExtras} so the workflow files / usage / context
+ * fields shared with incremental log updates have a single definition.
+ */
+export interface SyncStreamContentPayload extends LogContentExtras {
   stream: StreamTabId | '';
   action?: 'render' | 'clear';
-  workflowFiles?: Record<string, OutputFileInfo[]>;
-  workflowMissingOutputs?: Record<string, string[]>;
-  workflowCompileFailures?: Record<string, CompileFailure[]>;
-  runUsage?: Record<string, TokenUsageStats>;
-  contextState?: ContextStateData;
   todos: TodoItem[];
   plan: Plan | null;
   queuedFollowUps: string[];
