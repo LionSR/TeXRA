@@ -12,8 +12,6 @@ const UsageLogMetadataSchema = z.object({
   streamId: z.string().optional(),
 });
 
-type UsageLogMetadata = z.infer<typeof UsageLogMetadataSchema>;
-
 const UsageLogStatsSchema = z.object({
   inputTokens: z.int().nonnegative(),
   outputTokens: z.int().nonnegative(),
@@ -24,8 +22,6 @@ const UsageLogStatsSchema = z.object({
   cacheCreationInputTokens: z.int().nonnegative().optional(),
   reasoningTokens: z.int().nonnegative().optional(),
 });
-
-type UsageLogStats = z.infer<typeof UsageLogStatsSchema>;
 
 export const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
   UsageLogStatsSchema.shape,
