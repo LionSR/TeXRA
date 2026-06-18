@@ -8,6 +8,7 @@ import { describe, it } from 'vitest';
 import {
   getAuthCallbackBasePath,
   isAuthCallbackPath,
+  parseAuthCallbackCode,
   parseAuthCallbackTokens,
 } from '@auth/core/authCallback';
 
@@ -104,6 +105,53 @@ describe('authCallback', () => {
     assert.deepEqual(parseAuthCallbackTokens({ path: '/auth-callback' }), {
       success: false,
       error: 'Missing tokens in callback',
+    });
+  });
+});
+
+describe('parseAuthCallbackCode', () => {
+  it('extracts the PKCE code from the query string', () => {
+    assert.deepEqual(
+      parseAuthCallbackCode({ path: '/auth-callback', query: 'code=abc123' }),
+      { success: true, code: 'abc123' },
+    );
+  });
+
+  it('falls back to the fragment when the query has no code', () => {
+    assert.deepEqual(
+      parseAuthCallbackCode({
+        path: '/auth-callback',
+        fragment: 'code=frag-code',
+      }),
+      { success: true, code: 'frag-code' },
+    );
+  });
+
+  it('prefers the query code over a fragment code', () => {
+    assert.deepEqual(
+      parseAuthCallbackCode({
+        path: '/auth-callback',
+        query: 'code=query-code',
+        fragment: 'code=fragment-code',
+      }),
+      { success: true, code: 'query-code' },
+    );
+  });
+
+  it('reports auth errors before looking for a code', () => {
+    assert.deepEqual(
+      parseAuthCallbackCode({
+        path: '/auth-callback',
+        query: 'error=access_denied&error_description=Nope',
+      }),
+      { success: false, error: 'Nope', isAuthError: true },
+    );
+  });
+
+  it('reports a missing code', () => {
+    assert.deepEqual(parseAuthCallbackCode({ path: '/auth-callback' }), {
+      success: false,
+      error: 'Missing authorization code in callback',
     });
   });
 });
