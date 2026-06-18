@@ -81,7 +81,10 @@ async function rawGit(sg: SimpleGit, args: string[]): Promise<string | null> {
   try {
     return await sg.raw(args);
   } catch (err) {
-    logger.debug('reviewDiff', `git ${args.join(' ')} failed: ${toErrorMessage(err)}`);
+    logger.debug(
+      'reviewDiff',
+      `git ${args.join(' ')} failed: ${toErrorMessage(err)}`,
+    );
     return null;
   }
 }
