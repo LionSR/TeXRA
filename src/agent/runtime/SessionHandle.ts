@@ -36,7 +36,10 @@ import { createChannelTrace } from '@logger';
 import { tryUseRunContext } from './RunContext';
 import { ExecutionRegistry, executionRegistry } from './executionRegistry';
 import { InterruptRegistry, interruptRegistry } from './InterruptRegistry';
-import { RunCoordinatorBridge, runCoordinatorBridge } from './coordinators/runCoordinators';
+import {
+  RunCoordinatorBridge,
+  runCoordinatorBridge,
+} from './coordinators/runCoordinators';
 import {
   ExecutionSubscriptionBinder,
   executionSubscriptionBinder,

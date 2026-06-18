@@ -1,5 +1,8 @@
 import { useRunContext, type RunCoordinators } from '../RunContext';
-import { executionRegistry, type ExecutionRegistry } from '../executionRegistry';
+import {
+  executionRegistry,
+  type ExecutionRegistry,
+} from '../executionRegistry';
 import type {
   ProposalRequestOptions,
   ProposalResult,
