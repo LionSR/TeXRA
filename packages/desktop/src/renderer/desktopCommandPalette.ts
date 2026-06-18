@@ -76,6 +76,7 @@ export function createDesktopCommandPalette({
       item: 'desktop-command-palette-item',
       label: 'desktop-command-palette-label',
       meta: 'desktop-command-palette-meta',
+      empty: 'desktop-command-palette-empty',
     },
   });
 }

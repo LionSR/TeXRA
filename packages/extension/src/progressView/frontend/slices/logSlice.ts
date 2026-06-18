@@ -2,6 +2,7 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
+  ContextStateDataSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_STATUS,
@@ -29,20 +30,8 @@ function isTaskGroupStatus(
 }
 
 function asContextStateData(data: unknown): ContextStateData | undefined {
-  if (typeof data !== 'object' || data === null) return undefined;
-  const value = data as Partial<ContextStateData>;
-  if (
-    typeof value.inputTokens === 'number' &&
-    typeof value.contextWindow === 'number' &&
-    typeof value.utilizationPercent === 'number'
-  ) {
-    return {
-      inputTokens: value.inputTokens,
-      contextWindow: value.contextWindow,
-      utilizationPercent: value.utilizationPercent,
-    };
-  }
-  return undefined;
+  const result = ContextStateDataSchema.safeParse(data);
+  return result.success ? result.data : undefined;
 }
 
 function toLogMessage(entry: StreamLogEntry): LogMessageData {

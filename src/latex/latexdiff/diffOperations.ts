@@ -6,10 +6,8 @@
 // Standard library imports
 import * as path from 'node:path';
 
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Local imports
+import { platform } from '@platform/platform';
 import {
   legacyWorkflowOutputRoundRegex,
   midEraWorkflowOutputStem,
@@ -27,14 +25,20 @@ import {
   pathToLocation,
 } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
+import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 
 import { CHANNEL, service } from './service';
-import type { DiffOperation, DiffRunOutcome, DiffRunResult } from './types';
+import type {
+  DiffOperation,
+  DiffProgressReporter,
+  DiffRunOutcome,
+  DiffRunResult,
+} from './types';
 
 export async function executeDiffOperations(
   operations: DiffOperation[],
   mathMarkup: MathMarkupOption | undefined,
-  progress: vscode.Progress<{ message?: string; increment?: number }>,
+  progress: DiffProgressReporter,
   immediateResults: DiffRunResult[] = [],
 ): Promise<DiffRunOutcome> {
   const results: DiffRunResult[] = [...immediateResults];
@@ -95,7 +99,7 @@ export async function runLatexdiffFromMetadata(params: {
   rounds: Map<number, OutputFileInfo[]>;
   mathMarkup?: MathMarkupOption;
   generateBetweenRoundDiffs: boolean;
-  progress: vscode.Progress<{ message?: string; increment?: number }>;
+  progress: DiffProgressReporter;
   fileService: TaskRunFileService;
 }): Promise<DiffRunOutcome> {
   const { rounds, mathMarkup, generateBetweenRoundDiffs, progress } = params;
@@ -182,7 +186,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
   outputFiles?: string[];
   mathMarkup?: MathMarkupOption;
   generateBetweenRoundDiffs: boolean;
-  progress: vscode.Progress<{ message?: string; increment?: number }>;
+  progress: DiffProgressReporter;
 }): Promise<DiffRunOutcome> {
   const {
     agent,
@@ -214,9 +218,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     );
 
     const absoluteDir = path.join(workspacePath, outputDirPath);
-    const dirEntries = await vscode.workspace.fs.readDirectory(
-      vscode.Uri.file(absoluteDir),
-    );
+    const dirEntries = await platform().fs.readDirectory(absoluteDir);
 
     const roundOutputsMap = new Map<number, string>();
 
@@ -228,8 +230,12 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       model,
     );
     for (const [fileName, fileType] of dirEntries) {
+      // Skip symlinks (mirrored dependency copies, not revised outputs) so
+      // behavior matches the prior strict `=== FileType.File` check; the
+      // platform FS reports a symlink as `SymbolicLink | targetType`.
       if (
-        fileType !== vscode.FileType.File ||
+        !isFile(fileType) ||
+        isSymlink(fileType) ||
         !hasExtension(fileName, '.tex') ||
         fileName.includes('_diff')
       ) {
@@ -251,17 +257,15 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       model,
     })}.tex`;
     for (const [entryName, entryType] of dirEntries) {
-      if (entryType !== vscode.FileType.Directory) continue;
+      if (!isDirectory(entryType) || isSymlink(entryType)) continue;
       const round = parseWorkflowOutputRoundDir(entryName);
       if (round == null) continue;
       if (roundOutputsMap.has(round)) continue;
 
       const roundAbsoluteDir = path.join(absoluteDir, entryName);
-      let roundEntries: [string, vscode.FileType][];
+      let roundEntries: [string, number][];
       try {
-        roundEntries = await vscode.workspace.fs.readDirectory(
-          vscode.Uri.file(roundAbsoluteDir),
-        );
+        roundEntries = await platform().fs.readDirectory(roundAbsoluteDir);
       } catch (error) {
         // Skip unreadable round dirs but record which one so a missing
         // round output isn't silently invisible during diagnosis.
@@ -273,7 +277,9 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       }
       const match = roundEntries.find(
         ([fileName, nestedType]) =>
-          nestedType === vscode.FileType.File && fileName === midEraFilename,
+          isFile(nestedType) &&
+          !isSymlink(nestedType) &&
+          fileName === midEraFilename,
       );
       if (!match) continue;
       roundOutputsMap.set(
