@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import type { SkillSource } from './loadSkills';
 
-export interface SkillSourceContext {
+interface SkillSourceContext {
   readonly cwd: string;
   readonly resourcesPath: string;
 }

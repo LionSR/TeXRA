@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 
-export const UsageLogMetadataSchema = z.object({
+const UsageLogMetadataSchema = z.object({
   model: z.string(),
   provider: UsageProviderSchema,
   agentName: z.string().optional(),
@@ -12,9 +12,7 @@ export const UsageLogMetadataSchema = z.object({
   streamId: z.string().optional(),
 });
 
-export type UsageLogMetadata = z.infer<typeof UsageLogMetadataSchema>;
-
-export const UsageLogStatsSchema = z.object({
+const UsageLogStatsSchema = z.object({
   inputTokens: z.int().nonnegative(),
   outputTokens: z.int().nonnegative(),
   cost: z.number().nonnegative(),
@@ -24,8 +22,6 @@ export const UsageLogStatsSchema = z.object({
   cacheCreationInputTokens: z.int().nonnegative().optional(),
   reasoningTokens: z.int().nonnegative().optional(),
 });
-
-export type UsageLogStats = z.infer<typeof UsageLogStatsSchema>;
 
 export const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
   UsageLogStatsSchema.shape,
