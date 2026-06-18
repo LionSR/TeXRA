@@ -24,6 +24,7 @@ import {
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 import type { WaTabShowEvent } from '@shared/wa/tabs';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { AgentSelectionEvents } from '../components/profile/events';
 
 // Local imports - settings view components (side-effect: register)
@@ -239,14 +240,14 @@ export class AgentsTab extends LitElement {
             @wa-tab-show=${this.handleSubTabShow}
           >
             <wa-tab panel="workflow">
-              <wa-icon library="texra" name="symbol-method"></wa-icon>
+              ${waIcon('symbol-method')}
               Workflow
               <span class="agents-sub-tab-count"
                 >(${this.workflowAgents.length})</span
               >
             </wa-tab>
             <wa-tab panel="toolUse">
-              <wa-icon library="texra" name="tools"></wa-icon>
+              ${waIcon('tools')}
               Tool Use
               <span class="agents-sub-tab-count"
                 >(${this.toolUseAgents.length})</span
@@ -261,7 +262,7 @@ export class AgentsTab extends LitElement {
               title="Save current agent configuration as a team"
               @click=${this.handleSaveTeam}
             >
-              <wa-icon slot="start" library="texra" name="save"></wa-icon>
+              ${waIcon('save', { slot: 'start' })}
               Save Team
             </wa-button>
             ${this.desktopHost
@@ -274,11 +275,7 @@ export class AgentsTab extends LitElement {
                     title="Create a new agent from a blank YAML template"
                     @click=${this.handleCreateFromTemplate}
                   >
-                    <wa-icon
-                      slot="start"
-                      library="texra"
-                      name="new-file"
-                    ></wa-icon>
+                    ${waIcon('new-file', { slot: 'start' })}
                     From Template
                   </wa-button>
                   <wa-button
@@ -289,7 +286,7 @@ export class AgentsTab extends LitElement {
                     title="Create a new agent with AI"
                     @click=${this.handleCreateAgent}
                   >
-                    <wa-icon slot="start" library="texra" name="add"></wa-icon>
+                    ${waIcon('add', { slot: 'start' })}
                     New Agent
                   </wa-button>
                 `}
@@ -298,7 +295,7 @@ export class AgentsTab extends LitElement {
 
         <!-- Row 2: Custom directory info bar -->
         <div class="agents-dir-bar">
-          <wa-icon library="texra" name="folder"></wa-icon>
+          ${waIcon('folder')}
           <span class="agents-dir-label">Custom agents:</span>
           <span class="agents-dir-path" title=${this.customAgentDir}
             >${this.customAgentDir}</span
@@ -317,7 +314,7 @@ export class AgentsTab extends LitElement {
               @click=${this.handleOpenFolder}
               title="Open folder in file explorer"
             >
-              <wa-icon library="texra" name="folder-opened"></wa-icon>
+              ${waIcon('folder-opened')}
             </button>
             <wa-button
               appearance="outlined"

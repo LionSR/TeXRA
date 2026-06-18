@@ -8,6 +8,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderLoadingState } from '@shared/wa/loadingState';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -243,7 +244,7 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         <div class="category-header">
-          <wa-icon library="texra" name="shield"></wa-icon>
+          ${waIcon('shield')}
           Approval &amp; Safety
         </div>
 
@@ -264,7 +265,7 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         <div class="category-header">
-          <wa-icon library="texra" name="desktop-download"></wa-icon>
+          ${waIcon('desktop-download')}
           Desktop Diagnostics
         </div>
         <div class="desktop-settings">
@@ -296,7 +297,7 @@ export class ToolsTab extends LitElement {
               size="small"
               @click=${this.handleSetDesktopCrashReportingDsn}
             >
-              <wa-icon slot="start" library="texra" name="key"></wa-icon>
+              ${waIcon('key', { slot: 'start' })}
               ${this.desktopCrashReportingConfigured
                 ? 'Replace DSN'
                 : 'Set DSN'}
@@ -373,13 +374,13 @@ export class ToolsTab extends LitElement {
           </svg>
           <div class="tools-health-labels">
             <span class="tools-summary-stat tools-stat-available">
-              <wa-icon library="texra" name="check"></wa-icon>
+              ${waIcon('check')}
               ${available} available
             </span>
             ${missing > 0
               ? html`
                   <span class="tools-summary-stat tools-stat-missing">
-                    <wa-icon library="texra" name="warning"></wa-icon>
+                    ${waIcon('warning')}
                     ${missing} need setup
                   </span>
                 `
@@ -435,7 +436,7 @@ export class ToolsTab extends LitElement {
               title="Re-check tool availability"
               @click=${this.handleRecheck}
             >
-              <wa-icon slot="start" library="texra" name="refresh"></wa-icon>
+              ${waIcon('refresh', { slot: 'start' })}
               Re-check
             </wa-button>
           </div>

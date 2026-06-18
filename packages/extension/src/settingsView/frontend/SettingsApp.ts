@@ -30,7 +30,7 @@ import {
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import {
   registerTeXRAWebAwesomeIcons,
-  TEXRA_ICON_LIBRARY,
+  waIcon,
 } from '@shared/wa/webAwesomeIcons';
 import {
   type AgentSelectionItem,
@@ -761,11 +761,7 @@ export class SettingsApp extends SettingsAppBase {
             title="Open VS Code Settings"
             @click=${this.handleOpenVscodeSettings}
           >
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="gear"
-              variant="solid"
-            ></wa-icon>
+            ${waIcon('gear')}
           </wa-button>
         `;
 
@@ -773,12 +769,7 @@ export class SettingsApp extends SettingsAppBase {
       return html`
         <div class="settings-header">
           <div class="settings-header-user">
-            <wa-icon
-              class="settings-header-user-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="circle-user"
-              variant="solid"
-            ></wa-icon>
+            ${waIcon('circle-user', { className: 'settings-header-user-icon' })}
             <div class="settings-header-info">
               <span class="settings-header-email">${this.userEmail.get()}</span>
               <span class="settings-header-tier">${this.tier.get()} Plan</span>
@@ -794,12 +785,7 @@ export class SettingsApp extends SettingsAppBase {
               title="Sign out"
               @click=${this.handleSignOut}
             >
-              <wa-icon
-                slot="start"
-                library=${TEXRA_ICON_LIBRARY}
-                name="xmark"
-                variant="solid"
-              ></wa-icon>
+              ${waIcon('xmark', { slot: 'start' })}
               Sign out
             </wa-button>
           </div>
@@ -822,12 +808,7 @@ export class SettingsApp extends SettingsAppBase {
             title="Set provider API key"
             @click=${this.handleSetDefaultProviderKey}
           >
-            <wa-icon
-              slot="start"
-              library=${TEXRA_ICON_LIBRARY}
-              name="key"
-              variant="solid"
-            ></wa-icon>
+            ${waIcon('key', { slot: 'start' })}
             Set API key
           </wa-button>
           <wa-button
@@ -838,12 +819,7 @@ export class SettingsApp extends SettingsAppBase {
             title="Sign in"
             @click=${this.handleSignIn}
           >
-            <wa-icon
-              slot="start"
-              library=${TEXRA_ICON_LIBRARY}
-              name="user"
-              variant="solid"
-            ></wa-icon>
+            ${waIcon('user', { slot: 'start' })}
             Sign in
           </wa-button>
         </div>
@@ -875,12 +851,7 @@ export class SettingsApp extends SettingsAppBase {
       <div class="tab-content-container">
         <div class="settings-unavailable">
           <div class="settings-unavailable-title">
-            <wa-icon
-              class="settings-unavailable-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="ban"
-              variant="solid"
-            ></wa-icon>
+            ${waIcon('ban', { className: 'settings-unavailable-icon' })}
             ${title}
           </div>
           <div>${description}</div>
@@ -903,93 +874,43 @@ export class SettingsApp extends SettingsAppBase {
           @wa-tab-show=${this.handleTabShow}
         >
           <wa-tab panel="memory"
-            ><wa-icon
-              class="settings-tab-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="database"
-              variant="solid"
-            ></wa-icon>
+            >${waIcon('database', { className: 'settings-tab-icon' })}
             Memory</wa-tab
           >
           <wa-tab panel="history"
-            ><wa-icon
-              class="settings-tab-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="clock-rotate-left"
-              variant="solid"
-            ></wa-icon>
+            >${waIcon('clock-rotate-left', { className: 'settings-tab-icon' })}
             History</wa-tab
           >
           <wa-tab panel="models"
-            ><wa-icon
-              class="settings-tab-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="server"
-              variant="solid"
-            ></wa-icon>
+            >${waIcon('server', { className: 'settings-tab-icon' })}
             Models</wa-tab
           >
           <wa-tab panel="agents"
-            ><wa-icon
-              class="settings-tab-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="robot"
-              variant="solid"
-            ></wa-icon>
+            >${waIcon('robot', { className: 'settings-tab-icon' })}
             Agents</wa-tab
           >
           <wa-tab panel="multi-agent"
-            ><wa-icon
-              class="settings-tab-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="users"
-              variant="solid"
-            ></wa-icon>
+            >${waIcon('users', { className: 'settings-tab-icon' })}
             Multi-Agent</wa-tab
           >
           <wa-tab panel="tools"
-            ><wa-icon
-              class="settings-tab-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="screwdriver-wrench"
-              variant="solid"
-            ></wa-icon>
+            >${waIcon('screwdriver-wrench', { className: 'settings-tab-icon' })}
             Tools</wa-tab
           >
           <wa-tab panel="ai-agents"
-            ><wa-icon
-              class="settings-tab-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="robot"
-              variant="solid"
-            ></wa-icon>
+            >${waIcon('robot', { className: 'settings-tab-icon' })}
             Integrations</wa-tab
           >
           <wa-tab panel="git"
-            ><wa-icon
-              class="settings-tab-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="code-branch"
-              variant="solid"
-            ></wa-icon>
+            >${waIcon('code-branch', { className: 'settings-tab-icon' })}
             Git</wa-tab
           >
           <wa-tab panel="latex"
-            ><wa-icon
-              class="settings-tab-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="file-code"
-              variant="solid"
-            ></wa-icon>
+            >${waIcon('file-code', { className: 'settings-tab-icon' })}
             LaTeX</wa-tab
           >
           <wa-tab panel="goal"
-            ><wa-icon
-              class="settings-tab-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="compass"
-              variant="solid"
-            ></wa-icon>
+            >${waIcon('compass', { className: 'settings-tab-icon' })}
             Goal</wa-tab
           >
 
