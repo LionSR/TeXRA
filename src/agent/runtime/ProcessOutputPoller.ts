@@ -152,6 +152,15 @@ export class ProcessOutputPoller {
       (source) => {
         const { outputPaths } = source.handle;
         if (!outputPaths) return Promise.resolve();
+        // The snapshot above is taken before pMap drains it; a process can be
+        // unregistered while its read is still queued. Re-check membership at
+        // dequeue time so we don't recreate decoder state for a dead process
+        // (that orphan would leak in outputStates until dispose, since no
+        // future unregister fires for it). The flush() path is unaffected —
+        // it calls readIncremental directly with a caller-owned handle.
+        if (!this.processOutputs.has(source.handle.executionId)) {
+          return Promise.resolve();
+        }
         return this.readIncremental(
           source.handle.executionId,
           source.handle.parentStreamId,
