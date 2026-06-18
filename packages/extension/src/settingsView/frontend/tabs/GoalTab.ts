@@ -130,8 +130,7 @@ export class GoalTab extends LitElement {
               size="small"
               @click=${this.handleRefresh}
             >
-              ${waIcon('rotate-right', { slot: 'start' })}
-              Refresh
+              ${waIcon('rotate-right', { slot: 'start' })} Refresh
             </wa-button>
           </div>
         </div>
@@ -169,9 +168,7 @@ export class GoalTab extends LitElement {
             ${renderDotMeta(metaParts)}
           </div>
         </div>
-        ${inFlight
-          ? waIcon('chevron-right')
-          : nothing}
+        ${inFlight ? waIcon('chevron-right') : nothing}
       </div>
     `;
   }
