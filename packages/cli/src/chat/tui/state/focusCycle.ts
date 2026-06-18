@@ -40,14 +40,16 @@ export function orderedDescendantsFromTree(init: {
   const out = orderedDescendantsFromSlice(init.parentSlice).filter((id) =>
     init.streams.has(id),
   );
+  const seen = new Set(out);
   for (const [child, recordedParent] of init.parentStream) {
     if (
       recordedParent !== init.parent ||
       !init.streams.has(child) ||
-      out.includes(child)
+      seen.has(child)
     ) {
       continue;
     }
+    seen.add(child);
     out.push(child);
   }
   return out;
