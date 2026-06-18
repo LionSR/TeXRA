@@ -37,9 +37,9 @@ export function formatTimestamp(date: Date): {
   };
 }
 
-/** Format token counts for display. Values >= 100k display as "M", > 4096 as "k", otherwise raw. */
+/** Format token counts for display. Values >= 1M display as "M", > 4096 as "k", otherwise raw. */
 export function formatTokens(tokens: number): string {
-  if (tokens >= 100_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
   if (tokens > 4096) return `${Math.round(tokens / 1000)}k`;
   return `${tokens}`;
 }
