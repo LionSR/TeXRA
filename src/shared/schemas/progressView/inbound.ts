@@ -11,6 +11,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
+import { SwitchViewMessageSchema } from '../commonViewMessages';
 import { StreamTabIdSchema } from '../identifiers';
 import {
   ExternalInquirySessionLinksSchema,
@@ -42,12 +43,6 @@ const TrimmedStringSchema = z
 
 const WebviewReadyMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.WEBVIEW_READY),
-});
-
-const SwitchViewMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SWITCH_VIEW),
-  view: z.enum(['main', 'progress', 'dashboard']),
-  openInEditor: z.boolean().nullish(),
 });
 
 const InboundDeleteAllMessageSchema = z.object({

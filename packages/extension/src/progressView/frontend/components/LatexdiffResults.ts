@@ -91,7 +91,15 @@ export class LatexdiffResults extends LitElement {
     return html`<span
       class="file-link"
       data-file=${filePath}
+      role="button"
+      tabindex="0"
       @click=${() => this.handleFileClick(filePath)}
+      @keydown=${(e: KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          this.handleFileClick(filePath);
+        }
+      }}
       >${label}</span
     >`;
   }

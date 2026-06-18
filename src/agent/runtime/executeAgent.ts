@@ -333,10 +333,7 @@ export async function executeAgent(
                 onRoundFinalized,
                 setting,
                 isSubagent,
-                approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-                runtimeUnavailableTools: options.runtimeUnavailableTools,
                 onBeforeWaiting: options.onBeforeWaiting,
-                stopAfterCycle: options.stopAfterCycle,
                 onProgress: (update) => {
                   if (update.kind === 'overview') {
                     toolUseTurns++;
@@ -356,8 +353,11 @@ export async function executeAgent(
                   });
                   options.onFollowUpConsumed?.();
                 },
-                onModelChanged: (modelHandler, model) => {
-                  ctx.config.model = model;
+                onModelChanged: (modelHandler) => {
+                  // The tool-use flow already wrote services.config.model
+                  // (=== ctx.config.model, same object), so the live model is
+                  // updated before this fires; only the usage side-effect is
+                  // left to do here.
                   ctx.usageMonitor.setModelInfo({
                     capabilities: modelHandler.capabilities,
                     config: modelHandler.config,
@@ -484,8 +484,6 @@ export async function resumeToolUseFromSnapshot(
             // would drop subagent-specific instructions (e.g. the shared
             // /memories protocol) that the fresh run had included.
             isSubagent,
-            approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-            runtimeUnavailableTools: options.runtimeUnavailableTools,
             onFollowUpConsumed: () =>
               ctx.runtimeHost.emit('updateQueuedFollowUps', {
                 streamId: ctx.streamId,

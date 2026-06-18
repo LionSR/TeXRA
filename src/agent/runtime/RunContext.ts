@@ -1,6 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -27,7 +26,6 @@ export interface RunCoordinators {
  * **Why the field names differ from AgentCore.** This is a *flat* ambient
  * projection, not a copy of the nested launch context, so the names describe
  * the run directly rather than mirror `AgentCore`'s shape:
- *   - `AgentCore.logger`   → `trace`     (the run's `AgentTrace` SDK channel)
  *   - `AgentConfig.agent`  → `agentName` (`AgentConfig` nests it; here it is flat)
  *   - `AgentConfig.model`  → `model`     (flat + live; see below)
  *
@@ -43,15 +41,6 @@ export interface RunContext {
   readonly runtimeHost: AgentRuntimeHost;
   readonly streamId?: StreamTabId;
   readonly executionId?: ExecutionId;
-  /**
-   * Discriminated-event SDK channel for this run. Defaults to `noopTrace`
-   * when the context is created without a trace (e.g. in tests).
-   *
-   * Most tools receive the trace via explicit parameter threading rather than
-   * reading it here; this field exists for test helpers and future SDK
-   * consumers that need the trace without access to the full AgentLaunchContext.
-   */
-  readonly trace: AgentTrace;
   readonly coordinators?: RunCoordinators;
   /** Current model short name for this run (e.g. "opus46T"). */
   readonly model?: string;
@@ -84,11 +73,6 @@ export interface CreateRunContextOptions {
   runtimeHost: AgentRuntimeHost;
   streamId?: StreamTabId;
   executionId?: ExecutionId;
-  /**
-   * Discriminated-event channel for the run. When omitted, the context uses
-   * `noopTrace`.
-   */
-  trace?: AgentTrace;
   coordinators?: RunCoordinators;
   /** Static model fallback for manually-created run contexts. */
   model?: string;
@@ -116,7 +100,6 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
-    trace: options.trace ?? noopTrace,
     coordinators: options.coordinators,
     get model() {
       return getModel?.() ?? model;
