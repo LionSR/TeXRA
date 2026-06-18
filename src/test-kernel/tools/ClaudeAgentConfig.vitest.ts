@@ -10,7 +10,9 @@ import type { ExecResult } from '@shared/schemas/opResults';
 
 let secretStore: Map<string, string>;
 let cleanupDirs: string[];
-let executeCommandSyncMock: ReturnType<typeof vi.fn<[readonly [string, ...string[]], object?], ExecResult>>;
+let executeCommandSyncMock: ReturnType<
+  typeof vi.fn<[readonly [string, ...string[]], object?], ExecResult>
+>;
 let homedirMock: string;
 
 const EXEC_RESULT_NOT_FOUND: ExecResult = {
@@ -200,7 +202,10 @@ describe('Claude Code CLI configuration', () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
     executeCommandSyncMock.mockImplementation((command) => {
-      if (Array.isArray(command) && command.includes('Claude Code-credentials')) {
+      if (
+        Array.isArray(command) &&
+        command.includes('Claude Code-credentials')
+      ) {
         return EXEC_RESULT_FOUND;
       }
       return EXEC_RESULT_NOT_FOUND;
@@ -212,8 +217,7 @@ describe('Claude Code CLI configuration', () => {
     expect(
       executeCommandSyncMock.mock.calls.some(
         ([command]) =>
-          Array.isArray(command) &&
-          command.includes('Claude Code-credentials'),
+          Array.isArray(command) && command.includes('Claude Code-credentials'),
       ),
     ).toBe(false);
   });
