@@ -4,7 +4,9 @@
  * tool class stays focused on path routing and storage access.
  */
 
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+function truncate(str: string, maxLen: number): string {
+  return str.length > maxLen ? `${str.slice(0, maxLen - 3)}...` : str;
+}
 
 function formatBlock(block: unknown): string {
   if (typeof block === 'string') {
@@ -15,28 +17,28 @@ function formatBlock(block: unknown): string {
     case 'text':
       return (b.text as string) ?? '';
     case 'tool_use':
-      return `[tool_use: ${b.name}(${truncateWithEllipsis(JSON.stringify(b.input ?? {}), 100)})]`;
+      return `[tool_use: ${b.name}(${truncate(JSON.stringify(b.input ?? {}), 100)})]`;
     case 'tool_result': {
       const output =
         typeof b.content === 'string'
           ? b.content
           : (JSON.stringify(b.content) ?? '');
-      return `[tool_result: ${truncateWithEllipsis(output, 100)}]`;
+      return `[tool_result: ${truncate(output, 100)}]`;
     }
     default:
-      return truncateWithEllipsis(JSON.stringify(block), 100);
+      return truncate(JSON.stringify(block), 100);
   }
 }
 
 function formatMessageContent(content: unknown): string {
   if (content == null) return '';
   if (typeof content === 'string') {
-    return truncateWithEllipsis(content, 500);
+    return truncate(content, 500);
   }
   if (Array.isArray(content)) {
     return content.map((block) => formatBlock(block)).join('\n');
   }
-  return truncateWithEllipsis(JSON.stringify(content) ?? '', 500);
+  return truncate(JSON.stringify(content) ?? '', 500);
 }
 
 /** Render a stored conversation as numbered <message> blocks. */

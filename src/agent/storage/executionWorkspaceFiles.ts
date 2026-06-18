@@ -1,9 +1,9 @@
 import * as path from 'node:path';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { byStringProp } from '@utils/core/comparators';
 import { AbsoluteFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
+import { byStringProp } from '@utils/core/comparators';
 
 export interface ExecutionWorkspaceFile {
   readonly path: string;
