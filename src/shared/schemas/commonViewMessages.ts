@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { COMMON_COMMANDS } from '@shared/ipc';
 // Import from the leaf state module, not the ./mainView barrel: the barrel
 // re-exports ./inbound, which imports this file — going through the barrel
-// would close a load-time cycle (see PR #6185 review).
+// would close a load-time cycle.
 import { MainViewPersistedStateSchema } from './mainView/state';
 
 /** Theme values - single source of truth for all theme schemas */
