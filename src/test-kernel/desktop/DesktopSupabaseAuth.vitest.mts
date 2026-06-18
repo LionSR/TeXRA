@@ -10,8 +10,8 @@ import {
   createDesktopAuthCallbackState,
   createDesktopSupabaseAuth,
   type DesktopOAuthClient,
-  type DesktopAuthProfileData,
 } from '@desktop/main/desktopSupabaseAuth';
+import { buildProfileMessage } from '@shared/settingsView/handlers/profileHandlers';
 import type { StateStore } from '@platform/interfaces/state';
 
 function createCoordinator() {
@@ -198,8 +198,7 @@ describe('desktop Supabase auth', () => {
     });
     expect(onSessionChanged).toHaveBeenCalled();
 
-    const profile = (await auth.getProfileData()) as DesktopAuthProfileData;
-    expect(profile.authenticated).toBe(false);
+    expect(await SupabaseClient.isAuthenticated()).toBe(false);
     auth.dispose();
   });
 
@@ -542,11 +541,13 @@ describe('desktop Supabase auth', () => {
       openExternalUrl: vi.fn(async () => {}),
     });
 
-    const profile = await auth.getProfileData();
+    const message = await buildProfileMessage({
+      getProviderKeyStatuses: async () => [],
+    });
 
     expect(ensureFreshToken).toHaveBeenCalled();
     expect(loadAgents).toHaveBeenCalled();
-    expect(profile).toMatchObject({
+    expect(message).toMatchObject({
       authenticated: true,
       user: { email: 'user@example.com', id: 'user-1' },
       tier: 'free',
@@ -581,9 +582,11 @@ describe('desktop Supabase auth', () => {
       openExternalUrl: vi.fn(async () => {}),
     });
 
-    const profile = await auth.getProfileData();
+    const message = await buildProfileMessage({
+      getProviderKeyStatuses: async () => [],
+    });
 
-    expect(profile).toMatchObject({
+    expect(message).toMatchObject({
       authenticated: true,
       user: { email: 'user@example.com', id: 'user-1' },
       remoteAgents: [],

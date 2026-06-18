@@ -15,7 +15,6 @@ import {
 } from '@agent/index/agentRegistry';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
-import { MAX_TIER, ULTRA_TIER } from '@auth/sharedConfig';
 import {
   API_PROVIDERS,
   apiKeySecretName,
@@ -56,6 +55,7 @@ import {
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildHistoryMessage } from '@shared/settingsView/handlers/historyHandlers';
+import { buildProfileMessage } from '@shared/settingsView/handlers/profileHandlers';
 import {
   buildModelSelectionMessage,
   createModelSelectionController,
@@ -80,7 +80,6 @@ import {
   detectPackageManager,
 } from '@utils/system/toolUtils';
 import {
-  getGlobalStreaming,
   getProviderDisplayName,
   getProviderEndpoint,
   getProviderKeyUrl,
@@ -96,10 +95,6 @@ import {
   setDesktopCrashReportingDsn,
   setDesktopCrashReportingEnabled,
 } from './desktopCrashReporting.js';
-import {
-  unauthenticatedProfileData,
-  type DesktopAuthProfileData,
-} from './desktopSupabaseAuth.js';
 import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
 import {
   buildDefaultToolDashboardItems,
@@ -152,7 +147,6 @@ export interface DesktopSettingsIpcOptions {
   confirmAction?: (message: string, confirmLabel?: string) => Promise<boolean>;
   signIn?: () => Promise<void>;
   signOut?: () => Promise<void>;
-  getAuthProfileData?: () => Promise<DesktopAuthProfileData>;
   setApiAccessMode?: (mode: 'included' | 'personal') => Promise<void>;
   initializeCrashReporting?: () => Promise<void>;
   secrets?: PlatformSecrets;
@@ -346,15 +340,10 @@ export function createDesktopSettingsIpc(
   }
 
   async function postProfileData(): Promise<void> {
-    const authProfile =
-      (await options.getAuthProfileData?.()) ?? unauthenticatedProfileData();
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      ...authProfile,
-      tierConstants: { ultra: ULTRA_TIER, max: MAX_TIER },
-      providerKeyStatuses: await getProviderKeyStatuses(),
-      globalStreamingDefault: getGlobalStreaming(),
+    const message = await buildProfileMessage({
+      getProviderKeyStatuses: () => getProviderKeyStatuses(),
     });
+    options.postToRenderer(message);
   }
 
   async function postMemoryData(): Promise<void> {

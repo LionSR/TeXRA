@@ -1,11 +1,6 @@
 import { z } from 'zod';
 
 import { platform } from '@platform/platform';
-import {
-  getAgentsBySource,
-  loadAgents,
-  toRemoteAgentProfileData,
-} from '@agent/index';
 import { DEFAULT_OAUTH_PROVIDER, getAuthCallbackUri } from '@auth/config';
 import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -19,10 +14,9 @@ import {
   initializeServerSideKeyAccess,
 } from '@auth/serverKeys';
 import type { AuthServiceLogger } from '@auth/serviceLogger';
-import { FREE_TIER, type OAuthProvider } from '@auth/sharedConfig';
+import { type OAuthProvider } from '@auth/sharedConfig';
 import type { AuthCallbackUriParts } from '@auth/core/authCallback';
 import { toErrorMessage } from '@common/errors/errorMessage';
-import type { RemoteAgent } from '@shared/schemas/profileViewMessages';
 import { TEXRA_PROTOCOL } from '../desktopProtocol.js';
 import type { StateStore } from '@platform/interfaces/state';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -39,20 +33,9 @@ const DesktopPendingOAuthStateSchema = z.object({
 });
 type DesktopPendingOAuthState = z.infer<typeof DesktopPendingOAuthStateSchema>;
 
-export interface DesktopAuthProfileData {
-  authenticated: boolean;
-  user: { email: string; id: string } | null;
-  tier: string;
-  permissions: string[];
-  remoteAgents: RemoteAgent[];
-  apiAccessMode: 'included' | 'personal';
-  accessExpiresAt?: string | null;
-}
-
 export interface DesktopSupabaseAuth {
   signIn(provider?: OAuthProvider): Promise<void>;
   signOut(): Promise<void>;
-  getProfileData(): Promise<DesktopAuthProfileData>;
   dispose(): void;
 }
 
@@ -244,10 +227,6 @@ export function createDesktopSupabaseAuth(
       await options.onSessionChanged?.();
     },
 
-    async getProfileData() {
-      return loadDesktopAuthProfileData();
-    },
-
     dispose() {
       subscription.dispose();
     },
@@ -317,69 +296,6 @@ async function processProtocolCallback(
     `Signed in as ${result.session.account.label}`,
   );
   await options.onSessionChanged?.();
-}
-
-async function loadDesktopAuthProfileData(): Promise<DesktopAuthProfileData> {
-  const authenticated = await SupabaseClient.isAuthenticated();
-  if (!authenticated) return unauthenticatedProfileData();
-
-  const user = await SupabaseClient.getUser();
-  let authContext: { tier: string; permissions: string[] } = {
-    tier: FREE_TIER,
-    permissions: [],
-  };
-  try {
-    authContext = await SupabaseClient.getUserAuthContext();
-  } catch {
-    // Keep the UI signed in even if profile metadata is temporarily unavailable.
-  }
-
-  let apiAccessMode: 'included' | 'personal' = 'personal';
-  let accessExpiresAt: string | null = null;
-  try {
-    const serverSideKeyService = getServerSideKeyService();
-    apiAccessMode = serverSideKeyService.getUseIncludedModelAccess()
-      ? 'included'
-      : 'personal';
-    await serverSideKeyService.canUseServerSideKeys();
-    accessExpiresAt =
-      serverSideKeyService.getAccessExpirationDate()?.toISOString() ?? null;
-  } catch {
-    // Server-side key access is optional; personal provider keys still work.
-  }
-
-  let remoteAgents: RemoteAgent[] = [];
-  try {
-    await loadAgents();
-    remoteAgents = getAgentsBySource('remote').map(toRemoteAgentProfileData);
-  } catch {
-    // Keep auth/profile UI usable even if agent registry refresh fails.
-  }
-
-  return {
-    authenticated: true,
-    user: {
-      email: user?.email ?? 'N/A',
-      id: user?.id ?? '',
-    },
-    tier: authContext.tier,
-    permissions: authContext.permissions,
-    remoteAgents,
-    apiAccessMode,
-    accessExpiresAt,
-  };
-}
-
-export function unauthenticatedProfileData(): DesktopAuthProfileData {
-  return {
-    authenticated: false,
-    user: null,
-    tier: FREE_TIER,
-    permissions: [],
-    remoteAgents: [],
-    apiAccessMode: 'personal',
-    accessExpiresAt: null,
-  };
 }
 
 function createSessionLog(
