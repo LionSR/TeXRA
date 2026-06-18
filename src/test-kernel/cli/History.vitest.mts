@@ -289,6 +289,101 @@ describe('CLI history runtime', () => {
     );
   });
 
+  it('omits provider thinking blocks from history previews', async () => {
+    mocks.readConversation.mockResolvedValue([
+      { role: 'user', content: 'Polish the lemma.' },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'thinking',
+            thinking: 'hidden chain of thought',
+            signature: 'secret-signature',
+          },
+          { type: 'text', text: 'Final polished lemma.' },
+        ],
+      },
+    ]);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId, {
+      includeFullConversation: true,
+    });
+    const text = formatCliHistoryDetailsText(details!);
+
+    expect(details?.conversationPreview?.messages).toEqual([
+      {
+        index: 2,
+        role: 'assistant',
+        content: 'Final polished lemma.',
+        truncated: false,
+      },
+    ]);
+    expect(details?.conversation?.messages).toEqual([
+      {
+        index: 1,
+        role: 'user',
+        content: 'Polish the lemma.',
+        truncated: false,
+      },
+      {
+        index: 2,
+        role: 'assistant',
+        content: 'Final polished lemma.',
+        truncated: false,
+      },
+    ]);
+    expect(text).toContain('[assistant #2]\nFinal polished lemma.');
+    expect(text).not.toContain('hidden chain of thought');
+    expect(text).not.toContain('secret-signature');
+  });
+
+  it('keeps a placeholder for thinking-only assistant turns', async () => {
+    mocks.readConversation.mockResolvedValue([
+      { role: 'assistant', content: 'Earlier visible answer.' },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'redacted_thinking',
+            thinking: 'hidden newer reasoning',
+            signature: 'new-secret-signature',
+          },
+        ],
+      },
+    ]);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId, {
+      includeFullConversation: true,
+    });
+    const text = formatCliHistoryDetailsText(details!);
+
+    expect(details?.conversationPreview?.messages).toEqual([
+      {
+        index: 2,
+        role: 'assistant',
+        content: '[provider reasoning hidden]',
+        truncated: false,
+      },
+    ]);
+    expect(details?.conversation?.messages).toEqual([
+      {
+        index: 1,
+        role: 'assistant',
+        content: 'Earlier visible answer.',
+        truncated: false,
+      },
+      {
+        index: 2,
+        role: 'assistant',
+        content: '[provider reasoning hidden]',
+        truncated: false,
+      },
+    ]);
+    expect(text).toContain('[assistant #2]\n[provider reasoning hidden]');
+    expect(text).not.toContain('hidden newer reasoning');
+    expect(text).not.toContain('new-secret-signature');
+  });
+
   it('can show the full stored conversation for post-run inspection', async () => {
     const longToolOutput = `${'tool-output-line\n'.repeat(320)}done`;
     mocks.readConversation.mockResolvedValue([
