@@ -276,6 +276,19 @@ export function formatCliHistoryText(
     .join('\n');
 }
 
+export function formatCliHistoryNotFoundText(
+  id: ExecutionId,
+  cwd?: string,
+): string {
+  const workspace = cwd?.trim();
+  return [
+    workspace
+      ? `Execution not found in workspace ${workspace}: ${id}`
+      : `Execution not found: ${id}`,
+    'History is scoped by --cwd; use the workspace from the original run or run `texra history list --cwd <workspace>`.',
+  ].join('\n');
+}
+
 export function cliHistoryNdjsonRecords(
   entries: readonly CliHistoryEntry[],
   ts = new Date().toISOString(),

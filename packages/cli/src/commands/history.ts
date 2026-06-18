@@ -7,6 +7,7 @@ import {
   cliHistoryNdjsonRecords,
   deleteCliHistory,
   formatCliHistoryDetailsText,
+  formatCliHistoryNotFoundText,
   formatCliHistoryText,
   listCliHistoryEntries,
   parseCliHistoryId,
@@ -64,7 +65,7 @@ async function runHistoryShow(
     includeFullConversation: options.full === true,
   });
   if (!details) {
-    writeTextStderr(`Execution not found: ${id}`);
+    writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
     return CliExitCode.Usage;
   }
 
@@ -117,7 +118,7 @@ async function runHistoryDelete(
     !result.found &&
     context.outputFormat === 'text'
   ) {
-    writeTextStderr(`Execution not found: ${result.id}`);
+    writeTextStderr(formatCliHistoryNotFoundText(result.id, context.cwd));
     return CliExitCode.Usage;
   }
 
