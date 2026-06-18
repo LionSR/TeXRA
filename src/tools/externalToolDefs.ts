@@ -148,7 +148,7 @@ async function getGitHubPRPrerequisites(): Promise<{
   tokenPresent: boolean;
   inGitRepo: boolean;
 }> {
-  const tokenPresent = getGitHubToken() !== undefined;
+  const tokenPresent = (await getGitHubToken()) !== undefined;
   const inGitRepo = await isGitRepository();
   return { tokenPresent, inGitRepo };
 }
