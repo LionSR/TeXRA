@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 import { COMMON_COMMANDS } from '@shared/ipc';
-import { MainViewPersistedStateSchema } from './mainView';
+// Import from the leaf state module, not the ./mainView barrel: the barrel
+// re-exports ./inbound, which imports this file — going through the barrel
+// would close a load-time cycle (see PR #6185 review).
+import { MainViewPersistedStateSchema } from './mainView/state';
 
 /** Theme values - single source of truth for all theme schemas */
 export const ThemeSchema = z.enum(['dark', 'light', 'high-contrast']);
