@@ -82,6 +82,8 @@ export async function generateSessionDescription(
   runtimeHost: AgentRuntimeHost,
 ): Promise<void> {
   try {
+    if (config.agentCategory !== AgentCategory.ToolUse) return;
+
     const instruction = getSessionDescriptionInstruction(config);
     if (!instruction) return;
 

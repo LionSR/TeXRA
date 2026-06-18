@@ -287,7 +287,7 @@ export async function executeAgent(
 
     // Fire-and-forget: generate AI session description from the user's instruction.
     // Triggered at the start so cancelled/errored sessions still get descriptions.
-    // Applies to all agents including subagents so their progress tabs show
+    // Applies to tool-use agents, including subagents, so their progress tabs show
     // meaningful descriptions in multi-agent pipelines.
     generateSessionDescription(
       ctx.executionId,
