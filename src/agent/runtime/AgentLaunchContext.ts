@@ -120,9 +120,8 @@ const STATUS_MESSAGES: Record<string, string> = {
  * This is the single owner of the launch-context → ambient-context mapping, so
  * new per-run flags (e.g. `stopAfterCycle`, `approvalPromptsUnavailable`,
  * `runtimeUnavailableTools`) live in one place and are never silently dropped.
- * The ambient context is intentionally a flat projection, so three fields are
+ * The ambient context is intentionally a flat projection, so two fields are
  * renamed from their nested `AgentCore` positions:
- *  - `AgentCore.logger`   → `RunContext.trace`
  *  - `AgentConfig.agent`  → `RunContext.agentName`
  *  - `AgentConfig.model`  → `RunContext.model`
  *
@@ -136,7 +135,6 @@ function agentContextToRunContext(
     runtimeHost: ctx.runtimeHost,
     streamId: ctx.streamId,
     executionId: ctx.executionId,
-    trace: ctx.logger,
     coordinators: ctx.coordinators,
     getModel: () => ctx.config.model,
     agentName: ctx.config.agent,

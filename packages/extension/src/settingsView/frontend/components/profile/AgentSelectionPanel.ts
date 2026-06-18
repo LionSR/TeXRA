@@ -267,10 +267,14 @@ export class AgentSelectionPanel extends LitElement {
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
           ${agent.source === AGENT_SOURCE.REMOTE
-            ? html`<span title="Remote agent">${waIcon('cloud')}</span>`
+            ? html`<span title="Remote agent"
+                >${waIcon('cloud', { label: 'Remote agent' })}</span
+              >`
             : nothing}
           ${agent.source === AGENT_SOURCE.CUSTOM
-            ? html`<span title="Custom agent">${waIcon('star')}</span>`
+            ? html`<span title="Custom agent"
+                >${waIcon('star', { label: 'Custom agent' })}</span
+              >`
             : nothing}
         </span>
       </div>

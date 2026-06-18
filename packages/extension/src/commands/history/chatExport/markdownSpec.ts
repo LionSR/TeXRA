@@ -9,6 +9,22 @@ import {
 } from './formatSpec';
 import type { DocumentMeta } from './schemas';
 
+/**
+ * Wrap raw body text in a fenced code block whose delimiter is longer than the
+ * longest backtick run inside the body. Tool output and fetched pages routinely
+ * contain ``` lines; a fixed three-backtick fence would let them break out and
+ * corrupt the document. CommonMark closes a fence only on a backtick run at
+ * least as long as the opening one, so an over-long fence is breakout-proof.
+ */
+function fencedBlock(body: string, info = ''): string {
+  const longestRun = Math.max(
+    0,
+    ...[...body.matchAll(/`+/g)].map((m) => m[0].length),
+  );
+  const fence = '`'.repeat(Math.max(3, longestRun + 1));
+  return `${fence}${info}\n${body}\n${fence}`;
+}
+
 function markdownHeader(meta: DocumentMeta): string {
   const fields = HEADER_FIELDS.filter((f) => meta[f.key])
     .map((f) => `**${f.label}:** ${meta[f.key]}  `)
@@ -58,9 +74,9 @@ const MD_NODES: NodeRenderers = {
   'assistant-text': ({ text }) => `### Assistant\n\n${text}\n`,
 
   'tool-call': ({ name, input }) =>
-    `#### Tool: \`${name}\`\n\n\`\`\`json\n${input}\n\`\`\`\n`,
+    `#### Tool: \`${name}\`\n\n${fencedBlock(input, 'json')}\n`,
 
-  'tool-result': ({ text }) => `#### Tool Result\n\n\`\`\`\n${text}\n\`\`\`\n`,
+  'tool-result': ({ text }) => `#### Tool Result\n\n${fencedBlock(text)}\n`,
 
   'web-search': ({ query }) => `#### Web Search\n\n**Query:** ${query}\n`,
 
@@ -73,7 +89,7 @@ const MD_NODES: NodeRenderers = {
       '',
       url ? `**URL:** ${url}` : undefined,
       title ? `**Title:** ${title}` : undefined,
-      content ? `\n\`\`\`\n${content}\n\`\`\`` : undefined,
+      content ? `\n${fencedBlock(content)}` : undefined,
       '',
     ]
       .filter(filterNotNullish)
