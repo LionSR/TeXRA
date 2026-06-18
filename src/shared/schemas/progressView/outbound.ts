@@ -278,9 +278,9 @@ export const SyncStreamContentMessageSchema = z.object({
   // correctly accumulates. Frontend derives sessionUsage as the sum.
   runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),
   contextState: ContextStateDataSchema.optional(),
-  todos: z.array(TodoItemSchema).optional(),
-  plan: PlanSchema.nullable().optional(),
-  queuedFollowUps: z.array(z.string()).optional(),
+  todos: z.array(TodoItemSchema),
+  plan: PlanSchema.nullable(),
+  queuedFollowUps: z.array(z.string()),
   agentCategory: z.string().optional(),
   // Tab-switch state (R2: replaces separate syncActiveStreamState messages)
   conversationProgress: ConversationProgressSchema.optional(),
