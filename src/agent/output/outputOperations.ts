@@ -5,7 +5,7 @@ import { MESSAGE_TYPES, type MessageType } from '@shared/schemas';
 /** Trace levels that the output managers use for recoverable failures. */
 type OutputLogLevel = 'error' | 'warn' | 'debug';
 
-export interface TryOperationOptions<T> {
+interface TryOperationOptions<T> {
   /** Trace used for the internal failure line. */
   logger: AgentTrace;
   /** Trace level for the failure line (mirrors each call site's prior level). */
