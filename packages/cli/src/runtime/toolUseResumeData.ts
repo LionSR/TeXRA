@@ -1,6 +1,6 @@
 import { isToolUseTaskState } from '@agent/core/execution/TaskState';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
