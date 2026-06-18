@@ -290,13 +290,7 @@ function bridgePageHtml(ext: string, id: string): string {
       lede.className = 'error';
       var message;
       if (errorDescription) {
-        // error_description is attacker-influenced; a malformed percent escape
-        // must not throw and dead-link the button, so guard the decode.
-        try {
-          message = decodeURIComponent(errorDescription.replace(/\\+/g, ' '));
-        } catch (decodeErr) {
-          message = errorDescription;
-        }
+        message = errorDescription;
       } else {
         message = 'Authorization failed (' + oauthError + ').';
       }
@@ -351,8 +345,18 @@ function errorPageHtml(message: string): string {
 </head>
 <body>
 <h1>Sign-in could not be completed</h1>
-<p class="error">${message}</p>
+<p class="error">${escapeHtml(message)}</p>
 <p class="muted">Return to your editor and start sign-in again.</p>
 </body>
 </html>`;
+}
+
+function escapeHtml(value: string): string {
+  // Treat pre-existing entity references as literal text, not trusted markup.
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
