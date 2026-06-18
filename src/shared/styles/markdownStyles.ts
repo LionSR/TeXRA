@@ -115,6 +115,12 @@ export const markdownStyles = css`
     color: var(--wa-color-symbol-keyword);
   }
 
+  .markdown-content .latex-ref:focus-visible {
+    outline: var(--border-thin) solid var(--wa-color-focus);
+    outline-offset: 1px;
+    border-radius: var(--border-radius-small);
+  }
+
   .markdown-content a {
     color: var(--color-text-link);
     text-decoration: none;

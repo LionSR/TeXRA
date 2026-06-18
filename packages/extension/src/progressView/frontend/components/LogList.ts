@@ -286,10 +286,12 @@ export class LogList extends LitElement {
   private handleKeyEvent(event: Event): void {
     if (!(event instanceof KeyboardEvent)) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
-    const target = event.target;
+    if (event.defaultPrevented) return;
     if (
-      !(target instanceof Element) ||
-      !target.closest('.file-link, .latex-ref, .proposal-restore-link')
+      !this.findTargetInPath<Element>(
+        event,
+        '.file-link, .latex-ref, .proposal-restore-link',
+      )
     ) {
       return;
     }
