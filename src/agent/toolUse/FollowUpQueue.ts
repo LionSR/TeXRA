@@ -6,8 +6,6 @@
  */
 import pDefer, { type DeferredPromise } from 'p-defer';
 
-import pDefer, { type DeferredPromise } from 'p-defer';
-
 /** Preserves visible follow-up provenance across queueing and resume replay. */
 export type VisibleFollowUpQueueItemOrigin = 'user' | 'subagent_result';
 export type FollowUpQueueItemOrigin =
