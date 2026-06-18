@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
     withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
     isAuthenticated: vi.fn(),
-    resolveCliAgent: vi.fn(),
+    resolveCliLaunchAgent: vi.fn(),
     resolveCliRunModel: vi.fn(),
   };
 });
@@ -60,7 +60,7 @@ vi.mock('@cli/commands/_helpers/output', () => ({
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
-  resolveCliAgent: mocks.resolveCliAgent,
+  resolveCliLaunchAgent: mocks.resolveCliLaunchAgent,
 }));
 
 vi.mock('@cli/runtime/runExecution', () => ({
@@ -98,7 +98,7 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 describe('CLI workflow run command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.resolveCliAgent.mockResolvedValue({
+    mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'polish',
       category: AgentCategory.Workflow,
       source: 'builtInWorkflow',
@@ -149,13 +149,17 @@ describe('CLI workflow run command', () => {
     ).rejects.toThrow('Use either --output or --output-dir, not both.');
 
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliAgent).not.toHaveBeenCalled();
+    expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('reports missing workflow agents before resolving the model', async () => {
-    mocks.resolveCliAgent.mockResolvedValueOnce(undefined);
+    mocks.resolveCliLaunchAgent.mockRejectedValueOnce(
+      new Error(
+        'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
+      ),
+    );
     const { runWorkflowAgent } = await import('@cli/commands/workflow');
 
     await expect(
@@ -171,24 +175,22 @@ describe('CLI workflow run command', () => {
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
     expect(mocks.initLocalCliPlatform.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.resolveCliAgent.mock.invocationCallOrder[0],
+      mocks.resolveCliLaunchAgent.mock.invocationCallOrder[0],
     );
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
+    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
       'missing-agent',
-      AgentCategory.Workflow,
+      'run',
     );
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('reports tool-use agents before resolving the model', async () => {
-    mocks.resolveCliAgent.mockResolvedValueOnce({
-      name: 'chat',
-      category: AgentCategory.ToolUse,
-      source: 'builtInToolUse',
-      path: '/agents/chat.yaml',
-      tools: [],
-    });
+    mocks.resolveCliLaunchAgent.mockRejectedValueOnce(
+      new Error(
+        'Agent "chat" is a toolUse agent; `texra run` only handles workflow agents.',
+      ),
+    );
     const { runWorkflowAgent } = await import('@cli/commands/workflow');
 
     await expect(
@@ -203,10 +205,7 @@ describe('CLI workflow run command', () => {
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/tmp/project' }),
     );
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
-      'chat',
-      AgentCategory.Workflow,
-    );
+    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('chat', 'run');
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
@@ -227,10 +226,7 @@ describe('CLI workflow run command', () => {
     );
 
     expect(mocks.initLocalCliPlatform).toHaveBeenCalled();
-    expect(mocks.resolveCliAgent).toHaveBeenCalledWith(
-      'polish',
-      AgentCategory.Workflow,
-    );
+    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('polish', 'run');
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
@@ -337,7 +333,7 @@ describe('CLI workflow run command', () => {
     ).rejects.toThrow(/--instruction-file: file not found: missing-prompt\.md/);
 
     expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliAgent).not.toHaveBeenCalled();
+    expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
     expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
