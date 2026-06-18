@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -173,13 +174,24 @@ describe('CLI platform init', () => {
     expect(mocks.bootstrapPlatformAgentDirectories).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: 'cli',
-        resourcesPath: '/tmp/resources-versioned',
         currentVersion: '1.2.3',
       }),
     );
 
     const options =
       mocks.bootstrapPlatformAgentDirectories.mock.calls.at(-1)?.[0];
+
+    // Verify the bundle source is the right class AND was constructed with the
+    // forwarded resourcesPath — not just that some PathAgentDirectoryBundleSource
+    // was passed.
+    expect(options?.bundleSource).toBeInstanceOf(
+      PathAgentDirectoryBundleSource,
+    );
+    expect(
+      (options?.bundleSource as { resourcesBasePath?: string })
+        .resourcesBasePath,
+    ).toBe('/tmp/resources-versioned');
+
     expect(options?.versionStore.get()).toBe('1.2.2');
 
     await options?.versionStore.update('1.2.3');
