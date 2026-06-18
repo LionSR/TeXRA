@@ -30,6 +30,7 @@ import { readCliToolUseResumeDataForListing } from './toolUseResumeData';
 const HISTORY_FILE_SCAN_DEPTH = 2;
 const CONVERSATION_PREVIEW_MESSAGE_LIMIT = 3;
 const CONVERSATION_PREVIEW_CONTENT_LIMIT = 4000;
+const HIDDEN_PROVIDER_REASONING_MARKER = '[provider reasoning hidden]';
 const WORKSPACE_FILE_TOOL_NAMES = new Set(['write_file', 'edit_file']);
 
 const KV_FILES = new Set([
@@ -472,6 +473,7 @@ function formatConversationMessage(
   raw: Record<string, unknown>,
   options: ConversationMessageFormatOptions,
 ): string {
+  const role = typeof raw.role === 'string' ? raw.role : '';
   const parts = [
     formatConversationMessageContent(raw.content, options),
     formatConversationMessageContent(raw.parts, options),
@@ -479,7 +481,15 @@ function formatConversationMessage(
       ? formatTopLevelToolCalls(raw.tool_calls)
       : []),
   ].filter((part) => part.trim().length > 0);
-  return parts.join('\n').trim();
+  if (parts.length > 0) return parts.join('\n').trim();
+  if (
+    isAssistantMessageRole(role) &&
+    (hasProviderReasoningBlock(raw.content) ||
+      hasProviderReasoningBlock(raw.parts))
+  ) {
+    return HIDDEN_PROVIDER_REASONING_MARKER;
+  }
+  return '';
 }
 
 function isAssistantMessageRole(role: string): boolean {
@@ -556,6 +566,9 @@ function formatConversationContentBlock(
   }
 
   switch (block.type) {
+    case 'thinking':
+    case 'redacted_thinking':
+      return '';
     case 'tool_use':
       if (options.includeToolUseMarkers !== true) return '';
       return `[tool_use: ${String(block.name ?? 'unknown')}]`;
@@ -564,6 +577,18 @@ function formatConversationContentBlock(
     default:
       return formatJsonish(block);
   }
+}
+
+function hasProviderReasoningBlock(content: unknown): boolean {
+  if (Array.isArray(content)) return content.some(isProviderReasoningBlock);
+  return isProviderReasoningBlock(content);
+}
+
+function isProviderReasoningBlock(block: unknown): boolean {
+  return (
+    isObject(block) &&
+    (block.type === 'thinking' || block.type === 'redacted_thinking')
+  );
 }
 
 function formatGoogleFunctionResponse(
