@@ -122,7 +122,7 @@ const DEFAULT_CLI_MODEL_RECOVERY_ACTIONS = {
 
 function startSentence(text: string): string {
   if (text.length === 0) return text;
-  return `${text[0]!.toUpperCase()}${text.slice(1)}`;
+  return `${text.at(0)!.toUpperCase()}${text.slice(1)}`;
 }
 
 function cliModelRecoveryActions(

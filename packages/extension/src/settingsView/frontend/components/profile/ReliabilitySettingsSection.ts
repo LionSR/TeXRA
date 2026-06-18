@@ -9,10 +9,10 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared utilities
 import { createEvent } from '@shared/utils/events';
+import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
 import { clampOptional } from '@utils/core';
 
 // Local imports - shared schemas
-import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 @customElement('reliability-settings-section')

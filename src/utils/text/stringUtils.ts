@@ -1,4 +1,4 @@
-import _pluralize from 'pluralize';
+import pluralizeWord from 'pluralize';
 
 /** Normalize CRLF line endings to LF. */
 export function normalizeLineEndings(text: string): string {
@@ -16,7 +16,7 @@ export function pluralize(
   plural?: string,
 ): string {
   if (plural !== undefined) return count === 1 ? singular : plural;
-  return _pluralize(singular, count);
+  return pluralizeWord(singular, count);
 }
 
 /**

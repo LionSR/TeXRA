@@ -2,13 +2,13 @@ import * as path from 'node:path';
 
 import { z } from 'zod';
 
-import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { tryWorkspaceState } from '@platform/platform';
+import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
-import type { FileLocation } from '@shared/schemas';
 import { flexibleFS, pathToLocation } from '@utils/files';
 import { executeCommand } from '@utils/system';
 import { runLatexFormatter } from './texFormatter';

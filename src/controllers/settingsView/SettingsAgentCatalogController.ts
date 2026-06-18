@@ -4,13 +4,13 @@ import {
   AGENT_MODE_PRESETS_BY_ID,
   AgentModePresetSchema,
 } from '@shared/schemas/agentPresets';
-import { byName } from '@utils/core';
 import {
   agentKey,
   type AgentCategory,
   type AgentSource,
 } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
+import { byName } from '@utils/core';
 
 export interface SettingsAgentCatalogEntry {
   name: string;

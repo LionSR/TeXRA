@@ -2,8 +2,8 @@
 import * as logger from '@logger/logUtils';
 
 // Local imports - filesystem
-import { AbsoluteFS } from './absoluteFS';
 import type { FileLocation } from '@shared/schemas';
+import { AbsoluteFS } from './absoluteFS';
 
 const CHANNEL = 'flexibleFS';
 logger.initialize(CHANNEL);

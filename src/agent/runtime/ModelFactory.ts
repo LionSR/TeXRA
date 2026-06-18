@@ -6,12 +6,12 @@ import { platform } from '@platform/platform';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import { LEVEL_TO_EFFORT } from '@agent/modelHandlers/support/reasoningEffort';
 import * as logger from '@logger/logUtils';
 import { isGpt5ModelName } from '@model/modelNames';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-import { LEVEL_TO_EFFORT } from '@agent/modelHandlers/support/reasoningEffort';
 
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);

@@ -21,8 +21,8 @@ import {
   type AcceptedFileTarget,
 } from '@latex/acceptedFileTarget';
 import * as logger from '@logger/logUtils';
-import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
 import type { FileLocation } from '@shared/schemas';
+import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
 import { flexibleFS } from '@utils/files';
 
 /** Run agent/model/round used to build the legacy postfixed copy name. */

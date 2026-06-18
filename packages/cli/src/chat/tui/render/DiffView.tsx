@@ -54,7 +54,7 @@ export function statsFromHunks(hunks: readonly Hunk[]): DiffStats {
   let removed = 0;
   for (const hunk of hunks) {
     for (const line of hunk.lines) {
-      const first = line[0];
+      const first = line.at(0);
       if (first === '+') added += 1;
       else if (first === '-') removed += 1;
     }
@@ -104,7 +104,8 @@ export function editPatchGroups(
     ? edits.map((edit) => editCandidate(edit, fileLabel))
     : [editCandidate(input, fileLabel)];
 
-  const groups = candidates.filter(filterNotNullish).flatMap((candidate) => {
+  const groups = candidates.flatMap((candidate) => {
+    if (!filterNotNullish(candidate)) return [];
     const hunks = buildHunks(
       candidate.fileLabel,
       candidate.oldText,
@@ -129,7 +130,7 @@ export function diffDisplayLines(
     const rendered: DiffDisplayLine[] = [
       { kind: 'header', text: hunkHeader },
       ...visible.map((line): DiffDisplayLine => {
-        const marker = line[0];
+        const marker = line.at(0);
         if (marker === '+') return { kind: 'added', text: line };
         if (marker === '-') return { kind: 'removed', text: line };
         return { kind: 'context', text: line };
