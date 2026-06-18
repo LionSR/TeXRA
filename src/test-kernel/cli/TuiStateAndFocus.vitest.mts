@@ -2890,6 +2890,8 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     expect(isChildExecutionErrorStatus('exit 1')).toBe(true);
     expect(isChildExecutionErrorStatus('exited with code 2')).toBe(true);
     expect(isChildExecutionErrorStatus('failed')).toBe(true);
+    // A user stop is not an error (RUN_OUTCOME keeps cancelled ≠ failed).
+    expect(isChildExecutionErrorStatus('stopped')).toBe(false);
   });
 
   it('does not keep a stale running status after a process leaves the active list', () => {
