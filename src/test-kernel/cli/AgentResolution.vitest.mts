@@ -89,16 +89,14 @@ describe('CLI agent resolution', () => {
     expect(mocks.authProvider.isAuthenticated).toHaveBeenCalledOnce();
   });
 
-  it('uses lookup category for authenticated remote-priority reloads', async () => {
+  it('uses launch target category for authenticated remote-priority reloads', async () => {
     const local = agent('lean');
     const remote = agent('lean', 'remote');
     mocks.authProvider.isAuthenticated.mockResolvedValue(true);
     mocks.getAgent.mockReturnValueOnce(local).mockReturnValueOnce(remote);
-    const { resolveCliAgent } = await import('@cli/runtime/agents');
+    const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
-    await expect(resolveCliAgent('lean', AgentCategory.ToolUse)).resolves.toBe(
-      remote,
-    );
+    await expect(resolveCliLaunchAgent('lean', 'chat')).resolves.toBe(remote);
 
     expect(mocks.getAgent).toHaveBeenNthCalledWith(
       1,
@@ -129,14 +127,14 @@ describe('CLI agent resolution', () => {
     expect(mocks.authProvider.isAuthenticated).not.toHaveBeenCalled();
   });
 
-  it('uses lookup category for local and remote-fallback lookups', async () => {
+  it('uses launch target category for local and remote-fallback lookups', async () => {
     const remote = agent('assistant', 'remote');
     mocks.getAgent.mockReturnValueOnce(undefined).mockReturnValueOnce(remote);
-    const { resolveCliAgent } = await import('@cli/runtime/agents');
+    const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
-    await expect(
-      resolveCliAgent('assistant', AgentCategory.ToolUse),
-    ).resolves.toBe(remote);
+    await expect(resolveCliLaunchAgent('assistant', 'agentsRun')).resolves.toBe(
+      remote,
+    );
 
     expect(mocks.getAgent).toHaveBeenNthCalledWith(
       1,
@@ -147,6 +145,15 @@ describe('CLI agent resolution', () => {
       2,
       'assistant',
       AgentCategory.ToolUse,
+    );
+  });
+
+  it('reports launch-specific missing-agent messages', async () => {
+    mocks.getAgent.mockReturnValue(undefined);
+    const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
+
+    await expect(resolveCliLaunchAgent('missing', 'agentsRun')).rejects.toThrow(
+      'Tool-use agent not found: missing. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
     );
   });
 
