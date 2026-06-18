@@ -192,32 +192,27 @@ function applyShortModelNamePreference(
   return { ...config, fullName: short };
 }
 
-// CI-only package-validation guard. All env var reads and the readFileSync are
-// intentionally lazy (inside the function) so they never execute in the VS Code
-// extension host, Electron, or normal CLI invocations — only when the outer
-// TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL gate is set, which only happens
-// in the packaged-build validation pipeline.
-// Returns the env-var name that enabled validation mode (for the caller's
-// diagnostic log), or null when the validation handler is not active.
-function internalValidationModelHandlerEnv(): string | null {
+function shouldUseInternalValidationModelHandler(): boolean {
+  // All env reads are lazy — evaluated at call time, not at module load, so
+  // they happen after initPlatform() and can be overridden between test cases.
+  // Direct property access (not computed) is required so esbuild's `define`
+  // can inline these at bundle time for the CLI validation build.
   if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1')
-    return null;
+    return false;
 
-  const handlerEnv =
+  const envKey =
     process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV ?? '';
-  const flagEnv =
+  const flagEnvKey =
     process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV ?? '';
   const expectedFlagContent =
     process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT ?? '';
 
-  if (process.env[handlerEnv] !== '1') {
-    return null;
-  }
+  if (process.env[envKey] !== '1') return false;
 
-  const flagPath = process.env[flagEnv];
+  const flagPath = process.env[flagEnvKey];
   if (process.env.CI !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
     throw new Error(
-      `${handlerEnv}=1 is restricted to package validation with CI=1 and an absolute ${flagEnv} path.`,
+      `${envKey}=1 is restricted to package validation with CI=1 and an absolute ${flagEnvKey} path.`,
     );
   }
 
@@ -226,18 +221,16 @@ function internalValidationModelHandlerEnv(): string | null {
     flagContent = readFileSync(flagPath, 'utf8').trim();
   } catch (error) {
     throw new Error(
-      `${handlerEnv}=1 requires a readable validation flag file at ${flagPath}.`,
+      `${envKey}=1 requires a readable validation flag file at ${flagPath}.`,
       { cause: error },
     );
   }
 
   if (flagContent !== expectedFlagContent) {
-    throw new Error(
-      `${handlerEnv}=1 received an invalid validation flag file.`,
-    );
+    throw new Error(`${envKey}=1 received an invalid validation flag file.`);
   }
 
-  return handlerEnv;
+  return true;
 }
 
 /** Returns the conversation-history format used by the handler for this model. */
@@ -249,7 +242,7 @@ export function modelHandlerCompatibilityKey(
     false,
   ),
 ): ModelHandlerCompatibilityKey | undefined {
-  if (internalValidationModelHandlerEnv() !== null) {
+  if (shouldUseInternalValidationModelHandler()) {
     return 'ModelHandlerValidation';
   }
 
@@ -317,14 +310,13 @@ export async function createModelHandler(
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
 
-  const validationTriggerEnv = internalValidationModelHandlerEnv();
-  if (validationTriggerEnv !== null) {
+  if (shouldUseInternalValidationModelHandler()) {
     // Package validation still enters the real CLI and executeAgent path.
     // Only the provider boundary is deterministic, so this must not become
     // a user-facing model selector or an injected command-layer substitute.
     logger.warn(
       CHANNEL,
-      `${validationTriggerEnv}=1 is replacing provider handlers with the internal validation handler.`,
+      `${process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is replacing provider handlers with the internal validation handler.`,
     );
     const { ModelHandlerValidation } =
       await import('@agent/modelHandlers/modelHandlerValidation');
