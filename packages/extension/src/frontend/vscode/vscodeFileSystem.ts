@@ -6,6 +6,7 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 
+import { isFileNotFoundError } from '@common/errors';
 import type {
   FileSystemProvider,
   FileStat,
@@ -47,6 +48,24 @@ export class VscodeFileSystem implements FileSystemProvider {
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
     await vscode.workspace.fs.writeFile(vscode.Uri.file(target), content);
+  }
+
+  async appendFile(target: string, content: Uint8Array): Promise<void> {
+    // vscode.workspace.fs has no native append, so read-modify-write through
+    // the same virtual FS keeps appends on the one authority writeFile uses
+    // (a remote/web workspace is not the local node disk).
+    const uri = vscode.Uri.file(target);
+    let existing: Uint8Array;
+    try {
+      existing = await vscode.workspace.fs.readFile(uri);
+    } catch (error) {
+      if (!isFileNotFoundError(error)) throw error;
+      existing = new Uint8Array(0);
+    }
+    const merged = new Uint8Array(existing.length + content.length);
+    merged.set(existing, 0);
+    merged.set(content, existing.length);
+    await vscode.workspace.fs.writeFile(uri, merged);
   }
 
   async delete(
