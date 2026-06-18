@@ -3,14 +3,18 @@
  *
  * Wraps vscode.workspace.fs operations, converting string paths to vscode.Uri.
  */
+import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 
 import { isFileNotFoundError } from '@common/errors';
+import * as logger from '@logger/logUtils';
 import type {
   FileSystemProvider,
   FileStat,
 } from '@platform/interfaces/filesystem';
+
+const CHANNEL = 'VscodeFileSystem';
 
 export class VscodeFileSystem implements FileSystemProvider {
   /**
@@ -56,6 +60,28 @@ export class VscodeFileSystem implements FileSystemProvider {
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
     await vscode.workspace.fs.writeFile(vscode.Uri.file(target), content);
+  }
+
+  async writeFileAtomic(target: string, content: Uint8Array): Promise<void> {
+    // vscode.workspace.fs has no atomic write; stage to a unique sibling temp
+    // and rename over the target so an unclean exit can't leave a torn file.
+    const tmp = `${target}.${randomBytes(6).toString('hex')}.tmp`;
+    const tmpUri = vscode.Uri.file(tmp);
+    try {
+      await vscode.workspace.fs.writeFile(tmpUri, content);
+      await vscode.workspace.fs.rename(tmpUri, vscode.Uri.file(target), {
+        overwrite: true,
+      });
+    } catch (err) {
+      try {
+        await vscode.workspace.fs.delete(tmpUri);
+      } catch (cleanupError) {
+        logger.debug(CHANNEL, `Failed to clean up temp file: ${tmp}`, {
+          data: cleanupError,
+        });
+      }
+      throw err;
+    }
   }
 
   async appendFile(target: string, content: Uint8Array): Promise<void> {
