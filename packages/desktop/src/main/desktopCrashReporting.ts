@@ -1,5 +1,5 @@
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import escapeRegExp from 'escape-string-regexp';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { StateStore } from '@platform/interfaces/state';
 

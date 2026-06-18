@@ -5,7 +5,6 @@ import * as path from 'node:path';
 
 // Local imports - agent config
 import { platform } from '@platform/platform';
-import { executeCommandSync } from '@utils/system/execUtils';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -13,6 +12,7 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { executeCommandSync } from '@utils/system/execUtils';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import {

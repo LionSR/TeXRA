@@ -7,13 +7,13 @@ import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
 import * as logger from '@logger/logUtils';
+import type { FileLocation } from '@shared/schemas';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,
 } from '@shared/constants/latex';
 
 // Local imports - utilities
-import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
 
 const CHANNEL = 'OpenBuildUtils';

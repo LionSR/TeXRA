@@ -1,7 +1,7 @@
 import { type ZodType } from 'zod';
 
-import { ensureError } from '@common/errors/errorMessage';
 import { type Result, ok, err } from '@common/result';
+import { ensureError } from '@common/errors/errorMessage';
 
 /**
  * Parse JSON text without throwing.

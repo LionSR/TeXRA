@@ -16,8 +16,8 @@
  * have one import point for both eras.
  */
 
-import { getCleanAgentName } from '@shared/schemas/agent';
 import escapeRegExp from 'escape-string-regexp';
+import { getCleanAgentName } from '@shared/schemas/agent';
 
 // ---------------------------------------------------------------------------
 // Current layout (re-exported from the shared leaf module)

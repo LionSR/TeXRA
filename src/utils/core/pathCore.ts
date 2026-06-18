@@ -16,7 +16,7 @@ export function getPathSegments(input: string): string[] {
   if (!input || input === '.') {
     return [];
   }
-  return input.trim().replace(/\\/g, '/').split('/').filter(Boolean);
+  return input.trim().replaceAll('\\', '/').split('/').filter(Boolean);
 }
 
 /** Convert a path to POSIX style (forward slashes, collapsed separators, resolved `.` and `..`). */

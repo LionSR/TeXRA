@@ -1,8 +1,8 @@
-import { buildStreamTabInfo } from './streamTabInfo';
-import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
+import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
+import { buildStreamTabInfo } from './streamTabInfo';
 import { compareByNewestCreationTime } from './streamOrdering';
 import type { ProgressViewState } from './state/ProgressViewState';
 
