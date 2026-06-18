@@ -316,6 +316,12 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     this.writeFileSync(target, content, { overwrite: true });
   }
 
+  async writeFileAtomic(target: string, content: Uint8Array): Promise<void> {
+    // In-memory: the temp+rename of a real atomic write has no observable
+    // intermediate state here, so a direct write is equivalent.
+    this.writeFileSync(target, content, { overwrite: true });
+  }
+
   async appendFile(target: string, content: Uint8Array): Promise<void> {
     const existing = this.records.get(normalizePath(target));
     if (existing && existing.type !== FileType.File) {
