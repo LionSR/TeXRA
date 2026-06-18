@@ -30,6 +30,13 @@ import type { SupabaseUriHandler } from './UriHandler';
 const AUTH_URI_HANDLER_NOT_INITIALIZED =
   'OAuth handler not initialized. Restart the extension.';
 
+/** Notification operations injected at construction so tests can stub them. */
+export interface AuthNotifier {
+  showError(message: string): void;
+  showInfo(message: string): void;
+  showSignInPrompt(reason: 'expired' | 'invalid'): Promise<void>;
+}
+
 /** GitHub token type prefixes for diagnostic logging. */
 const GITHUB_TOKEN_TYPE_MAP: Record<string, string> = {
   ghp_: 'classic PAT',
@@ -55,7 +62,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   /** Flag to prevent race conditions between OAuth and magic link handlers */
   private isProcessingCallback = false;
 
-  constructor(_context: vscode.ExtensionContext) {
+  private readonly notifier: AuthNotifier;
+
+  constructor(_context: vscode.ExtensionContext, notifier: AuthNotifier) {
+    this.notifier = notifier;
     this.sessionCoordinator = createHostAuthCoordinator({
       secrets: platform().secrets,
       whenReady: async () => {
@@ -144,9 +154,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       if (!result.success) {
         if (result.isAuthError) {
-          void vscode.window.showErrorMessage(
-            `Sign-in failed: ${result.error}`,
-          );
+          this.notifier.showError(`Sign-in failed: ${result.error}`);
         } else {
           // Log non-auth errors for debugging (e.g., missing tokens from non-auth callbacks)
           logger.debug(
@@ -158,9 +166,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
 
       await this.storeSession(result.session, true);
-      void vscode.window.showInformationMessage(
-        `Signed in as ${result.session.account.label}`,
-      );
+      this.notifier.showInfo(`Signed in as ${result.session.account.label}`);
       logger.info(
         'SupabaseAuthProvider',
         `Magic link sign-in successful for ${result.session.account.label}`,
@@ -170,9 +176,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         'SupabaseAuthProvider',
         `Error processing magic link callback: ${toErrorMessage(error)}`,
       );
-      void vscode.window.showErrorMessage(
-        `Sign-in failed: ${toErrorMessage(error)}`,
-      );
+      this.notifier.showError(`Sign-in failed: ${toErrorMessage(error)}`);
     } finally {
       this.isProcessingCallback = false;
     }
@@ -228,21 +232,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     reason: 'expired' | 'invalid',
   ): Promise<void> {
     await this.removeSession(sessionId);
-    const message =
-      reason === 'expired'
-        ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
-        : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
-    const action = await vscode.window.showWarningMessage(message, 'Sign In');
-    if (action === 'Sign In') {
-      try {
-        await vscode.commands.executeCommand('texra.auth.signIn');
-      } catch (error) {
-        logger.error(
-          'SupabaseAuthProvider',
-          `Failed to trigger sign-in: ${toErrorMessage(error)}`,
-        );
-      }
-    }
+    await this.notifier.showSignInPrompt(reason);
   }
 
   private isWebEnvironment(): boolean {
@@ -391,9 +381,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       });
 
       await this.storeSession(session, true);
-      void vscode.window.showInformationMessage(
-        `Signed in as ${session.account.label}`,
-      );
+      this.notifier.showInfo(`Signed in as ${session.account.label}`);
       logger.info(
         'SupabaseAuthProvider',
         `VS Code GitHub auth successful for ${session.account.label}`,
@@ -401,7 +389,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       return this.toVSCodeSession(session);
     } catch (error) {
-      void vscode.window.showErrorMessage(
+      this.notifier.showError(
         `Authentication failed: ${toErrorMessage(error)}`,
       );
       throw error;
@@ -463,7 +451,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
       return sessions[0];
     } catch (error) {
-      void vscode.window.showErrorMessage(
+      this.notifier.showError(
         `Authentication failed: ${toErrorMessage(error)}`,
       );
       throw error;

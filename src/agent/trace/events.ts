@@ -35,7 +35,6 @@ export interface TokenUsageStats {
 export interface ContextStateData {
   readonly inputTokens: number;
   readonly contextWindow: number;
-  readonly utilizationPercent: number;
 }
 
 /**
