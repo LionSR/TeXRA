@@ -264,6 +264,15 @@ export class HistoryList extends LitElement {
       ? paginate(this.items, this.page, HISTORY_PAGE_SIZE).paged
       : this.getSearchCandidates();
 
+    // A search that excludes every entry would otherwise render an empty
+    // container with no count or message — show explicit no-results feedback.
+    if (this.searchTerm && displayItems.length === 0) {
+      return html`<div class="empty-state">
+        <wa-icon library="texra" name="history"></wa-icon>
+        <p>No history items match your search.</p>
+      </div>`;
+    }
+
     return html`
       ${this.paginated
         ? html`<list-pagination
