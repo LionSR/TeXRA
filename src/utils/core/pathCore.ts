@@ -27,14 +27,11 @@ export function toPosixPath(relativePath: string): string {
   return normalize(relativePath.trim()).split('/').filter(Boolean).join('/');
 }
 
-/** Normalize a path for LaTeX \input commands (strips leading ./). */
+/** Normalize a path for LaTeX \input commands. */
 export function normalizeLatexPath(value: string): string {
   const trimmed = value?.trim();
   if (!trimmed) return '';
-
-  const posix = toPosixPath(trimmed);
-  // Strip leading ./ for LaTeX compatibility
-  return posix.startsWith('./') ? posix.slice(2) : posix;
+  return toPosixPath(trimmed);
 }
 
 /** Get the file extension in lowercase (e.g. `'.tex'` for `'Paper.TEX'`). */
