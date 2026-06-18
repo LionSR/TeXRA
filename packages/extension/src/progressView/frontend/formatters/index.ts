@@ -33,8 +33,6 @@ import {
   type FormatResult,
 } from './litTemplates';
 
-// Local imports - shared utilities
-
 type TemplateFormatterFn = (
   message: LogMessageData,
   options?: { defaultOpen?: boolean },
