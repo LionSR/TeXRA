@@ -11,7 +11,7 @@ import type { FileLocation } from '@shared/schemas';
 import { createFileMapping, getComparablePath } from '@utils/files';
 
 import type { OutputState } from './outputState';
-import type { RoundFileMapping } from './types';
+import type { RoundFileEntry, RoundFileMapping } from './types';
 
 interface BaseEntry {
   readonly loc: FileLocation;
@@ -96,16 +96,17 @@ export function traceFileLineage(
   const baseEntries = buildBaseEntries(baseFiles);
   const currentLocations = currentOutputs.map((entry) => entry.location);
 
-  // Map output paths to base files using 'contains' strategy.
+  // 'contains' matches base filenames that appear as substrings of output names
+  // (e.g. "paper" matches "paper_r1"), which handles round-suffixed rewrite outputs.
   const baseToOutput = invertMapping(
     createFileMapping(baseFiles, currentLocations, 'contains'),
     baseFiles,
   );
 
-  // Map output paths to previous round files using 'basename' strategy with
-  // round number stripping. Returns an empty map when there are no previous
-  // outputs to map from.
   const prevLocations = prevOutputs.map((entry) => entry.location);
+  // 'basename' with roundAware=true strips round suffixes before comparing, so
+  // "paper_r1" and "paper_r2" are treated as the same file across rounds.
+  // Returns an empty map when there are no previous-round outputs to pair with.
   const prevToOutput =
     prevLocations.length === 0
       ? new Map<string, FileLocation>()
@@ -114,13 +115,15 @@ export function traceFileLineage(
           prevLocations,
         );
 
-  const originByOutput = new Map<string, FileLocation | undefined>();
+  const mapping = new Map<string, RoundFileEntry>();
   for (const entry of currentOutputs) {
-    originByOutput.set(
-      getComparablePath(entry.location),
-      findMatchingBaseFile(baseEntries, entry.source),
-    );
+    const key = getComparablePath(entry.location);
+    mapping.set(key, {
+      base: baseToOutput.get(key),
+      prev: prevToOutput.get(key),
+      origin: findMatchingBaseFile(baseEntries, entry.source),
+    });
   }
 
-  return { baseToOutput, prevToOutput, originByOutput };
+  return mapping;
 }

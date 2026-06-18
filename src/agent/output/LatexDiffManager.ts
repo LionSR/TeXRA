@@ -161,7 +161,10 @@ export class LatexDiffManager {
     const artifacts: CompiledPdfArtifact[] = [];
 
     if (this.agentSetting.isRewrite) {
-      const basePairs = [...mapping.baseToOutput.entries()];
+      const basePairs: [string, FileLocation][] = [];
+      for (const [outputPath, entry] of mapping) {
+        if (entry.base) basePairs.push([outputPath, entry.base]);
+      }
       this.logPairMatches(basePairs, 'base files to output files');
 
       for (const [outputPath, baseLocation] of basePairs) {
@@ -196,14 +199,17 @@ export class LatexDiffManager {
     );
 
     if (generateBetweenRoundDiffs && currRound > 0) {
-      const prevPairs = [...mapping.prevToOutput.entries()];
+      const prevPairs: [string, FileLocation][] = [];
+      for (const [outputPath, entry] of mapping) {
+        if (entry.prev) prevPairs.push([outputPath, entry.prev]);
+      }
       this.logPairMatches(
         prevPairs,
         'previous round files to current round files',
       );
 
       for (const [outputPath, prevLocation] of prevPairs) {
-        const originalLocation = mapping.originByOutput.get(outputPath) ?? null;
+        const originalLocation = mapping.get(outputPath)?.origin ?? null;
         const result = await this.runSingleDiff({
           outputPath,
           baseLocation: prevLocation,
