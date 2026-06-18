@@ -4,11 +4,6 @@ import { ensureError } from '@common/errors/errorMessage';
 import { type Result, ok, err } from '@common/result';
 
 /**
- * @deprecated Use `Result<T, Error>` from `@common/result` directly.
- */
-export type JsonParseResult<T> = Result<T, Error>;
-
-/**
  * Parse JSON text without throwing.
  *
  * Returns `{ ok: true, value }` with the parsed value typed as `unknown`
