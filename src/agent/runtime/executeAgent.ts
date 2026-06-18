@@ -4,10 +4,10 @@ import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/toolus
 import {
   getToolUseFlowErrorResult,
   runToolUseFlow,
-  type IToolUseSession,
   type RunToolUseFlowResult,
-  type ToolUseBeforeWaitingCallback,
-} from '@agent/implementations/flows/tooluse';
+} from '@agent/implementations/flows/tooluse/runToolUseFlow';
+import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
+import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import {
   runReflectionFlow,
   type RunReflectionFlowResult,
