@@ -24,7 +24,7 @@ export const SkillNameSchema = z
     'Skill name must not contain repeated hyphens',
   );
 
-export const SkillDescriptionSchema = z
+const SkillDescriptionSchema = z
   .string()
   .transform((description) => collapseWhitespace(description))
   .refine(
