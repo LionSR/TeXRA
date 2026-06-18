@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports - tool definitions
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { toErrorMessage } from '@common/errors';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import * as logger from '@logger/logUtils';
@@ -565,7 +566,8 @@ export class TextEditorTool extends defineTool({
     displayPath: string,
   ): Promise<ToolResult> {
     try {
-      const history = this.fileHistory.get(filePath);
+      const key = this.historyKey(filePath);
+      const history = this.fileHistory.get(key);
       if (!history || history.length === 0) {
         throw new ToolError(`No edit history found for ${displayPath}.`);
       }
@@ -601,7 +603,7 @@ export class TextEditorTool extends defineTool({
       recordToolFileRead(filePath);
 
       if (history.length === 0) {
-        this.fileHistory.delete(filePath);
+        this.fileHistory.delete(key);
       }
 
       const userDiffNote = formatUnifiedApprovalUserDiff(
@@ -645,12 +647,26 @@ export class TextEditorTool extends defineTool({
     return userDiffNote ? `${baseMsg}\n\n${userDiffNote}` : baseMsg;
   }
 
+  /**
+   * Scope undo history to the run that produced the edit. `fileHistory` is a
+   * process singleton (one TextEditorTool in the default registry), so keying by
+   * path alone bleeds edits across concurrent runs — a non-awaited subagent and
+   * its parent editing the same absolute path share the stack, so undo_edit could
+   * pop, or silently write to disk under YOLO, a foreign run's snapshot. Keying
+   * by the active run's executionId isolates them; with no run context
+   * (tests/manual) it collapses to the prior path-only behavior.
+   */
+  private historyKey(filePath: string): string {
+    return `${tryUseRunContext()?.executionId ?? ''}\u0000${filePath}`;
+  }
+
   private addToHistory(filePath: string, content: string): void {
-    const history = this.fileHistory.get(filePath);
+    const key = this.historyKey(filePath);
+    const history = this.fileHistory.get(key);
     if (history) {
       history.push(content);
     } else {
-      this.fileHistory.set(filePath, [content]);
+      this.fileHistory.set(key, [content]);
     }
   }
 
