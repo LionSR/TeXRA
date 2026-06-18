@@ -162,7 +162,10 @@ function mockStorage({
     }
     throw new Error(`Unexpected stat target: ${target}`);
   });
-  vi.spyOn(StorageFS, 'write').mockImplementation(async (target, content) => {
+  const recordWrite = async (
+    target: string,
+    content: string | Uint8Array,
+  ): Promise<void> => {
     if (
       pauseLogWriteKey != null &&
       !pausedLogWriteUsed &&
@@ -180,7 +183,9 @@ function mockStorage({
         ? content
         : Buffer.from(content).toString('utf8');
     writes.set(target, JSON.parse(text));
-  });
+  };
+  vi.spyOn(StorageFS, 'write').mockImplementation(recordWrite);
+  vi.spyOn(StorageFS, 'writeAtomic').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'delete').mockImplementation(async (target) => {
     deletes.push(target);
     writes.delete(target);
