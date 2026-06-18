@@ -23,7 +23,7 @@ export interface CliAgentListResult {
 export type CliAgentLaunchMode = 'chat' | 'run' | 'agentsRun';
 
 const AGENT_LOOKUP_HINT =
-  'Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.';
+  'Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.';
 const MULTI_AGENT_PRESET_LOOKUP_HINT =
   'Use `texra multi-agent list` for available team presets, then run `texra multi-agent inspect <preset>` to check a team before launch.';
 
@@ -49,10 +49,13 @@ const CLI_AGENT_LAUNCH_TARGETS = {
 } as const;
 
 export const AGENT_NAME_DESCRIPTION =
-  'Agent name from `texra agents list` or a known launchable agent name';
+  'Agent name from `texra agents list` or `texra agents list --all`';
+
+export const WORKFLOW_AGENT_NAME_DESCRIPTION =
+  'Workflow agent name from `texra agents list --category workflow --all`';
 
 export const TOOL_USE_AGENT_NAME_DESCRIPTION =
-  'Tool-use agent name from `texra agents list` or a known launchable agent name';
+  'Tool-use agent name from `texra agents list --category toolUse --all`';
 
 const AGENT_CATEGORY_FILTER_ALIASES = [
   [AgentCategory.Workflow, AgentCategory.Workflow],
