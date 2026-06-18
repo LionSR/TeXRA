@@ -314,8 +314,7 @@ export class AIAgentsTab extends LitElement {
             title="Re-check integration availability"
             @click=${this.handleRecheck}
           >
-            ${waIcon('refresh', { slot: 'start' })}
-            Re-check
+            ${waIcon('refresh', { slot: 'start' })} Re-check
           </wa-button>
         </div>
 
