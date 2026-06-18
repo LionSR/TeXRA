@@ -177,7 +177,7 @@ export class GoalTab extends LitElement {
           </div>
         </div>
         ${inFlight
-          ? html`<wa-icon library="texra" name="arrow-right"></wa-icon>`
+          ? html`<wa-icon library="texra" name="chevron-right"></wa-icon>`
           : nothing}
       </div>
     `;

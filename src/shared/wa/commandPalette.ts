@@ -10,7 +10,7 @@
 
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
-import { html, render } from 'lit';
+import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
@@ -61,6 +61,7 @@ export interface CommandPaletteClassNames {
   readonly item?: string;
   readonly label?: string;
   readonly meta?: string;
+  readonly empty?: string;
 }
 
 export interface CommandPaletteController {
@@ -226,6 +227,7 @@ export function createCommandPalette({
   const itemClass = classes?.item;
   const labelClass = classes?.label;
   const metaClass = classes?.meta;
+  const emptyClass = classes?.empty;
 
   const renderTemplate = (): void => {
     render(
@@ -242,6 +244,11 @@ export function createCommandPalette({
           @keydown=${handleFilterKeydown}
         ></wa-input>
         <div class=${listClass ?? ''} role="listbox">
+          ${visibleEntries.length === 0
+            ? html`<div class=${emptyClass ?? ''} role="status">
+                No matching commands
+              </div>`
+            : nothing}
           ${repeat(
             visibleEntries,
             (entry) => entry.id,
