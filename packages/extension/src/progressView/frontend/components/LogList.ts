@@ -97,11 +97,13 @@ export class LogList extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this.addEventListener('click', this.handleClickEvent);
+    this.addEventListener('keydown', this.handleKeyEvent);
     this.addEventListener('file-click', this.handleFileClickEvent);
   }
 
   override disconnectedCallback(): void {
     this.removeEventListener('click', this.handleClickEvent);
+    this.removeEventListener('keydown', this.handleKeyEvent);
     this.removeEventListener('file-click', this.handleFileClickEvent);
     super.disconnectedCallback();
   }
@@ -250,40 +252,7 @@ export class LogList extends LitElement {
   /** Handle click events for file links, copy buttons, etc. */
   private async handleClickEvent(event: Event): Promise<void> {
     if (!(event instanceof MouseEvent)) return;
-    const fileLink = this.findTargetInPath<HTMLElement>(event, '.file-link');
-    if (fileLink?.dataset.file) {
-      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, {
-        file: fileLink.dataset.file,
-        ...(fileLink.dataset.fileLine && {
-          line: Number(fileLink.dataset.fileLine),
-        }),
-      });
-      return;
-    }
-
-    const latexRef = this.findTargetInPath<HTMLElement>(event, '.latex-ref');
-    if (latexRef?.dataset.label) {
-      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_LABEL, {
-        label: latexRef.dataset.label,
-      });
-      return;
-    }
-
-    // Handle proposal restore links (may be inside <summary>, so prevent toggle)
-    const proposalLink = this.findTargetInPath<HTMLElement>(
-      event,
-      '.proposal-restore-link',
-    );
-    if (proposalLink?.dataset.proposalId) {
-      event.preventDefault();
-      const proposal = getProposalInput(proposalLink.dataset.proposalId);
-      if (proposal) {
-        postMessage(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG, {
-          proposal,
-        });
-      }
-      return;
-    }
+    if (this.activateLinkFromEvent(event)) return;
 
     // Handle copy buttons - content is stored in the copy registry
     const copyButton = this.findTargetInPath<HTMLElement>(
@@ -306,6 +275,68 @@ export class LogList extends LitElement {
         successClass: isCodeBlock ? 'copied' : undefined,
       });
     }
+  }
+
+  /**
+   * Keyboard activation (Enter/Space) for the focusable transcript link spans
+   * (file-link / latex-ref / proposal-restore-link). Copy buttons are native
+   * <wa-button>s and already keyboard-activatable via the click handler, so
+   * they are intentionally excluded here to avoid double-firing.
+   */
+  private handleKeyEvent(event: Event): void {
+    if (!(event instanceof KeyboardEvent)) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const target = event.target;
+    if (
+      !(target instanceof Element) ||
+      !target.closest('.file-link, .latex-ref, .proposal-restore-link')
+    ) {
+      return;
+    }
+    event.preventDefault();
+    this.activateLinkFromEvent(event);
+  }
+
+  /**
+   * Dispatch a file-link / latex-ref / proposal-restore-link activation from a
+   * click or keydown event. Returns true when one was handled.
+   */
+  private activateLinkFromEvent(event: Event): boolean {
+    const fileLink = this.findTargetInPath<HTMLElement>(event, '.file-link');
+    if (fileLink?.dataset.file) {
+      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, {
+        file: fileLink.dataset.file,
+        ...(fileLink.dataset.fileLine && {
+          line: Number(fileLink.dataset.fileLine),
+        }),
+      });
+      return true;
+    }
+
+    const latexRef = this.findTargetInPath<HTMLElement>(event, '.latex-ref');
+    if (latexRef?.dataset.label) {
+      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_LABEL, {
+        label: latexRef.dataset.label,
+      });
+      return true;
+    }
+
+    // Handle proposal restore links (may be inside <summary>, so prevent toggle)
+    const proposalLink = this.findTargetInPath<HTMLElement>(
+      event,
+      '.proposal-restore-link',
+    );
+    if (proposalLink?.dataset.proposalId) {
+      event.preventDefault();
+      const proposal = getProposalInput(proposalLink.dataset.proposalId);
+      if (proposal) {
+        postMessage(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG, {
+          proposal,
+        });
+      }
+      return true;
+    }
+    return false;
   }
 
   private findTargetInPath<T extends Element>(
