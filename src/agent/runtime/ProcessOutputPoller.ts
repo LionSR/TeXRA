@@ -152,12 +152,19 @@ export class ProcessOutputPoller {
       (source) => {
         const { outputPaths } = source.handle;
         if (!outputPaths) return Promise.resolve();
+        // Poll reads are gated on the process still being registered
+        // (requireRegistered=true): the snapshot above is taken before pMap
+        // drains it, and a process can be unregistered while its read is
+        // queued. Recreating decoder state for a dead process would orphan an
+        // outputStates entry that no future unregister clears. The flush() path
+        // owns its handle and reads with the default requireRegistered=false.
         return this.readIncremental(
           source.handle.executionId,
           source.handle.parentStreamId,
           outputPaths.stdout,
           outputPaths.stderr,
           source.runtimeHost,
+          true,
         );
       },
       { concurrency: OUTPUT_POLL_CONCURRENCY },
@@ -170,10 +177,20 @@ export class ProcessOutputPoller {
     stdoutPath: string,
     stderrPath: string,
     runtimeHost: AgentRuntimeHost,
+    requireRegistered = false,
   ): Promise<void> {
     const inflight = this.readingInProgress.get(executionId);
     if (inflight) {
       await inflight;
+    }
+
+    // Re-check registration AFTER awaiting any in-flight read: that read may be
+    // the terminal flush() whose .finally(unregister) deletes this process's
+    // state, and recreating it below (getOrCreateState) would orphan a decoder
+    // entry no future unregister clears. flush() itself passes
+    // requireRegistered=false so it still runs after unregister.
+    if (requireRegistered && !this.processOutputs.has(executionId)) {
+      return;
     }
 
     const work = (async () => {
