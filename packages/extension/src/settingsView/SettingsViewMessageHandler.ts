@@ -13,16 +13,8 @@ import * as vscode from 'vscode';
 // Shared schemas and dispatchers
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { platform } from '@platform/platform';
-import {
-  getAgentsBySource,
-  loadAgents,
-  toRemoteAgentProfileData,
-} from '@agent/index';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import { FREE_TIER, ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { getTierService } from '@auth/tier';
 import { BaseViewMessageHandler } from '@common/webview';
 import {
   GlobalStateKey,
@@ -53,6 +45,7 @@ import {
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
+import { buildProfileMessage } from '@shared/settingsView/handlers/profileHandlers';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import {
   dispatchSettingsViewInbound,
@@ -81,7 +74,6 @@ import {
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
 import type {
-  RemoteAgent,
   ProviderKeyStatus,
   ProviderVscodeSetting,
   NumberVscodeSetting,
@@ -100,7 +92,6 @@ import { hasExtension } from '@utils/core/pathCore';
 import { readGitAuthorSettingsFromState } from '@utils/system/gitAuthorSettings';
 import { setToolUseMemoryEnabled } from '@utils/config/constants';
 import {
-  getGlobalStreaming,
   setGlobalStreaming,
   getProviderStreaming,
   setProviderStreaming,
@@ -630,12 +621,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Helpers
   // ============================================================
 
-  private async primeIncludedAccessIfEnabled(): Promise<void> {
-    const serverSideKeyService = getServerSideKeyService();
-    if (!serverSideKeyService.getUseIncludedModelAccess()) return;
-    await serverSideKeyService.canUseServerSideKeys();
-  }
-
   // ============================================================
   // Public methods for external access
   // ============================================================
@@ -718,70 +703,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendProfileData(webview: vscode.Webview): Promise<void> {
-    const isAuthenticated = await SupabaseClient.isAuthenticated();
-    const providerKeyStatuses = await getProviderKeyStatuses();
-
-    const globalStreamingDefault = getGlobalStreaming();
-
-    if (!isAuthenticated) {
-      await webview.postMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-        authenticated: false,
-        user: null,
-        tier: 'free',
-        permissions: [],
-        remoteAgents: [],
-        apiAccessMode: 'personal',
-        tierConstants: {
-          ultra: ULTRA_TIER,
-          max: MAX_TIER,
-        },
-        providerKeyStatuses,
-        globalStreamingDefault,
-      });
-      return;
-    }
-
-    await this.primeIncludedAccessIfEnabled();
-    const serverSideKeyService = getServerSideKeyService();
-
-    const user = await SupabaseClient.getUser();
-    const authContext = await SupabaseClient.getUserAuthContext();
-
-    await loadAgents();
-    const remoteAgents: RemoteAgent[] = getAgentsBySource('remote').map(
-      toRemoteAgentProfileData,
-    );
-
-    const apiAccessMode = serverSideKeyService.getUseIncludedModelAccess()
-      ? 'included'
-      : 'personal';
-
-    const accessExpiresAt = serverSideKeyService.getAccessExpirationDate();
-    const spendingStatus = getTierService().getSpendingStatus();
-    const quotaAutoSwitched = serverSideKeyService.wasQuotaAutoSwitched();
-
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      authenticated: true,
-      user: {
-        email: user?.email ?? 'N/A',
-        id: user?.id ?? '',
-      },
-      tier: authContext.tier,
-      permissions: authContext.permissions,
-      remoteAgents,
-      apiAccessMode,
-      tierConstants: {
-        ultra: ULTRA_TIER,
-        max: MAX_TIER,
-      },
-      accessExpiresAt: accessExpiresAt?.toISOString() ?? null,
-      spendingStatus,
-      quotaAutoSwitched,
-      providerKeyStatuses,
-      globalStreamingDefault,
+    const message = await buildProfileMessage({
+      getProviderKeyStatuses: () => getProviderKeyStatuses(),
     });
+    await webview.postMessage(message);
   }
 
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {

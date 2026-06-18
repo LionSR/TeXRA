@@ -16,6 +16,7 @@ import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult } from '@hosts/terminalHost';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
@@ -348,9 +349,9 @@ function createWindow(options: {
     },
   });
   const refreshDesktopAuthSurfaces = async () => {
-    const profile = await desktopAuth.getProfileData();
+    const authenticated = await SupabaseClient.isAuthenticated();
     ipcRef.current?.postToRenderer({
-      command: profile.authenticated
+      command: authenticated
         ? MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER
         : MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
     });
@@ -541,7 +542,6 @@ function createWindow(options: {
     },
     signIn: () => desktopAuth.signIn(),
     signOut: () => desktopAuth.signOut(),
-    getAuthProfileData: () => desktopAuth.getProfileData(),
     setApiAccessMode: async (mode) => {
       await getServerSideKeyService().setUseIncludedModelAccess(
         mode === 'included',
@@ -658,7 +658,7 @@ function createWindow(options: {
     shellActions,
     modelListRefresh,
     getAuthStatus: async () => ({
-      authenticated: (await desktopAuth.getProfileData()).authenticated,
+      authenticated: await SupabaseClient.isAuthenticated(),
     }),
     onAsyncError: reportAsyncError,
   });
