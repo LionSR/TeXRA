@@ -14,7 +14,10 @@ import {
   buildHeadlessRunContext,
   resolveCliRunModel,
 } from '../runtime/runModel';
-import { resolveCliLaunchAgent } from '../runtime/agents';
+import {
+  resolveCliLaunchAgent,
+  WORKFLOW_AGENT_NAME_DESCRIPTION,
+} from '../runtime/agents';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -163,7 +166,7 @@ export const runWorkflowCommand = defineCliCommand({
     agent: {
       type: 'positional',
       required: true,
-      description: 'Workflow agent name',
+      description: WORKFLOW_AGENT_NAME_DESCRIPTION,
     },
     input: {
       type: 'string',

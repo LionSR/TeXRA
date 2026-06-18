@@ -194,7 +194,7 @@ describe('CLI agents run command', () => {
   it('reports missing agents before resolving the model', async () => {
     mocks.resolveCliLaunchAgent.mockRejectedValueOnce(
       new Error(
-        'Tool-use agent not found: missing-agent. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
+        'Tool-use agent not found: missing-agent. Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.',
       ),
     );
     const { runToolUseAgent } = await import('@cli/commands/agentsRun');
@@ -208,7 +208,7 @@ describe('CLI agents run command', () => {
         instruction: 'Check this.',
       }),
     ).rejects.toThrow(
-      'Tool-use agent not found: missing-agent. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
+      'Tool-use agent not found: missing-agent. Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.',
     );
 
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
