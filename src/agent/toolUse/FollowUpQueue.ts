@@ -5,6 +5,8 @@
  * toolUse modules, allowing it to be imported without circular dependency issues.
  */
 
+import pDefer, { type DeferredPromise } from 'p-defer';
+
 /** Preserves visible follow-up provenance across queueing and resume replay. */
 export type VisibleFollowUpQueueItemOrigin = 'user' | 'subagent_result';
 export type FollowUpQueueItemOrigin =
@@ -79,7 +81,7 @@ function drainedVisibleItem(
 
 export class FollowUpQueue {
   private readonly queued: FollowUpQueueItem[] = [];
-  private resolver: ((value: FollowUpQueueItem | null) => void) | null = null;
+  private deferred: DeferredPromise<FollowUpQueueItem | null> | null = null;
 
   enqueue(value: FollowUpQueueInput): void {
     this.enqueueItem({
@@ -95,10 +97,10 @@ export class FollowUpQueue {
   }
 
   private enqueueItem(value: FollowUpQueueItem): void {
-    if (this.resolver) {
-      const resolve = this.resolver;
-      this.resolver = null;
-      resolve(value);
+    if (this.deferred) {
+      const d = this.deferred;
+      this.deferred = null;
+      d.resolve(value);
     } else {
       this.queued.push(value);
     }
@@ -130,9 +132,9 @@ export class FollowUpQueue {
     if (checkInterruption()) {
       return Promise.resolve(null);
     }
-    return new Promise<FollowUpQueueItem | null>((resolve) => {
-      this.resolver = resolve;
-    });
+    const d = pDefer<FollowUpQueueItem | null>();
+    this.deferred = d;
+    return d.promise;
   }
 
   /**
@@ -165,9 +167,9 @@ export class FollowUpQueue {
   }
 
   cancelWait(): void {
-    const resolve = this.resolver;
-    this.resolver = null;
-    resolve?.(null);
+    const d = this.deferred;
+    this.deferred = null;
+    d?.resolve(null);
   }
 
   dispose(): void {

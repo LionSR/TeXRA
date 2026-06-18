@@ -5,14 +5,18 @@
 // Standard library imports
 import * as path from 'node:path';
 
-import slash from 'slash';
+import { normalize } from 'pathe';
 
-/** Get path segments as an array. */
+/**
+ * Get path segments as an array.
+ * Only converts backslashes — does NOT resolve '..' so callers can detect
+ * traversal attempts (e.g. AcceptRunFilesTool's `includes('..')` guard).
+ */
 export function getPathSegments(input: string): string[] {
   if (!input || input === '.') {
     return [];
   }
-  return slash(input.trim()).split('/').filter(Boolean);
+  return input.trim().replace(/\\/g, '/').split('/').filter(Boolean);
 }
 
 /** Convert a path to POSIX style (forward slashes, collapsed separators). */
@@ -20,7 +24,7 @@ export function toPosixPath(relativePath: string): string {
   if (!relativePath || relativePath === '.') {
     return '.';
   }
-  return getPathSegments(relativePath).join('/');
+  return normalize(relativePath.trim()).split('/').filter(Boolean).join('/');
 }
 
 /** Normalize a path for LaTeX \input commands (strips leading ./). */
