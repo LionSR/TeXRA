@@ -22,7 +22,7 @@ describe('RunContext', () => {
     expect(Object.isFrozen(context)).toBe(true);
 
     expect(() => {
-      (context as { trace: unknown }).trace = {};
+      (context as { runtimeHost: unknown }).runtimeHost = {};
     }).toThrow(TypeError);
   });
 
@@ -32,13 +32,6 @@ describe('RunContext', () => {
         runtimeHost: undefined as unknown as AgentRuntimeHost,
       }),
     ).toThrow(/explicit runtimeHost/);
-  });
-
-  it('defaults to the no-op trace when none is provided', () => {
-    const context = createRunContext({ runtimeHost: createRuntimeHost() });
-
-    expect(context.trace).toBeDefined();
-    expect(() => context.trace.debug('hello')).not.toThrow();
   });
 
   it('exposes the runtime host owned by the active context', () => {
