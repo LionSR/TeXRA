@@ -145,7 +145,7 @@ describe('CLI multi-agent presets', () => {
       'texra multi-agent inspect lean-project',
     );
     expect(formatCliMultiAgentPresetLauncherHints(leanUnavailable)).toEqual([
-      'Team setup: run `texra multi-agent inspect <team-id>` for the unavailable team.',
+      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
       'Relay teams may unlock more agents after texra login.',
     ]);
     expect(
@@ -153,7 +153,7 @@ describe('CLI multi-agent presets', () => {
         includeLoginHint: false,
       }),
     ).toEqual([
-      'Team setup: run `texra multi-agent inspect <team-id>` for the unavailable team.',
+      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
     ]);
 
     const physicistPreset = findCliMultiAgentPreset(
@@ -168,7 +168,7 @@ describe('CLI multi-agent presets', () => {
       ],
     });
     expect(formatCliMultiAgentPresetLauncherHints(degraded)).toContain(
-      'Team setup: run `texra multi-agent inspect <team-id>` for the unavailable team.',
+      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
     );
 
     const ready = planCliMultiAgentPresetRun(physicistPreset, {
