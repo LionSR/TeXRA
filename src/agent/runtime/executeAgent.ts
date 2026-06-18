@@ -333,10 +333,7 @@ export async function executeAgent(
                 onRoundFinalized,
                 setting,
                 isSubagent,
-                approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-                runtimeUnavailableTools: options.runtimeUnavailableTools,
                 onBeforeWaiting: options.onBeforeWaiting,
-                stopAfterCycle: options.stopAfterCycle,
                 onProgress: (update) => {
                   if (update.kind === 'overview') {
                     toolUseTurns++;
@@ -487,8 +484,6 @@ export async function resumeToolUseFromSnapshot(
             // would drop subagent-specific instructions (e.g. the shared
             // /memories protocol) that the fresh run had included.
             isSubagent,
-            approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-            runtimeUnavailableTools: options.runtimeUnavailableTools,
             onFollowUpConsumed: () =>
               ctx.runtimeHost.emit('updateQueuedFollowUps', {
                 streamId: ctx.streamId,
