@@ -2,6 +2,16 @@
   "name": "texra-workspace",
   "version": "0.38.9",
   "private": true,
+  "license": "Apache-2.0",
+  "description": "TeXRA — an AI theorist for academic writing, research, and document processing. VS Code extension, desktop app, and CLI.",
+  "homepage": "https://texra.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/texra-ai/texra-issues.git"
+  },
+  "bugs": {
+    "url": "https://github.com/texra-ai/texra-issues/issues"
+  },
   "packageManager": "pnpm@11.5.2+sha512.71c631e382066efc25625d5cf029075de07b61b37f6e27350fbd84b1bda5864c8c1967adc280776b45c30a715c0359a3be08fef42d5bb09e2b99029979692916",
   "workspaces": [
     "packages/*"

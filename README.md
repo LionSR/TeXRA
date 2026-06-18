@@ -138,6 +138,12 @@ The Setup Wizard checks for and helps install most of the above.
 
 Full docs at [texra.ai/guide](https://texra.ai/guide/).
 
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for how
+to set up the workspace, build, and run the test suite. To report a security
+issue, follow the process in [SECURITY.md](./SECURITY.md).
+
 ## Support
 
 Issues and feature requests: [GitHub](https://github.com/texra-ai/texra-issues/issues).
@@ -145,6 +151,8 @@ Contact: [contact@texra.ai](mailto:contact@texra.ai).
 
 ## License
 
-© TeXRA Team 2025–2026. All rights reserved.
+Licensed under the [Apache License 2.0](./LICENSE).
 
+Copyright © 2025–2026 Sirui Lu and the TeXRA contributors. Use of the hosted
+TeXRA service is additionally governed by the
 [Terms of Service](https://texra.ai/terms) · [Provider list](https://texra.ai/providers)

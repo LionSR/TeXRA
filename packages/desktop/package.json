@@ -2,7 +2,8 @@
   "name": "@texra/desktop",
   "version": "0.38.9",
   "description": "TeXRA standalone desktop application",
-  "author": "TeXRA.ai <contact@texra.ai>",
+  "author": "Sirui Lu",
+  "license": "Apache-2.0",
   "homepage": "https://texra.ai",
   "repository": {
     "type": "git",

@@ -2,8 +2,8 @@
   "name": "@texra-ai/cli",
   "version": "0.38.9",
   "description": "TeXRA CLI — your AI theorist in the terminal.",
-  "license": "SEE LICENSE IN LICENSE.txt",
-  "author": "TeXRA.ai",
+  "license": "Apache-2.0",
+  "author": "Sirui Lu",
   "homepage": "https://texra.ai",
   "repository": {
     "type": "git",
