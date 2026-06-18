@@ -30,7 +30,7 @@ export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
  * Schema for records of files edited during tool execution.
  * Specific to logging/tracking edited files in handler context.
  */
-export const EditedFileRecordSchema = z.object({
+const EditedFileRecordSchema = z.object({
   /** Path to the edited file */
   path: z.string(),
   /** Whether the edit succeeded */
