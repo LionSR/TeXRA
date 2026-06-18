@@ -7,10 +7,10 @@
  * back on subsequent requests; a 304 means "no change since that ETag".
  */
 
-import { isNonEmptyString } from '@utils/core';
 import { request as octokitRequest } from '@octokit/request';
 import { RequestError } from '@octokit/request-error';
 import { StatusCodes } from 'http-status-codes';
+import { isNonEmptyString } from '@utils/core';
 
 import { getGitHubToken } from './githubAuth';
 
@@ -83,7 +83,7 @@ export async function ghGet<T>(
   path: string,
   etag?: string,
 ): Promise<ConditionalResponse<T>> {
-  const token = getGitHubToken();
+  const token = await getGitHubToken();
   const headers: Record<string, string> = {
     'X-GitHub-Api-Version': API_VERSION,
     'user-agent': 'TeXRA-Extension',
