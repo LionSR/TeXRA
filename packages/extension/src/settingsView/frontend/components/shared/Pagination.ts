@@ -10,7 +10,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles and utilities
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { createEvent } from '@shared/utils/events';
 import { clamp } from '@utils/core';
 
@@ -141,11 +141,7 @@ export class Pagination extends LitElement {
             ?disabled=${atFirst}
             @click=${this.goFirst}
           >
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="backward-step"
-              variant="solid"
-            ></wa-icon>
+            ${waIcon('backward-step')}
           </wa-button>
           <wa-button
             appearance="outlined"
@@ -156,11 +152,7 @@ export class Pagination extends LitElement {
             ?disabled=${atFirst}
             @click=${this.goPrev}
           >
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="chevron-left"
-              variant="solid"
-            ></wa-icon>
+            ${waIcon('chevron-left')}
           </wa-button>
           <span class="pagination-status">
             ${this.page + 1}/${this.totalPages}
@@ -174,11 +166,7 @@ export class Pagination extends LitElement {
             ?disabled=${atLast}
             @click=${this.goNext}
           >
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="chevron-right"
-              variant="solid"
-            ></wa-icon>
+            ${waIcon('chevron-right')}
           </wa-button>
           <wa-button
             appearance="outlined"
@@ -189,11 +177,7 @@ export class Pagination extends LitElement {
             ?disabled=${atLast}
             @click=${this.goLast}
           >
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="forward-step"
-              variant="solid"
-            ></wa-icon>
+            ${waIcon('forward-step')}
           </wa-button>
         </div>
       </div>

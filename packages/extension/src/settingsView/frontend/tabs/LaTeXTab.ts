@@ -14,6 +14,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderLoadingState } from '@shared/wa/loadingState';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Web Awesome button + icon bundles (side-effect imports)
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -275,11 +276,7 @@ export class LaTeXTab extends LitElement {
                         }),
                       )}
                   >
-                    <wa-icon
-                      slot="start"
-                      library="texra"
-                      name="cloud-download"
-                    ></wa-icon>
+                    ${waIcon('cloud-download', { slot: 'start' })}
                     ${dep.actionLabel ?? 'Install'}
                   </wa-button>
                 `
@@ -301,12 +298,7 @@ export class LaTeXTab extends LitElement {
                   title="Run: ${installCmd.command}"
                   @click=${() => this.handleRunInTerminal(installCmd.command)}
                 >
-                  <wa-icon
-                    slot="start"
-                    library="texra"
-                    name="terminal"
-                  ></wa-icon>
-                  Run in Terminal
+                  ${waIcon('terminal', { slot: 'start' })} Run in Terminal
                 </wa-button>
               </div>
             `
@@ -365,7 +357,7 @@ export class LaTeXTab extends LitElement {
   ): TemplateResult {
     return html`
       <wa-callout class="prerequisite-hint" variant="brand">
-        <wa-icon library="texra" name="info" slot="icon"></wa-icon>
+        ${waIcon('info', { slot: 'icon' })}
         <div class="hint-title">${title}</div>
         <div class="hint-description">${description}</div>
         <div class="hint-actions">
@@ -380,8 +372,7 @@ export class LaTeXTab extends LitElement {
               : `Run ${pmName} installer in VS Code terminal`}
             @click=${() => this.handleRunInTerminal(installCommand)}
           >
-            <wa-icon slot="start" library="texra" name="terminal"></wa-icon>
-            Run in Terminal
+            ${waIcon('terminal', { slot: 'start' })} Run in Terminal
           </wa-button>
         </div>
       </wa-callout>
@@ -394,10 +385,7 @@ export class LaTeXTab extends LitElement {
       : DEPENDENCIES;
 
     return html`
-      <div class="section-header">
-        <wa-icon library="texra" name="package"></wa-icon>
-        Dependencies
-      </div>
+      <div class="section-header">${waIcon('package')} Dependencies</div>
       ${this.renderPrerequisiteHint()}
       ${dependencies.map((dep) => this.renderDependencyCard(dep))}
     `;
@@ -427,8 +415,7 @@ export class LaTeXTab extends LitElement {
                 title="Reset this setting to default"
                 @click=${() => this.handleApply(info.key, true)}
               >
-                <wa-icon slot="start" library="texra" name="discard"></wa-icon>
-                Reset
+                ${waIcon('discard', { slot: 'start' })} Reset
               </wa-button>
             `
           : html`
@@ -439,8 +426,7 @@ export class LaTeXTab extends LitElement {
                 title="Apply this setting"
                 @click=${() => this.handleApply(info.key)}
               >
-                <wa-icon slot="start" library="texra" name="check"></wa-icon>
-                Apply
+                ${waIcon('check', { slot: 'start' })} Apply
               </wa-button>
             `}
       </div>
@@ -468,12 +454,7 @@ export class LaTeXTab extends LitElement {
                   title="Apply all recommended settings"
                   @click=${() => this.handleApply()}
                 >
-                  <wa-icon
-                    slot="start"
-                    library="texra"
-                    name="check-all"
-                  ></wa-icon>
-                  Apply All
+                  ${waIcon('check-all', { slot: 'start' })} Apply All
                 </wa-button>
               </div>
             `
@@ -483,8 +464,7 @@ export class LaTeXTab extends LitElement {
           ? nothing
           : html`
               <div class="section-header" style="margin-top:var(--wa-space-s)">
-                <wa-icon library="texra" name="settings-gear"></wa-icon>
-                Recommended Settings
+                ${waIcon('settings-gear')} Recommended Settings
               </div>
 
               <div class="latex-description">
@@ -506,8 +486,7 @@ export class LaTeXTab extends LitElement {
   private renderInlineCriticismSetting(): TemplateResult {
     return html`
       <div class="section-header" style="margin-top:var(--wa-space-s)">
-        <wa-icon library="texra" name="comment-discussion"></wa-icon>
-        Inline Criticism
+        ${waIcon('comment-discussion')} Inline Criticism
       </div>
       <div class="setting-card">
         <wa-icon
@@ -552,8 +531,7 @@ export class LaTeXTab extends LitElement {
     const cv = this.configValues;
     return html`
       <div class="section-header" style="margin-top:var(--wa-space-s)">
-        <wa-icon library="texra" name="zap"></wa-icon>
-        Compile &amp; Diff
+        ${waIcon('zap')} Compile &amp; Diff
       </div>
       <div class="latex-description">
         TeXRA-specific compile and diff behavior, persisted per workspace. These
@@ -714,7 +692,7 @@ export class LaTeXTab extends LitElement {
       title="Reset to default (${defaultDisplay})"
       @click=${() => this.dispatchSetConfigValue(field, undefined)}
     >
-      <wa-icon library="texra" name="discard"></wa-icon>
+      ${waIcon('discard')}
     </wa-button>`;
   }
 

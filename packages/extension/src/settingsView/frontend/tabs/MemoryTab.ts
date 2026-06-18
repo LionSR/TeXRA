@@ -5,6 +5,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { MemoryViewItem } from '@shared/schemas';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { MemoryViewEvents } from '../components/memory/events';
 
@@ -51,11 +52,7 @@ export class MemoryTab extends LitElement {
   private renderMemoryReminder(): TemplateResult {
     return html`
       <div class="settings-reminder memory-reminder">
-        <wa-icon
-          library="texra"
-          name="info"
-          class="settings-reminder-icon"
-        ></wa-icon>
+        ${waIcon('info', { className: 'settings-reminder-icon' })}
         <div class="settings-reminder-body">
           <div class="settings-reminder-title">Memory notes</div>
           <div class="settings-reminder-description">
@@ -70,12 +67,7 @@ export class MemoryTab extends LitElement {
               size="small"
               @click=${this.handleRefresh}
             >
-              <wa-icon
-                slot="start"
-                library="texra"
-                name="rotate-right"
-              ></wa-icon>
-              Refresh
+              ${waIcon('rotate-right', { slot: 'start' })} Refresh
             </wa-button>
             <wa-button
               appearance="outlined"
@@ -84,12 +76,7 @@ export class MemoryTab extends LitElement {
               title="Open memory folder in file explorer"
               @click=${this.handleOpenFolder}
             >
-              <wa-icon
-                slot="start"
-                library="texra"
-                name="folder-open"
-              ></wa-icon>
-              Open Folder
+              ${waIcon('folder-open', { slot: 'start' })} Open Folder
             </wa-button>
           </div>
         </div>

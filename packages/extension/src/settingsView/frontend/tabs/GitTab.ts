@@ -10,6 +10,7 @@ import {
   renderSetStatusIcon,
   statusCheckIconStyles,
 } from '@shared/wa/statusIcons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -264,11 +265,7 @@ export class GitTab extends LitElement {
                       size="small"
                       @click=${this.handleSetGitHubToken}
                     >
-                      <wa-icon
-                        slot="start"
-                        library="texra"
-                        name="key"
-                      ></wa-icon>
+                      ${waIcon('key', { slot: 'start' })}
                       ${tokenIsSet ? 'Replace token' : 'Set token'}
                     </wa-button>
                     ${this.githubTokenStatus === 'secret'
@@ -279,12 +276,7 @@ export class GitTab extends LitElement {
                           size="small"
                           @click=${this.handleRemoveGitHubToken}
                         >
-                          <wa-icon
-                            slot="start"
-                            library="texra"
-                            name="trash"
-                          ></wa-icon>
-                          Remove
+                          ${waIcon('trash', { slot: 'start' })} Remove
                         </wa-button>`
                       : nothing}
                     <wa-button
@@ -293,12 +285,7 @@ export class GitTab extends LitElement {
                       size="small"
                       @click=${this.handleOpenGitHubTokenUrl}
                     >
-                      <wa-icon
-                        slot="start"
-                        library="texra"
-                        name="github"
-                      ></wa-icon>
-                      Create on GitHub…
+                      ${waIcon('github', { slot: 'start' })} Create on GitHub…
                     </wa-button>
                   </span>
                 </div>
@@ -376,11 +363,9 @@ export class GitTab extends LitElement {
                                               owner.streamId,
                                             )}
                                         >
-                                          <wa-icon
-                                            slot="start"
-                                            library="texra"
-                                            name="comment-discussion"
-                                          ></wa-icon>
+                                          ${waIcon('comment-discussion', {
+                                            slot: 'start',
+                                          })}
                                           Jump to agent
                                         </wa-button>
                                       </div>
@@ -401,12 +386,7 @@ export class GitTab extends LitElement {
                           @click=${() =>
                             this.handleUnsubscribePR(subscription.key)}
                         >
-                          <wa-icon
-                            slot="start"
-                            library="texra"
-                            name="debug-stop"
-                          ></wa-icon>
-                          Stop
+                          ${waIcon('debug-stop', { slot: 'start' })} Stop
                         </wa-button>
                       </li>
                     `,

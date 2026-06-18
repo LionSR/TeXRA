@@ -5,6 +5,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -70,12 +71,7 @@ export class ApiAccessSection extends LitElement {
         ${this.mode === 'included'
           ? html`
               <div class="api-access-support">
-                <wa-icon
-                  library="texra"
-                  name="heart"
-                  class="api-access-support-icon"
-                  aria-hidden="true"
-                ></wa-icon>
+                ${waIcon('heart', { className: 'api-access-support-icon' })}
                 <span class="api-access-support-copy">
                   ${PROMO_NOTICE_LONG.supportLead}<a
                     href=${PROMO_NOTICE_LONG.supportSponsorsUrl}
