@@ -86,9 +86,6 @@ export const MULTI_FILE_COMMAND_TO_KEY: Record<string, keyof MultiFiles> = {
 // Placeholder Configuration
 // =========================================================================
 
-/** Placeholder rotation interval in milliseconds */
-export const PLACEHOLDER_ROTATION_MS = 12000;
-
 /** Onboarding placeholder texts by session type (+ orchestrator override) */
 export const ONBOARDING_PLACEHOLDERS = {
   workflow: [
