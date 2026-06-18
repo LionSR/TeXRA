@@ -16,7 +16,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
-import { filterNotNull } from '@utils/core';
+import { byString, filterNotNull } from '@utils/core';
 import { TASK_RUNS_DIR } from '@utils/files';
 
 // ============================================================================
@@ -263,7 +263,7 @@ function normalizeWorkspaceFilePaths(paths: readonly string[]): string[] {
     const pathValue = rawPath.trim().replaceAll('\\', '/');
     if (pathValue) normalized.add(pathValue);
   }
-  return [...normalized].sort((a, b) => a.localeCompare(b));
+  return [...normalized].sort(byString);
 }
 
 // ============================================================================
