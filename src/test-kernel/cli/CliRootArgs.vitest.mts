@@ -1272,6 +1272,10 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('INTERACTIVE CONTROLS');
     expect(stdout).toContain('/help');
     expect(stdout).toContain('/status');
+    expect(stdout).toContain('/goal');
+    expect(stdout).toContain(
+      'explain autonomous goal mode and approved-plan startup',
+    );
     expect(stdout).toContain('/login, /logout');
     expect(stdout).toContain('Ctrl-T');
     expect(stdout).toContain('Tab');
@@ -1379,6 +1383,7 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('Interactive tool-use chat session');
     expect(stdout).toContain('USAGE texra chat');
     expect(stdout).toContain('INTERACTIVE CONTROLS');
+    expect(stdout).toContain('/goal');
     expect(stdout).toContain('Esc s');
     expect(stdout).toContain('open subagents when available');
     expect(stdout).toContain('Esc 1..9');
