@@ -105,7 +105,7 @@ describe('formatUnavailableApprovalInstruction', () => {
 });
 
 describe('formatMultiAgentRunInstruction', () => {
-  it('reminds the orchestrator to check domain edge cases before claiming completeness', () => {
+  it('keeps domain edge-case checks subordinate to the requested answer shape', () => {
     for (const mode of ['headless', 'interactive'] as const) {
       for (const approvalPolicy of ['never', 'ask', 'yolo'] as const) {
         const instruction = formatMultiAgentRunInstruction(preset, {
@@ -117,11 +117,15 @@ describe('formatMultiAgentRunInstruction', () => {
         });
 
         expect(instruction).toContain(
-          'check the full domain stated by the user',
+          'internally check the full domain stated by the user',
         );
         expect(instruction).toContain('sign choices');
         expect(instruction).toContain('zero and boundary cases');
         expect(instruction).toContain('symmetry branches');
+        expect(instruction).toContain('do not add a separate checklist');
+        expect(instruction).toContain(
+          'keep the final answer within the user-requested scope and length',
+        );
       }
     }
   });
