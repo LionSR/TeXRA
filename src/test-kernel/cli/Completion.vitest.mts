@@ -59,12 +59,11 @@ describe('CLI shell completion', () => {
       valueSkipIndex > 0 ? lines[valueSkipIndex - 1] : undefined;
     const valueFlags = new Set(
       commands.flatMap((command) =>
-        command.flags
-          .filter((flag) => flag.takesValue)
-          .flatMap((flag) => [
-            `--${flag.name}`,
-            ...flag.aliases.map((alias) => `-${alias}`),
-          ]),
+        command.flags.flatMap((flag) =>
+          flag.takesValue
+            ? [`--${flag.name}`, ...flag.aliases.map((alias) => `-${alias}`)]
+            : [],
+        ),
       ),
     );
 

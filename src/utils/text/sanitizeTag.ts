@@ -22,7 +22,7 @@ export function sanitizeTag(tagName: string, body: string): string {
   }
   const re = new RegExp(`<\\s*/?\\s*${escapeRegExp(tagName)}\\s*>`, 'gi');
   const ZWSP = String.fromCharCode(0x200b);
-  const broken = `${tagName[0]}${ZWSP}${tagName.slice(1)}`;
+  const broken = `${tagName.at(0)}${ZWSP}${tagName.slice(1)}`;
   return body.replaceAll(re, (match) =>
     match.includes('/') ? `</${broken}>` : `<${broken}>`,
   );
