@@ -2,6 +2,101 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.38.9] - 2026-06-18
+
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **Crash-safe run state** — run and flow progress is now written atomically, so an unexpected shutdown can no longer leave a corrupted file that makes a resumed run silently restart from scratch and lose applied edits.
+- **API keys kept out of saved transcripts** — when you set a provider API key, the key is no longer written in cleartext to the on-disk run transcript or reloaded through history.
+- **Contained run-file reads** — reading a file from a run's stored files now rejects paths that try to escape the run's storage directory, keeping reads contained.
+- **GitHub tools work in the CLI and desktop app** — the GitHub token is now read the same way across surfaces, so GitHub commands and checks that previously did nothing outside the VS Code extension now work everywhere.
+- **Safer and more correct code search** — search patterns that begin with a dash now match literally instead of being treated as options, closing a path where a crafted pattern could run a command during search.
+- **Wolfram runs now ask for approval** — running Wolfram Language code through the agent now goes through the same approval prompt as other commands instead of executing without asking, and it backs off when you have asked the agent not to use external computation.
+- **Reliable undo with subagents** — when a subagent and its parent edit the same file at once, undoing an edit no longer reverts the wrong run's change or writes a stale version to disk.
+- **Steadier long-running sessions** — fixed a leak that kept output-decoder state for finished background processes alive until the session ended.
+- **No more stalling after a tool runs** — when the model returns an empty turn right after a tool result, the agent now nudges it to keep going and deliver the answer instead of ending the turn with nothing.
+- **No more doubled subagent reports** — when you wait on a subagent, its result is delivered once to the parent instead of appearing twice.
+- **More forgiving shell tool** — agents can attach a short description to a command without the tool call failing; the description is ignored when running the command.
+- **Cleaner Google model output** — stray control characters that Google models emit right before a tool call no longer leak into the visible response text, including when they are split across streaming chunks.
+- **Cleaner command rejections** — when you decline a command an agent wants to run, it now moves on instead of repeatedly asking to run the same approval-gated command.
+- **Cleaner workflow output files** — files written from multi-document workflow output now end with a single trailing newline, so generated LaTeX matches the usual file convention.
+- **Proofreading stays out of the math** — the built-in Correct agent now leaves equations, theorem statements, and factual claims untouched, fixing only typos, grammar, and LaTeX formatting, so it no longer silently rewrites mathematical content.
+- **Truncated text no longer breaks emoji and other characters** — one-line summaries and tool-error previews that get shortened with an ellipsis now keep emoji, CJK, and math characters whole instead of leaving a broken glyph at the cut.
+
+#### Improvements
+
+- **Faster Lean detection** — checking whether Lean's build tool is installed is now an instant lookup on your path instead of launching the tool, so Lean tool availability resolves faster and without a slow startup spawn.
+- **Faster, less fussy reviews** — the review agent now checks elementary facts by hand instead of reaching for external computation, so reviews spend less time on trivial verifications.
+- **More faithful subagent summaries** — when a coordinating agent reports back a subagent's result, it now keeps the subagent's stated evidence, tool names, and caveats accurately instead of paraphrasing or inventing different methods.
+- **Delegated agents respect your limits** — when the agent hands work to a subagent, it now passes along your tool, network, file, approval, and output constraints, and the subagent reports a conflict instead of guessing when an instruction clashes with them. When you reject a delegation without a reason, the agent is told to stop retrying the same request and either continue with what it has or ask you a clarifying question.
+- **No looping on plan pause or complete in chat** — in ordinary turn-by-turn chat, pausing or completing a plan now returns plain guidance and the agent answers you directly, instead of repeatedly calling the plan controls when no autonomous goal is running.
+
+### CLI
+
+#### Features
+
+- **One-command code-review setup** — run `texra install-github-action` to scaffold the TeXRA code-review GitHub workflow into your repository and commit it on a branch, then push the branch and open the pull-request page so you review the diff and create the PR yourself, with graceful fallbacks when the GitHub CLI or a remote is missing.
+- **Goal details in status** — the status view now shows the current goal's state and objective when a goal run is active, so you can see what the agent is working toward at a glance.
+
+#### Bug Fixes
+
+- **Cleaner subagent results in the chat** — long or still-streaming subagent output no longer floods your conversation log with raw protocol markup, half-written tags, or an entire dumped response. A finished subagent now shows a short, readable summary (with todo progress, turns, and current activity), a long result shows a preview with a pointer to open the full transcript, and a running subagent's live output stays within a bounded live region with full history in the transcript viewer.
+- **Cleaner CLI transcripts** — HTML tags like bold, italics, code, and blockquotes that appear in model output now render as styled text in the terminal instead of showing raw markup.
+- **Gemini conversations in CLI history** — browsing past conversations now shows the full transcript for Gemini-driven runs, including the assistant's replies, tool calls, and tool results, instead of leaving them blank.
+- **Faster feedback on the wrong chat agent** — starting a chat with an unknown agent, a workflow agent, or a team preset now fails immediately with guidance on the right command, instead of only erroring after you send your first message.
+- **Clearer configuration errors** — running an agent or workflow with an invalid setting, such as an unknown model, now shows a readable "invalid configuration" message and exits cleanly, instead of crashing with an internal error and a bug-report prompt.
+- **Resume keeps your context** — the resume command the CLI prints now includes your non-default approval policy and the session's working directory when it differs from your current shell, so copy-pasting it resumes the right project with the same approval behavior instead of silently dropping to the default.
+- **Piped LaTeX input** — feeding LaTeX to the CLI through stdin no longer fails when LaTeX writes its auxiliary files, because the temporary input is no longer given a hidden name that TeX could reject. These temporary files are also removed when the CLI shuts down, so interrupting a run no longer leaves stray files behind.
+- **Accurate status on interrupt** — stopping the CLI mid-run with Ctrl-C now records the run as interrupted instead of leaving it in a stale or misleading state.
+- **Workflow `--output` handling** — running a workflow with `--output` no longer renames the agent's working file to your copy target; the requested output file is written correctly while the workflow keeps its own filenames.
+- **Stopped subagents no longer flagged as errors** — manually stopping a subagent now shows a neutral status instead of a red error dot, matching the other surfaces.
+- **Focused stream tab shows when it errors or finishes** — the active stream tab now displays an error or ready status, so a focused stream that fails or completes is no longer indistinguishable from one still running.
+- **Accurate context-window gauge** — the status bar now measures context-window usage from input tokens only, so the percentage and its warning colors no longer jump prematurely after a long response.
+- **Cleaner machine-readable output** — the CLI no longer emits stray progress lines after a run has finished, keeping `--output-format ndjson` output well-formed.
+- **Skills available in the CLI** — the terminal client now ships with its built-in skills, so they appear and run after a normal install.
+- **Approving a plan no longer skips edit review** — choosing approve-and-run now auto-approves only the plan's shell commands; file edits keep going through the normal diff approval so you still review every change.
+- **Tidier model and tool pickers** — the model and tool lists now reserve room for their key hints, so the footer and bottom rows stay visible instead of being pushed off-screen in short terminals.
+- **Smoother approval policy picker** — choosing an approval policy from the picker now closes the menu before applying your choice, so the new setting takes effect cleanly without the picker lingering.
+
+#### Improvements
+
+- **Live workflow progress** — the elapsed-time status line now keeps ticking during quiet workflow runs instead of freezing when there are no active sub-tasks, so you can tell a long run is still working. When a run processes several input files, the progress line shows the first filename with a compact "+N" so the extra inputs are no longer hidden.
+- **Readable elapsed times** — the status bar and subagent timers now show compact durations like `1m 15s` and `2h 5m` instead of raw seconds.
+- **Less clutter during goal runs** — the todo and plan panel now hides once every item is finished, so a stale completed checklist no longer lingers while the next turn is running.
+- **Clearer plan approval** — when a goal run is active, the plan approval prompt now states that choosing approve-and-run will auto-approve only Bash commands, so you know the scope before confirming.
+- **Clearer subagent panel navigation** — the Escape hint in the subagent panel now reads "back" when you are viewing a task's detail and "close" otherwise, matching what the key actually does.
+- **`/goal` help** — typing `/goal` (or `\goal`) now shows a quick explanation of autonomous goal mode instead of starting an agent turn.
+- **Clearer team hints** — when a multi-agent team is unavailable, the CLI now points you to `texra multi-agent inspect <team-id>` so it is obvious which value to supply.
+
+### Desktop
+
+#### Bug Fixes
+
+- **Reliable PDF reopen** — quickly reopening a PDF while the previous one is still closing no longer leaves the viewer blank.
+- **GitHub updates reach the right window** — GitHub subscription follow-ups now route to the session that created them, so polling updates are no longer misrouted or dropped when more than one window is open.
+- **Command palette shows when nothing matches** — filtering to no results now displays "No matching commands" instead of an empty box that looked broken or still loading.
+
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Output files in remote workspaces** — when working over SSH, remote, or web workspaces, agent output files no longer split between the remote filesystem and the local disk; every chunk of a file now lands in the same place.
+- **Markdown chat export** — exported conversations no longer break when tool output or fetched pages contain triple-backtick code fences; the rest of the document now renders correctly.
+- **Diff view recovers from a failed load** — if the diff editor fails to load once, reopening a diff now retries instead of staying stuck on an error message for the rest of the session.
+- **Unavailable models can no longer be enabled by mistake** — in Settings, models you cannot use (missing API key or not allowed) now have their checkbox properly disabled, so you cannot silently add an unusable model to your enabled set. An already-enabled model whose key was removed can still be turned off.
+- **Clearer empty states** — a history search with no matches now shows a "no matches" message, and a just-started terminal-mode run shows a starting placeholder, instead of a confusing blank panel.
+- **Token counts read correctly** — usage and context figures in the 100k to 1M range now show as, for example, "200k" instead of being shrunk to a nonsensical "0.2M".
+- **Tidier approval buttons** — the approve, reject, and diff buttons on a tool edit request now stay inside the panel and shorten long labels with an ellipsis instead of spilling over and breaking the layout in narrow views.
+- **Keyboard-activatable progress-view links** — file links, generated and proposed file links, diff results, LaTeX references, and the proposal Setup link in the progress view can now be reached with Tab and opened with Enter or Space, so keyboard-only and screen-reader users can open them, not just mouse users.
+- **UI styling polish** — fixed several broken visual references: the working-directory line in approval prompts regained its spacing and muted color, desktop log and editor text use the correct monospace font, the goal panel's in-flight arrow now displays instead of a blank glyph, and the credit usage meter's colored bands render correctly again so the normal, warning, and exhausted states are visually distinct.
+
+#### Improvements
+
+- **Consistent icons** — progress log severities, cloud and local agent badges, and the multi-agent team marker now use the same crisp icon set as the rest of the interface instead of mixed-in emoji.
+- **Cleaner screen-reader experience** — decorative icons in the main panel and toolbar are now hidden from screen readers so labeled buttons are announced once by their name, error and warning icons in the progress view carry text labels so their severity is announced, and icon-only remote and custom agent badges in settings now carry their own accessible name.
+
 ## [0.38.8] - 2026-06-14
 
 ### Shared (all surfaces)
