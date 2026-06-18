@@ -6,19 +6,20 @@
  * synthesizing pseudo-diffs for untracked files, so the whole change set
  * fits in one reviewable text blob.
  *
- * Host-neutral: shells out to git via the shared exec wrapper; no vscode.
+ * Host-neutral: uses simple-git for git operations; no vscode.
  */
 // Standard library imports
 import * as path from 'node:path';
 
+// Third-party imports
+import simpleGit, { type SimpleGit } from 'simple-git';
+
 // Local imports
 import { platform } from '@platform/platform';
-import { executeCommand } from '@utils/system/execUtils';
 import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
 
 import { normalizeReviewFilePath } from './reviewIssues';
 
-const CHANNEL = 'AgentReview';
 const GIT_TIMEOUT_MS = 30_000;
 
 /** Branch names probed when origin/HEAD is not configured. */
@@ -69,14 +70,17 @@ export type CollectReviewDiffResult =
   | { ok: true; value: ReviewDiff }
   | { ok: false; reason: string };
 
-/** Run git, returning stdout on success and null on any failure. */
-async function git(cwd: string, args: string[]): Promise<string | null> {
-  const result = await executeCommand(['git', ...args], {
-    cwd,
-    channel: CHANNEL,
-    timeout: GIT_TIMEOUT_MS,
-  });
-  return result.success ? (result.stdout ?? '') : null;
+function makeGit(cwd: string): SimpleGit {
+  return simpleGit(cwd, { timeout: { block: GIT_TIMEOUT_MS } });
+}
+
+/** Run a git command, returning stdout on success and null on error. */
+async function rawGit(sg: SimpleGit, args: string[]): Promise<string | null> {
+  try {
+    return await sg.raw(args);
+  } catch {
+    return null;
+  }
 }
 
 /** True when the content looks binary (NUL byte in the leading bytes). */
@@ -114,8 +118,8 @@ interface BaseBranch {
  * ref, so a clone without a local main (e.g. a manually added remote with
  * no origin/HEAD) still resolves. Local wins over remote for a name.
  */
-async function detectBaseBranch(cwd: string): Promise<BaseBranch | null> {
-  const originHead = await git(cwd, [
+async function detectBaseBranch(sg: SimpleGit): Promise<BaseBranch | null> {
+  const originHead = await rawGit(sg, [
     'symbolic-ref',
     '--quiet',
     '--short',
@@ -128,27 +132,19 @@ async function detectBaseBranch(cwd: string): Promise<BaseBranch | null> {
   const verified = await Promise.all(
     BASE_BRANCH_CANDIDATES.map(async (candidate) => {
       const [local, origin] = await Promise.all([
-        git(cwd, [
-          'rev-parse',
-          '--verify',
-          '--quiet',
-          `refs/heads/${candidate}`,
-        ]),
-        git(cwd, [
-          'rev-parse',
-          '--verify',
-          '--quiet',
-          `refs/remotes/origin/${candidate}`,
-        ]),
+        rawGit(sg, ['rev-parse', '--verify', '--quiet', `refs/heads/${candidate}`]),
+        rawGit(sg, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${candidate}`]),
       ]);
       return { candidate, local, origin };
     }),
   );
   for (const { candidate, local, origin } of verified) {
-    if (local !== null) {
+    // simple-git returns "" for --quiet non-existent refs (exit 1, no stdout);
+    // truthy check correctly treats "" as "not found" and a SHA as "found".
+    if (local) {
       return { ref: candidate, shortName: candidate };
     }
-    if (origin !== null) {
+    if (origin) {
       return { ref: `origin/${candidate}`, shortName: candidate };
     }
   }
@@ -162,11 +158,11 @@ async function detectBaseBranch(cwd: string): Promise<BaseBranch | null> {
  * user-facing labels in on-branch fallback descriptions.
  */
 async function resolveBaseBranch(
-  cwd: string,
+  sg: SimpleGit,
   branch: string,
 ): Promise<BaseBranch | null> {
-  const verified = await git(cwd, ['rev-parse', '--verify', '--quiet', branch]);
-  if (verified === null) return null;
+  const verified = await rawGit(sg, ['rev-parse', '--verify', '--quiet', branch]);
+  if (!verified) return null;
   return { ref: branch, shortName: branch.replace(/^origin\//, '') };
 }
 
@@ -186,12 +182,14 @@ export interface BaseBranchCandidate {
 export async function listBaseBranchCandidates(
   cwd: string,
 ): Promise<BaseBranchCandidate[]> {
-  const repoRoot = (await git(cwd, ['rev-parse', '--show-toplevel']))?.trim();
+  const sg = makeGit(cwd);
+  const repoRoot = (await rawGit(sg, ['rev-parse', '--show-toplevel']))?.trim();
   if (!repoRoot) return [];
+  const sgRoot = makeGit(repoRoot);
   const [headOut, localsOut, remotesOut] = await Promise.all([
-    git(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD']),
-    git(repoRoot, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']),
-    git(repoRoot, [
+    rawGit(sgRoot, ['rev-parse', '--abbrev-ref', 'HEAD']),
+    rawGit(sgRoot, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']),
+    rawGit(sgRoot, [
       'for-each-ref',
       '--format=%(refname:short)',
       'refs/remotes/origin',
@@ -219,20 +217,22 @@ export async function listBaseBranchCandidates(
  * to look at.
  */
 async function resolveOnBaseBranch(
-  cwd: string,
+  sg: SimpleGit,
   branch: string,
 ): Promise<Pick<ReviewDiff, 'baseRef' | 'baseDescription'>> {
-  // `git diff --quiet` signals "differences found" via exit code 1, which
-  // the `git` helper maps to null — a genuine git error looks the same and
-  // safely degrades to the HEAD base (whose diff then fails the collection).
-  const treeClean = (await git(cwd, ['diff', '--quiet', 'HEAD'])) !== null;
+  // `diff --name-only HEAD` is empty on a clean tree (exit 0, no output) and
+  // lists changed files on a dirty tree (exit 0, non-empty output). This
+  // avoids relying on exit code 1 from `diff --quiet`, which simple-git does
+  // not surface as an error for --quiet commands.
+  const dirtyFiles = (await rawGit(sg, ['diff', '--name-only', 'HEAD'])) ?? '';
+  const treeClean = !dirtyFiles.trim();
   if (!treeClean) {
     return {
       baseRef: 'HEAD',
       baseDescription: `last commit on ${branch} (uncommitted changes)`,
     };
   }
-  if (await git(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD^'])) {
+  if (await rawGit(sg, ['rev-parse', '--verify', '--quiet', 'HEAD^'])) {
     return {
       baseRef: 'HEAD^',
       baseDescription: `previous commit on ${branch} (latest commit)`,
@@ -287,9 +287,10 @@ export function buildUntrackedFileDiff(
  * to catch. An empty listing (no untracked files) is a normal result.
  */
 async function collectUntrackedDiffs(
+  sg: SimpleGit,
   repoRoot: string,
 ): Promise<{ diff: string; files: string[] } | null> {
-  const listing = await git(repoRoot, [
+  const listing = await rawGit(sg, [
     'ls-files',
     '--others',
     '--exclude-standard',
@@ -343,14 +344,18 @@ export async function collectReviewDiff(
 ): Promise<CollectReviewDiffResult> {
   const { includeUntracked, includeSubmodules } = options;
 
+  const sg = makeGit(options.cwd);
+
   // `git diff <commit>` always emits repo-relative paths; resolve the root
   // so file reads and editor locations agree with them.
   const repoRoot = (
-    await git(options.cwd, ['rev-parse', '--show-toplevel'])
+    await rawGit(sg, ['rev-parse', '--show-toplevel'])
   )?.trim();
   if (!repoRoot) {
     return { ok: false, reason: 'The workspace is not a git repository.' };
   }
+
+  const sgRoot = makeGit(repoRoot);
 
   let baseRef: string;
   let baseDescription: string;
@@ -359,8 +364,8 @@ export async function collectReviewDiff(
     baseDescription = options.baseDescription ?? options.baseRef;
   } else {
     const base = options.baseBranch
-      ? await resolveBaseBranch(repoRoot, options.baseBranch)
-      : await detectBaseBranch(repoRoot);
+      ? await resolveBaseBranch(sgRoot, options.baseBranch)
+      : await detectBaseBranch(sgRoot);
     if (!base) {
       return {
         ok: false,
@@ -371,18 +376,22 @@ export async function collectReviewDiff(
     }
 
     const head = (
-      await git(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD'])
+      await rawGit(sgRoot, ['rev-parse', '--abbrev-ref', 'HEAD'])
     )?.trim();
     const checkedOutBase = options.baseBranch
       ? head === base.ref
       : head === base.shortName;
     if (checkedOutBase) {
       ({ baseRef, baseDescription } = await resolveOnBaseBranch(
-        repoRoot,
+        sgRoot,
         base.shortName,
       ));
     } else {
-      const mergeBase = await git(repoRoot, ['merge-base', 'HEAD', base.ref]);
+      const mergeBase = await rawGit(sgRoot, [
+        'merge-base',
+        'HEAD',
+        base.ref,
+      ]);
       if (!mergeBase) {
         return {
           ok: false,
@@ -400,10 +409,10 @@ export async function collectReviewDiff(
     ? '--submodule=diff'
     : '--ignore-submodules=all';
   const [diffText, nameOnly, untracked] = await Promise.all([
-    git(repoRoot, ['diff', '--no-color', submoduleFlag, baseRef, '--']),
-    git(repoRoot, ['diff', '--name-only', submoduleFlag, baseRef, '--']),
+    rawGit(sgRoot, ['diff', '--no-color', submoduleFlag, baseRef, '--']),
+    rawGit(sgRoot, ['diff', '--name-only', submoduleFlag, baseRef, '--']),
     includeUntracked
-      ? collectUntrackedDiffs(repoRoot)
+      ? collectUntrackedDiffs(sgRoot, repoRoot)
       : Promise.resolve({ diff: '', files: [] }),
   ]);
   // A failed name-only diff must fail the collection too: issue reports are

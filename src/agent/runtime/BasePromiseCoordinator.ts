@@ -8,6 +8,9 @@
  * getDefaultCancelResult().
  */
 
+import pDefer, { type DeferredPromise } from 'p-defer';
+import pTimeout from 'p-timeout';
+
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
@@ -24,9 +27,10 @@ export type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
 type RequestState<TResult> =
   | {
       status: 'pending';
-      resolve: (result: TResult) => void;
+      deferred: DeferredPromise<TResult>;
       runtimeHost: AgentRuntimeHost;
-      timeoutId?: NodeJS.Timeout;
+      /** Cancels the pTimeout timer; no-op when no timeout was set. */
+      cancelTimeout: () => void;
     }
   | { status: 'resolved' };
 
@@ -79,39 +83,42 @@ export abstract class BasePromiseCoordinator<
 
     const existing = this.requests.get(id);
     if (existing?.status === 'pending') {
-      clearTimeout(existing.timeoutId);
-      existing.resolve(this.getDefaultCancelResult());
+      existing.cancelTimeout();
+      existing.deferred.resolve(this.getDefaultCancelResult());
       this.cleanup(id, existing.runtimeHost);
     }
 
-    return new Promise<TResult>((resolve) => {
-      let timeoutId: NodeJS.Timeout | undefined;
-      if (options?.timeoutMs && options.timeoutMs > 0) {
-        timeoutId = setTimeout(() => {
-          const req = this.requests.get(id);
-          if (req?.status === 'pending' && req.resolve === resolve) {
-            const result = options.onTimeout?.() ?? this.getTimeoutResult();
-            this.resolveRequest(id, result);
-          }
-        }, options.timeoutMs);
-      }
+    const deferred = pDefer<TResult>();
+    const pending: RequestState<TResult> & { status: 'pending' } = {
+      status: 'pending',
+      deferred,
+      runtimeHost,
+      cancelTimeout: () => {},
+    };
+    this.requests.set(id, pending);
 
-      this.requests.set(id, {
-        status: 'pending',
-        resolve,
-        runtimeHost,
-        timeoutId,
-      });
+    // `showEventName` is a runtime-variable key into ProgressEventPayloads,
+    // so TS can't correlate it with `payload`'s type. Cast to the payload
+    // the emitter expects for that key set rather than discarding all
+    // checking with `any`.
+    runtimeHost.emit(
+      this.config.showEventName,
+      payload as ProgressEventPayloads[keyof ProgressEventPayloads],
+    );
 
-      // `showEventName` is a runtime-variable key into ProgressEventPayloads,
-      // so TS can't correlate it with `payload`'s type. Cast to the payload
-      // the emitter expects for that key set rather than discarding all
-      // checking with `any`.
-      runtimeHost.emit(
-        this.config.showEventName,
-        payload as ProgressEventPayloads[keyof ProgressEventPayloads],
-      );
+    if (!options?.timeoutMs || options.timeoutMs <= 0) return deferred.promise;
+
+    const timedPromise = pTimeout(deferred.promise, {
+      milliseconds: options.timeoutMs,
+      fallback: () => {
+        const result = options.onTimeout?.() ?? this.getTimeoutResult();
+        this.resolveRequest(id, result);
+        return result;
+      },
     });
+    // Store the clear fn so resolveRequest/clearRequest can cancel the timer.
+    pending.cancelTimeout = timedPromise.clear.bind(timedPromise);
+    return timedPromise;
   }
 
   hasPendingRequest(id: string): boolean {
@@ -123,8 +130,8 @@ export abstract class BasePromiseCoordinator<
     const req = this.getPendingRequest(id);
     if (!req) return;
 
-    clearTimeout(req.timeoutId);
-    req.resolve(this.getDefaultCancelResult());
+    req.cancelTimeout();
+    req.deferred.resolve(this.getDefaultCancelResult());
     this.cleanup(id, req.runtimeHost);
   }
 
@@ -145,8 +152,8 @@ export abstract class BasePromiseCoordinator<
     const req = this.getPendingRequest(id);
     if (!req) return false;
 
-    clearTimeout(req.timeoutId);
-    req.resolve(result);
+    req.cancelTimeout();
+    req.deferred.resolve(result);
     this.cleanup(id, req.runtimeHost);
     return true;
   }

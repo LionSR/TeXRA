@@ -1,5 +1,6 @@
 import { StringDecoder } from 'node:string_decoder';
 
+import delay from 'delay';
 import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
@@ -40,8 +41,7 @@ export class ProcessOutputPoller {
 
   private readonly processOutputs = new Map<string, ProcessOutputSource>();
   private readonly readingInProgress = new Map<string, Promise<void>>();
-  private outputPollTimer: ReturnType<typeof setTimeout> | null = null;
-  private pollInFlight = false;
+  private loopController: AbortController | null = null;
 
   register(
     handle: ProcessExecutionHandle,
@@ -96,14 +96,11 @@ export class ProcessOutputPoller {
   }
 
   dispose(): void {
-    if (this.outputPollTimer) {
-      clearTimeout(this.outputPollTimer);
-      this.outputPollTimer = null;
-    }
+    this.loopController?.abort();
+    this.loopController = null;
     this.outputStates.clear();
     this.processOutputs.clear();
     this.readingInProgress.clear();
-    this.pollInFlight = false;
   }
 
   private getOrCreateState(executionId: string): OutputState {
@@ -120,30 +117,29 @@ export class ProcessOutputPoller {
 
   private reconcile(): void {
     const active = this.processOutputs.size > 0;
-    if (active && !this.outputPollTimer) {
-      this.schedule();
-    } else if (!active && this.outputPollTimer) {
-      clearTimeout(this.outputPollTimer);
-      this.outputPollTimer = null;
+    if (active && !this.loopController) {
+      const controller = new AbortController();
+      this.loopController = controller;
+      void this.runPollLoop(controller.signal);
+    } else if (!active && this.loopController) {
+      this.loopController.abort();
+      this.loopController = null;
     }
   }
 
-  /** Schedule the next poll cycle; the next poll waits for the current one. */
-  private schedule(): void {
-    this.outputPollTimer = setTimeout(async () => {
-      this.outputPollTimer = null;
-      if (this.pollInFlight) {
-        this.schedule();
-        return;
-      }
-      this.pollInFlight = true;
+  private async runPollLoop(signal: AbortSignal): Promise<void> {
+    while (!signal.aborted) {
       try {
-        await this.pollProcessOutputs();
-      } finally {
-        this.pollInFlight = false;
-        this.reconcile();
+        await delay(OUTPUT_POLL_INTERVAL_MS, { signal });
+      } catch {
+        break; // AbortError: stop requested
       }
-    }, OUTPUT_POLL_INTERVAL_MS);
+      await this.pollProcessOutputs();
+    }
+    // Clear the reference so a future register() can start a new loop.
+    if (this.loopController?.signal === signal) {
+      this.loopController = null;
+    }
   }
 
   private async pollProcessOutputs(): Promise<void> {

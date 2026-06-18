@@ -4,6 +4,7 @@
  * This is a standalone data structure with no dependencies on other
  * toolUse modules, allowing it to be imported without circular dependency issues.
  */
+import pDefer, { type DeferredPromise } from 'p-defer';
 
 import pDefer, { type DeferredPromise } from 'p-defer';
 
