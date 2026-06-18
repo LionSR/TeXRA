@@ -188,27 +188,25 @@ class Node<
     }
     const effectiveMaxRetries = Math.max(1, this.maxRetries);
     const MAX_MANUAL_RETRIES = 100;
-    let manualRetryCount = 0;
 
     // Outer loop: restarts the auto-retry cycle when the user clicks "retry".
-    while (manualRetryCount < MAX_MANUAL_RETRIES) {
+    for (let manualRetry = 0; manualRetry < MAX_MANUAL_RETRIES; manualRetry++) {
       try {
         return await pRetry(() => this.exec(prepRes), {
           retries: effectiveMaxRetries - 1,
           minTimeout: this.wait * 1000,
           factor: 1, // fixed backoff (no exponential growth)
           signal: this.signal,
-          shouldRetry: ({ error }) => this.shouldAutoRetry(error),
+          // Read this.signal dynamically: subclasses (e.g. RetryState) set it
+          // inside exec() via withAbortController, so it may be undefined here.
+          shouldRetry: ({ error }) =>
+            !this.signal?.aborted && this.shouldAutoRetry(error),
         });
       } catch (e) {
-        if (this.signal?.aborted) {
-          return await this.execFallback(prepRes, e as Error);
-        }
-        const shouldRetry = await this.retryPrompt(prepRes, e as Error);
-        if (shouldRetry) {
-          manualRetryCount++;
-          continue;
-        }
+        const shouldRetry =
+          !this.signal?.aborted &&
+          (await this.retryPrompt(prepRes, e as Error));
+        if (shouldRetry) continue;
         return await this.execFallback(prepRes, e as Error);
       }
     }
