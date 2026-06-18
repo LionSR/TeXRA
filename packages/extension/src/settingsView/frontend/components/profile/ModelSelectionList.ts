@@ -356,7 +356,6 @@ export class ModelSelectionList extends LitElement {
 
   private renderDeprecatedToggle(group: ProviderGroup): TemplateResult {
     const isOpen = this.expandedDeprecated.has(group.provider);
-    const chevron = isOpen ? '\u25BE' : '\u25B8';
 
     return html`
       <wa-button
@@ -365,7 +364,15 @@ export class ModelSelectionList extends LitElement {
         size="small"
         @click=${() => this.toggleDeprecated(group.provider)}
       >
-        ${chevron} ${group.deprecated.length} deprecated
+        <wa-icon
+          library="texra"
+          name="chevron-right"
+          class=${classMap({
+            'provider-group-chevron': true,
+            expanded: isOpen,
+          })}
+        ></wa-icon>
+        ${group.deprecated.length} deprecated
       </wa-button>
       ${isOpen
         ? html`<div class="deprecated-models">
