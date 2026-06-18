@@ -15,6 +15,10 @@ import type { AgentTrace } from '@agent/trace';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -61,6 +65,15 @@ interface BoundSubscription {
   disposable: Disposable;
   onEvent: (text: string) => void;
   runtimeHost: AgentRuntimeHost;
+  /**
+   * Session captured at bind() time (inside the run's AsyncLocalStorage).
+   * onEvent fires later from a detached polling timer where the ALS is empty, so
+   * it must pass this session to sendFollowUp explicitly — otherwise sendFollowUp
+   * falls back to defaultSession() and the follow-up is misrouted/dropped on a
+   * non-default session (e.g. a desktop per-window session). Mirrors
+   * ExecutionSubscriptionBinder.
+   */
+  session: SessionHandle;
 }
 
 export class StreamSubscriptionRegistry<K extends string, Input> {
@@ -85,6 +98,10 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   ): boolean {
     this.ensureHooks();
     const key = this.opts.keyOf(input);
+    // Capture the session HERE: bind() runs inside the run's AsyncLocalStorage
+    // (the github tool's execute()), but onEvent fires later from a detached
+    // polling timer where the ALS is empty.
+    const session = currentSession();
     let bound = this.perStream.get(streamId);
     if (!bound) {
       bound = new Map();
@@ -93,6 +110,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     const existing = bound.get(key);
     if (existing) {
       existing.runtimeHost = runtimeHost;
+      existing.session = session;
       this.opts.source.updateSubscription?.(
         input,
         existing.onEvent,
@@ -107,9 +125,16 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       disposable: { dispose: () => {} },
       onEvent: () => {},
       runtimeHost,
+      session,
     };
     subscription.onEvent = (text: string) => {
-      void sendFollowUp(streamId, text).then((result) => {
+      void sendFollowUp(
+        streamId,
+        text,
+        undefined,
+        undefined,
+        subscription.session,
+      ).then((result) => {
         if (result.status === 'sent' || result.status === 'queued') {
           subscription.runtimeHost.emit('updateQueuedFollowUps', { streamId });
         }
