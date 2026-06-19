@@ -10,10 +10,9 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
 import type { TokenUsageStats } from '@shared/schemas';
-import { clamp } from '@utils/core';
+import { clamp, formatCompactTokenCount } from '@utils/core';
 
 // Local imports - progress view
-import { formatTokens } from '../formatters/timestampUtils';
 import { ELEMENT_IDS } from '../constants';
 import type { ContextStateData } from '../store';
 
@@ -182,7 +181,7 @@ export class UsagePanel extends LitElement {
           title="Input tokens"
           aria-hidden="true"
         ></wa-icon
-        >${formatTokens(inputTokens)}
+        >${formatCompactTokenCount(inputTokens)}
         ${when(
           cacheRead > 0,
           () =>
@@ -193,7 +192,7 @@ export class UsagePanel extends LitElement {
                 title="Cache read tokens (discounted)"
                 aria-hidden="true"
               ></wa-icon>
-              ${formatTokens(cacheRead)}`,
+              ${formatCompactTokenCount(cacheRead)}`,
         )}
         ${when(
           cacheMiss > 0,
@@ -205,7 +204,7 @@ export class UsagePanel extends LitElement {
                 title="Cache miss tokens (full price)"
                 aria-hidden="true"
               ></wa-icon>
-              ${formatTokens(cacheMiss)}`,
+              ${formatCompactTokenCount(cacheMiss)}`,
         )}
         ${when(
           cacheWrite > 0,
@@ -217,7 +216,7 @@ export class UsagePanel extends LitElement {
                 title="Cache creation tokens (1.25x cost)"
                 aria-hidden="true"
               ></wa-icon>
-              ${formatTokens(cacheWrite)}`,
+              ${formatCompactTokenCount(cacheWrite)}`,
         )}
         ·
         <wa-icon
@@ -226,7 +225,7 @@ export class UsagePanel extends LitElement {
           title="Output tokens"
           aria-hidden="true"
         ></wa-icon
-        >${formatTokens(outputTokens)} · $${cost.toFixed(3)}
+        >${formatCompactTokenCount(outputTokens)} · $${cost.toFixed(3)}
       </span>
     `;
   }
@@ -255,7 +254,8 @@ export class UsagePanel extends LitElement {
           ></span>
         </span>
         <span class="context-state__value">
-          ${formatTokens(inputTokens)} / ${formatTokens(contextWindow)}
+          ${formatCompactTokenCount(inputTokens)} /
+          ${formatCompactTokenCount(contextWindow)}
         </span>
       </span>
     `;
@@ -264,6 +264,6 @@ export class UsagePanel extends LitElement {
   private buildUsageLabel(): string {
     if (!this.usage) return '';
     const { inputTokens, outputTokens, cost } = this.usage;
-    return `Total usage: ${formatTokens(inputTokens)} input tokens, ${formatTokens(outputTokens)} output tokens, $${cost.toFixed(3)}`;
+    return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, $${cost.toFixed(3)}`;
   }
 }

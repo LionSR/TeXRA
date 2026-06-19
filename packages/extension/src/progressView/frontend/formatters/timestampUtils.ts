@@ -2,7 +2,7 @@
  * Timestamp formatting utilities for progress view formatters.
  */
 
-// Local imports - formatter helpers
+// Local imports - formatter constants
 import { DATETIME_FORMAT_OPTIONS, TIME_FORMAT_OPTIONS } from './constants';
 
 // Shared formatters (lazily initialized for browser environments)
@@ -35,11 +35,4 @@ export function formatTimestamp(date: Date): {
     timeDisplay: getTimeFormatter().format(date),
     tooltipTimestamp: getDateTimeFormatter().format(date),
   };
-}
-
-/** Format token counts for display. Values >= 1M display as "M", > 4096 as "k", otherwise raw. */
-export function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens > 4096) return `${Math.round(tokens / 1000)}k`;
-  return `${tokens}`;
 }

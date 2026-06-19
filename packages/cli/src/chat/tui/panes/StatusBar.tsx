@@ -18,7 +18,11 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
-import { filterNotNullish, formatCompactDuration } from '@utils/core';
+import {
+  filterNotNullish,
+  formatCompactDuration,
+  formatCompactTokenCount,
+} from '@utils/core';
 
 import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
@@ -112,19 +116,6 @@ export interface StatusBarDisplay {
   readonly bindings: string;
 }
 
-function compactScale(scaled: number, suffix: string): string {
-  const rounded = Number.isInteger(scaled)
-    ? `${scaled}`
-    : scaled.toFixed(1).replace(/\.0$/, '');
-  return `${rounded}${suffix}`;
-}
-
-function formatCompactNumber(value: number): string {
-  if (value < 1000) return `${value}`;
-  if (value < 1_000_000) return compactScale(value / 1000, 'k');
-  return compactScale(value / 1_000_000, 'M');
-}
-
 function formatUsage(
   usage: TokenUsageStats | undefined,
   model: string,
@@ -141,7 +132,7 @@ function formatUsage(
   const base = { compactPriority: STATUS_BAR_COMPACT_PRIORITY.usage };
   const contextWindow = MODEL_CONFIGS[model]?.contextWindow;
   if (!contextWindow || contextWindow <= 0) {
-    return { ...base, text: formatCompactNumber(used), color: 'dim' };
+    return { ...base, text: formatCompactTokenCount(used), color: 'dim' };
   }
 
   const ratio = used / contextWindow;
@@ -152,7 +143,7 @@ function formatUsage(
   else color = 'dim';
   return {
     ...base,
-    text: `${formatCompactNumber(used)}/${formatCompactNumber(
+    text: `${formatCompactTokenCount(used)}/${formatCompactTokenCount(
       contextWindow,
     )} (${percent}%)`,
     // Keep context visibility on narrow terminals: degrade to the bare
