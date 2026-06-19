@@ -91,3 +91,16 @@ export function formatCompactDuration(durationMs: number): string {
     unitCount: 2,
   });
 }
+
+/**
+ * Format token counts for compact usage displays.
+ *
+ * Token displays intentionally stay raw until they exceed 4096, the common
+ * small-context threshold where an abbreviated number starts buying space. Once
+ * k-format rounding would print `1000k`, switch to `M` instead.
+ */
+export function formatCompactTokenCount(tokens: number): string {
+  if (tokens >= 999_500) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens > 4096) return `${Math.round(tokens / 1000)}k`;
+  return `${tokens}`;
+}

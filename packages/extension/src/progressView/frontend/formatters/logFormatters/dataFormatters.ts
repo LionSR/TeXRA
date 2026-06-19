@@ -20,13 +20,13 @@ import {
   type LogMessageData,
 } from '@shared/schemas';
 import { getBasename } from '@shared/utils/path';
+import { formatCompactTokenCount } from '@utils/core';
 
 // Local imports - shared schemas
 import { html, ifDefined, type FormatResult } from '../litTemplates';
 
 // Local imports - formatter helpers
 import { buildFileListRender, buildDetailsSummary } from '../htmlBuilders';
-import { formatTokens } from '../timestampUtils';
 
 /** Format file list entry as TemplateResult. */
 export function formatFileListTemplate(
@@ -130,14 +130,24 @@ type StatFieldConfig = readonly [
 
 // Statistics field configuration
 const STAT_FIELDS: readonly StatFieldConfig[] = [
-  ['inputTokens', 'arrow-up', 'Input tokens', formatTokens],
-  ['outputTokens', 'arrow-down', 'Output tokens', formatTokens],
-  ['cacheReadInputTokens', 'history', 'Cache hits', formatTokens],
-  ['cacheMissInputTokens', 'cloud-upload', 'Cache misses', formatTokens],
-  ['cacheCreationInputTokens', 'save', 'Cache writes', formatTokens],
+  ['inputTokens', 'arrow-up', 'Input tokens', formatCompactTokenCount],
+  ['outputTokens', 'arrow-down', 'Output tokens', formatCompactTokenCount],
+  ['cacheReadInputTokens', 'history', 'Cache hits', formatCompactTokenCount],
+  [
+    'cacheMissInputTokens',
+    'cloud-upload',
+    'Cache misses',
+    formatCompactTokenCount,
+  ],
+  ['cacheCreationInputTokens', 'save', 'Cache writes', formatCompactTokenCount],
   ['percentageCached', 'graph-line', 'Cached %', (v) => `${v.toFixed(2)}%`],
-  ['reasoningTokens', 'comment-discussion', 'Reasoning tokens', formatTokens],
-  ['toolUseTokens', 'tools', 'Tool tokens', formatTokens],
+  [
+    'reasoningTokens',
+    'comment-discussion',
+    'Reasoning tokens',
+    formatCompactTokenCount,
+  ],
+  ['toolUseTokens', 'tools', 'Tool tokens', formatCompactTokenCount],
   ['elapsedTime', 'clock', 'Elapsed time', (v) => `${v}s`],
   ['cost', 'rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
 ];
