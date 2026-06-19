@@ -8,60 +8,13 @@ import { wrapAnsiToWidth } from '../chat/tui/render/ansiWrap';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { formatCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import {
-  modelAccessLaunchBlockDescriptionForCliMode,
-  modelSelectItemsForCliMode,
-  type CliModelAccess,
-  type CliModelPickerItem,
-} from '../runtime/modelAccess';
-import type {
-  CliOrchestrationAction,
-  CliOrchestrationItem,
+  isCliOrchestrationModelPickAction,
+  orchestrationModelAccessView,
+  type CliOrchestrationAction,
+  type CliOrchestrationItem,
+  type CliOrchestrationModelPickAction,
 } from '../runtime/orchestration';
-
-/** Launcher items that chain into a model pick before launching the chat. */
-type ModelPickAction = Extract<
-  CliOrchestrationAction,
-  { kind: 'chat' | 'preset' }
->;
-
-function isModelPickAction(
-  action: CliOrchestrationAction,
-): action is ModelPickAction {
-  return action.kind === 'chat' || action.kind === 'preset';
-}
-
-export function orchestrationModelAccessView(
-  items: readonly CliOrchestrationItem[],
-  models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
-  options: {
-    readonly allowDefaultModelLaunch?: boolean;
-  } = {},
-): {
-  readonly items: readonly CliOrchestrationItem[];
-  readonly modelItems: readonly CliModelPickerItem[];
-} {
-  const modelItems = modelSelectItemsForCliMode(models, apiMode);
-  if (
-    models.length === 0 ||
-    modelItems.length > 0 ||
-    options.allowDefaultModelLaunch === true
-  ) {
-    return { items, modelItems };
-  }
-
-  const description = modelAccessLaunchBlockDescriptionForCliMode(
-    models,
-    apiMode,
-  );
-  return {
-    modelItems,
-    items: items.map((item) => {
-      if (!isModelPickAction(item.value) || item.disabled) return item;
-      return { ...item, description, disabled: true };
-    }),
-  };
-}
+import type { CliModelAccess } from '../runtime/modelAccess';
 
 export interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];
@@ -146,9 +99,9 @@ export function OrchestrationApp(
   const statusLines = props.statusLines ?? [];
   // When set, the launcher is on its second step: choosing the model for this
   // chat/team. Esc returns to the item list rather than exiting.
-  const [pending, setPending] = useState<ModelPickAction | undefined>(
-    undefined,
-  );
+  const [pending, setPending] = useState<
+    CliOrchestrationModelPickAction | undefined
+  >(undefined);
   const footerHints = pending ? [] : listFooterHints;
   const textColumns = Math.max(1, columns - 2);
   const maxVisibleItems = Math.max(
@@ -165,7 +118,7 @@ export function OrchestrationApp(
   };
 
   const onItemSelect = (action: CliOrchestrationAction): void => {
-    if (isModelPickAction(action) && modelItems.length > 0) {
+    if (isCliOrchestrationModelPickAction(action) && modelItems.length > 0) {
       setPending(action);
     } else {
       finish(action);

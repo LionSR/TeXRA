@@ -22,6 +22,13 @@ import {
   userStartedCliHistoryEntries,
   type CliHistoryEntry,
 } from './history';
+import {
+  modelAccessLaunchBlockDescriptionForCliMode,
+  modelSelectItemsForCliMode,
+  type CliModelAccess,
+  type CliModelPickerItem,
+} from './modelAccess';
+import type { CliApiMode } from './apiAccessMode';
 
 export type CliOrchestrationAction =
   | { readonly kind: 'chat'; readonly agent?: string; readonly model?: string }
@@ -36,6 +43,12 @@ export type CliOrchestrationAction =
   | { readonly kind: 'help' }
   | { readonly kind: 'exit' };
 
+/** Launcher items that chain into a model pick before launching the chat. */
+export type CliOrchestrationModelPickAction = Extract<
+  CliOrchestrationAction,
+  { kind: 'chat' | 'preset' }
+>;
+
 export interface CliOrchestrationItem {
   readonly value: CliOrchestrationAction;
   readonly label: string;
@@ -49,6 +62,47 @@ export interface BuildCliOrchestrationItemsInput {
   readonly history: readonly CliHistoryEntry[];
   readonly toolUseAgents: readonly AgentEntry[];
   readonly includeMultiAgentLoginHint?: boolean;
+}
+
+export function isCliOrchestrationModelPickAction(
+  action: CliOrchestrationAction,
+): action is CliOrchestrationModelPickAction {
+  return action.kind === 'chat' || action.kind === 'preset';
+}
+
+export function orchestrationModelAccessView(
+  items: readonly CliOrchestrationItem[],
+  models: readonly CliModelAccess[],
+  apiMode: CliApiMode,
+  options: {
+    readonly allowDefaultModelLaunch?: boolean;
+  } = {},
+): {
+  readonly items: readonly CliOrchestrationItem[];
+  readonly modelItems: readonly CliModelPickerItem[];
+} {
+  const modelItems = modelSelectItemsForCliMode(models, apiMode);
+  if (
+    models.length === 0 ||
+    modelItems.length > 0 ||
+    options.allowDefaultModelLaunch === true
+  ) {
+    return { items, modelItems };
+  }
+
+  const description = modelAccessLaunchBlockDescriptionForCliMode(
+    models,
+    apiMode,
+  );
+  return {
+    modelItems,
+    items: items.map((item) => {
+      if (!isCliOrchestrationModelPickAction(item.value) || item.disabled) {
+        return item;
+      }
+      return { ...item, description, disabled: true };
+    }),
+  };
 }
 
 const MAX_RECENT_RESUME_ITEMS = 3;
