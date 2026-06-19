@@ -1,6 +1,7 @@
 /**
  * Base log formatter utilities for open state management and error handling.
  */
+import { toErrorMessage } from '@common/errors';
 
 export type FormatOptions = {
   preservedOpen?: boolean;
@@ -21,7 +22,7 @@ export function safeFormat<T>(
     const value = formatter();
     return { ok: true, value };
   } catch (e) {
-    const errorMsg = e instanceof Error ? e.message : String(e);
+    const errorMsg = toErrorMessage(e);
     console.error(`Error parsing ${errorContext}:`, e);
     return { ok: false, error: errorMsg };
   }

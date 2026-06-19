@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
+import { isNonEmptyString } from '@utils/core';
 
 export type { ApiProvider };
 
@@ -98,7 +99,7 @@ export class SecretManager {
    */
   public static async hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
     const key = await this.lookupApiKey(provider);
-    return typeof key === 'string' && key.trim().length > 0;
+    return isNonEmptyString(key);
   }
 
   public static async getApiProviderQuickPickItems(): Promise<

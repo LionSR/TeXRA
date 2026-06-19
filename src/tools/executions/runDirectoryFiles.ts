@@ -82,6 +82,6 @@ export async function listRunDirectoryFiles(
 ): Promise<RunDirectoryEntry[]> {
   const entries = await walkDirectory(runDir, '', 2);
   return entries.filter(
-    (entry) => !isKVFile(entry.path.split('/').pop() ?? ''),
+    (entry) => !isKVFile(path.basename(entry.path)),
   );
 }
