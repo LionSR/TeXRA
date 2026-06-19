@@ -35,7 +35,6 @@ import {
   WorkflowAgentProposalSchema,
   type AgentProposal,
 } from './prompts';
-import { ToolConfigSchema } from './toolConfig';
 
 /**
  * Lenient proposal schemas derived from the canonical shared schemas.
@@ -51,7 +50,8 @@ const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
   contextFiles: z.array(z.string()).prefault([]),
   mediaFiles: z.array(z.string()).prefault([]),
   outputFiles: z.array(z.string()).prefault([]),
-  toolConfig: ToolConfigSchema,
+  // toolConfig is inherited from WorkflowAgentProposalSchema (via
+  // WorkflowSpecificFieldsSchema) and already object-prefaulted — no override.
 });
 
 /**
@@ -82,7 +82,11 @@ export function parseDelegationToolInput(
   input: unknown,
   toolName: string,
 ): AgentProposal | null {
-  const category = DELEGATION_TOOL_CATEGORY[toolName];
+  // Own-property guard: toolName derives from untrusted logged input, so a
+  // value like 'constructor' must not resolve to an inherited Object member.
+  const category = Object.hasOwn(DELEGATION_TOOL_CATEGORY, toolName)
+    ? DELEGATION_TOOL_CATEGORY[toolName]
+    : undefined;
   if (!category) return null;
 
   const spread = isObject(input) ? input : {};
