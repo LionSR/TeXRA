@@ -54,7 +54,9 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     return {
       shared,
-      outputLocation: this.services.getOutputFileLocation(shared.currentRound),
+      outputLocation: await this.services.getOutputFileLocation(
+        shared.currentRound,
+      ),
       round,
       run,
       workspace,
