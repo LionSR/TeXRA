@@ -4,10 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { loadAgents } from '@agent/index';
 import { registerExecution } from '@agent/storage';
-import {
-  AgentConfigSchema,
-  DEFAULT_AGENT_MODEL,
-} from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { AUTH_COMMANDS } from '@auth/constants';
@@ -18,6 +15,7 @@ import { GlobalStateKey, globalSM } from '@common/state';
 import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as logger from '@logger/logUtils';
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
