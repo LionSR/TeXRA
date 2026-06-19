@@ -77,10 +77,7 @@ const MULTI_AGENT_INSPECT_HINT =
   'Hint: run `texra multi-agent inspect <team-id>` to see missing agents for degraded or unavailable presets.';
 const MULTI_AGENT_LOGIN_HINT =
   'Hint: built-in teams may load additional relay-served agents after `texra login`.';
-const MULTI_AGENT_LAUNCHER_INSPECT_HINT =
-  'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.';
-const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
-  'Relay teams may unlock more agents after texra login.';
+export const MULTI_AGENT_NO_TEAM_ROOT_REASON = 'no runnable team root';
 
 export function formatCliMultiAgentInspectCommand(preset: string): string {
   return `texra multi-agent inspect ${preset}`;
@@ -141,34 +138,6 @@ function cliMultiAgentPresetAvailabilityParts(
   ];
   if (availability.status !== 'available') parts.push(availability.status);
   return parts;
-}
-
-export function formatCliMultiAgentPresetLauncherSummary(
-  plan: CliMultiAgentPresetRunPlan,
-): string {
-  const availability = cliMultiAgentPresetAvailability(plan);
-  const status =
-    availability.status === 'available' ? 'ready' : availability.status;
-  const details = formatPresetAvailabilityForLauncher(
-    availability,
-    cliMultiAgentPresetTeamLaunchBlockReason(plan),
-  );
-
-  return [status, details].filter((part): part is string => !!part).join('; ');
-}
-
-export function formatCliMultiAgentPresetLauncherHints(
-  plan: CliMultiAgentPresetRunPlan,
-  options: CliMultiAgentPresetFormatOptions = {},
-): readonly string[] {
-  return [
-    cliMultiAgentPlanStatus(plan) !== 'available'
-      ? MULTI_AGENT_LAUNCHER_INSPECT_HINT
-      : undefined,
-    shouldIncludeBuiltInLoginHint(plan, options)
-      ? MULTI_AGENT_LAUNCHER_LOGIN_HINT
-      : undefined,
-  ].filter((hint): hint is string => hint !== undefined);
 }
 
 export function formatCliMultiAgentPresetList(
@@ -232,7 +201,7 @@ export function formatCliMultiAgentPresetInspection(
     'Missing tool-use agents:',
     formatAgentNames(plan.missingToolUseAgents),
   ];
-  if (shouldIncludeBuiltInLoginHint(plan, options)) {
+  if (cliMultiAgentPresetShouldIncludeLoginHint(plan, options)) {
     lines.push('', MULTI_AGENT_LOGIN_HINT);
   }
   return lines.join('\n');
@@ -275,10 +244,10 @@ function cliMultiAgentPlanStatus(
   return cliMultiAgentPlanHasGaps(plan) ? 'degraded' : 'available';
 }
 
-function cliMultiAgentPresetTeamLaunchBlockReason(
+export function cliMultiAgentPresetTeamLaunchBlockReason(
   plan: CliMultiAgentPresetRunPlan,
 ): string | undefined {
-  if (!plan.rootAgent) return 'no runnable team root';
+  if (!plan.rootAgent) return MULTI_AGENT_NO_TEAM_ROOT_REASON;
   if (!agentHasDelegationTools(plan.rootAgent)) {
     return `team root ${plan.rootAgent.name} is not a delegating agent`;
   }
@@ -339,7 +308,7 @@ export function formatCliMultiAgentPresetRunWarnings(
   return warnings;
 }
 
-function cliMultiAgentPresetAvailability(
+export function cliMultiAgentPresetAvailability(
   plan: CliMultiAgentPresetRunPlan,
 ): CliMultiAgentPresetAvailability {
   return {
@@ -566,40 +535,6 @@ function presetAgentAvailability(
   };
 }
 
-function formatPresetAvailabilityForLauncher(
-  availability: CliMultiAgentPresetAvailability,
-  blockReason: string | undefined,
-): string | undefined {
-  const details = blockReason ? [blockReason] : [];
-
-  const countStyle = availability.status === 'available' ? 'total' : 'ratio';
-  const parts = [
-    formatPresetAgentCountForLauncher('tool-use', availability.toolUse, {
-      countStyle,
-    }),
-    formatPresetAgentCountForLauncher('workflow', availability.workflow, {
-      countStyle,
-    }),
-  ].filter((part): part is string => part != null);
-
-  if (parts.length > 0) details.push(parts.join('; '));
-  return details.length > 0 ? details.join('; ') : undefined;
-}
-
-function formatPresetAgentCountForLauncher(
-  label: 'workflow' | 'tool-use',
-  availability: CliMultiAgentPresetAgentAvailability,
-  options: { readonly countStyle: 'total' | 'ratio' },
-): string | undefined {
-  if (availability.total === 0) return undefined;
-  const agentText = availability.total === 1 ? 'agent' : 'agents';
-  const count =
-    options.countStyle === 'total'
-      ? String(availability.total)
-      : `${availability.available}/${availability.total}`;
-  return `${count} ${label} ${agentText}`;
-}
-
 function formatAgentNames(names: readonly string[]): string {
   if (names.length === 0) return '  (none)';
   return names.map((name) => `  ${name}`).join('\n');
@@ -614,14 +549,16 @@ function cliMultiAgentPresetListHint(
   );
   const hints = [
     hasIncompletePreset ? MULTI_AGENT_INSPECT_HINT : undefined,
-    plans.some((plan) => shouldIncludeBuiltInLoginHint(plan, options))
+    plans.some((plan) =>
+      cliMultiAgentPresetShouldIncludeLoginHint(plan, options),
+    )
       ? MULTI_AGENT_LOGIN_HINT
       : undefined,
   ].filter((hint): hint is string => hint !== undefined);
   return hints.length > 0 ? hints.join('\n') : undefined;
 }
 
-function shouldIncludeBuiltInLoginHint(
+export function cliMultiAgentPresetShouldIncludeLoginHint(
   plan: CliMultiAgentPresetRunPlan,
   options: CliMultiAgentPresetFormatOptions,
 ): boolean {
