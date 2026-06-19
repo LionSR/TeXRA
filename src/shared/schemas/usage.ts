@@ -14,7 +14,7 @@ export const TokenUsageStatsSchema = z.strictObject({
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
 
 /** Returns zero-initialized usage stats. */
-export function emptyUsageStats(): TokenUsageStats {
+export function emptyUsageStats(): Required<TokenUsageStats> {
   return {
     inputTokens: 0,
     outputTokens: 0,
