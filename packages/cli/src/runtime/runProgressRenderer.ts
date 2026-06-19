@@ -1,5 +1,9 @@
 import path from 'node:path';
 
+// Local imports - agent metadata
+import { getAgent } from '@agent/index';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+
 // Local imports - progress events
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
@@ -19,6 +23,7 @@ type ProgressEvent = keyof ProgressEventPayloads;
 
 interface RenderState {
   round?: number;
+  plannedRounds?: number;
   toolCallCount?: number;
   agent?: string;
   inputLabel?: string;
@@ -184,6 +189,10 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const config = payload.taskState.agentConfig;
     this.state.agent = config.agent;
     this.state.inputLabel = formatInputLabel(config.inputFiles);
+    this.state.plannedRounds =
+      config.agentCategory === AgentCategory.Workflow
+        ? getAgent(config.agent, AgentCategory.Workflow)?.rounds
+        : undefined;
     this.state.phase ??= 'running';
     return true;
   }
@@ -270,7 +279,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
   private formatLine(now: number): string {
     const parts: string[] = [];
-    if (this.state.round != null) parts.push(`[r${this.state.round}]`);
+    if (this.state.round != null) {
+      parts.push(
+        formatRoundProgress(this.state.round, this.state.plannedRounds),
+      );
+    }
 
     const subject = [this.state.agent, this.state.inputLabel]
       .filter(Boolean)
@@ -278,6 +291,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const phase = this.state.phase;
     parts.push(subject || phase || 'running');
     if (subject && phase && phase !== 'running') parts.push(phase);
+    if (this.state.round == null && isMultiRound(this.state.plannedRounds)) {
+      parts.push(formatPlannedRounds(this.state.plannedRounds));
+    }
 
     if (this.state.activeSubagents) parts.push(this.state.activeSubagents);
     if (this.state.activeProcesses) parts.push(this.state.activeProcesses);
@@ -328,6 +344,24 @@ function formatActiveChildren(
   const suffix =
     namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
   return `${label}: ${first}${suffix}`;
+}
+
+function formatRoundProgress(
+  round: number,
+  plannedRounds: number | undefined,
+): string {
+  if (isMultiRound(plannedRounds) && round <= plannedRounds) {
+    return `[r${round}/${plannedRounds}]`;
+  }
+  return `[r${round}]`;
+}
+
+function formatPlannedRounds(rounds: number): string {
+  return `${rounds} rounds`;
+}
+
+function isMultiRound(rounds: number | undefined): rounds is number {
+  return rounds != null && rounds > 1;
 }
 
 function formatElapsed(ms: number): string {

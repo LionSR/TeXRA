@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
@@ -9,6 +9,14 @@ import {
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { EXECUTION_STATUS, STREAM_STATUS } from '@shared/schemas';
+
+const mocks = vi.hoisted(() => ({
+  getAgent: vi.fn(),
+}));
+
+vi.mock('@agent/index', () => ({
+  getAgent: mocks.getAgent,
+}));
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   return {
@@ -69,6 +77,41 @@ function workflowTaskState(
   };
 }
 
+function toolUseTaskState(
+  overrides: {
+    streamId?: string;
+    agent?: string;
+    inputFiles?: string[];
+  } = {},
+) {
+  return {
+    streamId: overrides.streamId ?? 'stream-1',
+    taskState: {
+      agentConfig: {
+        agent: overrides.agent ?? 'polish',
+        agentCategory: AgentCategory.ToolUse,
+        model: 'deepseekT',
+        inputFiles: overrides.inputFiles ?? [],
+        contextFiles: [],
+        mediaFiles: [],
+        outputFiles: [],
+        editedFile: null,
+        editedFiles: [],
+        toolConfig: {
+          autoExtractFigure: false,
+          autoExtractTikzFigure: false,
+          attachTeXCount: false,
+          attachDiagnostics: false,
+          autoCompileInputPdf: false,
+        },
+        memories: [],
+        instruction: '',
+        workingDirectory: '/tmp/project',
+      },
+    },
+  };
+}
+
 async function captureStreamWrites(
   stream: NodeJS.WriteStream,
   action: () => Promise<void>,
@@ -106,6 +149,10 @@ function decodeStreamChunk(
 }
 
 describe('CLI run progress renderer', () => {
+  beforeEach(() => {
+    mocks.getAgent.mockReset();
+  });
+
   it('renders a single ANSI status line and clears it on close', () => {
     let now = 0;
     let output = '';
@@ -192,6 +239,65 @@ describe('CLI run progress renderer', () => {
     );
 
     expect(output).toBe('polish number-theory.tex +1 · 0s\n');
+  });
+
+  it('shows planned workflow rounds before the first model turn', () => {
+    mocks.getAgent.mockReturnValue({
+      rounds: 2,
+    });
+    let output = '';
+    const renderer = createRunProgressRenderer(
+      context({ colorEnabled: false }),
+      {
+        colorEnabled: false,
+        write: (text) => {
+          output += text;
+        },
+        minIntervalMs: 0,
+        nowMs: () => 0,
+      },
+    );
+
+    renderer?.handle('setTaskState', workflowTaskState());
+    renderer?.handle('updateConversationProgress', {
+      streamId: 'stream-1',
+      progress: { conversationTurns: 1, toolCallCount: 0 },
+    });
+
+    expect(mocks.getAgent).toHaveBeenCalledWith(
+      'polish',
+      AgentCategory.Workflow,
+    );
+    expect(output).toBe(
+      'polish paper.tex · 2 rounds · 0s\n' + '[r1/2] · polish paper.tex · 0s\n',
+    );
+  });
+
+  it('does not add workflow round hints to tool-use progress', () => {
+    mocks.getAgent.mockReturnValue({
+      rounds: 2,
+    });
+    let output = '';
+    const renderer = createRunProgressRenderer(
+      context({ colorEnabled: false }),
+      {
+        colorEnabled: false,
+        write: (text) => {
+          output += text;
+        },
+        nowMs: () => 0,
+      },
+    );
+
+    renderer?.handle(
+      'setTaskState',
+      toolUseTaskState({
+        inputFiles: [],
+      }),
+    );
+
+    expect(mocks.getAgent).not.toHaveBeenCalled();
+    expect(output).toBe('polish · 0s\n');
   });
 
   it('prints phase changes on separate lines when ANSI is disabled', () => {
