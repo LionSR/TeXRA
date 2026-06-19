@@ -141,7 +141,7 @@ describe('SettingsAgentCatalogController', () => {
   });
 
   it('applies custom presets by resolving names to canonical source keys', async () => {
-    const preset: AgentModePreset = {
+    const persistedPreset = {
       id: 'custom-team',
       name: 'Custom Team',
       description: 'test',
@@ -150,12 +150,15 @@ describe('SettingsAgentCatalogController', () => {
       toolUseAgents: ['review', 'missing'],
     };
     const { controller, enabled } = createController({
-      customPresets: [preset],
+      customPresets: [persistedPreset],
     });
 
     assert.deepEqual(await controller.applyPreset('custom-team'), {
       ok: true,
-      preset,
+      preset: {
+        ...persistedPreset,
+        icon: 'bookmark',
+      },
     });
     assert.deepEqual(enabled.workflow, ['remote:writer']);
     // Unresolved names are kept bare so the agent joins the roster the
@@ -181,6 +184,33 @@ describe('SettingsAgentCatalogController', () => {
     assert.deepEqual(controller.getCustomPresets(), []);
   });
 
+  it('drops only invalid custom presets', () => {
+    const { controller } = createController({
+      customPresets: [
+        { id: 'broken' },
+        {
+          id: 'custom-team',
+          name: 'Custom Team',
+          description: 'test',
+          icon: 'codicon-bookmark',
+          workflowAgents: [],
+          toolUseAgents: ['review'],
+        },
+      ],
+    });
+
+    assert.deepEqual(controller.getCustomPresets(), [
+      {
+        id: 'custom-team',
+        name: 'Custom Team',
+        description: 'test',
+        icon: 'bookmark',
+        workflowAgents: [],
+        toolUseAgents: ['review'],
+      },
+    ]);
+  });
+
   it('saves the currently visible agents as a custom preset', async () => {
     const state = createController({
       now: 456,
@@ -194,7 +224,7 @@ describe('SettingsAgentCatalogController', () => {
       id: 'custom-456',
       name: 'My Team',
       description: 'Custom team: review, correct',
-      icon: 'codicon-bookmark',
+      icon: 'bookmark',
       workflowAgents: ['correct'],
       toolUseAgents: ['review'],
     });
@@ -206,7 +236,7 @@ describe('SettingsAgentCatalogController', () => {
       id: 'custom-team',
       name: 'Custom Team',
       description: 'test',
-      icon: 'codicon-bookmark',
+      icon: 'bookmark',
       workflowAgents: [],
       toolUseAgents: [],
     };

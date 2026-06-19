@@ -2,7 +2,7 @@
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import {
   AGENT_MODE_PRESETS_BY_ID,
-  AgentModePresetSchema,
+  parseAgentModePresets,
 } from '@shared/schemas/agentPresets';
 import {
   agentKey,
@@ -127,9 +127,7 @@ export class SettingsAgentCatalogController {
   }
 
   getCustomPresets(): AgentModePreset[] {
-    return AgentModePresetSchema.array()
-      .catch([])
-      .parse(this.deps.state.getCustomPresetsRaw());
+    return parseAgentModePresets(this.deps.state.getCustomPresetsRaw());
   }
 
   getCustomPreset(presetId: string): AgentModePreset | null {
@@ -159,7 +157,7 @@ export class SettingsAgentCatalogController {
       id: `custom-${this.deps.now?.() ?? Date.now()}`,
       name: trimmedName,
       description: `Custom team: ${[...toolUseAgents, ...workflowAgents].join(', ')}`,
-      icon: 'codicon-bookmark',
+      icon: 'bookmark',
       workflowAgents,
       toolUseAgents,
     };
