@@ -18,11 +18,10 @@ import { createChannelTrace } from '@logger';
 import {
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
-  ExecutionIdSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  StreamTabIdSchema,
+  StreamTabInfoSchema,
   type ActiveChildInfo,
   type AgentCategoryFilter,
   type ConversationProgress,
@@ -42,16 +41,16 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { clamp } from '@utils/core';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
-export const StreamHintsSchema = z.object({
-  agent: z.string().optional(),
-  agentCategory: z.enum(AgentCategory).optional(),
-  inputFile: z.string().optional(),
-  isRemote: z.boolean().optional(),
-  creationTimestamp: z.number().optional(),
-  executionId: ExecutionIdSchema.optional(),
-  parentStreamId: StreamTabIdSchema.optional(),
-  description: z.string().optional(),
-});
+export const StreamHintsSchema = StreamTabInfoSchema.pick({
+  agent: true,
+  agentCategory: true,
+  inputFile: true,
+  isRemote: true,
+  creationTimestamp: true,
+  executionId: true,
+  parentStreamId: true,
+  description: true,
+}).partial();
 
 export type StreamHints = z.infer<typeof StreamHintsSchema>;
 
