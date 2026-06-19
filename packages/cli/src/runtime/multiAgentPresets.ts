@@ -491,12 +491,14 @@ function selectPresetRootAgent(
   const delegatingAgents = implicitDefaultToolUseAgents(agents).filter(
     agentHasDelegationTools,
   );
-  const preferredRoot = findPreferredRootAgent(
-    delegatingAgents,
-    options.presetSource,
-    options.presetOrder,
-  );
-  if (preferredRoot) return preferredRoot;
+  const searchOrder =
+    options.presetSource === 'built-in'
+      ? BUILTIN_TEAM_ROOT_AGENT_NAMES
+      : [...options.presetOrder, ...BUILTIN_TEAM_ROOT_AGENT_NAMES];
+  for (const name of searchOrder) {
+    const preferredRoot = delegatingAgents.find((agent) => agent.name === name);
+    if (preferredRoot) return preferredRoot;
+  }
 
   if (options.presetSource === 'built-in') {
     // Built-in teams have dedicated orchestrator roots. Local specialists such
@@ -505,22 +507,6 @@ function selectPresetRootAgent(
   }
 
   return delegatingAgents[0];
-}
-
-function findPreferredRootAgent(
-  agents: readonly AgentEntry[],
-  presetSource: CliMultiAgentPresetSource,
-  presetOrder: readonly string[],
-): AgentEntry | undefined {
-  const searchOrder =
-    presetSource === 'built-in'
-      ? BUILTIN_TEAM_ROOT_AGENT_NAMES
-      : [...presetOrder, ...BUILTIN_TEAM_ROOT_AGENT_NAMES];
-  for (const name of searchOrder) {
-    const entry = agents.find((agent) => agent.name === name);
-    if (entry) return entry;
-  }
-  return undefined;
 }
 
 function includeAgent(
