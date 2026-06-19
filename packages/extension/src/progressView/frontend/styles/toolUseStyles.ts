@@ -59,26 +59,25 @@ export const toolUseStyles = css`
   }
 
   .banner-details--relay-error {
-    border-left: var(--border-medium) solid
-      var(--wa-color-warning-on-quiet, #ff8c00);
+    border-left: var(--border-medium) solid var(--color-warning);
     border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0;
   }
 
   .banner-details--relay-error > .details-summary .label {
-    color: var(--wa-color-warning-on-quiet, #ff8c00);
+    color: var(--color-warning);
   }
 
   .tool-use-user-feedback > .details-summary :is(.tool-use-title, wa-icon) {
-    color: var(--wa-color-text-link, #3794ff);
+    color: var(--color-text-link);
   }
 
   .tool-use-in-progress > .details-summary :is(.tool-use-title, wa-icon),
   .tool-use-in-progress > .details-summary wa-spinner {
-    color: var(--wa-color-chart-yellow, #cca700);
+    color: var(--color-pending);
   }
 
   .tool-use-in-progress > .details-summary tool-timer {
-    color: var(--wa-color-chart-yellow, #cca700);
+    color: var(--color-pending);
   }
 
   :is(.tool-user-feedback, .tool-error-content, .tool-output-full) {
@@ -94,7 +93,7 @@ export const toolUseStyles = css`
 
   .tool-user-feedback {
     background-color: var(--wa-color-brand-fill-quiet, rgba(55, 148, 255, 0.1));
-    border-left-color: var(--wa-color-text-link, #3794ff);
+    border-left-color: var(--color-text-link);
   }
 
   .tool-error-content {
@@ -147,15 +146,15 @@ export const toolUseStyles = css`
 
   /* Diff styles */
   .diff-add {
-    color: var(--wa-color-git-added, #3fb950);
+    color: var(--color-diff-added);
   }
 
   .diff-remove {
-    color: var(--wa-color-git-deleted, #f85149);
+    color: var(--color-diff-removed);
   }
 
   .diff-hunk {
-    color: var(--wa-color-git-modified, #d29922);
+    color: var(--color-diff-modified);
   }
 
   .edit-diff-container {
@@ -180,12 +179,12 @@ export const toolUseStyles = css`
 
   .diff-inline-del {
     background-color: var(--wa-color-diff-removed, rgba(255, 0, 0, 0.2));
-    color: var(--wa-color-git-deleted, #f85149);
+    color: var(--color-diff-removed);
     text-decoration: line-through;
   }
 
   .diff-inline-add {
     background-color: var(--wa-color-diff-inserted, rgba(0, 255, 0, 0.2));
-    color: var(--wa-color-git-added, #3fb950);
+    color: var(--color-diff-added);
   }
 `;
