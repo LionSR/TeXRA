@@ -34,7 +34,7 @@ import {
   designTokens,
   requestPanelStyles,
 } from '@shared/styles';
-import { CopyButtonController } from '@shared/controllers/CopyButtonController';
+import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { tryParseUrl } from '@utils/core';
 

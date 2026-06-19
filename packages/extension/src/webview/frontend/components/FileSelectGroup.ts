@@ -8,7 +8,7 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import { SortableController } from '@shared/controllers';
+import { SortableController } from '@shared/litControllers';
 import { designTokens } from '@shared/styles';
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 import { getBasename, normalizeFilePath } from '@shared/utils/path';

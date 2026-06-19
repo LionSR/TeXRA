@@ -12,7 +12,7 @@ import { live } from 'lit/directives/live.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { RecordingButtonController } from '@shared/controllers';
+import { RecordingButtonController } from '@shared/litControllers';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
 import {
