@@ -305,4 +305,9 @@ export const UsageDataSchema = z
     }
     return map;
   })
-  .catch(new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
+  // `() => new Map()` (not a literal) for the same reason as `roundMapSchema`:
+  // a fresh fallback per failed parse. The current consumer copies this map
+  // (StreamSnapshotStore.applyStreamData) so a shared instance is safe today,
+  // but the factory keeps the file consistent and guards a future by-reference
+  // reader from leaking usage across streams with malformed sidecar JSON.
+  .catch(() => new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
