@@ -67,6 +67,12 @@ describe('agent registry legacy aliases', () => {
     expect(getAgent('assistant')?.name).toBe('assistant');
   });
 
+  it('exposes workflow round counts from local agent YAML', () => {
+    expect(getAgent('polish')?.rounds).toBe(2);
+    expect(getAgent('correct')?.rounds).toBe(1);
+    expect(getAgent('assistant')?.rounds).toBeUndefined();
+  });
+
   it('resolves source-qualified legacy keys', () => {
     expect(getAgent('builtInToolUse:chat')?.name).toBe('assistant');
     expect(getAgent('builtInToolUse:assistant')?.name).toBe('assistant');
@@ -97,6 +103,18 @@ describe('agent registry legacy aliases', () => {
     const visible = getVisibleAgents('toolUse').map((a) => a.name);
     expect(visible).toContain('assistant');
     expect(getVisibleAgent('toolUse', 'chat')?.name).toBe('assistant');
+  });
+
+  it('drops workflow round metadata when category is overridden to tool-use', async () => {
+    await platform().workspaceState.update(
+      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      ['polish'],
+    );
+    await refresh({ includeRemote: false });
+
+    const entry = getAgent('polish');
+    expect(entry?.category).toBe(AgentCategory.ToolUse);
+    expect(entry?.rounds).toBeUndefined();
   });
 
   it('preserves bare custom chat while migrating qualified built-in chat keys', async () => {
