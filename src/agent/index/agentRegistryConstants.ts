@@ -18,6 +18,14 @@ export const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'builtInWorkflow',
 ];
 
+/**
+ * Legacy agent-name aliases — keep prior configs, histories, delegation calls,
+ * and inherited references working when a built-in agent is renamed.
+ */
+export const LEGACY_AGENT_ALIASES: Record<string, string> = {
+  chat: 'assistant',
+};
+
 /** Default workflow agent when no workflow preference exists. */
 export const DEFAULT_WORKFLOW_AGENT = 'correct';
 

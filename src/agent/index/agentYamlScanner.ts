@@ -7,15 +7,26 @@ import * as yaml from 'yaml';
 import {
   AgentCategory,
   AgentDefinitionSchema,
+  AgentWorkflowSettingSchema,
+  type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
+import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';
 import { filterNotNull } from '@utils/core';
+import { LEGACY_AGENT_ALIASES } from './agentRegistryConstants';
 import type { AgentEntry } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
+const INVALID_WORKFLOW_ROUNDS = Number.NaN;
+
+interface ParsedAgentYaml {
+  readonly name: string;
+  readonly path: string;
+  readonly definition: AgentDefinition;
+}
 
 /**
  * Extract tool names from raw YAML tool configs.
@@ -43,34 +54,113 @@ export async function scanDirectory(
       absolute: true,
       nodir: true,
     });
-    const entries = await Promise.all(
-      files.map((f) => {
-        const name = path.basename(f, '.yaml');
-        return scanYaml(name, f, source);
-      }),
+    const parsed = (
+      await Promise.all(files.map((file) => readYamlDefinition(file)))
+    ).filter(filterNotNull);
+    const definitions = new Map(
+      parsed.map((entry) => [entry.name, entry] as const),
     );
+    const entries = parsed
+      .map((entry) => scanYaml(entry, source, definitions))
+      .filter(filterNotNull);
 
-    const result = entries.filter(filterNotNull);
-    logger.debug(CHANNEL, `Scanned ${result.length} agents from ${source}`);
-    return result;
+    logger.debug(CHANNEL, `Scanned ${entries.length} agents from ${source}`);
+    return entries;
   } catch (err) {
     logger.error(CHANNEL, `Failed to scan ${dir}: ${toErrorMessage(err)}`);
     return [];
   }
 }
 
-async function scanYaml(
-  name: string,
+async function readYamlDefinition(
   yamlPath: string,
-  source: AgentSource,
-): Promise<AgentEntry | null> {
+): Promise<ParsedAgentYaml | null> {
   try {
     const content = await AbsoluteFS.read(yamlPath);
     const parsed = yaml.parse(content);
-    const validated = AgentDefinitionSchema.parse(parsed);
+    const definition = AgentDefinitionSchema.parse(parsed);
+    return {
+      name: path.basename(yamlPath, '.yaml'),
+      path: yamlPath,
+      definition,
+    };
+  } catch (err) {
+    logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${toErrorMessage(err)}`);
+    return null;
+  }
+}
+
+type InheritedBlockName = 'prompts' | 'settings';
+
+interface InheritedDefinitionBlock {
+  readonly value: Record<string, unknown>;
+  readonly complete: boolean;
+}
+
+function parentDefinition(
+  parentName: string,
+  definitions: Map<string, ParsedAgentYaml>,
+): ParsedAgentYaml | undefined {
+  return (
+    definitions.get(parentName) ??
+    definitions.get(LEGACY_AGENT_ALIASES[parentName] ?? '')
+  );
+}
+
+function inheritedDefinitionBlock(
+  entry: ParsedAgentYaml,
+  definitions: Map<string, ParsedAgentYaml>,
+  block: InheritedBlockName,
+  seen: ReadonlySet<string> = new Set([entry.name]),
+): InheritedDefinitionBlock {
+  const ownBlock = entry.definition[block];
+  const parentName = entry.definition.inherits;
+  if (!parentName) return { value: ownBlock, complete: true };
+
+  const parent = parentDefinition(parentName, definitions);
+  if (!parent || seen.has(parent.name)) {
+    return { value: ownBlock, complete: false };
+  }
+
+  const inherited = inheritedDefinitionBlock(
+    parent,
+    definitions,
+    block,
+    new Set([...seen, parent.name]),
+  );
+  return {
+    value: mergeInheritedAgentObject(inherited.value, ownBlock),
+    complete: inherited.complete,
+  };
+}
+
+function userRequestTemplateCount(rawPrompts: Record<string, unknown>): number {
+  const userRequest = rawPrompts.userRequest;
+  if (Array.isArray(userRequest)) return userRequest.length;
+  return typeof userRequest === 'string' && userRequest ? 1 : 0;
+}
+
+function scanYaml(
+  entry: ParsedAgentYaml,
+  source: AgentSource,
+  definitions: Map<string, ParsedAgentYaml>,
+): AgentEntry | null {
+  try {
+    const validated = entry.definition;
 
     // Extract lightweight metadata
-    const rawSettings = (validated.settings ?? {}) as Record<string, unknown>;
+    const settingsBlock = inheritedDefinitionBlock(
+      entry,
+      definitions,
+      'settings',
+    );
+    const promptsBlock = inheritedDefinitionBlock(
+      entry,
+      definitions,
+      'prompts',
+    );
+    const rawSettings = settingsBlock.value;
+    const rawPrompts = promptsBlock.value;
     const defaultOutputFiles = rawSettings.defaultOutputFiles as
       | string[]
       | undefined;
@@ -85,22 +175,39 @@ async function scanYaml(
         : AgentCategory.Workflow;
 
     const internal = rawSettings.internal === true || undefined;
+    let rounds: number | undefined;
+    if (
+      category === AgentCategory.Workflow &&
+      settingsBlock.complete &&
+      promptsBlock.complete
+    ) {
+      const parsedRounds = AgentWorkflowSettingSchema.shape.rounds
+        .catch(INVALID_WORKFLOW_ROUNDS)
+        .parse(rawSettings.rounds);
+      if (!Number.isNaN(parsedRounds)) {
+        rounds = Math.max(parsedRounds, userRequestTemplateCount(rawPrompts));
+      }
+    }
 
     return {
-      name,
+      name: entry.name,
       displayName: validated.displayName,
       source,
-      path: yamlPath,
+      path: entry.path,
       category,
       description: validated.description,
       tools: tools?.length ? tools : undefined,
       defaultOutputFiles: defaultOutputFiles?.length
         ? defaultOutputFiles
         : undefined,
+      rounds,
       internal,
     };
   } catch (err) {
-    logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${toErrorMessage(err)}`);
+    logger.warn(
+      CHANNEL,
+      `Failed to scan ${entry.path}: ${toErrorMessage(err)}`,
+    );
     return null;
   }
 }

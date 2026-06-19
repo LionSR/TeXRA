@@ -181,6 +181,7 @@ describe('CLI agents command', () => {
       path: '/tmp/resources/agents/correct.yaml',
       category: AgentCategory.Workflow,
       description: 'Fixes typos.',
+      rounds: 1,
     };
     const toolUseAgent = {
       name: 'chat',
@@ -239,6 +240,28 @@ describe('CLI agents command', () => {
       json: localAgent,
       ndjson: { kind: 'agent', agent: localAgent },
       text: expect.stringContaining('source: builtInToolUse'),
+    });
+  });
+
+  it('renders workflow round counts in agent details', async () => {
+    const workflowAgent = {
+      name: 'polish',
+      source: 'builtInWorkflow',
+      path: '/tmp/resources/agents/polish.yaml',
+      category: AgentCategory.Workflow,
+      description: 'Polishes prose.',
+      rounds: 2,
+    };
+    mocks.resolveCliAgent.mockResolvedValue(workflowAgent);
+    const { showAgent } = await import('@cli/commands/agents');
+
+    const exitCode = await showAgent(cliContext(), 'polish');
+
+    expect(exitCode).toBe(0);
+    expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), {
+      json: workflowAgent,
+      ndjson: { kind: 'agent', agent: workflowAgent },
+      text: expect.stringContaining('rounds: 2'),
     });
   });
 

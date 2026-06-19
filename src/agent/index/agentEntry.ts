@@ -17,6 +17,7 @@ export interface AgentEntry {
   description?: string;
   tools?: string[]; // tool names for tool-use agents
   defaultOutputFiles?: string[];
+  rounds?: number; // workflow round count
   visibility?: string[]; // remote only: group names that can access the agent
   internal?: boolean; // internal agents are hidden from dropdowns but launchable by commands
 }
