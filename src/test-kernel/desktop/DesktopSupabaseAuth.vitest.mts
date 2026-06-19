@@ -5,10 +5,14 @@ import * as agentRegistry from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { setServerSideKeyService } from '@auth/serverKeys';
-import { createDesktopProtocolCallbackRouter } from '@desktop/main/desktopProtocolCallbacks';
+import {
+  createDesktopProtocolCallbackRouter,
+  parseDesktopProtocolCallback,
+} from '@desktop/main/desktopProtocolCallbacks';
 import {
   createDesktopAuthCallbackState,
   createDesktopSupabaseAuth,
+  type DesktopAuthCallbackState,
   type DesktopOAuthClient,
 } from '@desktop/main/desktopSupabaseAuth';
 import { buildProfileMessage } from '@shared/settingsView/handlers/profileHandlers';
@@ -90,12 +94,22 @@ function createOAuthClient() {
 function authCallbackUrl(input: {
   accessToken: string;
   refreshToken: string;
+  nonce?: string;
 }): string {
   const fragment = new URLSearchParams({
     access_token: input.accessToken,
     refresh_token: input.refreshToken,
   });
-  return `texra://texra-ai.texra/auth-callback#${fragment}`;
+  const query = input.nonce ? `?app_nonce=${input.nonce}` : '';
+  return `texra://texra-ai.texra/auth-callback${query}#${fragment}`;
+}
+
+/** Extract the app_nonce that signIn placed on its OAuth redirect_to. */
+function nonceFor(oauthClient: ReturnType<typeof createOAuthClient>): string {
+  const call = oauthClient.auth.signInWithOAuth.mock.calls.at(-1)?.[0];
+  const redirectTo = call?.options?.redirectTo ?? '';
+  const callback = parseDesktopProtocolCallback(redirectTo);
+  return new URLSearchParams(callback?.query).get('app_nonce') ?? '';
 }
 
 function createDeferred<T>() {
@@ -152,12 +166,57 @@ describe('desktop Supabase auth', () => {
     expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalledWith({
       provider: 'github',
       options: {
-        redirectTo: 'texra://texra-ai.texra/auth-callback',
+        redirectTo: expect.stringMatching(
+          /^texra:\/\/texra-ai\.texra\/auth-callback\?app_nonce=[0-9a-f]{32}$/,
+        ),
       },
     });
     expect(openExternalUrl).toHaveBeenCalledWith(
       'https://auth.example.test/start',
     );
+    auth.dispose();
+  });
+
+  it('persists the nonce before sending it to Supabase', async () => {
+    const events: string[] = [];
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const callbackState: DesktopAuthCallbackState = {
+      hasPendingSignIn: vi.fn(() => false),
+      beginAuthAttempt: vi.fn(async () => {
+        events.push('begin');
+      }),
+      matchesPendingNonce: vi.fn(() => false),
+      clearAwaitingCallback: vi.fn(async () => {
+        events.push('clear');
+      }),
+    };
+    const oauthClient: DesktopOAuthClient = {
+      auth: {
+        signInWithOAuth: vi.fn(async () => {
+          events.push('oauth');
+          return {
+            data: { url: 'https://auth.example.test/start' },
+            error: null,
+          };
+        }),
+      },
+    };
+    const openExternalUrl = vi.fn(async () => {
+      events.push('open');
+    });
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient,
+      callbackState,
+      secrets: createSecrets(),
+      openExternalUrl,
+    });
+
+    await auth.signIn();
+
+    expect(events).toEqual(['begin', 'oauth', 'open']);
     auth.dispose();
   });
 
@@ -180,6 +239,7 @@ describe('desktop Supabase auth', () => {
       authCallbackUrl({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
+        nonce: nonceFor(oauthClient),
       }),
     );
 
@@ -193,12 +253,76 @@ describe('desktop Supabase auth', () => {
     });
     expect(coordinator.createSessionFromCallback).toHaveBeenCalledWith({
       path: '/auth-callback',
-      query: '',
+      query: expect.stringMatching(/^app_nonce=[0-9a-f]{32}$/),
       fragment: 'access_token=access-token&refresh_token=refresh-token',
     });
     expect(onSessionChanged).toHaveBeenCalled();
 
     expect(await SupabaseClient.isAuthenticated()).toBe(false);
+    auth.dispose();
+  });
+
+  it('rejects a foreign callback whose nonce does not match the pending sign-in (login-CSRF)', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const oauthClient = createOAuthClient();
+    const log = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient,
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      log,
+    });
+
+    await auth.signIn();
+    // Attacker-delivered deeplink carrying valid tokens for another account but
+    // NOT the nonce this client minted in its redirect_to.
+    router.routeUrl(
+      authCallbackUrl({
+        accessToken: 'attacker-access',
+        refreshToken: 'attacker-refresh',
+        nonce: 'deadbeefdeadbeefdeadbeefdeadbeef',
+      }),
+    );
+    await Promise.resolve();
+
+    expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
+    expect(coordinator.storeSession).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledWith(
+      'Desktop auth callback rejected: nonce mismatch (possible login-CSRF or stale callback)',
+    );
+    auth.dispose();
+  });
+
+  it('rejects a callback with no nonce while a sign-in is pending', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+    });
+
+    await auth.signIn();
+    router.routeUrl(
+      authCallbackUrl({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      }),
+    );
+    await Promise.resolve();
+
+    expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
+    expect(coordinator.storeSession).not.toHaveBeenCalled();
     auth.dispose();
   });
 
@@ -256,6 +380,7 @@ describe('desktop Supabase auth', () => {
       authCallbackUrl({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
+        nonce: nonceFor(oauthClient),
       }),
     );
 
@@ -326,6 +451,26 @@ describe('desktop Supabase auth', () => {
     }
   });
 
+  it('clears expired pending state when matching a nonce directly', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
+      const stateStore = createStateStore();
+      const callbackState = createDesktopAuthCallbackState(stateStore);
+
+      await callbackState.beginAuthAttempt('attempt-nonce');
+      vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+
+      expect(callbackState.matchesPendingNonce('attempt-nonce')).toBe(false);
+      expect(callbackState.hasPendingSignIn()).toBe(false);
+      expect(
+        createDesktopAuthCallbackState(stateStore).hasPendingSignIn(),
+      ).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('cancels pending callback state on sign-out', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
@@ -353,6 +498,7 @@ describe('desktop Supabase auth', () => {
       authCallbackUrl({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
+        nonce: nonceFor(oauthClient),
       }),
     );
 
@@ -387,7 +533,11 @@ describe('desktop Supabase auth', () => {
 
     await auth.signIn();
     router.routeUrl(
-      authCallbackUrl({ accessToken: 'first', refreshToken: 'first' }),
+      authCallbackUrl({
+        accessToken: 'first',
+        refreshToken: 'first',
+        nonce: nonceFor(oauthClient),
+      }),
     );
     router.routeUrl(
       authCallbackUrl({ accessToken: 'second', refreshToken: 'second' }),
@@ -436,6 +586,7 @@ describe('desktop Supabase auth', () => {
       authCallbackUrl({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
+        nonce: nonceFor(oauthClient),
       }),
     );
     await vi.waitFor(() => {
@@ -481,6 +632,7 @@ describe('desktop Supabase auth', () => {
       authCallbackUrl({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
+        nonce: nonceFor(oauthClient),
       }),
     );
 
