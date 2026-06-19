@@ -34,6 +34,7 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
+import { GoalStore } from '@tools/goal';
 import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
@@ -899,8 +900,16 @@ function appendHarnessRetryDecision(decision: ApprovalDecision): void {
   );
 }
 
-function appendHarnessPlanDecision(decision: ApprovalDecision): void {
+async function appendHarnessPlanDecision(
+  decision: ApprovalDecision,
+): Promise<void> {
   if (decision.planAction === 'approve_and_goal') {
+    await GoalStore.start(STREAM_ID, PLAN_APPROVAL_OBJECTIVE);
+    patchStream(STREAM_ID, (slice) => ({
+      ...slice,
+      status: STREAM_STATUS.RUNNING,
+      bypass: { ...slice.bypass, bash: true },
+    }));
     appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
   }
@@ -1492,8 +1501,8 @@ function appendHarnessStatus(): void {
       approval: formatApprovalPolicyForCli(harnessApprovalPolicy),
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
-      queuedFollowUpMessages:
-        streamId === undefined ? [] : ToolUseFollowUpQueue.getAll(streamId),
+      goal: GoalStore.getForStream(streamId),
+      queuedFollowUpMessages: ToolUseFollowUpQueue.getAll(streamId),
     }),
   );
 }
@@ -1502,6 +1511,7 @@ function resetHarnessForClear(): void {
   const meta = cliState.sessionMeta.get();
   clearApprovals();
   ToolUseFollowUpQueue.drain(STREAM_ID);
+  void GoalStore.forget(STREAM_ID);
   const store = getDefaultStreamLogStore();
   for (const streamId of cliState.streams.get().keys()) {
     store.delete(streamId).catch(() => {
