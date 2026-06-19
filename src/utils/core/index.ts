@@ -10,6 +10,7 @@ export {
   isString,
   extractErrorMessage,
   formatCompactDuration,
+  formatCompactTokenCount,
   formatDuration,
   serializeError,
   type SerializedError,
