@@ -179,8 +179,14 @@ function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
  * the schema itself does not fall back to insertion order.
  *
  * The single cast here replaces the per-schema casts that the
- * `.transform(recordToRoundMap)` → `.catch(new Map())` pipeline would
- * otherwise require at each call site.
+ * `.transform(recordToRoundMap)` → `.catch(…)` pipeline would otherwise
+ * require at each call site.
+ *
+ * The fallback uses a `() => new Map()` factory rather than a literal
+ * `new Map()`: Zod stores a literal catch value once and returns that same
+ * instance on every failure, and consumers (e.g. `StreamSnapshotStore`) hold
+ * the parsed map by reference and mutate it via `.set()`, so a shared instance
+ * would leak rounds across streams whose sidecar JSON is malformed.
  */
 function roundMapSchema<T>(
   itemList: z.ZodType<T[]>,
@@ -188,7 +194,7 @@ function roundMapSchema<T>(
   return z
     .record(z.string(), itemList)
     .transform(recordToRoundMap)
-    .catch(new Map()) as z.ZodType<Map<number, T[]>>;
+    .catch(() => new Map()) as z.ZodType<Map<number, T[]>>;
 }
 
 function warnDroppedItem(
@@ -203,7 +209,8 @@ function warnDroppedItem(
 }
 
 // ============================================================================
-// Output files: { round: OutputFileInfo[] }
+// Output files: { round: OutputFileInfo[] } (caller pre-flattens legacy input,
+// threading the activeRunId hint in via flattenLegacyRuns).
 // ============================================================================
 
 const OutputFileListSchema = z
@@ -218,13 +225,6 @@ const OutputFileListSchema = z
   )
   .catch([]);
 
-/**
- * Parses a flat round-keyed record to `Map<number, OutputFileInfo[]>`.
- * Legacy nested records (`{ runId: { round: items[] } }`) must be
- * pre-flattened by the caller (see `flattenLegacyRuns`) so the
- * activeRunId hint can be threaded in — the schema itself does not fall
- * back to insertion order.
- */
 export const OutputFilesDataSchema = roundMapSchema(OutputFileListSchema);
 
 // ============================================================================
