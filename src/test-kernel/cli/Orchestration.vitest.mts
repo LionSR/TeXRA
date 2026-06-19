@@ -344,7 +344,7 @@ describe('CLI orchestration items', () => {
           kind: 'preset',
           preset: 'physicist',
         }),
-        description: 'ready; 2 tool-use agents; 1 workflow agent',
+        description: 'ready; 2 tool-use; 1 workflow',
         disabled: false,
       }),
     );
@@ -372,7 +372,7 @@ describe('CLI orchestration items', () => {
     expect(items.find((item) => item.label === 'Team Lean Project')).toEqual(
       expect.objectContaining({
         disabled: true,
-        description: 'unavailable; no runnable team root; 1/2 tool-use agents',
+        description: 'unavailable; no team root; 1/2 tool-use',
         footerHints: [
           'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
           'Relay teams may unlock more agents after texra login.',
@@ -491,7 +491,7 @@ describe('CLI orchestration items', () => {
       view.items.find((item) => item.label === 'Team Lean Project'),
     ).toMatchObject({
       disabled: true,
-      description: 'unavailable; no runnable team root; 1/2 tool-use agents',
+      description: 'unavailable; no team root; 1/2 tool-use',
     });
   });
 
