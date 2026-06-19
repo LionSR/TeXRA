@@ -1,3 +1,5 @@
+import { AgentCategory } from '../schemas/agent';
+
 /**
  * Tools that delegate work to sub-agents.
  *
@@ -13,6 +15,20 @@ export const DELEGATION_TOOLS: ReadonlySet<string> = new Set([
   'propose_workflow',
   'propose_agent',
 ]);
+
+/**
+ * Maps each proposal-bearing delegation tool to the agent category it launches.
+ * `resume_agent` is intentionally absent — it carries no proposal payload to
+ * reconstruct. Single source of truth for routing raw delegation tool input to
+ * the matching proposal schema.
+ */
+export const DELEGATION_TOOL_CATEGORY: Readonly<Record<string, AgentCategory>> =
+  {
+    delegate_workflow: AgentCategory.Workflow,
+    propose_workflow: AgentCategory.Workflow,
+    delegate_agent: AgentCategory.ToolUse,
+    propose_agent: AgentCategory.ToolUse,
+  };
 
 /** True when any of the given tool names is a delegation tool. */
 export function hasDelegationTool(
