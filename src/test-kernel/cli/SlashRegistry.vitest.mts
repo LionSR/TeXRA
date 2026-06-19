@@ -21,6 +21,7 @@ import {
 import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import { toErrorMessage } from '@common/errors';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -361,7 +362,7 @@ describe('slashRegistry', () => {
         throw new Error('model failed');
       },
       onError: (error) => {
-        errors.push(error instanceof Error ? error.message : String(error));
+        errors.push(toErrorMessage(error));
       },
     });
     const model = listSlashCommands().find((cmd) => cmd.name === 'model');
@@ -397,7 +398,7 @@ describe('slashRegistry', () => {
         throw new Error('api mode failed');
       },
       onError: (error) => {
-        errors.push(error instanceof Error ? error.message : String(error));
+        errors.push(toErrorMessage(error));
       },
     });
     const api = listSlashCommands().find((cmd) => cmd.name === 'api');
