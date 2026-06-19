@@ -304,7 +304,7 @@ describe('CLI multi-agent run command', () => {
         id: 'mathematician',
         name: 'Mathematician',
         description: 'For math papers.',
-        icon: 'codicon-symbol-operator',
+        icon: 'symbol-operator',
         workflowAgents: [],
         toolUseAgents: ['orchestrator'],
         source: 'built-in',
