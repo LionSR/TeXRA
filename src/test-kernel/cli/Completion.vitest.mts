@@ -157,6 +157,10 @@ COMP_WORDS=(texra agents show p)
 COMP_CWORD=3
 _texra
 printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
+COMP_WORDS=(texra agents inspect p)
+COMP_CWORD=3
+_texra
+printf 'agents-inspect:%s\\n' "\${COMPREPLY[@]}"
 `;
       const result = spawnSync('bash', ['-s'], {
         input: script,
@@ -170,6 +174,7 @@ printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
         'agents-run:review',
         'agent-flag:lean',
         'agents-show:polish',
+        'agents-inspect:polish',
       ]);
     } finally {
       rmSync(root, { recursive: true, force: true });
