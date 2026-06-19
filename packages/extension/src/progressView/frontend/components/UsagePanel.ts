@@ -24,9 +24,9 @@ const COMPACTION_THRESHOLD = 75;
 
 /** Solid fill color based on context utilization. */
 function fillColor(percent: number): string {
-  if (percent <= 65) return 'var(--wa-color-success-on-quiet, #73c991)';
-  if (percent <= 80) return 'var(--wa-color-warning-on-quiet, #cca700)';
-  return 'var(--wa-color-testing-failed, #f48771)';
+  if (percent <= 65) return 'var(--color-success)';
+  if (percent <= 80) return 'var(--color-warning)';
+  return 'var(--color-status-error)';
 }
 
 @customElement('usage-panel')
