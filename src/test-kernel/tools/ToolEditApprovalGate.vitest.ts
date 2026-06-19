@@ -2,8 +2,6 @@
 import * as assert from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
-// Third-party imports
-
 // Local imports - tests
 import { createFakePlatform } from '@test/support/FakePlatform';
 
@@ -13,6 +11,7 @@ import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 
 // Local imports - tools
 import type { StreamTabId } from '@shared/schemas';
+import { TextEditorTool } from '@tools/TextEditorTool';
 import { WriteFileTool } from '@tools/WriteTool';
 import {
   cleanupAllApprovals,
@@ -26,9 +25,29 @@ import { WorkspaceFS } from '@utils/files';
 // Test stream ID for per-stream YOLO mode tests
 const TEST_STREAM_ID = 'TestAgent@model: test.tex' as StreamTabId;
 
-async function installPlatform(config: Record<string, unknown> = {}) {
+async function installPlatform(
+  config: Record<string, unknown> = {},
+  files: Record<string, string | Uint8Array> = {},
+) {
   const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({ workspacePath: '/workspace', config }));
+  initPlatform(
+    createFakePlatform({ workspacePath: '/workspace', config, files }),
+  );
+}
+
+async function callTextEditorInRun(
+  tool: TextEditorTool,
+  executionId: string,
+  input: unknown,
+) {
+  return withRunContext(
+    createRunContext({
+      runtimeHost: noopAgentRuntimeHost,
+      streamId: `stream:${executionId}` as StreamTabId,
+      executionId,
+    }),
+    () => tool.call(input),
+  );
 }
 
 describe('Tool edit approval gating', () => {
@@ -171,6 +190,50 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(handlerCalled, false);
     assert.strictEqual(writtenContent, 'auto');
     assert.strictEqual(result.output, 'written');
+  });
+
+  it('keeps text editor undo history isolated between execution ids', async () => {
+    await installPlatform(
+      {},
+      {
+        '/workspace/shared.tex': 'alpha\n',
+      },
+    );
+    const tool = new TextEditorTool();
+
+    setToolEditApprovalHandler(async () => ({ accepted: true }));
+
+    const parentEdit = await callTextEditorInRun(tool, 'aaaaaa', {
+      command: 'str_replace',
+      path: 'shared.tex',
+      old_str: 'alpha',
+      new_str: 'parent',
+    });
+    assert.notStrictEqual(parentEdit.isError, true);
+    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'parent\n');
+
+    const childEdit = await callTextEditorInRun(tool, 'bbbbbb', {
+      command: 'str_replace',
+      path: 'shared.tex',
+      old_str: 'parent',
+      new_str: 'child',
+    });
+    assert.notStrictEqual(childEdit.isError, true);
+    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'child\n');
+
+    const parentUndo = await callTextEditorInRun(tool, 'aaaaaa', {
+      command: 'undo_edit',
+      path: 'shared.tex',
+    });
+    assert.notStrictEqual(parentUndo.isError, true);
+    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'alpha\n');
+
+    const childUndo = await callTextEditorInRun(tool, 'bbbbbb', {
+      command: 'undo_edit',
+      path: 'shared.tex',
+    });
+    assert.notStrictEqual(childUndo.isError, true);
+    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'parent\n');
   });
 
   it('toggleToolEditApprovalSessionBypass toggles state and returns new value', () => {
