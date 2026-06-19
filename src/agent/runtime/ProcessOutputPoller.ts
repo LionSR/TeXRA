@@ -1,12 +1,12 @@
 import { StringDecoder } from 'node:string_decoder';
 
-import delay from 'delay';
 import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
+import { delay } from '@utils/core/async';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ProcessExecutionHandle } from './ExecutionHandle';
