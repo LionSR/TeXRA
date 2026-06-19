@@ -812,6 +812,9 @@ function validateToolUseAgentRunCommand() {
 
 function validateMultiAgentRunCommand() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-multi-agent-run-'));
+  // This preset has a local built-in delegating root; relay-only teams such as
+  // mathematician are unavailable in signed-out validation environments.
+  const validationPreset = 'software-engineer';
   try {
     const inputPath = path.join(cwd, 'math-problem.md');
     const validationFlagPath = path.join(
@@ -828,7 +831,7 @@ function validateMultiAgentRunCommand() {
       binaryPath,
       'multi-agent',
       'run',
-      'mathematician',
+      validationPreset,
       '--input',
       'math-problem.md',
       '--cwd',
@@ -846,7 +849,7 @@ function validateMultiAgentRunCommand() {
     assertSuccess(json, 'texra multi-agent run JSON');
     const jsonResult = JSON.parse(json.stdout);
     assert(
-      jsonResult.preset?.id === 'mathematician',
+      jsonResult.preset?.id === validationPreset,
       'multi-agent JSON output should identify the preset',
     );
     assert(
@@ -871,7 +874,7 @@ function validateMultiAgentRunCommand() {
         binaryPath,
         'multi-agent',
         'run',
-        'mathematician',
+        validationPreset,
         '--instruction',
         'Prove that every odd square is congruent to 1 modulo 8.',
         '--cwd',
@@ -887,7 +890,7 @@ function validateMultiAgentRunCommand() {
     assertSuccess(inlineInstruction, 'texra multi-agent instruction-only JSON');
     const inlineJsonResult = JSON.parse(inlineInstruction.stdout);
     assert(
-      inlineJsonResult.preset?.id === 'mathematician',
+      inlineJsonResult.preset?.id === validationPreset,
       'instruction-only multi-agent JSON output should identify the preset',
     );
     assert(
@@ -911,7 +914,7 @@ function validateMultiAgentRunCommand() {
       parseNdjson(ndjson.stdout, 'multi-agent run NDJSON').some(
         (record) =>
           record.kind === 'multi-agent-result' &&
-          record.preset?.id === 'mathematician' &&
+          record.preset?.id === validationPreset &&
           record.rootAgent === jsonResult.rootAgent,
       ),
       'multi-agent run NDJSON should include a preset result record with the selected root agent',
