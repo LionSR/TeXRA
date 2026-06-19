@@ -38,13 +38,20 @@ function normalizeWorkPlanSnapshot(input: unknown): unknown {
   };
 }
 
+/** Raw work-plan field types; callers apply their own fallback policy. */
+export const WorkPlanSnapshotShape = {
+  todos: z.array(TodoItemSchema),
+  plan: PlanSchema.nullable(),
+  planSummary: z.string().nullable(),
+} satisfies z.ZodRawShape;
+
 /** Current serializable shape for workspace plan and todo progress state. */
 export const WorkPlanSnapshotSchema = z.preprocess(
   normalizeWorkPlanSnapshot,
   z.strictObject({
-    todos: z.array(TodoItemSchema).prefault([]),
-    plan: PlanSchema.nullable().prefault(null),
-    planSummary: z.string().nullable().prefault(null),
+    todos: WorkPlanSnapshotShape.todos.prefault([]),
+    plan: WorkPlanSnapshotShape.plan.prefault(null),
+    planSummary: WorkPlanSnapshotShape.planSummary.prefault(null),
   }),
 );
 
