@@ -37,6 +37,7 @@ export * from './streamData';
 export * from './subagentProgress';
 export * from './inquiry';
 export * from './prompts';
+export * from './proposalInput';
 export * from './diffResult';
 
 // Layer 4: MainView schemas (consolidated)
