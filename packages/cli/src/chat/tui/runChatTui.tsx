@@ -140,7 +140,12 @@ import {
 } from './render/noColorOutput';
 import { formatCliSessionStatus } from './sessionStatus';
 import { clearApprovals } from './state/approvalQueue';
-import { cliState, patchStream, resetCliState } from './state/cliState';
+import {
+  cliState,
+  patchStream,
+  resetCliState,
+  setCliSessionModelOverride,
+} from './state/cliState';
 import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,
@@ -544,11 +549,7 @@ async function applyCliModelSelection(
   if (chatTuiCanStartRootRun(context.session)) {
     try {
       await setCliHelperModel(nextModel);
-      cliState.sessionMeta.set({
-        ...cliState.sessionMeta.get(),
-        model: nextModel,
-        modelSource: 'override',
-      });
+      setCliSessionModelOverride(nextModel);
       appendLocalAssistantTranscript(`Root model set to ${nextModel}.`);
     } catch (error: unknown) {
       appendLocalAssistantTranscript(toErrorMessage(error));
@@ -575,11 +576,7 @@ async function applyCliModelSelection(
 
   try {
     await activeFlow.switchModel(nextModel);
-    cliState.sessionMeta.set({
-      ...cliState.sessionMeta.get(),
-      model: nextModel,
-      modelSource: 'override',
-    });
+    setCliSessionModelOverride(nextModel);
   } catch (error: unknown) {
     appendLocalAssistantTranscript(toErrorMessage(error));
     return;

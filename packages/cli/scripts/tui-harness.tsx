@@ -61,6 +61,7 @@ import {
   cliState,
   patchStream,
   resetCliState,
+  setCliSessionModelOverride,
   setParentStream,
   type ConversationEntry,
 } from '../src/chat/tui/state/cliState';
@@ -1572,7 +1573,7 @@ registerBuiltinSlashCommands({
   getApprovalPolicy: () => harnessApprovalPolicy,
   onApprovalPolicySelect: setHarnessApprovalPolicy,
   onModelSelect: (model) => {
-    cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), model });
+    setCliSessionModelOverride(model);
     appendHarnessAssistantTranscript(
       `Harness model selected. Future turns: ${model}.`,
     );
