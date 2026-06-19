@@ -70,7 +70,7 @@ describe('request panel styles', () => {
     expect(labelRule).toContain('white-space: nowrap');
   });
 
-  it('lets the tool edit diff dropdown shrink inside narrow panels', () => {
+  it('keeps the tool edit diff dropdown capped inside approval panels', () => {
     const source = readRequestPanelStyles();
     const dropdownStart = source.indexOf(
       '.approval-request__actions .diff-dropdown {',
@@ -89,7 +89,7 @@ describe('request panel styles', () => {
     expect(dropdownRule).toContain('flex: 1 1 7rem');
     expect(dropdownRule).toContain('min-width: 0');
     expect(dropdownRule).toContain('max-width: min(8.25rem, 100%)');
-    expect(dropdownRule).toContain('max-inline-size: 100%');
+    expect(dropdownRule).not.toContain('max-inline-size: 100%');
     expect(dropdownButtonRule).toContain('flex: 1 1 auto');
     expect(dropdownButtonRule).toContain('width: auto');
     expect(dropdownButtonRule).toContain('min-width: 0');
