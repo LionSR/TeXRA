@@ -22,7 +22,9 @@ export interface ReflectionServices<
   readonly latexMediaManager: LatexMediaManager;
   readonly promptBuilder: PromptBuilder;
   readonly fileService: TaskRunFileService;
-  readonly getOutputFileLocation: (round: number) => AgentFileLocation;
+  readonly getOutputFileLocation: (
+    round: number,
+  ) => AgentFileLocation | Promise<AgentFileLocation>;
   readonly baseFiles: WorkspaceFileLocation[];
   readonly onRoundFinalized: RoundFinalizedCallback;
 }

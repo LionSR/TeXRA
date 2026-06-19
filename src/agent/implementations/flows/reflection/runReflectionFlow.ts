@@ -57,7 +57,9 @@ export interface RunReflectionFlowInput<
   setting: AgentWorkflowSetting;
   storageKey: StorageKey;
   parentStage: StageHandle;
-  getOutputFileLocation?: (round: number) => AgentFileLocation;
+  getOutputFileLocation?: (
+    round: number,
+  ) => AgentFileLocation | Promise<AgentFileLocation>;
   onRoundCompleted?: (
     roundIndex: number,
     totalRounds: number,
@@ -137,7 +139,7 @@ export async function runReflectionFlow<C = unknown>(
 
   const getOutputFileLocation =
     input.getOutputFileLocation ??
-    ((round: number): AgentFileLocation => {
+    (async (round: number): Promise<AgentFileLocation> => {
       // The default `r{round}/output.xml` filename is only collision-safe
       // when resolved through a run-storage-bound fileService. Enforce the
       // invariant so a misconfigured TaskRunFileService can't silently
@@ -154,11 +156,11 @@ export async function runReflectionFlow<C = unknown>(
       // older build that used `.tex` for non-scratchpad agents, keep using that
       // file on resume so initializeOutputAndPrefill sees the existing content
       // instead of starting a fresh round at output.xml.
-      if (!AbsoluteFS.existsSync(canonical.absolutePath)) {
+      if (!(await AbsoluteFS.exists(canonical.absolutePath))) {
         const legacy = fileService.createLocation(
           getOutputFileName(WORKFLOW_DOCUMENT_OUTPUT_EXT, round),
         ) as AgentFileLocation;
-        if (AbsoluteFS.existsSync(legacy.absolutePath)) {
+        if (await AbsoluteFS.exists(legacy.absolutePath)) {
           return legacy;
         }
       }
