@@ -220,6 +220,14 @@ export const cliState = {
   >,
 };
 
+export function setCliSessionModelOverride(model: string): void {
+  cliState.sessionMeta.set({
+    ...cliState.sessionMeta.get(),
+    model,
+    modelSource: 'override',
+  });
+}
+
 export const NO_BYPASS: BypassState = {
   bash: false,
   toolEdit: false,
