@@ -4,13 +4,18 @@ import {
   type CompletionCommand,
 } from './completionCommandTree';
 
-// Dynamic positional sources, gated on TEXRA_COMPLETION_DYNAMIC so scripts can
-// opt out of shelling back into texra. Shared by the `--agent`/`--model` flags
-// and the `run` / `agents show` / `models show` positionals.
+// Dynamic completion sources, gated on TEXRA_COMPLETION_DYNAMIC so scripts can
+// opt out of shelling back into texra.
 const AGENTS_LIST_SOURCE =
   '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet 2>/dev/null | awk "{print \\$2}")';
+const WORKFLOW_AGENTS_LIST_SOURCE =
+  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --category workflow 2>/dev/null | awk "{print \\$2}")';
+const TOOL_USE_AGENTS_LIST_SOURCE =
+  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --category toolUse 2>/dev/null | awk "{print \\$2}")';
 const MODELS_LIST_SOURCE =
   '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra models list --quiet 2>/dev/null | awk "{print \\$1}")';
+const TOP_LEVEL_RUN_CONDITION =
+  "-n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from multi-agent'";
 
 function fishEscape(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
@@ -88,8 +93,14 @@ export function fishCompletion(commands: readonly CompletionCommand[]): string {
   );
   lines.push(
     fishCompleteLine([
-      "-n '__fish_seen_subcommand_from run'",
-      `-a '${AGENTS_LIST_SOURCE}'`,
+      TOP_LEVEL_RUN_CONDITION,
+      `-a '${WORKFLOW_AGENTS_LIST_SOURCE}'`,
+    ]),
+  );
+  lines.push(
+    fishCompleteLine([
+      "-n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from run'",
+      `-a '${TOOL_USE_AGENTS_LIST_SOURCE}'`,
     ]),
   );
   lines.push(
@@ -108,7 +119,7 @@ export function fishCompletion(commands: readonly CompletionCommand[]): string {
     fishCompleteLine(['-l model', '-s m', '-r', `-a '${MODELS_LIST_SOURCE}'`]),
   );
   lines.push(
-    fishCompleteLine(['-l agent', '-r', `-a '${AGENTS_LIST_SOURCE}'`]),
+    fishCompleteLine(['-l agent', '-r', `-a '${TOOL_USE_AGENTS_LIST_SOURCE}'`]),
   );
   return `${lines.join('\n')}\n`;
 }
