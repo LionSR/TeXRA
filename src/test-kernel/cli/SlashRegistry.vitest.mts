@@ -2,8 +2,6 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { toErrorMessage } from '@common/errors';
-
 import {
   findSlashCommand,
   listSlashCommands,
@@ -23,6 +21,7 @@ import {
 import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import { toErrorMessage } from '@common/errors';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
