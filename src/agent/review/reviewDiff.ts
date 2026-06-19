@@ -15,11 +15,11 @@ import * as path from 'node:path';
 import simpleGit, { type SimpleGit } from 'simple-git';
 
 // Local imports
+import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { platform } from '@platform/platform';
-import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
 import { extendEnvPath } from '@utils/system/platformPaths';
+import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
 
 import { normalizeReviewFilePath } from './reviewIssues';
 
@@ -33,6 +33,35 @@ const MAX_UNTRACKED_FILE_LINES = 400;
 const MAX_UNTRACKED_FILE_BYTES = 200 * 1024;
 /** Overall cap on the diff text sent to the model (~40k tokens). */
 const MAX_REVIEW_DIFF_CHARS = 160_000;
+
+const SIMPLE_GIT_UNSAFE_ENV_KEYS = new Set([
+  'editor',
+  'git_askpass',
+  'git_config_global',
+  'git_config_system',
+  'git_config_count',
+  'git_config',
+  'git_editor',
+  'git_exec_path',
+  'git_external_diff',
+  'git_pager',
+  'git_proxy_command',
+  'git_sequence_editor',
+  'git_template_dir',
+  'pager',
+  'prefix',
+  'ssh_askpass',
+]);
+
+function makeMachineGitEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (SIMPLE_GIT_UNSAFE_ENV_KEYS.has(key.toLowerCase())) continue;
+    env[key] = value;
+  }
+  env.PATH = extendEnvPath(env.PATH);
+  return env;
+}
 
 export interface CollectReviewDiffOptions {
   /** Any path inside the repository; the diff always covers the whole repo. */
@@ -78,10 +107,9 @@ function makeGit(cwd: string): SimpleGit {
   // with a minimal PATH that omits Homebrew / /usr/local/bin, so `git` may be
   // unresolvable. executeCommand previously ran git with extendEnvPath();
   // preserve that here so simple-git can still locate the binary.
-  return simpleGit(cwd, { timeout: { block: GIT_TIMEOUT_MS } }).env({
-    ...process.env,
-    PATH: extendEnvPath(),
-  });
+  return simpleGit(cwd, { timeout: { block: GIT_TIMEOUT_MS } }).env(
+    makeMachineGitEnv(),
+  );
 }
 
 /** Run a git command, returning stdout on success and null on error. */
