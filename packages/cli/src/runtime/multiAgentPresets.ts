@@ -86,10 +86,6 @@ export function formatCliMultiAgentInspectCommand(preset: string): string {
   return `texra multi-agent inspect ${preset}`;
 }
 
-export function parseCliCustomAgentPresets(raw: unknown): AgentModePreset[] {
-  return parseAgentModePresets(raw);
-}
-
 export function readCliMultiAgentPresets(): CliMultiAgentPreset[] {
   const customRaw = platform().workspaceState.get<unknown>(
     WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
@@ -105,7 +101,7 @@ export function cliMultiAgentPresets(
       ...preset,
       source: 'built-in' as const,
     })),
-    ...parseCliCustomAgentPresets(customRaw).map((preset) => ({
+    ...parseAgentModePresets(customRaw).map((preset) => ({
       ...preset,
       source: 'custom' as const,
     })),
