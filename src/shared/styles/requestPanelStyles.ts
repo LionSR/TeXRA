@@ -315,7 +315,6 @@ export const requestPanelStyles: CSSResult = css`
     flex: 1 1 7rem;
     min-width: 0;
     max-width: min(8.25rem, 100%);
-    max-inline-size: 100%;
   }
 
   .approval-request__actions .diff-dropdown .diff-main-button {
