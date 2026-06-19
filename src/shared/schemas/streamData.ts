@@ -24,7 +24,11 @@ import {
   type CompileFailure,
   type OutputFileInfo,
 } from './output';
-import { TokenUsageStatsSchema, type TokenUsageStats } from './usage';
+import {
+  TokenUsageStatsSchema,
+  emptyUsageStats,
+  type TokenUsageStats,
+} from './usage';
 
 // ============================================================================
 // Shared: round key coercion
@@ -238,44 +242,31 @@ const FiniteNumber = z.coerce
   .number()
   .transform((n) => (Number.isFinite(n) ? n : 0));
 
+type TokenUsageStatKey = keyof typeof TokenUsageStatsSchema.shape;
+
+const TokenUsageStatsParsingShape = {} as Record<
+  TokenUsageStatKey,
+  z.ZodType<number>
+>;
+for (const [key, schema] of Object.entries(TokenUsageStatsSchema.shape) as [
+  TokenUsageStatKey,
+  z.ZodType,
+][]) {
+  TokenUsageStatsParsingShape[key] = schema.isOptional()
+    ? FiniteNumber.optional().prefault(0)
+    : FiniteNumber;
+}
+
 /** Parsing schema with safe number coercion. */
-const TokenUsageStatsParsingBaseSchema = z.object({
-  inputTokens: FiniteNumber,
-  outputTokens: FiniteNumber,
-  cost: FiniteNumber,
-  cacheReadInputTokens: FiniteNumber.optional().prefault(0),
-  cacheMissInputTokens: FiniteNumber.optional().prefault(0),
-  cacheCreationInputTokens: FiniteNumber.optional().prefault(0),
-});
+const TokenUsageStatsParsingBaseSchema = z.object(TokenUsageStatsParsingShape);
 
 export const TokenUsageStatsParsingSchema =
-  TokenUsageStatsParsingBaseSchema.catch({
-    inputTokens: 0,
-    outputTokens: 0,
-    cost: 0,
-    cacheReadInputTokens: 0,
-    cacheMissInputTokens: 0,
-    cacheCreationInputTokens: 0,
-  });
+  TokenUsageStatsParsingBaseSchema.catch(emptyUsageStats());
 
 // Compile-time assertion: parsing schema output must be assignable to canonical type.
-type _AssertSchemaCompatible =
-  z.infer<typeof TokenUsageStatsParsingSchema> extends TokenUsageStats
-    ? true
-    : never;
-void (true as _AssertSchemaCompatible);
-
-// Runtime assertion: ensure all canonical keys are handled
-const canonicalKeys = TokenUsageStatsSchema.keyof().options;
-const parsingKeys = new Set(
-  Object.keys(TokenUsageStatsParsingBaseSchema.shape),
-);
-const missingKeys = canonicalKeys.filter((k) => !parsingKeys.has(k));
-if (missingKeys.length > 0) {
-  throw new Error(
-    `TokenUsageStatsParsingSchema missing keys from canonical schema: ${missingKeys.join(', ')}`,
-  );
-}
+void (null as unknown as z.infer<
+  typeof TokenUsageStatsParsingSchema
+> satisfies TokenUsageStats);
 
 /** Checks if usage stats are all zeros (effectively empty) */
 export function isEmptyUsage(usage: TokenUsageStats): boolean {
