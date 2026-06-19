@@ -64,12 +64,12 @@ export const latexTabStyles: CSSResult = css`
 
   .dependency-icon.installed,
   .setting-status-icon.is-set {
-    color: var(--wa-color-testing-passed, #73c991);
+    color: var(--color-status-ok);
   }
 
   .dependency-icon.missing,
   .setting-status-icon.not-set {
-    color: var(--wa-color-testing-failed, #f48771);
+    color: var(--color-status-error);
   }
 
   /* Using-default state for non-boolean settings (number/enum). Not a
