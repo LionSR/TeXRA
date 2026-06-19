@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 
-import deepmerge from 'deepmerge';
 import * as yaml from 'yaml';
 
 import {
@@ -16,6 +15,7 @@ import {
   type AgentSetting,
   type AgentPrompt,
 } from '@agent/core/definition/AgentDataclass';
+import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
@@ -112,12 +112,8 @@ export async function loadAgentSettingAndPrompts(
       await loadAgentSettingAndPrompts(parentResolution);
 
     // Parent provides defaults, child overrides
-    settings = deepmerge(parentSettings, config.settings, {
-      arrayMerge: (_d, s) => s,
-    });
-    prompts = deepmerge(parentPrompts, config.prompts, {
-      arrayMerge: (_d, s) => s,
-    });
+    settings = mergeInheritedAgentObject(parentSettings, config.settings);
+    prompts = mergeInheritedAgentObject(parentPrompts, config.prompts);
   }
 
   settings = ensureAgentCategoryForSource(settings, entry.source);

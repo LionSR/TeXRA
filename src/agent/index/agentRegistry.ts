@@ -12,6 +12,7 @@ import { agentKey as createKey, agentName } from '@shared/schemas/agent';
 import { getAgentDirectories } from './agentDirectoriesRegistry';
 import {
   DEFAULT_WORKFLOW_AGENT,
+  LEGACY_AGENT_ALIASES,
   LOOKUP_PRIORITY,
   PREFERRED_TOOL_USE_AGENTS,
   TOOL_USE_LOOKUP_PRIORITY,
@@ -169,6 +170,7 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
   for (const entry of allEntries) {
     if (toolUseOverrides.has(entry.name)) {
       entry.category = AgentCategory.ToolUse;
+      entry.rounds = undefined;
     }
     const key = `${entry.source}:${entry.name}`;
     cache.set(key, entry);
@@ -217,16 +219,6 @@ function migrateLegacyAgentNameKeys(): void {
     logger.info(CHANNEL, `Migrated legacy agent names in ${stateKey}`);
   }
 }
-
-/**
- * Legacy agent-name aliases — keep prior configs, histories, and delegation
- * calls working when a built-in agent is renamed. Each entry maps
- * `<old name> → <canonical name>`. Applied only when the original identifier
- * resolves to nothing, so a user-defined agent with the old name still wins.
- */
-const LEGACY_AGENT_ALIASES: Record<string, string> = {
-  chat: 'assistant',
-};
 
 /**
  * Canonical agent resolver: look up an agent by identifier.
