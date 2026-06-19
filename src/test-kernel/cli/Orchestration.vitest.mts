@@ -6,10 +6,12 @@ import {
   orchestrationBlockRowCost,
   orchestrationFooterHints,
   orchestrationKeyHints,
-  orchestrationModelAccessView,
   orchestrationWrappedLineRows,
 } from '@cli/orchestration/runOrchestrationTui';
-import { buildCliOrchestrationItems } from '@cli/runtime/orchestration';
+import {
+  buildCliOrchestrationItems,
+  orchestrationModelAccessView,
+} from '@cli/runtime/orchestration';
 
 import {
   CLI_HISTORY_RESUMABLE_STATUS,
