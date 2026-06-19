@@ -14,6 +14,7 @@
 import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
 
+import { toErrorMessage } from '@common/errors';
 import * as logUtils from '@logger/logUtils';
 
 interface EntryErrorBoundaryProps {
@@ -31,7 +32,7 @@ interface EntryErrorBoundaryState {
 export function formatRenderError(error: unknown): string {
   let message = '';
   try {
-    message = error instanceof Error ? error.message : String(error);
+    message = toErrorMessage(error);
   } catch {
     return '';
   }
