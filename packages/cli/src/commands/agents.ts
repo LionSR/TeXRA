@@ -89,16 +89,24 @@ const agentsListCommand = defineCliCommand({
   },
 });
 
+const agentDetailsArgs = {
+  ...GLOBAL_ARGS,
+  name: {
+    type: 'positional',
+    required: true,
+    description: `${AGENT_NAME_DESCRIPTION} (use \`source:name\` to disambiguate when the same name exists in multiple sources)`,
+  },
+} as const;
+
 const agentsShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one agent' },
-  args: {
-    ...GLOBAL_ARGS,
-    name: {
-      type: 'positional',
-      required: true,
-      description: `${AGENT_NAME_DESCRIPTION} (use \`source:name\` to disambiguate when the same name exists in multiple sources)`,
-    },
-  },
+  args: agentDetailsArgs,
+  run: (context, ctx) => showAgent(context, ctx.args.name),
+});
+
+const agentsInspectCommand = defineCliCommand({
+  meta: { name: 'inspect', description: 'Inspect one agent' },
+  args: agentDetailsArgs,
   run: (context, ctx) => showAgent(context, ctx.args.name),
 });
 
@@ -107,6 +115,7 @@ export const agentsCommand = defineCommand({
   subCommands: {
     list: agentsListCommand,
     show: agentsShowCommand,
+    inspect: agentsInspectCommand,
     run: agentsRunCommand,
   },
 });
