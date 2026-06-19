@@ -31,6 +31,8 @@ describe('CLI shell completion', () => {
 
     expect(bash).toContain('TEXRA_COMPLETION_DYNAMIC');
     expect(bash).toContain('texra agents list --quiet');
+    expect(bash).toContain('texra agents list --quiet --category workflow');
+    expect(bash).toContain('texra agents list --quiet --category toolUse');
     expect(bash).toContain('texra models list --quiet');
   });
 
@@ -110,7 +112,78 @@ describe('CLI shell completion', () => {
       '--model|-m) COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") ); return ;;',
     );
     expect(bash).toContain(
-      '--agent) COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") ); return ;;',
+      '--agent) COMPREPLY=( $(compgen -W "$(_texra_tool_use_agents)" -- "$cur") ); return ;;',
+    );
+  });
+
+  it('uses category-specific bash agent completions at launch boundaries', async () => {
+    const bash = await generateCompletionScript(rootCommand, 'bash');
+    const root = mkdtempSync(path.join(tmpdir(), 'texra-completion-bin-'));
+    const bin = path.join(root, 'bin');
+
+    try {
+      mkdirSync(bin);
+      writeFileSync(
+        path.join(bin, 'texra'),
+        `#!/usr/bin/env bash
+if [[ "$*" == "agents list --quiet --category workflow" ]]; then
+  printf 'workflow\\tpolish\\nworkflow\\tcorrect\\n'
+elif [[ "$*" == "agents list --quiet --category toolUse" ]]; then
+  printf 'toolUse\\treview\\ntoolUse\\tlean\\n'
+elif [[ "$*" == "agents list --quiet" ]]; then
+  printf 'workflow\\tpolish\\ntoolUse\\treview\\n'
+elif [[ "$*" == "models list --quiet" ]]; then
+  printf 'gpt54\\n'
+fi
+`,
+        { mode: 0o755 },
+      );
+      const script = `
+${bash.replace(/\ncomplete .*_texra texra\n$/, '\n')}
+export PATH=${bashQuote(bin)}:$PATH
+COMP_WORDS=(texra run p)
+COMP_CWORD=2
+_texra
+printf 'run:%s\\n' "\${COMPREPLY[@]}"
+COMP_WORDS=(texra agents run r)
+COMP_CWORD=3
+_texra
+printf 'agents-run:%s\\n' "\${COMPREPLY[@]}"
+COMP_WORDS=(texra chat --agent l)
+COMP_CWORD=3
+_texra
+printf 'agent-flag:%s\\n' "\${COMPREPLY[@]}"
+COMP_WORDS=(texra agents show p)
+COMP_CWORD=3
+_texra
+printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
+`;
+      const result = spawnSync('bash', ['-s'], {
+        input: script,
+        encoding: 'utf8',
+      });
+
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim().split('\n')).toEqual([
+        'run:polish',
+        'agents-run:review',
+        'agent-flag:lean',
+        'agents-show:polish',
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps fish workflow agent completion scoped to top-level run', async () => {
+    const fish = await generateCompletionScript(rootCommand, 'fish');
+
+    expect(fish).toContain(
+      "complete -c texra -n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from multi-agent' -a '(test \"$TEXRA_COMPLETION_DYNAMIC\" != 0; and texra agents list --quiet --category workflow",
+    );
+    expect(fish).toContain(
+      "complete -c texra -n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from run' -a '(test \"$TEXRA_COMPLETION_DYNAMIC\" != 0; and texra agents list --quiet --category toolUse",
     );
   });
 
