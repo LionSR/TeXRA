@@ -214,19 +214,28 @@ export class TierService {
       throw new Error(`tier-config request failed: HTTP ${response.status}`);
     }
 
-    const data = await response.json();
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch (error) {
+      this.logger.error(
+        CHANNEL,
+        `Failed to parse tier config JSON: ${toErrorMessage(error)}`,
+      );
+      throw error;
+    }
 
     // Parse user-specific blocks. Both are only present when the request
     // carries auth, so they resolve to null on an anonymous fetch and on parse
     // failure — a relay-side schema drift should not silently serve stale
     // values to the quota meter / BYOK switch.
     const userStatus = this.parseOptionalBlock(
-      data.userStatus,
+      (data as Record<string, unknown>).userStatus,
       UserAccessStatusSchema,
       'userStatus',
     );
     const spendingStatus = this.parseOptionalBlock(
-      data.spendingStatus,
+      (data as Record<string, unknown>).spendingStatus,
       SpendingStatusSchema,
       'spendingStatus',
     );
