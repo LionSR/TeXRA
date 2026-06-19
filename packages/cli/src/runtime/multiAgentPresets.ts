@@ -6,7 +6,7 @@ import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { agentKey } from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS,
-  AgentModePresetSchema,
+  parseAgentModePresets,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
 import { implicitDefaultToolUseAgents } from './defaultAgents';
@@ -87,7 +87,7 @@ export function formatCliMultiAgentInspectCommand(preset: string): string {
 }
 
 export function parseCliCustomAgentPresets(raw: unknown): AgentModePreset[] {
-  return AgentModePresetSchema.array().catch([]).parse(raw);
+  return parseAgentModePresets(raw);
 }
 
 export function readCliMultiAgentPresets(): CliMultiAgentPreset[] {
