@@ -13,7 +13,7 @@ import { ModelListForm } from '../forms/ModelListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
-import { cliState } from '../state/cliState';
+import { cliState, setCliSessionModelOverride } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 
 type AgentSelectHandler = (value: string) => void | Promise<void>;
@@ -27,18 +27,6 @@ type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
 type SkillSelectHandler = (value: SkillActivation) => void | Promise<void>;
 type ErrorHandler = (error: unknown) => void | Promise<void>;
 type SelectionCompletion = 'afterAction' | 'beforeAction';
-
-function patchSessionMeta<K extends 'agent' | 'model' | 'apiMode'>(
-  key: K,
-  value: K extends 'apiMode' ? CliApiMode : string,
-): void {
-  const meta = cliState.sessionMeta.get();
-  cliState.sessionMeta.set({
-    ...meta,
-    [key]: value,
-    ...(key === 'model' ? { modelSource: 'override' } : {}),
-  });
-}
 
 /** Run a form selection handler with consistent completion and error routing. */
 function runFormSelection<T>({
@@ -90,11 +78,17 @@ export function registerBuiltinSlashCommands(options?: {
   onError?: ErrorHandler;
 }): void {
   const onAgentSelect: AgentSelectHandler =
-    options?.onAgentSelect ?? ((value) => patchSessionMeta('agent', value));
+    options?.onAgentSelect ??
+    ((agent) => {
+      cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), agent });
+    });
   const onModelSelect: ModelSelectHandler =
-    options?.onModelSelect ?? ((value) => patchSessionMeta('model', value));
+    options?.onModelSelect ?? setCliSessionModelOverride;
   const onApiModeSelect: ApiModeSelectHandler =
-    options?.onApiModeSelect ?? ((value) => patchSessionMeta('apiMode', value));
+    options?.onApiModeSelect ??
+    ((apiMode) => {
+      cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), apiMode });
+    });
   const canSelectAgent = options?.canSelectAgent ?? (() => true);
   const canSelectModel = options?.canSelectModel ?? (() => true);
 
