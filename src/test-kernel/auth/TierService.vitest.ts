@@ -79,4 +79,114 @@ describe('TierService', () => {
 
     expect(service.getSpendingStatus()?.remaining).toBe(0);
   });
+
+  it('dedupes concurrent fetches for the same auth state', async () => {
+    const pending: PendingFetch[] = [];
+    const fetchMock = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit): Promise<Response> =>
+        new Promise<Response>((resolve) => {
+          pending.push({
+            hasAuth: Boolean(
+              (init?.headers as Record<string, string> | undefined)
+                ?.Authorization,
+            ),
+            resolve,
+          });
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new TierService('https://example.test');
+
+    const first = service.getConfig('token');
+    const second = service.getConfig('token');
+    // Let the synchronous fetch initiation settle before asserting.
+    await Promise.resolve();
+
+    // Both callers share a single in-flight request for the same key.
+    expect(pending).toHaveLength(1);
+
+    pending[0].resolve(jsonResponse(tierConfig()));
+
+    expect(await first).not.toBeNull();
+    expect(await second).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('prevents an in-flight auth fetch from repopulating snapshots after clearCache', async () => {
+    const pending: PendingFetch[] = [];
+    const fetchMock = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit): Promise<Response> =>
+        new Promise<Response>((resolve) => {
+          pending.push({
+            hasAuth: Boolean(
+              (init?.headers as Record<string, string> | undefined)
+                ?.Authorization,
+            ),
+            resolve,
+          });
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new TierService('https://example.test');
+
+    // Start an auth fetch that will remain in-flight.
+    const authPromise = service.getConfig('token');
+    // Let the synchronous fetch-initiation and cache-registration settle.
+    await Promise.resolve();
+
+    // Sign-out during the fetch — this must abort the signal and reset
+    // snapshots so the late-arriving response can't repopulate them.
+    service.clearCache();
+
+    // Now resolve the in-flight request with spend data.
+    pending[0].resolve(
+      jsonResponse(
+        tierConfig({
+          spendingStatus: {
+            currentSpend: 50,
+            limit: 300,
+            remaining: 250,
+            percentUsed: 16,
+          },
+        }),
+      ),
+    );
+    await authPromise;
+
+    // The response was aborted — snapshots must stay null.
+    expect(service.getSpendingStatus()).toBeNull();
+    expect(service.getConfigSync()).toBeNull();
+  });
+
+  it('clears the synchronous snapshots on clearCache', async () => {
+    const fetchMock = vi.fn(
+      (): Promise<Response> =>
+        Promise.resolve(
+          jsonResponse(
+            tierConfig({
+              spendingStatus: {
+                currentSpend: 100,
+                limit: 300,
+                remaining: 200,
+                percentUsed: 33,
+              },
+            }),
+          ),
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new TierService('https://example.test');
+
+    await service.getConfig('token');
+    expect(service.getConfigSync()).not.toBeNull();
+    expect(service.getSpendingStatus()?.remaining).toBe(200);
+
+    service.clearCache();
+
+    expect(service.getConfigSync()).toBeNull();
+    expect(service.getSpendingStatus()).toBeNull();
+  });
 });
