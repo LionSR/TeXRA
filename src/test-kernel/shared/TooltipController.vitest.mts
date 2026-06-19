@@ -53,7 +53,7 @@ describe('toolbar tooltip controller', () => {
     installDom();
 
     const { installToolbarTooltips } =
-      await import('@shared/controllers/TooltipController');
+      await import('@shared/litControllers/TooltipController');
     installToolbarTooltips();
 
     const button = document.createElement('wa-button');
