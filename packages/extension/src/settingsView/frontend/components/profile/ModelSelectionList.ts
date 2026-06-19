@@ -3,7 +3,6 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -314,14 +313,11 @@ export class ModelSelectionList extends LitElement {
             class="provider-group-toggle"
             @click=${() => this.toggleProvider(group.provider)}
           >
-            <wa-icon
-              library="texra"
-              name="chevron-right"
-              class=${classMap({
-                'provider-group-chevron': true,
-                expanded: isExpanded,
-              })}
-            ></wa-icon>
+            ${waIcon('chevron-right', {
+              className: isExpanded
+                ? 'provider-group-chevron expanded'
+                : 'provider-group-chevron',
+            })}
             <span class="provider-group-name">${group.displayName}</span>
             <span class="provider-group-count">
               ${enabledCount}/${totalCount} enabled
@@ -353,14 +349,11 @@ export class ModelSelectionList extends LitElement {
         size="small"
         @click=${() => this.toggleDeprecated(group.provider)}
       >
-        <wa-icon
-          library="texra"
-          name="chevron-right"
-          class=${classMap({
-            'provider-group-chevron': true,
-            expanded: isOpen,
-          })}
-        ></wa-icon>
+        ${waIcon('chevron-right', {
+          className: isOpen
+            ? 'provider-group-chevron expanded'
+            : 'provider-group-chevron',
+        })}
         ${group.deprecated.length} deprecated
       </wa-button>
       ${isOpen
