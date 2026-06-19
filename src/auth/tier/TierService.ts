@@ -13,6 +13,8 @@
  * - Ultra: All models above $3/M input
  */
 
+import { LRUCache } from 'lru-cache';
+
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   SpendingStatusSchema,
@@ -35,21 +37,46 @@ import type { z } from 'zod';
 
 const CHANNEL = 'TierService';
 
+/** Cache slot key — auth and anonymous responses never share a slot. */
+type TierCacheKey = 'auth' | 'anon';
+
+/** Per-fetch context threaded through {@link LRUCache.fetch} to fetchMethod. */
+interface TierFetchContext {
+  authToken: string | undefined;
+}
+
+/** Result of a single relay `/tier-config` response. */
+interface TierFetchResult {
+  config: TierModelConfig | null;
+  userStatus: UserAccessStatus | null;
+  spendingStatus: SpendingStatus | null;
+}
+
 /**
  * Service for managing tier-based model access configuration.
  */
 export class TierService {
-  private cache: TierModelConfig | null = null;
-  private cacheTimestamp = 0;
-  private fetchPromise: Promise<TierModelConfig | null> | null = null;
-  private fetchGeneration = 0;
   /**
-   * True when the latest cached fetch carried an Authorization header.
-   * A later authenticated call must refresh the cache so userStatus and
-   * spendingStatus are populated; otherwise the 5-min TTL would serve
-   * stale `null`s until expiry.
+   * Dedupes concurrent `/tier-config` fetches and gates them on the 5-min TTL.
+   *
+   * Keyed by auth state so an anonymous fetch and an authenticated fetch never
+   * share a slot: a late anonymous response can't clobber the authenticated
+   * spend snapshot (this is structural, not timing-dependent — it replaces the
+   * former `fetchGeneration` guard). Clearing the cache aborts any in-flight
+   * fetch via its `AbortSignal`, so a response that lands after sign-out can't
+   * repopulate the snapshots below.
    */
-  private cachedWithAuth = false;
+  private readonly configCache: LRUCache<
+    TierCacheKey,
+    TierModelConfig,
+    TierFetchContext
+  >;
+
+  /**
+   * Last successfully fetched config, backing the synchronous accessors.
+   * Persists past the cache TTL until the next fetch or {@link clearCache}.
+   */
+  private configSnapshot: TierModelConfig | null = null;
 
   /** User's access status including expiration (populated when fetching with auth) */
   private userStatus: UserAccessStatus | null = null;
@@ -64,32 +91,51 @@ export class TierService {
   constructor(
     private readonly baseUrl: string,
     private readonly logger: AuthServiceLogger = NOOP_AUTH_SERVICE_LOGGER,
-  ) {}
+  ) {
+    this.configCache = new LRUCache<
+      TierCacheKey,
+      TierModelConfig,
+      TierFetchContext
+    >({
+      max: 2,
+      ttl: SERVER_SIDE_CACHE_TTL_MS,
+      fetchMethod: async (key, _staleValue, { signal, context }) => {
+        const result = await this.fetchFromServer(context.authToken, signal);
+        // A sign-out (clearCache) during the fetch aborts the signal; never let
+        // a stale response repopulate the snapshots after invalidation.
+        if (signal.aborted) {
+          throw new Error('tier-config fetch aborted');
+        }
+        // An authenticated response carries the user blocks even when the tiers
+        // block fails validation; mirror the previous behaviour of refreshing
+        // the quota snapshot whenever auth was present. Anonymous responses
+        // never touch these — that is what protects an authenticated snapshot.
+        if (key === 'auth') {
+          this.userStatus = result.userStatus;
+          this.spendingStatus = result.spendingStatus;
+        }
+        if (result.config === null) {
+          // Throw so lru-cache drops the entry and the next call retries,
+          // matching the previous "reset timestamp on failure" behaviour
+          // (no negative caching of a missing/invalid config).
+          throw new Error('tier-config response had no usable config');
+        }
+        this.configSnapshot = result.config;
+        return result.config;
+      },
+    });
+  }
 
   /**
    * Clear the tier config cache.
    * Call this when user signs in/out.
    */
   clearCache(): void {
-    this.cache = null;
-    this.cacheTimestamp = 0;
-    this.fetchPromise = null;
-    this.fetchGeneration += 1;
+    // clear() aborts any in-flight fetch (see fetchMethod's signal guard).
+    this.configCache.clear();
+    this.configSnapshot = null;
     this.userStatus = null;
     this.spendingStatus = null;
-    this.cachedWithAuth = false;
-  }
-
-  /**
-   * Check if a fetch is in progress or cache is valid (not expired).
-   * Does NOT require cache data to be present - checking fetchPromise !== null
-   * with valid timestamp is enough to avoid duplicate fetches.
-   */
-  private isCacheValid(): boolean {
-    return (
-      this.fetchPromise !== null &&
-      Date.now() - this.cacheTimestamp < SERVER_SIDE_CACHE_TTL_MS
-    );
   }
 
   /**
@@ -114,79 +160,87 @@ export class TierService {
 
   /**
    * Fetch tier configuration from the relay server.
+   *
+   * Pure with respect to instance state — the caller (fetchMethod) owns the
+   * snapshot updates so invalidation stays in one place. Throws on a transport
+   * failure (network error, non-OK, 404) so the cache drops the entry and the
+   * next call retries; returns a result with `config: null` when a real 200
+   * response failed config validation but may still carry the user blocks.
+   *
    * @param authToken - Optional JWT token to include user access status in response
+   * @param signal - Abort signal from the cache; cancels the in-flight request
    */
   private async fetchFromServer(
     authToken: string | undefined,
-    generation: number,
-  ): Promise<TierModelConfig | null> {
+    signal: AbortSignal,
+  ): Promise<TierFetchResult> {
+    const url = `${this.baseUrl}/functions/v1/relay/tier-config`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Include auth token if provided to get user-specific status
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    let response: Response;
     try {
-      const url = `${this.baseUrl}/functions/v1/relay/tier-config`;
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      // Include auth token if provided to get user-specific status
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
+      response = await fetch(url, { method: 'GET', headers, signal });
+    } catch (error) {
+      // A sign-out (clearCache) aborts the request; that is expected, so stay
+      // quiet. Genuine network failures keep the previous error log.
+      if (!signal.aborted) {
+        this.logger.error(
+          CHANNEL,
+          `Error fetching tier config: ${toErrorMessage(error)}`,
+        );
       }
+      throw error;
+    }
 
-      const response = await fetch(url, { method: 'GET', headers });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          this.logger.info(
-            CHANNEL,
-            'Tier-config endpoint not available, using defaults',
-          );
-          return null;
-        }
+    if (!response.ok) {
+      if (response.status === 404) {
+        this.logger.info(
+          CHANNEL,
+          'Tier-config endpoint not available, using defaults',
+        );
+      } else {
         this.logger.error(
           CHANNEL,
           `Failed to fetch tier config: ${response.status}`,
         );
-        return null;
       }
+      throw new Error(`tier-config request failed: HTTP ${response.status}`);
+    }
 
-      const data = await response.json();
+    const data = await response.json();
 
-      // Parse user-specific blocks. Both are only present when the
-      // request carries auth, so clear them on absence (anonymous fetch)
-      // and on parse failure — a relay-side schema drift should not
-      // silently serve stale values to the quota meter / BYOK switch.
-      const userStatus = this.parseOptionalBlock(
-        data.userStatus,
-        UserAccessStatusSchema,
-        'userStatus',
-      );
-      const spendingStatus = this.parseOptionalBlock(
-        data.spendingStatus,
-        SpendingStatusSchema,
-        'spendingStatus',
-      );
-      if (generation === this.fetchGeneration) {
-        this.userStatus = userStatus;
-        this.spendingStatus = spendingStatus;
-      }
+    // Parse user-specific blocks. Both are only present when the request
+    // carries auth, so they resolve to null on an anonymous fetch and on parse
+    // failure — a relay-side schema drift should not silently serve stale
+    // values to the quota meter / BYOK switch.
+    const userStatus = this.parseOptionalBlock(
+      data.userStatus,
+      UserAccessStatusSchema,
+      'userStatus',
+    );
+    const spendingStatus = this.parseOptionalBlock(
+      data.spendingStatus,
+      SpendingStatusSchema,
+      'spendingStatus',
+    );
 
-      const parsed = TierModelConfigSchema.safeParse(data);
-
-      if (!parsed.success) {
-        this.logger.error(
-          CHANNEL,
-          `Invalid tier config response: ${parsed.error.message}`,
-        );
-        return null;
-      }
-
-      return parsed.data;
-    } catch (error) {
+    const parsed = TierModelConfigSchema.safeParse(data);
+    if (!parsed.success) {
       this.logger.error(
         CHANNEL,
-        `Error fetching tier config: ${toErrorMessage(error)}`,
+        `Invalid tier config response: ${parsed.error.message}`,
       );
-      return null;
+      return { config: null, userStatus, spendingStatus };
     }
+
+    return { config: parsed.data, userStatus, spendingStatus };
   }
 
   /**
@@ -195,37 +249,21 @@ export class TierService {
    * @param authToken - Optional JWT to get user-specific access status
    */
   async getConfig(authToken?: string): Promise<TierModelConfig | null> {
-    // Reuse an in-flight or fresh cache only when it matches the
-    // current auth state. A previous anonymous fetch leaves
-    // userStatus/spendingStatus as null; reusing it here would mask
-    // the user's quota for 5 minutes after sign-in.
-    const tokenPresent = Boolean(authToken);
-    if (this.isCacheValid() && this.cachedWithAuth === tokenPresent) {
-      return this.fetchPromise;
+    const key: TierCacheKey = authToken ? 'auth' : 'anon';
+    try {
+      // lru-cache dedupes concurrent fetches for the same key and serves a
+      // cached value within the TTL; fetchMethod owns the snapshot updates.
+      const config = await this.configCache.fetch(key, {
+        context: { authToken },
+      });
+      return config ?? null;
+    } catch {
+      // fetchMethod throws on transport failure, a missing/invalid config, or a
+      // post-sign-out abort; lru-cache drops the rejected entry so the next
+      // call retries. fetchFromServer has already logged any genuine failure;
+      // a missing config or sign-out abort is expected and stays quiet.
+      return null;
     }
-
-    // Set timestamp BEFORE creating promise to prevent race conditions
-    // where concurrent calls see fetchPromise !== null but timestamp is stale
-    this.cacheTimestamp = Date.now();
-    this.cachedWithAuth = tokenPresent;
-    const generation = ++this.fetchGeneration;
-    this.fetchPromise = this.fetchFromServer(authToken, generation).then(
-      (result) => {
-        if (generation !== this.fetchGeneration) {
-          return this.cache;
-        }
-        if (result !== null) {
-          this.cache = result;
-        } else {
-          // Reset timestamp on failure so next call retries
-          this.cacheTimestamp = 0;
-          this.cachedWithAuth = false;
-        }
-        return result;
-      },
-    );
-
-    return this.fetchPromise;
   }
 
   /**
@@ -233,7 +271,7 @@ export class TierService {
    * Returns null if config hasn't been fetched yet.
    */
   getConfigSync(): TierModelConfig | null {
-    return this.cache;
+    return this.configSnapshot;
   }
 
   /**
@@ -244,7 +282,7 @@ export class TierService {
     tier: UserTier,
     config?: TierModelConfig | null,
   ): TierModelsConfig | null {
-    return (config ?? this.cache)?.tiers[tier] ?? null;
+    return (config ?? this.configSnapshot)?.tiers[tier] ?? null;
   }
 
   /**
@@ -270,7 +308,7 @@ export class TierService {
    * All tiers have access to the same providers.
    */
   getProviders(config?: TierModelConfig | null): string[] {
-    return (config ?? this.cache)?.providers ?? [];
+    return (config ?? this.configSnapshot)?.providers ?? [];
   }
 
   /**
