@@ -35,8 +35,9 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
         : 'true';
       const positionalSpecs: Record<string, string> = {
         completion: `1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`,
-        run: `1:agent:($(_texra_agents))`,
+        run: `1:agent:($(_texra_workflow_agents))`,
         'agents show': `1:agent:($(_texra_agents))`,
+        'agents run': `1:agent:($(_texra_tool_use_agents))`,
         'models show': `1:model:($(_texra_models))`,
       };
       const positionalSpec = positionalSpecs[key];
@@ -59,6 +60,16 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
 _texra_agents() {
   [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
   texra agents list --quiet 2>/dev/null | awk '{print $2}'
+}
+
+_texra_workflow_agents() {
+  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
+  texra agents list --quiet --category workflow 2>/dev/null | awk '{print $2}'
+}
+
+_texra_tool_use_agents() {
+  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
+  texra agents list --quiet --category toolUse 2>/dev/null | awk '{print $2}'
 }
 
 _texra_models() {

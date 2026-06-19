@@ -55,7 +55,7 @@ function fixedFlagValueCases(commands: readonly CompletionCommand[]): string {
 
 const DYNAMIC_VALUE_FLAG_CASES = [
   { tokens: ['--model', '-m'], source: '_texra_models' },
-  { tokens: ['--agent'], source: '_texra_agents' },
+  { tokens: ['--agent'], source: '_texra_tool_use_agents' },
 ] as const;
 
 function dynamicFlagValueCases(): string {
@@ -137,6 +137,16 @@ _texra_agents() {
   texra agents list --quiet 2>/dev/null | awk '{print $2}'
 }
 
+_texra_workflow_agents() {
+  _texra_completion_dynamic || return 0
+  texra agents list --quiet --category workflow 2>/dev/null | awk '{print $2}'
+}
+
+_texra_tool_use_agents() {
+  _texra_completion_dynamic || return 0
+  texra agents list --quiet --category toolUse 2>/dev/null | awk '{print $2}'
+}
+
 _texra_models() {
   _texra_completion_dynamic || return 0
   texra models list --quiet 2>/dev/null | awk '{print $1}'
@@ -198,7 +208,12 @@ _texra() {
   esac
 
   if [[ "$path" == 'run' && "$cur" != -* ]]; then
-    COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") )
+    COMPREPLY=( $(compgen -W "$(_texra_workflow_agents)" -- "$cur") )
+    return
+  fi
+
+  if [[ "$path" == 'agents run' && "$cur" != -* ]]; then
+    COMPREPLY=( $(compgen -W "$(_texra_tool_use_agents)" -- "$cur") )
     return
   fi
 
