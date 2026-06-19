@@ -18,12 +18,7 @@
 
 import { z } from 'zod';
 
-import {
-  CompileFailureSchema,
-  OutputFileInfoSchema,
-  type CompileFailure,
-  type OutputFileInfo,
-} from './output';
+import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import {
   TokenUsageStatsSchema,
   emptyUsageStats,
@@ -175,6 +170,33 @@ function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
   return map;
 }
 
+/**
+ * Builds a schema that parses a flat round-keyed record
+ * (`{ "1": items[], … }`) into `Map<number, items[]>`: keys are coerced to
+ * integers, empty/malformed rounds are dropped, and a malformed top-level
+ * value falls back to an empty map. Callers pre-flatten legacy nested records
+ * (`{ runId: { round: items[] } }`, see `flattenLegacyRuns`) before parsing —
+ * the schema itself does not fall back to insertion order.
+ *
+ * The single cast here replaces the per-schema casts that the
+ * `.transform(recordToRoundMap)` → `.catch(…)` pipeline would otherwise
+ * require at each call site.
+ *
+ * The fallback uses a `() => new Map()` factory rather than a literal
+ * `new Map()`: Zod stores a literal catch value once and returns that same
+ * instance on every failure, and consumers (e.g. `StreamSnapshotStore`) hold
+ * the parsed map by reference and mutate it via `.set()`, so a shared instance
+ * would leak rounds across streams whose sidecar JSON is malformed.
+ */
+function roundMapSchema<T>(
+  itemList: z.ZodType<T[]>,
+): z.ZodType<Map<number, T[]>> {
+  return z
+    .record(z.string(), itemList)
+    .transform(recordToRoundMap)
+    .catch(() => new Map()) as z.ZodType<Map<number, T[]>>;
+}
+
 function warnDroppedItem(
   kind: string,
   error: { issues: readonly { path: PropertyKey[]; message: string }[] },
@@ -187,7 +209,8 @@ function warnDroppedItem(
 }
 
 // ============================================================================
-// Output files: { round: OutputFileInfo[] }
+// Output files: { round: OutputFileInfo[] } (caller pre-flattens legacy input,
+// threading the activeRunId hint in via flattenLegacyRuns).
 // ============================================================================
 
 const OutputFileListSchema = z
@@ -202,35 +225,23 @@ const OutputFileListSchema = z
   )
   .catch([]);
 
-/**
- * Parses a flat round-keyed record to `Map<number, OutputFileInfo[]>`.
- * Legacy nested records (`{ runId: { round: items[] } }`) must be
- * pre-flattened by the caller (see `flattenLegacyRuns`) so the
- * activeRunId hint can be threaded in — the schema itself does not fall
- * back to insertion order.
- */
-export const OutputFilesDataSchema = z
-  .record(z.string(), OutputFileListSchema)
-  .transform(recordToRoundMap)
-  .catch(new Map()) as z.ZodType<Map<number, OutputFileInfo[]>>;
+export const OutputFilesDataSchema = roundMapSchema(OutputFileListSchema);
 
 // ============================================================================
 // Missing outputs: { round: string[] } (caller pre-flattens legacy input).
 // ============================================================================
 
-export const MissingOutputsDataSchema = z
-  .record(z.string(), z.array(z.string()).catch([]))
-  .transform(recordToRoundMap)
-  .catch(new Map()) as z.ZodType<Map<number, string[]>>;
+export const MissingOutputsDataSchema = roundMapSchema(
+  z.array(z.string()).catch([]),
+);
 
 // ============================================================================
 // Compile failures: { round: CompileFailure[] } (caller pre-flattens legacy input).
 // ============================================================================
 
-export const CompileFailuresDataSchema = z
-  .record(z.string(), z.array(CompileFailureSchema).catch([]))
-  .transform(recordToRoundMap)
-  .catch(new Map()) as z.ZodType<Map<number, CompileFailure[]>>;
+export const CompileFailuresDataSchema = roundMapSchema(
+  z.array(CompileFailureSchema).catch([]),
+);
 
 // ============================================================================
 // Usage stats — per-run map kept (tool-use can resume → multiple runs).
@@ -294,4 +305,9 @@ export const UsageDataSchema = z
     }
     return map;
   })
-  .catch(new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
+  // `() => new Map()` (not a literal) for the same reason as `roundMapSchema`:
+  // a fresh fallback per failed parse. The current consumer copies this map
+  // (StreamSnapshotStore.applyStreamData) so a shared instance is safe today,
+  // but the factory keeps the file consistent and guards a future by-reference
+  // reader from leaking usage across streams with malformed sidecar JSON.
+  .catch(() => new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
