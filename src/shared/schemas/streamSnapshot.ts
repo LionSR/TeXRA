@@ -26,14 +26,13 @@ import { z } from 'zod';
 
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 import { OutputFileInfoSchema, CompileFailureSchema } from './output';
-import { PlanSchema } from './plan';
 import { StreamStatusSchema } from './stream';
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
 } from './streamState';
-import { TodoItemSchema } from './todo';
 import { TokenUsageStatsSchema } from './usage';
+import { WorkPlanSnapshotShape } from './workPlan';
 
 /**
  * Bump when the persisted shape changes. A reader enforces this as a
@@ -76,9 +75,9 @@ export const PersistedWorkPlanSchema = z.object({
   schemaVersion: z
     .literal(STREAM_SNAPSHOT_SCHEMA_VERSION)
     .catch(STREAM_SNAPSHOT_SCHEMA_VERSION),
-  todos: z.array(TodoItemSchema).catch([]),
-  plan: PlanSchema.nullable().catch(null),
-  planSummary: z.string().nullable().catch(null),
+  todos: WorkPlanSnapshotShape.todos.catch([]),
+  plan: WorkPlanSnapshotShape.plan.catch(null),
+  planSummary: WorkPlanSnapshotShape.planSummary.catch(null),
 });
 
 // ============================================================================
@@ -92,9 +91,9 @@ export const StreamSnapshotSchema = z.object({
   streamId: StreamTabIdSchema,
 
   // -- Durable display state (persisted in field-scoped files) --------------
-  todos: z.array(TodoItemSchema).prefault([]),
-  plan: PlanSchema.nullable().prefault(null),
-  planSummary: z.string().nullable().prefault(null),
+  todos: WorkPlanSnapshotShape.todos.prefault([]),
+  plan: WorkPlanSnapshotShape.plan.prefault(null),
+  planSummary: WorkPlanSnapshotShape.planSummary.prefault(null),
   outputFilesByRound: OutputFilesByRoundSchema,
   missingOutputsByRound: MissingOutputsByRoundSchema,
   compileFailuresByRound: CompileFailuresByRoundSchema,
