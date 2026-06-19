@@ -19,7 +19,6 @@ import {
   formatCliMultiAgentPresetRunWarnings,
   planCliMultiAgentPresets,
   planCliMultiAgentPresetRun,
-  parseCliCustomAgentPresets,
 } from '@cli/runtime/multiAgentPresets';
 
 function agent(
@@ -490,7 +489,7 @@ describe('CLI multi-agent presets', () => {
     ]);
   });
 
-  it('parses valid custom team presets and ignores invalid state', () => {
+  it('loads valid custom team presets and ignores invalid state', () => {
     const valid = [
       {
         id: 'custom-paper',
@@ -501,21 +500,25 @@ describe('CLI multi-agent presets', () => {
         toolUseAgents: ['review'],
       },
     ];
+    const customPresets = (raw: unknown) =>
+      cliMultiAgentPresets(raw).filter((preset) => preset.source === 'custom');
 
-    expect(parseCliCustomAgentPresets(valid)).toEqual([
+    expect(customPresets(valid)).toEqual([
       {
         ...valid[0],
         icon: 'bookmark',
+        source: 'custom',
       },
     ]);
-    expect(parseCliCustomAgentPresets([{ id: 'broken' }, ...valid])).toEqual([
+    expect(customPresets([{ id: 'broken' }, ...valid])).toEqual([
       {
         ...valid[0],
         icon: 'bookmark',
+        source: 'custom',
       },
     ]);
     expect(
-      parseCliCustomAgentPresets([
+      customPresets([
         ...valid,
         {
           id: 'custom-broken-icon',
@@ -530,9 +533,10 @@ describe('CLI multi-agent presets', () => {
       {
         ...valid[0],
         icon: 'bookmark',
+        source: 'custom',
       },
     ]);
-    expect(parseCliCustomAgentPresets([{ id: 'broken' }])).toEqual([]);
+    expect(customPresets([{ id: 'broken' }])).toEqual([]);
   });
 
   it('finds presets by id, name, or slugified name', () => {
