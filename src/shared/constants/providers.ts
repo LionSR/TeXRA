@@ -138,6 +138,14 @@ export const PROVIDER_URLS: Record<string, string> = {
 export const DEFAULT_HELPER_MODEL = 'deepseek';
 
 /**
+ * Default model used when a new agent run / proposal omits one. Single source of
+ * truth shared by the agent config schema (`@agent/core/definition/AgentConfig`),
+ * the main-view persisted state, and the progress-view proposal reconstruction —
+ * so a change here propagates to all three instead of drifting per call site.
+ */
+export const DEFAULT_AGENT_MODEL = 'gemini35f';
+
+/**
  * Zod schema for a VS Code boolean setting surfaced per provider (without runtime value).
  * This is the single source of truth — ProviderVscodeSettingSchema in
  * profileViewMessages.ts extends this with a `value` field for runtime state.

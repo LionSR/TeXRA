@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import {
   NullableFileFieldsSchema,
   migrateLegacyContextFileFields,
@@ -8,7 +9,9 @@ import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 import { AgentCategory } from './AgentDataclass';
 
 const DEFAULT_AGENT_NAME = 'correct';
-export const DEFAULT_AGENT_MODEL = 'gemini35f';
+// Re-exported from the shared constants source so existing `@agent` importers
+// keep their import path while the literal lives in one place.
+export { DEFAULT_AGENT_MODEL };
 const DEFAULT_AGENT_INSTRUCTION = '';
 
 /** Pure object schema without refinements for use with .partial(). */

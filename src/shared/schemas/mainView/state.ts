@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import {
   UIFileFieldsSchema,
   migrateLegacyContextFileFields,
@@ -120,7 +121,7 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   sessionType: SessionTypeSchema.prefault('toolUse'),
   workflowAgent: z.string().prefault('correct'),
   toolUseAgent: z.string().prefault('orchestrator'),
-  model: z.string().prefault('gemini35f'),
+  model: z.string().prefault(DEFAULT_AGENT_MODEL),
   commit: z.string().prefault('HEAD'),
   instruction: z.string().prefault(''),
   workflowInstruction: z.string().prefault(''),
