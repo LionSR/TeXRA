@@ -4,97 +4,18 @@
  * Stores typed proposal payloads by ID so they can be retrieved when the user
  * clicks the "Setup" link on a completed proposal log entry.
  *
- * Uses content-based hashing (like copyContentStore) so re-rendering the
- * same message produces the same ID — no memory leak on stream switches.
+ * Parsing the raw tool input into a typed proposal is domain logic and lives in
+ * the schema layer (`parseDelegationToolInput`); this module is a thin registry
+ * over it. Uses content-based hashing (like copyContentStore) so re-rendering
+ * the same message produces the same ID — no memory leak on stream switches.
  */
 
-import { z } from 'zod';
-
-import {
-  AgentCategory,
-  ToolConfigSchema,
-  ToolUseAgentProposalSchema,
-  WorkflowAgentProposalSchema,
-  migrateLegacyContextFileFields,
-  type AgentProposal,
-} from '@shared/schemas';
-import { isObject } from '@utils/core';
+import { parseDelegationToolInput, type AgentProposal } from '@shared/schemas';
 
 import { hashString } from './hashUtils';
 
-/**
- * Lenient proposal schemas derived from the canonical shared schemas.
- * Add `.prefault()` defaults for fields the LLM may omit in tool input.
- */
-const LenientToolUseProposalSchema = ToolUseAgentProposalSchema.extend({
-  model: z.string().prefault('gemini35f'),
-});
-
-const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
-  model: z.string().prefault('gemini35f'),
-  inputFiles: z.array(z.string()).prefault([]),
-  contextFiles: z.array(z.string()).prefault([]),
-  mediaFiles: z.array(z.string()).prefault([]),
-  outputFiles: z.array(z.string()).prefault([]),
-  toolConfig: ToolConfigSchema,
-});
-
 const MAX_STORE_SIZE = 500;
 const proposalInputStore = new Map<string, AgentProposal>();
-
-function parseProposalInput(
-  input: unknown,
-  toolName: string,
-): AgentProposal | null {
-  const spread = isObject(input) ? input : {};
-
-  if (toolName === 'delegate_agent' || toolName === 'propose_agent') {
-    const result = LenientToolUseProposalSchema.safeParse({
-      agentCategory: AgentCategory.ToolUse,
-      ...spread,
-    });
-    return result.success ? result.data : null;
-  }
-
-  if (toolName === 'delegate_workflow' || toolName === 'propose_workflow') {
-    const migrated = migrateLegacyContextFileFields(spread) as Record<
-      string,
-      unknown
-    >;
-    // Map extraction shorthand flags into toolConfig.
-    // Note: at runtime, DelegationTools.execute also inherits flags from the
-    // parent agent's toolConfig when omitted. That inheritance can't be
-    // replicated here (no access to parent context), so the store reflects
-    // only what the LLM explicitly requested.
-    const extractFigures =
-      migrated.extractFigures != null
-        ? Boolean(migrated.extractFigures)
-        : undefined;
-    const extractTikz =
-      migrated.extractTikz != null ? Boolean(migrated.extractTikz) : undefined;
-    const existingToolConfig = isObject(migrated.toolConfig)
-      ? migrated.toolConfig
-      : {};
-    const toolConfig = {
-      ...existingToolConfig,
-      ...(extractFigures !== undefined && {
-        autoExtractFigure: extractFigures,
-      }),
-      ...(extractTikz !== undefined && {
-        autoExtractTikzFigure: extractTikz,
-      }),
-    };
-
-    const result = LenientWorkflowProposalSchema.safeParse({
-      agentCategory: AgentCategory.Workflow,
-      ...migrated,
-      toolConfig,
-    });
-    return result.success ? result.data : null;
-  }
-
-  return null;
-}
 
 /**
  * Register proposal input and return a stable ID for lookup.
@@ -103,7 +24,7 @@ export function registerProposalInput(
   input: unknown,
   toolName: string,
 ): string | null {
-  const proposal = parseProposalInput(input, toolName);
+  const proposal = parseDelegationToolInput(input, toolName);
   if (!proposal) return null;
 
   const serialized = JSON.stringify(proposal);
