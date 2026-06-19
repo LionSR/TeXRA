@@ -298,11 +298,7 @@ export class MultiAgentTab extends LitElement {
         title="Apply ${preset.name} team"
       >
         <div class="preset-card-header">
-          <wa-icon
-            library="texra"
-            name=${preset.icon.replace('codicon-', '')}
-            class="preset-card-icon"
-          ></wa-icon>
+          ${waIcon(preset.icon, { className: 'preset-card-icon' })}
           <span class="preset-card-name">${preset.name}</span>
           ${isActive
             ? html`<wa-tag
