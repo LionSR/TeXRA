@@ -14,12 +14,10 @@ import {
   type ContextManagementData,
   type LogMessageData,
 } from '@shared/schemas';
+import { formatCompactTokenCount } from '@utils/core';
 
 // Local imports - Lit template utilities
 import { html, type FormatResult } from '../litTemplates';
-
-// Local imports - formatter helpers
-import { formatTokens } from '../timestampUtils';
 
 // Local imports - component types
 
@@ -94,7 +92,7 @@ function buildContextManagementItems(data: ContextManagementData): {
     items.push({
       icon: 'arrow-down',
       label: 'Max tokens reduced',
-      value: `${formatTokens(data.originalMaxTokens)} → ${formatTokens(data.reducedMaxTokens)}`,
+      value: `${formatCompactTokenCount(data.originalMaxTokens)} → ${formatCompactTokenCount(data.reducedMaxTokens)}`,
     });
   }
 
@@ -105,7 +103,7 @@ function buildContextManagementItems(data: ContextManagementData): {
       items.push({
         icon: 'dash',
         label: 'Tokens freed',
-        value: formatTokens(tokensFreed),
+        value: formatCompactTokenCount(tokensFreed),
       });
     }
   }
@@ -124,7 +122,7 @@ function buildContextManagementItems(data: ContextManagementData): {
   items.push({
     icon: 'window',
     label: 'Context window',
-    value: formatTokens(data.contextWindow),
+    value: formatCompactTokenCount(data.contextWindow),
   });
 
   if (data.details) {

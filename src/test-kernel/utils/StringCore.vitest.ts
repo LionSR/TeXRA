@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatCompactDuration } from '@utils/core/stringCore';
+import {
+  formatCompactDuration,
+  formatCompactTokenCount,
+} from '@utils/core/stringCore';
 
 describe('formatCompactDuration', () => {
   it.each([
@@ -16,5 +19,21 @@ describe('formatCompactDuration', () => {
     [90_000_000, '1d 1h'],
   ])('renders %i ms as %s', (ms, label) => {
     expect(formatCompactDuration(ms)).toBe(label);
+  });
+});
+
+describe('formatCompactTokenCount', () => {
+  it.each([
+    [0, '0'],
+    [999, '999'],
+    [4096, '4096'],
+    [4097, '4k'],
+    [999_499, '999k'],
+    [999_500, '1.0M'],
+    [999_999, '1.0M'],
+    [1_000_000, '1.0M'],
+    [1_250_000, '1.3M'],
+  ])('renders %i tokens as %s', (tokens, label) => {
+    expect(formatCompactTokenCount(tokens)).toBe(label);
   });
 });
