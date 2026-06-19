@@ -122,14 +122,14 @@ export class ToolsTab extends LitElement {
 
       .tools-health-ring__available {
         fill: none;
-        stroke: var(--wa-color-testing-passed, #73c991);
+        stroke: var(--color-status-ok);
         stroke-width: 4;
         stroke-linecap: round;
       }
 
       .tools-health-ring__missing {
         fill: none;
-        stroke: var(--wa-color-testing-failed, #f48771);
+        stroke: var(--color-status-error);
         stroke-width: 4;
         stroke-linecap: round;
       }
@@ -151,11 +151,11 @@ export class ToolsTab extends LitElement {
       }
 
       .tools-stat-available {
-        color: var(--wa-color-testing-passed, #73c991);
+        color: var(--color-status-ok);
       }
 
       .tools-stat-missing {
-        color: var(--wa-color-testing-failed, #f48771);
+        color: var(--color-status-error);
       }
 
       .category-section {
