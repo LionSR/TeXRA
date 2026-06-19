@@ -45,7 +45,7 @@ export const markdownStyles = css`
   }
 
   .markdown-content :is(h1, h2, h3, h4) {
-    color: var(--wa-color-text-link, #3794ff);
+    color: var(--color-text-link);
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
     line-height: var(--line-height-heading);
