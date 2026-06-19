@@ -239,8 +239,8 @@ export class ServerSideKeyService {
       this.clearAllCaches(cacheOptions);
       // No pre-fetch on enable — the next canUseServerSideKeys() does
       // its own auth'd fetch in parallel with fetchAccessStatus(), and
-      // an anonymous pre-fetch here would just be discarded by the
-      // cachedWithAuth mismatch in TierService.getConfig.
+      // an anonymous pre-fetch here would populate the 'anon' cache slot
+      // rather than the 'auth' slot needed for the access check.
       this._onDidChangeModelAccess.fire(value);
     }
   }
