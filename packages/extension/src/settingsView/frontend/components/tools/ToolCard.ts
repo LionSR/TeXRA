@@ -78,7 +78,7 @@ export class ToolCard extends LitElement {
         width: 18px;
         height: 18px;
         flex: 0 0 18px;
-        color: var(--wa-color-testing-passed, #73c991);
+        color: var(--color-status-ok);
       }
 
       .tool-status-icon wa-icon {
@@ -135,12 +135,8 @@ export class ToolCard extends LitElement {
         border-radius: var(--border-radius);
         white-space: nowrap;
         font-weight: var(--font-weight-medium);
-        color: var(--wa-color-chart-blue, #3794ff);
-        background: color-mix(
-          in srgb,
-          var(--wa-color-chart-blue, #3794ff) 12%,
-          transparent
-        );
+        color: var(--color-info);
+        background: color-mix(in srgb, var(--color-info) 12%, transparent);
       }
 
       .tool-toggle {
