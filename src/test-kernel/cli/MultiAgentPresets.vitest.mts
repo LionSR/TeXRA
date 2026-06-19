@@ -3,20 +3,19 @@ import { describe, expect, it } from 'vitest';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
+  cliMultiAgentPresetAvailability,
   cliMultiAgentPlanHasGaps,
   cliMultiAgentPresetCanLaunchTeam,
   cliMultiAgentPresetListRecord,
   cliMultiAgentPresetNdjsonRecords,
   cliMultiAgentPresets,
   findCliMultiAgentPreset,
-  formatCliMultiAgentInspectCommand,
   formatCliMultiAgentTeamLaunchBlockMessage,
-  formatCliMultiAgentPresetLauncherHints,
-  formatCliMultiAgentPresetLauncherSummary,
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
   formatCliMultiAgentPresetRunWarnings,
+  cliMultiAgentPresetTeamLaunchBlockReason,
   planCliMultiAgentPresets,
   planCliMultiAgentPresetRun,
 } from '@cli/runtime/multiAgentPresets';
@@ -112,7 +111,7 @@ describe('CLI multi-agent presets', () => {
     expect(output).not.toContain('after `texra login`');
   });
 
-  it('formats launcher team summaries as reader-facing status text', () => {
+  it('marks missing team roots as unavailable', () => {
     const preset = findCliMultiAgentPreset(
       cliMultiAgentPresets(undefined),
       'lean-project',
@@ -125,64 +124,12 @@ describe('CLI multi-agent presets', () => {
       ],
     });
 
-    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
-      'unavailable; no runnable team root; 2/7 tool-use agents',
+    expect(plan.rootAgent).toBeUndefined();
+    expect(cliMultiAgentPresetAvailability(plan).status).toBe('unavailable');
+    expect(cliMultiAgentPresetTeamLaunchBlockReason(plan)).toBe(
+      'no runnable team root',
     );
     expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(false);
-  });
-
-  it('formats launcher team footer hints from preset status', () => {
-    const leanPreset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    )!;
-    const leanUnavailable = planCliMultiAgentPresetRun(leanPreset, {
-      workflowAgents: [],
-      toolUseAgents: [agent('lean', AgentCategory.ToolUse)],
-    });
-    expect(formatCliMultiAgentInspectCommand('lean-project')).toBe(
-      'texra multi-agent inspect lean-project',
-    );
-    expect(formatCliMultiAgentPresetLauncherHints(leanUnavailable)).toEqual([
-      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
-      'Relay teams may unlock more agents after texra login.',
-    ]);
-    expect(
-      formatCliMultiAgentPresetLauncherHints(leanUnavailable, {
-        includeLoginHint: false,
-      }),
-    ).toEqual([
-      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
-    ]);
-
-    const physicistPreset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'physicist',
-    )!;
-    const degraded = planCliMultiAgentPresetRun(physicistPreset, {
-      workflowAgents: [],
-      toolUseAgents: [
-        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
-        agent('review', AgentCategory.ToolUse),
-      ],
-    });
-    expect(formatCliMultiAgentPresetLauncherHints(degraded)).toContain(
-      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
-    );
-
-    const ready = planCliMultiAgentPresetRun(physicistPreset, {
-      workflowAgents: physicistPreset.workflowAgents.map((name) =>
-        agent(name, AgentCategory.Workflow),
-      ),
-      toolUseAgents: physicistPreset.toolUseAgents.map((name) =>
-        agent(
-          name,
-          AgentCategory.ToolUse,
-          name === 'orchestrator' ? ['delegate_agent'] : [],
-        ),
-      ),
-    });
-    expect(formatCliMultiAgentPresetLauncherHints(ready)).toEqual([]);
   });
 
   it('keeps degraded presets launchable when they still have delegation', () => {
@@ -198,9 +145,7 @@ describe('CLI multi-agent presets', () => {
       ],
     });
 
-    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
-      'degraded; 2/9 tool-use agents; 0/4 workflow agents',
-    );
+    expect(cliMultiAgentPresetAvailability(plan).status).toBe('degraded');
     expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(true);
   });
 
@@ -240,7 +185,7 @@ describe('CLI multi-agent presets', () => {
     ]);
   });
 
-  it('formats ready launcher team summaries without raw availability keys', () => {
+  it('marks complete built-in teams available', () => {
     const preset = findCliMultiAgentPreset(
       cliMultiAgentPresets(undefined),
       'physicist',
@@ -258,9 +203,11 @@ describe('CLI multi-agent presets', () => {
       ),
     });
 
-    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
-      'ready; 9 tool-use agents; 4 workflow agents',
-    );
+    expect(cliMultiAgentPresetAvailability(plan)).toMatchObject({
+      status: 'available',
+      toolUse: { available: 9, total: 9 },
+      workflow: { available: 4, total: 4 },
+    });
   });
 
   it('launches the software-engineer team on its bundled engineer root', () => {
@@ -283,12 +230,13 @@ describe('CLI multi-agent presets', () => {
     expect(plan.missingToolUseAgents).toEqual([]);
     expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
     expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(true);
-    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
-      'ready; 6 tool-use agents',
-    );
+    expect(cliMultiAgentPresetAvailability(plan).toolUse).toMatchObject({
+      available: 6,
+      total: 6,
+    });
   });
 
-  it('formats unavailable launcher team summaries with root guidance', () => {
+  it('keeps unavailable preset facts separate from launcher guidance', () => {
     const preset = findCliMultiAgentPreset(
       cliMultiAgentPresets(undefined),
       'physicist',
@@ -298,8 +246,13 @@ describe('CLI multi-agent presets', () => {
       toolUseAgents: [],
     });
 
-    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
-      'unavailable; no runnable team root; 0/9 tool-use agents; 0/4 workflow agents',
+    expect(cliMultiAgentPresetAvailability(plan)).toMatchObject({
+      status: 'unavailable',
+      toolUse: { available: 0, total: 9 },
+      workflow: { available: 0, total: 4 },
+    });
+    expect(cliMultiAgentPresetTeamLaunchBlockReason(plan)).toBe(
+      'no runnable team root',
     );
   });
 
@@ -384,40 +337,22 @@ describe('CLI multi-agent presets', () => {
       ],
     });
 
-    const summaries = new Map(
+    const launchBlockReasons = new Map(
       plans.map((plan) => [
         plan.preset.id,
-        formatCliMultiAgentPresetLauncherSummary(plan),
+        cliMultiAgentPresetTeamLaunchBlockReason(plan),
       ]),
     );
 
-    expect(summaries).toEqual(
+    expect(launchBlockReasons).toEqual(
       new Map([
-        [
-          'lean-project',
-          'unavailable; no runnable team root; 2/7 tool-use agents',
-        ],
-        [
-          'physicist',
-          'unavailable; no runnable team root; 5/9 tool-use agents; 0/4 workflow agents',
-        ],
-        [
-          'mathematician',
-          'unavailable; no runnable team root; 5/9 tool-use agents; 2/5 workflow agents',
-        ],
-        [
-          'cs-ml',
-          'unavailable; no runnable team root; 5/11 tool-use agents; 1/5 workflow agents',
-        ],
-        [
-          'software-engineer',
-          'unavailable; no runnable team root; 0/6 tool-use agents',
-        ],
+        ['lean-project', 'no runnable team root'],
+        ['physicist', 'no runnable team root'],
+        ['mathematician', 'no runnable team root'],
+        ['cs-ml', 'no runnable team root'],
+        ['software-engineer', 'no runnable team root'],
       ]),
     );
-    for (const summary of summaries.values()) {
-      expect(summary).not.toContain('cannot delegate');
-    }
   });
 
   it('serializes planned availability for machine-readable list output', () => {
@@ -716,8 +651,8 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(plan.rootAgent).toBeUndefined();
-    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
-      'unavailable; no runnable team root; 2/7 tool-use agents',
+    expect(cliMultiAgentPresetTeamLaunchBlockReason(plan)).toBe(
+      'no runnable team root',
     );
   });
 
