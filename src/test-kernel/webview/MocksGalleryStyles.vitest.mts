@@ -16,6 +16,23 @@ function readSource(relativePath: string): string {
 }
 
 describe('mock gallery styles', () => {
+  it('uses host-bridged danger tokens in context utilization mock', () => {
+    const source = readSource(
+      'packages/extension/src/webview/frontend/mocks/ContextUtilizationMock.ts',
+    );
+    const extensionBridge = readSource(
+      'packages/extension/src/common/styles/common.css',
+    );
+    const desktopBridge = readSource(
+      'packages/desktop/src/renderer/themeTokens.css',
+    );
+
+    expect(source).not.toContain('--wa-color-danger-text-loud');
+    expect(source).toContain('--wa-color-danger-on-quiet');
+    expect(extensionBridge).toContain('--wa-color-danger-on-quiet');
+    expect(desktopBridge).toContain('--wa-color-danger-on-quiet');
+  });
+
   it('keeps mock previews inside the launcher panel', () => {
     const source = readSource(
       'packages/extension/src/webview/frontend/mocks/MocksGallery.ts',
