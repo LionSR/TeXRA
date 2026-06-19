@@ -208,6 +208,10 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
     lines.push('');
     lines.push(...metadataLines);
   }
+  if (entry.rounds) {
+    if (metadataLines.length === 0) lines.push('');
+    lines.push(`rounds: ${entry.rounds}`);
+  }
   return lines.join('\n');
 }
 
