@@ -84,7 +84,7 @@ jobs:
           prompt-file: .trusted-review-prompt/.github/prompts/texra-code-review-prompt.md
           approval-policy: never
           require-write-access: 'true'
-          allow-bots: dependabot[bot]
+          allow-bots: dependabot[bot],github-actions[bot]
           model: ${{ vars.TEXRA_REVIEW_MODEL }}
           model-defaults: ${{ vars.TEXRA_REVIEW_MODEL_DEFAULTS }}
           texra-version: ${{ vars.TEXRA_CLI_VERSION }}
