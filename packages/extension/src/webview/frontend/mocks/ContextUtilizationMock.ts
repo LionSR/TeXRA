@@ -68,7 +68,7 @@ export class ContextUtilizationMock extends LitElement {
       }
 
       .ctx-chip--danger {
-        color: var(--wa-color-danger-text-loud);
+        color: var(--wa-color-danger-on-quiet);
       }
 
       .ctx-chip--danger .ctx-chip__fill {
