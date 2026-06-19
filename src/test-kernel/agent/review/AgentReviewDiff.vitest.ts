@@ -122,6 +122,29 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(await realpath(result.value.repoRoot)).toBe(await realpath(repo));
   });
 
+  it('ignores inherited interactive git environment variables', async () => {
+    const previousPager = process.env.PAGER;
+    const previousEditor = process.env.EDITOR;
+    process.env.PAGER = 'less';
+    process.env.EDITOR = 'vim';
+    try {
+      await git('checkout', '-b', 'feature');
+      await writeFile(path.join(repo, 'paper.tex'), 'changed line\n');
+
+      const result = await collectReviewDiff({
+        cwd: repo,
+        includeUntracked: false,
+        includeSubmodules: true,
+      });
+      expect(result.ok).toBe(true);
+    } finally {
+      if (previousPager === undefined) delete process.env.PAGER;
+      else process.env.PAGER = previousPager;
+      if (previousEditor === undefined) delete process.env.EDITOR;
+      else process.env.EDITOR = previousEditor;
+    }
+  });
+
   it('caps oversized untracked files at a bounded prefix with a truncation marker', async () => {
     await git('checkout', '-b', 'feature');
     // Larger than MAX_UNTRACKED_FILE_BYTES (200 KB); only a prefix may load.
