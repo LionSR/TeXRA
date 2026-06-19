@@ -45,22 +45,14 @@ export interface ToolUseAgentRunInit {
   readonly instructionFile?: string;
 }
 
-async function resolveToolUseInstruction(
-  init: Pick<ToolUseAgentRunInit, 'instruction' | 'instructionFile'>,
-  cwd: string,
-): Promise<string> {
-  const instruction = await resolveFileBackedInstruction(init, cwd);
-  if (!instruction) {
-    throw new CliUsageError('Provide --instruction or --instruction-file.');
-  }
-  return instruction;
-}
-
 export async function runToolUseAgent(
   context: CliContext,
   init: ToolUseAgentRunInit,
 ): Promise<number> {
-  const instruction = await resolveToolUseInstruction(init, context.cwd);
+  const instruction = await resolveFileBackedInstruction(init, context.cwd);
+  if (!instruction) {
+    throw new CliUsageError('Provide --instruction or --instruction-file.');
+  }
 
   await initLocalCliPlatform(context);
   await resolveCliLaunchAgent(init.agent, 'agentsRun');
