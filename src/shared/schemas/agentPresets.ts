@@ -9,17 +9,60 @@
 
 import { z } from 'zod';
 
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+
+const AGENT_MODE_PRESET_ICON_NAMES = [
+  'bookmark',
+  'rocket',
+  'symbol-structure',
+  'symbol-operator',
+  'symbol-number',
+  'symbol-method',
+  'tools',
+] as const satisfies readonly TeXRAIconName[];
+
+type AgentModePresetIconName = (typeof AGENT_MODE_PRESET_ICON_NAMES)[number];
+
+const AGENT_MODE_PRESET_ICON_NAME_SET = new Set<string>(
+  AGENT_MODE_PRESET_ICON_NAMES,
+);
+
+const AgentModePresetIconSchema = z.string().transform((rawIcon, ctx) => {
+  const icon = rawIcon.trim();
+  const normalized = icon.startsWith('codicon-') ? icon.slice(8) : icon;
+  if (AGENT_MODE_PRESET_ICON_NAME_SET.has(normalized)) {
+    return normalized as AgentModePresetIconName;
+  }
+
+  ctx.addIssue({
+    code: 'custom',
+    message: `Unknown agent team icon: ${normalized}`,
+  });
+  return z.NEVER;
+});
+
 /** Schema for a single agent team. */
 export const AgentModePresetSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
-  icon: z.string(),
+  icon: AgentModePresetIconSchema,
   workflowAgents: z.array(z.string()),
   toolUseAgents: z.array(z.string()),
 });
 
 export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
+
+export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
+  return z
+    .array(z.unknown())
+    .catch([])
+    .parse(raw)
+    .flatMap((preset) => {
+      const result = AgentModePresetSchema.safeParse(preset);
+      return result.success ? [result.data] : [];
+    });
+}
 
 /**
  * Generic default team applied when the user skips the setup agent's
@@ -36,7 +79,7 @@ export const STARTER_AGENT_MODE_PRESET: AgentModePreset = {
   id: 'starter',
   name: 'Starter',
   description: 'Balanced default roster for a first project.',
-  icon: 'codicon-rocket',
+  icon: 'rocket',
   workflowAgents: ['correct', 'polish'],
   toolUseAgents: [
     'assistant',
@@ -60,7 +103,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     name: 'Lean Project',
     description:
       'For Lean 4 projects -- theorem search, tactic simplification, and blueprints.',
-    icon: 'codicon-symbol-structure',
+    icon: 'symbol-structure',
     workflowAgents: [],
     toolUseAgents: [
       'lean',
@@ -77,7 +120,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     name: 'Physicist',
     description:
       'For physics papers -- analytical derivations, numerical experiments, literature search, slides, and critical review.',
-    icon: 'codicon-symbol-operator',
+    icon: 'symbol-operator',
     workflowAgents: ['criticize', 'generic', 'devise', 'apply'],
     toolUseAgents: [
       'orchestrator',
@@ -96,7 +139,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     name: 'Mathematician',
     description:
       'For math research -- attacking open problems, proofs, Lean 4 formalization, and LaTeX correction.',
-    icon: 'codicon-symbol-number',
+    icon: 'symbol-number',
     workflowAgents: ['correct', 'polish', 'generic', 'devise', 'apply'],
     toolUseAgents: [
       'prover',
@@ -115,7 +158,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     name: 'Computer Scientist',
     description:
       'For CS papers -- algorithm design, code-driven experiments and ablations, tests for reproducibility, literature search, and critical review.',
-    icon: 'codicon-symbol-method',
+    icon: 'symbol-method',
     workflowAgents: ['criticize', 'generic', 'devise', 'apply', 'polish'],
     toolUseAgents: [
       'orchestrator',
@@ -136,7 +179,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     name: 'Software Engineer',
     description:
       "For a project's code -- the engineer lead delegates implementation, review, debugging, and testing across a team of specialists.",
-    icon: 'codicon-tools',
+    icon: 'tools',
     workflowAgents: [],
     toolUseAgents: [
       'engineer',

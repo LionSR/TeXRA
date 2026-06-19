@@ -502,7 +502,36 @@ describe('CLI multi-agent presets', () => {
       },
     ];
 
-    expect(parseCliCustomAgentPresets(valid)).toEqual(valid);
+    expect(parseCliCustomAgentPresets(valid)).toEqual([
+      {
+        ...valid[0],
+        icon: 'bookmark',
+      },
+    ]);
+    expect(parseCliCustomAgentPresets([{ id: 'broken' }, ...valid])).toEqual([
+      {
+        ...valid[0],
+        icon: 'bookmark',
+      },
+    ]);
+    expect(
+      parseCliCustomAgentPresets([
+        ...valid,
+        {
+          id: 'custom-broken-icon',
+          name: 'Broken Icon',
+          description: 'Structurally valid but uses an unknown icon.',
+          icon: 'not-a-valid-icon',
+          workflowAgents: [],
+          toolUseAgents: [],
+        },
+      ]),
+    ).toEqual([
+      {
+        ...valid[0],
+        icon: 'bookmark',
+      },
+    ]);
     expect(parseCliCustomAgentPresets([{ id: 'broken' }])).toEqual([]);
   });
 
@@ -694,7 +723,7 @@ describe('CLI multi-agent presets', () => {
         id: 'custom-review',
         name: 'Custom review',
         description: 'User-authored review team.',
-        icon: 'codicon-symbol-method',
+        icon: 'symbol-method',
         source: 'custom',
         workflowAgents: [],
         toolUseAgents: ['review'],
@@ -717,7 +746,7 @@ describe('CLI multi-agent presets', () => {
         id: 'custom-review',
         name: 'Custom review',
         description: 'User-authored review team.',
-        icon: 'codicon-symbol-method',
+        icon: 'symbol-method',
         source: 'custom',
         workflowAgents: [],
         toolUseAgents: ['review', 'engineer'],
@@ -741,7 +770,7 @@ describe('CLI multi-agent presets', () => {
         id: 'custom-review',
         name: 'Custom review',
         description: 'User-authored review team.',
-        icon: 'codicon-symbol-method',
+        icon: 'symbol-method',
         source: 'custom',
         workflowAgents: [],
         toolUseAgents: ['review'],
@@ -762,7 +791,7 @@ describe('CLI multi-agent presets', () => {
         id: 'custom-cleanup',
         name: 'Custom cleanup',
         description: 'User-authored cleanup team.',
-        icon: 'codicon-symbol-method',
+        icon: 'symbol-method',
         source: 'custom',
         workflowAgents: [],
         toolUseAgents: ['simplifier'],
