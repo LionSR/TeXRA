@@ -5,7 +5,7 @@ import {
   ClaudeAgentEffortSchema,
   ClaudeAgentModelSchema,
   ClaudeAgentPermissionModeSchema,
-} from '@shared/schemas/settingsView/data';
+} from '@shared/schemas/agentCliSettings';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk';

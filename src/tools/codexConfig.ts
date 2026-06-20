@@ -8,7 +8,7 @@ import {
   CodexApprovalPolicySchema,
   CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
-} from '@shared/schemas/settingsView/data';
+} from '@shared/schemas/agentCliSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';

@@ -42,7 +42,7 @@ import type {
   ToolUseLog,
 } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
-import { CodexSandboxModeSchema } from '@shared/schemas/settingsView/data';
+import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { ToolError, type ToolResult } from '@tools/result';
 import { parseWorkingDirectory } from '@tools/pathResolution';
