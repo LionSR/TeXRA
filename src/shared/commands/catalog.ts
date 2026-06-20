@@ -310,6 +310,12 @@ export const commandCatalog = [
     icon: '$(organization)',
   },
   {
+    id: 'texra.showGitSettings',
+    title: 'Show Git Settings',
+    category: 'TeXRA',
+    icon: '$(git-branch)',
+  },
+  {
     id: 'texra.openSettings',
     title: 'Open TeXRA Settings',
     category: 'TeXRA',

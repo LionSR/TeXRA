@@ -114,6 +114,8 @@ describe('InvokeCommandTool allowlist', () => {
       'workbench.action.closeAllEditors',
       'editor.action.deleteAllLines',
       'workbench.action.terminal.sendSequence',
+      'texra.refreshApiKeyStatus',
+      'texra.refreshAllOptions',
     ]) {
       const result = await tool.call({ command: cmd, args: [] });
       assert.ok(result.isError, `${cmd} should be rejected`);
