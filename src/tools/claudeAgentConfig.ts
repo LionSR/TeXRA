@@ -12,45 +12,29 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { safeHomedir } from '@utils/system/platformPaths';
-import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
-import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import {
-  CLAUDE_AGENT_NAME,
-  CLAUDE_AGENT_DISPLAY_MODEL,
-  CLAUDE_AGENT_EFFORT_LEVELS,
-  CLAUDE_AGENT_MODELS,
-  CLAUDE_AGENT_PERMISSION_MODES,
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  parseClaudeAgentEffort,
+  parseClaudeAgentModel,
+  parseClaudeAgentPermissionMode,
   type ClaudeAgentEffort,
   type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
+} from '@shared/schemas/agentCliSettings';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { safeHomedir } from '@utils/system/platformPaths';
+import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
+import { createEnumStateGetter } from './support/enumConfig';
+import {
+  CLAUDE_AGENT_NAME,
+  CLAUDE_AGENT_DISPLAY_MODEL,
 } from './claudeAgentShared';
 
 // ============================================================================
 // Model — defaults to Sonnet 4.6; users can override per-call or via workspace state
 // ============================================================================
-
-/** Default Claude model passed to the Agent SDK. */
-export const CLAUDE_AGENT_DEFAULT_MODEL: ClaudeAgentModel = 'claude-sonnet-4-6';
-
-/**
- * Models retired from the picker that should resolve to their successor instead
- * of silently dropping to the Sonnet default. Opus 4.7 was the prior top tier,
- * so a persisted selection maps forward to Opus 4.8 to keep users on the Opus
- * tier across the bump.
- */
-const RETIRED_CLAUDE_AGENT_MODELS: Readonly<Record<string, ClaudeAgentModel>> =
-  {
-    'claude-opus-4-7': 'claude-opus-4-8',
-  };
-
-export const parseClaudeAgentModel: (raw: string) => ClaudeAgentModel =
-  createEnumParser(
-    CLAUDE_AGENT_MODELS,
-    CLAUDE_AGENT_DEFAULT_MODEL,
-    RETIRED_CLAUDE_AGENT_MODELS,
-  );
 
 export const getClaudeAgentModel: () => ClaudeAgentModel =
   createEnumStateGetter(
@@ -63,16 +47,6 @@ export const getClaudeAgentModel: () => ClaudeAgentModel =
 // Permission mode
 // ============================================================================
 
-export const CLAUDE_AGENT_DEFAULT_PERMISSION_MODE: ClaudeAgentPermissionMode =
-  'acceptEdits';
-
-export const parseClaudeAgentPermissionMode: (
-  raw: string,
-) => ClaudeAgentPermissionMode = createEnumParser(
-  CLAUDE_AGENT_PERMISSION_MODES,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-);
-
 export const getClaudeAgentPermissionMode: () => ClaudeAgentPermissionMode =
   createEnumStateGetter(
     WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
@@ -83,11 +57,6 @@ export const getClaudeAgentPermissionMode: () => ClaudeAgentPermissionMode =
 // ============================================================================
 // Effort — adaptive thinking depth hint passed via `effort` SDK option
 // ============================================================================
-
-export const CLAUDE_AGENT_DEFAULT_EFFORT: ClaudeAgentEffort = 'high';
-
-export const parseClaudeAgentEffort: (raw: string) => ClaudeAgentEffort =
-  createEnumParser(CLAUDE_AGENT_EFFORT_LEVELS, CLAUDE_AGENT_DEFAULT_EFFORT);
 
 export const getClaudeAgentEffort: () => ClaudeAgentEffort =
   createEnumStateGetter(

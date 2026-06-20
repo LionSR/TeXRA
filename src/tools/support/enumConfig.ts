@@ -1,34 +1,10 @@
 /**
- * Shared helpers for tools that persist an enum-valued setting in workspace
- * state. Both the Codex and Claude Code tools follow the same pattern:
- *
- *   1. A `parse(raw)` that maps an arbitrary string onto a known enum value,
- *      falling back to a default when the string isn't recognised.
- *   2. A `get()` that reads the persisted string from workspace state and runs
- *      it through `parse`.
- *
- * Centralising the pattern keeps the parse-with-default + read-from-state
- * semantics identical across both tools.
+ * Shared helper for tools that persist an enum-valued setting in workspace
+ * state. The schemas own parse/default semantics; tool runtimes only adapt
+ * those parsers to the active workspace state.
  */
 
 import { platform } from '@platform/platform';
-
-/**
- * Build a parser that maps an arbitrary string onto a member of `values`,
- * returning `fallback` for anything not in the set. An optional `aliases` map
- * redirects retired/renamed values onto a current member before the fallback.
- */
-export function createEnumParser<T extends string>(
-  values: readonly T[],
-  fallback: T,
-  aliases?: Readonly<Record<string, T>>,
-): (raw: string) => T {
-  const known = values as readonly string[];
-  return (raw: string): T => {
-    if (known.includes(raw)) return raw as T;
-    return aliases?.[raw] ?? fallback;
-  };
-}
 
 /**
  * Build a workspace-state accessor for an enum setting: reads the persisted
