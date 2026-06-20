@@ -201,11 +201,15 @@ function buildDefaultModelOptionsAccess(): ModelOptionsAccess {
   };
 }
 
+function getDefaultVisibleModels(): string[] {
+  return getVisibleModels(platform().globalState);
+}
+
 /** Build synchronous fallback options from the current host-visible model list. */
 export function buildVisibleBasicModelOptionsData(
-  access: ModelOptionsAccess = buildDefaultModelOptionsAccess(),
+  visibleModels: readonly string[] = getDefaultVisibleModels(),
 ): ModelOptionData[] {
-  return buildBasicModelOptionsData(access.visibleModels);
+  return buildBasicModelOptionsData(visibleModels);
 }
 
 /** Returns a human-readable reason why a model is unavailable, or `null` if available. */
@@ -291,6 +295,10 @@ export function invalidateModelOptionsCache(): void {
  * honored verbatim. Explicit lists are cached by their exact ordered contents,
  * so alternate global-state views stay isolated while repeated settings/CLI
  * refreshes do not redo secret and server-side key checks.
+ *
+ * Passing `access` computes directly from that dependency snapshot and skips
+ * the shared TTL cache. Use it when the caller owns access-state freshness,
+ * such as tests or host adapters with explicitly supplied state.
  */
 export async function computeModelOptionsData(
   models?: readonly string[],

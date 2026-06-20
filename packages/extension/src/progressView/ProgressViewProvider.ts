@@ -304,10 +304,10 @@ export class ProgressViewProvider
   private async sendProposalModelOptions(
     proposal: AgentProposalPermission,
   ): Promise<void> {
-    // Model options have a static fallback (buildBasicModelOptionsData) so
-    // the dropdown still appears if ServerSideKeyService isn't ready. Agent
-    // options have no static equivalent, so the agent dropdown is omitted
-    // when the registry fetch fails.
+    // Model options have a visible-model fallback that does not require
+    // ServerSideKeyService, so the dropdown still appears if availability
+    // loading fails. Agent options have no static equivalent, so the agent
+    // dropdown is omitted when the registry fetch fails.
     const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
     const loadAgentOptions = async () => {
       const all = await computeAgentOptionsData();
