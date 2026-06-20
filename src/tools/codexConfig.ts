@@ -4,6 +4,12 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  CodexApprovalPolicySchema,
+  CodexReasoningEffortSchema,
+  CodexSandboxModeSchema,
+} from '@shared/schemas/agentCliSettings';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 
@@ -25,21 +31,22 @@ export const CODEX_CLI_MODEL = 'gpt-5.5';
 // Reasoning effort
 // ============================================================================
 
-const REASONING_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
+// Derived from `CodexReasoningEffortSchema` (the single source of truth in
+// `@shared`) so the runtime list and the IPC schema can't drift.
+const REASONING_EFFORTS = CodexReasoningEffortSchema.options;
 export const CODEX_REASONING_EFFORTS = REASONING_EFFORTS;
 export type CodexReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
-const REASONING_EFFORT_KEY = 'texra.codexReasoningEffort';
-const REASONING_EFFORT_DEFAULT: CodexReasoningEffort = 'high';
+export const CODEX_REASONING_EFFORT_DEFAULT: CodexReasoningEffort = 'high';
 
 export const parseCodexReasoningEffort = createEnumParser(
   REASONING_EFFORTS,
-  REASONING_EFFORT_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
 );
 
 export const getCodexReasoningEffort = createEnumStateGetter(
-  REASONING_EFFORT_KEY,
-  REASONING_EFFORT_DEFAULT,
+  WorkspaceStateKey.CODEX_REASONING_EFFORT,
+  CODEX_REASONING_EFFORT_DEFAULT,
   parseCodexReasoningEffort,
 );
 
@@ -68,26 +75,22 @@ export function getCodexCliReasoningEffort(): CodexCliReasoningEffort {
 // Approval policy
 // ============================================================================
 
-const APPROVAL_POLICIES = [
-  'never',
-  'on-request',
-  'on-failure',
-  'untrusted',
-] as const;
+// Derived from `CodexApprovalPolicySchema` (the single source of truth in
+// `@shared`); `satisfies` keeps the schema values aligned with the SDK union.
+const APPROVAL_POLICIES = CodexApprovalPolicySchema.options;
 export const CODEX_APPROVAL_POLICIES =
   APPROVAL_POLICIES satisfies readonly ApprovalMode[];
 export type CodexApprovalPolicy = ApprovalMode;
 
-const APPROVAL_POLICY_KEY = 'texra.codexApprovalPolicy';
-const APPROVAL_POLICY_DEFAULT: CodexApprovalPolicy = 'never';
+export const CODEX_APPROVAL_POLICY_DEFAULT: CodexApprovalPolicy = 'never';
 
 export const parseCodexApprovalPolicy: (raw: string) => CodexApprovalPolicy =
-  createEnumParser(APPROVAL_POLICIES, APPROVAL_POLICY_DEFAULT);
+  createEnumParser(APPROVAL_POLICIES, CODEX_APPROVAL_POLICY_DEFAULT);
 
 export const getCodexApprovalPolicy: () => CodexApprovalPolicy =
   createEnumStateGetter(
-    APPROVAL_POLICY_KEY,
-    APPROVAL_POLICY_DEFAULT,
+    WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+    CODEX_APPROVAL_POLICY_DEFAULT,
     parseCodexApprovalPolicy,
   );
 
@@ -95,25 +98,22 @@ export const getCodexApprovalPolicy: () => CodexApprovalPolicy =
 // Sandbox mode
 // ============================================================================
 
-const SANDBOX_MODES = [
-  'read-only',
-  'workspace-write',
-  'danger-full-access',
-] as const;
+// Derived from `CodexSandboxModeSchema` (the single source of truth in
+// `@shared`); `satisfies` keeps the schema values aligned with the SDK union.
+const SANDBOX_MODES = CodexSandboxModeSchema.options;
 export const CODEX_SANDBOX_MODES =
   SANDBOX_MODES satisfies readonly SandboxMode[];
 export type CodexSandboxMode = SandboxMode;
 
-const SANDBOX_MODE_KEY = 'texra.codexSandboxMode';
-const SANDBOX_MODE_DEFAULT: CodexSandboxMode = 'workspace-write';
+export const CODEX_SANDBOX_MODE_DEFAULT: CodexSandboxMode = 'workspace-write';
 
 export const parseCodexSandboxMode: (raw: string) => CodexSandboxMode =
-  createEnumParser(SANDBOX_MODES, SANDBOX_MODE_DEFAULT);
+  createEnumParser(SANDBOX_MODES, CODEX_SANDBOX_MODE_DEFAULT);
 
 export const getCodexSandboxMode: () => CodexSandboxMode =
   createEnumStateGetter(
-    SANDBOX_MODE_KEY,
-    SANDBOX_MODE_DEFAULT,
+    WorkspaceStateKey.CODEX_SANDBOX_MODE,
+    CODEX_SANDBOX_MODE_DEFAULT,
     parseCodexSandboxMode,
   );
 
