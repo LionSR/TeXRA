@@ -24,9 +24,9 @@ import {
 } from '@cli/runtime/memory';
 import {
   formatCliNoAvailableModelsRecovery,
-  resolveCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
 } from '@cli/runtime/modelAccess';
+import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
 import {
   formatCliApprovalPolicy,
   parseCliApprovalPolicy,
@@ -150,9 +150,18 @@ export async function applyCliModelSelection(
   const nextModel = model.trim();
   if (chatTuiCanStartRootRun(context.session)) {
     try {
-      await setCliHelperModel(nextModel);
-      setCliSessionModelOverride(nextModel);
-      appendLocalAssistantTranscript(`Root model set to ${nextModel}.`);
+      const { apiMode } = cliState.sessionMeta.get();
+      const selection = await selectCliRootModel({
+        model: nextModel,
+        modelSource: 'override',
+        apiMode,
+        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+          apiMode,
+          CHAT_API_MODE_MODEL_RECOVERY,
+        ),
+      });
+      setCliSessionModelOverride(selection.model);
+      appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
     } catch (error: unknown) {
       appendLocalAssistantTranscript(toErrorMessage(error));
     }
@@ -205,8 +214,9 @@ async function reconcileRootModelAfterApiModeChange(
   if (!context || !chatTuiCanStartRootRun(context.session)) return undefined;
 
   const { model: currentModel, modelSource } = cliState.sessionMeta.get();
-  const selection = await resolveCliRunnableModel(currentModel, {
-    fallbackSource: modelSource,
+  const selection = await selectCliRootModel({
+    model: currentModel,
+    modelSource,
     apiMode,
     noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
       apiMode,
@@ -215,7 +225,6 @@ async function reconcileRootModelAfterApiModeChange(
   });
   if (selection.model === currentModel) return undefined;
 
-  await setCliHelperModel(selection.model);
   cliState.sessionMeta.set({
     ...cliState.sessionMeta.get(),
     model: selection.model,
