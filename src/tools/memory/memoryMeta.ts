@@ -8,30 +8,54 @@
 
 import * as path from 'node:path';
 
+import * as yaml from 'yaml';
+import { z } from 'zod';
+
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { MEMORY_STORAGE_ROOT, shouldSkipEntry } from './constants';
 
-export interface MemoryFileMeta {
+/**
+ * Attribution metadata schema. Source of truth for the {@link MemoryFileMeta}
+ * type; also validates the YAML frontmatter parsed back off disk so a
+ * hand-edited or malformed block degrades to "no metadata" rather than
+ * throwing. `modifiedAt` defaults to now for legacy blocks that predate it.
+ */
+const MemoryFileMetaSchema = z.object({
   /** Agent name that last modified this file. */
-  modifiedBy: string;
+  modifiedBy: z.string().min(1),
   /** Execution ID of the run that last modified this file. */
-  executionId?: string;
+  executionId: z.string().optional(),
   /** ISO 8601 timestamp of last modification. */
-  modifiedAt: string;
-  /** Whether this memory is pinned as a core long-term insight. */
-  pinned?: boolean;
-}
+  modifiedAt: z.string().prefault(() => new Date().toISOString()),
+  /**
+   * Whether this memory is pinned as a core long-term insight. A parsed
+   * `false` is treated the same as absent everywhere it is read, and
+   * {@link buildFrontmatter} only ever writes the flag when truthy.
+   */
+  pinned: z.boolean().optional(),
+});
+
+export type MemoryFileMeta = z.infer<typeof MemoryFileMetaSchema>;
 
 const FRONTMATTER_FENCE = '---';
+
+/** Parse a frontmatter YAML block, returning undefined on malformed YAML. */
+function parseYamlBlock(block: string): unknown {
+  try {
+    return yaml.parse(block);
+  } catch {
+    return undefined;
+  }
+}
 
 // ── Parsing ────────────────────────────────────────────────────────
 
 /**
  * Split a raw file string into optional attribution metadata and the
- * user-visible content.  Files without frontmatter return null metadata
- * and the full string as content (backward-compatible).
+ * user-visible content.  Files without (valid) frontmatter return null
+ * metadata and the full string as content (backward-compatible).
  */
 export function parseFrontmatter(raw: string): {
   meta: MemoryFileMeta | null;
@@ -50,25 +74,13 @@ export function parseFrontmatter(raw: string): {
   }
 
   const block = raw.slice(FRONTMATTER_FENCE.length + 1, endIdx);
-  const fields: Record<string, string> = {};
-  for (const line of block.split('\n')) {
-    const colon = line.indexOf(':');
-    if (colon > 0) {
-      fields[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
-    }
-  }
-
-  if (!fields.modifiedBy) {
+  const parsed = MemoryFileMetaSchema.safeParse(parseYamlBlock(block));
+  if (!parsed.success) {
     return { meta: null, content: raw };
   }
 
   return {
-    meta: {
-      modifiedBy: fields.modifiedBy,
-      executionId: fields.executionId || undefined,
-      modifiedAt: fields.modifiedAt || new Date().toISOString(),
-      pinned: fields.pinned === 'true' ? true : undefined,
-    },
+    meta: parsed.data,
     content: raw.slice(endIdx + FRONTMATTER_FENCE.length + 2), // skip "\n---\n"
   };
 }
@@ -76,16 +88,18 @@ export function parseFrontmatter(raw: string): {
 // ── Building ───────────────────────────────────────────────────────
 
 function buildFrontmatter(meta: MemoryFileMeta): string {
-  const lines = [FRONTMATTER_FENCE, `modifiedBy: ${meta.modifiedBy}`];
-  if (meta.executionId) {
-    lines.push(`executionId: ${meta.executionId}`);
-  }
-  lines.push(`modifiedAt: ${meta.modifiedAt}`);
-  if (meta.pinned) {
-    lines.push('pinned: true');
-  }
-  lines.push(FRONTMATTER_FENCE);
-  return lines.join('\n');
+  // Build the object explicitly so only set fields are serialized, in a
+  // stable key order.
+  const fields: Record<string, string | boolean> = {
+    modifiedBy: meta.modifiedBy,
+  };
+  if (meta.executionId) fields.executionId = meta.executionId;
+  fields.modifiedAt = meta.modifiedAt;
+  if (meta.pinned) fields.pinned = true;
+
+  // yaml.stringify ends with a trailing newline, so the closing fence sits on
+  // its own line: "---\n<fields>---".
+  return `${FRONTMATTER_FENCE}\n${yaml.stringify(fields)}${FRONTMATTER_FENCE}`;
 }
 
 /**
