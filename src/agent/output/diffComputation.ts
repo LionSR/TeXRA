@@ -7,10 +7,10 @@
 
 import { diff_match_patch } from 'diff-match-patch';
 
-import type { DiffStats } from '@agent/types/DiffTypes';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo, FileLocation } from '@shared/schemas';
+import type { DiffStats } from '@shared/schemas/lineChanges';
 import {
   AbsoluteFS,
   createWorkspaceLocation,
