@@ -295,7 +295,8 @@ Continuation text shape — three variants, deterministic templates.
 ```
 [inquiry] ei_b22c answered.
 Q: <question, truncated to 400 chars>
-A: <answer, truncated to 2000 chars; full text via inquiry { command: 'read', thread_id }>
+A: <answer, truncated to 2000 chars; full text available in thread ei_b22c>
+Full thread: ei_b22c
 
 Still open on this stream:
   - ei_a1f0  "Prove Lemma 3.2 …"  (dispatched 12m ago)
@@ -308,7 +309,8 @@ Proceed using the new answer. Do not re-dispatch any open thread_id.
 ```
 [inquiry] ei_b22c answered.
 Q: <question, truncated to 400 chars>
-A: <answer, truncated to 2000 chars; full text via inquiry { command: 'read', thread_id }>
+A: <answer, truncated to 2000 chars; full text available in thread ei_b22c>
+Full thread: ei_b22c
 
 No other open inquiries on this stream.
 
@@ -320,6 +322,7 @@ Proceed using the new answer.
 ```
 [inquiry] ei_b22c dropped by user.
 Q: <question, truncated to 400 chars>
+Full thread: ei_b22c
 
 Still open on this stream:
   - ei_a1f0  "Prove Lemma 3.2 …"  (dispatched 12m ago)
