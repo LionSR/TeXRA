@@ -7,6 +7,10 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
+import {
+  buildMainViewExecuteMessage,
+  type MainViewExecuteMessage,
+} from '@controllers/mainView/MainViewExecutionMessageController';
 import { PREFERRED_TOOL_USE_AGENTS } from '@agent/index/agentRegistryConstants';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
@@ -1128,77 +1132,42 @@ export class MainApp extends MainAppBase {
   }
 
   private executeAgent(): void {
-    const {
-      agent,
-      isToolUseAgent,
-      singleFileSelections,
-      multipleFileSelections,
-      checkboxValues,
-    } = this.collectCurrentContext();
-    postMessage(MAIN_VIEW_COMMANDS.EXECUTE, {
-      agent,
-      model: this.model.get(),
-      instruction: this.instruction.get(),
-      isToolUseAgent,
-      ...singleFileSelections,
-      ...multipleFileSelections,
-      ...checkboxValues,
-    });
+    postMessage(MAIN_VIEW_COMMANDS.EXECUTE, this.buildExecuteMessage());
   }
 
-  private collectCurrentContext(): {
-    agent: string;
-    isToolUseAgent: boolean;
-    singleFileSelections: Record<string, string>;
-    multipleFileSelections: Record<string, string[] | boolean>;
-    checkboxValues: Record<string, boolean>;
-  } {
-    const st = this.sessionType.get();
-    const agent =
-      st === SESSION_TYPES.TOOL_USE
-        ? this.toolUseAgent.get()
-        : this.workflowAgent.get();
-
-    const sf = this.singleFiles.get();
-    const singleFileSelections = {
-      editedFile: sf.editedFile,
-      baseFile: sf.baseFile,
-    };
-
-    const mf = this.multiFiles.get();
-    const multipleFileSelections: Record<string, string[] | boolean> = {};
-    MULTIPLE_DOCUMENT_FILE_TYPES.forEach((type) => {
-      const listId = `${type}Files` as keyof MultiFiles;
-      const files = type === 'output' ? [] : (mf[listId] ?? []);
-      const isActive = type !== 'output' && files.length > 0;
-      multipleFileSelections[listId] = files;
-      multipleFileSelections[`${listId}Active`] = isActive;
+  private buildExecuteMessage(): MainViewExecuteMessage {
+    return buildMainViewExecuteMessage({
+      sessionType: this.sessionType.get(),
+      workflowAgent: this.workflowAgent.get(),
+      toolUseAgent: this.toolUseAgent.get(),
+      model: this.model.get(),
+      instruction: this.instruction.get(),
+      singleFiles: this.singleFiles.get(),
+      multiFiles: this.multiFiles.get(),
+      checkboxValues: this.checkboxValues.get(),
     });
-
-    const checkboxValues = this.checkboxValues.get();
-
-    return {
-      agent,
-      isToolUseAgent: st === SESSION_TYPES.TOOL_USE,
-      singleFileSelections,
-      multipleFileSelections,
-      checkboxValues,
-    };
   }
 
   private handlePolishInstruction(): void {
     const instructionText = this.instruction.get();
     if (!instructionText.trim()) return;
 
-    const { agent, singleFileSelections, multipleFileSelections } =
-      this.collectCurrentContext();
+    const executionMessage = this.buildExecuteMessage();
     this.isPolishing.set(true);
     postMessage(MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT, {
       text: instructionText,
-      agent,
+      agent: executionMessage.agent,
       model: this.model.get(),
-      ...singleFileSelections,
-      ...multipleFileSelections,
+      editedFile: executionMessage.editedFile,
+      baseFile: executionMessage.baseFile,
+      inputFiles: executionMessage.inputFiles,
+      inputFilesActive: executionMessage.inputFilesActive,
+      contextFiles: executionMessage.contextFiles,
+      contextFilesActive: executionMessage.contextFilesActive,
+      mediaFiles: executionMessage.mediaFiles,
+      mediaFilesActive: executionMessage.mediaFilesActive,
+      outputFiles: executionMessage.outputFiles,
+      outputFilesActive: executionMessage.outputFilesActive,
     });
   }
 

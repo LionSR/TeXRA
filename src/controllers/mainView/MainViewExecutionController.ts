@@ -1,7 +1,6 @@
 // Third-party imports
 
 // Local imports - agent
-import type { AgentConfigInput } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   validateExecutionRequest,
@@ -20,18 +19,8 @@ import {
   getPastedImageFullPath,
   isPastedImage,
 } from '@utils/files/pastedImageUtils';
-import type { z } from 'zod';
 
-/**
- * Message shape from the main view for agent execution.
- * ToolConfig fields are sent flat from the UI form.
- */
-export type MainViewExecuteMessage = Omit<AgentConfigInput, 'mediaFiles'> & {
-  /** UI toggle indicating tool-use vs workflow agent. */
-  isToolUseAgent?: boolean;
-  /** Media files may contain nulls from UI and are filtered during processing. */
-  mediaFiles?: (string | null)[];
-} & z.input<typeof ToolConfigSchema>;
+import type { MainViewExecuteMessage } from './MainViewExecutionMessageController';
 
 export type MainViewExecutionPreparationResult =
   | { valid: true; request: ValidatedExecutionRequest }
