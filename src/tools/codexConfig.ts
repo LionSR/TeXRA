@@ -4,6 +4,11 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  CodexApprovalPolicySchema,
+  CodexReasoningEffortSchema,
+  CodexSandboxModeSchema,
+} from '@shared/schemas/settingsView/data';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
@@ -26,7 +31,9 @@ export const CODEX_CLI_MODEL = 'gpt-5.5';
 // Reasoning effort
 // ============================================================================
 
-const REASONING_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
+// Derived from `CodexReasoningEffortSchema` (the single source of truth in
+// `@shared`) so the runtime list and the IPC schema can't drift.
+const REASONING_EFFORTS = CodexReasoningEffortSchema.options;
 export const CODEX_REASONING_EFFORTS = REASONING_EFFORTS;
 export type CodexReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
@@ -68,12 +75,9 @@ export function getCodexCliReasoningEffort(): CodexCliReasoningEffort {
 // Approval policy
 // ============================================================================
 
-const APPROVAL_POLICIES = [
-  'never',
-  'on-request',
-  'on-failure',
-  'untrusted',
-] as const;
+// Derived from `CodexApprovalPolicySchema` (the single source of truth in
+// `@shared`); `satisfies` keeps the schema values aligned with the SDK union.
+const APPROVAL_POLICIES = CodexApprovalPolicySchema.options;
 export const CODEX_APPROVAL_POLICIES =
   APPROVAL_POLICIES satisfies readonly ApprovalMode[];
 export type CodexApprovalPolicy = ApprovalMode;
@@ -94,11 +98,9 @@ export const getCodexApprovalPolicy: () => CodexApprovalPolicy =
 // Sandbox mode
 // ============================================================================
 
-const SANDBOX_MODES = [
-  'read-only',
-  'workspace-write',
-  'danger-full-access',
-] as const;
+// Derived from `CodexSandboxModeSchema` (the single source of truth in
+// `@shared`); `satisfies` keeps the schema values aligned with the SDK union.
+const SANDBOX_MODES = CodexSandboxModeSchema.options;
 export const CODEX_SANDBOX_MODES =
   SANDBOX_MODES satisfies readonly SandboxMode[];
 export type CodexSandboxMode = SandboxMode;

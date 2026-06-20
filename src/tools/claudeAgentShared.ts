@@ -1,6 +1,11 @@
 // Shared constants and helpers for the Claude Code CLI tool.
 
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
+import {
+  ClaudeAgentEffortSchema,
+  ClaudeAgentModelSchema,
+  ClaudeAgentPermissionModeSchema,
+} from '@shared/schemas/settingsView/data';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk';
@@ -9,10 +14,10 @@ import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk';
 export type ClaudeAgentEffort = EffortLevel;
 
 /**
- * Compile-time guard: our const array and the SDK's `EffortLevel` union must
- * stay synchronized in both directions. If the SDK adds or removes an effort
- * level, this line produces a type error so `CLAUDE_AGENT_EFFORT_LEVELS` and
- * `ClaudeAgentEffortSchema` are reviewed together.
+ * Compile-time guard: the effort-level schema and the SDK's `EffortLevel`
+ * union must stay synchronized in both directions. If the SDK adds or removes
+ * an effort level, this line produces a type error so `ClaudeAgentEffortSchema`
+ * (the source of truth) and the SDK type are reviewed together.
  */
 type _AssertExact<T extends true> = T;
 type _IsExact<A, B> = [A] extends [B]
@@ -31,38 +36,25 @@ export const CLAUDE_AGENT_DISPLAY_MODEL = 'claude';
 /**
  * Permission modes exposed in the settings UI.
  * Subset of the SDK's PermissionMode — 'dontAsk' and 'auto' are internal only.
- * The type is derived from this subset so it stays narrower than the SDK type.
+ * Derived from `ClaudeAgentPermissionModeSchema` (the single source of truth in
+ * `@shared`) so the runtime list and the IPC schema can't drift.
  */
-export const CLAUDE_AGENT_PERMISSION_MODES = [
-  'default',
-  'acceptEdits',
-  'bypassPermissions',
-  'plan',
-] as const;
+export const CLAUDE_AGENT_PERMISSION_MODES =
+  ClaudeAgentPermissionModeSchema.options;
 export type ClaudeAgentPermissionMode =
   (typeof CLAUDE_AGENT_PERMISSION_MODES)[number];
 
 /** Effort levels mirror the SDK's `EffortLevel` (low → max). Claude decides
- * adaptively how much thinking to do, scaled by this hint. */
-export const CLAUDE_AGENT_EFFORT_LEVELS = [
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-] as const;
+ * adaptively how much thinking to do, scaled by this hint. Derived from
+ * `ClaudeAgentEffortSchema` (the single source of truth in `@shared`). */
+export const CLAUDE_AGENT_EFFORT_LEVELS = ClaudeAgentEffortSchema.options;
 
 /** Canonical Claude model IDs surfaced by the settings dropdown.
  * The SDK accepts arbitrary model strings; this list is what we expose in the
- * UI. Keep it in sync with `ClaudeAgentModelSchema` in settingsViewMessages.ts.
- * Sonnet, Fable, and Opus use the alias form; Haiku 4.5 ships with a dated
- * snapshot suffix (its only published identifier at time of writing). */
-export const CLAUDE_AGENT_MODELS = [
-  'claude-sonnet-4-6',
-  'claude-fable-5',
-  'claude-opus-4-8',
-  'claude-haiku-4-5-20251001',
-] as const;
+ * UI. Derived from `ClaudeAgentModelSchema` (the single source of truth in
+ * `@shared`). Sonnet, Fable, and Opus use the alias form; Haiku 4.5 ships with
+ * a dated snapshot suffix (its only published identifier at time of writing). */
+export const CLAUDE_AGENT_MODELS = ClaudeAgentModelSchema.options;
 export type ClaudeAgentModel = (typeof CLAUDE_AGENT_MODELS)[number];
 
 /**
