@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { app } from 'electron';
 
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import { configKeyVariants } from '@platform/defaults/configKeyHelpers';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
@@ -15,8 +14,10 @@ import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { StreamSnapshotStore } from '@transcript';
 import { registerAgentFeatures } from '@agent/features';
+import { initializeGoalPrompts } from '@agent/goal';
 import { toErrorMessage } from '@common/errors';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
+import { configKeyVariants } from '@shared/config/configKeys';
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
@@ -139,6 +140,8 @@ export async function initializeElectronPlatform(
     toolAvailability: NO_TOOL_AVAILABILITY_HOST,
   });
   registerAgentFeatures();
+  const resourcesPath = resolveResourcesPath(mainDirname);
+  initializeGoalPrompts(join(resourcesPath, 'goal', 'goal.yaml'));
 
   // Persist per-stream sidecar data (todos, plan, usage, output files) via the
   // shared, host-agnostic snapshot store. The desktop progress backend owns the
@@ -150,10 +153,7 @@ export async function initializeElectronPlatform(
   // Lean tools talk to `lake env lean --server` directly in the desktop build.
   registerDirectLeanLanguageServices(lifecycle);
 
-  await bootstrapElectronAgentDirectories(
-    resolveResourcesPath(mainDirname),
-    app.getVersion(),
-  );
+  await bootstrapElectronAgentDirectories(resourcesPath, app.getVersion());
 
   return { workspacePath, lifecycle, progressSnapshotStore: snapshotStore };
 }

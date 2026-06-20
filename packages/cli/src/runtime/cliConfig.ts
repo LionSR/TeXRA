@@ -3,10 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { z } from 'zod';
 
-import { configKeyVariants } from '@platform/defaults/configKeyHelpers';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { configKeyVariants } from '@shared/config/configKeys';
 import { isObject } from '@utils/core/typeGuards';
 
 import {

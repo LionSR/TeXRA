@@ -1,14 +1,12 @@
-import * as path from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 import * as nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
-import { AbsoluteFS } from '@utils/files';
-
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
 
-let extensionPath: string | null = null;
+let polishPromptPath: string | null = null;
 let templatePromise: Promise<string> | null = null;
 
 const PolishYamlSchema = z.object({
@@ -16,28 +14,23 @@ const PolishYamlSchema = z.object({
 });
 
 /**
- * Store the extension path so the YAML template can be located later.
- * Call once during extension activation.
+ * Store the host-provided polish prompt YAML path. Call once during host
+ * startup before text enhancement is used.
  */
-export function initializePolishModel(extPath: string): void {
-  extensionPath = extPath;
+export function initializePolishModel(pathToPromptYaml: string): void {
+  polishPromptPath = pathToPromptYaml;
+  templatePromise = null;
 }
 
 function loadPromptTemplate(): Promise<string> {
   if (templatePromise) return templatePromise;
-  if (!extensionPath) {
+  if (!polishPromptPath) {
     throw new Error(
       'Polish model not initialized. Call initializePolishModel() first.',
     );
   }
-  const yamlPath = path.join(
-    extensionPath,
-    'resources',
-    'templates',
-    'instructionPolish.yaml',
-  );
   templatePromise = (async () => {
-    const content = await AbsoluteFS.read(yamlPath);
+    const content = await readFile(polishPromptPath, 'utf8');
     return PolishYamlSchema.parse(yaml.parse(content)).prompts.userRequest;
   })();
   return templatePromise;
