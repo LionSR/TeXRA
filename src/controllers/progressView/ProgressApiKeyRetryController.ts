@@ -43,15 +43,23 @@ export class ProgressApiKeyRetryController {
       ? [request.provider]
       : this.deps.providers;
     const requireChange = request.upstreamCreditDepleted === true;
-    const before = requireChange
-      ? await this.readKeys(providersToCheck)
-      : undefined;
 
-    await this.deps.promptForApiKey(request.provider);
-
-    const shouldProceed = requireChange
-      ? await this.hasChangedUsableKey(providersToCheck, before)
-      : await this.hasAnyUsableKey(providersToCheck);
+    // The gate depends on which credential failed:
+    // - Upstream credit depletion means the stored direct key is the broken
+    //   credential, so the user must provide a changed usable key.
+    // - Relay monthly limits do not imply a broken direct key, so any usable
+    //   direct key is enough consent to retry outside the relay.
+    // Do not use "any API key exists" here; that also treats relay access as a
+    // credential, which would allow retrying without a usable direct key.
+    let shouldProceed: boolean;
+    if (requireChange) {
+      const before = await this.readKeys(providersToCheck);
+      await this.deps.promptForApiKey(request.provider);
+      shouldProceed = await this.hasChangedUsableKey(providersToCheck, before);
+    } else {
+      await this.deps.promptForApiKey(request.provider);
+      shouldProceed = await this.hasAnyUsableKey(providersToCheck);
+    }
 
     if (!shouldProceed) {
       return {
@@ -62,6 +70,8 @@ export class ProgressApiKeyRetryController {
     }
 
     let disabledIncludedModelAccess = false;
+    // Only disable relay access when the failing call actually went through
+    // relay. Direct-key failures should not revoke relay for other providers.
     if (request.viaRelay === true) {
       await this.deps.setUseIncludedModelAccess(false);
       this.deps.invalidateModelOptionsCache();
@@ -86,7 +96,7 @@ export class ProgressApiKeyRetryController {
 
   private async hasChangedUsableKey(
     providers: readonly ApiProvider[],
-    before: ReadonlyMap<ApiProvider, string | undefined> | undefined,
+    before: ReadonlyMap<ApiProvider, string | undefined>,
   ): Promise<boolean> {
     const after = await this.readKeys(providers);
     return providers.some((provider) => {
@@ -94,7 +104,7 @@ export class ProgressApiKeyRetryController {
       return (
         typeof next === 'string' &&
         next.trim().length > 0 &&
-        next !== before?.get(provider)
+        next !== before.get(provider)
       );
     });
   }

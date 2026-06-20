@@ -123,6 +123,31 @@ describe('ProgressApiKeyRetryController', () => {
     assert.deepEqual(harness.retries, []);
   });
 
+  it('accepts a changed key from any provider when depletion has no provider hint', async () => {
+    const harness = createHarness({
+      keys: { openai: 'old-openai', anthropic: undefined },
+      prompt: (keys) => {
+        keys.set('anthropic', 'new-anthropic');
+      },
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-b',
+      upstreamCreditDepleted: true,
+      viaRelay: true,
+    });
+
+    assert.deepEqual(result, {
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: true,
+    });
+    assert.deepEqual(harness.prompts, [undefined]);
+    assert.deepEqual(harness.includedAccessValues, [false]);
+    assert.equal(harness.invalidations, 1);
+    assert.deepEqual(harness.retries, ['stream-b']);
+  });
+
   it('uses any existing usable key for relay-limit consent', async () => {
     const harness = createHarness({
       keys: { openai: 'stored-key' },
