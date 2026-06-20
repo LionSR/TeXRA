@@ -41,10 +41,6 @@ export type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
 const QUESTION_TRUNCATION = 400;
 const ANSWER_TRUNCATION = 2000;
 
-function readThreadCommand(threadId: ExternalInquiryThreadId): string {
-  return `inquiry { command: 'read', thread_id: '${threadId}' }`;
-}
-
 function formatStillOpen(threads: ExternalInquiryThreadSummary[]): string[] {
   if (!threads.length) return [];
   const lines = ['', 'Still open on this stream:'];
@@ -74,11 +70,11 @@ export function buildContinuationText(params: {
       lines.push(
         `A: ${truncateSummary(answer, ANSWER_TRUNCATION)}` +
           (answer.length > ANSWER_TRUNCATION
-            ? ` (full text via ${readThreadCommand(threadId)})`
+            ? ` (full text available in thread ${threadId})`
             : ''),
       );
     }
-    lines.push(`Full thread: ${readThreadCommand(threadId)}`);
+    lines.push(`Full thread: ${threadId}`);
     lines.push(...formatStillOpen(stillOpen));
     if (stillOpen.length === 0) {
       lines.push('', 'No other open inquiries on this stream.');
@@ -95,7 +91,7 @@ export function buildContinuationText(params: {
   // dropped
   lines.push(`[inquiry] ${threadId} dropped by user.`);
   lines.push(`Q: ${truncateSummary(question, QUESTION_TRUNCATION)}`);
-  lines.push(`Full thread: ${readThreadCommand(threadId)}`);
+  lines.push(`Full thread: ${threadId}`);
   lines.push(...formatStillOpen(stillOpen));
   lines.push(
     '',
