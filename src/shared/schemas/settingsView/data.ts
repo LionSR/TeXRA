@@ -42,6 +42,30 @@ import {
   HistoryClearedMessageSchema,
   UpdateHistoryMessageSchema,
 } from '../historyViewMessages';
+import {
+  ClaudeAgentEffortSchema,
+  ClaudeAgentModelSchema,
+  ClaudeAgentPermissionModeSchema,
+  CodexApprovalPolicySchema,
+  CodexReasoningEffortSchema,
+  CodexSandboxModeSchema,
+} from '../agentCliSettings';
+export {
+  ClaudeAgentEffortSchema,
+  ClaudeAgentModelSchema,
+  ClaudeAgentPermissionModeSchema,
+  CodexApprovalPolicySchema,
+  CodexReasoningEffortSchema,
+  CodexSandboxModeSchema,
+} from '../agentCliSettings';
+export type {
+  ClaudeAgentEffort,
+  ClaudeAgentModel,
+  ClaudeAgentPermissionMode,
+  CodexApprovalPolicy,
+  CodexReasoningEffort,
+  CodexSandboxMode,
+} from '../agentCliSettings';
 
 /** Tab name order - single source of truth for tab indices */
 export const SETTINGS_TAB_ORDER = [
@@ -280,63 +304,6 @@ export type UpdateToolDashboardMessage = z.infer<
 // ============================================================
 // Approval settings data schema
 // ============================================================
-
-/** Valid Codex sandbox modes (mirrors CODEX_SANDBOX_MODES in codexConfig.ts). */
-export const CodexSandboxModeSchema = z.enum([
-  'read-only',
-  'workspace-write',
-  'danger-full-access',
-]);
-export type CodexSandboxMode = z.infer<typeof CodexSandboxModeSchema>;
-
-/** Valid Codex reasoning effort levels (mirrors CODEX_REASONING_EFFORTS in codexConfig.ts). */
-export const CodexReasoningEffortSchema = z.enum([
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-]);
-export type CodexReasoningEffort = z.infer<typeof CodexReasoningEffortSchema>;
-
-/** Valid Codex approval policies (mirrors CODEX_APPROVAL_POLICIES in codexConfig.ts). */
-export const CodexApprovalPolicySchema = z.enum([
-  'never',
-  'on-request',
-  'on-failure',
-  'untrusted',
-]);
-export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
-
-/** Claude Code CLI model options surfaced in the picker. The SDK accepts any
- * string, but the dropdown is fixed to the canonical Anthropic families. */
-export const ClaudeAgentModelSchema = z.enum([
-  'claude-sonnet-4-6',
-  'claude-fable-5',
-  'claude-opus-4-8',
-  'claude-haiku-4-5-20251001',
-]);
-export type ClaudeAgentModel = z.infer<typeof ClaudeAgentModelSchema>;
-
-/** Claude Code CLI permission modes (mirrors CLAUDE_AGENT_PERMISSION_MODES). */
-export const ClaudeAgentPermissionModeSchema = z.enum([
-  'default',
-  'acceptEdits',
-  'bypassPermissions',
-  'plan',
-]);
-export type ClaudeAgentPermissionMode = z.infer<
-  typeof ClaudeAgentPermissionModeSchema
->;
-
-/** Claude Code CLI effort levels — mirrors the SDK's EffortLevel. */
-export const ClaudeAgentEffortSchema = z.enum([
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-]);
-export type ClaudeAgentEffort = z.infer<typeof ClaudeAgentEffortSchema>;
 
 /** Outbound: backend → frontend approval settings */
 export const UpdateApprovalSettingsMessageSchema = z.object({
