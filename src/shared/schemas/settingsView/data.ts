@@ -281,7 +281,14 @@ export type UpdateToolDashboardMessage = z.infer<
 // Approval settings data schema
 // ============================================================
 
-/** Valid Codex sandbox modes (mirrors CODEX_SANDBOX_MODES in codexConfig.ts). */
+/**
+ * Single source of truth for the Codex/Claude agent value lists. These schemas
+ * are vscode/SDK-runtime-free, so the SDK-aware `@tools` config modules derive
+ * their runtime const arrays from `.options` (and guard SDK alignment with
+ * `satisfies`) instead of repeating the literals.
+ */
+
+/** Valid Codex sandbox modes. */
 export const CodexSandboxModeSchema = z.enum([
   'read-only',
   'workspace-write',
@@ -289,7 +296,7 @@ export const CodexSandboxModeSchema = z.enum([
 ]);
 export type CodexSandboxMode = z.infer<typeof CodexSandboxModeSchema>;
 
-/** Valid Codex reasoning effort levels (mirrors CODEX_REASONING_EFFORTS in codexConfig.ts). */
+/** Valid Codex reasoning effort levels. */
 export const CodexReasoningEffortSchema = z.enum([
   'low',
   'medium',
@@ -298,7 +305,7 @@ export const CodexReasoningEffortSchema = z.enum([
 ]);
 export type CodexReasoningEffort = z.infer<typeof CodexReasoningEffortSchema>;
 
-/** Valid Codex approval policies (mirrors CODEX_APPROVAL_POLICIES in codexConfig.ts). */
+/** Valid Codex approval policies. */
 export const CodexApprovalPolicySchema = z.enum([
   'never',
   'on-request',
@@ -317,7 +324,8 @@ export const ClaudeAgentModelSchema = z.enum([
 ]);
 export type ClaudeAgentModel = z.infer<typeof ClaudeAgentModelSchema>;
 
-/** Claude Code CLI permission modes (mirrors CLAUDE_AGENT_PERMISSION_MODES). */
+/** Claude Code CLI permission modes (subset of the SDK's PermissionMode;
+ * 'dontAsk' and 'auto' are internal only). */
 export const ClaudeAgentPermissionModeSchema = z.enum([
   'default',
   'acceptEdits',
@@ -328,7 +336,8 @@ export type ClaudeAgentPermissionMode = z.infer<
   typeof ClaudeAgentPermissionModeSchema
 >;
 
-/** Claude Code CLI effort levels — mirrors the SDK's EffortLevel. */
+/** Claude Code CLI effort levels — kept aligned with the SDK's EffortLevel via
+ * a compile-time guard in claudeAgentShared.ts. */
 export const ClaudeAgentEffortSchema = z.enum([
   'low',
   'medium',
