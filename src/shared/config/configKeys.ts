@@ -1,14 +1,20 @@
-import type { Disposable } from '@platform/interfaces/disposable';
-import type { JsonStore } from './jsonStore';
-
 /**
- * Helpers shared by file-backed `ConfigProvider` implementations (Electron,
- * CLI). Keys are stored flat in a JSON file. Both `texra.<key>` and bare
- * `<key>` are accepted on read (canonical prefixed form tried first). Writes
- * always use the canonical `texra.<key>` form unless an unprefixed legacy
- * entry already exists for that key.
+ * Shared TeXRA configuration key helpers.
+ *
+ * Hosts store settings as flat keys. Both `texra.<key>` and bare `<key>` are
+ * accepted on read for legacy compatibility; writes use the canonical prefixed
+ * form unless a legacy bare key already exists.
  */
 const TEXRA_PREFIX = 'texra.';
+
+export interface ConfigKeyValueStore {
+  has(key: string): boolean;
+  get<T>(key: string): T | undefined;
+}
+
+export interface ConfigWatcherDisposable {
+  dispose(): void;
+}
 
 export function stripPrefix(key: string): string {
   return key.startsWith(TEXRA_PREFIX) ? key.slice(TEXRA_PREFIX.length) : key;
@@ -55,7 +61,7 @@ function watcherMatches(
 }
 
 export function firstStoredValue<T>(
-  store: JsonStore,
+  store: ConfigKeyValueStore,
   keys: readonly string[],
 ): T | undefined {
   for (const candidate of keys) {
@@ -65,7 +71,7 @@ export function firstStoredValue<T>(
 }
 
 export function createWatcherRegistry(): {
-  add(watcher: ConfigWatcher): Disposable;
+  add(watcher: ConfigWatcher): ConfigWatcherDisposable;
   notify(changedKey: string): void;
 } {
   const watchers = new Set<ConfigWatcher>();

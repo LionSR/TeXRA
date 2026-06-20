@@ -1,24 +1,22 @@
 /**
- * Loader for the packaged Goal prompt templates
- * (`<extension>/resources/goal/goal.yaml`).
+ * Loader for the packaged Goal prompt templates.
  *
- * Mirrors the shape of `src/agent/runtime/polishModel.ts`: each host calls
- * `initializeGoalPrompts(extensionPath)` once at startup with the path
- * to its own resource bundle. The agent code path is host-neutral and
- * reads through this loader; no `vscode` import is required.
+ * Each host calls `initializeGoalPrompts(goalYamlPath)` once at startup with
+ * the concrete YAML path from its own resource bundle. The agent code path is
+ * host-neutral and reads through this loader; no `vscode` import or package
+ * layout knowledge is required.
  *
  * When the loader has not been initialized (e.g. on a host that has not
  * yet wired Goal, or under tests), template lookups fall back to the
  * inline copy in `inlineTemplates` so the continuation loop still works.
  */
-import * as path from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { AbsoluteFS } from '@utils/files';
 
 const GoalPromptsYamlSchema = z.object({
   continuation: z.object({ template: z.string().min(1) }),
@@ -63,31 +61,29 @@ const inlineTemplates: GoalPrompts = {
   },
 };
 
-let extensionPath: string | null = null;
+let goalYamlPath: string | null = null;
 let cached: GoalPrompts | null = null;
 
 /**
- * Register the host's resource root. The Goal YAML is resolved at
- * `<extensionPath>/resources/goal/goal.yaml` on first use.
+ * Register the host's Goal prompt YAML path.
  *
  * Safe to call multiple times; later calls replace the path and bust the
  * cache so a previously-loaded inline fallback won't stick once the host
  * is wired.
  */
-export function initializeGoalPrompts(extPath: string): void {
-  extensionPath = extPath;
+export function initializeGoalPrompts(pathToGoalYaml: string): void {
+  goalYamlPath = pathToGoalYaml;
   cached = null;
 }
 
 async function loadPrompts(): Promise<GoalPrompts> {
   if (cached) return cached;
-  if (!extensionPath) {
+  if (!goalYamlPath) {
     cached = inlineTemplates;
     return cached;
   }
   try {
-    const yamlPath = path.join(extensionPath, 'resources', 'goal', 'goal.yaml');
-    const content = await AbsoluteFS.read(yamlPath);
+    const content = await readFile(goalYamlPath, 'utf8');
     cached = GoalPromptsYamlSchema.parse(yaml.parse(content));
   } catch (err) {
     // Fall back to inline templates, but warn so a broken/missing bundled
