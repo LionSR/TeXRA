@@ -22,7 +22,6 @@ allowBuilds:
 patchedDependencies:
   ink@7.0.5: patches/ink@7.0.5.patch
 minimumReleaseAgeExclude:
-  - llm-zoo@1.9.1
   - '@anthropic-ai/sdk@0.103.0'
   # 2026-06-10: unblock installs; these cleared review but were <24h old.
   # Safe to remove once they age past the default quarantine window.
