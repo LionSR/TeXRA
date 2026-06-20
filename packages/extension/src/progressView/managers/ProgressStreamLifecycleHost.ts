@@ -14,15 +14,16 @@ import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } f
 import type { ProgressViewProvider } from '../ProgressViewProvider';
 
 type StreamTabId = import('@shared/schemas').StreamTabId;
-type ModelOutputBackups = Map<
-  StreamTabId,
-  Map<string, { content: string; streamId: StreamTabId }>
->;
+
+interface ModelOutputBackupCleaner {
+  clearStreamBackups(stream: StreamTabId): void;
+  clearAllBackups(): void;
+}
 
 export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostPort {
   constructor(
     private readonly provider: ProgressViewProvider,
-    private readonly modelOutputBackups: ModelOutputBackups,
+    private readonly backupCleaner: ModelOutputBackupCleaner,
   ) {}
 
   getVisibleStreamIds(): StreamTabId[] {
@@ -49,7 +50,7 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
   cleanupDeletedStream(stream: StreamTabId): void {
     cleanupApprovalsForStream(stream);
     ToolUseFollowUpQueue.release(stream);
-    this.modelOutputBackups.delete(stream);
+    this.backupCleaner.clearStreamBackups(stream);
     this.provider.webviewBridge.clearStream(stream);
   }
 
@@ -58,7 +59,7 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
     for (const stream of streams) {
       ToolUseFollowUpQueue.release(stream);
     }
-    this.modelOutputBackups.clear();
+    this.backupCleaner.clearAllBackups();
     this.provider.webviewBridge.clearAll();
   }
 
