@@ -16,6 +16,7 @@ import { SettingsProfileController } from '@controllers/settingsView/SettingsPro
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
 import { buildToolDashboardItems } from '@controllers/settingsView/ToolDashboardData';
 import { platform } from '@platform/platform';
+import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { BaseViewMessageHandler } from '@common/webview';
@@ -63,7 +64,6 @@ import {
   buildSuperYoloMessage,
   setNestedDelegationMaxDepth,
 } from '@shared/settingsView/handlers/superYoloHandlers';
-import { createSettingsMemoryController } from '@shared/settingsView/handlers/memoryControllerFactory';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -133,7 +133,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     };
 
     this.memoryController = createSettingsMemoryController({
-      workspaceState: workspaceSM,
       globalState: globalSM,
       prompt: new VscodePromptHost(),
       setMemoryEnabled: setToolUseMemoryEnabled,
