@@ -5,7 +5,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
 
 // Local imports - compatibility keys
-import { LEGACY_GOAL_FEATURE_FLAG_KEYS } from '@tools/goal';
+import { LEGACY_GOAL_FEATURE_FLAG_KEYS } from '@shared/schemas/goal';
 
 // Local imports - CLI extension schema
 import { CLI_SETTING_PATHS } from './cliSettings';

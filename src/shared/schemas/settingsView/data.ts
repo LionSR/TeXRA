@@ -19,7 +19,7 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-import { GoalSchema } from '@tools/goal/goalMeta';
+import { GoalSchema } from '../goal';
 
 import {
   AgentCategorySchema,

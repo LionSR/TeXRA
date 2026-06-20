@@ -1,11 +1,6 @@
 import type { StreamTabId } from '@shared/schemas/identifiers';
-
-import {
-  GoalStore,
-  formatGoalTime,
-  goalElapsedMs,
-  isGoalEnabled,
-} from '@tools/goal';
+import { formatGoalTime, goalElapsedMs } from '@shared/schemas/goal';
+import { GoalStore, isGoalEnabled } from '@tools/goal';
 
 import { getContinuationTemplate } from './promptLoader';
 

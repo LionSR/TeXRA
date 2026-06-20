@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { GoalStatusSchema } from '@tools/goal/goalMeta';
+import { GoalStatusSchema } from './goal';
 import { AgentCategory, AgentCategorySchema } from './agent';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import { STREAM_STATUS, StreamStatusSchema } from './stream';
