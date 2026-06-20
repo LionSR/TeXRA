@@ -1,8 +1,6 @@
 // Standard library imports
 import * as path from 'node:path';
 
-import { nanoid } from 'nanoid';
-
 // Local imports
 import { PASTED_PREFIX } from '@shared/files/pastedImageConstants';
 import { THREE_DAYS_MS } from '@utils/config/constants';
@@ -24,14 +22,6 @@ export function getPastedImageFullPath(filename: string): string {
   return StorageFS.fullPath(
     path.join(PASTED_DIR, pastedImageFileName(filename)),
   );
-}
-
-/**
- * Generate a pasted-image filename: `pasted_<timestamp>_<rand>.<ext>`. The
- * `PASTED_PREFIX` lets {@link isPastedImage} recognize it later.
- */
-export function generatePastedImageName(ext: string): string {
-  return `${PASTED_PREFIX}${Date.now()}_${nanoid(6)}.${ext}`;
 }
 
 /**

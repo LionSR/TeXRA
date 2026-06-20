@@ -14,10 +14,10 @@ import { live } from 'lit/directives/live.js';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { RecordingButtonController } from '@shared/litControllers';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { generatePastedImageName } from '@shared/files/pastedImageConstants';
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
 import {
   clipboardImageFiles,
-  generatePastedImageName,
   getExtensionFromMimeType,
   readFileAsBase64,
   type ExtractedClipboardImage,
