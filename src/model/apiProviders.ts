@@ -28,6 +28,19 @@ export function apiKeyEnvName(provider: ApiProvider): string {
   return `${provider.toUpperCase()}_API_KEY`;
 }
 
+/**
+ * Read a provider's API key from the process environment. Isolating the lone
+ * `process.env` touch in this VS Code-free module behind a named, injectable
+ * seam keeps the env-fallback source explicit and testable without mutating
+ * global state (mirrors the `env` injection pattern in `claudeAgentConfig.ts`).
+ */
+export function apiKeyFromEnv(
+  provider: ApiProvider,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  return env[apiKeyEnvName(provider)];
+}
+
 /** Where a resolved API key came from. */
 export type ApiKeyOrigin = 'secret' | 'env' | 'none';
 
@@ -74,7 +87,7 @@ async function resolveApiKey(
   const request = (async (): Promise<ResolvedApiKey> => {
     const stored = await secrets.get(apiKeySecretName(provider));
     if (stored) return { value: stored, origin: 'secret' };
-    const envValue = process.env[apiKeyEnvName(provider)];
+    const envValue = apiKeyFromEnv(provider);
     if (envValue) return { value: envValue, origin: 'env' };
     return { value: undefined, origin: 'none' };
   })();
