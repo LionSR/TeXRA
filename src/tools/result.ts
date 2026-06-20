@@ -1,24 +1,14 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Local imports - shared schemas
+import {
+  LineChangesSchema,
+  LineCountSchema,
+} from '@shared/schemas/lineChanges';
+
 // Type imports
 import type { ZodIssue } from 'zod';
-
-// ============================================================================
-// Zod Schemas - Single Source of Truth
-// ============================================================================
-
-/**
- * Schema for line change statistics.
- * Single source of truth - used by ToolResult, edits, and model handlers.
- */
-const LineCountSchema = z.int().nonnegative();
-
-export const LineChangesSchema = z.object({
-  added: LineCountSchema,
-  removed: LineCountSchema,
-});
-export type LineChanges = z.infer<typeof LineChangesSchema>;
 
 /**
  * Base schema for file references (metadata only, no binary data).

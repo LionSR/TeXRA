@@ -1,6 +1,8 @@
 // Third-party imports
 import { z } from 'zod';
 
+import { LineChangesSchema } from '@shared/schemas/lineChanges';
+
 // Local imports - tools (single source of truth for file/attachment schemas)
 import {
   type ToolFileAttachment,
@@ -8,7 +10,6 @@ import {
   type FileReference,
   ToolFileAttachmentSchema,
   FileReferenceSchema,
-  LineChangesSchema,
   EditRecordSchema,
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
 } from '@tools/result';
