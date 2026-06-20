@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
 import { platform } from '@platform/platform';
-import { toErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
-import { SupabaseClient } from './SupabaseClient';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   AUTH_BRIDGE_URL,
   DEFAULT_OAUTH_PROVIDER,
@@ -13,19 +11,21 @@ import {
   DEFAULT_SESSION_EXPIRY_MS,
   isOAuthProvider,
   type OAuthProvider,
-} from './config';
+} from '@auth/config';
 import {
   DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS,
   createHostAuthCoordinator,
-} from './SupabaseAuthCoordinator';
-import { getServerSideKeyService } from './serverKeys';
+} from '@auth/SupabaseAuthCoordinator';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   fetchWithTimeout,
   parseTokenExchangeResponse,
   SupabaseSessionCoordinator,
   toStorableSupabaseSession,
   type SupabaseSession,
-} from './SupabaseSession';
+} from '@auth/SupabaseSession';
+import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 import type { SupabaseUriHandler } from './UriHandler';
 
 const AUTH_URI_HANDLER_NOT_INITIALIZED =

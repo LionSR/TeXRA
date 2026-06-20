@@ -24,7 +24,7 @@ export async function buildDefaultToolDashboardItems(
   cachedResults?: ExternalToolCheckResult[],
 ): Promise<ToolDashboardItem[]> {
   const { buildToolDashboardItems } =
-    await import('@settingsView/utils/toolDashboardData');
+    await import('@shared/settingsView/toolDashboardData');
   return buildToolDashboardItems(cachedResults);
 }
 

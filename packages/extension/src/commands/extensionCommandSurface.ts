@@ -7,7 +7,7 @@ import {
   signIn as authSignIn,
   signOut as authSignOut,
   viewProfile as authViewProfile,
-} from '@auth/authCommands';
+} from '@commands/auth';
 import {
   stopAgent as agentStopAgent,
   compactResponse as agentCompactResponse,
