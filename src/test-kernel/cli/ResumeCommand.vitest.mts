@@ -70,7 +70,7 @@ describe('runResumeExecution', () => {
   it('uses the CLI context TTY snapshot before reopening chat', async () => {
     const resolution = resumableResolution();
     mocks.resolveCliResumeSnapshot.mockResolvedValueOnce(resolution);
-    const { runResumeExecution } = await import('@cli/commands/resume');
+    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
 
     await expect(
       runResumeExecution(cliContext({ stdoutIsTty: true }), EXECUTION_ID),
@@ -89,7 +89,7 @@ describe('runResumeExecution', () => {
   });
 
   it('rejects resume when the context says stdout is not a TTY', async () => {
-    const { runResumeExecution } = await import('@cli/commands/resume');
+    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
 
     await expect(
       runResumeExecution(cliContext({ stdoutIsTty: false }), EXECUTION_ID),
@@ -107,7 +107,7 @@ describe('runResumeExecution', () => {
   });
 
   it('uses the local launcher in headless resume guidance', async () => {
-    const { runResumeExecution } = await import('@cli/commands/resume');
+    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
 
     await expect(
       runResumeExecution(
@@ -125,7 +125,7 @@ describe('runResumeExecution', () => {
   });
 
   it('rejects resume in dumb terminals before falling through to chat', async () => {
-    const { runResumeExecution } = await import('@cli/commands/resume');
+    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
 
     await expect(
       runResumeExecution(cliContext({ termIsDumb: true }), EXECUTION_ID),
@@ -140,7 +140,7 @@ describe('runResumeExecution', () => {
   });
 
   it('uses the local launcher in dumb-terminal resume guidance', async () => {
-    const { runResumeExecution } = await import('@cli/commands/resume');
+    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
 
     await expect(
       runResumeExecution(
@@ -162,7 +162,7 @@ describe('runResumeExecution', () => {
     mocks.explainNonResumable.mockReturnValue(
       `Failed to load resumable session ${EXECUTION_ID}: KV timeout`,
     );
-    const { runResumeExecution } = await import('@cli/commands/resume');
+    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
 
     await expect(
       runResumeExecution(cliContext({ stdoutIsTty: true }), EXECUTION_ID),

@@ -259,7 +259,7 @@ describe('CLI multi-agent run command', () => {
 
   it('marks run-plan resolution when authenticated gaps triggered a remote load', async () => {
     const { loadCliMultiAgentRunPlan } =
-      await import('@cli/commands/multiAgent');
+      await import('@cli/runtime/multiAgentRunPlan');
     mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
     mocks.isAuthenticated.mockResolvedValueOnce(true);
 
@@ -279,7 +279,7 @@ describe('CLI multi-agent run command', () => {
 
   it('does not mark run-plan resolution when unauthenticated gaps stay local-only', async () => {
     const { loadCliMultiAgentRunPlan } =
-      await import('@cli/commands/multiAgent');
+      await import('@cli/runtime/multiAgentRunPlan');
     mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
     mocks.isAuthenticated.mockResolvedValueOnce(false);
 
@@ -295,7 +295,7 @@ describe('CLI multi-agent run command', () => {
 
   it('marks preset-list resolution when authenticated gaps triggered a remote load', async () => {
     const { loadCliMultiAgentPresetPlanSet } =
-      await import('@cli/commands/multiAgent');
+      await import('@cli/runtime/multiAgentRunPlan');
     mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
     mocks.isAuthenticated.mockResolvedValueOnce(true);
 

@@ -14,7 +14,7 @@ flowchart TD
   onboarding[onboarding maybeRunCliOnboarding]
   history[runtime/history listCliHistoryEntries]
   presets[runtime/multiAgentPresets readCliMultiAgentPresets]
-  plans[commands/multiAgent loadCliMultiAgentPresetPlans]
+  plans[runtime/multiAgentRunPlan loadCliMultiAgentPresetPlanSet]
   agentsLocal[agentRegistry loadAgents includeRemote false]
   auth[supabaseAuth isAuthenticated]
   agentsRemote[agentRegistry loadAgents includeRemote true]
@@ -24,7 +24,7 @@ flowchart TD
   defaultModel[resolveChatDefaults + resolveCliRunnableModel]
   picker[orchestration/runOrchestrationTui]
   chat[chat/tui/runChatTui runChat]
-  presetRun[commands/multiAgent loadCliMultiAgentRunPlan]
+  presetRun[runtime/multiAgentRunPlan loadCliMultiAgentRunPlan]
 
   user --> orch
   orch --> platform
@@ -57,7 +57,7 @@ Current ownership:
   `commands/orchestrate.ts` and `chat/tui/runChatTui.tsx`.
   The launcher can run onboarding, then a selected chat runs the same gate again.
 - Team availability:
-  `commands/multiAgent.ts` plus `runtime/multiAgentPresets.ts`.
+  `runtime/multiAgentRunPlan.ts` plus `runtime/multiAgentPresets.ts`.
   List, inspect, and run all use the same planner, but launch replans after selection.
 - Agent registry load scope:
   `agentRegistry.loadAgents()` call sites.
