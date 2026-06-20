@@ -1,4 +1,3 @@
-import { platform } from '@platform/platform';
 import { Node } from '@agent/node';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { CompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
@@ -33,8 +32,6 @@ import {
   type FileLocation,
   type RoundOutput,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { flexibleFS } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -278,7 +275,8 @@ export class OutputNode<C = unknown> extends Node<
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { streamId, logger, outputState, runtimeHost } = this.services;
+    const { streamId, logger, outputState, runtimeHost, workflowOutputPolicy } =
+      this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary, roundOutput } = execRes;
 
@@ -300,7 +298,7 @@ export class OutputNode<C = unknown> extends Node<
       runtimeHost.emit('requestOpenFile', { location, preserveFocus: true });
     }
 
-    if (endTurn && shouldAutoOpenPdfOrLog()) {
+    if (endTurn && workflowOutputPolicy.shouldAutoOpenPdfOrLog()) {
       if (execRes.compileFailures.length > 0) {
         for (const failure of execRes.compileFailures) {
           runtimeHost.emit('requestOpenFile', {
@@ -358,7 +356,7 @@ export class OutputNode<C = unknown> extends Node<
       shared.lastCompileResult = execRes.compileResult;
       const compileFailureContext = shouldUseCompileFailureRepairContext(
         execRes.compileResult,
-        shouldRejectOnCompileFailure(),
+        workflowOutputPolicy.shouldRejectOnCompileFailure(),
       )
         ? formatCompileFailureRoundContext(execRes.compileResult)
         : undefined;
@@ -393,18 +391,4 @@ export class OutputNode<C = unknown> extends Node<
 
     return diffManager.handleLatexdiffofOutput(currentRound, mapping);
   }
-}
-
-function shouldAutoOpenPdfOrLog(): boolean {
-  return platform().workspaceState.get<boolean>(
-    WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
-    LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
-  );
-}
-
-function shouldRejectOnCompileFailure(): boolean {
-  return platform().workspaceState.get<boolean>(
-    WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-    LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
-  );
 }
