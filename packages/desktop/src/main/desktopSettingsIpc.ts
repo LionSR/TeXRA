@@ -5,6 +5,7 @@ import {
   isAllowedLatexInstallCommand,
   LatexToolingController,
 } from '@controllers/settingsView/LatexToolingController';
+import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
 import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
   computeAgentOptionsData,
@@ -61,7 +62,6 @@ import {
   createModelSelectionController,
 } from '@shared/settingsView/handlers/modelSelectionHandlers';
 import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
-import { createSettingsMemoryController } from '@shared/settingsView/handlers/memoryControllerFactory';
 import {
   buildSuperYoloMessage,
   setNestedDelegationMaxDepth,
@@ -222,7 +222,6 @@ export function createDesktopSettingsIpc(
       onError,
     });
   const memoryController = createSettingsMemoryController({
-    workspaceState,
     globalState,
     prompt: {
       confirm: (message, promptOptions) =>
