@@ -123,12 +123,9 @@ Useful for finding the right lemma when you know roughly what type it should hav
   schema: LeanLoogleInputSchema,
 }) {
   /**
-   * Execute a single Loogle query and return a per-query result.
-   */
-  /**
    * Fetch one Loogle query, retrying transient failures (timeouts, 5xx,
-   * dropped connections) with jittered backoff. A 4xx or any non-axios
-   * error aborts immediately — those won't change on retry.
+   * 429 rate limits, dropped connections) with jittered backoff. Non-429
+   * 4xx responses and non-axios errors abort immediately.
    */
   private async fetchLoogle(query: string): Promise<LoogleResponse> {
     return pRetry(
@@ -164,6 +161,9 @@ Useful for finding the right lemma when you know roughly what type it should hav
     );
   }
 
+  /**
+   * Execute a single Loogle query and return a per-query result.
+   */
   private async executeSingle(
     query: string,
     limit: number,

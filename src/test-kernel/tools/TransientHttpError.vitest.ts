@@ -34,7 +34,8 @@ describe('isTransientHttpError', () => {
     );
   });
 
-  it('treats 5xx server errors as transient', () => {
+  it('treats rate limits and 5xx server errors as transient', () => {
+    expect(isTransientHttpError(axiosErrorWithStatus(429))).toBe(true);
     expect(isTransientHttpError(axiosErrorWithStatus(500))).toBe(true);
     expect(isTransientHttpError(axiosErrorWithStatus(503))).toBe(true);
   });
@@ -42,7 +43,6 @@ describe('isTransientHttpError', () => {
   it('treats 4xx responses as permanent', () => {
     expect(isTransientHttpError(axiosErrorWithStatus(400))).toBe(false);
     expect(isTransientHttpError(axiosErrorWithStatus(404))).toBe(false);
-    expect(isTransientHttpError(axiosErrorWithStatus(429))).toBe(false);
   });
 
   it('treats non-axios errors as permanent', () => {
