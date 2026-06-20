@@ -109,38 +109,35 @@ describe('ProgressWorkflowFileActionsController', () => {
     ]);
   });
 
-  it('does not send accept follow-up when the host cancels acceptance', async () => {
-    const backups = new Map([
-      [
-        'workflow',
-        new Map([
-          [
-            '/workspace/edited.tex',
-            {
-              content: 'original model output',
-              streamId: 'workflow' as const,
-            },
-          ],
-        ]),
-      ],
-    ]);
+  it('keeps the accept follow-up backup when the host cancels acceptance', async () => {
     const followUps: string[] = [];
+    const acceptResults = [false, true];
+    const readResults = [
+      'original model output',
+      'user edited output',
+      'user edited output',
+    ];
     const deps = createDeps({
-      acceptEditedFile: async () => false,
-      readFile: async () => 'user edited output',
+      acceptEditedFile: async () => acceptResults.shift(),
+      readFile: async () => readResults.shift() ?? '',
     });
     deps.state.getActiveStream = () => 'workflow';
     deps.sendFollowUp = async (_stream, text) => {
       followUps.push(text);
     };
-    const controller = new ProgressWorkflowFileActionsController({
-      ...deps,
-      modelOutputBackups: backups,
-    });
+    const controller = new ProgressWorkflowFileActionsController(deps);
 
+    await controller.compareOriginal(
+      '/workspace/edited.tex',
+      '/workspace/base.tex',
+    );
     await controller.acceptFile('/workspace/edited.tex', '/workspace/base.tex');
 
     assert.deepEqual(followUps, []);
-    assert.equal(backups.get('workflow')?.has('/workspace/edited.tex'), true);
+
+    await controller.acceptFile('/workspace/edited.tex', '/workspace/base.tex');
+
+    assert.equal(followUps.length, 1);
+    assert.match(followUps[0] ?? '', /edited\.tex/);
   });
 });

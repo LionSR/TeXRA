@@ -79,10 +79,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly agentProposalController: ProgressAgentProposalController;
   private readonly apiKeyRetryController: ProgressApiKeyRetryController;
   private readonly followUpController: ProgressFollowUpController;
-  private readonly modelOutputBackups = new Map<
-    StreamTabId,
-    Map<string, { content: string; streamId: StreamTabId }>
-  >();
 
   /**
    * Type-safe handler registry - handlers receive typed data.
@@ -109,14 +105,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       progressTitle: 'Transcribing follow-up message',
     });
 
-    this.handlerRegistry = this.createHandlerRegistry();
-    this.streamLifecycleController = this.createStreamLifecycleController();
-    this.workflowActionsController = this.createWorkflowActionsController();
     this.workflowFileActionsController =
       this.createWorkflowFileActionsController();
+    this.streamLifecycleController = this.createStreamLifecycleController();
+    this.workflowActionsController = this.createWorkflowActionsController();
     this.agentProposalController = this.createAgentProposalController();
     this.apiKeyRetryController = this.createApiKeyRetryController();
     this.followUpController = this.createFollowUpController();
+    this.handlerRegistry = this.createHandlerRegistry();
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
       void this.streamLifecycleController.deleteStream(streamId);
@@ -399,7 +395,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       host: new ProgressStreamLifecycleHost(
         this.provider,
-        this.modelOutputBackups,
+        this.workflowFileActionsController,
       ),
     });
   }
@@ -515,7 +511,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           text,
         });
       },
-      modelOutputBackups: this.modelOutputBackups,
     });
   }
 
