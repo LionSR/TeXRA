@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Shared (all surfaces)
+
+#### Improvements
+
+- **More reliable Lean theorem search** — Loogle queries now retry automatically when the server times out, drops the connection, or returns a transient server error, so a brief hiccup no longer surfaces as a failed search; genuine bad requests still fail fast.
+
 ## [0.38.9] - 2026-06-18
 
 ### Shared (all surfaces)
