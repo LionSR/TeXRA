@@ -233,6 +233,34 @@ describe('CLI workflow run command', () => {
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
+  it('reports input expansion errors before resolving the model', async () => {
+    mocks.withExpandedRunInputs.mockRejectedValueOnce(
+      new Error('At least one workflow input file is required.'),
+    );
+    const { runWorkflowAgent } = await import('@cli/commands/workflow');
+
+    await expect(
+      runWorkflowAgent(cliContext(), {
+        agent: 'polish',
+        inputFiles: [],
+        contextFiles: [],
+        instruction: '',
+      }),
+    ).rejects.toThrow('At least one workflow input file is required.');
+
+    expect(mocks.initLocalCliPlatform).toHaveBeenCalled();
+    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('polish', 'run');
+    expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
+      [],
+      [],
+      '/tmp/project',
+      { readStdinText: expect.any(Function) },
+      expect.any(Function),
+    );
+    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.executeCliConfig).not.toHaveBeenCalled();
+  });
+
   it('passes instruction file contents before inline workflow instructions', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
     try {
