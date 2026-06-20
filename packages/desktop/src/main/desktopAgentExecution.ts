@@ -53,6 +53,7 @@ import {
   type RestoredStreamSnapshot,
   type StreamTabId,
 } from '@shared/schemas';
+import { isGoalInFlight } from '@shared/schemas/goal';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
@@ -66,8 +67,10 @@ import {
   cleanupApprovalsForStream,
   cleanupUnscopedApprovals,
   handleProgressViewBashApprovalAction,
+  isApprovalBypassedForStream,
+  proposalApprovalState,
 } from '@tools/approval';
-import { GoalStore, isGoalInFlight } from '@tools/goal';
+import { GoalStore } from '@tools/goal';
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
@@ -210,6 +213,7 @@ export class DesktopProgressBridge {
         return this.postToRenderer(message) !== false;
       },
       hasTarget: () => true,
+      getStreamControls: (streamId) => this.getStreamControls(streamId),
       configureUi: ({ webviewUpdater }) => {
         // Track shown-but-unresolved prompts so hasPendingPermissions can
         // keep the active view on a stream awaiting input (the shared
@@ -813,6 +817,19 @@ export class DesktopProgressBridge {
       .finally(() => {
         this.restoredDisplayInFlight.delete(streamId);
       });
+  }
+
+  private getStreamControls(streamId: StreamTabId) {
+    const goal = GoalStore.getForStream(streamId);
+    const goalActive = isGoalInFlight(goal);
+    return {
+      toolEditBypass: isApprovalBypassedForStream(streamId),
+      superYoloBypass: proposalApprovalState.isBypassed(streamId),
+      goalActive,
+      ...(goalActive && goal
+        ? { goalStatus: goal.status, goalObjective: goal.objective }
+        : {}),
+    };
   }
 
   private updateGoalActiveFromStore(streamId: StreamTabId): void {

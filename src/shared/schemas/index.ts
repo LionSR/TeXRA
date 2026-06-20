@@ -3,6 +3,7 @@ export * from './identifiers';
 export * from './agent';
 export * from './agentCliSettings';
 export * from './fileFields';
+export * from './goal';
 export * from './proposalFields';
 export * from './toolConfig';
 export {
