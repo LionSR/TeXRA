@@ -12,16 +12,12 @@ import * as vscode from 'vscode';
 
 // Shared schemas and dispatchers
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
+import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { platform } from '@platform/platform';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { BaseViewMessageHandler } from '@common/webview';
-import {
-  GlobalStateKey,
-  WorkspaceStateKey,
-  globalSM,
-  workspaceSM,
-} from '@common/state';
+import { WorkspaceStateKey, globalSM, workspaceSM } from '@common/state';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -45,7 +41,6 @@ import {
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
-import { buildProfileMessage } from '@shared/settingsView/handlers/profileHandlers';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import {
   dispatchSettingsViewInbound,
@@ -73,11 +68,6 @@ import {
   PROVIDER_URLS,
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
-import type {
-  ProviderKeyStatus,
-  ProviderVscodeSetting,
-  NumberVscodeSetting,
-} from '@shared/schemas/profileViewMessages';
 import { buildToolDashboardItems } from '@shared/settingsView/toolDashboardData';
 import { GoalStore } from '@tools/goal';
 import {
@@ -116,84 +106,6 @@ import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 type MessageFor<C extends SettingsViewInboundMessage['command']> =
   SettingsMessageFor<C>;
 
-/** Reliability settings surfaced in the Models tab. */
-const RELIABILITY_SETTINGS: (Omit<NumberVscodeSetting, 'value'> & {
-  defaultValue: number;
-})[] = [
-  {
-    key: 'texra.model.compactionThresholdPercent',
-    label: 'Compaction threshold',
-    description:
-      'Context window percentage to trigger automatic context compaction. Set to 0 to disable.',
-    min: 0,
-    max: 100,
-    unit: '%',
-    defaultValue: 75,
-  },
-  {
-    key: 'texra.model.retry.maxAttempts',
-    label: 'Retry attempts',
-    description:
-      'Automatic retry attempts before showing a manual retry button. Set to 0 for manual-only.',
-    min: 0,
-    defaultValue: 0,
-  },
-  {
-    key: 'texra.model.retry.backoffMs',
-    label: 'Retry backoff',
-    description: 'Base delay between retry attempts.',
-    min: 0,
-    unit: 'ms',
-    defaultValue: 1000,
-  },
-];
-
-/** Allowed setting keys that the frontend can toggle (whitelist for safety). */
-const ALLOWED_VSCODE_SETTING_KEYS = new Set([
-  ...Object.values(PROVIDER_VSCODE_SETTINGS)
-    .flat()
-    .map((s) => s.key),
-  ...RELIABILITY_SETTINGS.map((s) => s.key),
-]);
-
-function getProviderVscodeSettings(provider: string): ProviderVscodeSetting[] {
-  const defs = PROVIDER_VSCODE_SETTINGS[provider.toLowerCase()];
-  if (!defs) return [];
-  return defs.map((def) => ({
-    ...def,
-    value: def.globalStateKey
-      ? (globalSM?.get<boolean>(def.globalStateKey, false) ?? false)
-      : getConfig<boolean>(def.key, false),
-  }));
-}
-
-function getReliabilitySettings(): NumberVscodeSetting[] {
-  return RELIABILITY_SETTINGS.map(({ defaultValue, ...def }) => ({
-    ...def,
-    value: getConfig<number>(def.key, defaultValue),
-  }));
-}
-
-async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
-  const secretStatuses = await loadApiKeyStatusMap(
-    platform().secrets,
-    SecretManager.API_PROVIDERS,
-  );
-  return SecretManager.API_PROVIDERS.map((provider) => ({
-    provider,
-    displayName: getProviderDisplayName(
-      provider,
-      PROVIDER_DISPLAY_NAMES[provider],
-    ),
-    status: secretStatuses[provider],
-    keyUrl: getProviderKeyUrl(provider, PROVIDER_URLS[provider]),
-    streaming: getProviderStreaming(provider),
-    customEndpoint: getProviderEndpoint(provider),
-    supportsCustomEndpoint: supportsCustomEndpoint(provider),
-    vscodeSettings: getProviderVscodeSettings(provider),
-  }));
-}
-
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
@@ -206,6 +118,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly githubHandlers: GitHubSubscriptionHandlers;
   private readonly memoryController: SettingsMemoryController;
   private readonly modelSelectionController: SettingsModelSelectionController;
+  private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
 
   constructor(context: vscode.ExtensionContext) {
@@ -236,13 +149,33 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
       },
     );
+    this.profileController = new SettingsProfileController({
+      globalState: globalSM,
+      providerIds: SecretManager.API_PROVIDERS,
+      providerVscodeSettings: PROVIDER_VSCODE_SETTINGS,
+      providerDisplayNames: PROVIDER_DISPLAY_NAMES,
+      providerKeyUrls: PROVIDER_URLS,
+      loadProviderKeyStatuses: () =>
+        loadApiKeyStatusMap(platform().secrets, SecretManager.API_PROVIDERS),
+      getProviderDisplayName,
+      getProviderKeyUrl,
+      getProviderStreaming,
+      getProviderEndpoint,
+      supportsCustomEndpoint,
+      getConfig,
+      updateConfig: (key, value) =>
+        updateConfig(key, value, { target: 'global', prefix: false }),
+      setUseIncludedModelAccess: (enabled) =>
+        getServerSideKeyService().setUseIncludedModelAccess(enabled),
+      invalidateModelOptionsCache,
+    });
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: new VscodePromptHost(),
       externalOpener: new VscodeExternalOpener(),
       getProviderDisplayName: (provider) =>
-        PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+        this.profileController.getProviderDisplayName(provider),
       getProviderKeyUrl: (provider) =>
-        getProviderKeyUrl(provider, PROVIDER_URLS[provider]),
+        this.profileController.getProviderKeyUrl(provider),
       getApiKeySecretName: (provider) =>
         SecretManager.getApiKeySecretName(provider as ApiProvider),
       setSecret: (key, value) => SecretManager.set(key, value),
@@ -703,10 +636,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendProfileData(webview: vscode.Webview): Promise<void> {
-    const message = await buildProfileMessage({
-      getProviderKeyStatuses: () => getProviderKeyStatuses(),
-    });
-    await webview.postMessage(message);
+    await webview.postMessage(
+      await this.profileController.buildProfileMessage(),
+    );
   }
 
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
@@ -731,7 +663,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       buildSuperYoloMessage({
         workspaceState: workspaceSM,
         globalState: globalSM,
-        getReliabilitySettings,
+        getReliabilitySettings: () =>
+          this.profileController.getReliabilitySettings(),
       }),
     );
   }
@@ -944,30 +877,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetApiAccessMode(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_API_ACCESS_MODE>,
   ): Promise<void> {
-    await getServerSideKeyService().setUseIncludedModelAccess(
-      data.mode === 'included',
-    );
-
-    // Included Access routes through the TeXRA relay — OpenRouter bypasses it.
-    // Disable OpenRouter when switching to Included Access so routing is consistent.
-    let openRouterDisabled = false;
-    if (
-      data.mode === 'included' &&
-      globalSM?.get<boolean>(GlobalStateKey.USE_OPENROUTER, false)
-    ) {
-      await globalSM.update(GlobalStateKey.USE_OPENROUTER, false);
-      openRouterDisabled = true;
-    }
-
-    // Access mode affects model availability — invalidate cached options.
-    invalidateModelOptionsCache();
+    const update = await this.profileController.setApiAccessMode(data.mode);
     await this.withActiveWebview(async (w) => {
       await this.sendProfileAndModelSelectionData(w);
     });
-
     const modeLabel =
-      data.mode === 'included' ? 'Included Access' : 'My Own Keys';
-    const suffix = openRouterDisabled
+      update.mode === 'included' ? 'Included Access' : 'My Own Keys';
+    const suffix = update.openRouterDisabled
       ? ' OpenRouter has been turned off (not compatible with Included Access).'
       : '';
     void vscode.window.showInformationMessage(
@@ -1001,7 +917,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
-        `Failed to ${verb} ${PROVIDER_DISPLAY_NAMES[provider] ?? provider} API key`,
+        `Failed to ${verb} ${this.profileController.getProviderDisplayName(provider)} API key`,
         error,
       );
       // On error, still refresh settings view to reflect current key state.
@@ -1072,44 +988,26 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetProviderVscodeSetting(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_VSCODE_SETTING>,
   ): Promise<void> {
-    if (!ALLOWED_VSCODE_SETTING_KEYS.has(data.key)) {
+    const result = await this.profileController.setProviderVscodeSetting(data);
+    if (result.kind === 'rejected') {
       this.logger.warn(
         this.channel,
-        `Rejected unknown vscode setting key: ${data.key}`,
+        `Rejected unknown vscode setting key: ${result.key}`,
       );
       return;
-    }
-
-    // Check if this setting is backed by globalSM instead of VS Code config
-    const def = Object.values(PROVIDER_VSCODE_SETTINGS)
-      .flat()
-      .find((s) => s.key === data.key);
-    if (def?.globalStateKey) {
-      await globalSM?.update(def.globalStateKey, data.value);
-    } else {
-      await updateConfig(data.key, data.value, {
-        target: 'global',
-        prefix: false,
-      });
-    }
-
-    const affectsModelAvailability =
-      def?.globalStateKey === GlobalStateKey.USE_OPENROUTER;
-    if (affectsModelAvailability) {
-      invalidateModelOptionsCache();
     }
 
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendProfileData(w),
         this.sendSuperYoloEnabled(w),
-        affectsModelAvailability
+        result.affectsModelAvailability
           ? this.sendModelSelectionData(w)
           : Promise.resolve(),
       ]);
     });
 
-    if (affectsModelAvailability) {
+    if (result.affectsModelAvailability) {
       await vscode.commands.executeCommand('texra.refreshAllOptions');
     }
   }
