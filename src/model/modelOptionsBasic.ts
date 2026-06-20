@@ -84,7 +84,7 @@ export function buildBaseModelOption(
 
 /** Build model options from static config without provider availability checks. */
 export function buildBasicModelOptionsData(
-  visibleModels: readonly string[] = DEFAULT_MODELS,
+  visibleModels: readonly string[],
 ): ModelOptionData[] {
   return visibleModels.map((model) => {
     const config = MODEL_CONFIGS[model];

@@ -47,12 +47,14 @@ function installServerSideKeyService(
 
 function createModelOptionsAccess(
   options: Parameters<typeof createServerSideKeyService>[0],
+  secrets: Record<string, string> = {
+    [apiKeySecretName('openai')]: 'sk-openai',
+  },
 ): ModelOptionsAccess {
   return {
     visibleModels: ['gpt55'],
     secrets: {
-      get: async (key) =>
-        key === apiKeySecretName('openai') ? 'sk-openai' : undefined,
+      get: async (key) => secrets[key],
       set: async () => {},
       delete: async () => {},
     },
@@ -72,7 +74,10 @@ describe('computeModelOptionsData relay quota state', () => {
     initPlatform(
       createFakePlatform({
         globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
-        secrets: { [apiKeySecretName('openai')]: 'sk-openai' },
+        secrets: {
+          [apiKeySecretName('openai')]: 'sk-openai',
+          [apiKeySecretName('deepseek')]: 'sk-deepseek',
+        },
       }),
     );
   });
@@ -115,6 +120,39 @@ describe('computeModelOptionsData relay quota state', () => {
 
     expect(model.availability).toBe('provider-key');
     expect(model.disabled).toBe(false);
+  });
+
+  it('does not reuse cached provider keys for injected access', async () => {
+    const previousDeepseekKey = process.env.DEEPSEEK_API_KEY;
+    delete process.env.DEEPSEEK_API_KEY;
+    try {
+      installServerSideKeyService({
+        useIncludedAccess: false,
+        relayQuotaExceeded: false,
+        quotaAutoSwitched: false,
+      });
+      await computeModelOptionsData(['deepseekproT']);
+
+      const access = createModelOptionsAccess(
+        {
+          useIncludedAccess: false,
+          relayQuotaExceeded: false,
+          quotaAutoSwitched: false,
+        },
+        {},
+      );
+
+      const [model] = await computeModelOptionsData(['deepseekproT'], access);
+
+      expect(model.availability).toBe('missing-key');
+      expect(model.disabled).toBe(true);
+    } finally {
+      if (previousDeepseekKey === undefined) {
+        delete process.env.DEEPSEEK_API_KEY;
+      } else {
+        process.env.DEEPSEEK_API_KEY = previousDeepseekKey;
+      }
+    }
   });
 
   it('caches explicit model-list availability until invalidated', async () => {

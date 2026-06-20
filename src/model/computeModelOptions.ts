@@ -6,7 +6,12 @@ import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
-import { apiKeyExists, isApiProvider } from './apiProviders';
+import {
+  apiKeyExists,
+  apiKeyExistsUncached,
+  isApiProvider,
+  type ApiProvider,
+} from './apiProviders';
 import {
   buildBaseModelOption,
   buildBasicModelOptionsData,
@@ -99,7 +104,7 @@ async function getPersonalAccessKindForModel(
   }
 
   try {
-    if (await apiKeyExists(ctx.secrets, provider)) {
+    if (await ctx.apiKeyExists(provider)) {
       return 'provider-key';
     }
   } catch {
@@ -113,7 +118,7 @@ async function getPersonalAccessKindForModel(
 }
 
 interface ModelAvailabilityContext {
-  secrets: PlatformSecrets;
+  apiKeyExists(provider: ApiProvider): Promise<boolean>;
   hasOpenRouter: boolean;
   hasServerAccess: boolean;
   relayQuotaExhausted: boolean;
@@ -171,15 +176,20 @@ async function resolveModelAvailability(
 
 async function buildAvailabilityContext(
   access: ModelOptionsAccess,
+  useApiKeyCache: boolean,
 ): Promise<ModelAvailabilityContext> {
   const { serverSideKeyService } = access;
+  const hasApiKey = (provider: ApiProvider) =>
+    useApiKeyCache
+      ? apiKeyExists(access.secrets, provider)
+      : apiKeyExistsUncached(access.secrets, provider);
   const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
   const [hasOpenRouter, hasServerAccess] = await Promise.all([
-    apiKeyExists(access.secrets, 'openRouter'),
+    hasApiKey('openRouter'),
     serverSideKeyService.canUseServerSideKeys(),
   ]);
   return {
-    secrets: access.secrets,
+    apiKeyExists: hasApiKey,
     hasOpenRouter,
     hasServerAccess,
     relayQuotaExhausted:
@@ -201,13 +211,9 @@ function buildDefaultModelOptionsAccess(): ModelOptionsAccess {
   };
 }
 
-function getDefaultVisibleModels(): string[] {
-  return getVisibleModels(platform().globalState);
-}
-
 /** Build synchronous fallback options from the current host-visible model list. */
 export function buildVisibleBasicModelOptionsData(
-  visibleModels: readonly string[] = getDefaultVisibleModels(),
+  visibleModels: readonly string[] = getVisibleModels(platform().globalState),
 ): ModelOptionData[] {
   return buildBasicModelOptionsData(visibleModels);
 }
@@ -215,12 +221,13 @@ export function buildVisibleBasicModelOptionsData(
 /** Returns a human-readable reason why a model is unavailable, or `null` if available. */
 export async function getModelUnavailableReason(
   model: string,
-  access: ModelOptionsAccess = buildDefaultModelOptionsAccess(),
+  access?: ModelOptionsAccess,
 ): Promise<string | null> {
   const config = MODEL_CONFIGS[model];
   if (!config) return `Model "${model}" is not recognized.`;
 
-  const ctx = await buildAvailabilityContext(access);
+  const effectiveAccess = access ?? buildDefaultModelOptionsAccess();
+  const ctx = await buildAvailabilityContext(effectiveAccess, access == null);
   const availability = await resolveModelAvailability(model, config, ctx);
   if (availability.available) return null;
 
@@ -305,7 +312,7 @@ export async function computeModelOptionsData(
   access?: ModelOptionsAccess,
 ): Promise<ModelOptionData[]> {
   if (access) {
-    return computeModelOptionsDataUncached(models, access);
+    return computeModelOptionsDataUncached(models, access, false);
   }
 
   const cacheKey = getModelOptionsCacheKey(models);
@@ -318,6 +325,7 @@ export async function computeModelOptionsData(
   const request = computeModelOptionsDataUncached(
     models,
     buildDefaultModelOptionsAccess(),
+    true,
   );
   pendingModelOptions.set(cacheKey, request);
 
@@ -347,9 +355,13 @@ function getModelOptionsCacheKey(models?: readonly string[]): string {
 async function computeModelOptionsDataUncached(
   modelsOverride?: readonly string[],
   access: ModelOptionsAccess = buildDefaultModelOptionsAccess(),
+  useApiKeyCache = true,
 ): Promise<ModelOptionData[]> {
   const models = modelsOverride ?? access.visibleModels;
-  const availabilityCtx = await buildAvailabilityContext(access);
+  const availabilityCtx = await buildAvailabilityContext(
+    access,
+    useApiKeyCache,
+  );
 
   return Promise.all(
     models.map((model) => buildModelOptionData(model, availabilityCtx)),
