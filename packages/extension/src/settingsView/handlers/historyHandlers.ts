@@ -4,9 +4,14 @@
  * Handles rerun/restore/delete of past executions, clearing history,
  * and exporting a conversation as Markdown, LaTeX/PDF, or self-contained HTML.
  */
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
+import {
+  ChatExportController,
+  type ExportInputStatus,
+} from '@controllers/settingsView/ChatExportController';
 import {
   getExecutionStore,
   deleteExecution,
@@ -19,22 +24,13 @@ import {
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
-import {
-  formatChatAsMarkdown,
-  formatChatAsLatex,
-  generateExportFilename,
-  generateExportFolderName,
-  type ChatExportInput,
-} from '@commands/history/chatExportFormatter';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { compileLatex2Pdf } from '@latex/texTools';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId } from '@shared/schemas';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
-import { StorageFS } from '@utils/files';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
@@ -42,11 +38,17 @@ type ChatExportFormat = 'md' | 'tex' | 'html';
 
 /** History and chat-export handler delegate. */
 export class HistoryHandlers {
-  /** Used by HTML export to locate the bundled assets. */
-  private readonly extensionPath: string;
+  private readonly chatExportController = new ChatExportController();
+
+  /** Path to the bundled HTML export assets (under extension resources). */
+  private readonly htmlAssetsSrc: string;
 
   constructor(private readonly ctx: SettingsHandlerContext) {
-    this.extensionPath = ctx.extensionContext.extensionPath;
+    this.htmlAssetsSrc = path.join(
+      ctx.extensionContext.extensionPath,
+      'resources',
+      'htmlExport',
+    );
   }
 
   async sendHistoryData(webview: vscode.Webview): Promise<void> {
@@ -132,85 +134,25 @@ export class HistoryHandlers {
     format: ChatExportFormat,
   ): Promise<void> {
     try {
-      const store = getExecutionStore(data.historyId as ExecutionId);
-      const [rawConfig, conversation, meta] = await Promise.all([
-        store.readConfig(),
-        store.readConversation(),
-        store.readMeta(),
-      ]);
+      const result = await this.chatExportController.buildExportInput(
+        data.historyId,
+      );
 
-      if (!rawConfig) {
-        await vscode.window.showErrorMessage('History item not found');
+      if (!this.reportExportInputError(result.status)) {
         return;
       }
 
-      if (!conversation) {
-        await vscode.window.showErrorMessage(
-          'No conversation data available for this execution',
-        );
-        return;
-      }
-
-      const config = AgentConfigSchema.parse(rawConfig);
-
-      const exportInput: ChatExportInput = {
-        timestamp: meta?.timestamp ?? new Date().toISOString(),
-        description: meta?.description,
-        config: {
-          agent: config.agent,
-          model: config.model,
-          instruction: config.instruction,
-          inputFiles: config.inputFiles,
-          mediaFiles: config.mediaFiles,
-          contextFiles: config.contextFiles,
-          outputFiles: config.outputFiles,
-        },
-        messages: conversation,
-      };
+      const exportInput = result.exportInput!;
 
       if (format === 'html') {
-        await this.exportChatAsHtml(data.historyId, exportInput);
+        await this.exportAndOpenHtml(data.historyId, exportInput);
         return;
       }
 
-      const filename = generateExportFilename(exportInput, format);
-      const storagePath = `executions/${data.historyId}/${filename}`;
-
-      const content =
-        format === 'md'
-          ? formatChatAsMarkdown(exportInput)
-          : formatChatAsLatex(exportInput);
-
-      await StorageFS.write(storagePath, content);
-      const absolutePath = StorageFS.fullPath(storagePath);
-
-      if (format === 'tex') {
-        // Compile LaTeX to PDF
-        const { pathToLocation } = await import('@utils/files');
-        const location = pathToLocation(absolutePath);
-        const compiled = await compileLatex2Pdf(location);
-
-        if (compiled) {
-          // Open the generated PDF
-          const pdfPath = absolutePath.replace(/\.tex$/, '.pdf');
-          const pdfUri = vscode.Uri.file(pdfPath);
-          await vscode.commands.executeCommand('vscode.open', pdfUri);
-          void vscode.window.showInformationMessage(
-            `Chat exported and compiled: ${filename.replace('.tex', '.pdf')}`,
-          );
-        } else {
-          // Compilation failed — open the .tex source instead
-          const doc = await vscode.workspace.openTextDocument(absolutePath);
-          await vscode.window.showTextDocument(doc, { preview: false });
-          void vscode.window.showWarningMessage(
-            'LaTeX compilation failed. The .tex source file has been opened instead.',
-          );
-        }
+      if (format === 'md') {
+        await this.exportAndOpenMarkdown(data.historyId, exportInput);
       } else {
-        // Open Markdown file
-        const doc = await vscode.workspace.openTextDocument(absolutePath);
-        await vscode.window.showTextDocument(doc, { preview: false });
-        void vscode.window.showInformationMessage(`Chat exported: ${filename}`);
+        await this.exportAndOpenLatex(data.historyId, exportInput);
       }
     } catch (error) {
       await showLoggedErrorMessage(
@@ -221,49 +163,80 @@ export class HistoryHandlers {
     }
   }
 
+  // ==========================================================
+  // Private helpers
+  // ==========================================================
+
   /**
-   * Build a self-contained HTML chat export.
-   *
-   * Layout (under the execution's storage folder):
-   *   texra-chat-{date}-{slug}/
-   *     index.html           ← TeXRA styling inlined; references ./assets/*
-   *     assets/              ← katex.min.css, texmath.css, hljs themes, fonts
-   *
-   * Opens index.html in the user's default browser so they see the same
-   * KaTeX/highlight.js rendering an audience would see.
+   * Translate the controller's export-input status into a user-visible
+   * error message. Returns `true` when the caller should proceed.
    */
-  private async exportChatAsHtml(
+  private reportExportInputError(status: ExportInputStatus): boolean {
+    switch (status) {
+      case 'config_missing':
+        void vscode.window.showErrorMessage('History item not found');
+        return false;
+      case 'conversation_missing':
+        void vscode.window.showErrorMessage(
+          'No conversation data available for this execution',
+        );
+        return false;
+      case 'ok':
+        return true;
+    }
+  }
+
+  private async exportAndOpenMarkdown(
     historyId: string,
-    exportInput: ChatExportInput,
+    exportInput: Parameters<
+      ChatExportController['exportAsMarkdown']
+    >[1],
   ): Promise<void> {
-    const path = await import('node:path');
-    const { formatChatAsHtml } =
-      await import('@commands/history/htmlExport/htmlFormatter');
+    const { absolutePath, storagePath } =
+      await this.chatExportController.exportAsMarkdown(historyId, exportInput);
+    const doc = await vscode.workspace.openTextDocument(absolutePath);
+    await vscode.window.showTextDocument(doc, { preview: false });
+    const filename = storagePath.split('/').pop() ?? storagePath;
+    void vscode.window.showInformationMessage(`Chat exported: ${filename}`);
+  }
 
-    const folderName = generateExportFolderName(exportInput);
-    const folderPath = `executions/${historyId}/${folderName}`;
-    const assetsPath = `${folderPath}/assets`;
+  private async exportAndOpenLatex(
+    historyId: string,
+    exportInput: Parameters<ChatExportController['exportAsLatex']>[1],
+  ): Promise<void> {
+    const { absolutePath, storagePath, pdfPath } =
+      await this.chatExportController.exportAsLatex(historyId, exportInput);
 
-    // Stage assets BEFORE writing index.html so a missing/failed asset
-    // copy can never leave behind an HTML file pointing at empty `./assets`.
-    const assetsSrc = path.join(this.extensionPath, 'resources', 'htmlExport');
-    const fsExtra = (await import('fs-extra')).default;
-    if (!(await fsExtra.pathExists(assetsSrc))) {
-      throw new Error(
-        `HTML export assets missing at ${assetsSrc} — rebuild the extension ` +
-          `(npm run package:fast) so scripts/copy-html-export-assets.mjs runs.`,
+    if (pdfPath) {
+      // Open the generated PDF
+      const pdfUri = vscode.Uri.file(pdfPath);
+      await vscode.commands.executeCommand('vscode.open', pdfUri);
+      const filename = storagePath.split('/').pop() ?? storagePath;
+      void vscode.window.showInformationMessage(
+        `Chat exported and compiled: ${filename.replace('.tex', '.pdf')}`,
+      );
+    } else {
+      // Compilation failed — open the .tex source instead
+      const doc = await vscode.workspace.openTextDocument(absolutePath);
+      await vscode.window.showTextDocument(doc, { preview: false });
+      void vscode.window.showWarningMessage(
+        'LaTeX compilation failed. The .tex source file has been opened instead.',
       );
     }
-    await StorageFS.ensureDir(folderPath);
-    await fsExtra.copy(assetsSrc, StorageFS.fullPath(assetsPath), {
-      overwrite: true,
-    });
+  }
 
-    const html = formatChatAsHtml(exportInput);
-    await StorageFS.write(`${folderPath}/index.html`, html);
+  private async exportAndOpenHtml(
+    historyId: string,
+    exportInput: Parameters<ChatExportController['exportAsHtml']>[1],
+  ): Promise<void> {
+    const { absolutePath, folderName } =
+      await this.chatExportController.exportAsHtml(
+        historyId,
+        exportInput,
+        this.htmlAssetsSrc,
+      );
 
-    const htmlAbsolute = StorageFS.fullPath(`${folderPath}/index.html`);
-    await vscode.env.openExternal(vscode.Uri.file(htmlAbsolute));
+    await vscode.env.openExternal(vscode.Uri.file(absolutePath));
     void vscode.window.showInformationMessage(
       `Chat exported to ${folderName}/index.html`,
     );
