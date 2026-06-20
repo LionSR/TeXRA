@@ -102,7 +102,7 @@ type ChatCompletionRequestWithThinking = ChatCompletionRequestBase & {
   thinking?: { type: 'enabled' | 'disabled' };
 };
 type ChatCompletionSummaryParams = ChatCompletionCreateParamsNonStreaming & {
-  thinking?: { type: 'disabled' };
+  thinking?: { type: 'enabled' | 'disabled' };
 };
 
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
@@ -181,24 +181,9 @@ export class ModelHandlerOpenAI<
           ? this.prepareNormalizedMessages(conversationMessages, normOptions)
           : conversationMessages;
 
-        const summaryParams: ChatCompletionSummaryParams = {
-          model: this.config.fullName,
-          messages: [
-            { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
-            ...normalizedConversation,
-          ],
-          max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-          temperature: 0,
-          stream: false,
-        };
-        // Disable thinking for the summary call — reasoning models
-        // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
-        if (
-          this.getThinkingParameter() ||
-          this.capabilities.supportsReasoning
-        ) {
-          summaryParams.thinking = { type: 'disabled' };
-        }
+        const summaryParams = this.buildCompactionSummaryParams(
+          normalizedConversation,
+        );
         const summaryResponse = await client.chat.completions.create(
           summaryParams,
           { signal },
@@ -268,6 +253,27 @@ export class ModelHandlerOpenAI<
     | { type: 'enabled' | 'disabled' }
     | undefined {
     return undefined;
+  }
+
+  protected buildCompactionSummaryParams(
+    conversationMessages: ChatCompletionMessageParam[],
+  ): ChatCompletionSummaryParams {
+    const summaryParams: ChatCompletionSummaryParams = {
+      model: this.config.fullName,
+      messages: [
+        { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
+        ...conversationMessages,
+      ],
+      max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+      temperature: 0,
+      stream: false,
+    };
+    // Disable thinking for the summary call — reasoning models
+    // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
+    if (this.getThinkingParameter() || this.capabilities.supportsReasoning) {
+      summaryParams.thinking = { type: 'disabled' };
+    }
+    return summaryParams;
   }
 
   protected buildChatBaseParams(
