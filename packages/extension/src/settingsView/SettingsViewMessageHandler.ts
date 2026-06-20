@@ -13,6 +13,7 @@ import * as vscode from 'vscode';
 // Shared schemas and dispatchers
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
+import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
 import { platform } from '@platform/platform';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -38,10 +39,9 @@ import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
-import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
@@ -120,6 +120,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly modelSelectionController: SettingsModelSelectionController;
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
+  private readonly goalController: SettingsGoalController;
 
   constructor(context: vscode.ExtensionContext) {
     super('SettingsView', { trackActiveView: true });
@@ -188,6 +189,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.latexHandlers = new LatexSettingsHandlers(ctx);
     this.historyHandlers = new HistoryHandlers(ctx);
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
+    this.goalController = new SettingsGoalController({
+      listGoals: () => GoalStore.list(),
+    });
 
     this.handlerRegistry = this.createHandlerRegistry();
 
@@ -497,28 +501,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendGoalList(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-      items: GoalStore.list(),
-    });
+    await webview.postMessage(this.goalController.getGoalListMessage());
   }
 
   private async handleRevealGoalStream(streamId: StreamTabId): Promise<void> {
-    const provider = ProgressViewProvider.getInstance();
-    if (!provider) return;
-    if (!provider.state.streamLogs.has(streamId)) return;
-    await provider.showProgressView();
-    if (
-      buildStreamInfo(
-        provider.state,
-        streamId,
-        provider.state.agentCategoryFilter,
-      ) === null
-    ) {
-      provider.state.agentCategoryFilter = 'all';
-      provider.syncFullView();
-    }
-    await provider.setActiveStream(streamId);
+    await revealProgressStream(streamId);
   }
 
   private handleRunToolCommand(
