@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { chatTuiIsResumableIdleOnExit } from '@cli/chat/tui/runChatTui';
+import { chatTuiIsResumableIdleOnExit } from '@cli/chat/tui/state/sessionRunState';
 
 describe('chatTuiIsResumableIdleOnExit', () => {
   it('preserves an idle/WAITING session (interruptible, not stoppable)', () => {
