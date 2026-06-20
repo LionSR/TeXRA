@@ -77,6 +77,7 @@ export interface SlashCommandContext {
   readonly session: TuiSession;
   readonly commandName?: string;
   readonly cwd: CliContext['cwd'];
+  readonly processCwd?: CliContext['cwd'];
   readonly initialAgent: string;
   readonly initialModel: string;
   readonly interruptActive: () => void;
@@ -520,7 +521,7 @@ export async function handleTuiSlashCommand(
           sessionId: slice ? context.session.executionId : undefined,
           commandName: context.commandName,
           cwd: context.cwd,
-          processCwd: process.cwd(),
+          processCwd: context.processCwd,
           approvalPolicy: context.getApprovalPolicy(),
           queuedFollowUpMessages:
             activeStreamId === undefined

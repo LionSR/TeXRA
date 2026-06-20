@@ -11,11 +11,19 @@ import {
   listSlashCommands,
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
-import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
+import {
+  cliState,
+  patchStream,
+  resetCliState,
+} from '@cli/chat/tui/state/cliState';
 import type { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import type { ExecutionId } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -42,6 +50,7 @@ function createContext(
   return {
     session,
     cwd: '/tmp/workspace',
+    processCwd: '/tmp/launcher',
     initialAgent: 'chat',
     initialModel: 'deepseekT',
     interruptActive: vi.fn(),
@@ -89,5 +98,31 @@ describe('handleTuiSlashCommand', () => {
     expect(interruptActive).toHaveBeenCalledOnce();
     expect(requestInputExit).toHaveBeenCalledOnce();
     expect(cliState.activeStreamId.get()).toBeUndefined();
+  });
+
+  it('uses the provided process cwd when formatting /status resume hints', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const streamId = 'stream-1' as StreamTabId;
+    session.streamId = streamId;
+    session.executionId = 'exec-1' as ExecutionId;
+    cliState.activeStreamId.set(streamId);
+    patchStream(streamId, (slice) => ({
+      ...slice,
+      status: STREAM_STATUS.WAITING,
+    }));
+
+    const handled = await handleTuiSlashCommand(
+      '/status',
+      createContext(session, { processCwd: '/tmp/workspace' }),
+    );
+
+    expect(handled).toBe(true);
+    const statusText = cliState.streams
+      .get()
+      .get(streamId)
+      ?.entries.at(-1)?.text;
+    expect(statusText).toContain('resume later with: texra resume exec-1');
+    expect(statusText).not.toContain('--cwd');
   });
 });
