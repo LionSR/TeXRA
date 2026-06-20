@@ -42,7 +42,7 @@ function mapRemoteAgentConfigHttpError(
       return 'Session expired. Sign in again to continue.';
 
     case StatusCodes.FORBIDDEN:
-      return `Access denied to agent "${agentName}". Upgrade your account for access.`;
+      return `Access denied to agent "${agentName}". Your account does not have permission to access this remote agent.`;
 
     case StatusCodes.NOT_FOUND:
       return `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`;

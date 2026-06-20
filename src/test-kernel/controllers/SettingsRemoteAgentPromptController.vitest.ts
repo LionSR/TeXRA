@@ -41,7 +41,6 @@ describe('SettingsRemoteAgentPromptController', () => {
 
     assert.deepEqual(result, {
       ok: false,
-      reason: 'requiresUltra',
       message: 'Viewing remote agent prompts requires an Ultra plan.',
     });
     assert.equal(fetchPromptConfig.mock.calls.length, 0);
@@ -57,7 +56,6 @@ describe('SettingsRemoteAgentPromptController', () => {
 
     assert.deepEqual(result, {
       ok: false,
-      reason: 'unauthenticated',
       message: 'Authentication required. Sign in using "TeXRA: Sign In".',
     });
     assert.equal(fetchPromptConfig.mock.calls.length, 0);

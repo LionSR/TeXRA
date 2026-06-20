@@ -5,7 +5,6 @@ export type SettingsRemoteAgentPromptResult =
   | { ok: true; config: string }
   | {
       ok: false;
-      reason: 'requiresUltra' | 'unauthenticated';
       message: string;
     };
 
@@ -25,7 +24,6 @@ export class SettingsRemoteAgentPromptController {
     if (tier !== ULTRA_TIER) {
       return {
         ok: false,
-        reason: 'requiresUltra',
         message: 'Viewing remote agent prompts requires an Ultra plan.',
       };
     }
@@ -34,7 +32,6 @@ export class SettingsRemoteAgentPromptController {
     if (!token) {
       return {
         ok: false,
-        reason: 'unauthenticated',
         message: 'Authentication required. Sign in using "TeXRA: Sign In".',
       };
     }

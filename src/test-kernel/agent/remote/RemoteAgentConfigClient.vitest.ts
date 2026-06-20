@@ -44,4 +44,16 @@ describe('fetchRemoteAgentConfigYaml', () => {
       /Agent "remoteWriter" not found or access denied/,
     );
   });
+
+  it('maps forbidden agents to a permission-specific error text', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('forbidden', { status: 403 })),
+    );
+
+    await assert.rejects(
+      () => fetchRemoteAgentConfigYaml('remoteWriter', 'token'),
+      /Your account does not have permission to access this remote agent/,
+    );
+  });
 });
