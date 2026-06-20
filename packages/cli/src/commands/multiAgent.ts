@@ -1,6 +1,5 @@
 import { defineCommand } from 'citty';
 
-import { getAgentsByCategory, loadAgents } from '@agent/index';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
@@ -27,21 +26,21 @@ import {
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
-  formatCliMultiAgentPresetRunWarnings,
-  planCliMultiAgentPresets,
-  planCliMultiAgentPresetRun,
   readCliMultiAgentPresets,
   withCliMultiAgentPresetVisibility,
   MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION,
   MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION,
-  type CliMultiAgentPreset,
   type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
+import {
+  loadCliMultiAgentPresetPlanSet,
+  loadCliMultiAgentRunPlan,
+  writeMissingPresetAgents,
+} from '../runtime/multiAgentRunPlan';
 import {
   buildHeadlessRunContext,
   resolveCliRunModel,
 } from '../runtime/runModel';
-import { getCliAuthProvider } from '../runtime/supabaseAuth';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch/usage';
@@ -74,112 +73,8 @@ interface MultiAgentRunInit {
   readonly instructionFile?: string;
 }
 
-interface RemoteAgentPlanReloadResult<T> {
-  readonly value: T;
-  readonly remoteAgentLoadAttempted: boolean;
-}
-
-export interface MultiAgentRunPlanLoadResult {
-  readonly plan: CliMultiAgentPresetRunPlan;
-  readonly remoteAgentLoadAttempted: boolean;
-}
-
-export interface MultiAgentPresetPlansLoadResult {
-  readonly plans: readonly CliMultiAgentPresetRunPlan[];
-  readonly remoteAgentLoadAttempted: boolean;
-}
-
 const MULTI_AGENT_TASK_REQUIRED_MESSAGE =
   'Provide --input, --instruction, or --instruction-file for the team task. Example: texra multi-agent run physicist --instruction "Check this derivation"';
-
-function planCurrentMultiAgentRun(
-  init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
-): CliMultiAgentPresetRunPlan {
-  const preset = findCliMultiAgentPreset(
-    readCliMultiAgentPresets(),
-    init.preset,
-  );
-  if (!preset) {
-    throw new CliUsageError(missingMultiAgentPresetMessage(init.preset));
-  }
-  return planCliMultiAgentPresetRun(preset, {
-    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
-    agentOverride: init.agent,
-  });
-}
-
-function planLoadedCliMultiAgentPresets(
-  presets: readonly CliMultiAgentPreset[],
-): CliMultiAgentPresetRunPlan[] {
-  return planCliMultiAgentPresets(presets, {
-    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
-  });
-}
-
-/**
- * Resolve a preset plan, then — when it still has gaps and the user is
- * authenticated — perform a remote load and replan. Relay-served premium agents
- * (the team orchestrator and delegation specialists most presets name) are only
- * visible after a remote load. Until then, built-in presets report no runnable
- * root instead of promoting a local specialist; custom presets can still use
- * their own delegating member root. Both the headless `multi-agent run` path and
- * the interactive `orchestrate` menu route through here so they can't drift
- * apart again.
- *
- * Owns the local agent registry load (`loadAgents({ includeRemote: false })`)
- * before planning, so callers no longer need to pre-load local agents.
- */
-export async function loadCliMultiAgentRunPlan(
-  init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
-): Promise<MultiAgentRunPlanLoadResult> {
-  await loadAgents({ includeRemote: false });
-  const result = await reloadRemoteAgentsForGaps(
-    planCurrentMultiAgentRun(init),
-    cliMultiAgentPlanHasGaps,
-    () => planCurrentMultiAgentRun(init),
-  );
-  return {
-    plan: result.value,
-    remoteAgentLoadAttempted: result.remoteAgentLoadAttempted,
-  };
-}
-
-export async function loadCliMultiAgentPresetPlanSet(
-  presets: readonly CliMultiAgentPreset[],
-): Promise<MultiAgentPresetPlansLoadResult> {
-  await loadAgents({ includeRemote: false });
-  const result = await reloadRemoteAgentsForGaps(
-    planLoadedCliMultiAgentPresets(presets),
-    (plans) => plans.some(cliMultiAgentPlanHasGaps),
-    () => planLoadedCliMultiAgentPresets(presets),
-  );
-  return {
-    plans: result.value,
-    remoteAgentLoadAttempted: result.remoteAgentLoadAttempted,
-  };
-}
-
-async function reloadRemoteAgentsForGaps<T>(
-  value: T,
-  hasGaps: (value: T) => boolean,
-  replan: () => T,
-): Promise<RemoteAgentPlanReloadResult<T>> {
-  if (hasGaps(value) && (await getCliAuthProvider().isAuthenticated())) {
-    await loadAgents();
-    return { value: replan(), remoteAgentLoadAttempted: true };
-  }
-  return { value, remoteAgentLoadAttempted: false };
-}
-
-export function writeMissingPresetAgents(
-  plan: CliMultiAgentPresetRunPlan,
-): void {
-  for (const warning of formatCliMultiAgentPresetRunWarnings(plan)) {
-    writeTextStderr(warning);
-  }
-}
 
 function writeMultiAgentRunResult(
   context: CliContext,
