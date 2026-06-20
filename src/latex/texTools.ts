@@ -40,6 +40,34 @@ export function buildKpathseaSearchPath(
 }
 
 /**
+ * Build the kpathsea search-path overrides (TEXINPUTS / BIBINPUTS / BSTINPUTS)
+ * for a LaTeX compile, prepending the workspace and TikZ input directories onto
+ * any inherited values.
+ *
+ * The `env` seam keeps the `process.env` read injectable for tests; this is the
+ * lone environment touch in this VS Code-free module. The subprocess still
+ * inherits the rest of `process.env` via `executeCommand`'s `commandEnv`, so
+ * these keys only override the three search paths that need prepending.
+ */
+export function buildLatexInputEnv(
+  texInputParts: readonly string[],
+  bibSearchParts: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+  const needsTexInputs = texInputParts.length > 1 || !!env.TEXINPUTS;
+  const texInputs = needsTexInputs
+    ? buildKpathseaSearchPath(texInputParts, env.TEXINPUTS)
+    : undefined;
+  const bibInputs = buildKpathseaSearchPath(bibSearchParts, env.BIBINPUTS);
+  const bstInputs = buildKpathseaSearchPath(bibSearchParts, env.BSTINPUTS);
+  return {
+    ...(texInputs && { TEXINPUTS: texInputs }),
+    ...(bibInputs && { BIBINPUTS: bibInputs }),
+    ...(bstInputs && { BSTINPUTS: bstInputs }),
+  };
+}
+
+/**
  * Compile a LaTeX file to PDF
  * @param latexLocation FileLocation for the LaTeX file
  * @param options Compilation options (channel defaults to module CHANNEL)
@@ -77,27 +105,13 @@ export async function compileLatex2Pdf(
       ...(workspacePath ? [workspacePath] : []),
       ...(tikzInputDirectory?.trim() ? [tikzInputDirectory] : []),
     ];
-
-    // Build environment with TEXINPUTS if we have custom paths or existing TEXINPUTS
-    // Use path.delimiter for cross-platform compatibility (`:` on Unix, `;` on Windows)
-    const needsTexInputs = texInputParts.length > 1 || process.env.TEXINPUTS;
-    const texInputs = needsTexInputs
-      ? buildKpathseaSearchPath(texInputParts, process.env.TEXINPUTS)
-      : undefined;
     const bibSearchParts = workspacePath ? [workspacePath] : [];
-    const bibInputs = buildKpathseaSearchPath(
-      bibSearchParts,
-      process.env.BIBINPUTS,
-    );
-    const bstInputs = buildKpathseaSearchPath(
-      bibSearchParts,
-      process.env.BSTINPUTS,
-    );
-    const env: Record<string, string> = {
-      ...(texInputs && { TEXINPUTS: texInputs }),
-      ...(bibInputs && { BIBINPUTS: bibInputs }),
-      ...(bstInputs && { BSTINPUTS: bstInputs }),
-    };
+
+    // Build kpathsea search-path overrides, prepending workspace/TikZ dirs onto
+    // any inherited values. `path.delimiter` keeps it cross-platform.
+    const env = buildLatexInputEnv(texInputParts, bibSearchParts);
+    const { TEXINPUTS: texInputs, BIBINPUTS: bibInputs, BSTINPUTS: bstInputs } =
+      env;
     if (texInputs) {
       logger.debug(channel, `Setting TEXINPUTS to: ${texInputs}`);
     }
