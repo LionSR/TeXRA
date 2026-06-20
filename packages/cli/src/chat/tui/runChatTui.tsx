@@ -85,10 +85,11 @@ import {
   terminalStatusExitCode,
 } from '@cli/runtime/terminalStatus';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
+import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
-  CLI_APPROVAL_POLICIES,
-  type CliApprovalPolicy,
-} from '@cli/schemas/cliSettings';
+  formatCliApprovalPolicy,
+  parseCliApprovalPolicy,
+} from '@cli/runtime/approvalPolicyText';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import {
   explainNonResumable,
@@ -119,7 +120,6 @@ import { generateExecutionId } from '@utils/core/executionId';
 
 import { App } from './App';
 import { assertNever } from './assertNever';
-import { formatApprovalPolicyForCli as formatApprovalPolicy } from './forms/ApprovalPolicyForm';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import {
   openCliSlashCommandForm,
@@ -767,28 +767,6 @@ async function logoutFromChat(): Promise<void> {
   }
 }
 
-function parseApprovalPolicy(input: string): CliApprovalPolicy | undefined {
-  const normalized = input.trim().toLowerCase();
-  if ((CLI_APPROVAL_POLICIES as readonly string[]).includes(normalized)) {
-    return normalized as CliApprovalPolicy;
-  }
-  switch (normalized) {
-    case 'default':
-    case 'interactive':
-    case 'on':
-      return 'ask';
-    case 'off':
-    case 'deny':
-      return 'never';
-    case 'auto':
-    case 'full':
-    case 'danger':
-      return 'yolo';
-    default:
-      return undefined;
-  }
-}
-
 const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 
 function applyCliApprovalPolicySelection(
@@ -802,7 +780,7 @@ function applyCliApprovalPolicySelection(
     return;
   }
 
-  const policy = parseApprovalPolicy(normalized);
+  const policy = parseCliApprovalPolicy(normalized);
   if (!policy) {
     appendLocalAssistantTranscript(usage);
     return;
@@ -810,7 +788,7 @@ function applyCliApprovalPolicySelection(
 
   context.setApprovalPolicy(policy);
   appendLocalAssistantTranscript(
-    `Approval mode set to ${formatApprovalPolicy(policy)}.`,
+    `Approval mode set to ${formatCliApprovalPolicy(policy)}.`,
   );
 }
 
@@ -923,7 +901,7 @@ async function handleTuiSlashCommand(
           // Read the session's own mode (which honors a --api-mode/env override)
           // so /status agrees with the header instead of re-reading the global.
           api: formatCliApiMode(meta.apiMode),
-          approval: formatApprovalPolicy(context.getApprovalPolicy()),
+          approval: formatCliApprovalPolicy(context.getApprovalPolicy()),
           approvalBypasses: slice?.bypass,
           status: slice?.status ?? 'not started',
           goal: activeStreamId
@@ -1524,7 +1502,7 @@ export async function runChat(
     onApprovalPolicySelect: (policy) => {
       setApprovalPolicy(policy);
       appendLocalAssistantTranscript(
-        `Approval mode set to ${formatApprovalPolicy(policy)}.`,
+        `Approval mode set to ${formatCliApprovalPolicy(policy)}.`,
       );
     },
     canSelectModel: canSelectCurrentModel,
