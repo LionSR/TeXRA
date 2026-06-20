@@ -21,9 +21,10 @@ export function isTimeoutErrorCode(code: string | undefined): boolean {
  * Whether an error from an axios request is worth retrying.
  *
  * Transient = a retry could plausibly succeed: request timeouts, network-level
- * failures (no response received — DNS hiccup, connection reset), and 5xx
- * server errors. Permanent = the same request will keep failing: any 4xx
- * status (bad request, not found, auth), and non-axios/application errors.
+ * failures (no response received — DNS hiccup, connection reset), 429 rate
+ * limits, and 5xx server errors. Permanent = the same request will keep
+ * failing: other 4xx statuses (bad request, not found, auth), and non-axios /
+ * application errors.
  *
  * Only safe to use for idempotent requests (GET / read-only RPC); retrying a
  * non-idempotent write risks duplicate side effects.
@@ -34,5 +35,5 @@ export function isTransientHttpError(error: unknown): boolean {
   // No response means the request never completed (connection reset, DNS,
   // socket hang up) — generally worth one more attempt for an external API.
   if (!error.response) return true;
-  return error.response.status >= 500;
+  return error.response.status === 429 || error.response.status >= 500;
 }
