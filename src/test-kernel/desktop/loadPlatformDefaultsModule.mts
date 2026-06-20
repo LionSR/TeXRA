@@ -6,8 +6,8 @@ import { moduleFileUrl, repoPath } from './desktopTestPaths.mjs';
  *
  * Mirrors `loadDesktopPlatformModule` but resolves against the shared
  * platform-defaults directory rather than the desktop-only `main/platform`
- * tree. Use this for modules (e.g. `JsonStore`, `configKeyHelpers`) that
- * moved out of the desktop package after consolidation.
+ * tree. Use this for modules (e.g. `JsonStore`) that moved out of the desktop
+ * package after consolidation.
  */
 export async function loadPlatformDefaultsModule<T>(
   moduleName: string,

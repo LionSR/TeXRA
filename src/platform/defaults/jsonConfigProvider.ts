@@ -3,7 +3,7 @@ import {
   configKeyVariants,
   createWatcherRegistry,
   firstStoredValue,
-} from './configKeyHelpers';
+} from '@shared/config/configKeys';
 
 import type { JsonStore } from './jsonStore';
 import type {
