@@ -1,6 +1,6 @@
 /**
  * Profile message construction shared between the VS Code extension and the
- * Electron desktop.
+ * Electron desktop settings controllers.
  *
  * Builds the `UPDATE_PROFILE` wire message from shared auth / tier / agent
  * services so the two hosts can't drift — previously each host hand-assembled

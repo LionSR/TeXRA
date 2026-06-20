@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as agentRegistry from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -15,7 +16,6 @@ import {
   type DesktopAuthCallbackState,
   type DesktopOAuthClient,
 } from '@desktop/main/desktopSupabaseAuth';
-import { buildProfileMessage } from '@shared/settingsView/handlers/profileHandlers';
 import type { StateStore } from '@platform/interfaces/state';
 
 function createCoordinator() {
