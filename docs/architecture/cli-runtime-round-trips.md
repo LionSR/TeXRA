@@ -214,9 +214,10 @@ team planning. Startup should need only names, descriptions, and availability.
   entrypoint-specific (`chat` defaults, headless `run`, resume history), but do
   not reintroduce direct resolve-and-persist pairs outside the runtime helper.
 - Stream status lookup:
-  UI helpers read child status from parent slice, child slice, and `StreamStatusService`.
-  Normalize once in the subscriber and make UI read `StreamSlice` only. Keep the
-  service as an input source, not a UI fallback.
+  `subscribeStreamStatus` mirrors `StreamStatusService` events into `StreamSlice`
+  once, including retained parent child rows. TUI routing and rendering should
+  read status from that normalized stream map, keeping the service as an input
+  source rather than a UI/session fallback.
 - Transcript viewport repaint:
   `App` detects root/scoped changes and `runChatTui` wires them to
   `render/tuiViewportController`. Keep repaint options and SIGCONT clear-repaint
