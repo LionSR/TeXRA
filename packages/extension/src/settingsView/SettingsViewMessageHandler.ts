@@ -78,6 +78,7 @@ import type {
   ProviderVscodeSetting,
   NumberVscodeSetting,
 } from '@shared/schemas/profileViewMessages';
+import { buildToolDashboardItems } from '@shared/settingsView/toolDashboardData';
 import { GoalStore } from '@tools/goal';
 import {
   getLastCheckResults,
@@ -103,7 +104,6 @@ import {
 } from '@utils/config/providerConfig';
 import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
-import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { HistoryHandlers } from './handlers/historyHandlers';

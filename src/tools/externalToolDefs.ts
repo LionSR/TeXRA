@@ -8,7 +8,7 @@
  *
  * Consumed by:
  *   - {@link @tools/toolAvailability} — reads id/tools/check for caching
- *   - {@link @settingsView/utils/toolDashboardData} — reads everything for the UI
+ *   - {@link @shared/settingsView/toolDashboardData} — reads everything for the UI
  */
 
 // Local imports

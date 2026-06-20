@@ -16,4 +16,4 @@ export function registerAuthCommands(
 
 // Re-export AUTH_COMMANDS for external use
 export { AUTH_COMMANDS } from '@auth/constants';
-export { getAuthStatus } from '@auth/authCommands';
+export { getAuthStatus, signIn, signOut, viewProfile } from './authCommands';
