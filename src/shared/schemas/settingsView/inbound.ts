@@ -52,8 +52,8 @@ import {
   CodexApprovalPolicySchema,
   CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
-  ReasoningLevelSchema,
-} from './data';
+} from '../agentCliSettings';
+import { ReasoningLevelSchema } from './data';
 
 const CMD = SETTINGS_VIEW_CMD;
 
