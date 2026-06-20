@@ -70,6 +70,7 @@ import {
   listSlashCommands,
   parseSlashInput,
   suggestSlashCommand,
+  type SlashCommand,
 } from './slashRegistry';
 
 export interface SlashCommandContext {
@@ -399,6 +400,15 @@ export async function showCliMemoryPreview(inputPath: string): Promise<void> {
   appendLocalAssistantTranscript(await formatCliMemoryPreview(inputPath));
 }
 
+function openCanonicalSlashForm(
+  commandName: string,
+  registered: SlashCommand | undefined,
+  remainder: string,
+): void {
+  if (registered && openRegisteredCliSlashForm(registered, remainder)) return;
+  openCliSlashCommandForm(commandName, remainder);
+}
+
 export async function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
@@ -408,16 +418,18 @@ export async function handleTuiSlashCommand(
 
   const command = parsed.name.toLowerCase();
   const rest = parsed.remainder.trim();
+  const registered = findSlashCommand(command);
+  const canonicalCommand = registered?.name ?? command;
   // Echo the slash input into the transcript so the user can see what they
   // typed. Slash commands don't go through the agent run, so the usual
   // USER_MESSAGE stream-log entry is never produced. Skip the echo for the
   // exit commands (the TUI is tearing down); /clear still echoes because
   // resetSessionForClear refuses while a run is active and surfaces an
   // error — without the echo the user wouldn't see what triggered it.
-  if (command !== 'exit' && command !== 'quit' && command !== 'login') {
+  if (canonicalCommand !== 'exit' && canonicalCommand !== 'login') {
     appendLocalUserTranscript(line.trim());
   }
-  switch (command) {
+  switch (canonicalCommand) {
     case 'help': {
       appendLocalAssistantTranscript(
         formatSlashCommandHelp(listSlashCommands(), {
@@ -431,13 +443,11 @@ export async function handleTuiSlashCommand(
       context.resetSession();
       return true;
     case 'exit':
-    case 'quit':
       context.session.stopRequested = true;
       context.interruptActive();
       context.requestInputExit();
       return true;
     case 'agent':
-    case 'agents':
       if (!chatTuiCanStartRootRun(context.session) && rest) {
         appendLocalAssistantTranscript(
           'The agent is fixed for this chat session. Start a new chat to use a different agent.',
@@ -445,16 +455,15 @@ export async function handleTuiSlashCommand(
       } else if (rest) {
         applyInitialCliAgentSelection(rest, context);
       } else {
-        openCliSlashCommandForm('agent', rest);
+        openCanonicalSlashForm('agent', registered, rest);
       }
       return true;
     case 'model':
-    case 'models':
-      openCliSlashCommandForm('model', rest);
+      openCanonicalSlashForm('model', registered, rest);
       return true;
     case 'api':
       if (!rest) {
-        openCliSlashCommandForm('api', rest);
+        openCanonicalSlashForm('api', registered, rest);
         return true;
       }
       try {
@@ -480,7 +489,7 @@ export async function handleTuiSlashCommand(
       if (rest) {
         applyCliApprovalPolicySelection(rest, context);
       } else {
-        openCliSlashCommandForm('approval', rest);
+        openCanonicalSlashForm('approval', registered, rest);
       }
       return true;
     case 'yolo':
@@ -522,12 +531,11 @@ export async function handleTuiSlashCommand(
       return true;
     }
     case 'goal':
-    case 'goals':
       appendLocalAssistantTranscript(GOAL_MODE_HELP);
       return true;
     case 'resume': {
       if (!rest) {
-        openCliSlashCommandForm('resume', rest);
+        openCanonicalSlashForm('resume', registered, rest);
         return true;
       }
       const id = parseCliHistoryId(rest);
@@ -541,7 +549,7 @@ export async function handleTuiSlashCommand(
     case 'memory': {
       try {
         if (!rest) {
-          openCliSlashCommandForm('memory', rest);
+          openCanonicalSlashForm('memory', registered, rest);
         } else if (rest.toLowerCase() === 'list') {
           await showCliMemoryList();
         } else {
@@ -562,7 +570,6 @@ export async function handleTuiSlashCommand(
       });
       return true;
     default: {
-      const registered = findSlashCommand(command);
       if (registered) {
         if (openRegisteredCliSlashForm(registered, parsed.remainder)) {
           return true;
