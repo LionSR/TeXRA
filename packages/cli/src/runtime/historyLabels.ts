@@ -13,11 +13,17 @@ function formatCliHistoryResumeInputLabel(
   return entry.description?.trim() || 'no input';
 }
 
+export function formatCliHistoryAgentLabel(
+  entry: Pick<CliHistoryEntry, 'agent' | 'teamPresetId'>,
+): string {
+  return entry.teamPresetId ? `team:${entry.teamPresetId}` : entry.agent;
+}
+
 export function formatCliHistoryResumeSummary(
   entry: Pick<
     CliHistoryEntry,
-    'agent' | 'description' | 'inputBasename' | 'status'
+    'agent' | 'description' | 'inputBasename' | 'status' | 'teamPresetId'
   >,
 ): string {
-  return `${entry.agent}; ${entry.status}; ${formatCliHistoryResumeInputLabel(entry)}`;
+  return `${formatCliHistoryAgentLabel(entry)}; ${entry.status}; ${formatCliHistoryResumeInputLabel(entry)}`;
 }
