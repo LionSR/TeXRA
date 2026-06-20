@@ -21,7 +21,7 @@ import {
   type DiffViewHost,
 } from '@hosts/diffViewHost';
 import type { StreamTabId } from '@shared/schemas';
-import type { LineChanges } from '@tools/result';
+import type { LineChanges } from '@shared/schemas/lineChanges';
 import {
   type LatexPreviewEntry,
   previewProposedLatex,
