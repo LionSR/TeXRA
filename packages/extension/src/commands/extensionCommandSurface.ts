@@ -126,6 +126,7 @@ export type ExtensionRegistryCommandId = Extract<
   | 'texra.showAgents'
   | 'texra.showTools'
   | 'texra.showMultiAgent'
+  | 'texra.showGitSettings'
   | 'texra.openSettings'
   | 'texra.mainView.reset'
   | 'texra.cleanOutput'
@@ -349,6 +350,8 @@ const EXTENSION_COMMAND_HANDLERS = {
     awaitTrue(actions.showSettings(SETTINGS_TAB.TOOLS)),
   'texra.showMultiAgent': (actions) =>
     awaitTrue(actions.showSettings(SETTINGS_TAB.MULTI_AGENT)),
+  'texra.showGitSettings': (actions) =>
+    awaitTrue(actions.showSettings(SETTINGS_TAB.GIT)),
   'texra.openSettings': (actions) => awaitTrue(actions.openWorkbenchSettings()),
   'texra.mainView.reset': (actions) => awaitTrue(actions.resetMainView()),
   'texra.cleanOutput': (actions) => awaitTrue(actions.cleanOutput()),

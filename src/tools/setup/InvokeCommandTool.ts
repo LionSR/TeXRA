@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { AUTH_COMMANDS } from '@auth/constants';
+import type { CommandId } from '@shared/commands/catalog';
 import { ToolError, type ToolResult } from '@tools/result';
 
 // Local file imports
@@ -19,7 +20,7 @@ import { getSetupPlatform } from './platform';
 // purpose is to *establish* credentials, and signing the user out
 // mid-setup would undo the very credential the assistant just wired up.
 // A user who genuinely wants to sign out has the Profile command for it.
-const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
+const ALLOWED_COMMAND_IDS = [
   // API keys & auth
   'texra.setApiKey',
   'texra.removeApiKey',
@@ -42,12 +43,11 @@ const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
   'texra.showMainView',
   'texra.cloneOverleafProject',
   'texra.downloadArXivSource',
-  // Refresh helpers
-  'texra.refreshApiKeyStatus',
-  'texra.refreshAllOptions',
   // Walkthrough re-entry
   'texra.openGettingStarted',
-]);
+] as const satisfies readonly CommandId[];
+
+const ALLOWED_COMMANDS: ReadonlySet<string> = new Set(ALLOWED_COMMAND_IDS);
 
 const InvokeCommandInputSchema = z.strictObject({
   command: z

@@ -996,6 +996,12 @@
         "icon": "$(organization)"
       },
       {
+        "command": "texra.showGitSettings",
+        "title": "Show Git Settings",
+        "category": "TeXRA",
+        "icon": "$(git-branch)"
+      },
+      {
         "command": "texra.openSettings",
         "title": "Open TeXRA Settings",
         "category": "TeXRA",
@@ -1578,6 +1584,10 @@
         },
         {
           "command": "texra.showMultiAgent",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showGitSettings",
           "when": "texra.activated"
         },
         {

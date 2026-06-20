@@ -207,6 +207,7 @@ describe('desktop command surface', () => {
     expect(dispatchDesktopCommand('texra.mainView.reset', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showModels', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showAgents', actions)).toBe(true);
+    expect(dispatchDesktopCommand('texra.showGitSettings', actions)).toBe(true);
     expect(
       dispatchDesktopCommand(
         DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
@@ -244,6 +245,7 @@ describe('desktop command surface', () => {
       3,
       SETTINGS_TAB.AGENTS,
     );
+    expect(actions.showSettings).toHaveBeenNthCalledWith(4, SETTINGS_TAB.GIT);
     expect(actions.resetMainView).toHaveBeenCalledOnce();
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
     expect(actions.openWorkspaceInNewWindow).toHaveBeenCalledOnce();
@@ -352,6 +354,7 @@ describe('desktop command surface', () => {
       'Show Agents',
       'Show Tool Dashboard',
       'Show Multi-Agent Settings',
+      'Show Git Settings',
       'Open Getting Started Walkthrough',
       'Clean LLM Outputs',
       'Clean Build Files',
