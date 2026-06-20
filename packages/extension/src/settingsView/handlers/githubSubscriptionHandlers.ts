@@ -11,6 +11,7 @@ import { SecretManager } from '@frontend/secretManager';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import {
@@ -145,33 +146,18 @@ export class GitHubSubscriptionHandlers {
       typeof SETTINGS_VIEW_CMD.OPEN_PR_SUBSCRIPTION_STREAM
     >,
   ): Promise<void> {
-    const provider = ProgressViewProvider.getInstance();
-    if (!provider) {
+    const result = await revealProgressStream(data.streamId);
+    if (result === 'unavailable') {
       await vscode.window.showErrorMessage(
         'Progress View is not available. Please try again.',
       );
       return;
     }
 
-    const { state } = provider;
-    if (!state.streamLogs.has(data.streamId)) {
+    if (result === 'missing') {
       await vscode.window.showWarningMessage(
         'The agent stream is no longer available.',
       );
-      return;
     }
-
-    await provider.showProgressView();
-
-    // If the current filter would hide the target stream, clear it to 'all'
-    // so SET_ACTIVE_STREAM doesn't silently land on the wrong tab.
-    if (
-      buildStreamInfo(state, data.streamId, state.agentCategoryFilter) === null
-    ) {
-      state.agentCategoryFilter = 'all';
-      provider.syncFullView();
-    }
-
-    provider.setActiveStream(data.streamId);
   }
 }
