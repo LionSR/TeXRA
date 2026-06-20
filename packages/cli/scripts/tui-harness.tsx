@@ -38,10 +38,6 @@ import { GoalStore } from '@tools/goal';
 import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
-import {
-  transcriptViewportRepaintOptions,
-  type TranscriptViewportChange,
-} from '../src/chat/tui/state/transcriptViewportMode';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
 import {
   formatSlashCommandHelp,
@@ -75,6 +71,7 @@ import {
   installTuiStdoutListenerLimit,
   tuiOutputStreamForColor,
 } from '../src/chat/tui/render/noColorOutput';
+import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
 import {
   clearApprovals,
   enqueueApproval,
@@ -1589,11 +1586,7 @@ registerBuiltinSlashCommands({
 cliState.rootRunStartAvailable.set(CAN_SELECT_AGENT);
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
-function repaintHarnessTranscriptViewport(
-  change: TranscriptViewportChange,
-): void {
-  inkRef.current?.repaint(transcriptViewportRepaintOptions(change));
-}
+const viewportController = createTuiViewportController(inkRef);
 
 function handleHarnessCtrlC(): void {
   if (canInterrupt) {
@@ -1614,7 +1607,9 @@ const ink = render(
     canStopActiveRun={() => canInterrupt}
     colorEnabled={HARNESS_COLOR_ENABLED}
     onInterruptActive={markHarnessInterrupted}
-    onTranscriptViewportChange={repaintHarnessTranscriptViewport}
+    onTranscriptViewportChange={
+      viewportController.handleTranscriptViewportChange
+    }
     onCtrlC={handleHarnessCtrlC}
   />,
   {
