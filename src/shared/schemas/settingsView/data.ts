@@ -42,6 +42,30 @@ import {
   HistoryClearedMessageSchema,
   UpdateHistoryMessageSchema,
 } from '../historyViewMessages';
+import {
+  ClaudeAgentEffortSchema,
+  ClaudeAgentModelSchema,
+  ClaudeAgentPermissionModeSchema,
+  CodexApprovalPolicySchema,
+  CodexReasoningEffortSchema,
+  CodexSandboxModeSchema,
+} from '../agentCliSettings';
+export {
+  ClaudeAgentEffortSchema,
+  ClaudeAgentModelSchema,
+  ClaudeAgentPermissionModeSchema,
+  CodexApprovalPolicySchema,
+  CodexReasoningEffortSchema,
+  CodexSandboxModeSchema,
+} from '../agentCliSettings';
+export type {
+  ClaudeAgentEffort,
+  ClaudeAgentModel,
+  ClaudeAgentPermissionMode,
+  CodexApprovalPolicy,
+  CodexReasoningEffort,
+  CodexSandboxMode,
+} from '../agentCliSettings';
 
 /** Tab name order - single source of truth for tab indices */
 export const SETTINGS_TAB_ORDER = [
@@ -280,72 +304,6 @@ export type UpdateToolDashboardMessage = z.infer<
 // ============================================================
 // Approval settings data schema
 // ============================================================
-
-/**
- * Single source of truth for the Codex/Claude agent value lists. These schemas
- * are vscode/SDK-runtime-free, so the SDK-aware `@tools` config modules derive
- * their runtime const arrays from `.options` (and guard SDK alignment with
- * `satisfies`) instead of repeating the literals.
- */
-
-/** Valid Codex sandbox modes. */
-export const CodexSandboxModeSchema = z.enum([
-  'read-only',
-  'workspace-write',
-  'danger-full-access',
-]);
-export type CodexSandboxMode = z.infer<typeof CodexSandboxModeSchema>;
-
-/** Valid Codex reasoning effort levels. */
-export const CodexReasoningEffortSchema = z.enum([
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-]);
-export type CodexReasoningEffort = z.infer<typeof CodexReasoningEffortSchema>;
-
-/** Valid Codex approval policies. */
-export const CodexApprovalPolicySchema = z.enum([
-  'never',
-  'on-request',
-  'on-failure',
-  'untrusted',
-]);
-export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
-
-/** Claude Code CLI model options surfaced in the picker. The SDK accepts any
- * string, but the dropdown is fixed to the canonical Anthropic families. */
-export const ClaudeAgentModelSchema = z.enum([
-  'claude-sonnet-4-6',
-  'claude-fable-5',
-  'claude-opus-4-8',
-  'claude-haiku-4-5-20251001',
-]);
-export type ClaudeAgentModel = z.infer<typeof ClaudeAgentModelSchema>;
-
-/** Claude Code CLI permission modes (subset of the SDK's PermissionMode;
- * 'dontAsk' and 'auto' are internal only). */
-export const ClaudeAgentPermissionModeSchema = z.enum([
-  'default',
-  'acceptEdits',
-  'bypassPermissions',
-  'plan',
-]);
-export type ClaudeAgentPermissionMode = z.infer<
-  typeof ClaudeAgentPermissionModeSchema
->;
-
-/** Claude Code CLI effort levels — kept aligned with the SDK's EffortLevel via
- * a compile-time guard in claudeAgentShared.ts. */
-export const ClaudeAgentEffortSchema = z.enum([
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-]);
-export type ClaudeAgentEffort = z.infer<typeof ClaudeAgentEffortSchema>;
 
 /** Outbound: backend → frontend approval settings */
 export const UpdateApprovalSettingsMessageSchema = z.object({
