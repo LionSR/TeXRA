@@ -20,6 +20,7 @@ import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
+import { initializeGoalPrompts } from '@agent/goal';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 
@@ -257,6 +258,9 @@ export async function initCliPlatform(
   }
   await getServerSideKeyService().setUseIncludedModelAccess(authed);
   await setCliHelperModel(context.helperModel);
+  initializeGoalPrompts(
+    nodePath.join(context.resourcesPath, 'goal', 'goal.yaml'),
+  );
 
   if (bootstrappedResourcesPath !== context.resourcesPath) {
     const globalState = tryPlatform()?.globalState;
