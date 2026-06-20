@@ -26,6 +26,7 @@ import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 
 import { readCliToolUseResumeDataForListing } from './toolUseResumeData';
+import { formatCliHistoryAgentLabel } from './historyLabels';
 
 const HISTORY_FILE_SCAN_DEPTH = 2;
 const CONVERSATION_PREVIEW_MESSAGE_LIMIT = 3;
@@ -57,6 +58,7 @@ export interface CliHistoryEntry {
   readonly inputBasename: string;
   readonly category?: string;
   readonly description?: string;
+  readonly teamPresetId?: string;
   readonly parentExecutionId?: ExecutionId;
   readonly delegationDepth?: number;
 }
@@ -269,7 +271,7 @@ export function formatCliHistoryText(
       [
         entry.id,
         entry.timestamp,
-        entry.agent,
+        formatCliHistoryAgentLabel(entry),
         entry.status,
         entry.inputBasename,
       ].join('\t'),
@@ -318,6 +320,7 @@ export function formatCliHistoryDetailsText(
 ): string {
   const { config, meta } = details;
   const model = details.currentModel ?? config?.model;
+  const teamPreset = teamPresetId(config);
   const lines = [
     `Execution: ${details.id}`,
     `Status: ${details.status}`,
@@ -326,6 +329,9 @@ export function formatCliHistoryDetailsText(
     `Model: ${model ?? 'unknown'}`,
   ];
 
+  if (teamPreset) {
+    lines.push(`Team: ${teamPreset}`);
+  }
   if (
     details.currentModel &&
     config?.model &&
@@ -388,9 +394,15 @@ async function toCliHistoryEntry(
     inputBasename,
     category: entry.category,
     description: entry.description,
+    teamPresetId: teamPresetId(entry.agentConfig),
     parentExecutionId: entry.parentExecutionId,
     delegationDepth: entry.delegationDepth,
   };
+}
+
+function teamPresetId(config: AgentConfig | null): string | undefined {
+  const preset = config?.cliMultiAgentPresetId?.trim();
+  return preset ? preset : undefined;
 }
 
 function firstInputBasename(config: AgentConfig | null): string {
