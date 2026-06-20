@@ -133,6 +133,35 @@ describe('CLI history runtime', () => {
     ]);
   });
 
+  it('labels multi-agent team runs by preset in history lists', async () => {
+    const teamConfig = {
+      ...config,
+      agent: 'engineer',
+      agentCategory: 'toolUse',
+      inputFiles: [],
+      outputFiles: [],
+      cliMultiAgentPresetId: ' software-engineer ',
+    } as AgentConfig;
+    mocks.listExecutions.mockResolvedValue([
+      {
+        id: 'team1' as ExecutionId,
+        timestamp: '2026-05-18T10:00:00.000Z',
+        agent: 'engineer',
+        model: 'sonnet46T',
+        agentConfig: teamConfig,
+        terminalStatus: 'resumable',
+      },
+    ]);
+
+    const entries = await listCliHistoryEntries();
+
+    expect(entries[0]?.agent).toBe('engineer');
+    expect(entries[0]?.teamPresetId).toBe('software-engineer');
+    expect(formatCliHistoryText(entries)).toBe(
+      'team1\t2026-05-18T10:00:00.000Z\tteam:software-engineer\tresumable\t-',
+    );
+  });
+
   it('parses positive history list limits', () => {
     expect(parseHistoryListLimit('1')).toBe(1);
     expect(parseHistoryListLimit('25')).toBe(25);
@@ -240,6 +269,23 @@ describe('CLI history runtime', () => {
     expect(details?.currentModel).toBe('gpt55');
     expect(text).toContain('Model: gpt55');
     expect(text).toContain('Startup model: gpt54');
+  });
+
+  it('shows the team preset in details without hiding the root agent', async () => {
+    mocks.readConfig.mockResolvedValue({
+      ...config,
+      agent: 'engineer',
+      model: 'sonnet46T',
+      agentCategory: 'toolUse',
+      cliMultiAgentPresetId: ' software-engineer ',
+    } as AgentConfig);
+
+    const details = await readCliHistoryDetails('team1' as ExecutionId);
+    const text = formatCliHistoryDetailsText(details!);
+
+    expect(text).toContain('Agent: engineer');
+    expect(text).toContain('Team: software-engineer');
+    expect(text).not.toContain('Team:  software-engineer ');
   });
 
   it('shows a bounded final assistant preview when no report is stored', async () => {
