@@ -1,10 +1,10 @@
 // Local imports - shared utilities
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { generatePastedImageName } from '@shared/files/pastedImageConstants';
 import { insertTextAtCursor } from '@shared/utils/textarea';
 import {
   clipboardImageFiles,
-  generatePastedImageName,
   getExtensionFromMimeType,
   readFileAsBase64,
 } from '@shared/utils/clipboardImages';

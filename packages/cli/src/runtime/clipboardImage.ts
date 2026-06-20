@@ -18,10 +18,8 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { isFileNotFoundError } from '@common/errors';
-import {
-  generatePastedImageName,
-  savePastedImageBuffer,
-} from '@utils/files/pastedImageUtils';
+import { generatePastedImageName } from '@shared/files/pastedImageConstants';
+import { savePastedImageBuffer } from '@utils/files/pastedImageUtils';
 
 const execFileAsync = promisify(execFile);
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;

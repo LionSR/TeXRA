@@ -14,9 +14,12 @@ vi.mock('@shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
+vi.mock('@shared/files/pastedImageConstants', () => ({
+  generatePastedImageName: mocks.generatePastedImageName,
+}));
+
 vi.mock('@shared/utils/clipboardImages', () => ({
   clipboardImageFiles: mocks.clipboardImageFiles,
-  generatePastedImageName: mocks.generatePastedImageName,
   getExtensionFromMimeType: mocks.getExtensionFromMimeType,
   readFileAsBase64: mocks.readFileAsBase64,
 }));
