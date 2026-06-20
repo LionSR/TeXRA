@@ -7,6 +7,7 @@ import {
   type ProgressFollowUpPlan,
 } from '@controllers/progressView/ProgressFollowUpController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { getAgent } from '@agent/index';
@@ -75,6 +76,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly workflowActionsController: ProgressWorkflowActionsController;
   private readonly workflowFileActionsController: ProgressWorkflowFileActionsController;
   private readonly agentProposalController: ProgressAgentProposalController;
+  private readonly apiKeyRetryController: ProgressApiKeyRetryController;
   private readonly followUpController: ProgressFollowUpController;
   private readonly modelOutputBackups = new Map<
     StreamTabId,
@@ -112,6 +114,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.workflowFileActionsController =
       this.createWorkflowFileActionsController();
     this.agentProposalController = this.createAgentProposalController();
+    this.apiKeyRetryController = this.createApiKeyRetryController();
     this.followUpController = this.createFollowUpController();
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
@@ -553,6 +556,25 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
+  private createApiKeyRetryController(): ProgressApiKeyRetryController {
+    return new ProgressApiKeyRetryController({
+      providers: SecretManager.API_PROVIDERS,
+      readKey: (provider) =>
+        SecretManager.get(SecretManager.getApiKeySecretName(provider)),
+      hasUsableKey: (provider) => SecretManager.hasUsableApiKey(provider),
+      promptForApiKey: async (provider) => {
+        await vscode.commands.executeCommand(
+          apiKeyCommands.setApiKey,
+          provider,
+        );
+      },
+      setUseIncludedModelAccess: (enabled) =>
+        getServerSideKeyService().setUseIncludedModelAccess(enabled),
+      invalidateModelOptionsCache,
+      triggerRetry: (stream) => runCoordinatorBridge.triggerRetry(stream),
+    });
+  }
+
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
       getAgentCategory: (agent) =>
@@ -606,69 +628,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         ? data.provider
         : undefined;
 
-    // The gate depends on WHICH credential is exhausted:
-    //   - Upstream credit depletion (Anthropic 400 "credit balance is
-    //     too low"): the STORED key is the broken one, so we require
-    //     evidence of a key change.
-    //   - Relay monthly limit (or unknown provider): the stored key is
-    //     fine, so any usable key counts as consent.
-    // `anyApiKeyExists()` is deliberately NOT used — it also returns
-    // true when only relay access is available.
-    const providersToCheck = providerArg
-      ? [providerArg]
-      : SecretManager.API_PROVIDERS;
-    const readKey = (p: ApiProvider) =>
-      SecretManager.get(SecretManager.getApiKeySecretName(p));
-
-    const requireChange = data.upstreamCreditDepleted === true;
-    const before = requireChange
-      ? new Map(
-          await Promise.all(
-            providersToCheck.map(async (p) => [p, await readKey(p)] as const),
-          ),
-        )
-      : undefined;
-
-    await vscode.commands.executeCommand(apiKeyCommands.setApiKey, providerArg);
-
-    let shouldProceed: boolean;
-    if (requireChange) {
-      const after = new Map(
-        await Promise.all(
-          providersToCheck.map(async (p) => [p, await readKey(p)] as const),
-        ),
-      );
-      shouldProceed = providersToCheck.some((p) => {
-        const next = after.get(p);
-        return (
-          typeof next === 'string' &&
-          next.trim().length > 0 &&
-          next !== before!.get(p)
-        );
-      });
-    } else {
-      const usable = await Promise.all(
-        providersToCheck.map((p) => SecretManager.hasUsableApiKey(p)),
-      );
-      shouldProceed = usable.some(Boolean);
-    }
-
-    if (!shouldProceed) {
-      return;
-    }
-
-    // Only disable relay access when the failing call actually went
-    // through relay. If the error came from a direct-key call (e.g.
-    // user's own Anthropic key ran out of credit on a tier that
-    // routes Anthropic directly while other providers still go via
-    // relay), flipping the global mode would revoke relay for the
-    // other providers too.
-    if (data.viaRelay === true) {
-      await getServerSideKeyService().setUseIncludedModelAccess(false);
-      invalidateModelOptionsCache();
-    }
-    const retried = runCoordinatorBridge.triggerRetry(data.stream);
-    if (!retried) {
+    const result = await this.apiKeyRetryController.useOwnApiKey({
+      stream: data.stream,
+      provider: providerArg,
+      upstreamCreditDepleted: data.upstreamCreditDepleted,
+      viaRelay: data.viaRelay,
+    });
+    if (result.proceeded && !result.retried) {
       await vscode.window.showInformationMessage(
         'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
       );
