@@ -2,10 +2,6 @@
 // progress-view follow-up). Browser-only — relies on FileReader/DataTransfer
 // and has no Node imports, so it is safe in both webview bundles.
 
-import { generatePastedImageName } from '@shared/files/pastedImageConstants';
-
-export { generatePastedImageName };
-
 const IMAGE_MIME_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/jpg': 'jpg',

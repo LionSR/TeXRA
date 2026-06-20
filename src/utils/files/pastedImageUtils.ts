@@ -2,14 +2,9 @@
 import * as path from 'node:path';
 
 // Local imports
-import {
-  generatePastedImageName,
-  PASTED_PREFIX,
-} from '@shared/files/pastedImageConstants';
+import { PASTED_PREFIX } from '@shared/files/pastedImageConstants';
 import { THREE_DAYS_MS } from '@utils/config/constants';
 import { StorageFS } from './storageFS';
-
-export { generatePastedImageName };
 
 export const PASTED_DIR = 'pasted';
 
