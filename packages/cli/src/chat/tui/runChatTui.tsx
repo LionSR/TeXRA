@@ -191,7 +191,6 @@ import {
   chatTuiCanInterruptActiveRun,
   chatTuiCanSelectModel,
   chatTuiCanStartRootRun,
-  chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
   chatTuiIsResumableIdleOnExit,
   chatTuiSigintAction,
