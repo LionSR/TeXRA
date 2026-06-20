@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import { AgentCategory } from '@shared/schemas/agent';
 
 const mocks = vi.hoisted(() => ({
@@ -13,8 +14,6 @@ vi.mock('@agent/storage', () => ({
   })),
   listExecutions: mocks.listExecutions,
 }));
-
-import { buildHistoryMessage } from '@shared/settingsView/handlers/historyHandlers';
 
 describe('settings history handlers', () => {
   beforeEach(() => {
