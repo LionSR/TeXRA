@@ -7,6 +7,18 @@ import { z } from 'zod';
  * own runtime schemas, so it must not pull in settings-view or tool code.
  */
 
+function parseEnumSetting<T extends string>(
+  values: readonly T[],
+  fallback: T,
+  aliases?: Readonly<Record<string, T>>,
+): (raw: string) => T {
+  const known = values as readonly string[];
+  return (raw: string): T => {
+    if (known.includes(raw)) return raw as T;
+    return aliases?.[raw] ?? fallback;
+  };
+}
+
 /** Valid Codex sandbox modes. */
 export const CodexSandboxModeSchema = z.enum([
   'read-only',
@@ -14,6 +26,12 @@ export const CodexSandboxModeSchema = z.enum([
   'danger-full-access',
 ]);
 export type CodexSandboxMode = z.infer<typeof CodexSandboxModeSchema>;
+
+export const CODEX_SANDBOX_MODE_DEFAULT: CodexSandboxMode = 'workspace-write';
+export const parseCodexSandboxMode = parseEnumSetting(
+  CodexSandboxModeSchema.options,
+  CODEX_SANDBOX_MODE_DEFAULT,
+);
 
 /** Valid Codex reasoning effort levels. */
 export const CodexReasoningEffortSchema = z.enum([
@@ -24,6 +42,12 @@ export const CodexReasoningEffortSchema = z.enum([
 ]);
 export type CodexReasoningEffort = z.infer<typeof CodexReasoningEffortSchema>;
 
+export const CODEX_REASONING_EFFORT_DEFAULT: CodexReasoningEffort = 'high';
+export const parseCodexReasoningEffort = parseEnumSetting(
+  CodexReasoningEffortSchema.options,
+  CODEX_REASONING_EFFORT_DEFAULT,
+);
+
 /** Valid Codex approval policies. */
 export const CodexApprovalPolicySchema = z.enum([
   'never',
@@ -33,6 +57,12 @@ export const CodexApprovalPolicySchema = z.enum([
 ]);
 export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
 
+export const CODEX_APPROVAL_POLICY_DEFAULT: CodexApprovalPolicy = 'never';
+export const parseCodexApprovalPolicy = parseEnumSetting(
+  CodexApprovalPolicySchema.options,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+);
+
 /** Claude Code CLI model options surfaced in the picker. */
 export const ClaudeAgentModelSchema = z.enum([
   'claude-sonnet-4-6',
@@ -41,6 +71,19 @@ export const ClaudeAgentModelSchema = z.enum([
   'claude-haiku-4-5-20251001',
 ]);
 export type ClaudeAgentModel = z.infer<typeof ClaudeAgentModelSchema>;
+
+export const CLAUDE_AGENT_DEFAULT_MODEL: ClaudeAgentModel = 'claude-sonnet-4-6';
+
+const RETIRED_CLAUDE_AGENT_MODELS: Readonly<Record<string, ClaudeAgentModel>> =
+  {
+    'claude-opus-4-7': 'claude-opus-4-8',
+  };
+
+export const parseClaudeAgentModel = parseEnumSetting(
+  ClaudeAgentModelSchema.options,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  RETIRED_CLAUDE_AGENT_MODELS,
+);
 
 /** Claude Code CLI permission modes exposed in settings. */
 export const ClaudeAgentPermissionModeSchema = z.enum([
@@ -52,6 +95,13 @@ export const ClaudeAgentPermissionModeSchema = z.enum([
 export type ClaudeAgentPermissionMode = z.infer<
   typeof ClaudeAgentPermissionModeSchema
 >;
+
+export const CLAUDE_AGENT_DEFAULT_PERMISSION_MODE: ClaudeAgentPermissionMode =
+  'acceptEdits';
+export const parseClaudeAgentPermissionMode = parseEnumSetting(
+  ClaudeAgentPermissionModeSchema.options,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+);
 
 /**
  * Claude Code CLI effort levels. `claudeAgentShared.ts` guards this against the
@@ -65,3 +115,11 @@ export const ClaudeAgentEffortSchema = z.enum([
   'max',
 ]);
 export type ClaudeAgentEffort = z.infer<typeof ClaudeAgentEffortSchema>;
+
+export const CLAUDE_AGENT_DEFAULT_EFFORT: ClaudeAgentEffort = 'high';
+export const parseClaudeAgentEffort = parseEnumSetting(
+  ClaudeAgentEffortSchema.options,
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+);
+
+export const BASH_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireBashApproval';
