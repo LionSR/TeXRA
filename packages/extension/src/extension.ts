@@ -176,8 +176,17 @@ export async function activate(context: vscode.ExtensionContext) {
   logger.setOutputChannelFactory((name) =>
     vscode.window.createOutputChannel(name),
   );
-  initializePolishModel(context.extensionPath);
-  initializeGoalPrompts(context.extensionPath);
+  initializePolishModel(
+    path.join(
+      context.extensionPath,
+      'resources',
+      'templates',
+      'instructionPolish.yaml',
+    ),
+  );
+  initializeGoalPrompts(
+    path.join(context.extensionPath, 'resources', 'goal', 'goal.yaml'),
+  );
   initializeStateManagers(context, gitRepoRoot);
   const lifecycle = createLifecycleHost({
     onError: (phase, error) =>
