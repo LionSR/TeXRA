@@ -2118,7 +2118,7 @@ const SCENARIOS = [
       'f focus',
       'Esc close',
     ],
-    unexpect: ['Tasks and sub-workflows'],
+    unexpect: ['Tasks and sub-workflows', 'strategy — +2 more'],
     maxBlankLinesBetween: [
       {
         from: 'entry-4 chat history line',
@@ -2148,7 +2148,7 @@ const SCENARIOS = [
       'k kill',
       'Esc close',
     ],
-    unexpect: ['Subagents'],
+    unexpect: ['Subagents', 'strategy — +3 more'],
     maxBlankLinesBetween: [
       {
         from: 'entry-4 chat history line',
@@ -2176,7 +2176,7 @@ const SCENARIOS = [
       'Enter view',
       'Esc close',
     ],
-    unexpect: ['Subagents'],
+    unexpect: ['Subagents', 'latex build — +3 earlier'],
   },
   {
     name: 'task-subworkflow-detail',

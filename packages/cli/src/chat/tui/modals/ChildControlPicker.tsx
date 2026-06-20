@@ -334,7 +334,6 @@ function renderItem(
   item: ChildControlItem,
   index: number,
   highlighted: boolean,
-  extraDetail?: string,
   stackedDetail = false,
 ): React.JSX.Element {
   const commandDetail = item.command !== item.label ? item.command : '';
@@ -352,11 +351,6 @@ function renderItem(
               {item.label}
             </Text>
           </Box>
-          {extraDetail ? (
-            <Box flexShrink={0}>
-              <Text dimColor>{` — ${extraDetail}`}</Text>
-            </Box>
-          ) : null}
           {item.description ? (
             <Text dimColor wrap="truncate-end">{` — ${item.description}`}</Text>
           ) : null}
@@ -385,11 +379,6 @@ function renderItem(
           {item.label}
         </Text>
       </Box>
-      {extraDetail ? (
-        <Box flexShrink={0}>
-          <Text dimColor>{` — ${extraDetail}`}</Text>
-        </Box>
-      ) : null}
       {detail ? (
         <Text dimColor wrap="truncate-end">{` — ${detail}`}</Text>
       ) : null}
@@ -1113,15 +1102,18 @@ export function ChildControlPicker({
   }
 
   if (ultraCompact) {
+    const titleParts = [
+      pickerTitle(mode),
+      streamScopeText,
+      compactOverflowText,
+    ].filter((part): part is string => Boolean(part));
     return (
       <Box flexDirection="column" minWidth={0} width={availableColumns}>
         <Text bold color="cyan" wrap="truncate-end">
-          {streamScopeText
-            ? `${pickerTitle(mode)} · ${streamScopeText}`
-            : pickerTitle(mode)}
+          {titleParts.join(' · ')}
         </Text>
         {selectedItem ? (
-          renderItem(selectedItem, selectedIndex, true, compactOverflowText)
+          renderItem(selectedItem, selectedIndex, true)
         ) : (
           <Text dimColor>{emptyPickerText(mode)}</Text>
         )}
@@ -1169,7 +1161,6 @@ export function ChildControlPicker({
                 item,
                 index,
                 index === selectedIndex,
-                undefined,
                 stackSelectedSubagent && index === selectedIndex,
               );
             })}
