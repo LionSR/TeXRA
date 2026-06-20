@@ -1,5 +1,5 @@
 // Third-party imports
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
@@ -23,7 +23,6 @@ import type {
   OutputXmlSummary,
   RoundOutput,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createRecordingHost } from '../progressTestUtils';
 
 function createLocation(path: string): FileLocation {
@@ -83,21 +82,12 @@ function createCompileFailureFixture() {
   };
 }
 
-async function initFakePlatform(
-  workspaceState: Record<string, unknown> = {},
-): Promise<void> {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(createFakePlatform({ workspaceState }));
-}
+const defaultWorkflowOutputPolicy = {
+  shouldAutoOpenPdfOrLog: () => true,
+  shouldRejectOnCompileFailure: () => true,
+};
 
 describe('output progress events', () => {
-  beforeEach(async () => {
-    await initFakePlatform();
-  });
-
   it('publishes reflection output-node events through the runtime host', async () => {
     const { events, host } = createRecordingHost();
     const outputNode = new OutputNode().setServices({
@@ -105,6 +95,7 @@ describe('output progress events', () => {
       logger: { warn: () => {} },
       outputState: createOutputState(),
       runtimeHost: host,
+      workflowOutputPolicy: defaultWorkflowOutputPolicy,
     } as unknown as ReflectionServices);
     const outputLocation = createAgentLocation('/tmp/output.xml');
     const openedLocation = createLocation('/tmp/rendered.tex');
@@ -169,6 +160,7 @@ describe('output progress events', () => {
       logger: { warn: () => {} },
       outputState: createOutputState(),
       runtimeHost: host,
+      workflowOutputPolicy: defaultWorkflowOutputPolicy,
     } as unknown as ReflectionServices);
     const {
       outputLocation,
@@ -204,15 +196,16 @@ describe('output progress events', () => {
   });
 
   it('honors disabled compile-failure repair context setting', async () => {
-    await initFakePlatform({
-      [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: false,
-    });
     const { host } = createRecordingHost();
     const outputNode = new OutputNode().setServices({
       streamId: 'stream:compile-context-disabled',
       logger: { warn: () => {} },
       outputState: createOutputState(),
       runtimeHost: host,
+      workflowOutputPolicy: {
+        ...defaultWorkflowOutputPolicy,
+        shouldRejectOnCompileFailure: () => false,
+      },
     } as unknown as ReflectionServices);
     const {
       outputLocation,
@@ -251,6 +244,7 @@ describe('output progress events', () => {
       logger: { warn: () => {} },
       outputState: createOutputState(),
       runtimeHost: host,
+      workflowOutputPolicy: defaultWorkflowOutputPolicy,
     } as unknown as ReflectionServices);
     const { outputLocation, roundOutput, summary } =
       createCompileFailureFixture();
