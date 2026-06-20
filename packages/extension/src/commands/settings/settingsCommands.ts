@@ -1,23 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports
-import { registerCommands } from '@commands/_shared/registerCommands';
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
-import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
-
-const settingsViewCommands = {
-  showSettingsView: 'texra.showSettingsView',
-  showDashboard: 'texra.showDashboard',
-  // Tab-specific commands
-  showMemory: 'texra.showMemory',
-  showHistory: 'texra.showAgentHistory',
-  showModels: 'texra.showModels',
-  showAgents: 'texra.showAgents',
-  showTools: 'texra.showTools',
-  showMultiAgent: 'texra.showMultiAgent',
-  showGitSettings: 'texra.showGitSettings',
-} as const;
 
 let settingsViewProvider: SettingsViewProvider | null = null;
 
@@ -40,23 +24,9 @@ export async function showSettingsView(): Promise<void> {
   await settingsViewProvider.showSettingsView();
 }
 
-/**
- * Most settings view-routing commands are now registered through the
- * shared command registry in `extensionCommandSurface.ts` (mirroring the
- * desktop's `DESKTOP_COMMAND_HANDLERS`). The remaining per-command
- * registration here covers `texra.showGitSettings`, which is not yet on
- * the desktop's menu surface and is also absent from `commandCatalog`,
- * so it stays VS Code-only via direct `registerCommand`.
- */
+/** Initialize the settings provider before registry-backed commands use it. */
 export function registerSettingsViewCommands(
   context: vscode.ExtensionContext,
 ): void {
   initializeSettingsViewProvider(context);
-
-  registerCommands(context, [
-    {
-      id: settingsViewCommands.showGitSettings,
-      handler: () => settingsViewProvider?.showSettingsView(SETTINGS_TAB.GIT),
-    },
-  ]);
 }
