@@ -115,10 +115,7 @@ import { installTuiApprovals } from './state/subscribeApprovals';
 import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
-import {
-  onStreamStatusChange,
-  streamStatusFromState,
-} from './state/streamStatus';
+import { onStreamStatusChange } from './state/streamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
   appendLocalAssistantTranscript,
@@ -274,7 +271,7 @@ export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpR
   return focusedChildFollowUpRoute({
     activeStreamId: cliState.activeStreamId.get(),
     parentStream: cliState.parentStream.get(),
-    statusForStream: streamStatusFromState,
+    streams: cliState.streams.get(),
   });
 }
 
@@ -283,7 +280,6 @@ function stoppedFocusedChildFollowUpMessage(streamId: StreamTabId): string {
   const streams = cliState.streams.get();
   return focusedChildStoppedMessage({
     parentStream,
-    status: streamStatusFromState(streamId),
     streamId,
     streams,
   });
@@ -488,7 +484,9 @@ export async function runChat(
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
   const rootStreamStatus = (): StreamStatus | undefined =>
-    session.streamId ? streamStatusFromState(session.streamId) : undefined;
+    session.streamId
+      ? cliState.streams.get().get(session.streamId)?.status
+      : undefined;
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
       session.streamId &&
@@ -545,7 +543,7 @@ export async function runChat(
   const resetSessionForClear = (): void => {
     const activeStreamId = session.streamId ?? cliState.activeStreamId.get();
     const activeStatus = activeStreamId
-      ? streamStatusFromState(activeStreamId)
+      ? cliState.streams.get().get(activeStreamId)?.status
       : undefined;
     const isRunPending = Boolean(session.runPromise && !session.runCompleted);
 
