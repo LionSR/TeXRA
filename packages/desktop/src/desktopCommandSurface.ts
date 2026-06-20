@@ -56,6 +56,7 @@ const DESKTOP_MENU_GROUPS = [
     'texra.showAgents',
     'texra.showTools',
     'texra.showMultiAgent',
+    'texra.showGitSettings',
     'texra.openGettingStarted',
     'texra.cleanOutput',
     'texra.cleanBuild',
@@ -297,6 +298,10 @@ const DESKTOP_COMMAND_HANDLERS = {
   },
   'texra.showMultiAgent': (actions) => {
     actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
+    return true;
+  },
+  'texra.showGitSettings': (actions) => {
+    actions.showSettings(SETTINGS_TAB.GIT);
     return true;
   },
   [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: (actions) => {
