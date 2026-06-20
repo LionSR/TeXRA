@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { DiffStatsSchema } from '@agent/types/DiffTypes';
+import { DiffStatsSchema } from './lineChanges';
 import { ExecutionIdSchema } from './identifiers';
 
 export const WorkspaceFileLocationSchema = z.strictObject({
