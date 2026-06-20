@@ -78,7 +78,6 @@ import {
   type ApprovalDecision,
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
-import { streamStatusFromState } from '../src/chat/tui/state/streamStatus';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
@@ -1436,13 +1435,12 @@ function handleHarnessSubmit(line: string): void {
   const focusedChildRoute = focusedChildFollowUpRoute({
     activeStreamId: cliState.activeStreamId.get(),
     parentStream: cliState.parentStream.get(),
-    statusForStream: streamStatusFromState,
+    streams: cliState.streams.get(),
   });
   if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(
       stoppedFocusedChildFollowUpMessage({
         parentStream: cliState.parentStream.get(),
-        status: streamStatusFromState(focusedChildRoute.streamId),
         streamId: focusedChildRoute.streamId,
         streams: cliState.streams.get(),
       }),
