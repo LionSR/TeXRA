@@ -188,9 +188,7 @@ export class HistoryHandlers {
 
   private async exportAndOpenMarkdown(
     historyId: string,
-    exportInput: Parameters<
-      ChatExportController['exportAsMarkdown']
-    >[1],
+    exportInput: Parameters<ChatExportController['exportAsMarkdown']>[1],
   ): Promise<void> {
     const { absolutePath, storagePath } =
       await this.chatExportController.exportAsMarkdown(historyId, exportInput);
