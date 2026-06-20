@@ -321,6 +321,7 @@ export function formatCliHistoryDetailsText(
   const { config, meta } = details;
   const model = details.currentModel ?? config?.model;
   const teamPreset = teamPresetId(config);
+  const cliOutputFile = config?.cliOutputFile?.trim();
   const lines = [
     `Execution: ${details.id}`,
     `Status: ${details.status}`,
@@ -340,6 +341,7 @@ export function formatCliHistoryDetailsText(
     lines.push(`Startup model: ${config.model}`);
   }
   if (config?.agentCategory) lines.push(`Category: ${config.agentCategory}`);
+  if (cliOutputFile) lines.push(`CLI output: ${cliOutputFile}`);
   if (meta?.parentExecutionId) lines.push(`Parent: ${meta.parentExecutionId}`);
   if (meta?.delegationDepth !== undefined) {
     lines.push(`Delegation depth: ${meta.delegationDepth}`);
