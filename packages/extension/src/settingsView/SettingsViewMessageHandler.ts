@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
+import { buildToolDashboardItems } from '@controllers/settingsView/ToolDashboardData';
 import { platform } from '@platform/platform';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -68,7 +69,6 @@ import {
   PROVIDER_URLS,
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
-import { buildToolDashboardItems } from '@shared/settingsView/toolDashboardData';
 import { GoalStore } from '@tools/goal';
 import {
   getLastCheckResults,

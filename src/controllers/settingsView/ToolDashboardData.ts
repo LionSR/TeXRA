@@ -1,8 +1,9 @@
 /**
  * Tool dashboard data builder.
  *
- * Enriches tool groups with runtime availability. External tool definitions
- * (SSOT) live in {@link @tools/externalToolDefs}.
+ * Enriches settings-view tool groups with runtime availability. External tool
+ * definitions live in {@link @tools/externalToolDefs}; this controller module
+ * keeps that tool-layer dependency out of shared settings-view code.
  */
 
 // Local imports
@@ -127,7 +128,7 @@ const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
 /**
  * Build the complete tool dashboard items list.
  *
- * @param cachedResults — when provided, skips network probes and uses
+ * @param cachedResults - when provided, skips network probes and uses
  *   these results (including their `statusDetail`). Used by the toggle
  *   handler for instant UI updates.
  */
