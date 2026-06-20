@@ -7,6 +7,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import * as yaml from 'yaml';
 
+import {
+  getContinuationTemplate,
+  initializeGoalPrompts,
+} from '@agent/goal/promptLoader';
+
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
   '../../..',
@@ -50,5 +55,17 @@ describe('Goal prompt parity (YAML ↔ inline fallback)', () => {
         `Inline fallback in promptLoader.ts is missing this continuation line — update both files in lockstep:\n  ${line}`,
       ).toContain(line);
     }
+  });
+
+  it('loads the host-provided goal YAML path directly', async () => {
+    const yamlPath = resolve(
+      REPO_ROOT,
+      'packages/extension/resources/goal/goal.yaml',
+    );
+    initializeGoalPrompts(yamlPath);
+
+    await expect(getContinuationTemplate()).resolves.toBe(
+      readYaml().continuation.template,
+    );
   });
 });

@@ -9,7 +9,7 @@ import { z } from 'zod';
 /* eslint-disable local/prefer-alias-for-deep-relative-imports -- This module
  * must remain require-able after tsc emit by the plain Node settings sync
  * script, which does not install tsconfig alias hooks. */
-import { stripPrefix } from '../../../../src/platform/defaults/configKeyHelpers';
+import { stripPrefix } from '../../../../src/shared/config/configKeys';
 import {
   CORE_SETTING_PATHS,
   CoreSettingsShape,
