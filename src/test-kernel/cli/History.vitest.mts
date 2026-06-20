@@ -288,6 +288,19 @@ describe('CLI history runtime', () => {
     expect(text).not.toContain('Team:  software-engineer ');
   });
 
+  it('surfaces the explicit CLI output file in history details', async () => {
+    mocks.readConfig.mockResolvedValue({
+      ...config,
+      cliOutputFile: ' /tmp/texra-output/polished.tex ',
+    } as AgentConfig);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+    const text = formatCliHistoryDetailsText(details!);
+
+    expect(text).toContain('CLI output: /tmp/texra-output/polished.tex');
+    expect(text).not.toContain('CLI output:  /tmp/texra-output/polished.tex ');
+  });
+
   it('shows a bounded final assistant preview when no report is stored', async () => {
     mocks.readConversation.mockResolvedValue([
       { role: 'user', content: 'Review the proof.' },
