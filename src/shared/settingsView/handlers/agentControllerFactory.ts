@@ -20,7 +20,7 @@ import {
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 
-import type { SettingsStatePorts } from './types';
+import type { SettingsStatePorts } from '@shared/settingsView/types';
 
 export interface AgentControllerFactoryOptions extends SettingsStatePorts {
   readonly getCustomAgentDirectory: () => Promise<string>;
