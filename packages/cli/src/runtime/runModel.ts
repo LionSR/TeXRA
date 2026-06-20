@@ -6,14 +6,12 @@ import {
   resolveConfiguredModel,
 } from './cliConfig';
 import { CliUsageError, type CliContext } from './cliContext';
-import { initCliPlatform, setCliHelperModel } from './initPlatform';
+import { initCliPlatform } from './initPlatform';
 import { writeTextStderr } from './logSinks';
-import {
-  resolveCliRunnableModel,
-  type CliModelSelectionSource,
-} from './modelAccess';
-import { shouldRenderRunProgress } from './runProgressRenderer';
 import { effectiveCliApiMode } from './apiAccessMode';
+import { selectCliRootModel } from './rootModelSelection';
+import { shouldRenderRunProgress } from './runProgressRenderer';
+import type { CliModelSelectionSource } from './modelAccess';
 
 export type CliRunModelCandidateSource = Extract<
   CliModelSelectionSource,
@@ -69,14 +67,14 @@ export async function resolveCliRunModel(
   await initCliPlatform({ ...context, quietLogs: true });
   const apiMode = effectiveCliApiMode(context);
   try {
-    const resolution = await resolveCliRunnableModel(candidate.model, {
-      fallbackSource: candidate.source,
+    const resolution = await selectCliRootModel({
+      model: candidate.model,
+      modelSource: candidate.source,
       apiMode,
     });
     if (resolution.notice && context.quietLogs !== true) {
       writeTextStderr(resolution.notice);
     }
-    await setCliHelperModel(resolution.model);
     return resolution.model;
   } catch (error: unknown) {
     throw new CliUsageError(toErrorMessage(error));

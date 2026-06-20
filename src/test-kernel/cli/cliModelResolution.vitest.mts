@@ -11,6 +11,7 @@ import {
 } from '@cli/runtime/cliConfig';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
+import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
 
 const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
@@ -62,6 +63,46 @@ function makeContext(partial: Partial<CliContext> = {}): CliContext {
 }
 
 const runConfig = (model: string): CliConfigValues => ({ run: { model } });
+
+describe('selectCliRootModel', () => {
+  beforeEach(() => {
+    mocks.setCliHelperModel.mockReset();
+    mocks.resolveCliRunnableModel.mockReset();
+    mocks.setCliHelperModel.mockResolvedValue(undefined);
+    resolveCliRunnableModelMock.mockImplementation(async (model) => ({
+      model,
+    }));
+  });
+
+  it('resolves the runnable model and persists the selected helper model', async () => {
+    resolveCliRunnableModelMock.mockResolvedValueOnce({
+      model: 'deepseekT',
+      notice: 'Using deepseekT instead.',
+    });
+
+    await expect(
+      selectCliRootModel({
+        model: 'staleConfiguredModel',
+        modelSource: 'config',
+        apiMode: 'personal',
+        noAvailableModelsMessage: 'No personal models.',
+      }),
+    ).resolves.toEqual({
+      model: 'deepseekT',
+      notice: 'Using deepseekT instead.',
+    });
+
+    expect(resolveCliRunnableModelMock).toHaveBeenCalledWith(
+      'staleConfiguredModel',
+      {
+        apiMode: 'personal',
+        fallbackSource: 'config',
+        noAvailableModelsMessage: 'No personal models.',
+      },
+    );
+    expect(mocks.setCliHelperModel).toHaveBeenCalledWith('deepseekT');
+  });
+});
 
 describe('resolveCliRunModel precedence', () => {
   beforeEach(() => {
