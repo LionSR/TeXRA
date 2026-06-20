@@ -27,16 +27,14 @@ import {
   initializeServerSideKeyAccess,
 } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
-import { SupabaseUriHandler } from '@auth/UriHandler';
 import {
   getAuthCallbackUri,
   isSupabaseConfigured,
   setExternalAuthCallbackResolver,
   setRuntimeExtensionId,
 } from '@auth/config';
-import { getAuthStatus } from '@auth/authCommands';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
+import { getAuthStatus } from '@commands/auth';
 import { hasAnyUsableSetupCredential } from '@commands/setup';
 import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
@@ -61,6 +59,8 @@ import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
+import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
+import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';

@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { type OAuthProvider, getExternalAuthCallbackUri } from '@auth/config';
+import { AUTH_PROVIDER_ID, AUTH_COMMANDS } from '@auth/constants';
 import { showSettingsView } from '@commands/settings';
 import { toErrorMessage } from '@common/errors';
+import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import { getConfig } from '@utils/config';
-import { SupabaseClient } from './SupabaseClient';
-import { SupabaseAuthProvider } from './SupabaseAuthProvider';
-import { type OAuthProvider, getExternalAuthCallbackUri } from './config';
-import { AUTH_PROVIDER_ID, AUTH_COMMANDS } from './constants';
 
 type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 
