@@ -98,8 +98,7 @@ export class DependencyBanner extends LitElement {
                       size="small"
                       @click=${() => this.handleInstall(tool)}
                     >
-                      ${waIcon('cloud-arrow-down', { slot: 'start' })}
-                      Install
+                      ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
                     </wa-button>
                   </div>
                 `,
