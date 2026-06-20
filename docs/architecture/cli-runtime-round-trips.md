@@ -221,9 +221,10 @@ team planning. Startup should need only names, descriptions, and availability.
   Move viewport repaint ownership into a small TUI viewport controller so render mode
   and terminal clear policy live together.
 - Slash command dispatch:
-  Built-in commands are registered, but `handleTuiSlashCommand` still owns a large
-  switch with special cases. Move command handlers into the registry incrementally,
-  keeping `runChatTui` as dispatcher plus session lifecycle owner.
+  `runChatTui` now delegates slash commands to the command layer, but
+  `handleTuiSlashCommand` still owns a large switch with special cases. Move
+  command handlers into the registry incrementally so the command layer becomes
+  data-driven.
 - Skills startup:
   Skills should be discoverable without injecting bodies into every tool-use prompt.
   Keep discovery metadata cached; load `SKILL.md` only on activation for the next message.
