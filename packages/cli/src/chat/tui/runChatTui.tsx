@@ -402,6 +402,7 @@ export async function runChat(
     session,
     commandName: context.commandName,
     cwd: context.cwd,
+    processCwd: process.cwd(),
     initialAgent: agent,
     initialModel: model,
     interruptActive,
