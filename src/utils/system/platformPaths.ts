@@ -5,6 +5,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { globSync } from 'glob';
 import { execaSync } from 'execa';
+import { LRUCache } from 'lru-cache';
 import which from 'which';
 
 // Local imports - log
@@ -211,8 +212,10 @@ function getExtraDirs(): string[] {
   return cachedExtraDirs;
 }
 
-// Cache for extended PATH strings
-const cachedExtendedPaths = new Map<string, string>();
+// Cache for extended PATH strings. Bounded so a process that mutates PATH many
+// times over its lifetime can't grow this unbounded; in practice only a handful
+// of distinct base paths are ever seen.
+const cachedExtendedPaths = new LRUCache<string, string>({ max: 16 });
 
 /**
  * Extend PATH with common directories if they are missing.
@@ -250,7 +253,11 @@ function isPathSafe(filepath: string): boolean {
   return !normalized.includes('..');
 }
 
-const findToolCache = new Map<string, string>();
+// Resolved tool paths, bounded so a long-lived session that probes many
+// distinct tool names can't grow this unbounded. Only hits are cached; misses
+// are always re-checked (see below) so tools installed mid-session are picked
+// up without a reload.
+const findToolCache = new LRUCache<string, string>({ max: 64 });
 
 /**
  * Locate a tool in the common directories.
