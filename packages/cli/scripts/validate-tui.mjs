@@ -80,6 +80,11 @@ const LONG_BASH_APPROVAL_COMMAND = [
 ].join('\n');
 const LONG_EXTERNAL_INQUIRY_ANSWER =
   'Independent check agrees: there are 22 non-degenerate triples in the displayed list, plus exactly 61 degenerate triples of the form (0,b,b), and the bounded search over integer pairs proves completeness.';
+const LONG_EXTERNAL_INQUIRY_ANSWER_FOR_TRUNCATION = Array.from(
+  { length: 24 },
+  (_, index) =>
+    `Long verification note ${String(index + 1).padStart(2, '0')}: independent enumeration confirms the count and keeps the full answer recoverable by thread id.`,
+).join(' ');
 const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
 const ASYNC_FORM_SETTLE_MS = 12000;
 const VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT = [
@@ -1409,13 +1414,42 @@ const SCENARIOS = [
     expect: [
       '[inquiry] ei_123456abcdef answered.',
       'A: Independent check agrees',
-      "Full thread: inquiry { command: 'read'",
+      'Full thread: ei_123456abcdef',
       'No other open inquiries on this stream.',
       'Proceed using the new answer.',
       '[/status]details',
       '[/model]models',
     ],
-    unexpect: ['Agent asks:', '1 question', '1 approval'],
+    unexpect: [
+      'Agent asks:',
+      '1 question',
+      '1 approval',
+      "inquiry { command: 'read'",
+    ],
+  },
+  {
+    name: 'external-inquiry-submit-long-answer',
+    rows: 36,
+    cols: 120,
+    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
+    bootExpect: '[Ctrl-C]',
+    keys: [LONG_EXTERNAL_INQUIRY_ANSWER_FOR_TRUNCATION, '\r'],
+    frame: 'tail',
+    expect: [
+      '[inquiry] ei_123456abcdef answered.',
+      'A: Long verification note 01',
+      'full text',
+      'available in thread ei_123456abcdef',
+      'Full thread: ei_123456abcdef',
+      'No other open inquiries on this stream.',
+      'Proceed using the new answer.',
+    ],
+    unexpect: [
+      'Agent asks:',
+      '1 question',
+      '1 approval',
+      "inquiry { command: 'read'",
+    ],
   },
   {
     name: 'compact-user-question',
