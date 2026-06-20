@@ -159,3 +159,13 @@ export async function apiKeyExists(
 ): Promise<boolean> {
   return (await lookupApiKey(secrets, provider)) !== undefined;
 }
+
+/** Check if an API key exists without using the process-wide provider cache. */
+export async function apiKeyExistsUncached(
+  secrets: PlatformSecrets,
+  provider: ApiProvider,
+): Promise<boolean> {
+  const stored = await secrets.get(apiKeySecretName(provider));
+  if (stored) return true;
+  return Boolean(process.env[apiKeyEnvName(provider)]);
+}
