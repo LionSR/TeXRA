@@ -209,9 +209,10 @@ team planning. Startup should need only names, descriptions, and availability.
   Return a `CliMultiAgentPlanSnapshot` from the planner and let launch validate or
   reuse it unless registry/auth state changed.
 - Model selection ownership:
-  Startup, submit-time, and `/model` each reconcile model availability and persistence.
-  Add a `CliRootModelSelection` helper that owns `apiMode`, current model, runnable
-  list loading, and persistence.
+  Root model paths now use `selectCliRootModel` for API-mode-aware runnable
+  resolution plus helper-model persistence. Keep candidate precedence
+  entrypoint-specific (`chat` defaults, headless `run`, resume history), but do
+  not reintroduce direct resolve-and-persist pairs outside the runtime helper.
 - Stream status lookup:
   UI helpers read child status from parent slice, child slice, and `StreamStatusService`.
   Normalize once in the subscriber and make UI read `StreamSlice` only. Keep the
