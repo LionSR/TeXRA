@@ -2,9 +2,9 @@
 // progress-view follow-up). Browser-only — relies on FileReader/DataTransfer
 // and has no Node imports, so it is safe in both webview bundles.
 
-import { nanoid } from 'nanoid';
+import { generatePastedImageName } from '@shared/files/pastedImageConstants';
 
-import { PASTED_PREFIX } from '@shared/files/pastedImageConstants';
+export { generatePastedImageName };
 
 const IMAGE_MIME_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -32,10 +32,6 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
 
 export function getExtensionFromMimeType(mimeType: string): string {
   return IMAGE_MIME_TYPES[mimeType] || mimeType.split('/')[1] || 'png';
-}
-
-export function generatePastedImageName(extension: string): string {
-  return `${PASTED_PREFIX}${Date.now()}_${nanoid(6)}.${extension}`;
 }
 
 export interface ExtractedClipboardImage {
