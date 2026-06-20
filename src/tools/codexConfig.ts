@@ -4,6 +4,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 
@@ -29,17 +30,16 @@ const REASONING_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
 export const CODEX_REASONING_EFFORTS = REASONING_EFFORTS;
 export type CodexReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
-const REASONING_EFFORT_KEY = 'texra.codexReasoningEffort';
-const REASONING_EFFORT_DEFAULT: CodexReasoningEffort = 'high';
+export const CODEX_REASONING_EFFORT_DEFAULT: CodexReasoningEffort = 'high';
 
 export const parseCodexReasoningEffort = createEnumParser(
   REASONING_EFFORTS,
-  REASONING_EFFORT_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
 );
 
 export const getCodexReasoningEffort = createEnumStateGetter(
-  REASONING_EFFORT_KEY,
-  REASONING_EFFORT_DEFAULT,
+  WorkspaceStateKey.CODEX_REASONING_EFFORT,
+  CODEX_REASONING_EFFORT_DEFAULT,
   parseCodexReasoningEffort,
 );
 
@@ -78,16 +78,15 @@ export const CODEX_APPROVAL_POLICIES =
   APPROVAL_POLICIES satisfies readonly ApprovalMode[];
 export type CodexApprovalPolicy = ApprovalMode;
 
-const APPROVAL_POLICY_KEY = 'texra.codexApprovalPolicy';
-const APPROVAL_POLICY_DEFAULT: CodexApprovalPolicy = 'never';
+export const CODEX_APPROVAL_POLICY_DEFAULT: CodexApprovalPolicy = 'never';
 
 export const parseCodexApprovalPolicy: (raw: string) => CodexApprovalPolicy =
-  createEnumParser(APPROVAL_POLICIES, APPROVAL_POLICY_DEFAULT);
+  createEnumParser(APPROVAL_POLICIES, CODEX_APPROVAL_POLICY_DEFAULT);
 
 export const getCodexApprovalPolicy: () => CodexApprovalPolicy =
   createEnumStateGetter(
-    APPROVAL_POLICY_KEY,
-    APPROVAL_POLICY_DEFAULT,
+    WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+    CODEX_APPROVAL_POLICY_DEFAULT,
     parseCodexApprovalPolicy,
   );
 
@@ -104,16 +103,15 @@ export const CODEX_SANDBOX_MODES =
   SANDBOX_MODES satisfies readonly SandboxMode[];
 export type CodexSandboxMode = SandboxMode;
 
-const SANDBOX_MODE_KEY = 'texra.codexSandboxMode';
-const SANDBOX_MODE_DEFAULT: CodexSandboxMode = 'workspace-write';
+export const CODEX_SANDBOX_MODE_DEFAULT: CodexSandboxMode = 'workspace-write';
 
 export const parseCodexSandboxMode: (raw: string) => CodexSandboxMode =
-  createEnumParser(SANDBOX_MODES, SANDBOX_MODE_DEFAULT);
+  createEnumParser(SANDBOX_MODES, CODEX_SANDBOX_MODE_DEFAULT);
 
 export const getCodexSandboxMode: () => CodexSandboxMode =
   createEnumStateGetter(
-    SANDBOX_MODE_KEY,
-    SANDBOX_MODE_DEFAULT,
+    WorkspaceStateKey.CODEX_SANDBOX_MODE,
+    CODEX_SANDBOX_MODE_DEFAULT,
     parseCodexSandboxMode,
   );
 
