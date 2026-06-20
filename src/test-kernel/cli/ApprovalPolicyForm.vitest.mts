@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  APPROVAL_POLICY_ITEMS,
-  formatApprovalPolicyForCli,
-} from '@cli/chat/tui/forms/ApprovalPolicyForm';
+import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
+import { APPROVAL_POLICY_ITEMS } from '@cli/chat/tui/forms/ApprovalPolicyForm';
 
 describe('ApprovalPolicyForm', () => {
   it('describes approval policies consistently', () => {
@@ -27,7 +25,7 @@ describe('ApprovalPolicyForm', () => {
 
     expect(APPROVAL_POLICY_ITEMS).toEqual(expectedItems);
     for (const item of expectedItems) {
-      expect(formatApprovalPolicyForCli(item.value)).toBe(item.description);
+      expect(formatCliApprovalPolicy(item.value)).toBe(item.description);
     }
   });
 });

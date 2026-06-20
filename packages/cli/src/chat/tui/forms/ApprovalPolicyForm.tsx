@@ -1,6 +1,8 @@
 import { Box, Text } from 'ink';
 
+import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+
 import { KeyHints } from '../ui/KeyHints';
 import { Select, type SelectItem } from '../ui/Select';
 import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
@@ -13,32 +15,21 @@ export interface ApprovalPolicyFormProps {
   readonly onCancel: () => void;
 }
 
-export function formatApprovalPolicyForCli(policy: CliApprovalPolicy): string {
-  switch (policy) {
-    case 'ask':
-      return 'ask before privileged actions';
-    case 'never':
-      return 'deny privileged actions';
-    case 'yolo':
-      return 'auto-approve privileged actions';
-  }
-}
-
 export const APPROVAL_POLICY_ITEMS = [
   {
     value: 'ask',
     label: 'Ask',
-    description: formatApprovalPolicyForCli('ask'),
+    description: formatCliApprovalPolicy('ask'),
   },
   {
     value: 'never',
     label: 'Never',
-    description: formatApprovalPolicyForCli('never'),
+    description: formatCliApprovalPolicy('never'),
   },
   {
     value: 'yolo',
     label: 'Auto-approve',
-    description: formatApprovalPolicyForCli('yolo'),
+    description: formatCliApprovalPolicy('yolo'),
   },
 ] as const satisfies ReadonlyArray<SelectItem<CliApprovalPolicy>>;
 

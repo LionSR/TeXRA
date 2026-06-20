@@ -57,7 +57,6 @@ import {
   openCliSlashCommandForm,
   openRegisteredCliSlashForm,
 } from '../src/chat/tui/commands/slashForms';
-import { formatApprovalPolicyForCli } from '../src/chat/tui/forms/ApprovalPolicyForm';
 import {
   cliState,
   patchStream,
@@ -95,6 +94,10 @@ import {
   formatCliApiStatusActionHint,
   formatCliAuthStatusLine,
 } from '../src/runtime/apiStatus';
+import {
+  formatCliApprovalPolicy,
+  parseCliApprovalPolicy,
+} from '../src/runtime/approvalPolicyText';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
 import {
   cliMultiAgentPresets,
@@ -105,10 +108,7 @@ import {
   CLI_HISTORY_RESUMABLE_STATUS,
   type CliHistoryEntry,
 } from '../src/runtime/history';
-import {
-  CLI_APPROVAL_POLICIES,
-  type CliApprovalPolicy,
-} from '../src/schemas/cliSettings';
+import { type CliApprovalPolicy } from '../src/schemas/cliSettings';
 import { initLocalCliPlatform } from '../src/runtime/initPlatform';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
 
@@ -217,8 +217,7 @@ const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 let harnessApprovalPolicy: CliApprovalPolicy =
-  parseHarnessApprovalPolicy(process.env.HARNESS_APPROVAL_POLICY ?? '') ??
-  'ask';
+  parseCliApprovalPolicy(process.env.HARNESS_APPROVAL_POLICY ?? '') ?? 'ask';
 const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
@@ -1344,30 +1343,6 @@ function formatHarnessSlashHelp(): string {
   });
 }
 
-function parseHarnessApprovalPolicy(
-  input: string,
-): CliApprovalPolicy | undefined {
-  const normalized = input.trim().toLowerCase();
-  if ((CLI_APPROVAL_POLICIES as readonly string[]).includes(normalized)) {
-    return normalized as CliApprovalPolicy;
-  }
-  switch (normalized) {
-    case 'default':
-    case 'interactive':
-    case 'on':
-      return 'ask';
-    case 'off':
-    case 'deny':
-      return 'never';
-    case 'auto':
-    case 'full':
-    case 'danger':
-      return 'yolo';
-    default:
-      return undefined;
-  }
-}
-
 function setHarnessApprovalPolicy(policy: CliApprovalPolicy): void {
   harnessApprovalPolicy = policy;
   cliState.sessionMeta.set({
@@ -1375,7 +1350,7 @@ function setHarnessApprovalPolicy(policy: CliApprovalPolicy): void {
     approvalPolicy: policy,
   });
   appendHarnessAssistantTranscript(
-    `Approval mode set to ${formatApprovalPolicyForCli(policy)}.`,
+    `Approval mode set to ${formatCliApprovalPolicy(policy)}.`,
   );
 }
 
@@ -1400,7 +1375,7 @@ function applyHarnessApprovalPolicySelection(
     if (openHarnessApprovalPolicyForm(input)) return;
   }
 
-  const policy = parseHarnessApprovalPolicy(normalized);
+  const policy = parseCliApprovalPolicy(normalized);
   if (!policy) {
     appendHarnessAssistantTranscript(usage);
     return;
@@ -1498,7 +1473,7 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       api: meta.apiMode,
-      approval: formatApprovalPolicyForCli(harnessApprovalPolicy),
+      approval: formatCliApprovalPolicy(harnessApprovalPolicy),
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       goal: GoalStore.getForStream(streamId),
