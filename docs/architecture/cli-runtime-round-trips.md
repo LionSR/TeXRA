@@ -218,9 +218,9 @@ team planning. Startup should need only names, descriptions, and availability.
   Normalize once in the subscriber and make UI read `StreamSlice` only. Keep the
   service as an input source, not a UI fallback.
 - Transcript viewport repaint:
-  `App` detects root/scoped changes and calls back into `runChatTui` to repaint Ink.
-  Move viewport repaint ownership into a small TUI viewport controller so render mode
-  and terminal clear policy live together.
+  `App` detects root/scoped changes and `runChatTui` wires them to
+  `render/tuiViewportController`. Keep repaint options and SIGCONT clear-repaint
+  policy in that render controller, not in state or the session entrypoint.
 - Slash command dispatch:
   `runChatTui` now delegates slash commands to the command layer, but
   `handleTuiSlashCommand` still owns a large switch with special cases. Move

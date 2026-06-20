@@ -20,8 +20,11 @@ import { staticScrollbackTarget } from '@cli/chat/tui/App';
 import {
   transcriptViewportChange,
   transcriptViewportKey,
-  transcriptViewportRepaintOptions,
 } from '@cli/chat/tui/state/transcriptViewportMode';
+import {
+  createTuiViewportController,
+  type TuiRepaintOptions,
+} from '@cli/chat/tui/render/tuiViewportController';
 import {
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
@@ -1088,18 +1091,26 @@ describe('CLI conversation transcript splitting', () => {
     expect(rootToChild).toBeDefined();
     expect(childToRoot).toBeDefined();
     expect(childToChild).toBeDefined();
-    expect(transcriptViewportRepaintOptions(rootToChild!)).toEqual({
-      clearScrollback: true,
-      preserveStatic: false,
+    const calls: TuiRepaintOptions[] = [];
+    const controller = createTuiViewportController({
+      current: {
+        repaint: (options) => {
+          calls.push(options);
+        },
+      },
     });
-    expect(transcriptViewportRepaintOptions(childToRoot!)).toEqual({
-      clearScrollback: true,
-      preserveStatic: false,
-    });
-    expect(transcriptViewportRepaintOptions(childToChild!)).toEqual({
-      clearScrollback: true,
-      preserveStatic: false,
-    });
+
+    controller.handleTranscriptViewportChange(rootToChild!);
+    controller.handleTranscriptViewportChange(childToRoot!);
+    controller.handleTranscriptViewportChange(childToChild!);
+    controller.repaintAfterTerminalResume();
+
+    expect(calls).toEqual([
+      { clearScrollback: true, preserveStatic: false },
+      { clearScrollback: true, preserveStatic: false },
+      { clearScrollback: true, preserveStatic: false },
+      { clearScrollback: true },
+    ]);
   });
 
   it('shows the thinking liveness row only while a running stream is thinking', () => {
