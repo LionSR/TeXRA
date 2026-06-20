@@ -5,7 +5,7 @@
 import { z } from 'zod';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { GoalStatusSchema } from '@tools/goal/goalMeta';
+import { GoalStatusSchema } from '../goal';
 
 import { StreamTabIdSchema } from '../identifiers';
 import { StreamLogEntrySchema } from '../log';

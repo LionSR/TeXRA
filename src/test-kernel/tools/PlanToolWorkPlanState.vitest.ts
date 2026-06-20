@@ -14,12 +14,13 @@ import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator'
 import { type RunCoordinators } from '@agent/runtime/RunContext';
 import { withToolEnvironment } from '@agent/toolUse/ToolFileInteractionContext';
 import { planSummaryLine, type Plan, type StreamTabId } from '@shared/schemas';
+import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas/goal';
 import {
   cleanupApprovalsForStream,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
 } from '@tools/approval';
-import { GOAL_FEATURE_FLAG_KEY, GoalStore } from '@tools/goal';
+import { GoalStore } from '@tools/goal';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { createRecordingHost } from '../agent/progressTestUtils';
 

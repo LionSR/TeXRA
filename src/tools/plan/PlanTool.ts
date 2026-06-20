@@ -25,15 +25,17 @@ import type { CurrentToolContexts } from '@agent/toolUse/ToolFileInteractionCont
 import { toErrorMessage } from '@common/errors';
 import { createChannelTrace } from '@logger';
 import type { Plan } from '@shared/schemas';
+import {
+  formatGoalTime,
+  goalElapsedMs,
+  isGoalInFlight,
+  type Goal,
+} from '@shared/schemas/goal';
 import { proposalApprovalState } from '@tools/approval';
 import {
   GoalStore,
-  formatGoalTime,
   isGoalEnabled,
-  isGoalInFlight,
-  goalElapsedMs,
   setGoalSessionBashAutoApproval,
-  type Goal,
 } from '@tools/goal';
 import { ToolError, type ToolResult } from '@tools/result';
 import { requireNonEmptyString } from '@tools/utils';

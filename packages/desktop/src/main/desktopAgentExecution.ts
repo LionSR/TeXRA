@@ -10,6 +10,7 @@ import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreCo
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { createProgressViewCommandHandlers } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
+import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
 import { StreamSnapshotStore } from '@transcript';
@@ -53,6 +54,7 @@ import {
   type RestoredStreamSnapshot,
   type StreamTabId,
 } from '@shared/schemas';
+import { isGoalInFlight } from '@shared/schemas/goal';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
@@ -67,7 +69,7 @@ import {
   cleanupUnscopedApprovals,
   handleProgressViewBashApprovalAction,
 } from '@tools/approval';
-import { GoalStore, isGoalInFlight } from '@tools/goal';
+import { GoalStore } from '@tools/goal';
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
@@ -210,6 +212,7 @@ export class DesktopProgressBridge {
         return this.postToRenderer(message) !== false;
       },
       hasTarget: () => true,
+      getStreamControls: getProgressStreamControls,
       configureUi: ({ webviewUpdater }) => {
         // Track shown-but-unresolved prompts so hasPendingPermissions can
         // keep the active view on a stream awaiting input (the shared

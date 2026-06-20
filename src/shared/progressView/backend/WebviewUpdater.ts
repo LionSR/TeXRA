@@ -25,7 +25,7 @@ import {
   type StreamBadgeSnapshot,
 } from '@shared/progressView/backend/state/ProgressViewState';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
-import type { GoalStatus } from '@tools/goal';
+import type { GoalStatus } from '@shared/schemas/goal';
 
 export type ProgressViewMessageSender = (
   message: ProgressViewOutboundMessage,
