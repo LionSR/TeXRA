@@ -30,7 +30,6 @@ import {
   executeAgent,
   resumeToolUseFromSnapshot,
 } from '@agent/runtime/executeAgent';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import {
@@ -188,6 +187,20 @@ import {
   transcriptViewportRepaintOptions,
   type TranscriptViewportChange,
 } from './state/transcriptViewportMode';
+import {
+  chatTuiCanInterruptActiveRun,
+  chatTuiCanSelectModel,
+  chatTuiCanStartRootRun,
+  chatTuiCanStopActiveRun,
+  chatTuiCanStopVisibleRun,
+  chatTuiIsResumableIdleOnExit,
+  chatTuiSigintAction,
+  clearTuiSessionRunState,
+  markChatTuiRunCompleted,
+  markChatTuiRunPending,
+  publishChatTuiRootRunStartAvailability,
+  type TuiSession,
+} from './state/sessionRunState';
 import type { SkillActivation } from './forms/SkillsListForm';
 
 export interface ChatResult {
@@ -306,154 +319,6 @@ export async function markRegisteredChatExecutionError(
 ): Promise<void> {
   if (!options.executionRegistered || options.agentSettled) return;
   await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-}
-
-export interface ClearableTuiSessionState {
-  streamId: StreamTabId | undefined;
-  executionId: string | undefined;
-  runtimeHost?: AgentRuntimeHost;
-  runPromise: Promise<void> | undefined;
-  runExitCode: CliExitCode;
-  runCompleted: boolean;
-  stopRequested: boolean;
-}
-
-type TuiSession = ClearableTuiSessionState;
-type InterruptibleTuiSessionState = Pick<
-  ClearableTuiSessionState,
-  'streamId' | 'runPromise' | 'runCompleted'
->;
-type PendingTuiRunSessionState = Pick<
-  ClearableTuiSessionState,
-  'runPromise' | 'runCompleted'
->;
-
-export function clearTuiSessionRunState(
-  session: ClearableTuiSessionState,
-): void {
-  session.streamId = undefined;
-  session.executionId = undefined;
-  session.runtimeHost = undefined;
-  session.runPromise = undefined;
-  session.runExitCode = CliExitCode.Success;
-  session.runCompleted = false;
-  session.stopRequested = false;
-  publishRootRunStartAvailability(session);
-}
-
-export function markChatTuiRunPending(
-  session: ClearableTuiSessionState,
-  runPromise: Promise<void>,
-  runtimeHost?: AgentRuntimeHost,
-): void {
-  session.streamId = undefined;
-  session.runtimeHost = runtimeHost;
-  session.runPromise = runPromise;
-  session.runExitCode = CliExitCode.Success;
-  session.runCompleted = false;
-  session.stopRequested = false;
-  publishRootRunStartAvailability(session);
-}
-
-export function chatTuiCanInterruptActiveRun(
-  session: InterruptibleTuiSessionState,
-): boolean {
-  return Boolean(
-    session.streamId && session.runPromise && !session.runCompleted,
-  );
-}
-
-export function chatTuiCanStopActiveRun(
-  session: InterruptibleTuiSessionState,
-  status: StreamStatus | undefined,
-): boolean {
-  if (!session.runPromise || session.runCompleted) return false;
-  if (!session.streamId) return true;
-  return status === undefined || isLiveElapsedStatus(status);
-}
-
-export function chatTuiCanStopVisibleRun(
-  session: InterruptibleTuiSessionState,
-  status: StreamStatus | undefined,
-): boolean {
-  return (
-    chatTuiCanStopActiveRun(session, status) ||
-    Boolean(session.streamId && isLiveElapsedStatus(status))
-  );
-}
-
-export function chatTuiCanStartRootRun(
-  session: PendingTuiRunSessionState,
-): boolean {
-  return !session.runPromise || session.runCompleted;
-}
-
-function publishRootRunStartAvailability(
-  session: PendingTuiRunSessionState,
-): void {
-  cliState.rootRunStartAvailable.set(chatTuiCanStartRootRun(session));
-}
-
-function markChatTuiRunCompleted(session: PendingTuiRunSessionState): void {
-  session.runCompleted = true;
-  publishRootRunStartAvailability(session);
-}
-
-export function chatTuiCanSelectModel(input: {
-  readonly canStartRootRun: boolean;
-  readonly streamId: StreamTabId | undefined;
-  readonly status: StreamStatus | undefined;
-  readonly hasActiveToolUseFlow: boolean;
-}): boolean {
-  return (
-    input.canStartRootRun ||
-    Boolean(
-      input.streamId &&
-      input.status === STREAM_STATUS.WAITING &&
-      input.hasActiveToolUseFlow,
-    )
-  );
-}
-
-export type ChatTuiSigintAction =
-  | 'clean-exit'
-  | 'force-exit'
-  | 'preserve-exit'
-  | 'interrupt-and-arm-exit';
-
-export function chatTuiSigintAction(input: {
-  readonly exitArmed: boolean;
-  readonly canStopActiveRun: boolean;
-  readonly canInterruptActiveRun: boolean;
-}): ChatTuiSigintAction {
-  if (input.exitArmed) return 'force-exit';
-  if (input.canStopActiveRun) return 'interrupt-and-arm-exit';
-  // Resumable-idle (interruptible but not actively running): exit WITHOUT
-  // interrupting so the suspended tool-use flow record survives for resume —
-  // interrupting would clear it in runToolUseFlow's finally. preserve-exit
-  // calls process.exit, leaving the suspended flow on disk for `texra resume`.
-  if (input.canInterruptActiveRun) return 'preserve-exit';
-  return 'clean-exit';
-}
-
-/**
- * On exit, a tool-use session suspended at the WAIT node (idle/WAITING) must
- * NOT be interrupted: interrupting clears its per-execution flow record in
- * `runToolUseFlow`'s finally, destroying the only resumable state. The record
- * survives only when the process dies while the flow is still suspended.
- *
- * The discriminator: `canInterruptActiveRun` is true for any pending run, but
- * `canStopActiveRun` is true only while a turn is *actively* running. So
- * "interruptible but not stoppable" is exactly the resumable-idle case. Kept
- * pure (takes the two precomputed booleans) so the exit policy is unit-testable
- * without the live status plumbing. Used by the graceful-exit `finally`; the
- * SIGINT path encodes the same idle→preserve rule via `chatTuiSigintAction`.
- */
-export function chatTuiIsResumableIdleOnExit(input: {
-  readonly canInterruptActiveRun: boolean;
-  readonly canStopActiveRun: boolean;
-}): boolean {
-  return input.canInterruptActiveRun && !input.canStopActiveRun;
 }
 
 export type ChatTuiFocusedChildFollowUpRoute = FocusedChildFollowUpRoute;
@@ -1401,7 +1266,7 @@ export async function runChat(
     clearLocalTranscript();
     followUpQueue.clear();
     session.runCompleted = false;
-    publishRootRunStartAvailability(session);
+    publishChatTuiRootRunStartAvailability(session);
     session.stopRequested = false;
     session.runExitCode = CliExitCode.Success;
     session.streamId = resolution.streamId;
@@ -1487,7 +1352,7 @@ export async function runChat(
         markChatTuiRunCompleted(session);
         void runtimeHost.close();
       });
-    publishRootRunStartAvailability(session);
+    publishChatTuiRootRunStartAvailability(session);
     // Don't await session.runPromise here: a resumed session that suspends at
     // the WAIT node leaves runPromise unresolved (mirrors startAgentRun's
     // fire-and-forget). The exit `finally` handles the dangling-promise case.

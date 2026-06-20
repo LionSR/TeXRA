@@ -71,10 +71,10 @@ import {
   chatTuiCanStartRootRun,
   chatTuiCanSelectModel,
   chatTuiSigintAction,
-  chatTuiFocusedChildFollowUpRoute,
   clearTuiSessionRunState,
   markChatTuiRunPending,
-} from '@cli/chat/tui/runChatTui';
+} from '@cli/chat/tui/state/sessionRunState';
+import { chatTuiFocusedChildFollowUpRoute } from '@cli/chat/tui/runChatTui';
 import { installTuiStdoutListenerLimit } from '@cli/chat/tui/render/noColorOutput';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
