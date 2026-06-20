@@ -1,6 +1,4 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import {
   LitElement,
   html,
@@ -16,6 +14,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import type { DependencyBannerState } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
+import { renderWarningBanner } from './bannerFrame';
 import { MainViewEvents } from '../events';
 
 @customElement('dependency-banner')
@@ -79,59 +78,55 @@ export class DependencyBanner extends LitElement {
       tool === 'gm/magick' ? ['gm', 'magick'] : [tool],
     );
 
-    return html`
-      <div class="banner-frame">
-        <wa-callout id="dependencyBanner" variant="warning">
-          ${waIcon('triangle-exclamation', { slot: 'icon' })}
-          <div class="banner-row">
-            <div class="missing-tools">
-              ${when(
-                tools.length === 0,
-                () => html`Missing dependencies: none`,
-                () =>
-                  repeat(
-                    tools,
-                    (tool) => tool,
-                    (tool) => html`
-                      <div class="dependency-item">
-                        <span>${this.getToolLabel(tool)}</span>
-                        <wa-button
-                          class="dependency-install-button"
-                          appearance="plain"
-                          size="small"
-                          @click=${() => this.handleInstall(tool)}
-                        >
-                          ${waIcon('cloud-arrow-down', { slot: 'start' })}
-                          Install
-                        </wa-button>
-                      </div>
-                    `,
-                  ),
-              )}
-            </div>
-            <div class="actions">
-              <wa-button
-                id="dependencyRecheckButton"
-                appearance="plain"
-                size="small"
-                @click=${this.handleRecheck}
-              >
-                ${waIcon('rotate-right', { slot: 'start' })} Re-check
-              </wa-button>
-              <wa-button
-                id="dependencyDismissButton"
-                appearance="plain"
-                size="small"
-                title="Dismiss (can be re-enabled in settings)"
-                @click=${this.handleDismiss}
-              >
-                ${waIcon('xmark', { slot: 'start' })} Dismiss
-              </wa-button>
-            </div>
-          </div>
-        </wa-callout>
-      </div>
-    `;
+    return renderWarningBanner({
+      id: 'dependencyBanner',
+      body: html`
+        <div class="missing-tools">
+          ${when(
+            tools.length === 0,
+            () => html`Missing dependencies: none`,
+            () =>
+              repeat(
+                tools,
+                (tool) => tool,
+                (tool) => html`
+                  <div class="dependency-item">
+                    <span>${this.getToolLabel(tool)}</span>
+                    <wa-button
+                      class="dependency-install-button"
+                      appearance="plain"
+                      size="small"
+                      @click=${() => this.handleInstall(tool)}
+                    >
+                      ${waIcon('cloud-arrow-down', { slot: 'start' })}
+                      Install
+                    </wa-button>
+                  </div>
+                `,
+              ),
+          )}
+        </div>
+        <div class="actions">
+          <wa-button
+            id="dependencyRecheckButton"
+            appearance="plain"
+            size="small"
+            @click=${this.handleRecheck}
+          >
+            ${waIcon('rotate-right', { slot: 'start' })} Re-check
+          </wa-button>
+          <wa-button
+            id="dependencyDismissButton"
+            appearance="plain"
+            size="small"
+            title="Dismiss (can be re-enabled in settings)"
+            @click=${this.handleDismiss}
+          >
+            ${waIcon('xmark', { slot: 'start' })} Dismiss
+          </wa-button>
+        </div>
+      `,
+    });
   }
 }
 
