@@ -12,6 +12,7 @@ import {
   buildModelSelectionMessage,
   createModelSelectionController,
 } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
+import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
   computeAgentOptionsData,
@@ -61,7 +62,6 @@ import {
   setBashApprovalEnabled,
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
-import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
 import {
   buildSuperYoloMessage,
   setNestedDelegationMaxDepth,
