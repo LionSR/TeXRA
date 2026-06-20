@@ -42,11 +42,10 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
-  resolveCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
-  type CliModelSelectionSource,
   type CliRunnableModelResolution,
 } from '@cli/runtime/modelAccess';
+import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
 import {
@@ -368,8 +367,9 @@ export async function runChat(
   // never disagree.
   let modelSelection: CliRunnableModelResolution;
   try {
-    modelSelection = await resolveCliRunnableModel(defaults.model, {
-      fallbackSource: defaults.modelSource,
+    modelSelection = await selectCliRootModel({
+      model: defaults.model,
+      modelSource: defaults.modelSource,
       apiMode,
       noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
         apiMode,
@@ -382,7 +382,6 @@ export async function runChat(
   }
   const { agent } = defaults;
   const model = modelSelection.model;
-  await setCliHelperModel(model);
   const version = await readCliVersion();
 
   let activeApprovalPolicy = context.approvalPolicy;
@@ -608,8 +607,7 @@ export async function runChat(
     session.executionId = executionId;
     const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
 
-    const runPromise = setCliHelperModel(currentModel)
-      .then(() => registerFreshChatExecution(executionId, config))
+    const runPromise = registerFreshChatExecution(executionId, config)
       .then((registeredConfig) => {
         executionRegistered = true;
         return executeAgent(registeredConfig, executionId, {
@@ -847,11 +845,9 @@ export async function runChat(
         const meta = cliState.sessionMeta.get();
         const currentAgent = meta.agent || agent;
         const currentModel = meta.model || model;
-        const currentModelSource: CliModelSelectionSource = meta.model
-          ? meta.modelSource
-          : defaults.modelSource;
-        const selection = await resolveCliRunnableModel(currentModel, {
-          fallbackSource: currentModelSource,
+        const selection = await selectCliRootModel({
+          model: currentModel,
+          modelSource: meta.model ? meta.modelSource : defaults.modelSource,
           apiMode: meta.apiMode,
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
             meta.apiMode,
