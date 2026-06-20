@@ -123,6 +123,46 @@ describe('CLI agents command', () => {
     );
   });
 
+  it('suppresses hidden-agent notices in quiet text mode', async () => {
+    const visibleAgent = {
+      name: 'polish',
+      source: 'builtInWorkflow',
+      path: '/tmp/resources/agents/polish.yaml',
+      category: AgentCategory.Workflow,
+      description: 'Polishes prose.',
+    };
+    const hiddenAgent = {
+      name: 'correct',
+      source: 'builtInWorkflow',
+      path: '/tmp/resources/agents/correct.yaml',
+      category: AgentCategory.Workflow,
+      description: 'Corrects LaTeX.',
+    };
+    mocks.getVisibleAgents.mockImplementation((category: AgentCategory) =>
+      category === AgentCategory.Workflow ? [visibleAgent] : [],
+    );
+    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
+      category === AgentCategory.Workflow ? [visibleAgent, hiddenAgent] : [],
+    );
+    const { listAgents } = await import('@cli/commands/agents');
+
+    const exitCode = await listAgents(cliContext({ quietLogs: true }), {
+      category: AgentCategory.Workflow,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.emitCliResult).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        json: [visibleAgent],
+        ndjson: [{ kind: 'agent', agent: visibleAgent }],
+        text: 'workflow\tpolish\tPolishes prose.',
+      },
+      { paged: true },
+    );
+    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
+  });
+
   it('filters agents by category and reports hidden agents in that category', async () => {
     const visibleToolUseAgent = {
       name: 'lean',

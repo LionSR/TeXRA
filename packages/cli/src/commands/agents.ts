@@ -29,7 +29,7 @@ export async function listAgents(
   await initLocalCliPlatform(context);
   const result = await loadCliAgentList(options);
 
-  if (context.outputFormat === 'text') {
+  if (context.outputFormat === 'text' && !context.quietLogs) {
     const hiddenNotice = formatCliHiddenAgentsNotice(result.hiddenCount);
     if (hiddenNotice) writeTextStderr(hiddenNotice);
   }
