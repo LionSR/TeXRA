@@ -42,6 +42,7 @@ import type {
   ToolUseLog,
 } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import { CodexSandboxModeSchema } from '@shared/schemas/settingsView/data';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { ToolError, type ToolResult } from '@tools/result';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -76,7 +77,6 @@ import {
 import type {
   McpToolCallItem,
   RunResult,
-  SandboxMode,
   Thread,
   ThreadItem,
   ThreadOptions,
@@ -88,17 +88,11 @@ import type {
 // Codex config
 // ============================================================================
 
-// CODEX_SANDBOX_MODES must be inlined (used at module-level by the schema).
+// The sandbox-mode schema is imported eagerly from `@shared` (a light,
+// dependency-free leaf) since it is used at module level by the input schema.
 // All other config (model, reasoning, buildCodexConfig, sandbox getter) is
-// lazy-imported from codexConfig.ts at runtime to avoid pulling vscode into
-// the module graph — src/tools/ is a VS Code-free zone.
-
-/** All sandbox modes from the SDK, exposed to the LLM. */
-const CODEX_SANDBOX_MODES = [
-  'read-only',
-  'workspace-write',
-  'danger-full-access',
-] as const satisfies readonly SandboxMode[];
+// lazy-imported from codexConfig.ts at runtime to avoid pulling the heavy
+// platform/SDK graph into the tool-registration path.
 
 /** Lazy accessor for codexConfig.ts exports (loaded once, cached). */
 let _configModule: typeof import('./codexConfig') | null = null;
@@ -116,12 +110,9 @@ const CodexInputSchema = z.strictObject({
     .describe(
       'Instruction for the Codex agent. For a new session, describe the task. For a resume (thread_id set), describe the follow-up.',
     ),
-  sandbox_mode: z
-    .enum(CODEX_SANDBOX_MODES)
-    .nullish()
-    .describe(
-      'File access level for the Codex agent (defaults to user-configured mode, typically workspace-write)',
-    ),
+  sandbox_mode: CodexSandboxModeSchema.nullish().describe(
+    'File access level for the Codex agent (defaults to user-configured mode, typically workspace-write)',
+  ),
   thread_id: z
     .string()
     .nullish()
