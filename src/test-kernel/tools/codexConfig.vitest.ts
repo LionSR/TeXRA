@@ -8,7 +8,6 @@ import { describe, it } from 'vitest';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   buildCodexConfig,
-  parseCodexApprovalPolicy,
   toCodexCliReasoningEffort,
 } from '@tools/codexConfig';
 import {
@@ -50,19 +49,6 @@ describe('toCodexCliReasoningEffort', () => {
     // 'xhigh' with `unknown variant 'xhigh', expected one of 'minimal',
     // 'low', 'medium', 'high' in 'model_reasoning_effort'`.
     assert.equal(toCodexCliReasoningEffort('xhigh'), 'high');
-  });
-});
-
-describe('parseCodexApprovalPolicy', () => {
-  it('accepts SDK approval policies', () => {
-    assert.equal(parseCodexApprovalPolicy('never'), 'never');
-    assert.equal(parseCodexApprovalPolicy('on-request'), 'on-request');
-    assert.equal(parseCodexApprovalPolicy('on-failure'), 'on-failure');
-    assert.equal(parseCodexApprovalPolicy('untrusted'), 'untrusted');
-  });
-
-  it('defaults to automatic approval for invalid persisted values', () => {
-    assert.equal(parseCodexApprovalPolicy('ask'), 'never');
   });
 });
 

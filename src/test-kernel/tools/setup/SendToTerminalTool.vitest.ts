@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
-import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
+import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
 import {
   setSetupPlatform,

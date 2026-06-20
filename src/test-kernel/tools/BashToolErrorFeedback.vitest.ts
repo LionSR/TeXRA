@@ -9,10 +9,10 @@ import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { extractToolAttachments } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import type { OpenAIResponseToolCall } from '@agent/modelHandlers/types/IModelHandler';
+import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 
 // Local imports - tools
 import { BashTool } from '@tools/bash';
-import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import * as agentConfig from '@utils/config/configUtils';
 
 // Local imports - system utilities
