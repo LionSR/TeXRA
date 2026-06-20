@@ -21,6 +21,10 @@ import type { CliContext } from './cliContext';
 
 type ProgressEvent = keyof ProgressEventPayloads;
 
+// Carriage return + erase-line (CSI 2K): rewind to column 0 and clear the row
+// so the single live status line can be repainted in place.
+const CLEAR_LINE = '\r\x1b[2K';
+
 interface RenderState {
   round?: number;
   plannedRounds?: number;
@@ -168,7 +172,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   clear(): void {
     this.stopHeartbeat();
     if (this.ansi && this.liveLine) {
-      this.write('\r\x1b[2K');
+      this.write(CLEAR_LINE);
       this.liveLine = false;
     }
   }
@@ -249,7 +253,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!line || line === this.lastLine) return;
 
     if (this.ansi) {
-      this.write(`\r\x1b[2K${line}`);
+      this.write(`${CLEAR_LINE}${line}`);
       this.liveLine = true;
     } else {
       this.write(`${line}\n`);
