@@ -9,17 +9,19 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
+  type ModelOptionsAccess,
+  type ModelOptionsServerAccess,
 } from '@model/computeModelOptions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-function installServerSideKeyService(options: {
+function createServerSideKeyService(options: {
   useIncludedAccess: boolean;
   readonly relayQuotaExceeded: boolean;
   readonly quotaAutoSwitched: boolean;
   readonly autoSwitchDuringAccessCheck?: boolean;
   readonly onAccessCheck?: () => void;
-}): void {
-  setServerSideKeyService({
+}): ModelOptionsServerAccess {
+  return {
     canUseServerSideKeys: async () => {
       options.onAccessCheck?.();
       if (options.autoSwitchDuringAccessCheck) {
@@ -32,7 +34,31 @@ function installServerSideKeyService(options: {
     wasQuotaAutoSwitched: () => options.quotaAutoSwitched,
     isProviderOnServer: () => true,
     canUseModelSync: () => false,
-  } as unknown as ServerSideKeyService);
+  };
+}
+
+function installServerSideKeyService(
+  options: Parameters<typeof createServerSideKeyService>[0],
+): void {
+  setServerSideKeyService(
+    createServerSideKeyService(options) as unknown as ServerSideKeyService,
+  );
+}
+
+function createModelOptionsAccess(
+  options: Parameters<typeof createServerSideKeyService>[0],
+): ModelOptionsAccess {
+  return {
+    visibleModels: ['gpt55'],
+    secrets: {
+      get: async (key) =>
+        key === apiKeySecretName('openai') ? 'sk-openai' : undefined,
+      set: async () => {},
+      delete: async () => {},
+    },
+    useOpenRouter: false,
+    serverSideKeyService: createServerSideKeyService(options),
+  };
 }
 
 describe('computeModelOptionsData relay quota state', () => {
@@ -52,40 +78,40 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('shows relay quota exhaustion while included access remains selected', async () => {
-    installServerSideKeyService({
+    const access = createModelOptionsAccess({
       useIncludedAccess: true,
       relayQuotaExceeded: true,
       quotaAutoSwitched: false,
     });
 
-    const [model] = await computeModelOptionsData();
+    const [model] = await computeModelOptionsData(undefined, access);
 
     expect(model.availability).toBe('relay-quota-exhausted');
     expect(model.disabled).toBe(true);
   });
 
   it('preserves the quota label when access check auto-switches included access off', async () => {
-    installServerSideKeyService({
+    const access = createModelOptionsAccess({
       useIncludedAccess: true,
       relayQuotaExceeded: true,
       quotaAutoSwitched: true,
       autoSwitchDuringAccessCheck: true,
     });
 
-    const [model] = await computeModelOptionsData();
+    const [model] = await computeModelOptionsData(undefined, access);
 
     expect(model.availability).toBe('relay-quota-exhausted');
     expect(model.disabled).toBe(true);
   });
 
   it('falls back to personal keys when included access is disabled without quota auto-switch', async () => {
-    installServerSideKeyService({
+    const access = createModelOptionsAccess({
       useIncludedAccess: false,
       relayQuotaExceeded: true,
       quotaAutoSwitched: false,
     });
 
-    const [model] = await computeModelOptionsData();
+    const [model] = await computeModelOptionsData(undefined, access);
 
     expect(model.availability).toBe('provider-key');
     expect(model.disabled).toBe(false);
