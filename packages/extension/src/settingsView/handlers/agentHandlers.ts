@@ -21,13 +21,13 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@agent/index/agentRegistry';
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { renderAgentTemplateFromBundle } from '@commands/agent/agentTemplateRenderer';
 import { workspaceSM, globalSM } from '@common/state';
 import {
   isFileNotFoundError,
   showLoggedErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
