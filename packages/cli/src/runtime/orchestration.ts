@@ -3,13 +3,9 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionId } from '@shared/schemas';
 
 import {
-  cliMultiAgentPresetAvailability,
   cliMultiAgentPresetCanLaunchTeam,
-  cliMultiAgentPresetShouldIncludeLoginHint,
-  cliMultiAgentPresetTeamLaunchBlockReason,
-  MULTI_AGENT_NO_TEAM_ROOT_REASON,
-  type CliMultiAgentPresetAgentAvailability,
-  type CliMultiAgentPresetAvailability,
+  formatCliMultiAgentPresetLauncherHints,
+  formatCliMultiAgentPresetLauncherSummary,
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
 import {
@@ -108,11 +104,6 @@ export function orchestrationModelAccessView(
 const MAX_RECENT_RESUME_ITEMS = 3;
 const MAX_RECENT_AGENT_ITEMS = 3;
 const MAX_PRESET_ITEMS = 6;
-const MULTI_AGENT_LAUNCHER_INSPECT_HINT =
-  'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.';
-const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
-  'Relay teams may unlock more agents after texra login.';
-const MULTI_AGENT_LAUNCHER_NO_TEAM_ROOT_REASON = 'no team root';
 
 export function buildCliOrchestrationItems(
   input: BuildCliOrchestrationItemsInput,
@@ -192,71 +183,4 @@ function presetItems(
       includeLoginHint: options.includeLoginHint,
     }),
   }));
-}
-
-function formatCliMultiAgentPresetLauncherSummary(
-  plan: CliMultiAgentPresetRunPlan,
-): string {
-  const availability = cliMultiAgentPresetAvailability(plan);
-  const status =
-    availability.status === 'available' ? 'ready' : availability.status;
-  const details = formatPresetAvailabilityForLauncher(
-    availability,
-    cliMultiAgentPresetTeamLaunchBlockReason(plan),
-  );
-
-  return [status, details].filter((part): part is string => !!part).join('; ');
-}
-
-function formatCliMultiAgentPresetLauncherHints(
-  plan: CliMultiAgentPresetRunPlan,
-  options: { readonly includeLoginHint?: boolean },
-): readonly string[] {
-  const availability = cliMultiAgentPresetAvailability(plan);
-  return [
-    availability.status !== 'available'
-      ? MULTI_AGENT_LAUNCHER_INSPECT_HINT
-      : undefined,
-    cliMultiAgentPresetShouldIncludeLoginHint(plan, options)
-      ? MULTI_AGENT_LAUNCHER_LOGIN_HINT
-      : undefined,
-  ].filter((hint): hint is string => hint !== undefined);
-}
-
-function formatPresetAvailabilityForLauncher(
-  availability: CliMultiAgentPresetAvailability,
-  blockReason: string | undefined,
-): string | undefined {
-  const details = blockReason ? [formatLauncherBlockReason(blockReason)] : [];
-  const countStyle = availability.status === 'available' ? 'total' : 'ratio';
-  const parts = [
-    formatPresetAgentCountForLauncher('tool-use', availability.toolUse, {
-      countStyle,
-    }),
-    formatPresetAgentCountForLauncher('workflow', availability.workflow, {
-      countStyle,
-    }),
-  ].filter((part): part is string => part != null);
-
-  if (parts.length > 0) details.push(parts.join('; '));
-  return details.length > 0 ? details.join('; ') : undefined;
-}
-
-function formatLauncherBlockReason(blockReason: string): string {
-  return blockReason === MULTI_AGENT_NO_TEAM_ROOT_REASON
-    ? MULTI_AGENT_LAUNCHER_NO_TEAM_ROOT_REASON
-    : blockReason;
-}
-
-function formatPresetAgentCountForLauncher(
-  label: 'workflow' | 'tool-use',
-  availability: CliMultiAgentPresetAgentAvailability,
-  options: { readonly countStyle: 'total' | 'ratio' },
-): string | undefined {
-  if (availability.total === 0) return undefined;
-  const count =
-    options.countStyle === 'total'
-      ? String(availability.total)
-      : `${availability.available}/${availability.total}`;
-  return `${count} ${label}`;
 }
