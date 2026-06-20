@@ -5,15 +5,20 @@
  */
 
 import axios from 'axios';
+import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 import { ToolResult } from '@tools/result';
-import { isTimeoutErrorCode } from '@tools/timeouts';
+import { isTimeoutErrorCode, isTransientHttpError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { ensureArray } from '@utils/core';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
+const LOOGLE_CHANNEL = 'lean_loogle';
+/** Retry transient Loogle failures (timeouts, 5xx, dropped connections). */
+const LOOGLE_RETRIES = 2;
 
 // ============================================================================
 // Schema
@@ -120,20 +125,51 @@ Useful for finding the right lemma when you know roughly what type it should hav
   /**
    * Execute a single Loogle query and return a per-query result.
    */
+  /**
+   * Fetch one Loogle query, retrying transient failures (timeouts, 5xx,
+   * dropped connections) with jittered backoff. A 4xx or any non-axios
+   * error aborts immediately — those won't change on retry.
+   */
+  private async fetchLoogle(query: string): Promise<LoogleResponse> {
+    return pRetry(
+      async () => {
+        try {
+          const response = await axios.get<LoogleResponse>(LOOGLE_API_URL, {
+            params: { q: query },
+            headers: {
+              'User-Agent': 'TeXRA-VSCode-Extension',
+            },
+            timeout: LOOGLE_TIMEOUT_MS,
+          });
+          return response.data;
+        } catch (error) {
+          if (isTransientHttpError(error)) throw error;
+          throw new AbortError(
+            error instanceof Error ? error : new Error(String(error)),
+          );
+        }
+      },
+      {
+        retries: LOOGLE_RETRIES,
+        minTimeout: 1000,
+        // Jitter the backoff so batched queries don't retry in lockstep.
+        randomize: true,
+        onFailedAttempt: ({ error, retriesLeft }) => {
+          logger.debug(
+            LOOGLE_CHANNEL,
+            `Loogle query "${query}" failed (${retriesLeft} retries left): ${toErrorMessage(error)}`,
+          );
+        },
+      },
+    );
+  }
+
   private async executeSingle(
     query: string,
     limit: number,
   ): Promise<{ query: string; result: ToolResult }> {
     try {
-      const response = await axios.get<LoogleResponse>(LOOGLE_API_URL, {
-        params: { q: query },
-        headers: {
-          'User-Agent': 'TeXRA-VSCode-Extension',
-        },
-        timeout: LOOGLE_TIMEOUT_MS,
-      });
-
-      const data = response.data;
+      const data = await this.fetchLoogle(query);
 
       if (isErrorResponse(data)) {
         const suggestions = data.suggestions ?? [];
