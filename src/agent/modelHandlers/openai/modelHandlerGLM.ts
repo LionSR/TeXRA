@@ -19,6 +19,14 @@ import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
  */
 export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
   /**
+   * GLM effort-capable models accept only high/max on the OpenAI-compatible
+   * surface. Keep lower user selections valid by mapping them to high.
+   */
+  protected override validateReasoningEffort(effort: string): string {
+    return effort === 'xhigh' || effort === 'max' ? 'max' : 'high';
+  }
+
+  /**
    * GLM models require explicit `thinking` parameter to control reasoning.
    * Thinking models (e.g. GLM-4.5) need it enabled; non-thinking variants
    * get it explicitly disabled to prevent unexpected reasoning activation.

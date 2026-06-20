@@ -6,6 +6,14 @@ import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 // Type imports
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
+function isKimiK25(fullName: string): boolean {
+  return fullName.startsWith('kimi-k2.5');
+}
+
+function isKimiK27Code(fullName: string): boolean {
+  return fullName === 'kimi-k2.7-code';
+}
+
 /** Response from Kimi's token estimation API */
 interface KimiTokenEstimateResponse {
   data: {
@@ -68,9 +76,12 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
     // Kimi K2.5 requires fixed temperature values:
     // - thinking mode (supportsReasoning: true): temperature=1.0
     // - non-thinking mode (supportsReasoning: false): temperature=0.6
+    // Kimi K2.7 Code requires temperature=1.0 for both catalog entries.
     let temperature = _temperature;
-    if (this.config.fullName.startsWith('kimi-k2.5')) {
+    if (isKimiK25(this.config.fullName)) {
       temperature = this.capabilities.supportsReasoning ? 1 : 0.6;
+    } else if (isKimiK27Code(this.config.fullName)) {
+      temperature = 1;
     }
     return super.buildChatBaseParams(
       messages,
@@ -79,6 +90,17 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
       endTag,
       tools,
     );
+  }
+
+  protected override buildCompactionSummaryParams(
+    conversationMessages: ChatCompletionMessageParam[],
+  ) {
+    const params = super.buildCompactionSummaryParams(conversationMessages);
+    if (isKimiK27Code(this.config.fullName)) {
+      params.temperature = 1;
+      delete params.thinking;
+    }
+    return params;
   }
 
   /**
