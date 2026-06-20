@@ -353,9 +353,9 @@ function getModelOptionsCacheKey(models?: readonly string[]): string {
 }
 
 async function computeModelOptionsDataUncached(
-  modelsOverride?: readonly string[],
-  access: ModelOptionsAccess = buildDefaultModelOptionsAccess(),
-  useApiKeyCache = true,
+  modelsOverride: readonly string[] | undefined,
+  access: ModelOptionsAccess,
+  useApiKeyCache: boolean,
 ): Promise<ModelOptionData[]> {
   const models = modelsOverride ?? access.visibleModels;
   const availabilityCtx = await buildAvailabilityContext(

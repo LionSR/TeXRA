@@ -167,5 +167,5 @@ export async function apiKeyExistsUncached(
 ): Promise<boolean> {
   const stored = await secrets.get(apiKeySecretName(provider));
   if (stored) return true;
-  return process.env[apiKeyEnvName(provider)] !== undefined;
+  return Boolean(process.env[apiKeyEnvName(provider)]);
 }
