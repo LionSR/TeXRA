@@ -13,9 +13,14 @@ import {
   parseCodexApprovalPolicy,
   parseCodexReasoningEffort,
   parseCodexSandboxMode,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
+  CODEX_SANDBOX_MODE_DEFAULT,
 } from '@tools/codexConfig';
 import {
   CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  CLAUDE_AGENT_DEFAULT_EFFORT,
   parseClaudeAgentEffort,
   parseClaudeAgentModel,
   parseClaudeAgentPermissionMode,
@@ -39,19 +44,19 @@ export function buildApprovalSettingsMessage(
     codexSandboxMode: parseCodexSandboxMode(
       workspaceState.get<string>(
         WorkspaceStateKey.CODEX_SANDBOX_MODE,
-        'workspace-write',
+        CODEX_SANDBOX_MODE_DEFAULT,
       ),
     ),
     codexReasoningEffort: parseCodexReasoningEffort(
       workspaceState.get<string>(
         WorkspaceStateKey.CODEX_REASONING_EFFORT,
-        'high',
+        CODEX_REASONING_EFFORT_DEFAULT,
       ),
     ),
     codexApprovalPolicy: parseCodexApprovalPolicy(
       workspaceState.get<string>(
         WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-        'never',
+        CODEX_APPROVAL_POLICY_DEFAULT,
       ),
     ),
     claudeAgentModel: parseClaudeAgentModel(
@@ -63,11 +68,14 @@ export function buildApprovalSettingsMessage(
     claudeAgentPermissionMode: parseClaudeAgentPermissionMode(
       workspaceState.get<string>(
         WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-        'acceptEdits',
+        CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
       ),
     ),
     claudeAgentEffort: parseClaudeAgentEffort(
-      workspaceState.get<string>(WorkspaceStateKey.CLAUDE_AGENT_EFFORT, 'high'),
+      workspaceState.get<string>(
+        WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+        CLAUDE_AGENT_DEFAULT_EFFORT,
+      ),
     ),
   };
 }

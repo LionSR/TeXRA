@@ -63,19 +63,19 @@ export const getClaudeAgentModel: () => ClaudeAgentModel =
 // Permission mode
 // ============================================================================
 
-const PERMISSION_MODE_DEFAULT: ClaudeAgentPermissionMode = 'acceptEdits';
+export const CLAUDE_AGENT_DEFAULT_PERMISSION_MODE: ClaudeAgentPermissionMode = 'acceptEdits';
 
 export const parseClaudeAgentPermissionMode: (
   raw: string,
 ) => ClaudeAgentPermissionMode = createEnumParser(
   CLAUDE_AGENT_PERMISSION_MODES,
-  PERMISSION_MODE_DEFAULT,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
 );
 
 export const getClaudeAgentPermissionMode: () => ClaudeAgentPermissionMode =
   createEnumStateGetter(
     WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-    PERMISSION_MODE_DEFAULT,
+    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
     parseClaudeAgentPermissionMode,
   );
 
@@ -83,15 +83,15 @@ export const getClaudeAgentPermissionMode: () => ClaudeAgentPermissionMode =
 // Effort — adaptive thinking depth hint passed via `effort` SDK option
 // ============================================================================
 
-const EFFORT_DEFAULT: ClaudeAgentEffort = 'high';
+export const CLAUDE_AGENT_DEFAULT_EFFORT: ClaudeAgentEffort = 'high';
 
 export const parseClaudeAgentEffort: (raw: string) => ClaudeAgentEffort =
-  createEnumParser(CLAUDE_AGENT_EFFORT_LEVELS, EFFORT_DEFAULT);
+  createEnumParser(CLAUDE_AGENT_EFFORT_LEVELS, CLAUDE_AGENT_DEFAULT_EFFORT);
 
 export const getClaudeAgentEffort: () => ClaudeAgentEffort =
   createEnumStateGetter(
     WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-    EFFORT_DEFAULT,
+    CLAUDE_AGENT_DEFAULT_EFFORT,
     parseClaudeAgentEffort,
   );
 
