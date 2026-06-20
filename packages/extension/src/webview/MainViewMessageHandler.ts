@@ -29,7 +29,7 @@ import * as executionHandlers from './managers/executionHandlers';
 import { FileManager } from './managers/FileManager';
 import { InstructionManager } from './managers/InstructionManager';
 import type { CommandMessage } from './managers/executionHandlers';
-import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
+import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 
 export interface MainViewOnboardingHooks {
   /**
