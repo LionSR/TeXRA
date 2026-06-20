@@ -1,13 +1,16 @@
 /**
- * Shared `SettingsMemoryController` factory.
+ * Concrete settings-memory controller composition shared by extension and
+ * desktop hosts.
  *
- * The controller's dependencies fall into two groups: filesystem/format
- * primitives that are platform-agnostic (already wired here), and host-only
- * pieces — the prompt host and the memory-enabled toggle — that callers
- * supply.
+ * The controller remains dependency-injected for tests; this factory owns the
+ * production memory storage/format wiring so `src/shared/settingsView` stays
+ * free of tool-layer implementation imports.
  */
-import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
+
+// Local imports - shared state
 import { GlobalStateKey } from '@shared/state/stateKeys';
+
+// Local imports - memory tooling
 import {
   loadMemoryItems,
   loadMemoryPreview,
@@ -20,22 +23,29 @@ import {
   setPinnedMeta,
 } from '@tools/memory/memoryMeta';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
+
+// Local imports - file system
 import { StorageFS } from '@utils/files';
 
-import type { SettingsStatePorts } from './types';
+// Local imports - controller
+import { SettingsMemoryController } from './SettingsMemoryController';
+
+// Type-only imports
+import type { StateStore } from '@platform/interfaces/state';
 
 type ConstructorArgs = ConstructorParameters<
   typeof SettingsMemoryController
 >[0];
 
-export interface MemoryControllerFactoryOptions extends SettingsStatePorts {
+export interface SettingsMemoryControllerFactoryOptions {
+  readonly globalState: StateStore;
   readonly prompt: ConstructorArgs['prompt'];
   /** Optional override for persisting the memory-enabled flag. */
   readonly setMemoryEnabled?: ConstructorArgs['setMemoryEnabled'];
 }
 
 export function createSettingsMemoryController(
-  options: MemoryControllerFactoryOptions,
+  options: SettingsMemoryControllerFactoryOptions,
 ): SettingsMemoryController {
   const { globalState } = options;
   return new SettingsMemoryController({
