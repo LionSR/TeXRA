@@ -9,6 +9,7 @@ import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
   type ConversationProgress,
+  type GoalStatus,
   type StreamStatus,
   type StreamTabId,
 } from '@shared/schemas';
@@ -24,11 +25,6 @@ import {
   type StreamExecutionState,
 } from '@shared/progressView/backend/state/ProgressViewState';
 import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
-import { GoalStore, isGoalInFlight } from '@tools/goal';
-import {
-  isApprovalBypassedForStream,
-  proposalApprovalState,
-} from '@tools/approval';
 
 import { registerHandlers } from './registerHandlers';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
@@ -43,6 +39,26 @@ export type ProgressEventSubscription = {
   dispose(): void;
 };
 
+export interface ProgressStreamControls {
+  toolEditBypass: boolean;
+  superYoloBypass: boolean;
+  goalActive: boolean;
+  goalStatus?: GoalStatus;
+  goalObjective?: string;
+}
+
+export type GetProgressStreamControls = (
+  stream: StreamTabId,
+) => ProgressStreamControls;
+
+function getDefaultProgressStreamControls(): ProgressStreamControls {
+  return {
+    toolEditBypass: false,
+    superYoloBypass: false,
+    goalActive: false,
+  };
+}
+
 /** Handles progress event bus subscriptions for the progress view. */
 export class ProgressEventHandler {
   private readonly logger: AgentTrace;
@@ -56,6 +72,7 @@ export class ProgressEventHandler {
     private webviewBridge: WebviewBridge,
     private readonly uiCallbacks: UICallbacks,
     private readonly hasPendingPermissions: (streamId: string) => boolean,
+    private readonly getStreamControls: GetProgressStreamControls = getDefaultProgressStreamControls,
   ) {
     this.logger = createChannelTrace('ProgressEventHandler');
     this.ctx = { state: this.state, webviewUpdater: this.webviewUpdater };
@@ -500,11 +517,8 @@ export class ProgressEventHandler {
       parentStreamId = this.state.snapshots.getParentStreamId(stream);
     }
 
-    // Always include toggle bypass state so buttons render correctly on tab switch.
-    const toolEditBypass = isApprovalBypassedForStream(stream);
-    const superYoloBypass = proposalApprovalState.isBypassed(stream);
-    const goal = GoalStore.getForStream(stream);
-    const goalActive = isGoalInFlight(goal);
+    // Always include toggle/goal state so buttons render correctly on tab switch.
+    const streamControls = this.getStreamControls(stream);
 
     this.webviewUpdater.sendSyncStreamContent({
       stream,
@@ -517,11 +531,7 @@ export class ProgressEventHandler {
       conversationProgress,
       badges,
       parentStreamId,
-      toolEditBypass,
-      superYoloBypass,
-      goalActive,
-      goalStatus: goalActive ? goal?.status : undefined,
-      goalObjective: goalActive ? goal?.objective : undefined,
+      ...streamControls,
     });
   }
 

@@ -8,6 +8,7 @@ import {
 import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import {
   ProgressEventHandler,
+  type GetProgressStreamControls,
   type ProgressEventSubscription,
   type UICallbacks,
 } from '@shared/progressView/backend/events/ProgressEventHandler';
@@ -34,6 +35,7 @@ export interface ProgressBackendOptions {
   sendMessage: ProgressBackendMessageSender;
   hasTarget(): boolean;
   configureUi(services: ProgressBackendServices): ProgressBackendUiConfig;
+  getStreamControls?: GetProgressStreamControls;
   /** Session that owns this backend's coordination state (defaults to the process session). */
   session?: SessionHandle;
 }
@@ -88,6 +90,7 @@ export class ProgressBackend {
       this.webviewBridge,
       ui.callbacks,
       ui.hasPendingPermissions,
+      options.getStreamControls,
     );
   }
 

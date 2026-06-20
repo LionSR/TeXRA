@@ -11,9 +11,8 @@ import type { StreamTabId } from '@shared/schemas';
 import {
   LEGACY_GOAL_FEATURE_FLAG_KEYS,
   GOAL_FEATURE_FLAG_KEY,
-  GoalStore,
-  isGoalEnabled,
-} from '@tools/goal';
+} from '@shared/schemas/goal';
+import { GoalStore, isGoalEnabled } from '@tools/goal';
 import type { Platform } from '@platform/platform';
 
 const STREAM_ID = 'stream:goal-cont' as StreamTabId;
