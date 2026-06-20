@@ -8,6 +8,10 @@ import {
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
 import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
+import {
+  buildModelSelectionMessage,
+  createModelSelectionController,
+} from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
   computeAgentOptionsData,
@@ -57,10 +61,6 @@ import {
   setBashApprovalEnabled,
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
-import {
-  buildModelSelectionMessage,
-  createModelSelectionController,
-} from '@shared/settingsView/handlers/modelSelectionHandlers';
 import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
 import {
   buildSuperYoloMessage,
