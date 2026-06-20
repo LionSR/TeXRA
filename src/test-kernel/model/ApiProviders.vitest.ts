@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import {
+  apiKeyExistsUncached,
   apiKeySecretName,
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
@@ -144,6 +145,14 @@ describe('API provider key caches', () => {
     ).resolves.toEqual({
       openai: 'env',
     });
+  });
+
+  it('treats empty env keys as missing in uncached lookups', async () => {
+    process.env.OPENAI_API_KEY = '';
+
+    await expect(
+      apiKeyExistsUncached(createSecrets().secrets, 'openai'),
+    ).resolves.toBe(false);
   });
 
   it('set_api_key invalidates stale missing-key lookups', async () => {

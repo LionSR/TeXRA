@@ -14,8 +14,10 @@ import {
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
 import { createChannelTrace } from '@logger';
-import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  buildVisibleBasicModelOptionsData,
+  computeModelOptionsData,
+} from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import type {
   AgentProposalPermission,
@@ -152,7 +154,7 @@ export class ProgressViewProvider
             u.showPermission({
               kind: PERMISSION_KIND.PROPOSAL,
               data: p,
-              modelOptionsData: buildBasicModelOptionsData(),
+              modelOptionsData: buildVisibleBasicModelOptionsData(),
             });
             // Then upgrade with availability metadata if possible
             void this.sendProposalModelOptions(p);
@@ -302,10 +304,10 @@ export class ProgressViewProvider
   private async sendProposalModelOptions(
     proposal: AgentProposalPermission,
   ): Promise<void> {
-    // Model options have a static fallback (buildBasicModelOptionsData) so
-    // the dropdown still appears if ServerSideKeyService isn't ready. Agent
-    // options have no static equivalent, so the agent dropdown is omitted
-    // when the registry fetch fails.
+    // Model options have a visible-model fallback that does not require
+    // ServerSideKeyService, so the dropdown still appears if availability
+    // loading fails. Agent options have no static equivalent, so the agent
+    // dropdown is omitted when the registry fetch fails.
     const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
     const loadAgentOptions = async () => {
       const all = await computeAgentOptionsData();
@@ -314,7 +316,9 @@ export class ProgressViewProvider
       return raw.map((opt) => ({ ...opt, value: opt.label }));
     };
     const [modelOptions, agentOptions] = await Promise.all([
-      computeModelOptionsData().catch(() => buildBasicModelOptionsData()),
+      computeModelOptionsData().catch(() =>
+        buildVisibleBasicModelOptionsData(),
+      ),
       loadAgentOptions().catch(() => undefined),
     ]);
     if (!this.agentProposalHandler.get(proposal.proposalId)) return;
