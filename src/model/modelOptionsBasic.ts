@@ -1,8 +1,6 @@
 import { MODEL_CONFIGS, hint, type ModelConfig } from 'llm-zoo';
 
-import { platform } from '@platform/platform';
 import type { ModelOptionData } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   EXPENSIVE_MODEL_HINT,
   isExpensiveModel,
@@ -30,14 +28,6 @@ export const MODEL_LIST_VERSION = 20;
 
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;
-
-/** Get the list of visible models from extension global state. */
-export function getVisibleModels(): string[] {
-  return platform().globalState.get<string[]>(
-    GlobalStateKey.ENABLED_MODELS,
-    DEFAULT_MODELS,
-  );
-}
 
 /** Return whether the registry marks a model as deprecated. */
 export function isDeprecatedModel(model: string): boolean {
@@ -94,7 +84,7 @@ export function buildBaseModelOption(
 
 /** Build model options from static config without provider availability checks. */
 export function buildBasicModelOptionsData(
-  visibleModels: readonly string[] = getVisibleModels(),
+  visibleModels: readonly string[],
 ): ModelOptionData[] {
   return visibleModels.map((model) => {
     const config = MODEL_CONFIGS[model];
