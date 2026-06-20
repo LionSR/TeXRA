@@ -64,7 +64,8 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   print: {
     type: 'boolean',
     alias: 'p',
-    description: 'Run non-interactively and print the result to stdout',
+    description:
+      'For headless commands, run non-interactively and print the result to stdout',
   },
   quiet: {
     type: 'boolean',
@@ -84,7 +85,7 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   'output-format': {
     type: 'enum',
     options: [...CLI_OUTPUT_FORMATS],
-    description: 'Output format for headless runs (default: text)',
+    description: 'Output format for headless commands (default: text)',
   },
   'approval-policy': {
     type: 'enum',
@@ -101,7 +102,7 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   'no-input': {
     type: 'boolean',
     description:
-      'Disable prompts and run headlessly (defaults approvals to never)',
+      'For headless commands, disable prompts and default approvals to never',
   },
 };
 
