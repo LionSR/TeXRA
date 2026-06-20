@@ -36,36 +36,21 @@ import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles, streamTabsContainerStyles } from './streamTabsStyles';
-import {
-  ACTIVE_STREAM_STATUSES,
-  ELEMENT_IDS,
-  FILTER_BUTTONS,
-} from '../constants';
+import { ELEMENT_IDS, FILTER_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement, getRadioValue, setsEqual } from '../utils';
+import {
+  computeStreamTreeProjection,
+  getStreamBranchActivity,
+  type StreamBranchActivity,
+  type StreamTreeExpansionOverride,
+} from '../streamTree';
 import type { StreamState } from '../store';
 import type { StreamFilter } from '../store';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
 import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
-
-type ChildActivity = 'active' | 'finished' | 'unknown';
-
-/**
- * Classify a child stream's lifecycle. Absent entries in `streamStates`
- * (e.g., child just appeared in `childStreamsByParent` before its first
- * status event) are `unknown` — neither active nor finished — so the
- * parent's expand/collapse decision can wait for a real signal.
- */
-function classifyChild(
-  streamStates: ReadonlyMap<StreamTabId, StreamState>,
-  name: StreamTabId,
-): ChildActivity {
-  const status = streamStates.get(name)?.status;
-  if (status === undefined) return 'unknown';
-  return ACTIVE_STREAM_STATUSES.has(status) ? 'active' : 'finished';
-}
 
 function buildTooltip(
   info: StreamTabInfo,
@@ -298,49 +283,25 @@ export class StreamTabs extends LitElement {
    * appearance (new run) starts from auto. One map replaces the former
    * `manuallyCollapsed` + `finishedCollapseHandled` sets.
    */
-  private userOverride: Map<string, 'expanded' | 'collapsed'> = new Map();
-  private branchActivityCache: Map<StreamTabId, ChildActivity> = new Map();
+  private userOverride: Map<string, StreamTreeExpansionOverride> = new Map();
+  private branchActivityByStream: Map<StreamTabId, StreamBranchActivity> =
+    new Map();
 
   protected override willUpdate(changed: import('lit').PropertyValues): void {
     if (!changed.has('childStreamsByParent') && !changed.has('streamStates'))
       return;
 
-    this.branchActivityCache.clear();
+    const projection = computeStreamTreeProjection({
+      streamStates: this.streamStates,
+      childStreamsByParent: this.childStreamsByParent,
+      userOverrides: this.userOverride,
+    });
 
-    for (const parentId of this.userOverride.keys()) {
-      if (!this.childStreamsByParent.has(parentId)) {
-        this.userOverride.delete(parentId);
-      }
+    this.branchActivityByStream = projection.branchActivityByStream;
+    this.userOverride = projection.userOverrides;
+    if (!setsEqual(projection.expandedParents, this.expandedParents)) {
+      this.expandedParents = projection.expandedParents;
     }
-
-    const next = new Set<string>();
-    for (const [parentId, children] of this.childStreamsByParent) {
-      if (this.computeExpanded(parentId, children)) next.add(parentId);
-    }
-
-    if (!setsEqual(next, this.expandedParents)) this.expandedParents = next;
-  }
-
-  /**
-   * Single source of truth for "is this parent's child list expanded?".
-   * Rules (top to bottom):
-   *   1. Honor user intent if set.
-   *   2. Expand if any child or descendant is actively running.
-   *   3. Collapse once every child branch has reached a terminal status.
-   *   4. Otherwise (mixed / still-unknown), keep expanded — default on
-   *      first appearance before status events arrive.
-   */
-  private computeExpanded(
-    parentId: string,
-    children: readonly StreamTabInfo[],
-  ): boolean {
-    const override = this.userOverride.get(parentId);
-    if (override) return override === 'expanded';
-
-    return children.some(
-      (child) =>
-        this.getBranchActivity(child.name, new Set([parentId])) !== 'finished',
-    );
   }
 
   private getStatus(name: StreamTabId): string {
@@ -351,44 +312,19 @@ export class StreamTabs extends LitElement {
     return this.streamStates.get(name)?.lastTimestamp;
   }
 
-  /**
-   * Classify an entire child branch, not just the direct row. Results are
-   * memoized for each reactive update so deep child trees are traversed once
-   * even though expansion and dimming both ask for branch activity.
-   */
   private getBranchActivity(
     streamId: StreamTabId,
     visited: Set<string>,
-  ): ChildActivity {
-    if (visited.has(streamId))
-      return classifyChild(this.streamStates, streamId);
-
-    const cached = this.branchActivityCache.get(streamId);
-    if (cached) return cached;
-
-    const ownActivity = classifyChild(this.streamStates, streamId);
-    if (ownActivity === 'active') {
-      this.branchActivityCache.set(streamId, 'active');
-      return 'active';
-    }
-
-    const nextVisited = new Set(visited);
-    nextVisited.add(streamId);
-
-    let anyUnknown = ownActivity === 'unknown';
-    const children = this.childStreamsByParent.get(streamId) ?? [];
-    for (const child of children) {
-      const childActivity = this.getBranchActivity(child.name, nextVisited);
-      if (childActivity === 'active') {
-        this.branchActivityCache.set(streamId, 'active');
-        return 'active';
-      }
-      if (childActivity === 'unknown') anyUnknown = true;
-    }
-
-    const activity = anyUnknown ? 'unknown' : 'finished';
-    this.branchActivityCache.set(streamId, activity);
-    return activity;
+  ): StreamBranchActivity {
+    return getStreamBranchActivity(
+      {
+        streamStates: this.streamStates,
+        childStreamsByParent: this.childStreamsByParent,
+      },
+      streamId,
+      visited,
+      this.branchActivityByStream,
+    );
   }
 
   private renderStreamNode(
