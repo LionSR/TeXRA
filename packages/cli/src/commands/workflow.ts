@@ -83,13 +83,10 @@ export async function runWorkflowAgent(
     );
   }
 
-  const model = await resolveCliRunModel(context, init.model, 'run');
-  const runContext = buildHeadlessRunContext(context, model);
-
   return withExpandedRunInputs(
     init.inputFiles,
     init.contextFiles,
-    runContext.cwd,
+    context.cwd,
     { readStdinText: readCliStdinText },
     async ({ inputFiles, contextFiles }) => {
       if (init.output && inputFiles.length > 1) {
@@ -98,6 +95,8 @@ export async function runWorkflowAgent(
         );
       }
 
+      const model = await resolveCliRunModel(context, init.model, 'run');
+      const runContext = buildHeadlessRunContext(context, model);
       const config: AgentConfigPayload = {
         agent: init.agent,
         model,
