@@ -43,7 +43,8 @@ describe('buildContinuationText', () => {
     expect(text).toContain(`[inquiry] ${THREAD} answered.`);
     expect(text).toContain('Q: Q');
     expect(text).toContain('A: A');
-    expect(text).toContain(`Full thread: inquiry { command: 'read'`);
+    expect(text).toContain(`Full thread: ${THREAD}`);
+    expect(text).not.toContain(`inquiry { command: 'read'`);
     expect(text).toContain('Still open on this stream:');
     expect(text).toContain(OTHER_THREAD);
     expect(text).toContain(
@@ -75,7 +76,8 @@ describe('buildContinuationText', () => {
 
     expect(text).toContain(`[inquiry] ${THREAD} dropped by user.`);
     expect(text).toContain('Q: Q');
-    expect(text).toContain(`Full thread: inquiry { command: 'read'`);
+    expect(text).toContain(`Full thread: ${THREAD}`);
+    expect(text).not.toContain(`inquiry { command: 'read'`);
     expect(text).toContain('re-formulate (new thread)');
     expect(text).toContain(`Do not re-dispatch ${THREAD}.`);
   });
@@ -113,9 +115,8 @@ describe('buildContinuationText', () => {
       stillOpen: [],
     });
 
-    expect(text).toContain(
-      `(full text via inquiry { command: 'read', thread_id: '${THREAD}' })`,
-    );
+    expect(text).toContain(`(full text available in thread ${THREAD})`);
+    expect(text).not.toContain(`inquiry { command: 'read'`);
     expect(text.length).toBeLessThan(longQ.length + longA.length);
   });
 });
