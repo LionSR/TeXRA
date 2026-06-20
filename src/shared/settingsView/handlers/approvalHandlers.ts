@@ -24,9 +24,8 @@ import {
   parseCodexReasoningEffort,
   parseCodexSandboxMode,
 } from '@shared/schemas/agentCliSettings';
+import type { SettingsStatePorts } from '@shared/settingsView/types';
 import type { ConfigProvider, ConfigTarget } from '@platform/interfaces/config';
-
-import type { SettingsStatePorts } from './types';
 
 export interface ApprovalHandlerPorts extends SettingsStatePorts {
   readonly config: ConfigProvider;

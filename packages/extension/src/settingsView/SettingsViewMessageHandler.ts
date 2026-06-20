@@ -17,6 +17,10 @@ import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalCo
 import { buildToolDashboardItems } from '@controllers/settingsView/ToolDashboardData';
 import { platform } from '@platform/platform';
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
+import {
+  buildModelSelectionMessage,
+  createModelSelectionController,
+} from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { BaseViewMessageHandler } from '@common/webview';
@@ -56,10 +60,6 @@ import {
   setBashApprovalEnabled as setBashApprovalEnabledShared,
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
-import {
-  buildModelSelectionMessage,
-  createModelSelectionController,
-} from '@shared/settingsView/handlers/modelSelectionHandlers';
 import {
   buildSuperYoloMessage,
   setNestedDelegationMaxDepth,

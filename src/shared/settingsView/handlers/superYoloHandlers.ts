@@ -15,7 +15,7 @@ import {
 import type { NumberVscodeSetting } from '@shared/schemas/profileViewMessages';
 import type { UpdateSuperYoloEnabledMessage } from '@shared/schemas/settingsViewMessages';
 
-import type { SettingsStatePorts } from './types';
+import type { SettingsStatePorts } from '@shared/settingsView/types';
 
 export interface SuperYoloHandlerPorts extends SettingsStatePorts {
   /** Host-provided reliability settings (extension only — desktop returns []). */

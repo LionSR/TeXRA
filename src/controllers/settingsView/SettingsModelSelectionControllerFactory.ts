@@ -1,7 +1,7 @@
 /**
- * Model selection controller factory + outbound message builder.
+ * Model selection controller-layer factory + outbound message builder.
  *
- * Both hosts wire the same five global-state pairs into the controller, so
+ * Both hosts wire the same four global-state pairs into the controller, so
  * the factory captures that. The outbound message is also shared.
  */
 import {
@@ -13,7 +13,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import type { UpdateModelSelectionMessage } from '@shared/schemas/settingsViewMessages';
 
-import type { SettingsStatePorts } from './types';
+import type { SettingsStatePorts } from '@shared/settingsView/types';
 
 export type ModelSelectionExtras = Omit<
   SettingsModelSelectionControllerDeps,
