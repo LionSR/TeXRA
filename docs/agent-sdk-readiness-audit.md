@@ -2212,8 +2212,9 @@ Each is behavior-touching, so each is recorded for a future tidy pass, not appli
   (every `tooluse/nodes/*` + `reflection/nodes/*`). The bag is **never populated** — no flow passes
   params. Three names for an unused `Record`; candidate to collapse to one (or drop the type-param).
 - **`platform().agentResume` is a required host port with only two production call sites.**
-  `ToolUseFollowUp.ts:67` and `inquiry/inquiryContinuation.ts:138` — yet every host must implement it
-  (`extension.ts:207`, `cli/.../initPlatform.ts:206`, `FakePlatform.ts:755`). It abstracts a
+  `ToolUseFollowUp.ts:67` and `inquiry/inquiryContinuation.ts:138` — yet every production host must
+  implement it (`extension.ts:207`, `cli/.../initPlatform.ts:206`,
+  `packages/desktop/src/main/platform/index.ts:136`). It abstracts a
   host-command "resume the stream" UI-orchestration concern that sits on the always-present core
   `Platform` port set. Candidate to demote to an optional/nullable port (3-host touch), narrowing
   the SDK-exported surface. (Companion observation: `toolAvailability` is similarly two booleans
