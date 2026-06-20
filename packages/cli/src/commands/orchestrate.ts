@@ -20,6 +20,11 @@ import {
   readCliMultiAgentPresets,
   withCliMultiAgentPresetVisibility,
 } from '../runtime/multiAgentPresets';
+import {
+  loadCliMultiAgentRunPlan,
+  loadCliMultiAgentPresetPlanSet,
+  writeMissingPresetAgents,
+} from '../runtime/multiAgentRunPlan';
 import { buildCliOrchestrationItems } from '../runtime/orchestration';
 import {
   getCliModelAccessList,
@@ -38,12 +43,7 @@ import {
   INTERACTIVE_AGENT_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
-import {
-  loadCliMultiAgentRunPlan,
-  loadCliMultiAgentPresetPlanSet,
-  writeMissingPresetAgents,
-} from './multiAgent';
-import { runResumeExecution } from './resume';
+import { runResumeExecution } from '../runtime/resumeExecution';
 import type { CliContext } from '../runtime/cliContext';
 
 async function canLaunchWithDefaultModel(

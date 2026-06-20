@@ -1,19 +1,9 @@
 import { defineCommand } from 'citty';
-import type { ExecutionId } from '@shared/schemas';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { parseCliHistoryId } from '../runtime/history';
-import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
-import {
-  explainNonResumable,
-  resolveCliResumeSnapshot,
-} from '../runtime/sessionResume';
-import { formatResumeCommand } from '../chat/tui/state/resumeHint';
-import {
-  formatInteractiveTerminalFailure,
-  interactiveTerminalFailure,
-} from '../runtime/terminalRequirements';
+import { runResumeExecution } from '../runtime/resumeExecution';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
@@ -21,69 +11,6 @@ import {
   INTERACTIVE_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
-
-import type { CliContext } from '../runtime/cliContext';
-
-/**
- * `texra resume <id>` continues (resumes) a stored tool-use session by
- * reopening the interactive chat TUI, which rehydrates the prior transcript and
- * continues the suspended flow.
- *
- * Resume is interactive by nature: a resumed tool-use session returns to
- * WAITING for the user's next message, so there is no meaningful non-interactive
- * continuation without an input channel — a headless run would simply block at
- * the WAIT node. Headless callers are therefore pointed at `texra run`.
- */
-export async function runResumeExecution(
-  context: CliContext,
-  id: ExecutionId,
-): Promise<number> {
-  const terminalFailure = interactiveTerminalFailure(context);
-  if (terminalFailure) {
-    const commandName = context.commandName || 'texra';
-    const runCommand = `${commandName} run`;
-    // A resumed tool-use session goes back to WAITING for the next message;
-    // headless has no input channel to provide one, so continuing here would
-    // block forever. Reject before platform/snapshot work; no terminal means no
-    // interactive resume regardless of whether the id is otherwise resumable.
-    writeTextStderr(
-      formatInteractiveTerminalFailure(terminalFailure, {
-        headlessMessage: `Resuming continues an interactive chat session — run \`${formatResumeCommand(
-          commandName,
-          id,
-          { approvalPolicy: context.approvalPolicy },
-        )}\` in a terminal. For scripting, use \`${runCommand}\`.`,
-        dumbTerminalCommand: 'resume',
-        dumbTerminalOptions: {
-          commandName,
-          nonInteractiveFallback: `\`${runCommand}\``,
-        },
-      }),
-    );
-    return CliExitCode.Usage;
-  }
-
-  await initCliPlatform({ ...context, quietLogs: true });
-
-  // Resolve the stored session up front so we (a) fail fast with a clear
-  // message for non-resumable ids (workflow / missing / no live snapshot) and
-  // (b) reopen the TUI on the SAVED model/agent rather than the current chat
-  // defaults — those could be unavailable while the saved model is still
-  // runnable, which would otherwise fail resume for the wrong reason.
-  const resolution = await resolveCliResumeSnapshot(id);
-  if (resolution.kind !== 'toolUse') {
-    writeTextStderr(explainNonResumable(resolution, id));
-    return resolution.kind === 'load-failed'
-      ? CliExitCode.AgentError
-      : CliExitCode.Usage;
-  }
-
-  const { runChat } = await import('../chat/tui/runChatTui');
-  const result = await runChat(context, {
-    initialResume: { id, resolution },
-  });
-  return result.exitCode;
-}
 
 export const resumeCommand = defineCommand({
   meta: {
