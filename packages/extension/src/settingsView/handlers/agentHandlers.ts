@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
+import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import {
   createKey,
   getAgent,
@@ -29,7 +30,6 @@ import {
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
