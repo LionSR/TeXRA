@@ -18,11 +18,11 @@ describe('buildLatexInputEnv', () => {
   });
 
   it('prepends workspace and TikZ dirs onto inherited TEXINPUTS', () => {
-    const env = buildLatexInputEnv(
-      ['.', '/ws', '/tikz'],
-      ['/ws'],
-      { TEXINPUTS: '/inherited', BIBINPUTS: '/bib', BSTINPUTS: '/bst' },
-    );
+    const env = buildLatexInputEnv(['.', '/ws', '/tikz'], ['/ws'], {
+      TEXINPUTS: '/inherited',
+      BIBINPUTS: '/bib',
+      BSTINPUTS: '/bst',
+    });
     expect(env.TEXINPUTS).toBe(`.${D}/ws${D}/tikz${D}/inherited${D}`);
     expect(env.BIBINPUTS).toBe(`/ws${D}/bib${D}`);
     expect(env.BSTINPUTS).toBe(`/ws${D}/bst${D}`);

@@ -110,8 +110,11 @@ export async function compileLatex2Pdf(
     // Build kpathsea search-path overrides, prepending workspace/TikZ dirs onto
     // any inherited values. `path.delimiter` keeps it cross-platform.
     const env = buildLatexInputEnv(texInputParts, bibSearchParts);
-    const { TEXINPUTS: texInputs, BIBINPUTS: bibInputs, BSTINPUTS: bstInputs } =
-      env;
+    const {
+      TEXINPUTS: texInputs,
+      BIBINPUTS: bibInputs,
+      BSTINPUTS: bstInputs,
+    } = env;
     if (texInputs) {
       logger.debug(channel, `Setting TEXINPUTS to: ${texInputs}`);
     }
