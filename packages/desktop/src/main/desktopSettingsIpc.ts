@@ -7,6 +7,7 @@ import {
 } from '@controllers/settingsView/LatexToolingController';
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
 import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
+import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
   computeAgentOptionsData,
@@ -56,7 +57,6 @@ import {
   setBashApprovalEnabled,
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
-import { buildHistoryMessage } from '@shared/settingsView/handlers/historyHandlers';
 import {
   buildModelSelectionMessage,
   createModelSelectionController,
