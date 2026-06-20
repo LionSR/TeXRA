@@ -21,19 +21,19 @@ async function collectTypeScriptFiles(root: string): Promise<string[]> {
 }
 
 describe('shared settings-view import boundaries', () => {
-  it('does not import tool-layer implementations directly', async () => {
+  it('does not import tool or auth implementations directly', async () => {
     const sharedSettingsRoot = path.join(
       process.cwd(),
       'src/shared/settingsView',
     );
     const files = await collectTypeScriptFiles(sharedSettingsRoot);
-    const directToolImport =
-      /(?:from\s+|import\s+|import\s*\(\s*|require\s*\(\s*)['"]@tools\//;
+    const directImplementationImport =
+      /(?:from\s+|import\s+|import\s*\(\s*|require\s*\(\s*)['"](?:@tools|@auth)\//;
     const offenders: string[] = [];
 
     for (const file of files) {
       const source = await readFile(file, 'utf8');
-      if (directToolImport.test(source)) {
+      if (directImplementationImport.test(source)) {
         offenders.push(path.relative(process.cwd(), file));
       }
     }

@@ -1,5 +1,4 @@
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { buildProfileMessage } from '@shared/settingsView/handlers/profileHandlers';
 import type {
   ApiAccessMode,
   NumberVscodeSetting,
@@ -8,6 +7,7 @@ import type {
   UpdateProfileMessage,
 } from '@shared/schemas/profileViewMessages';
 import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
+import { buildProfileMessage } from './ProfileMessageBuilder';
 import type { StateStore } from '@platform/interfaces/state';
 
 export type SettingsReliabilitySetting = Omit<NumberVscodeSetting, 'value'> & {
