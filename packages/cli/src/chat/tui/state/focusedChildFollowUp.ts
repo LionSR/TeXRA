@@ -17,7 +17,7 @@ export type FocusedChildFollowUpRoute =
 export function focusedChildFollowUpRoute(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly statusForStream: (streamId: StreamTabId) => StreamStatus | undefined;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): FocusedChildFollowUpRoute {
   const scope = activeStreamScope({
     activeStreamId: init.activeStreamId,
@@ -27,7 +27,7 @@ export function focusedChildFollowUpRoute(init: {
     return { kind: 'none' };
   }
 
-  const status = init.statusForStream(scope.streamId);
+  const status = init.streams.get(scope.streamId)?.status;
   // A focused child normally has a status. Keep the previous permissive
   // behavior during the brief edge where parent focus arrives first.
   if (status !== undefined && !isInFlightStatus(status)) {
@@ -77,7 +77,6 @@ export function focusedChildInputDisabledMessage(init: {
 
 export function stoppedFocusedChildFollowUpMessage(init: {
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly status: StreamStatus | undefined;
   readonly streamId: StreamTabId;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): string {
@@ -91,7 +90,7 @@ export function stoppedFocusedChildFollowUpMessage(init: {
     focusedChildInputDisabledMessage({
       activeStreamId: init.streamId,
       parentStream: init.parentStream,
-      status: init.status,
+      status: init.streams.get(init.streamId)?.status,
       subagentControlsAvailable: controls.subagents.hasItems,
       taskControlsAvailable: controls.tasks.hasItems,
     }) ?? 'The selected subagent is no longer accepting follow-ups.'
