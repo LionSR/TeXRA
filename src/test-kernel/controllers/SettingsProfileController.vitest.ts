@@ -1,0 +1,176 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  SettingsProfileController,
+  type SettingsProfileConfigValue,
+} from '@controllers/settingsView/SettingsProfileController';
+import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { StateStore } from '@platform/interfaces/state';
+
+const providerVscodeSettings = {
+  openai: [
+    {
+      key: 'texra.model.useOpenAIResponsesAPI',
+      label: 'Responses API',
+      description: 'Use Responses API',
+    },
+  ],
+  openrouter: [
+    {
+      key: GlobalStateKey.USE_OPENROUTER,
+      label: 'Use OpenRouter',
+      description: 'Route through OpenRouter',
+      globalStateKey: GlobalStateKey.USE_OPENROUTER,
+    },
+  ],
+} satisfies Record<string, readonly ProviderVscodeSettingDef[]>;
+
+function createState(initial: Record<string, unknown> = {}): StateStore & {
+  data: Record<string, unknown>;
+} {
+  const data = { ...initial };
+  return {
+    data,
+    get: <T>(key: string, defaultValue?: T): T => {
+      return (Object.hasOwn(data, key) ? data[key] : defaultValue) as T;
+    },
+    update: async (key: string, value: unknown) => {
+      data[key] = value;
+    },
+  };
+}
+
+function createController(
+  options: {
+    state?: StateStore;
+    config?: Record<string, SettingsProfileConfigValue>;
+  } = {},
+): {
+  controller: SettingsProfileController;
+  includedAccessUpdates: boolean[];
+  invalidations: { count: number };
+  config: Record<string, SettingsProfileConfigValue>;
+} {
+  const includedAccessUpdates: boolean[] = [];
+  const invalidations = { count: 0 };
+  const config = options.config ?? {};
+  const state = options.state ?? createState();
+
+  return {
+    controller: new SettingsProfileController({
+      globalState: state,
+      providerIds: ['openai', 'openrouter'],
+      providerVscodeSettings,
+      providerDisplayNames: { openai: 'OpenAI', openrouter: 'OpenRouter' },
+      providerKeyUrls: {
+        openai: 'https://platform.openai.com/api-keys',
+        openrouter: 'https://openrouter.ai/keys',
+      },
+      loadProviderKeyStatuses: async () => ({
+        openai: 'set',
+        openrouter: 'not-set',
+      }),
+      getProviderDisplayName: (_provider, defaultName) => defaultName,
+      getProviderKeyUrl: (_provider, defaultUrl) => defaultUrl,
+      getProviderStreaming: () => true,
+      getProviderEndpoint: () => '',
+      supportsCustomEndpoint: () => false,
+      getConfig: <T>(key: string, defaultValue: T): T =>
+        (Object.hasOwn(config, key) ? config[key] : defaultValue) as T,
+      updateConfig: async (key, value) => {
+        config[key] = value;
+      },
+      setUseIncludedModelAccess: async (enabled) => {
+        includedAccessUpdates.push(enabled);
+      },
+      invalidateModelOptionsCache: () => {
+        invalidations.count += 1;
+      },
+    }),
+    includedAccessUpdates,
+    invalidations,
+    config,
+  };
+}
+
+describe('SettingsProfileController', () => {
+  it('turns off OpenRouter when switching to included access', async () => {
+    const state = createState({ [GlobalStateKey.USE_OPENROUTER]: true });
+    const { controller, includedAccessUpdates, invalidations } =
+      createController({ state });
+
+    const update = await controller.setApiAccessMode('included');
+
+    expect(includedAccessUpdates).toEqual([true]);
+    expect(state.get(GlobalStateKey.USE_OPENROUTER, true)).toBe(false);
+    expect(invalidations.count).toBe(1);
+    expect(update).toEqual({
+      mode: 'included',
+      openRouterDisabled: true,
+    });
+  });
+
+  it('keeps OpenRouter unchanged when switching to personal keys', async () => {
+    const state = createState({ [GlobalStateKey.USE_OPENROUTER]: true });
+    const { controller, includedAccessUpdates, invalidations } =
+      createController({ state });
+
+    const update = await controller.setApiAccessMode('personal');
+
+    expect(includedAccessUpdates).toEqual([false]);
+    expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
+    expect(invalidations.count).toBe(1);
+    expect(update).toEqual({
+      mode: 'personal',
+      openRouterDisabled: false,
+    });
+  });
+
+  it('updates only whitelisted provider settings', async () => {
+    const state = createState();
+    const { controller, invalidations } = createController({ state });
+
+    const rejected = await controller.setProviderVscodeSetting({
+      key: 'texra.unknownSetting',
+      value: true,
+    });
+    const updated = await controller.setProviderVscodeSetting({
+      key: GlobalStateKey.USE_OPENROUTER,
+      value: true,
+    });
+
+    expect(rejected).toEqual({
+      kind: 'rejected',
+      key: 'texra.unknownSetting',
+    });
+    expect(updated).toEqual({
+      kind: 'updated',
+      affectsModelAvailability: true,
+    });
+    expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
+    expect(invalidations.count).toBe(1);
+  });
+
+  it('keeps reliability settings in config-backed model policy', async () => {
+    const { controller, config, invalidations } = createController();
+
+    const result = await controller.setProviderVscodeSetting({
+      key: 'texra.model.retry.maxAttempts',
+      value: 3,
+    });
+
+    expect(result).toEqual({
+      kind: 'updated',
+      affectsModelAvailability: false,
+    });
+    expect(config['texra.model.retry.maxAttempts']).toBe(3);
+    expect(invalidations.count).toBe(0);
+    expect(controller.getReliabilitySettings()).toContainEqual(
+      expect.objectContaining({
+        key: 'texra.model.retry.maxAttempts',
+        value: 3,
+      }),
+    );
+  });
+});
