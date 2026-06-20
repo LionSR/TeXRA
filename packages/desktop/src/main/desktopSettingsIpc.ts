@@ -6,6 +6,7 @@ import {
   LatexToolingController,
 } from '@controllers/settingsView/LatexToolingController';
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
+import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
   computeAgentOptionsData,
@@ -56,7 +57,6 @@ import {
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildHistoryMessage } from '@shared/settingsView/handlers/historyHandlers';
-import { buildProfileMessage } from '@shared/settingsView/handlers/profileHandlers';
 import {
   buildModelSelectionMessage,
   createModelSelectionController,
