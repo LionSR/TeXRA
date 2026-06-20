@@ -7,15 +7,14 @@ import {
   StreamTabIdSchema,
   type StreamTabId,
 } from '@shared/schemas/identifiers';
-
-import { filterNotNull } from '@utils/core';
-import { hexId12 } from '@utils/core/executionId';
 import {
   GoalSchema,
   isGoalInFlight,
   type Goal,
   type GoalStatus,
-} from './goalMeta';
+} from '@shared/schemas/goal';
+import { filterNotNull } from '@utils/core';
+import { hexId12 } from '@utils/core/executionId';
 
 const STREAM_KEY_PREFIX = 'goals:byStream:';
 const INDEX_KEY = 'goals:index';

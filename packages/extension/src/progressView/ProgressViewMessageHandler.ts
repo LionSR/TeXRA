@@ -36,6 +36,7 @@ import { isApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
+import { isGoalInFlight } from '@shared/schemas/goal';
 import {
   dispatchProgressViewInbound,
   type ProgressViewInboundHandlerRegistry,
@@ -44,7 +45,7 @@ import {
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleProgressViewBashApprovalAction } from '@tools/approval';
-import { GoalStore, isGoalInFlight } from '@tools/goal';
+import { GoalStore } from '@tools/goal';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import {
   createExternalLocation,

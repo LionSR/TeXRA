@@ -167,4 +167,50 @@ describe('progress view snapshot hydration', () => {
       planSummary: 'Hydrate plan and todo state from one backend owner.',
     });
   });
+
+  it('includes host-provided stream controls in synced content', async () => {
+    const state = new ProgressViewState(new MemoryMementoStorage());
+    await state.snapshots.load([]);
+    const messages: SyncStreamContentPayload[] = [];
+    const updater = {
+      isAvailable: () => true,
+      sendSyncStreamContent: (payload: SyncStreamContentPayload) => {
+        messages.push(payload);
+      },
+    } as unknown as WebviewUpdater;
+    const bridge = {
+      syncStream: vi.fn(),
+      clearAll: vi.fn(),
+    } as unknown as WebviewBridge;
+    const controlledStream = 'stream:controls' as StreamTabId;
+    const handler = new ProgressEventHandler(
+      state,
+      updater,
+      bridge,
+      {} as never,
+      () => false,
+      (streamId) => {
+        expect(streamId).toBe(controlledStream);
+        return {
+          toolEditBypass: true,
+          superYoloBypass: true,
+          goalActive: true,
+          goalStatus: 'active',
+          goalObjective: 'Keep making progress.',
+        };
+      },
+    );
+
+    handler.syncStreamContent(controlledStream);
+
+    expect(messages.at(-1)).toMatchObject({
+      stream: controlledStream,
+      action: 'render',
+      toolEditBypass: true,
+      superYoloBypass: true,
+      goalActive: true,
+      goalStatus: 'active',
+      goalObjective: 'Keep making progress.',
+    });
+  });
 });

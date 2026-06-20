@@ -17,16 +17,16 @@ export { SETTINGS_VIEW_CMD };
 // import `LatexConfigField` from this module continue to compile.
 export type { LatexConfigField } from '@shared/constants/latex';
 
-// Import GoalSchema from its leaf module so this file (consumed by webview
-// frontends) does not pull in GoalTool/GoalStore runtime modules.
+// Import Goal metadata from its shared leaf module so this file (consumed by
+// webview frontends) does not pull in GoalTool/GoalStore runtime modules.
 import {
   GoalSchema,
   formatGoalTime,
   isGoalInFlight,
   goalDurationMs,
   goalElapsedMs,
-} from '@tools/goal/goalMeta';
-export type { Goal, GoalStatus } from '@tools/goal/goalMeta';
+} from './goal';
+export type { Goal, GoalStatus } from './goal';
 export {
   GoalSchema,
   formatGoalTime,

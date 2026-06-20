@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
 import type { IProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
@@ -127,6 +128,7 @@ export class ProgressViewProvider
       storage: workspaceSM,
       sendMessage: (message) => this.sendToActiveProgressWebview(message),
       hasTarget: () => this.getActiveWebview() !== undefined,
+      getStreamControls: getProgressStreamControls,
       configureUi: ({ webviewUpdater: u }) => {
         const canSend = () => this.canSendToWebview();
         this.toolEditHandler = new ApprovalRequestHandler(

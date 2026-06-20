@@ -3,7 +3,7 @@ import { platform } from '@platform/platform';
 import {
   LEGACY_GOAL_FEATURE_FLAG_KEYS,
   GOAL_FEATURE_FLAG_KEY,
-} from './goalMeta';
+} from '@shared/schemas/goal';
 
 /**
  * Whether Goal (autonomous-continuation mode) is enabled.

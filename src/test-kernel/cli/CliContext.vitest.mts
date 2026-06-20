@@ -17,7 +17,7 @@ import {
   type CliAmbientState,
 } from '@cli/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
-import { LEGACY_GOAL_FEATURE_FLAG_KEYS } from '@tools/goal';
+import { LEGACY_GOAL_FEATURE_FLAG_KEYS } from '@shared/schemas/goal';
 
 // Pre-rename canonical key, still honored read-only for back-compat.
 const LEGACY_GOAL_FEATURE_FLAG_KEY = LEGACY_GOAL_FEATURE_FLAG_KEYS[0];
