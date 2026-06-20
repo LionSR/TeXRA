@@ -21,14 +21,14 @@ async function collectTypeScriptFiles(root: string): Promise<string[]> {
 }
 
 describe('shared settings-view import boundaries', () => {
-  it('does not import tool, auth, execution-storage, or model implementations directly', async () => {
+  it('does not import controller, agent, model, tool, or auth implementations directly', async () => {
     const sharedSettingsRoot = path.join(
       process.cwd(),
       'src/shared/settingsView',
     );
     const files = await collectTypeScriptFiles(sharedSettingsRoot);
     const directImplementationImport =
-      /(?:from\s+|import\s+|import\s*\(\s*|require\s*\(\s*)['"](?:@tools\/|@auth\/|@model\/|@agent\/storage(?:\/|['"]))/;
+      /(?:from\s+|import\s+|import\s*\(\s*|require\s*\(\s*)['"](?:@controllers\/|@agent\/|@model\/|@tools\/|@auth\/)/;
     const offenders: string[] = [];
 
     for (const file of files) {
