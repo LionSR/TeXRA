@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
 import type { IProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
@@ -32,15 +33,9 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import { isGoalInFlight } from '@shared/schemas/goal';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import {
-  isApprovalBypassedForStream,
-  proposalApprovalState,
-} from '@tools/approval';
-import { GoalStore } from '@tools/goal';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
 import {
   getOpenTurnDraft,
@@ -133,7 +128,7 @@ export class ProgressViewProvider
       storage: workspaceSM,
       sendMessage: (message) => this.sendToActiveProgressWebview(message),
       hasTarget: () => this.getActiveWebview() !== undefined,
-      getStreamControls: (streamId) => this.getStreamControls(streamId),
+      getStreamControls: getProgressStreamControls,
       configureUi: ({ webviewUpdater: u }) => {
         const canSend = () => this.canSendToWebview();
         this.toolEditHandler = new ApprovalRequestHandler(
@@ -258,19 +253,6 @@ export class ProgressViewProvider
         }
       }),
     );
-  }
-
-  private getStreamControls(streamId: StreamTabId) {
-    const goal = GoalStore.getForStream(streamId);
-    const goalActive = isGoalInFlight(goal);
-    return {
-      toolEditBypass: isApprovalBypassedForStream(streamId),
-      superYoloBypass: proposalApprovalState.isBypassed(streamId),
-      goalActive,
-      ...(goalActive && goal
-        ? { goalStatus: goal.status, goalObjective: goal.objective }
-        : {}),
-    };
   }
 
   public async initialize(): Promise<void> {

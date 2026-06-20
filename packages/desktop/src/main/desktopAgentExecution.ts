@@ -10,6 +10,7 @@ import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreCo
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { createProgressViewCommandHandlers } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
+import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
 import { StreamSnapshotStore } from '@transcript';
@@ -67,8 +68,6 @@ import {
   cleanupApprovalsForStream,
   cleanupUnscopedApprovals,
   handleProgressViewBashApprovalAction,
-  isApprovalBypassedForStream,
-  proposalApprovalState,
 } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 import { handleExternalInquiryAction } from '@tools/inquiry';
@@ -213,7 +212,7 @@ export class DesktopProgressBridge {
         return this.postToRenderer(message) !== false;
       },
       hasTarget: () => true,
-      getStreamControls: (streamId) => this.getStreamControls(streamId),
+      getStreamControls: getProgressStreamControls,
       configureUi: ({ webviewUpdater }) => {
         // Track shown-but-unresolved prompts so hasPendingPermissions can
         // keep the active view on a stream awaiting input (the shared
@@ -817,19 +816,6 @@ export class DesktopProgressBridge {
       .finally(() => {
         this.restoredDisplayInFlight.delete(streamId);
       });
-  }
-
-  private getStreamControls(streamId: StreamTabId) {
-    const goal = GoalStore.getForStream(streamId);
-    const goalActive = isGoalInFlight(goal);
-    return {
-      toolEditBypass: isApprovalBypassedForStream(streamId),
-      superYoloBypass: proposalApprovalState.isBypassed(streamId),
-      goalActive,
-      ...(goalActive && goal
-        ? { goalStatus: goal.status, goalObjective: goal.objective }
-        : {}),
-    };
   }
 
   private updateGoalActiveFromStore(streamId: StreamTabId): void {
