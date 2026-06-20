@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
+import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import {
   BASH_APPROVAL_ACTIONS,
   type BashApprovalAction,
@@ -26,8 +27,6 @@ const BashApprovalResultSchema = z.object({
   userMessage: z.string().optional(),
 });
 export type BashApprovalResult = z.infer<typeof BashApprovalResultSchema>;
-
-export const BASH_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireBashApproval';
 
 // Defined in the schema layer (see @shared/schemas/prompts); re-exported here
 // so existing importers of `@tools/approval/bashApproval` keep working.

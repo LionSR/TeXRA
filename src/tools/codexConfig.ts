@@ -5,12 +5,18 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
+  CODEX_SANDBOX_MODE_DEFAULT,
   CodexApprovalPolicySchema,
   CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
+  parseCodexApprovalPolicy,
+  parseCodexReasoningEffort,
+  parseCodexSandboxMode,
 } from '@shared/schemas/agentCliSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
+import { createEnumStateGetter } from './support/enumConfig';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 
 // Type-only imports
@@ -36,13 +42,6 @@ export const CODEX_CLI_MODEL = 'gpt-5.5';
 const REASONING_EFFORTS = CodexReasoningEffortSchema.options;
 export const CODEX_REASONING_EFFORTS = REASONING_EFFORTS;
 export type CodexReasoningEffort = (typeof REASONING_EFFORTS)[number];
-
-export const CODEX_REASONING_EFFORT_DEFAULT: CodexReasoningEffort = 'high';
-
-export const parseCodexReasoningEffort = createEnumParser(
-  REASONING_EFFORTS,
-  CODEX_REASONING_EFFORT_DEFAULT,
-);
 
 export const getCodexReasoningEffort = createEnumStateGetter(
   WorkspaceStateKey.CODEX_REASONING_EFFORT,
@@ -82,11 +81,6 @@ export const CODEX_APPROVAL_POLICIES =
   APPROVAL_POLICIES satisfies readonly ApprovalMode[];
 export type CodexApprovalPolicy = ApprovalMode;
 
-export const CODEX_APPROVAL_POLICY_DEFAULT: CodexApprovalPolicy = 'never';
-
-export const parseCodexApprovalPolicy: (raw: string) => CodexApprovalPolicy =
-  createEnumParser(APPROVAL_POLICIES, CODEX_APPROVAL_POLICY_DEFAULT);
-
 export const getCodexApprovalPolicy: () => CodexApprovalPolicy =
   createEnumStateGetter(
     WorkspaceStateKey.CODEX_APPROVAL_POLICY,
@@ -104,11 +98,6 @@ const SANDBOX_MODES = CodexSandboxModeSchema.options;
 export const CODEX_SANDBOX_MODES =
   SANDBOX_MODES satisfies readonly SandboxMode[];
 export type CodexSandboxMode = SandboxMode;
-
-export const CODEX_SANDBOX_MODE_DEFAULT: CodexSandboxMode = 'workspace-write';
-
-export const parseCodexSandboxMode: (raw: string) => CodexSandboxMode =
-  createEnumParser(SANDBOX_MODES, CODEX_SANDBOX_MODE_DEFAULT);
 
 export const getCodexSandboxMode: () => CodexSandboxMode =
   createEnumStateGetter(

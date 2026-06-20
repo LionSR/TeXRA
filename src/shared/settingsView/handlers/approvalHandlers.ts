@@ -10,22 +10,20 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import type { UpdateApprovalSettingsMessage } from '@shared/schemas/settingsViewMessages';
 import {
-  parseCodexApprovalPolicy,
-  parseCodexReasoningEffort,
-  parseCodexSandboxMode,
+  BASH_APPROVAL_CONFIG_KEY,
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
-} from '@tools/codexConfig';
-import {
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  CLAUDE_AGENT_DEFAULT_EFFORT,
   parseClaudeAgentEffort,
   parseClaudeAgentModel,
   parseClaudeAgentPermissionMode,
-} from '@tools/claudeAgentConfig';
-import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
+  parseCodexApprovalPolicy,
+  parseCodexReasoningEffort,
+  parseCodexSandboxMode,
+} from '@shared/schemas/agentCliSettings';
 import type { ConfigProvider, ConfigTarget } from '@platform/interfaces/config';
 
 import type { SettingsStatePorts } from './types';
