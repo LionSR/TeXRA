@@ -10,6 +10,8 @@ import {
   cliMultiAgentPresetNdjsonRecords,
   cliMultiAgentPresets,
   findCliMultiAgentPreset,
+  formatCliMultiAgentPresetLauncherHints,
+  formatCliMultiAgentPresetLauncherSummary,
   formatCliMultiAgentTeamLaunchBlockMessage,
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
@@ -147,6 +149,28 @@ describe('CLI multi-agent presets', () => {
 
     expect(cliMultiAgentPresetAvailability(plan).status).toBe('degraded');
     expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(true);
+  });
+
+  it('formats compact launcher summaries from planned availability', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [agent('criticize', AgentCategory.Workflow)],
+      toolUseAgents: [
+        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+        agent('review', AgentCategory.ToolUse),
+      ],
+    });
+
+    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
+      'degraded; 1/4 workflows; 2/9 tools',
+    );
+    expect(formatCliMultiAgentPresetLauncherHints(plan)).toEqual([
+      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
+      'Relay teams may unlock more agents after texra login.',
+    ]);
   });
 
   it('formats run warnings from planned missing team members', () => {
