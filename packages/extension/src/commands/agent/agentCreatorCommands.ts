@@ -10,12 +10,11 @@ import {
   TOOL_GROUPS,
   createAgentCreatorFlow,
 } from '@agent/implementations/flows/agentCreator/agentCreatorFlow';
+import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
 import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
-
-import { renderAgentTemplateString } from './agentTemplateRenderer';
 
 const CHANNEL = 'AgentCreator';
 logger.initialize(CHANNEL);
