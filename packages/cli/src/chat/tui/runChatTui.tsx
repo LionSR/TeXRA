@@ -98,6 +98,7 @@ import {
   installTuiStdoutListenerLimit,
   tuiOutputStreamForColor,
 } from './render/noColorOutput';
+import { createTuiViewportController } from './render/tuiViewportController';
 import { clearApprovals } from './state/approvalQueue';
 import { cliState, patchStream, resetCliState } from './state/cliState';
 import {
@@ -134,10 +135,6 @@ import {
   restoreTuiInputModes,
   supportsTerminalJobControl,
 } from './terminalCleanup';
-import {
-  transcriptViewportRepaintOptions,
-  type TranscriptViewportChange,
-} from './state/transcriptViewportMode';
 import {
   chatTuiCanInterruptActiveRun,
   chatTuiCanSelectModel,
@@ -984,11 +981,7 @@ export async function runChat(
 
   const stdoutColorEnabled = context.stdoutColorEnabled ?? context.colorEnabled;
   const inkRef: { current?: InkInstance } = {};
-  const repaintTranscriptViewport = (
-    change: TranscriptViewportChange,
-  ): void => {
-    inkRef.current?.repaint(transcriptViewportRepaintOptions(change));
-  };
+  const viewportController = createTuiViewportController(inkRef);
   const ink = render(
     <App
       onSubmit={handleSubmit}
@@ -998,7 +991,9 @@ export async function runChat(
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
       onInterruptActive={interruptActive}
-      onTranscriptViewportChange={repaintTranscriptViewport}
+      onTranscriptViewportChange={
+        viewportController.handleTranscriptViewportChange
+      }
       onCtrlC={() => handleSigint()}
       onSuspend={() => handleSigtstp()}
       onKillExecution={(executionId) => {
@@ -1191,7 +1186,7 @@ export async function runChat(
   const handleSigcont = (): void => {
     if (process.stdin.isTTY) process.stdin.setRawMode(true);
     restoreTuiInputModes({ kittyKeyboard: terminalCaps.kittyKeyboard });
-    inkRef.current?.repaint({ clearScrollback: true });
+    viewportController.repaintAfterTerminalResume();
   };
   function requestInputExit(): void {
     removeProcessHandlers();
