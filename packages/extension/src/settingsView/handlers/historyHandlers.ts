@@ -6,6 +6,7 @@
  */
 import * as vscode from 'vscode';
 
+import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import {
   getExecutionStore,
   deleteExecution,
@@ -33,7 +34,6 @@ import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
-import { buildHistoryMessage } from '@shared/settingsView/handlers/historyHandlers';
 import { StorageFS } from '@utils/files';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';

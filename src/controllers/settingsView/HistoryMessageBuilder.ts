@@ -1,5 +1,6 @@
 /**
- * History list construction shared between desktop and extension hosts.
+ * History list construction shared between desktop and extension settings
+ * controllers.
  *
  * Both hosts iterate `listExecutions()` and turn each entry into the same
  * `HistoryItem` shape for the settings UI. Action handlers (delete, rerun,
