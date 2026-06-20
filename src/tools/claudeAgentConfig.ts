@@ -63,7 +63,8 @@ export const getClaudeAgentModel: () => ClaudeAgentModel =
 // Permission mode
 // ============================================================================
 
-export const CLAUDE_AGENT_DEFAULT_PERMISSION_MODE: ClaudeAgentPermissionMode = 'acceptEdits';
+export const CLAUDE_AGENT_DEFAULT_PERMISSION_MODE: ClaudeAgentPermissionMode =
+  'acceptEdits';
 
 export const parseClaudeAgentPermissionMode: (
   raw: string,
