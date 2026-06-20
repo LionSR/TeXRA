@@ -12,6 +12,11 @@ import type { AgentFileLocation, WorkspaceFileLocation } from '@shared/schemas';
 import type { PromptBuilder } from '@utils/prompt';
 import type { TaskRunFileService } from '@utils/files';
 
+export interface WorkflowOutputPolicy {
+  readonly shouldAutoOpenPdfOrLog: () => boolean;
+  readonly shouldRejectOnCompileFailure: () => boolean;
+}
+
 export interface ReflectionServices<
   C = unknown,
 > extends BaseFlowContextInit<C> {
@@ -25,6 +30,7 @@ export interface ReflectionServices<
   readonly getOutputFileLocation: (
     round: number,
   ) => AgentFileLocation | Promise<AgentFileLocation>;
+  readonly workflowOutputPolicy: WorkflowOutputPolicy;
   readonly baseFiles: WorkspaceFileLocation[];
   readonly onRoundFinalized: RoundFinalizedCallback;
 }

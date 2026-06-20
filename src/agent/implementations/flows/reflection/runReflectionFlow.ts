@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { platform } from '@platform/platform';
 import { getExecutionStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
 import {
@@ -32,6 +33,8 @@ import {
   type StorageKey,
   type WorkspaceFileLocation,
 } from '@shared/schemas';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   AbsoluteFS,
   TaskRunFileService,
@@ -49,7 +52,10 @@ import {
   ReflectionFlowStateSchema,
   type ReflectionFlowShared,
 } from './ReflectionFlowState';
-import type { ReflectionServices } from './ReflectionServices';
+import type {
+  ReflectionServices,
+  WorkflowOutputPolicy,
+} from './ReflectionServices';
 
 export interface RunReflectionFlowInput<
   C = unknown,
@@ -65,6 +71,7 @@ export interface RunReflectionFlowInput<
     totalRounds: number,
     outputPaths: readonly string[],
   ) => void;
+  workflowOutputPolicy?: WorkflowOutputPolicy;
 }
 
 export interface RunReflectionFlowResult {
@@ -276,6 +283,9 @@ export async function runReflectionFlow<C = unknown>(
       promptBuilder,
       fileService,
       getOutputFileLocation,
+      workflowOutputPolicy:
+        input.workflowOutputPolicy ??
+        createWorkspaceStateWorkflowOutputPolicy(),
       baseFiles,
     };
     pf.setServices(services);
@@ -326,5 +336,20 @@ export async function runReflectionFlow<C = unknown>(
     roundOutputs: shared?.roundOutputs ?? [],
     outcome,
     ...(totalCostUsd > 0 ? { totalCostUsd } : {}),
+  };
+}
+
+function createWorkspaceStateWorkflowOutputPolicy(): WorkflowOutputPolicy {
+  return {
+    shouldAutoOpenPdfOrLog: () =>
+      platform().workspaceState.get<boolean>(
+        WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+        LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
+      ),
+    shouldRejectOnCompileFailure: () =>
+      platform().workspaceState.get<boolean>(
+        WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+        LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
+      ),
   };
 }
