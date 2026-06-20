@@ -92,6 +92,10 @@ export function editApprovalFeedbackRows({
   );
 }
 
+export function formatEditApprovalHunkCount(count: number): string {
+  return `${count} ${count === 1 ? 'hunk' : 'hunks'}`;
+}
+
 export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [feedbackMode, setFeedbackMode] = useState(false);
@@ -148,7 +152,8 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       onDecide={props.onDecide}
     >
       <Text dimColor>
-        +{stats.added} / −{stats.removed} · {stats.hunks} hunks · source:{' '}
+        +{stats.added} / −{stats.removed} ·{' '}
+        {formatEditApprovalHunkCount(stats.hunks)} · source:{' '}
         {props.request.sourceTool}
       </Text>
       <Box marginY={compactDiffLayout ? 0 : 1} flexDirection="column">

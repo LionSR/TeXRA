@@ -4,6 +4,7 @@ import {
   COMPACT_EDIT_APPROVAL_MAX_ROWS,
   editApprovalDiffRowsBudget,
   editApprovalFeedbackRows,
+  formatEditApprovalHunkCount,
 } from '@cli/chat/tui/modals/EditApproval';
 
 describe('CLI edit approval layout', () => {
@@ -79,5 +80,10 @@ describe('CLI edit approval layout', () => {
         title: 'Apply edit to proof.tex?',
       }),
     ).toBe(30);
+  });
+
+  it('pluralizes the hunk count in the summary line', () => {
+    expect(formatEditApprovalHunkCount(1)).toBe('1 hunk');
+    expect(formatEditApprovalHunkCount(2)).toBe('2 hunks');
   });
 });
