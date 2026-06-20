@@ -1,0 +1,162 @@
+import { strict as assert } from 'node:assert';
+import { describe, it } from 'vitest';
+
+import {
+  computeStreamTreeProjection,
+  getStreamBranchActivity,
+} from '@progressView/frontend/streamTree';
+import type { StreamState } from '@progressView/frontend/store';
+import {
+  AgentCategory,
+  createStreamState,
+  STREAM_STATUS,
+  type StreamStatus,
+  type StreamTabInfo,
+} from '@shared/schemas';
+
+function stream(name: string, parentStreamId?: string): StreamTabInfo {
+  return {
+    name,
+    label: name,
+    agentCategory: AgentCategory.ToolUse,
+    creationTimestamp: 0,
+    ...(parentStreamId && { parentStreamId }),
+  };
+}
+
+function streamState(status: StreamStatus): StreamState {
+  return createStreamState(AgentCategory.ToolUse, { status });
+}
+
+describe('progress stream tree policy', () => {
+  it('keeps a parent expanded while a child has not reported status yet', () => {
+    const childStreamsByParent = new Map([['root', [stream('child', 'root')]]]);
+
+    const projection = computeStreamTreeProjection({
+      streamStates: new Map(),
+      childStreamsByParent,
+      userOverrides: new Map(),
+    });
+
+    assert.equal(projection.expandedParents.has('root'), true);
+    assert.equal(
+      getStreamBranchActivity(
+        { streamStates: new Map(), childStreamsByParent },
+        'child',
+      ),
+      'unknown',
+    );
+  });
+
+  it('collapses a parent once every child branch is finished', () => {
+    const childStreamsByParent = new Map([
+      ['root', [stream('child-a', 'root'), stream('child-b', 'root')]],
+    ]);
+    const streamStates = new Map([
+      ['child-a', streamState(STREAM_STATUS.STOPPED)],
+      ['child-b', streamState(STREAM_STATUS.ERROR)],
+    ]);
+
+    const projection = computeStreamTreeProjection({
+      streamStates,
+      childStreamsByParent,
+      userOverrides: new Map(),
+    });
+
+    assert.equal(projection.expandedParents.has('root'), false);
+    assert.equal(projection.branchActivityByStream.get('child-a'), 'finished');
+    assert.equal(projection.branchActivityByStream.get('child-b'), 'finished');
+  });
+
+  it('expands ancestors when a descendant is active', () => {
+    const childStreamsByParent = new Map([
+      ['root', [stream('child', 'root')]],
+      ['child', [stream('grandchild', 'child')]],
+    ]);
+    const streamStates = new Map([
+      ['child', streamState(STREAM_STATUS.STOPPED)],
+      ['grandchild', streamState(STREAM_STATUS.RUNNING)],
+    ]);
+
+    const projection = computeStreamTreeProjection({
+      streamStates,
+      childStreamsByParent,
+      userOverrides: new Map(),
+    });
+
+    assert.equal(projection.expandedParents.has('root'), true);
+    assert.equal(projection.expandedParents.has('child'), true);
+    assert.equal(projection.branchActivityByStream.get('child'), 'active');
+    assert.equal(projection.branchActivityByStream.get('grandchild'), 'active');
+  });
+
+  it('honors user overrides and drops overrides for missing parents', () => {
+    const childStreamsByParent = new Map([['root', [stream('child', 'root')]]]);
+    const streamStates = new Map([
+      ['child', streamState(STREAM_STATUS.RUNNING)],
+    ]);
+
+    const projection = computeStreamTreeProjection({
+      streamStates,
+      childStreamsByParent,
+      userOverrides: new Map([
+        ['root', 'collapsed'],
+        ['stale-parent', 'expanded'],
+      ]),
+    });
+
+    assert.equal(projection.expandedParents.has('root'), false);
+    assert.deepEqual([...projection.userOverrides], [['root', 'collapsed']]);
+  });
+
+  it('allows users to keep a finished parent expanded', () => {
+    const childStreamsByParent = new Map([['root', [stream('child', 'root')]]]);
+    const streamStates = new Map([
+      ['child', streamState(STREAM_STATUS.STOPPED)],
+    ]);
+
+    const projection = computeStreamTreeProjection({
+      streamStates,
+      childStreamsByParent,
+      userOverrides: new Map([['root', 'expanded']]),
+    });
+
+    assert.equal(projection.expandedParents.has('root'), true);
+  });
+
+  it('guards cycles while preserving the stream own activity', () => {
+    const childStreamsByParent = new Map([
+      ['root', [stream('child', 'root')]],
+      ['child', [stream('root', 'child')]],
+    ]);
+    const streamStates = new Map([
+      ['root', streamState(STREAM_STATUS.STOPPED)],
+      ['child', streamState(STREAM_STATUS.STOPPED)],
+    ]);
+
+    assert.equal(
+      getStreamBranchActivity(
+        { streamStates, childStreamsByParent },
+        'child',
+        new Set(['root']),
+      ),
+      'finished',
+    );
+  });
+
+  it('guards direct self-loops', () => {
+    const childStreamsByParent = new Map([['root', [stream('root', 'root')]]]);
+    const streamStates = new Map([
+      ['root', streamState(STREAM_STATUS.STOPPED)],
+    ]);
+
+    assert.equal(
+      getStreamBranchActivity(
+        { streamStates, childStreamsByParent },
+        'root',
+        new Set(['root']),
+      ),
+      'finished',
+    );
+  });
+});
