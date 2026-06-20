@@ -10,10 +10,11 @@ import * as vscode from 'vscode';
 import { SecretManager } from '@frontend/secretManager';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { revealProgressStream } from '@progressView/progressNavigation';
+import {
+  getProgressStreamLabel,
+  revealProgressStream,
+} from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -89,7 +90,6 @@ export class GitHubSubscriptionHandlers {
   }
 
   async sendPRSubscriptions(webview: vscode.Webview): Promise<void> {
-    const state = ProgressViewProvider.getInstance()?.state;
     const toEntry = (
       key: string,
       streamIds: readonly string[],
@@ -97,9 +97,7 @@ export class GitHubSubscriptionHandlers {
       key,
       owners: streamIds.map((streamId) => ({
         streamId,
-        label: state
-          ? (buildStreamInfo(state, streamId, 'all')?.label ?? streamId)
-          : streamId,
+        label: getProgressStreamLabel(streamId) ?? streamId,
       })),
     });
     const prEntries = listPRSubscriptionBindings(
