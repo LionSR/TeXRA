@@ -2147,3 +2147,128 @@ the recurring traps (node-runs-subflow "wrapper", `IModelHandler` redundant for 
 shim/barrel remains for a tidy pass to remove, so no refactor was applied. The remaining open
 items are behavior-sensitive (§4 producer de-dup, §16 #4 cycle) or the multi-day §5 `delegateTo`
 primitive — exactly the residue the original audit projected.
+
+## 21. Re-verification addendum — 2026-06-20 (sixteenth pass — confirmation; small net-new core backlog candidates recorded)
+
+A sixteenth pass — a fresh three-agent fan-out (independent, given only the source, not this
+document): an `agent/core` + `implementations/flows` abstraction audit, a `modelHandlers/` +
+`toolConversion` audit, and a logger + `platform/` + run-entry surface audit — run against branch
+`claude/eager-noether-eb5m6f` at HEAD `5a5f6f8` (no audited-dir drift vs §20's `df0ca92`
+baseline reachable on this branch; `5a5f6f8` is the recent edit-approval/output-policy/extract
+train: `#6332`/`#6330`/`#6325`/`#6324`/`#6323` — pure DRY/extract refactors, no new abstraction).
+**All 2026-05-28 → 06-17 findings hold without change. No new structural over-abstraction
+surfaced; the standing verdict is reaffirmed for the sixteenth time** — TeXRA is well-architected
+and SDK-aligned, the gaps are incremental not structural. Like §15/§17–§20 this is a
+**confirmation-only pass — no refactor applied** — because the genuinely-new items below are all
+behavior-touching (union-shape, threaded type-params, host-port arity, batched-semantics), none a
+zero-risk dead-shim/barrel removal.
+
+### The three independent agents re-reached the standing verdict and re-surfaced the recurring traps
+
+Consistent with §14/§16/§17/§20, the fresh-eyes agents re-converged on "well-layered, incremental
+not structural" and re-surfaced the documented traps — all re-rebutted as before:
+
+- The model-handler agent re-flagged **`IModelHandler` (471 LOC / ~45 members) as a redundant
+  duplicate of the `ModelHandler` abstract base** and recommended deleting it — the **ninth**
+  re-surfacing of the `IModelHandler`-is-redundant family. **Re-rebutted** (consistent with
+  §9–§20 and the proposal's rejected-findings table): the interface declares the _optional_
+  `createBatchedToolUseFollowUpMessages?` (`IModelHandler.ts:392`) the abstract class omits and
+  `ToolUseDispatchNode` feature-detects (`ToolUseDispatchNode.ts:434`); it is typed into
+  `AgentCore.modelHandler` (`BaseFlowServices.ts:24-30`). Load-bearing, not a duplicate. (See the
+  one constructive net-new angle on this below.)
+- The model-handler agent re-proposed **`ModelHandler → ModelHandlerOpenAIBase → {Chat, Responses}`
+  consolidation** and **folding `OpenRouterNative` into the OpenAI base**. The OpenAI-base
+  consolidation is the **already-tracked** multi-day migration (proposal "Split
+  `modelHandlerOpenAIResponse`" rejected-as-quick-win; §18 notes the de-dup is _landing on main_);
+  the OpenRouter merge is the proposal's **explicitly rejected** finding (two real SDK type
+  families + OpenRouter-only `reasoningDetails`; the exact subclassing was deliberately deleted in
+  PR #2962). Not net-new; do not re-flag as a fresh structural win.
+
+### Genuinely-new candidates recorded for the backlog (verified first-hand; none are blockers, none applied)
+
+These are small and do **not** appear in any prior section (grep'd: zero hits for
+`ToolSessionState`/`FlowParams`/`CycleParams`/`agentResume`/`recordRound` across both audit docs).
+Each is behavior-touching, so each is recorded for a future tidy pass, not applied here:
+
+- **`ToolSessionState` is a vestigial empty type threaded through the `TaskState` union.**
+  `ToolSessionStateSchema = z.object({})` (`core/execution/TaskState.ts:11`), surfaced at `:33`/`:55`,
+  type at `:63`. The only production writer sets it to `{}` (`agent/utils/agentConfigToTaskState.ts:35`);
+  it carries no data and the `ToolUseTaskState` branch is already distinguishable by `agentCategory`.
+  The empty schema + field + type export are dead weight. _Not zero-risk:_ removing the field
+  changes the union shape and a test fixture (`ChildStreamProgressEvents.vitest.ts`) sets it — a
+  tidy-with-test-update, not a pure shim delete.
+- **`TaskState` re-derives the category split via `.refine()` + `as z.ZodType<…>` casts**
+  (`TaskState.ts:18-75`, escape-hatch casts at `:41`/`:46`) over the same `agentCategory` field that
+  `AgentSettingSchema` already models as a proper `z.discriminatedUnion('agentCategory', …)`
+  (`AgentDataclass.ts:69-75`). The wrapper adds a second, weaker discriminator (refine, not
+  discriminated union) plus `isWorkflowTaskState`/`isToolUseTaskState` guards over an
+  already-discriminated concept. Candidate to rebuild on a real discriminated union (removes the
+  two casts).
+- **Empty params-bag aliases — `FlowParams`/`CycleParams` + the two re-export aliases.**
+  `CycleParams = Record<string, unknown>` (`core/flows/CycleServices.ts:59`); `FlowParams` is the same
+  `{ [key: string]: unknown }` (`BaseFlowServices.ts`), re-exported under two more names
+  `ToolUseFlowParams` (`tooluse/ToolUseServices.ts:52`) and `ReflectionFlowParams`
+  (`reflection/ReflectionServices.ts:38`) and threaded as a type-param through ~13 node signatures
+  (every `tooluse/nodes/*` + `reflection/nodes/*`). The bag is **never populated** — no flow passes
+  params. Three names for an unused `Record`; candidate to collapse to one (or drop the type-param).
+- **`platform().agentResume` is a required host port with only two production call sites.**
+  `ToolUseFollowUp.ts:67` and `inquiry/inquiryContinuation.ts:138` — yet every production host must
+  implement it (`extension.ts:207`, `cli/.../initPlatform.ts:206`,
+  `packages/desktop/src/main/platform/index.ts:136`). It abstracts a
+  host-command "resume the stream" UI-orchestration concern that sits on the always-present core
+  `Platform` port set. Candidate to demote to an optional/nullable port (3-host touch), narrowing
+  the SDK-exported surface. (Companion observation: `toolAvailability` is similarly two booleans
+  each used once, but it ships a frozen `NO_TOOL_AVAILABILITY_HOST` default — lower priority.)
+- **`AgentState.recordRound` is a trivial 3-field forwarding wrapper** over `recordCycleMetrics`
+  (`core/execution/AgentState.ts:49-59`; two callers — `ResponseCycleFlow.ts`, `ResponseCycleNode.ts`).
+  The CLAUDE.md "trivial forwarding wrapper" shape; inline-or-merge candidate (trivial).
+
+### One constructive net-new angle on the recurring `IModelHandler` trap (recorded, not applied)
+
+The model-handler agent independently noted that `createBatchedToolUseFollowUpMessages` — the
+single optional member that makes `IModelHandler` load-bearing (the basis of every prior rebuttal)
+— is a **Google-batched-tool-results quirk** the runtime must probe with
+`!!modelHandler.createBatchedToolUseFollowUpMessages` (`ToolUseDispatchNode.ts:434`). Making it a
+**non-optional** member with a base default that loops `createToolUseFollowUpMessages` would
+(a) delete the runtime feature-probe and (b) **remove the one divergence that keeps `IModelHandler`
+from collapsing into the abstract base** — i.e. it is the principled path to eventually retiring the
+parallel interface the audit has rejected deleting nine times. _Not applied:_ the base-default loop
+must preserve Google's batched-parallel-tool-result semantics
+(`requiresBatchedParallelToolResults`), so this is a behavior-sensitive change, not a mechanical
+de-dup. Recorded as the correct sequencing for the `IModelHandler` question rather than a fresh
+"delete it" re-flag.
+
+### Re-confirmed clean / settled (recorded, not re-flagged)
+
+- Logger emission path (`logUtils.ts` single `writeLine` sink), `channelTrace`, the redaction-at-sink
+  host contract (documented trade-off, §-covered), the `@texra/core` curated barrel, and the
+  `runAgent`/`runAgentStream` two-tier run entry — all re-confirmed thin and correct.
+- `support/UsageNormalizer.ts`, `support/sdkErrorTagging.ts`, the `createResponse → sdkErrorTagger`
+  template-method seam, `ResponseStreamProcessor`/`OpenAIResponseWebSocketTransport` collaborator
+  extraction, `toolConversion.ts` (Zod-v4-JSONSchema compensation, reusable by SDK `tool()` defs) —
+  all re-confirmed justified.
+- `tryGlobalState`/`tryWorkspaceState` pre-init accessors — the symptom of module-level state reads
+  already tracked under SDK-008 (CLOSED/deepened, §19); the `tryX` pair remains as documented
+  null-tolerance, not a fresh finding.
+
+**Guardrails intact:** `find src/agent -name index.ts` shows the **same seven** pre-existing
+barrels (§20 counted eight against the sibling branch; this branch's `5a5f6f8` carries seven — no
+_new_ barrel either way; `src/agent/runtime/index.ts` still absent, §3.1); `grep` for `vscode`
+imports over `src/agent`/`src/model`/`src/latex`/`src/tools`/`src/controllers`/`src/shared`/
+`src/eventBus`/`src/hosts` is **clean**; `@texra/core` is **16** `export` statements (unchanged).
+
+**Subagent split points — unchanged and accurate** (§5 + proposal): the config-driven YAML agents
+over the two flows (reflection / `ToolUseRoundFlow`) plus the `delegate_*` tools remain the existing
+subagent mechanism; the `agentCategory` dispatch in `executeAgent` is the cleanest internal seam;
+helper-model tasks and node-level candidates stay the lowest-risk extractions, gated behind the
+still-open multi-day §5 `delegateTo(...)` primitive.
+
+**Net for 2026-06-20:** thesis reaffirmed for the sixteenth pass — incremental, not structural.
+Three independent fresh-eyes agents re-reached the standing verdict and re-surfaced the recurring
+traps (`IModelHandler` redundant for the ninth time, OpenAI-base / OpenRouter-merge consolidation) —
+all re-rebutted/cross-referenced to their tracked-or-rejected status. The genuinely-new material is
+five small core-domain backlog candidates (vestigial `ToolSessionState`, the refine-vs-discriminated
+`TaskState`, the empty `FlowParams`/`CycleParams` aliases, the near-single-use `agentResume` port,
+the `recordRound` passthrough) plus the constructive `createBatchedToolUseFollowUpMessages`-non-optional
+sequencing for the long-recurring `IModelHandler` question — all behavior-touching, all recorded for
+a future tidy pass rather than applied. No dead shim/barrel remains, so no refactor was applied.
