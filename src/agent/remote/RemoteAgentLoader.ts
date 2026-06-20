@@ -1,4 +1,3 @@
-import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
 import { z } from 'zod';
 
@@ -23,10 +22,10 @@ import { resolveToolDefinitions } from '@tools/registry';
 import { filterNotNull, filterNotNullish } from '@utils/core';
 import {
   RemoteAgentListItemSchema,
-  EdgeFunctionResponseSchema,
   type RemoteAgentListItem,
   type RemoteAgentConfig,
 } from './types';
+import { fetchRemoteAgentConfigYaml } from './remoteAgentConfigClient';
 
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
@@ -75,37 +74,6 @@ export function isMissingRemoteAgentToolsColumnError(
     text.includes('column');
 
   return schemaError && /\btools\b/.test(text);
-}
-
-/** Maps HTTP status codes to user-friendly error messages. */
-function mapHttpError(
-  status: number,
-  agentName: string,
-  errorText: string,
-): string {
-  switch (status) {
-    case StatusCodes.UNAUTHORIZED:
-      return 'Session expired. Sign in again to continue.';
-
-    case StatusCodes.FORBIDDEN:
-      return `Access denied to agent "${agentName}". Upgrade your account for access.`;
-
-    case StatusCodes.NOT_FOUND:
-      return `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`;
-
-    case StatusCodes.INTERNAL_SERVER_ERROR:
-      if (errorText.includes('Failed to load agent configuration')) {
-        return (
-          `Failed to load agent "${agentName}": The agent configuration file could not be retrieved from storage. ` +
-          `This may indicate the agent's YAML file is missing or the storage path in the database is incorrect. ` +
-          `Please contact the TeXRA team if this agent should be available.`
-        );
-      }
-      return `Failed to load agent: ${StatusCodes[status]} - ${errorText}`;
-
-    default:
-      return `Failed to load agent: ${StatusCodes[status] || status} - ${errorText}`;
-  }
 }
 
 /** Parse DB row to RemoteAgentListItem, returning null on validation failure. */
@@ -287,27 +255,10 @@ async function fetchAgentConfig(agentName: string): Promise<{
     throw new Error('Authentication token unavailable. Try signing in again.');
   }
 
-  const response = await fetch(SUPABASE_CONFIG.edgeFunctionUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ agentName }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => 'Unknown error');
-    const message = mapHttpError(response.status, agentName, errorText);
-    throw new Error(message);
-  }
-
-  const responseData = EdgeFunctionResponseSchema.parse(await response.json());
+  const configYaml = await fetchRemoteAgentConfigYaml(agentName, token);
 
   logger.debug(CHANNEL, `Parsing YAML for remote agent: ${agentName}`);
-  const validated = AgentDefinitionSchema.parse(
-    yaml.parse(responseData.config),
-  );
+  const validated = AgentDefinitionSchema.parse(yaml.parse(configYaml));
 
   // Extract metadata before resolving tools to full definitions (for registry cache)
   const settings: Partial<AgentSetting> = validated.settings;

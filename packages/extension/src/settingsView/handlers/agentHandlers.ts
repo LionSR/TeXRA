@@ -9,6 +9,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
+import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import {
   createKey,
   getAgent,
@@ -17,9 +18,8 @@ import {
 } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@agent/index/agentRegistry';
-import { EdgeFunctionResponseSchema } from '@agent/remote/types';
+import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { ULTRA_TIER, SUPABASE_CONFIG } from '@auth/config';
 import { renderAgentTemplateFromBundle } from '@commands/agent/agentTemplateRenderer';
 import { workspaceSM, globalSM } from '@common/state';
 import {
@@ -48,6 +48,12 @@ export class AgentHandlers {
   private readonly catalogController: SettingsAgentCatalogController;
   private readonly directoryController: SettingsAgentDirectoryController;
   private readonly fileController = new SettingsAgentFileController();
+  private readonly remotePromptController =
+    new SettingsRemoteAgentPromptController({
+      getUserTier: () => SupabaseClient.getUserTier(),
+      getAccessToken: () => SupabaseClient.getAccessToken(),
+      fetchPromptConfig: fetchRemoteAgentConfigYaml,
+    });
   private readonly visibilityController: SettingsAgentVisibilityController;
 
   constructor(
@@ -208,45 +214,16 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.VIEW_REMOTE_AGENT_PROMPT>,
   ): Promise<void> {
     try {
-      const tier = await SupabaseClient.getUserTier();
-      if (tier !== ULTRA_TIER) {
-        await vscode.window.showErrorMessage(
-          'Viewing remote agent prompts requires an Ultra plan.',
-        );
-        return;
-      }
-
-      const token = await SupabaseClient.getAccessToken();
-      if (!token) {
-        await vscode.window.showErrorMessage(
-          'Authentication required. Sign in using "TeXRA: Sign In".',
-        );
-        return;
-      }
-
-      const response = await fetch(SUPABASE_CONFIG.edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ agentName: data.agentName }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        await vscode.window.showErrorMessage(
-          `Failed to fetch agent prompt: ${errorText}`,
-        );
-        return;
-      }
-
-      const responseData = EdgeFunctionResponseSchema.parse(
-        await response.json(),
+      const result = await this.remotePromptController.getPromptConfig(
+        data.agentName,
       );
+      if (!result.ok) {
+        await vscode.window.showErrorMessage(result.message);
+        return;
+      }
 
       const doc = await vscode.workspace.openTextDocument({
-        content: responseData.config,
+        content: result.config,
         language: 'yaml',
       });
       await vscode.window.showTextDocument(doc, { preview: false });
