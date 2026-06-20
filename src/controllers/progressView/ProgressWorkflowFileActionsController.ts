@@ -48,7 +48,6 @@ export interface ProgressWorkflowFileActionsControllerDeps {
   state: ProgressWorkflowFileActionsState;
   host: ProgressWorkflowFileActionsHost;
   sendFollowUp(stream: StreamTabId, text: string): Promise<void>;
-  modelOutputBackups?: Map<StreamTabId, Map<string, ModelOutputBackup>>;
 }
 
 type ModelOutputBackup = {
@@ -57,16 +56,14 @@ type ModelOutputBackup = {
 };
 
 export class ProgressWorkflowFileActionsController {
-  private readonly modelOutputBackups: Map<
+  private readonly modelOutputBackups = new Map<
     StreamTabId,
     Map<string, ModelOutputBackup>
-  >;
+  >();
 
   constructor(
     private readonly deps: ProgressWorkflowFileActionsControllerDeps,
-  ) {
-    this.modelOutputBackups = deps.modelOutputBackups ?? new Map();
-  }
+  ) {}
 
   async openTaskStorage(stream: StreamTabId): Promise<void> {
     try {
