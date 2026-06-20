@@ -31,6 +31,7 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
+import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
 import {
@@ -46,6 +47,8 @@ import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import type { MainViewProvider } from '../MainViewProvider';
 
 const MAX_INQUIRY_THREAD_HYDRATION = 100;
+
+export type ProgressStreamRevealResult = 'revealed' | 'missing';
 
 /**
  * Orchestrates the progress view webview with exclusive rendering:
@@ -578,6 +581,28 @@ export class ProgressViewProvider
     this.webviewUpdater.setActiveStream(streamId);
     // Hydrate content (logs, todos, follow-ups, instruction, bypass state) + active-state metadata
     this.eventHandler.syncStreamContent(streamId, { includeActiveState: true });
+  }
+
+  public async revealStream(
+    streamId: StreamTabId,
+  ): Promise<ProgressStreamRevealResult> {
+    if (!this.state.streamLogs.has(streamId)) return 'missing';
+
+    await this.showProgressView();
+
+    // Clear filters owned by the progress view before selecting the stream;
+    // otherwise SET_ACTIVE_STREAM can target a stream hidden by the current
+    // category filter and appear to do nothing.
+    if (
+      buildStreamInfo(this.state, streamId, this.state.agentCategoryFilter) ===
+      null
+    ) {
+      this.state.agentCategoryFilter = 'all';
+      this.syncFullView();
+    }
+
+    await this.setActiveStream(streamId);
+    return 'revealed';
   }
 
   public isEditorMode(): boolean {
