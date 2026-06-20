@@ -39,11 +39,6 @@ export interface TranscriptViewportChange {
   readonly nextViewportKey: string;
 }
 
-export interface TranscriptViewportRepaintOptions {
-  readonly clearScrollback: boolean;
-  readonly preserveStatic: false;
-}
-
 export function transcriptViewportChange({
   nextViewportKey,
   previousViewportKey,
@@ -54,13 +49,4 @@ export function transcriptViewportChange({
   if (previousViewportKey === undefined) return undefined;
   if (previousViewportKey === nextViewportKey) return undefined;
   return { previousViewportKey, nextViewportKey };
-}
-
-export function transcriptViewportRepaintOptions(
-  _change: TranscriptViewportChange,
-): TranscriptViewportRepaintOptions {
-  return {
-    clearScrollback: true,
-    preserveStatic: false,
-  };
 }
