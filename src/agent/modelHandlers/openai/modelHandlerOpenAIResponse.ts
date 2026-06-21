@@ -1572,13 +1572,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // would otherwise be dropped (usage counted, nothing produced). Rebuild
       // `output` from the streamed `output_item.done` events. The guard keeps
       // the standard OpenAI path (which populates `output`) intact.
+      // `finalResponse()` returns a `ParsedResponse`, but `output` /
+      // `output_text` are mutable fields on the base `Response`; assign through
+      // that view so the streamed items replace the empty values natively,
+      // without a hand-rolled shape cast.
       const hasFinalOutput =
         Array.isArray(response.output) && response.output.length > 0;
       if (!hasFinalOutput && streamedItems.length > 0) {
-        (response as { output: Response['output'] }).output = streamedItems;
+        (response as Response).output = streamedItems;
       }
       if (streamedText && !hasResponseOutputText(response)) {
-        (response as { output_text: string }).output_text = streamedText;
+        (response as Response).output_text = streamedText;
       }
 
       processor.finalize(response);
