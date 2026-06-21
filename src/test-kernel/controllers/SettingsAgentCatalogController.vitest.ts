@@ -47,9 +47,11 @@ const AGENTS: Record<AgentCategory, SettingsAgentCatalogEntry[]> = {
 };
 
 function createController(options?: {
+  agents?: Partial<Record<AgentCategory, SettingsAgentCatalogEntry[]>>;
   enabled?: Partial<Record<AgentCategory, string[] | undefined>>;
   visible?: Partial<Record<AgentCategory, SettingsAgentCatalogEntry[]>>;
   customPresets?: unknown;
+  builtInOrchestratorAgentNames?: readonly string[];
   now?: number;
 }): {
   controller: SettingsAgentCatalogController;
@@ -61,14 +63,18 @@ function createController(options?: {
   return {
     controller: new SettingsAgentCatalogController({
       now: () => options?.now ?? 123,
+      builtInOrchestratorAgentNames: options?.builtInOrchestratorAgentNames,
       state: {
         getEnabledAgentKeys: (category) => enabled[category],
         setEnabledAgentKeys: async (category, enabledKeys) => {
           enabled[category] = enabledKeys;
         },
-        getAgents: (category) => AGENTS[category],
+        getAgents: (category) =>
+          options?.agents?.[category] ?? AGENTS[category],
         getVisibleAgents: (category) =>
-          options?.visible?.[category] ?? AGENTS[category],
+          options?.visible?.[category] ??
+          options?.agents?.[category] ??
+          AGENTS[category],
         getCustomPresetsRaw: () => customPresetsRaw,
         setCustomPresets: async (presets) => {
           customPresetsRaw = presets;
@@ -182,6 +188,28 @@ describe('SettingsAgentCatalogController', () => {
     });
 
     assert.deepEqual(controller.getCustomPresets(), []);
+  });
+
+  it('collects built-in and capability-based orchestrator agent names', () => {
+    const { controller } = createController({
+      agents: {
+        toolUse: [
+          ...AGENTS.toolUse,
+          {
+            source: 'custom',
+            name: 'teamLead',
+            category: 'toolUse',
+            tools: ['delegate_agent'],
+          },
+        ],
+      },
+      builtInOrchestratorAgentNames: ['orchestrator'],
+    });
+
+    assert.deepEqual(controller.getOrchestratorAgentNames(), [
+      'orchestrator',
+      'teamLead',
+    ]);
   });
 
   it('drops only invalid custom presets', () => {

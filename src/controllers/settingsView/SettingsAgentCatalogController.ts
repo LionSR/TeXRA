@@ -10,6 +10,7 @@ import {
   type AgentSource,
 } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
+import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
 
 export interface SettingsAgentCatalogEntry {
@@ -35,6 +36,7 @@ export interface SettingsAgentCatalogState {
 
 export interface SettingsAgentCatalogControllerDeps {
   state: SettingsAgentCatalogState;
+  builtInOrchestratorAgentNames?: readonly string[];
   now?: () => number;
 }
 
@@ -134,6 +136,14 @@ export class SettingsAgentCatalogController {
     return (
       this.getCustomPresets().find((preset) => preset.id === presetId) ?? null
     );
+  }
+
+  getOrchestratorAgentNames(): string[] {
+    const names = new Set(this.deps.builtInOrchestratorAgentNames ?? []);
+    for (const agent of this.deps.state.getAgents('toolUse')) {
+      if (hasDelegationTool(agent.tools)) names.add(agent.name);
+    }
+    return [...names].sort();
   }
 
   async applyPreset(presetId: string): Promise<SettingsAgentPresetApplyResult> {

@@ -1342,6 +1342,11 @@ describe('desktop settings IPC', () => {
     expect(infoMessages).toEqual(['Saved team "Paper Team"']);
     expect(posted.at(-1)).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+      orchestratorAgents: expect.arrayContaining([
+        'engineer',
+        'leanOrchestrator',
+        'orchestrator',
+      ]),
       customPresets: [
         expect.objectContaining({
           name: 'Paper Team',
@@ -1388,7 +1393,7 @@ describe('desktop settings IPC', () => {
     expect(
       workspaceState.values.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
     ).toEqual([]);
-    expect(posted.at(-1)).toEqual({
+    expect(posted.at(-1)).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
       customPresets: [],
     });
