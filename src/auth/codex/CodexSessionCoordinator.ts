@@ -78,6 +78,7 @@ export class CodexSessionCoordinator {
   private readonly log?: CodexLogger;
   private readonly now: () => number;
   private refreshInFlight: Promise<CodexSession> | null = null;
+  private refreshStoreInFlight: Promise<void> | null = null;
   private sessionGeneration = 0;
 
   constructor(init: CodexSessionCoordinatorInit) {
@@ -116,7 +117,9 @@ export class CodexSessionCoordinator {
   /** Forget the session (sign out). */
   async signOut(): Promise<void> {
     this.sessionGeneration += 1;
+    const staleStore = this.refreshStoreInFlight;
     this.refreshInFlight = null;
+    await staleStore?.catch(() => undefined);
     await this.storage.delete();
   }
 
@@ -162,6 +165,9 @@ export class CodexSessionCoordinator {
     const tokens = await this.client.exchangeAuthorizationCode(params);
     const session = this.buildSession(tokens);
     this.sessionGeneration += 1;
+    const staleStore = this.refreshStoreInFlight;
+    this.refreshInFlight = null;
+    await staleStore?.catch(() => undefined);
     await this.storeSession(session);
     return session;
   }
@@ -247,7 +253,21 @@ export class CodexSessionCoordinator {
         'expired',
       );
     }
-    await this.storeSession(session);
+    const storeTask = this.storeSession(session);
+    this.refreshStoreInFlight = storeTask;
+    try {
+      await storeTask;
+    } finally {
+      if (this.refreshStoreInFlight === storeTask) {
+        this.refreshStoreInFlight = null;
+      }
+    }
+    if (generation !== this.sessionGeneration) {
+      throw new CodexAuthError(
+        'ChatGPT session changed while refreshing. Try again.',
+        'expired',
+      );
+    }
     return session;
   }
 

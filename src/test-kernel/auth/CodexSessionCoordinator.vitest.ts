@@ -147,6 +147,48 @@ describe('CodexSessionCoordinator', () => {
     expect(storage.peek()).toBeUndefined();
   });
 
+  it('does not restore a session when sign-out races with refresh storage', async () => {
+    let value: string | undefined = JSON.stringify(
+      session({ expiresAtMs: NOW - 1 }),
+    );
+    let storeStarted!: () => void;
+    let releaseStore!: () => void;
+    const storeStartedPromise = new Promise<void>((resolve) => {
+      storeStarted = resolve;
+    });
+    const releaseStorePromise = new Promise<void>((resolve) => {
+      releaseStore = resolve;
+    });
+    const storage: CodexSessionStorage & {
+      peek: () => CodexSession | undefined;
+    } = {
+      get: async () => value,
+      store: async (v) => {
+        storeStarted();
+        await releaseStorePromise;
+        value = v;
+      },
+      delete: async () => {
+        value = undefined;
+      },
+      peek: () => (value ? (JSON.parse(value) as CodexSession) : undefined),
+    };
+    const refreshTokens = vi.fn(async () => tokenResponse());
+    const { coordinator } = makeCoordinator(storage, { refreshTokens });
+
+    const token = coordinator.getFreshAccessToken();
+    await storeStartedPromise;
+    const signOut = coordinator.signOut();
+    releaseStore();
+
+    await expect(token).rejects.toMatchObject({
+      kind: 'expired',
+      needsReauth: true,
+    });
+    await signOut;
+    expect(storage.peek()).toBeUndefined();
+  });
+
   it('does not clear a newer login when a stale refresh is rejected', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
     let reject!: (error: unknown) => void;

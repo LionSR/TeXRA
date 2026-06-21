@@ -50,6 +50,26 @@ describe('codex JWT claim extraction', () => {
     );
   });
 
+  it('falls back field-by-field when id_token lacks claims', () => {
+    const idToken = makeJwt({ email: 'from-id-token@example.com' });
+    const accessToken = makeJwt({ chatgpt_account_id: 'from-access-token' });
+    expect(extractCodexClaims(idToken, accessToken)).toEqual({
+      accountId: 'from-access-token',
+      email: 'from-id-token@example.com',
+    });
+  });
+
+  it('falls back to access_token when id_token is malformed', () => {
+    const accessToken = makeJwt({
+      chatgpt_account_id: 'from-access-token',
+      email: 'from-access-token@example.com',
+    });
+    expect(extractCodexClaims('not-a-jwt', accessToken)).toEqual({
+      accountId: 'from-access-token',
+      email: 'from-access-token@example.com',
+    });
+  });
+
   it('returns empty claims for malformed or missing tokens', () => {
     expect(extractCodexClaims(undefined, undefined)).toEqual({});
     expect(extractCodexClaims('not-a-jwt', undefined)).toEqual({});
