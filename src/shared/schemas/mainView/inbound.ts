@@ -23,8 +23,8 @@ import {
 import {
   ExtendedDocumentFileTypeSchema,
   MultipleDocumentFileTypeSchema,
-  SessionTypeSchema,
-} from './state';
+} from '../fileTypes';
+import { SessionTypeSchema } from './state';
 
 const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.WEBVIEW_READY),
