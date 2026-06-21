@@ -1,0 +1,29 @@
+/**
+ * Live "is this model routing through the ChatGPT subscription right now?"
+ * check: the (sync) routing predicate from {@link shouldUseCodexSubscription}
+ * AND a current ChatGPT sign-in. Async because it reads the stored session.
+ *
+ * Shared by the CLI status bar badge and the `/status` text command so the two
+ * never disagree, and the single place that pairs the routing predicate with
+ * `getUseOpenRouter()` — keeping that config read out of the CLI render path.
+ */
+import { MODEL_CONFIGS } from 'llm-zoo';
+
+import { getUseOpenRouter } from '@utils/config/providerConfig';
+
+import { isCodexSignedIn } from './codexAuthAccess';
+import { shouldUseCodexSubscription } from './codexRouting';
+
+/**
+ * Whether a request for `modelId` would be served by the ChatGPT subscription
+ * right now: the model prefers + is eligible for the subscription AND a session
+ * is signed in. Returns `false` for an unknown model id.
+ */
+export async function isCodexSubscriptionActive(
+  modelId: string,
+): Promise<boolean> {
+  const config = MODEL_CONFIGS[modelId];
+  if (!config) return false;
+  if (!shouldUseCodexSubscription(config, getUseOpenRouter())) return false;
+  return isCodexSignedIn();
+}
