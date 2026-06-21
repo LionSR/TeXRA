@@ -1,10 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import {
-  prepareMainViewExecutionRequest,
-  type MainViewExecuteMessage,
-} from '@controllers/mainView/MainViewExecutionController';
+import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
+import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
