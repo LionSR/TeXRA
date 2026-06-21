@@ -610,6 +610,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * - Not running through OpenRouter (which may not support compaction)
    */
   private shouldCompact(): boolean {
+    if (!this.supportsManualCompaction) {
+      this.compactionRequested = false;
+      return false;
+    }
+
     // Manual compaction request bypasses threshold checks.
     // The flag is NOT cleared here - the caller clears it after compaction
     // is attempted to preserve the request across retries.

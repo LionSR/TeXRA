@@ -184,6 +184,27 @@ describe('OpenAI model handler routing', () => {
     ).toBe('ModelHandlerOpenAIResponse');
   });
 
+  it('falls back to the API-key Responses handler when the subscription switch is on but signed out', async () => {
+    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/FakePlatform'),
+    ]);
+    initPlatform(
+      createFakePlatform({
+        config: { 'texra.chatgptCodex.preferSubscription': true },
+      }),
+    );
+
+    const handler = await createModelHandler(codexEligibleConfig);
+    try {
+      expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+        'ModelHandlerOpenAIResponse',
+      );
+    } finally {
+      handler.dispose();
+    }
+  });
+
   it('uses the validation compatibility key only after the validation gate passes', async () => {
     const flagRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), 'texra-validation-handler-'),

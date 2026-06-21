@@ -165,12 +165,14 @@ async function resolveModelAvailability(
   config: ModelConfig,
   ctx: ModelAvailabilityContext,
 ): Promise<ModelAvailabilityStatus> {
-  // ChatGPT subscription (Codex) takes precedence when the user opted into it
-  // for an eligible model: available once signed in, else login is required.
-  if (shouldUseCodexSubscription(config, ctx.useOpenRouter)) {
-    return ctx.codexSignedIn
-      ? AVAILABILITY_STATUS['subscription-access']
-      : AVAILABILITY_STATUS['subscription-login-required'];
+  // ChatGPT subscription (Codex) is a preference, not a hard requirement. When
+  // the host is not signed in, continue through the normal API-key/relay paths
+  // so the switch cannot disable models that are otherwise runnable.
+  if (
+    ctx.codexSignedIn &&
+    shouldUseCodexSubscription(config, ctx.useOpenRouter)
+  ) {
+    return AVAILABILITY_STATUS['subscription-access'];
   }
 
   // OpenRouter routing is intentionally outside included access; a configured
@@ -264,7 +266,7 @@ export async function getModelUnavailableReason(
 
   // Determine the specific reason
   if (availability.kind === 'subscription-login-required') {
-    return `Model "${model}" needs you to sign in with ChatGPT to use your subscription. Sign in with \`texra auth chatgpt login\` (or Settings → Models), or turn off "Prefer ChatGPT subscription".`;
+    return `Model "${model}" needs you to sign in with ChatGPT to use your subscription. Sign in with \`texra auth chatgpt login\`, or turn off "Prefer ChatGPT subscription".`;
   }
 
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {

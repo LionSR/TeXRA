@@ -17,7 +17,10 @@
       "Education",
       "Data Science"
     ],
-    "activationEvents": ["onStartupFinished", "onColorTheme"],
+    "activationEvents": [
+      "onStartupFinished",
+      "onColorTheme"
+    ],
     "main": "./dist/extension.js",
     "capabilities": {
       "untrustedWorkspaces": {
@@ -418,13 +421,6 @@
               "scope": "resource",
               "type": "boolean"
             },
-            "texra.chatgptCodex.preferSubscription": {
-              "default": false,
-              "description": "Experimental (personal use): when on AND you are signed in with ChatGPT, drive Codex-eligible OpenAI models through your own ChatGPT Plus/Pro/Team subscription instead of your OpenAI API key. Rides an unofficial OpenAI endpoint and may break without notice; never presented as an OpenAI-sanctioned integration. Sign in under Settings → Models.",
-              "order": 54,
-              "scope": "resource",
-              "type": "boolean"
-            },
             "texra.goal.enabled": {
               "default": true,
               "description": "Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command=\"complete\"). On by default; set to false to require manual continuation.",
@@ -656,7 +652,10 @@
               "type": "array"
             },
             "texra.files.included.editedExtensions": {
-              "default": [".txt", ".tex"],
+              "default": [
+                ".txt",
+                ".tex"
+              ],
               "description": "File extensions to include when searching for edited files",
               "editPresentation": "multilineText",
               "items": {
@@ -666,7 +665,11 @@
               "type": "array"
             },
             "texra.files.included.inputExtensions": {
-              "default": [".txt", ".tex", ".md"],
+              "default": [
+                ".txt",
+                ".tex",
+                ".md"
+              ],
               "description": "File extensions to include when searching for input files",
               "editPresentation": "multilineText",
               "items": {
@@ -894,7 +897,10 @@
             "texra.latexdiff.tempFileLocation": {
               "default": "sameDirectory",
               "description": "Where to create temporary files for LaTeX preview and diff operations during tool edit approval.",
-              "enum": ["sameDirectory", "workspaceTemp"],
+              "enum": [
+                "sameDirectory",
+                "workspaceTemp"
+              ],
               "enumDescriptions": [
                 "Create temp files in the same directory as the original file. Best for resolving \\input{} and relative paths.",
                 "Create temp files in .texra-temp directory at workspace root. Keeps source directories clean but may break relative paths."
@@ -930,7 +936,10 @@
             "texra.agentReview.approach": {
               "default": "quick",
               "description": "Choose between quick or more thorough, higher-cost analysis.",
-              "enum": ["quick", "thorough"],
+              "enum": [
+                "quick",
+                "thorough"
+              ],
               "enumDescriptions": [
                 "The reviewer verifies only its strongest suspicions with tools — fast and cheap.",
                 "The reviewer reads every changed file in full, checks callers, and pulls diagnostics before reporting — deeper, higher-cost analysis."
@@ -1551,7 +1560,9 @@
               "title": "Sign in — free for academics — or add a key"
             },
             {
-              "completionEvents": ["onCommand:texra.runSetupAssistant"],
+              "completionEvents": [
+                "onCommand:texra.runSetupAssistant"
+              ],
               "description": "One conversation covers the rest. The setup assistant checks your environment and installs any missing LaTeX tools, asks what you're working on and applies the matching team, then runs your first polish -- ending at a diff so you can see every change. It asks before every command and explains what it's about to do; you stay in control.\n\n[Run Setup Assistant Agent](command:texra.runSetupAssistant)\n\nPrefer to do it yourself? The manual steps below walk the same loop.",
               "id": "texra.gettingStarted.setupAssistant",
               "media": {
@@ -1560,7 +1571,9 @@
               "title": "The setup assistant takes it from here"
             },
             {
-              "completionEvents": ["onCommand:texra.showMultiAgent"],
+              "completionEvents": [
+                "onCommand:texra.showMultiAgent"
+              ],
               "description": "After setup, the **orchestrator** is the habit. You don't pick from 23 agents -- it reads your paper, figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in.\n\nPick **orchestrator** from the agent dropdown and choose a model -- bigger models give better results, smaller ones are faster and cheaper. On your own API key, start with **assistant** instead; the orchestrator is served through Researcher Access.\n\nTeams give the orchestrator the right tools for your field. The setup assistant applies one for you, or pick one yourself:\n\n[Pick a team](command:texra.showMultiAgent)",
               "id": "texra.gettingStarted.agentModel",
               "media": {
@@ -1570,7 +1583,9 @@
               "title": "Meet the orchestrator"
             },
             {
-              "completionEvents": ["onCommand:texra.createSampleProject"],
+              "completionEvents": [
+                "onCommand:texra.createSampleProject"
+              ],
               "description": "The steps from here mirror what the setup assistant does, for when you'd rather drive yourself.\n\nNot sure where to start? We've bundled a small LaTeX project you can play with.\n\n[Create the sample project](command:texra.createSampleProject)\n\nYou'll get a folder with example `.tex` files and a README that explains the layout.",
               "id": "texra.gettingStarted.sampleWorkspace",
               "media": {
@@ -1579,7 +1594,9 @@
               "title": "Prefer to do it manually? Try the sample project"
             },
             {
-              "completionEvents": ["onCommand:texra.showMainView"],
+              "completionEvents": [
+                "onCommand:texra.showMainView"
+              ],
               "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Context** -- bib/style files, reference papers, or any read-only context (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
               "id": "texra.gettingStarted.stageFiles",
               "media": {
@@ -1602,7 +1619,9 @@
               "title": "Manual path: auto-extract figures (optional)"
             },
             {
-              "completionEvents": ["onCommand:texra.execute"],
+              "completionEvents": [
+                "onCommand:texra.execute"
+              ],
               "description": "You're all set. Click Execute and the orchestrator will start working through your paper.\n\n[Execute](command:texra.execute)\n\nIt'll propose tasks as it goes -- you'll see each one pop up in the [Progress view](command:texra.showProgressView) where you can approve, tweak, or skip it.\n\nWant it to just run without asking? Turn on **auto-approve** in Settings > Multi-Agent.",
               "id": "texra.gettingStarted.progress",
               "media": {
