@@ -553,7 +553,7 @@ private sortableController = new SortableController(
 - `src/webview/frontend/components/FileSelectGroup.ts` - Lazy document listener
 - `src/progressView/frontend/components/LogList.ts` - Component-level listeners
 - `src/shared/utils/icons.ts` - Added getCodiconClasses()
-- `docs/2026-01-26-prd-lit-native-phase9.md` - This document
+- `docs/prds/2026-01-26-prd-lit-native-phase9.md` - This document
 
 **Files Created:**
 
@@ -628,7 +628,7 @@ private sortableController = new SortableController(
 
 - `src/historyView/frontend/HistoryApp.ts` - Reactive properties instead of @query
 - `src/historyView/frontend/components/HistoryList.ts` - willUpdate lifecycle for reactive updates
-- `docs/2026-01-26-prd-lit-native-phase9.md` - This document
+- `docs/prds/2026-01-26-prd-lit-native-phase9.md` - This document
 
 ### 2026-01-26 - Additional Lit-native Refactoring
 

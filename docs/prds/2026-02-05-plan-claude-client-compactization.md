@@ -11,7 +11,7 @@ updated: 2026-03-26
 
 ## Prerequisite: None (can start immediately)
 
-## PRD Alignment: `docs/2026-02-02-prd-context-compactization.md`
+## PRD Alignment: `docs/prds/2026-02-02-prd-context-compactization.md`
 
 This plan implements **Phase 3** (Integration with Handlers) of the PRD for the Anthropic provider. It follows the PRD's core architectural decision (Section 4.6): **Anthropic uses client-side summarization, not server-side `context_management`**. The PRD explicitly states: "Anthropic → returns `null` → triggers client-side summarization" and explains: "The server-side clearing is opaque and loses context. Client-side summarization preserves the conversation summary visibly in the message history."
 
@@ -21,7 +21,7 @@ This plan implements **Phase 3** (Integration with Handlers) of the PRD for the 
 
 Add client-side compaction to `ModelHandlerAnthropic`, inspired by the Anthropic SDK's `BetaToolRunner._checkAndCompact()` but using a **system-prompt-swap** strategy instead of serialization. The compaction call swaps the system prompt to summarization instructions and sends conversation messages as-is — no serialization, no "last K messages" windowing. This approach works with **all Anthropic models** (not just Opus 4.6), uses a **cheaper model** for summarization, and requires **no SDK type additions**.
 
-This is the same approach proposed in the main PRD (`docs/2026-02-02-prd-context-compactization.md`) Section 4.2 for all non-OpenAI-Responses providers. Implementing it for Anthropic first validates the pattern before rolling out to Google, DeepSeek, Kimi, and OpenAI Chat.
+This is the same approach proposed in the main PRD (`docs/prds/2026-02-02-prd-context-compactization.md`) Section 4.2 for all non-OpenAI-Responses providers. Implementing it for Anthropic first validates the pattern before rolling out to Google, DeepSeek, Kimi, and OpenAI Chat.
 
 **Relationship to PRD phases:**
 
@@ -598,13 +598,13 @@ When `action === 'compaction'` and `summary` present: render expandable `<detail
 
 ## 8. Relationship to Other Plans
 
-- **Main PRD** (`docs/2026-02-02-prd-context-compactization.md`): This plan implements Phase 3 for Anthropic per the PRD's architecture. Key PRD decisions adopted:
+- **Main PRD** (`docs/prds/2026-02-02-prd-context-compactization.md`): This plan implements Phase 3 for Anthropic per the PRD's architecture. Key PRD decisions adopted:
   - Section 4.1: CompactionManager strategy pattern (client-side for Anthropic)
   - Section 4.3: Shared `COMPACTION_MODEL_MAP` constant
   - Section 4.5: Compaction inside `createResponse()` (has access to full token context)
   - Section 4.6: Anthropic returns `null` strategy → triggers client-side summarization
   - Section 4.7: `allMessages` single source of truth (long-term; MVP uses `updatedMessages`)
-- **Server-side plan** (`docs/2026-02-05-plan-claude-server-compactization.md`): Optional future upgrade for Opus 4.6. The PRD explicitly chose client-side over server-side for Anthropic. Server-side plan is preserved as a reference if the team later decides the trade-offs favor it for Opus 4.6.
+- **Server-side plan** (`docs/prds/2026-02-05-plan-claude-server-compactization.md`): Optional future upgrade for Opus 4.6. The PRD explicitly chose client-side over server-side for Anthropic. Server-side plan is preserved as a reference if the team later decides the trade-offs favor it for Opus 4.6.
 - **DRY rollout** (PRD Section 4.3.1): After this plan validates the pattern for Anthropic, Google gets its own implementation (different SDK), while DeepSeek, Kimi, and OpenAI Chat share `compactOpenAICompatible()`.
 
 ---
