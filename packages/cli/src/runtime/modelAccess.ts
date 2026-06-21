@@ -38,6 +38,11 @@ export interface CliRunnableModelOptions {
   readonly noAvailableModelsMessage?: string;
 }
 
+export interface CliModelAccessEntryOptions extends CliModelAccessListOptions {
+  /** Optional preloaded list, used by commands that already fetched access. */
+  readonly accessList?: readonly CliModelAccess[];
+}
+
 export type CliModelSelectionSource =
   | 'override'
   | 'env'
@@ -445,6 +450,34 @@ function getCanonicalModelConfigId(model: string): string | undefined {
   return Object.keys(MODEL_CONFIGS).find((id) => id.toLowerCase() === lower);
 }
 
+export async function resolveCliModelAccessEntry(
+  model: string,
+  options: CliModelAccessEntryOptions = {},
+): Promise<CliModelAccess | undefined> {
+  const models =
+    options.accessList ??
+    (await getCliModelAccessList({ apiMode: options.apiMode }));
+  const trimmed = model.trim();
+  const listedEntry = findCliModelAccessEntry(models, trimmed);
+  if (listedEntry || trimmed.length === 0) return listedEntry;
+
+  const hiddenModelId = getCanonicalModelConfigId(trimmed);
+  if (hiddenModelId == null) return undefined;
+
+  const hiddenModelOption = (await computeModelOptionsData([hiddenModelId]))[0];
+  if (!hiddenModelOption) {
+    throw new Error(
+      `Model "${hiddenModelId}" is configured but has no option data.`,
+    );
+  }
+
+  let hiddenModel = toCliModelAccess(hiddenModelOption, options.apiMode);
+  if (await includedAccessRequiresLogin(options)) {
+    hiddenModel = toIncludedLoginRequiredAccess(hiddenModel);
+  }
+  return hiddenModel;
+}
+
 function formatAvailableModels(
   ids: readonly string[],
   options: Pick<
@@ -515,28 +548,13 @@ export async function resolveCliRunnableModel(
     options.accessList ??
     (await getCliModelAccessList({ apiMode: options.apiMode }));
   const trimmed = model.trim();
-  const hiddenModelId =
-    trimmed && !findCliModelAccessEntry(models, trimmed)
-      ? getCanonicalModelConfigId(trimmed)
-      : undefined;
-  let hiddenModel: CliModelAccess | undefined;
-  if (hiddenModelId != null) {
-    const hiddenModelOption = (
-      await computeModelOptionsData([hiddenModelId])
-    )[0];
-    if (!hiddenModelOption) {
-      throw new Error(
-        `Model "${hiddenModelId}" is configured but has no option data.`,
-      );
-    }
-    hiddenModel = toCliModelAccess(hiddenModelOption, options.apiMode);
-    if (await includedAccessRequiresLogin(options)) {
-      hiddenModel = toIncludedLoginRequiredAccess(hiddenModel);
-    }
-  }
+  const modelEntry = await resolveCliModelAccessEntry(trimmed, {
+    apiMode: options.apiMode,
+    accessList: models,
+  });
 
   return resolveCliRunnableModelFromAccessList(
-    withModelAccess(models, hiddenModel),
+    withModelAccess(models, modelEntry),
     trimmed,
     options,
   );
