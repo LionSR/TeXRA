@@ -7,6 +7,7 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { LEVEL_TO_EFFORT } from '@agent/modelHandlers/support/reasoningEffort';
+import { isCodexSignedIn, shouldUseCodexSubscription } from '@auth/codex';
 import * as logger from '@logger/logUtils';
 import { isGpt5ModelName } from '@model/modelNames';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -327,6 +328,30 @@ export async function createModelHandler(
   }
 
   const useOpenRouter = getUseOpenRouter();
+
+  // ChatGPT subscription (Codex backend via the user's OAuth session). Must come
+  // before the normal Responses branch: these are OpenAI Responses-shaped models
+  // the user has opted to drive through their subscription instead of an API key.
+  if (
+    shouldUseCodexSubscription(config, useOpenRouter) &&
+    (await isCodexSignedIn())
+  ) {
+    logger.debug(CHANNEL, 'Using ChatGPT subscription (Codex) Handler');
+    const { ModelHandlerCodex } =
+      await import('@agent/modelHandlers/openai/modelHandlerCodex');
+    // The Codex backend keys on the unpinned model id (e.g. `gpt-5.5`), not the
+    // date-pinned `fullName` (`gpt-5.5-2026-04-23`), so always send the short
+    // name regardless of the "prefer short model names" setting.
+    const codexConfig = {
+      ...config,
+      fullName:
+        config.shortName || config.fullName.replace(/-\d{4}-\d{2}-\d{2}$/, ''),
+    };
+    return withModelHandlerCompatibilityKey(
+      withReasoningOverride(new ModelHandlerCodex(codexConfig)),
+      'ModelHandlerOpenAIResponse',
+    );
+  }
 
   // OpenAI Responses API (required or optional)
   if (shouldUseResponsesAPI(config, useOpenRouter)) {

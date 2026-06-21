@@ -168,6 +168,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return true;
   }
 
+  /** Whether inline input files can be uploaded before the response request. */
+  protected get supportsInlineInputFileUpload(): boolean {
+    return true;
+  }
+
+  /** Whether this backend can retain responses for `previous_response_id`. */
+  protected get supportsResponseChaining(): boolean {
+    return true;
+  }
+
   /**
    * Override streaming config to disable streaming when background mode is enabled.
    * Background responses use polling for completed results, incompatible with streaming.
@@ -469,7 +479,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Use a typeof check rather than truthiness so a legitimate 0 wouldn't
     // be misclassified.
     const hasInputTokens = typeof response.usage?.input_tokens === 'number';
-    const safeToChain = response.status === 'completed' && hasInputTokens;
+    const safeToChain =
+      this.supportsResponseChaining &&
+      response.status === 'completed' &&
+      hasInputTokens;
     if (safeToChain) {
       this.previousResponseId = response.id;
       this.conversationState.sentMessages = effectiveMessagesCount;
@@ -610,6 +623,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * - Not running through OpenRouter (which may not support compaction)
    */
   private shouldCompact(): boolean {
+    if (!this.supportsManualCompaction) {
+      this.compactionRequested = false;
+      return false;
+    }
+
     // Manual compaction request bypasses threshold checks.
     // The flag is NOT cleared here - the caller clears it after compaction
     // is attempted to preserve the request across retries.
@@ -668,7 +686,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * - Otherwise: small buffer (10) for exact counting
    */
   private getTokenSafetyBuffer(): number {
-    if (this.previousResponseId !== null) {
+    if (this.supportsResponseChaining && this.previousResponseId !== null) {
       // Proportional margin scales with context window size - critical at high utilization
       // where even a small percentage error can cause overflow.
       const proportionalMargin = Math.floor(
@@ -687,7 +705,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * headroom for server-side context framing with previous_response_id.
    */
   private applyChainedOutputTokenBudget(maxOutputTokens: number): number {
-    if (!this.previousResponseId) {
+    if (!this.supportsResponseChaining || !this.previousResponseId) {
       return maxOutputTokens;
     }
 
@@ -1056,9 +1074,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const countParams: InputTokenCountParams = {
       model: this.config.fullName,
       input: messages,
-      ...(this.previousResponseId && {
-        previous_response_id: this.previousResponseId,
-      }),
+      ...(this.supportsResponseChaining &&
+        this.previousResponseId && {
+          previous_response_id: this.previousResponseId,
+        }),
       ...(options?.systemPrompt && { instructions: options.systemPrompt }),
       ...(options?.tools?.length && {
         tools: options.tools as InputTokenCountParams['tools'],
@@ -1199,15 +1218,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // If already compacted (from previous call), also send all messages.
     // Otherwise, only send new messages since last request.
     const shouldSendAll =
-      compactedThisCall || this.conversationState.isCompacted;
+      !this.supportsResponseChaining ||
+      compactedThisCall ||
+      this.conversationState.isCompacted;
     const newMessages = shouldSendAll
       ? effectiveMessages
       : effectiveMessages.slice(this.conversationState.sentMessages);
 
-    await uploadInlineInputFiles(client, newMessages, {
-      openRouterRouting: this.isOpenRouterRoutingEnabled(),
-      logger: this.logger,
-    });
+    if (this.supportsInlineInputFileUpload) {
+      await uploadInlineInputFiles(client, newMessages, {
+        openRouterRouting: this.isOpenRouterRoutingEnabled(),
+        logger: this.logger,
+      });
+    }
 
     // Build shared params used by both token counting and API call
 
@@ -1223,9 +1246,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       model: this.config.fullName,
       input: newMessages,
       ...(systemPrompt && { instructions: systemPrompt }),
-      ...(this.previousResponseId && {
-        previous_response_id: this.previousResponseId,
-      }),
+      ...(this.supportsResponseChaining &&
+        this.previousResponseId && {
+          previous_response_id: this.previousResponseId,
+        }),
       ...(convertedTools?.length && { tools: convertedTools }),
       ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
     };
@@ -2293,7 +2317,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // output items (reasoning, web_search_call, function_call) are already in
     // OpenAI's server-side history. We should only send NEW items (function_call_output).
     // Including them again causes "Duplicate item found" errors.
-    const isResponseChaining = Boolean(this.previousResponseId);
+    const isResponseChaining =
+      this.supportsResponseChaining && Boolean(this.previousResponseId);
 
     if (text && !isResponseChaining) {
       // Only include assistant text when not chaining (it's in previous response)
