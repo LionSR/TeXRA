@@ -265,7 +265,7 @@ export class ProviderKeyList extends LitElement {
     const description =
       this.apiAccessMode === 'included'
         ? 'You are using included access. Personal keys below are optional overrides.'
-        : 'Chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do not include API access\u2014you need a key from the provider\u2019s developer platform.';
+        : 'Except for Codex models through the ChatGPT subscription section above, chat subscriptions do not include API access - use a key from the provider developer platform.';
 
     return html`
       <div class="provider-keys-section">

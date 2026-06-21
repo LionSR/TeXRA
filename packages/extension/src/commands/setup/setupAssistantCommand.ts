@@ -7,6 +7,7 @@ import { registerExecution } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { isCodexSubscriptionActive } from '@auth/codex';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
@@ -69,6 +70,8 @@ interface LaunchModelResolution {
  * launching with a model that will crash on tier enforcement.
  *
  * Order:
+ *   0. ChatGPT subscription — when enabled and signed in, use the
+ *      Codex-eligible OpenAI setup model.
  *   1. Researcher Access — only when "Use Included Access" is actually
  *      on AND the signed-in setup model is in the user's tier. A plain
  *      `canUseServerSideKeys()` pass is insufficient because a lower-tier
@@ -100,6 +103,13 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
     return {
       model: API_KEY_MODEL_BY_PROVIDER.openRouter,
       requiresOpenRouter: true,
+    };
+  }
+
+  if (await isCodexSubscriptionActive(API_KEY_MODEL_BY_PROVIDER.openai)) {
+    return {
+      model: API_KEY_MODEL_BY_PROVIDER.openai,
+      requiresOpenRouter: false,
     };
   }
 
@@ -190,6 +200,9 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
  * means.
  */
 export async function hasAnyUsableSetupCredential(): Promise<boolean> {
+  if (await isCodexSubscriptionActive(API_KEY_MODEL_BY_PROVIDER.openai)) {
+    return true;
+  }
   for (const provider of SecretManager.API_PROVIDERS) {
     if (await SecretManager.hasUsableApiKey(provider)) return true;
   }
@@ -204,6 +217,11 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
       label: '$(sign-in) Sign in for free (recommended)',
       description: 'Researcher Access Program — no API key needed',
       id: 'signIn' as const,
+    },
+    {
+      label: '$(comment-discussion) Use ChatGPT subscription',
+      description: 'Codex models through your ChatGPT plan',
+      id: 'chatgpt' as const,
     },
     {
       label: '$(key) I have an API key',
@@ -233,6 +251,14 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
   if (picked.id === 'apiKey') {
     await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
     return hasAnyUsableSetupCredential();
+  }
+
+  if (picked.id === 'chatgpt') {
+    await vscode.commands.executeCommand('texra.showModels');
+    void vscode.window.showInformationMessage(
+      'Sign in with ChatGPT in the Models tab, then run the setup assistant again.',
+    );
+    return false;
   }
 
   // walkthrough
@@ -301,7 +327,7 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     const proceed = await ensureCredentialOrPrompt();
     if (!proceed) {
       void vscode.window.showInformationMessage(
-        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in or set an API key.',
+        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, enabled ChatGPT subscription, or set an API key.',
       );
       return 'not-started';
     }
@@ -319,15 +345,15 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
       // setup-model candidate, and no direct/OR keys to fall back on.
       // Refuse launch rather than pick a model that crashes at runtime.
       const choice = await vscode.window.showWarningMessage(
-        'No model is available for your current credentials and tier. Add a provider API key or upgrade your Researcher Access tier, then retry.',
+        'No model is available for your current credentials and tier. Sign in with ChatGPT for Codex models, add a provider API key, or upgrade your Researcher Access tier, then retry.',
         { modal: true },
-        'Set API key',
         'Open Models tab',
+        'Set API key',
       );
-      if (choice === 'Set API key') {
-        await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
-      } else if (choice === 'Open Models tab') {
+      if (choice === 'Open Models tab') {
         await vscode.commands.executeCommand('texra.showModels');
+      } else if (choice === 'Set API key') {
+        await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
       }
       return 'not-started';
     }

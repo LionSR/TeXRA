@@ -77,6 +77,18 @@ describe('handleTuiSlashCommand', () => {
     expect(cliState.activeForm.get()?.commandName).toBe('model');
   });
 
+  it('opens the login form for bare /login', async () => {
+    registerBuiltinSlashCommands();
+
+    const handled = await handleTuiSlashCommand(
+      '/login',
+      createContext(createSession()),
+    );
+
+    expect(handled).toBe(true);
+    expect(cliState.activeForm.get()?.commandName).toBe('login');
+  });
+
   it('treats /quit as the canonical exit command without echoing it', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
