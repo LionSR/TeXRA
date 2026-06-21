@@ -114,12 +114,34 @@ export class CodexSessionCoordinator {
     await this.storage.store(JSON.stringify(session));
   }
 
-  /** Forget the session (sign out). */
-  async signOut(): Promise<void> {
+  /**
+   * Advance the session generation and abandon any in-flight refresh so its
+   * result can no longer overwrite the session that supersedes it. Shared by
+   * sign-out and every successful login.
+   */
+  private async supersedeInFlightRefresh(): Promise<void> {
     this.sessionGeneration += 1;
     const staleStore = this.refreshStoreInFlight;
     this.refreshInFlight = null;
     await staleStore?.catch(() => undefined);
+  }
+
+  /**
+   * Fail an in-flight refresh whose session was superseded (a newer login or
+   * sign-out bumped the generation) so it can't resurrect a stale token.
+   */
+  private assertSameGeneration(generation: number): void {
+    if (generation !== this.sessionGeneration) {
+      throw new CodexAuthError(
+        'ChatGPT session changed while refreshing. Try again.',
+        'expired',
+      );
+    }
+  }
+
+  /** Forget the session (sign out). */
+  async signOut(): Promise<void> {
+    await this.supersedeInFlightRefresh();
     await this.storage.delete();
   }
 
@@ -164,10 +186,7 @@ export class CodexSessionCoordinator {
   }): Promise<CodexSession> {
     const tokens = await this.client.exchangeAuthorizationCode(params);
     const session = this.buildSession(tokens);
-    this.sessionGeneration += 1;
-    const staleStore = this.refreshStoreInFlight;
-    this.refreshInFlight = null;
-    await staleStore?.catch(() => undefined);
+    await this.supersedeInFlightRefresh();
     await this.storeSession(session);
     return session;
   }
@@ -247,12 +266,7 @@ export class CodexSessionCoordinator {
       throw error;
     }
     const session = this.buildSession(tokens, previous);
-    if (generation !== this.sessionGeneration) {
-      throw new CodexAuthError(
-        'ChatGPT session changed while refreshing. Try again.',
-        'expired',
-      );
-    }
+    this.assertSameGeneration(generation);
     const storeTask = this.storeSession(session);
     this.refreshStoreInFlight = storeTask;
     try {
@@ -262,12 +276,7 @@ export class CodexSessionCoordinator {
         this.refreshStoreInFlight = null;
       }
     }
-    if (generation !== this.sessionGeneration) {
-      throw new CodexAuthError(
-        'ChatGPT session changed while refreshing. Try again.',
-        'expired',
-      );
-    }
+    this.assertSameGeneration(generation);
     return session;
   }
 
