@@ -1,4 +1,4 @@
-import { quotePosixShellArg as shellQuote } from '@utils/system/shellQuote';
+import { quote } from 'shell-quote';
 
 import {
   CLI_COMPLETION_SHELLS,
@@ -31,7 +31,7 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
     .map((command) => {
       const key = commandKey(command.path);
       const subs = command.subcommands.length
-        ? `_values 'subcommands' ${command.subcommands.map(shellQuote).join(' ')}`
+        ? `_values 'subcommands' ${quote(command.subcommands)}`
         : 'true';
       const positionalSpecs: Record<string, string> = {
         completion: `1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`,
@@ -47,9 +47,9 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
         ...(positionalSpec ? [positionalSpec] : []),
       ];
       const args = specs.length
-        ? `_arguments ${specs.map(shellQuote).join(' ')}`
+        ? `_arguments ${quote(specs)}`
         : 'true';
-      return `${shellQuote(key)}) ${subs}; ${args} ;;`;
+      return `${quote([key])}) ${subs}; ${args} ;;`;
     })
     .join('\n    ');
   const rootSpecs = [
@@ -85,7 +85,7 @@ _texra() {
 
   case "$path" in
     ${pathCases}
-    *) _arguments ${rootSpecs.map(shellQuote).join(' ')} ;;
+    *) _arguments ${quote(rootSpecs)} ;;
   esac
 }
 
