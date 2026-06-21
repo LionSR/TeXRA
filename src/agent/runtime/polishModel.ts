@@ -1,8 +1,8 @@
-import { readFile } from 'node:fs/promises';
-
 import * as nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 import { z } from 'zod';
+
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
 
@@ -30,7 +30,7 @@ function loadPromptTemplate(): Promise<string> {
     );
   }
   templatePromise = (async () => {
-    const content = await readFile(polishPromptPath, 'utf8');
+    const content = await AbsoluteFS.read(polishPromptPath);
     return PolishYamlSchema.parse(yaml.parse(content)).prompts.userRequest;
   })();
   return templatePromise;
