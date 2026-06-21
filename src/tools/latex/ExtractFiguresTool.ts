@@ -8,6 +8,7 @@ import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
 import { formatResultCount } from '@utils/text/stringUtils';
+import { unique } from '@utils/core';
 import {
   buildLimitedAttachments,
   resolveLatexFileOrThrow,
@@ -36,7 +37,7 @@ export class ExtractLatexFiguresTool extends defineTool({
     const figurePaths = await extractFigurePathsFromLatex(
       pathToLocation(path.absolute),
     );
-    const uniqueFigures = [...new Set(figurePaths)];
+    const uniqueFigures = unique(figurePaths);
 
     if (uniqueFigures.length === 0) {
       const summary = `No figures found in ${display}.`;

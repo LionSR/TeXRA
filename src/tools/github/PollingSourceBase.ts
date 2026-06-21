@@ -15,6 +15,7 @@ import type { AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
+import { unique } from '@utils/core';
 
 import {
   GitHubAuthError,
@@ -201,7 +202,7 @@ export abstract class PollingSourceBase<
         this.logger.warn(`Keys-changed listener threw: ${String(err)}`);
       }
     }
-    this.emitKeysChangedEvent(keys, [...new Set(runtimeHosts)]);
+    this.emitKeysChangedEvent(keys, unique(runtimeHosts));
   }
 
   private activeRuntimeHosts(): AgentRuntimeHost[] {
@@ -209,11 +210,11 @@ export abstract class PollingSourceBase<
     for (const state of this.subscriptions.values()) {
       runtimeHosts.push(...this.hostsForState(state));
     }
-    return [...new Set(runtimeHosts)];
+    return unique(runtimeHosts);
   }
 
   private hostsForState(state: S): AgentRuntimeHost[] {
-    return [...new Set(state.runtimeHostByListener.values())];
+    return unique(state.runtimeHostByListener.values());
   }
 
   private emitToStateHosts<EventKey extends keyof ProgressEventPayloads>(

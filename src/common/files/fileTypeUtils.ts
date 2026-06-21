@@ -6,6 +6,7 @@ import {
   isConfigExplicitlySet,
 } from '@utils/config/configUtils';
 import { hasExtension } from '@utils/core/pathCore';
+import { unique } from '@utils/core';
 
 /**
  * File categories for extension configuration lookups.
@@ -85,7 +86,7 @@ export function getIncludedExtensions(category: ExtensionCategory): string[] {
       (legacyRef && legacyRef.length > 0) ||
       (legacyAux && legacyAux.length > 0)
     ) {
-      return [...new Set([...(legacyRef ?? []), ...(legacyAux ?? [])])];
+      return unique([...(legacyRef ?? []), ...(legacyAux ?? [])]);
     }
   }
   return getConfig<string[]>(INCLUDED_EXTENSION_KEYS[category], defaults);

@@ -26,3 +26,8 @@ export function filterNotNullish<T>(item: T | null | undefined): item is T {
 export function ensureArray<T>(value: T | T[]): T[] {
   return Array.isArray(value) ? value : [value];
 }
+
+/** Return a new array with duplicate values removed, preserving first-occurrence order. */
+export function unique<T>(iterable: Iterable<T>): T[] {
+  return [...new Set(iterable)];
+}
