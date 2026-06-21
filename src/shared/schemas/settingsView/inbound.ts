@@ -315,6 +315,13 @@ const RemoveGitHubTokenMessageSchema = commandOnly(CMD.REMOVE_GITHUB_TOKEN);
 
 const OpenGitHubTokenUrlMessageSchema = commandOnly(CMD.OPEN_GITHUB_TOKEN_URL);
 
+// ChatGPT subscription (Codex) sign-in messages
+const GetChatGptAuthStatusMessageSchema = commandOnly(
+  CMD.GET_CHATGPT_AUTH_STATUS,
+);
+const SignInChatGptMessageSchema = commandOnly(CMD.SIGN_IN_CHATGPT);
+const SignOutChatGptMessageSchema = commandOnly(CMD.SIGN_OUT_CHATGPT);
+
 const GetDesktopCrashReportingMessageSchema = commandOnly(
   CMD.GET_DESKTOP_CRASH_REPORTING,
 );
@@ -533,6 +540,10 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetGitHubTokenMessageSchema,
     RemoveGitHubTokenMessageSchema,
     OpenGitHubTokenUrlMessageSchema,
+    // ChatGPT subscription sign-in messages
+    GetChatGptAuthStatusMessageSchema,
+    SignInChatGptMessageSchema,
+    SignOutChatGptMessageSchema,
     GetDesktopCrashReportingMessageSchema,
     SetDesktopCrashReportingEnabledMessageSchema,
     SetDesktopCrashReportingDsnMessageSchema,
