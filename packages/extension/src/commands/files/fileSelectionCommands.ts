@@ -3,8 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { registerCommands } from '@commands/_shared/registerCommands';
-import { FILE_SELECTION_COMMAND_IDS, getFilterExtensions } from '@common/files';
-import { getFileLister } from '@frontend/files';
+import { getFilterExtensions } from '@common/files';
+import { FILE_SELECTION_COMMAND_IDS, getFileLister } from '@frontend/files';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
