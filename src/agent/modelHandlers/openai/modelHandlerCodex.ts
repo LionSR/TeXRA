@@ -29,9 +29,13 @@ import {
   CodexAuthError,
   codexCoordinator,
 } from '@auth/codex';
+import * as logger from '@logger/logUtils';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 import type { ResponseUsage } from 'openai/resources/responses/responses';
+
+const CHANNEL = 'ModelHandlerCodex';
+logger.initialize(CHANNEL);
 
 /** Flatten Responses message content (string or typed parts) to plain text. */
 function partsToText(content: unknown): string {
@@ -180,8 +184,13 @@ const codexFetch = (async (input, init) => {
     callerWantsStream = body.stream === true;
     body.stream = true;
     init = { ...init, body: JSON.stringify(body) };
-  } catch {
-    // Not JSON we can edit — send the original body unchanged.
+  } catch (error) {
+    // Body isn't JSON we can edit — the backend will reject it (missing
+    // stream/instructions). Log so the resulting 400 is diagnosable.
+    logger.warn(
+      CHANNEL,
+      `Could not adapt Codex request body: ${(error as Error).message}`,
+    );
   }
 
   const response = await fetch(input, init);
@@ -273,8 +282,10 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
         const action = error.needsReauth
           ? 'Sign in with ChatGPT again, or turn off "Prefer ChatGPT subscription".'
           : 'Try again in a moment, or turn off "Prefer ChatGPT subscription".';
+        // Preserve the original CodexAuthError (kind/stack) as the cause.
         throw new Error(
           `ChatGPT subscription unavailable: ${error.message} ${action}`,
+          { cause: error },
         );
       }
       throw error;
