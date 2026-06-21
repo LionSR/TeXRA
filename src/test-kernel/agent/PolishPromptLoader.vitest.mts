@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - platform
-import { initPlatform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
 
@@ -23,6 +22,7 @@ const REPO_ROOT = resolve(
 
 describe('polish prompt loader', () => {
   it('loads the host-provided polish YAML path directly', async () => {
+    const { initPlatform } = await import('@platform/platform');
     initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
     initializePolishModel(
       resolve(
