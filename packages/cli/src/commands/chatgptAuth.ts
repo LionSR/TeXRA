@@ -6,6 +6,7 @@ import {
   loginWithLoopback,
   type CodexSession,
 } from '@auth/codex';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 import { tryOpenBrowser } from '../runtime/browser';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -102,6 +103,7 @@ async function runChatgptLogin(
   }
 
   emitLogin(context, session);
+  invalidateModelOptionsCache();
   return CliExitCode.Success;
 }
 
@@ -147,6 +149,7 @@ const chatgptLogoutCommand = defineCliCommand({
       writeErrorStderr(error);
       return CliExitCode.ModelOrNetworkError;
     }
+    invalidateModelOptionsCache();
     emitCliResult(context, {
       json: { authenticated: false },
       ndjson: { kind: 'chatgpt-auth', authenticated: false },

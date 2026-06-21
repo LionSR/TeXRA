@@ -342,9 +342,11 @@ export async function createModelHandler(
     // The Codex backend keys on the unpinned model id (e.g. `gpt-5.5`), not the
     // date-pinned `fullName` (`gpt-5.5-2026-04-23`), so always send the short
     // name regardless of the "prefer short model names" setting.
-    const codexConfig = config.shortName
-      ? { ...config, fullName: config.shortName }
-      : config;
+    const codexConfig = {
+      ...config,
+      fullName:
+        config.shortName || config.fullName.replace(/-\d{4}-\d{2}-\d{2}$/, ''),
+    };
     return withModelHandlerCompatibilityKey(
       withReasoningOverride(new ModelHandlerCodex(codexConfig)),
       'ModelHandlerOpenAIResponse',
