@@ -47,8 +47,8 @@ Evidence (file:line):
 
 - OpenCode: `lib/auth/auth.ts:6-9` (client id, authorize/token, redirect),
   `lib/constants.ts` (`CODEX_BASE_URL`), `lib/request/fetch-helpers.ts:88`
-  (`/responses`→`/codex/responses`), `:181-184` (Bearer + `chatgpt-account-id` +
-  `originator`).
+  (`/responses`→`/codex/responses`), `lib/request/fetch-helpers.ts:181-184`
+  (Bearer + `chatgpt-account-id` + `originator`).
 - Zed `crates/language_models/src/provider/openai_subscribed.rs`: `:34` base URL,
   `:37` client id, `:518/:529` headers, `:697-704` redirect allow-list,
   `:754` `originator=zed`.
@@ -123,14 +123,14 @@ API-key provider, so the two can coexist and a user can have both configured.
 Add a Codex OAuth coordinator alongside the existing Supabase coordinator. It does
 **not** touch Supabase; it manages the OpenAI token bundle.
 
-- **PKCE authorize:** open `auth.openai.com/oauth/authorize` with our PKCE
+- **PKCE authorize:** open `https://auth.openai.com/oauth/authorize` with our PKCE
   challenge, the borrowed `client_id`, `redirect_uri=http://localhost:1455/auth/callback`,
   scopes `openid profile email offline_access`, `response_type=code`.
 - **Loopback callback server:** bind `127.0.0.1:1455` (fallback `1457`) to capture
-  `code`, exchange at `auth.openai.com/oauth/token` for `{access_token,
+  `code`, exchange at `https://auth.openai.com/oauth/token` for `{access_token,
 refresh_token, id_token, expires_in}`.
 - **Headless / remote (important for TeXRA CLI + web sessions):** also support the
-  **device-code flow** (`auth.openai.com/codex/device`) so SSH/container/CLI users
+  **device-code flow** (`https://auth.openai.com/codex/device`) so SSH/container/CLI users
   who can't open a loopback browser can still log in. This is the
   [`opencode-openai-device-auth`](https://github.com/tumf/opencode-openai-device-auth)
   approach.
