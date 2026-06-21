@@ -141,6 +141,49 @@ describe('OpenAI model handler routing', () => {
     }
   });
 
+  const codexEligibleConfig: ModelConfig = {
+    ...modelConfig(ModelProvider.OPENAI),
+    name: 'gpt55-test',
+    // Date-pinned fullName (as llm-zoo really ships) with the unpinned shortName
+    // the Codex backend + eligibility key on. Guards the short-name matching.
+    fullName: 'gpt-5.5-2026-04-23',
+    shortName: 'gpt-5.5',
+    requiresResponsesAPI: true,
+  };
+
+  it('routes Codex-eligible OpenAI models to the Codex handler when the subscription switch is on', async () => {
+    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/FakePlatform'),
+    ]);
+    initPlatform(
+      createFakePlatform({
+        config: { 'texra.chatgptCodex.preferSubscription': true },
+      }),
+    );
+
+    // The switch is on and the model is Codex-eligible → subscription handler,
+    // ahead of the normal Responses path.
+    expect(
+      modelHandlerCompatibilityKey(codexEligibleConfig, false, false),
+    ).toBe('ModelHandlerCodex');
+    // The active OpenRouter proxy disables the subscription path entirely.
+    expect(shouldUseResponsesAPI(codexEligibleConfig, true)).toBe(true);
+  });
+
+  it('keeps Codex-eligible models on the API-key Responses path when the switch is off', async () => {
+    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/FakePlatform'),
+    ]);
+    // No switch set → defaults off.
+    initPlatform(createFakePlatform());
+
+    expect(
+      modelHandlerCompatibilityKey(codexEligibleConfig, false, false),
+    ).toBe('ModelHandlerOpenAIResponse');
+  });
+
   it('uses the validation compatibility key only after the validation gate passes', async () => {
     const flagRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), 'texra-validation-handler-'),
