@@ -38,7 +38,8 @@ prompts:
 
     As you review the document, make only proofreading corrections:
     - Preserve every mathematical claim, equation, theorem statement, and factual assertion.
-    - Do not change math tokens inside inline math, display math, theorem statements, or derivations except for LaTeX syntax/formatting fixes such as spacing, delimiters, braces, or indentation.
+    - Do not change the meaning of math expressions inside inline math, display math, theorem statements, or derivations.
+    - Preserve valid math delimiter style (`\(...\)`, `$...$`, `\[...\]`, `$$...$$`, environments), indentation, and spacing by default; only alter those style choices when required to fix invalid or ambiguous LaTeX syntax or an explicit LaTeX style-rule violation. Do not normalize delimiter style merely for preference.
     - Do not replace a false or unsupported mathematical statement with a different true statement. For example, if the input says `(x+1)^2 = x^2 + 1`, keep that equation unchanged.
     - Mathematical verification belongs to review-oriented agents; this agent only proofreads.
 
