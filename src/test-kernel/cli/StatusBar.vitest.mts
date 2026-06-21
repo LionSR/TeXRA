@@ -78,7 +78,7 @@ describe('CLI StatusBar display model', () => {
 
   it('uses clear compact labels for API access mode', () => {
     expect(shortCliApiMode('included')).toBe('relay');
-    expect(shortCliApiMode('personal')).toBe('keys');
+    expect(shortCliApiMode('personal')).toBe('byok');
   });
 
   it('surfaces non-default approval policies in the durable status row', () => {
