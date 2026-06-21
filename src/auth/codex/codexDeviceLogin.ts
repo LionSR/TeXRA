@@ -13,7 +13,6 @@ import {
 } from './CodexSessionCoordinator';
 import { CodexAuthError, type CodexSession } from './codexSessionTypes';
 import {
-  deviceInterval,
   deviceUserCode,
   pollDeviceToken,
   requestDeviceUserCode,
@@ -49,7 +48,7 @@ export async function loginWithDeviceCode(
   if (!userCode) {
     throw new Error('ChatGPT did not return a device code. Try again.');
   }
-  const intervalMs = deviceInterval(userCodeResponse) * 1000;
+  const intervalMs = userCodeResponse.interval * 1000;
 
   options.onPrompt({
     userCode,

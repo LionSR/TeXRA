@@ -161,15 +161,6 @@ export function deviceUserCode(resp: CodexDeviceUserCode): string | undefined {
   return resp.user_code ?? resp.usercode ?? undefined;
 }
 
-/** The poll interval (seconds) from a device-code response, defaulting to 5. */
-export function deviceInterval(resp: CodexDeviceUserCode): number {
-  const raw = resp.interval;
-  const value = typeof raw === 'string' ? Number.parseInt(raw, 10) : raw;
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
-    ? value
-    : 5;
-}
-
 /**
  * Poll once for the device authorization result. Resolves to the authorization
  * code + verifier on success, or throws a CodexAuthError('pending') while the
