@@ -29,26 +29,26 @@ import {
   CodexAuthError,
   codexCoordinator,
 } from '@auth/codex';
+import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 import type { ResponseUsage } from 'openai/resources/responses/responses';
 
+const CHANNEL = 'ModelHandlerCodex';
+logger.initialize(CHANNEL);
+
 /** Flatten Responses message content (string or typed parts) to plain text. */
 function partsToText(content: unknown): string {
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((part) =>
-        part &&
-        typeof part === 'object' &&
-        typeof (part as { text?: unknown }).text === 'string'
-          ? (part as { text: string }).text
-          : '',
-      )
-      .filter(Boolean)
-      .join('\n');
-  }
-  return '';
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((part) => {
+      const text = (part as { text?: unknown } | null)?.text;
+      return typeof text === 'string' ? text : '';
+    })
+    .filter(Boolean)
+    .join('\n');
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -67,54 +67,6 @@ function isGenerationRequest(url: string): boolean {
 }
 
 /**
- * The Codex backend is streaming-only, so a non-streaming caller's request is
- * sent with `stream: true` and the SSE is collapsed back into the single
- * Response JSON the SDK's non-streaming path expects. Returns the final
- * `response.completed` payload (falling back to the last response seen).
- */
-export interface CodexSseCollapseResult {
-  body: unknown;
-  status: number;
-}
-
-export function sseToResponseJson(sse: string): CodexSseCollapseResult | null {
-  let completed: unknown = null;
-  let failure: unknown = null;
-  let last: unknown = null;
-  for (const block of sse.split(/\r?\n\r?\n/)) {
-    const payload = block
-      .split(/\r?\n/)
-      .filter((line) => line.startsWith('data:'))
-      .map((line) => line.slice('data:'.length).trim())
-      .join('\n');
-    if (!payload || payload === '[DONE]') continue;
-    try {
-      const event = JSON.parse(payload) as {
-        type?: string;
-        error?: unknown;
-        response?: unknown;
-      };
-      if (
-        event.type === 'response.failed' ||
-        event.type === 'response.incomplete' ||
-        event.type === 'error'
-      ) {
-        failure = event.response ?? event.error ?? event;
-      }
-      if (event.response) {
-        last = event.response;
-        if (event.type === 'response.completed') completed = event.response;
-      }
-    } catch {
-      // Ignore non-JSON keepalive lines.
-    }
-  }
-  const body = failure ?? completed ?? last;
-  if (body == null) return null;
-  return { body, status: failure == null ? 200 : 502 };
-}
-
-/**
  * Rewrite the outgoing Responses request for the Codex backend:
  *  - drop `max_output_tokens` (rejected as unsupported) and `background`
  *    (the backend has no polling mode);
@@ -124,10 +76,12 @@ export function sseToResponseJson(sse: string): CodexSseCollapseResult | null {
  *    system/developer items out of `input` into `instructions` (matching
  *    Zed/Codex) with a minimal fallback;
  *  - force `stream: true` (the backend returns `400 Stream must be set to true`
- *    otherwise) and, for a non-streaming caller, collapse the SSE back to JSON.
+ *    otherwise).
  *
- * Token-counting / compaction endpoints are disabled at the capability level,
- * so only the generation endpoint reaches this rewrite.
+ * The handler forces the streaming path (`getStreamingConfig` → true), so the
+ * SDK's own `ResponseStream` accumulates the deltas natively — no SSE parsing
+ * here. Token-counting / compaction endpoints are disabled at the capability
+ * level, so only the generation endpoint reaches this rewrite.
  */
 const codexFetch = (async (input, init) => {
   const url = requestUrl(input);
@@ -140,7 +94,6 @@ const codexFetch = (async (input, init) => {
     return fetch(input, init);
   }
 
-  let callerWantsStream = true;
   try {
     const body = JSON.parse(init.body) as Record<string, unknown>;
     delete body.max_output_tokens;
@@ -177,34 +130,32 @@ const codexFetch = (async (input, init) => {
     body.instructions =
       instructions.join('\n\n') || 'You are a helpful assistant.';
 
-    callerWantsStream = body.stream === true;
     body.stream = true;
     init = { ...init, body: JSON.stringify(body) };
-  } catch {
-    // Not JSON we can edit — send the original body unchanged.
+  } catch (error) {
+    // Body isn't JSON we can edit — the backend will reject it (missing
+    // stream/instructions). Log so the resulting 400 is diagnosable.
+    logger.warn(
+      CHANNEL,
+      `Could not adapt Codex request body: ${toErrorMessage(error)}`,
+    );
   }
 
-  const response = await fetch(input, init);
-  if (callerWantsStream || !response.ok) return response;
-
-  // Non-streaming caller: collapse the SSE into the single Response JSON.
-  const sse = await response.text();
-  const json = sseToResponseJson(sse);
-  if (json == null) {
-    return new Response(sse, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-    });
-  }
-  return new Response(JSON.stringify(json.body), {
-    status: json.status,
-    headers: { 'content-type': 'application/json' },
-  });
+  return fetch(input, init);
 }) satisfies typeof fetch;
 
 export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   protected override backgroundModeSupported = false;
+
+  // The Codex backend is streaming-only (`400 Stream must be set to true`
+  // otherwise), so always take the streaming path regardless of the user's
+  // streaming toggle. The SDK's `ResponseStream` then accumulates the deltas
+  // natively, and the base path rebuilds `output` from the streamed
+  // `output_item.done` events (the backend leaves `response.completed.output`
+  // empty).
+  public override getStreamingConfig(): boolean {
+    return true;
+  }
 
   // The Codex backend has no `/responses/input_tokens` or `/compact` endpoint
   // (they return 403); rely on the handler's heuristic fallbacks instead.
@@ -273,8 +224,10 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
         const action = error.needsReauth
           ? 'Sign in with ChatGPT again, or turn off "Prefer ChatGPT subscription".'
           : 'Try again in a moment, or turn off "Prefer ChatGPT subscription".';
+        // Preserve the original CodexAuthError (kind/stack) as the cause.
         throw new Error(
           `ChatGPT subscription unavailable: ${error.message} ${action}`,
+          { cause: error },
         );
       }
       throw error;

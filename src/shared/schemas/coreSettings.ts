@@ -88,6 +88,9 @@ export const DEFAULT_CORE_SETTINGS = {
       backoffMs: 1000,
     },
   },
+  chatgptCodex: {
+    preferSubscription: false,
+  },
   files: {
     included: {
       mediaExtensions: [
@@ -350,6 +353,13 @@ export const CoreSettingsShape = {
         .prefault(DEFAULT_CORE_SETTINGS.model.retry),
     })
     .prefault(DEFAULT_CORE_SETTINGS.model),
+  chatgptCodex: z
+    .strictObject({
+      preferSubscription: z
+        .boolean()
+        .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex.preferSubscription),
+    })
+    .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex),
   files: z
     .strictObject({
       included: z
@@ -558,6 +568,7 @@ export const CORE_SETTING_PATHS = [
   'model.gpt5ReasoningSummary',
   'model.retry.maxAttempts',
   'model.retry.backoffMs',
+  'chatgptCodex.preferSubscription',
   'files.included.mediaExtensions',
   'files.included.inputExtensions',
   'files.included.contextExtensions',
