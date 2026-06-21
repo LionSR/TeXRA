@@ -2,6 +2,11 @@ import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 import { platform } from '@platform/platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import {
+  isCodexSignedIn,
+  isPreferCodexSubscription,
+  shouldUseCodexSubscription,
+} from '@auth/codex';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -85,6 +90,18 @@ const AVAILABILITY_STATUS: Record<
     available: false,
     requiresKey: false,
   },
+  'subscription-access': {
+    kind: 'subscription-access',
+    label: 'ChatGPT subscription',
+    available: true,
+    requiresKey: false,
+  },
+  'subscription-login-required': {
+    kind: 'subscription-login-required',
+    label: 'ChatGPT sign-in required',
+    available: false,
+    requiresKey: false,
+  },
   'relay-quota-exhausted': {
     kind: 'relay-quota-exhausted',
     label: 'Relay quota exhausted',
@@ -124,6 +141,9 @@ interface ModelAvailabilityContext {
   relayQuotaExhausted: boolean;
   useOpenRouter: boolean;
   useIncludedAccess: boolean;
+  /** Whether the user is signed in with ChatGPT (only resolved when the
+   * "prefer subscription" switch is on). */
+  codexSignedIn: boolean;
   serverSideKeyService: ModelOptionsServerAccess;
 }
 
@@ -145,6 +165,14 @@ async function resolveModelAvailability(
   config: ModelConfig,
   ctx: ModelAvailabilityContext,
 ): Promise<ModelAvailabilityStatus> {
+  // ChatGPT subscription (Codex) takes precedence when the user opted into it
+  // for an eligible model: available once signed in, else login is required.
+  if (shouldUseCodexSubscription(config, ctx.useOpenRouter)) {
+    return ctx.codexSignedIn
+      ? AVAILABILITY_STATUS['subscription-access']
+      : AVAILABILITY_STATUS['subscription-login-required'];
+  }
+
   // OpenRouter routing is intentionally outside included access; a configured
   // OpenRouter key is the only ready state for these calls.
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
@@ -184,9 +212,11 @@ async function buildAvailabilityContext(
       ? apiKeyExists(access.secrets, provider)
       : apiKeyExistsUncached(access.secrets, provider);
   const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
-  const [hasOpenRouter, hasServerAccess] = await Promise.all([
+  const [hasOpenRouter, hasServerAccess, codexSignedIn] = await Promise.all([
     hasApiKey('openRouter'),
     serverSideKeyService.canUseServerSideKeys(),
+    // Only worth a secrets read when the "prefer subscription" switch is on.
+    isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
   ]);
   return {
     apiKeyExists: hasApiKey,
@@ -197,6 +227,7 @@ async function buildAvailabilityContext(
       (useIncludedAccess && serverSideKeyService.isRelayQuotaExceeded()),
     useOpenRouter: access.useOpenRouter,
     useIncludedAccess,
+    codexSignedIn,
     serverSideKeyService,
   };
 }
@@ -232,6 +263,10 @@ export async function getModelUnavailableReason(
   if (availability.available) return null;
 
   // Determine the specific reason
+  if (availability.kind === 'subscription-login-required') {
+    return `Model "${model}" needs you to sign in with ChatGPT to use your subscription. Sign in with \`texra auth chatgpt login\` (or Settings → Models), or turn off "Prefer ChatGPT subscription".`;
+  }
+
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
     return `Model "${model}" requires an OpenRouter API key.`;
   }

@@ -59,6 +59,13 @@
             "description": "Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command=\"complete\"). On by default; set to false to require manual continuation.",
             "scope": "resource",
             "order": 53
+          },
+          "texra.chatgptCodex.preferSubscription": {
+            "type": "boolean",
+            "default": false,
+            "description": "Experimental (personal use): when on AND you are signed in with ChatGPT, drive Codex-eligible OpenAI models through your own ChatGPT Plus/Pro/Team subscription instead of your OpenAI API key. Rides an unofficial OpenAI endpoint and may break without notice; never presented as an OpenAI-sanctioned integration. Sign in under Settings → Models.",
+            "scope": "resource",
+            "order": 54
           }
         }
       },
