@@ -86,6 +86,7 @@ import { isResponseFunctionToolCallItem } from './responseStreamEvents';
 import {
   createInputText,
   extractTextContentPart,
+  hasResponseOutputText,
   isAssistantTextMessage,
   isMessageItem,
 } from './openAIResponseContent';
@@ -136,6 +137,42 @@ interface ResponseFinalizeContext {
   readonly effectiveMessagesLength: number;
   readonly compactedThisCall: boolean;
   readonly compactedMessages: ResponseInputItem[] | undefined;
+}
+
+function responseOutputItemKey(item: ResponseOutputItem): string | undefined {
+  if (typeof item.id === 'string') return `id:${item.id}`;
+  if (item.type === 'function_call' && typeof item.call_id === 'string') {
+    return `function_call:${item.call_id}`;
+  }
+  return undefined;
+}
+
+function mergeMissingStreamedOutputItems(
+  finalOutput: Response['output'],
+  streamedItems: Response['output'],
+): Response['output'] {
+  if (streamedItems.length === 0) return finalOutput;
+  if (!Array.isArray(finalOutput) || finalOutput.length === 0) {
+    return streamedItems;
+  }
+
+  const finalKeys = new Set(
+    finalOutput.map(responseOutputItemKey).filter(filterNotNullish),
+  );
+  const hasMissingStreamedItem = streamedItems.some((item) => {
+    const key = responseOutputItemKey(item);
+    return key != null && !finalKeys.has(key);
+  });
+  if (!hasMissingStreamedItem) return finalOutput;
+
+  const streamedKeys = new Set(
+    streamedItems.map(responseOutputItemKey).filter(filterNotNullish),
+  );
+  const finalOnlyItems = finalOutput.filter((item) => {
+    const key = responseOutputItemKey(item);
+    return key == null || !streamedKeys.has(key);
+  });
+  return [...streamedItems, ...finalOnlyItems];
 }
 
 /**
@@ -1526,6 +1563,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Text accumulated from `response.output_text.delta` events; surfaced as
     // partial text if the stream fails mid-flight.
     let streamedText = '';
+    // Each `output_item.done` carries one complete output item (message, tool
+    // call, or reasoning). Some backends (the Codex subscription endpoint) leave
+    // the completed response's `output` empty, so we keep the items to rebuild
+    // it below — otherwise the whole turn, tool calls included, is dropped.
+    const streamedItems: Response['output'] = [];
     try {
       const { stream: _stream, ...rest } = params;
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
@@ -1539,6 +1581,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         processor.process(event);
         if (event.type === 'response.output_text.delta') {
           streamedText += event.delta;
+        } else if (event.type === 'response.output_item.done') {
+          streamedItems.push(event.item);
         }
       }
 
@@ -1556,6 +1600,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           response,
           signal,
         );
+      }
+
+      // Some backends (the ChatGPT-subscription Codex endpoint) stream output
+      // items (text, tool calls, reasoning) but leave the completed response's
+      // `output` empty or partial. Fill missing items from streamed
+      // `output_item.done` events so function calls are not dropped.
+      // `finalResponse()` returns a `ParsedResponse`, but `output` /
+      // `output_text` are mutable fields on the base `Response`; assign
+      // through that view so no hand-rolled response shape is needed.
+      const mergedOutput = mergeMissingStreamedOutputItems(
+        response.output,
+        streamedItems,
+      );
+      if (mergedOutput !== response.output) {
+        (response as Response).output = mergedOutput;
+      }
+      if (streamedText && !hasResponseOutputText(response)) {
+        (response as Response).output_text = streamedText;
       }
 
       processor.finalize(response);

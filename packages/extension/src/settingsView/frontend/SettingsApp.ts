@@ -42,6 +42,7 @@ import {
   type Goal,
   type PRSubscriptionEntry,
   type ToolDashboardItem,
+  type ChatGptAuthStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
 import {
@@ -214,6 +215,10 @@ export class SettingsApp extends SettingsAppBase {
   private readonly githubTokenStatus = signal<'secret' | 'env' | 'none'>(
     'none',
   );
+  private readonly chatgptAuth = signal<ChatGptAuthStatus>({
+    signedIn: false,
+    preferSubscription: false,
+  });
   private readonly desktopCrashReportingEnabled = signal(false);
   private readonly desktopCrashReportingConfigured = signal(false);
   private readonly prSubscriptions = signal<readonly PRSubscriptionEntry[]>([]);
@@ -324,6 +329,9 @@ export class SettingsApp extends SettingsAppBase {
     },
     [SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS]: (data) => {
       this.githubTokenStatus.set(data.status);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS]: (data) => {
+      this.chatgptAuth.set(data.status);
     },
     [SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING]: (data) => {
       this.desktopCrashReportingEnabled.set(data.enabled);
@@ -709,6 +717,19 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
   );
 
+  // ChatGPT subscription sign-in handlers
+  private handleChatGptSignIn = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,
+  );
+
+  private handleChatGptSignOut = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
+  );
+
+  private handleSetChatGptPreferSubscription = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
+  );
+
   private handleDesktopCrashReportingToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
   );
@@ -946,6 +967,7 @@ export class SettingsApp extends SettingsAppBase {
               .spendingStatus=${this.spendingStatus.get()}
               .quotaAutoSwitched=${this.quotaAutoSwitched.get()}
               .providerKeyStatuses=${this.providerKeyStatuses.get()}
+              .chatgptAuth=${this.chatgptAuth.get()}
               .globalStreamingDefault=${this.globalStreamingDefault.get()}
               .modelSelectionItems=${this.modelSelectionItems.get()}
               .reliabilitySettings=${this.reliabilitySettings.get()}
@@ -966,6 +988,10 @@ export class SettingsApp extends SettingsAppBase {
               @model-reasoning-level-set=${this.handleSetReasoningLevel}
               @prefer-short-model-names-set=${this
                 .handleSetPreferShortModelNames}
+              @chatgpt-sign-in=${this.handleChatGptSignIn}
+              @chatgpt-sign-out=${this.handleChatGptSignOut}
+              @chatgpt-prefer-subscription-set=${this
+                .handleSetChatGptPreferSubscription}
             ></models-tab>
           </wa-tab-panel>
 
