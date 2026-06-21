@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import * as yaml from 'yaml';
 
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   getContinuationTemplate,
   initializeGoalPrompts,
@@ -58,6 +60,8 @@ describe('Goal prompt parity (YAML ↔ inline fallback)', () => {
   });
 
   it('loads the host-provided goal YAML path directly', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
     const yamlPath = resolve(
       REPO_ROOT,
       'packages/extension/resources/goal/goal.yaml',
