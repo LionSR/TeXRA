@@ -8,18 +8,26 @@ import {
   type CompletionFlag,
 } from './completionCommandTree';
 
+const DYNAMIC_FLAG_VALUE_SOURCES: ReadonlyMap<string, string> = new Map([
+  ['agent', '_texra_tool_use_agents'],
+  ['model', '_texra_models'],
+]);
+
 function zshFlagSpec(flag: CompletionFlag): string[] {
   return completionFlagVariants(flag).flatMap((variant) => {
     const names = [
       `--${variant.name}`,
       ...variant.aliases.map((alias) => `-${alias}`),
     ];
+    const dynamicSource = DYNAMIC_FLAG_VALUE_SOURCES.get(flag.name);
     const suffix =
       variant.values.length > 0
         ? `: :(${variant.values.join(' ')})`
-        : variant.takesValue
-          ? `:${variant.valueKind ?? 'value'}:`
-          : '';
+        : variant.takesValue && dynamicSource
+          ? `:${flag.name}:($(${dynamicSource}))`
+          : variant.takesValue
+            ? `:${variant.valueKind ?? 'value'}:`
+            : '';
     return names.map((name) => `${name}[${variant.description}]${suffix}`);
   });
 }
