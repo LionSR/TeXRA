@@ -4,12 +4,13 @@ TeXRA helps you write better papers. It uses AI to correct, polish, review, and 
 
 One story, three beats: **Setup is the doorman, polish is the demo, the orchestrator is the habit.**
 
-## 1. Sign in — free for academics — or add a key
+## 1. Choose a credential
 
-A credential is the one step no agent can do for you. Two ways in:
+A credential is the one step no agent can do for you. Three ways in:
 
 - **Sign in — free for academics** -- Researcher Access: no API key needed (recommended). Signing in also unlocks remote agents, including the orchestrator.
-- **Use your own provider API key** -- Anthropic, OpenAI, Google, and more. Note: chat subscriptions (ChatGPT Plus, Claude Pro) don't include API access; you need a key from the provider's developer platform.
+- **Use ChatGPT subscription** -- ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan from the Models tab.
+- **Use your own provider API key** -- Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions (Claude Pro, ChatGPT for non-Codex models, etc.) do not include API access; you need a key from the provider's developer platform.
 
 You can also pick **Skip for now** and come back later, but nothing below runs without a credential.
 
