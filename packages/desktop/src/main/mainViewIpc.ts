@@ -21,7 +21,7 @@ import {
 import type { DesktopProgressIpc } from './desktopProgressIpc.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
-import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
+import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
 import type { BrowserWindow } from 'electron';
