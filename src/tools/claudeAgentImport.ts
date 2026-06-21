@@ -21,12 +21,8 @@ import { isModuleNotFoundError } from '@common/errors';
 import { AbsoluteFS } from '@utils/files';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { resolveBinary } from './support/externalBinaryUtils';
-import type { Options, Query } from '@anthropic-ai/claude-agent-sdk';
-
-type QueryFn = (params: {
-  prompt: string | AsyncIterable<unknown>;
-  options?: Options;
-}) => Query;
+// Mirror the native `query` signature exactly (no hand-rolled structural copy).
+type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
 
 type PlatformInfo = { pkgs: readonly string[] };
 

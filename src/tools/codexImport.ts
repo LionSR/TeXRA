@@ -21,7 +21,9 @@ import { AbsoluteFS } from '@utils/files';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { resolveBinary } from './support/externalBinaryUtils';
 
-type CodexConstructor = new (options?: any) => any;
+// The native `Codex` class value; `typeof` gives its construct signature
+// (`new (options?: CodexOptions) => Codex`) so construction stays type-checked.
+type CodexConstructor = typeof import('@openai/codex-sdk').Codex;
 type PlatformInfo = { pkg: string; triple: string };
 
 // ---------------------------------------------------------------------------
