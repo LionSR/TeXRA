@@ -2631,16 +2631,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (!text.trim()) return;
 
     const lastUserMsg = messages.findLast(
-      (m) => (m as { role?: string }).role === 'user',
-    ) as { role: 'user'; content?: unknown } | undefined;
+      (m): m is EasyInputMessage | ResponseInputItem.Message =>
+        isMessageItem(m) && m.role === 'user',
+    );
     if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
 
-    const content = lastUserMsg.content as { type?: string; text?: string }[];
+    const content = lastUserMsg.content;
     const firstTextPart = content.find((part) => part.type === 'input_text');
-    if (firstTextPart && 'text' in firstTextPart) {
+    if (firstTextPart?.type === 'input_text') {
       firstTextPart.text = text + firstTextPart.text;
     } else {
-      content.unshift({ type: 'input_text', text });
+      content.unshift(createInputText(text));
     }
   }
 
@@ -2655,8 +2656,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (!mediaFiles.length || !this.capabilities.supportsVision) return;
 
     const lastUserMsg = messages.findLast(
-      (m) => (m as { role?: string }).role === 'user',
-    ) as { role: 'user'; content?: unknown[] } | undefined;
+      (m): m is EasyInputMessage | ResponseInputItem.Message =>
+        isMessageItem(m) && m.role === 'user',
+    );
     if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
 
     try {

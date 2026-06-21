@@ -22,7 +22,6 @@ import type {
   WebSearchToolResultBlock,
   WebSearchResultBlock,
   WebFetchToolResultBlock,
-  WebFetchBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 /**
@@ -228,12 +227,10 @@ export class AnthropicStreamHandler {
     switch (event.type) {
       case 'message_start':
         this.diagnostics.messageStartReceived = true;
-        this.diagnostics.anthropicMessageId =
-          (event.message as { id?: string })?.id ?? null;
+        this.diagnostics.anthropicMessageId = event.message.id;
         break;
       case 'message_delta':
-        this.diagnostics.stopReason =
-          (event.delta as { stop_reason?: string | null })?.stop_reason ?? null;
+        this.diagnostics.stopReason = event.delta.stop_reason;
         break;
       case 'message_stop':
         this.diagnostics.messageStopReceived = true;
@@ -393,27 +390,25 @@ export class AnthropicStreamHandler {
     // Parse URL from accumulated input JSON
     const fetchUrl = this.parseFetchUrl(fetchData?.input);
 
-    // Determine if fetch succeeded or failed
-    const isSuccess =
-      typeof block.content === 'object' &&
-      block.content !== null &&
-      block.content.type === 'web_fetch_result';
-
-    const result: WebFetchResult = isSuccess
-      ? {
-          url: (block.content as WebFetchBlock).url || fetchUrl,
-          title: (block.content as WebFetchBlock).content?.title ?? undefined,
-          provider: 'anthropic',
-          callId: block.tool_use_id,
-          status: 'completed',
-        }
-      : {
-          url: fetchUrl,
-          provider: 'anthropic',
-          callId: block.tool_use_id,
-          status: 'failed',
-          errorCode: (block.content as { error_code?: string }).error_code,
-        };
+    // Native discriminated-union narrowing on block.content
+    // (WebFetchBlock | WebFetchToolResultErrorBlock) replaces the prior
+    // structural casts.
+    const result: WebFetchResult =
+      block.content.type === 'web_fetch_result'
+        ? {
+            url: block.content.url || fetchUrl,
+            title: block.content.content?.title ?? undefined,
+            provider: 'anthropic',
+            callId: block.tool_use_id,
+            status: 'completed',
+          }
+        : {
+            url: fetchUrl,
+            provider: 'anthropic',
+            callId: block.tool_use_id,
+            status: 'failed',
+            errorCode: block.content.error_code,
+          };
 
     // Emit to progress view
     if (result.url || result.status === 'failed') {
