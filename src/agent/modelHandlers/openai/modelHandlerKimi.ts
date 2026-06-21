@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 // Local imports - agent
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { ToolDefinition } from '@model';
@@ -15,11 +17,9 @@ function isKimiK27Code(fullName: string): boolean {
 }
 
 /** Response from Kimi's token estimation API */
-interface KimiTokenEstimateResponse {
-  data: {
-    total_tokens: number;
-  };
-}
+const KimiTokenEstimateResponseSchema = z.object({
+  data: z.object({ total_tokens: z.number() }),
+});
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
@@ -144,7 +144,14 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
       );
     }
 
-    const result = (await response.json()) as KimiTokenEstimateResponse;
-    return result.data.total_tokens;
+    const parsed = KimiTokenEstimateResponseSchema.safeParse(
+      await response.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      throw new Error(
+        `Kimi token estimation returned an unexpected response shape: ${parsed.error.message}`,
+      );
+    }
+    return parsed.data.data.total_tokens;
   }
 }
