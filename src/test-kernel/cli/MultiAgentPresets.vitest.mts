@@ -255,8 +255,8 @@ describe('CLI multi-agent presets', () => {
     expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
     expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(true);
     expect(cliMultiAgentPresetAvailability(plan).toolUse).toMatchObject({
-      available: 6,
-      total: 6,
+      available: 5,
+      total: 5,
     });
   });
 
