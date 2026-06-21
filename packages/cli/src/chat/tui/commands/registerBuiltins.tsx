@@ -288,6 +288,13 @@ export function registerBuiltinSlashCommands(options?: {
     formComponent: ApiModeFormAdapter,
   });
   registerSlashCommand({
+    name: 'subscription',
+    description: 'Use your ChatGPT subscription for Codex models (on | off)',
+    aliases: ['sub'],
+    category: 'account',
+    takesArgs: true,
+  });
+  registerSlashCommand({
     name: 'auth',
     description: 'Show TeXRA login status',
     category: 'account',
