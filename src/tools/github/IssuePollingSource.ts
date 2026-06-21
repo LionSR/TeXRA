@@ -31,12 +31,11 @@ import {
 } from './PollingSourceBase';
 import { emitGitHubSubscriptionChangedToHosts } from './subscriptionEventEmitter';
 import {
-  GhIssueCommentSchema,
+  GhIssueCommentArraySchema,
   GhIssueSchema,
   type GhIssue,
   type GhIssueComment,
 } from './prTypes';
-import { z } from 'zod';
 
 import type { Disposable } from '@platform/interfaces/disposable';
 
@@ -204,9 +203,9 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     // triggers a whole-array skip instead of a mid-loop TypeError throw.
     let comments: GhIssueComment[] | undefined;
     if (commentsRes.status === 200) {
-      const parsedComments = z
-        .array(GhIssueCommentSchema)
-        .safeParse(commentsRes.data);
+      const parsedComments = GhIssueCommentArraySchema.safeParse(
+        commentsRes.data,
+      );
       if (!parsedComments.success) {
         this.logger.warn(
           `Skipping comments tick for ${state.slug}#${issue.issueNumber}: ` +
