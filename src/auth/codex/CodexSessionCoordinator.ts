@@ -1,0 +1,263 @@
+/**
+ * Host-neutral coordinator for the Codex (ChatGPT-subscription) OAuth session.
+ *
+ * Mirrors the split of `SupabaseSessionCoordinator`: pure state machine over an
+ * injected secret-backed storage (one JSON bundle under one key) plus an
+ * injected network client, so refresh/expiry logic is unit-testable without the
+ * network or a real keychain. Stays `vscode`-free; the loopback server,
+ * browser-open, and device-code UI live in the host layer and call into here.
+ */
+import {
+  CODEX_AUTHORIZE_URL,
+  CODEX_CLIENT_ID,
+  CODEX_ORIGINATOR,
+  CODEX_SCOPE,
+  CODEX_TOKEN_REFRESH_BUFFER_MS,
+  codexRedirectUri,
+} from './codexConstants';
+import { extractCodexClaims } from './codexJwt';
+import {
+  codexDeviceRedirectUri,
+  exchangeAuthorizationCode as defaultExchange,
+  refreshTokens as defaultRefresh,
+} from './codexOAuthClient';
+import { generateOAuthState, generatePkcePair } from './codexPkce';
+import {
+  CodexAuthError,
+  CodexSessionSchema,
+  type CodexSession,
+  type CodexTokenResponse,
+} from './codexSessionTypes';
+
+/** Secret-backed persistence for the single session bundle. */
+export interface CodexSessionStorage {
+  get(): Promise<string | undefined>;
+  store(value: string): Promise<void>;
+  delete(): Promise<void>;
+}
+
+/** The network surface the coordinator depends on (injectable for tests). */
+export interface CodexOAuthClient {
+  exchangeAuthorizationCode(params: {
+    code: string;
+    verifier: string;
+    redirectUri: string;
+  }): Promise<CodexTokenResponse>;
+  refreshTokens(refreshToken: string): Promise<CodexTokenResponse>;
+}
+
+export interface CodexLogger {
+  debug?(message: string): void;
+  warn?(message: string): void;
+}
+
+export interface CodexSessionStatus {
+  signedIn: boolean;
+  email?: string;
+  accountId?: string;
+}
+
+export interface CodexAuthorizeRequest {
+  url: string;
+  verifier: string;
+  state: string;
+  redirectUri: string;
+}
+
+export interface CodexSessionCoordinatorInit {
+  storage: CodexSessionStorage;
+  client?: CodexOAuthClient;
+  log?: CodexLogger;
+  /** Injectable clock for tests; defaults to Date.now. */
+  now?: () => number;
+}
+
+export class CodexSessionCoordinator {
+  private readonly storage: CodexSessionStorage;
+  private readonly client: CodexOAuthClient;
+  private readonly log?: CodexLogger;
+  private readonly now: () => number;
+  private refreshInFlight: Promise<CodexSession> | null = null;
+
+  constructor(init: CodexSessionCoordinatorInit) {
+    this.storage = init.storage;
+    this.client = init.client ?? {
+      exchangeAuthorizationCode: defaultExchange,
+      refreshTokens: defaultRefresh,
+    };
+    this.log = init.log;
+    this.now = init.now ?? (() => Date.now());
+  }
+
+  /** Load + validate the persisted session, or null if absent/corrupt. */
+  async loadSession(): Promise<CodexSession | null> {
+    const raw = await this.storage.get();
+    if (!raw) return null;
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(raw);
+    } catch {
+      this.log?.warn?.('Codex session storage was not valid JSON; ignoring.');
+      return null;
+    }
+    const result = CodexSessionSchema.safeParse(parsedJson);
+    if (!result.success) {
+      this.log?.warn?.('Codex session bundle failed validation; ignoring.');
+      return null;
+    }
+    return result.data;
+  }
+
+  private async storeSession(session: CodexSession): Promise<void> {
+    await this.storage.store(JSON.stringify(session));
+  }
+
+  /** Forget the session (sign out). */
+  async signOut(): Promise<void> {
+    this.refreshInFlight = null;
+    await this.storage.delete();
+  }
+
+  /** Whether a session is currently signed in (no network). */
+  async getStatus(): Promise<CodexSessionStatus> {
+    const session = await this.loadSession();
+    if (!session) return { signedIn: false };
+    return {
+      signedIn: true,
+      email: session.email,
+      accountId: session.accountId,
+    };
+  }
+
+  /**
+   * Build the authorize URL + PKCE for a loopback login on `port`. The verifier
+   * and state must be carried back to {@link completeLoginWithCode}.
+   */
+  buildAuthorizeRequest(port: number): CodexAuthorizeRequest {
+    const pkce = generatePkcePair();
+    const state = generateOAuthState();
+    const redirectUri = codexRedirectUri(port);
+    const url = new URL(CODEX_AUTHORIZE_URL);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('client_id', CODEX_CLIENT_ID);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('scope', CODEX_SCOPE);
+    url.searchParams.set('code_challenge', pkce.challenge);
+    url.searchParams.set('code_challenge_method', pkce.method);
+    url.searchParams.set('id_token_add_organizations', 'true');
+    url.searchParams.set('codex_cli_simplified_flow', 'true');
+    url.searchParams.set('state', state);
+    url.searchParams.set('originator', CODEX_ORIGINATOR);
+    return { url: url.toString(), verifier: pkce.verifier, state, redirectUri };
+  }
+
+  /** Exchange a loopback/manual authorization code for a stored session. */
+  async completeLoginWithCode(params: {
+    code: string;
+    verifier: string;
+    redirectUri: string;
+  }): Promise<CodexSession> {
+    const tokens = await this.client.exchangeAuthorizationCode(params);
+    const session = this.buildSession(tokens);
+    await this.storeSession(session);
+    return session;
+  }
+
+  /** Exchange a device-code authorization code for a stored session. */
+  async completeDeviceLogin(params: {
+    authorizationCode: string;
+    codeVerifier: string;
+  }): Promise<CodexSession> {
+    return this.completeLoginWithCode({
+      code: params.authorizationCode,
+      verifier: params.codeVerifier,
+      redirectUri: codexDeviceRedirectUri,
+    });
+  }
+
+  /** Whether a session is within the proactive-refresh window of expiry. */
+  isExpiringSoon(session: CodexSession): boolean {
+    return this.now() + CODEX_TOKEN_REFRESH_BUFFER_MS >= session.expiresAtMs;
+  }
+
+  /**
+   * Return a non-expired access token, refreshing if needed. Throws a
+   * CodexAuthError('expired') if not signed in, or ('fatal') if the refresh was
+   * rejected (the session is cleared in that case — the user must sign in again).
+   */
+  async getFreshAccessToken(forceRefresh = false): Promise<string> {
+    const session = await this.getFreshSession(forceRefresh);
+    return session.accessToken;
+  }
+
+  /** The ChatGPT account id from the current session, if any (no refresh). */
+  async getAccountId(): Promise<string | undefined> {
+    return (await this.loadSession())?.accountId;
+  }
+
+  /** Refresh if needed and return the live session. */
+  async getFreshSession(forceRefresh = false): Promise<CodexSession> {
+    const session = await this.loadSession();
+    if (!session) {
+      throw new CodexAuthError(
+        'Not signed in with ChatGPT. Run sign-in first.',
+        'expired',
+      );
+    }
+    if (!forceRefresh && !this.isExpiringSoon(session)) return session;
+    return this.refresh(session);
+  }
+
+  private async refresh(previous: CodexSession): Promise<CodexSession> {
+    // Single-flight: concurrent callers await the same refresh.
+    if (this.refreshInFlight) return this.refreshInFlight;
+    const task = this.performRefresh(previous).finally(() => {
+      this.refreshInFlight = null;
+    });
+    this.refreshInFlight = task;
+    return task;
+  }
+
+  private async performRefresh(previous: CodexSession): Promise<CodexSession> {
+    let tokens: CodexTokenResponse;
+    try {
+      tokens = await this.client.refreshTokens(previous.refreshToken);
+    } catch (error) {
+      if (error instanceof CodexAuthError && error.kind === 'fatal') {
+        // Revoked / invalid refresh token: drop the dead session.
+        this.log?.warn?.('Codex token refresh was rejected; signing out.');
+        await this.storage.delete();
+      }
+      throw error;
+    }
+    const session = this.buildSession(tokens, previous);
+    await this.storeSession(session);
+    return session;
+  }
+
+  /** Map a raw token response into the canonical session, preserving prior fields. */
+  private buildSession(
+    tokens: CodexTokenResponse,
+    previous?: CodexSession,
+  ): CodexSession {
+    const refreshToken = tokens.refresh_token ?? previous?.refreshToken;
+    if (!refreshToken) {
+      throw new CodexAuthError(
+        'OAuth response did not include a refresh token.',
+        'config',
+      );
+    }
+    const claims = extractCodexClaims(
+      tokens.id_token ?? undefined,
+      tokens.access_token,
+    );
+    return {
+      accessToken: tokens.access_token,
+      refreshToken,
+      idToken: tokens.id_token ?? previous?.idToken,
+      expiresAtMs: this.now() + tokens.expires_in * 1000,
+      accountId: claims.accountId ?? previous?.accountId,
+      email: claims.email ?? previous?.email,
+    };
+  }
+}
