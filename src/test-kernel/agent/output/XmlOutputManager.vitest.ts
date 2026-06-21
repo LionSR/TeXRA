@@ -3,12 +3,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { OutputFileProcessor } from '@agent/output/OutputFileProcessor';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { OutputFileInfo, RoundOutput } from '@shared/schemas';
 import {
   AbsoluteFS,
   TaskRunFileService,
   createExternalLocation,
 } from '@utils/files';
+
+const formatterMocks = vi.hoisted(() => ({
+  runLatexFormatter: vi.fn(),
+}));
+
+vi.mock('@latex/texFormatter', () => ({
+  runLatexFormatter: formatterMocks.runLatexFormatter,
+}));
 
 async function initFakePlatform(files: Record<string, string> = {}) {
   const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
@@ -18,11 +29,11 @@ async function initFakePlatform(files: Record<string, string> = {}) {
   initPlatform(createFakePlatform({ files, workspacePath: '/workspace' }));
 }
 
-function createXmlManager(): XmlOutputManager {
+function createXmlManager(documentTag = 'document'): XmlOutputManager {
   return new XmlOutputManager(
     {
       agentCategory: AgentCategory.Workflow,
-      documentTag: 'document',
+      documentTag,
       endTag: '</documents>',
       temperature: 0,
       requiredFiles: {},
@@ -44,6 +55,7 @@ function createXmlManager(): XmlOutputManager {
 
 describe('XmlOutputManager', () => {
   beforeEach(async () => {
+    formatterMocks.runLatexFormatter.mockReset();
     await initFakePlatform({ '/tmp/run/output.xml': '<documents />' });
   });
 
@@ -83,6 +95,70 @@ describe('XmlOutputManager', () => {
 
     await expect(AbsoluteFS.read('/tmp/run/fragment.tex')).resolves.toBe(
       'Body only.\n',
+    );
+  });
+
+  it('does not auto-format extracted workflow outputs', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      `<documents><document name="main.tex">
+\\[
+  f(x)=x^4-2x^2+1.
+\\]
+</document><document name="appendix.tex">
+Appendix.
+</document></documents>`,
+    );
+    const manager = createXmlManager('documents');
+    let roundOutputs: OutputFileInfo[] = [];
+    const roundData: RoundOutput = {
+      round: 0,
+      rawOutput: null,
+      outputs: [],
+      compileFailures: [],
+      xmlSummary: {
+        tagContents: {},
+        documents: [],
+        singleOutputFile: null,
+        sourceLocation: null,
+      },
+    };
+    const processor = new OutputFileProcessor({
+      agentSetting: {
+        agentCategory: AgentCategory.Workflow,
+        documentTag: 'documents',
+        endTag: '</documents>',
+        temperature: 0,
+        requiredFiles: {},
+        requiredFilesInternal: {},
+        defaultOutputFiles: [],
+        filePatternsContain: [],
+        tools: [],
+        isRewrite: true,
+        rounds: 1,
+        prefills: [],
+      },
+      baseFiles: [],
+      streamId: 'stream',
+      runtimeHost: { emit: vi.fn() } as unknown as AgentRuntimeHost,
+      logger: { debug: vi.fn() } as unknown as AgentTrace,
+      xmlManager: manager,
+      setRoundOutputs: (_round, outputs) => {
+        roundOutputs = outputs;
+      },
+      ensureRoundData: () => roundData,
+    });
+
+    await processor.processMultipleOutputs(
+      createExternalLocation('/tmp/run/output.xml'),
+      0,
+      createExternalLocation('/tmp/run/output.xml'),
+    );
+
+    expect(roundOutputs).toHaveLength(2);
+    expect(formatterMocks.runLatexFormatter).not.toHaveBeenCalled();
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      '\\[\n  f(x)=x^4-2x^2+1.\n\\]\n',
     );
   });
 });
