@@ -129,15 +129,14 @@ async function refreshApiKeyStatus() {
     return;
   }
 
-  // `anyApiKeyExists()` already falls back to `canUseServerSideKeys()`
-  // internally. Don't catch here: a transient probe failure shouldn't
-  // regress a signed-in user to the "Get Started" CTA — let the outer
-  // wrapper log it and leave the pill in its prior state.
-  const exists = await SecretManager.anyApiKeyExists();
+  // Use the same credential predicate as the setup assistant and onboarding
+  // funnel. This keeps ChatGPT subscription, Researcher Access, and direct API
+  // keys in agreement about whether the first-run CTA should remain visible.
+  const exists = await hasAnyUsableSetupCredential();
   if (!exists) {
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
     apiKeyStatusBarItem.tooltip =
-      'Click to run the setup assistant — sign in for free or add an API key';
+      'Click to run the setup assistant — sign in, use ChatGPT, or add an API key';
     apiKeyStatusBarItem.command = 'texra.runSetupAssistant';
     apiKeyStatusBarItem.show();
   } else {
@@ -502,20 +501,10 @@ export async function activate(context: vscode.ExtensionContext) {
         );
         return stored !== undefined;
       },
-      anyApiKeyExists: async () => {
-        // Shared SecretManager.anyApiKeyExists reports true for
-        // PROVIDER_API_KEY="" — a common stale-env case. For setup
-        // tools (probe/verify) and setup-launch preflight, "any key
-        // present" must mean "launchable", so require at least one
-        // provider with a non-blank key (or server-side access).
-        const usable = await Promise.all(
-          SecretManager.API_PROVIDERS.map((p) =>
-            SecretManager.hasUsableApiKey(p),
-          ),
-        );
-        if (usable.some(Boolean)) return true;
-        return getServerSideKeyService().canUseServerSideKeys();
-      },
+      // Historical adapter name; setup tools treat this as "any usable model
+      // credential" so ChatGPT subscription, Researcher Access, and non-blank
+      // direct keys stay in sync with setup launch and onboarding.
+      anyApiKeyExists: () => hasAnyUsableSetupCredential(),
       gitHubTokenExists: () => SecretManager.gitHubTokenExists(),
     },
     commands: {
