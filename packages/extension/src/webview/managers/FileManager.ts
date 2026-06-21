@@ -3,14 +3,13 @@ import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
 
+import { ExtensionCategory, getIncludedExtensions } from '@common/files';
 import {
-  ExtensionCategory,
   FILE_SELECTION_COMMAND_IDS,
   MULTIPLE_FILE_COMMANDS,
-  getIncludedExtensions,
+  getFileLister,
   type MultiFileCategory,
-} from '@common/files';
-import { getFileLister } from '@frontend/files';
+} from '@frontend/files';
 import {
   showLoggedErrorMessage,
   toErrorMessage,
