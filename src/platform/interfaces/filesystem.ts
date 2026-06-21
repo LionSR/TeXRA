@@ -29,6 +29,12 @@ export interface FileStat {
 
 export interface FileSystemProvider {
   stat(path: string): Promise<FileStat>;
+  /**
+   * Returns true when `path` is a symbolic link (does NOT follow the link).
+   * Prefer this over checking the `SymbolicLink` bit from `readDirectory`
+   * entries; some `vscode.workspace.fs` implementations do not set that bit.
+   */
+  isSymlink(path: string): Promise<boolean>;
   realPath(path: string): Promise<string>;
   readFile(path: string): Promise<Uint8Array>;
   readFileChunk(
