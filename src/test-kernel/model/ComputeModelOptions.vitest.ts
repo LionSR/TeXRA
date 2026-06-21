@@ -122,6 +122,26 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(model.disabled).toBe(false);
   });
 
+  it('does not disable API-key access when ChatGPT subscription is preferred but signed out', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform({
+        config: { 'texra.chatgptCodex.preferSubscription': true },
+        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+      }),
+    );
+    const access = createModelOptionsAccess({
+      useIncludedAccess: false,
+      relayQuotaExceeded: false,
+      quotaAutoSwitched: false,
+    });
+
+    const [model] = await computeModelOptionsData(['gpt55'], access);
+
+    expect(model.availability).toBe('provider-key');
+    expect(model.disabled).toBe(false);
+  });
+
   it('does not reuse cached provider keys for injected access', async () => {
     const previousDeepseekKey = process.env.DEEPSEEK_API_KEY;
     delete process.env.DEEPSEEK_API_KEY;

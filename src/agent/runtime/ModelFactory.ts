@@ -7,7 +7,7 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { LEVEL_TO_EFFORT } from '@agent/modelHandlers/support/reasoningEffort';
-import { shouldUseCodexSubscription } from '@auth/codex';
+import { isCodexSignedIn, shouldUseCodexSubscription } from '@auth/codex';
 import * as logger from '@logger/logUtils';
 import { isGpt5ModelName } from '@model/modelNames';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -336,7 +336,10 @@ export async function createModelHandler(
   // ChatGPT subscription (Codex backend via the user's OAuth session). Must come
   // before the normal Responses branch: these are OpenAI Responses-shaped models
   // the user has opted to drive through their subscription instead of an API key.
-  if (shouldUseCodexSubscription(config, useOpenRouter)) {
+  if (
+    shouldUseCodexSubscription(config, useOpenRouter) &&
+    (await isCodexSignedIn())
+  ) {
     logger.debug(CHANNEL, 'Using ChatGPT subscription (Codex) Handler');
     const { ModelHandlerCodex } =
       await import('@agent/modelHandlers/openai/modelHandlerCodex');
