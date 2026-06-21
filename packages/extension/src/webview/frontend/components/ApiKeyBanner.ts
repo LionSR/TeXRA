@@ -67,9 +67,9 @@ export class ApiKeyBanner extends LitElement {
           </wa-button>
         </div>
         <span class="hint">
-          Chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do not include API
-          access. You need a separate API key from the provider's developer
-          platform.
+          Except for Codex models through ChatGPT subscription, chat
+          subscriptions do not include API access. Use a provider developer key
+          for other models.
         </span>
       `,
     });

@@ -136,6 +136,12 @@ describe('slashRegistry', () => {
         formComponent: expect.any(Function),
       }),
     );
+    expect(listSlashCommands().find((cmd) => cmd.name === 'login')).toEqual(
+      expect.objectContaining({
+        description: 'Sign in to TeXRA or ChatGPT subscription',
+        formComponent: expect.any(Function),
+      }),
+    );
     expect(listSlashCommands().find((cmd) => cmd.name === 'compact')).toEqual(
       expect.objectContaining({
         description: 'Request context compaction',
@@ -450,6 +456,37 @@ describe('slashRegistry', () => {
     await settleFormSelection();
 
     expect(apiNode.isClosed()).toBe(true);
+  });
+
+  it('closes the login picker before running the selected login path', async () => {
+    const selected: string[] = [];
+    let closed = false;
+    let sawClosedBeforeLogin = false;
+    registerBuiltinSlashCommands({
+      onLoginSelect: (value) => {
+        sawClosedBeforeLogin = closed;
+        selected.push(value);
+      },
+    });
+    const login = listSlashCommands().find((cmd) => cmd.name === 'login');
+
+    if (!login) throw new Error('Expected /login to be registered');
+
+    expect(openRegisteredCliSlashForm(login, '')).toBe(true);
+
+    const loginNode = renderFormAdapter<{
+      onSelect?: (value: string) => void;
+    }>(
+      cliState.activeForm.get()?.render(() => {
+        closed = true;
+      }, 20),
+    );
+    loginNode.props?.onSelect?.('chatgpt');
+    await settleFormSelection();
+
+    expect(selected).toEqual(['chatgpt']);
+    expect(closed).toBe(true);
+    expect(sawClosedBeforeLogin).toBe(true);
   });
 
   it('closes the approval policy picker before applying the new policy', async () => {

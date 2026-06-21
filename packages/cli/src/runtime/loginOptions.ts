@@ -13,13 +13,26 @@ export interface CliLoginInit {
   readonly loginHint?: string;
 }
 
-export interface CliLoginSlashArgs {
+export interface CliTexraLoginSlashArgs {
+  readonly target: 'texra';
   readonly provider: OAuthProvider;
   readonly noBrowser: boolean;
   readonly device: boolean;
   readonly selectAccount: boolean;
   readonly loginHint?: string;
 }
+
+export interface CliChatGptLoginSlashArgs {
+  readonly target: 'chatgpt';
+  readonly noBrowser: boolean;
+  readonly device: boolean;
+}
+
+export type CliLoginSlashArgs =
+  | CliTexraLoginSlashArgs
+  | CliChatGptLoginSlashArgs;
+
+const CHATGPT_LOGIN_TARGETS = new Set(['chatgpt', 'codex', 'subscription']);
 
 export function resolveLoginProvider(
   positional: string | undefined,
@@ -56,8 +69,7 @@ export function parseChatLoginSlashArgs(
   input: string,
 ): CliLoginSlashArgs | undefined {
   const tokens = input.trim().split(/\s+/).filter(Boolean);
-  let provider: string = DEFAULT_OAUTH_PROVIDER;
-  let providerSet = false;
+  const positionals: string[] = [];
   let noBrowser = false;
   let device = false;
   let selectAccount = false;
@@ -90,11 +102,27 @@ export function parseChatLoginSlashArgs(
       loginHint = value;
       continue;
     }
-    if (token.startsWith('--') || providerSet) return undefined;
-    provider = token;
-    providerSet = true;
+    if (token.startsWith('--')) return undefined;
+    positionals.push(token);
   }
 
+  let target: CliLoginSlashArgs['target'] = 'texra';
+  if (positionals[0] === 'texra') {
+    positionals.shift();
+  } else if (positionals[0] && CHATGPT_LOGIN_TARGETS.has(positionals[0])) {
+    target = 'chatgpt';
+    positionals.shift();
+  }
+
+  if (target === 'chatgpt') {
+    if (positionals.length > 0 || selectAccount || loginHint !== undefined) {
+      return undefined;
+    }
+    return { target, noBrowser, device };
+  }
+
+  if (positionals.length > 1) return undefined;
+  const provider = positionals[0] ?? DEFAULT_OAUTH_PROVIDER;
   if (!isCliLoginProvider(provider)) return undefined;
-  return { provider, noBrowser, device, selectAccount, loginHint };
+  return { target, provider, noBrowser, device, selectAccount, loginHint };
 }

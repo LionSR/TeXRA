@@ -103,9 +103,12 @@ export class ModelsTab extends LitElement {
   @property({ type: Boolean }) preferShortModelNames = false;
 
   private scrollToSection(
-    tagName: 'api-access-section' | 'provider-key-list',
+    selector:
+      | 'api-access-section'
+      | 'provider-key-list'
+      | '#chatgpt-subscription',
   ): void {
-    const el = this.shadowRoot?.querySelector(tagName);
+    const el = this.shadowRoot?.querySelector(selector);
     if (el instanceof HTMLElement) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -117,11 +120,14 @@ export class ModelsTab extends LitElement {
   private readonly handleScrollToApiConfig = (): void =>
     this.scrollToSection('provider-key-list');
 
+  private readonly handleScrollToChatGpt = (): void =>
+    this.scrollToSection('#chatgpt-subscription');
+
   private renderTabHint(): TemplateResult {
     const description =
       this.apiAccessMode === 'included'
-        ? 'Personal provider API keys are optional overrides—configure them in the API Configuration section below.'
-        : 'To use your own keys for OpenAI, Anthropic, Google, and other providers, scroll to the API Configuration section below.';
+        ? 'Use included access, ChatGPT subscription for Codex models, or personal provider API keys.'
+        : 'Use ChatGPT subscription for Codex models, or configure personal API keys for OpenAI, Anthropic, Google, and other providers.';
 
     const accessJump = this.authenticated
       ? html`<wa-button
@@ -138,10 +144,19 @@ export class ModelsTab extends LitElement {
       <div class="settings-reminder">
         ${waIcon('info', { className: 'settings-reminder-icon' })}
         <div class="settings-reminder-body">
-          <div class="settings-reminder-title">API key settings</div>
+          <div class="settings-reminder-title">Model credentials</div>
           <div class="settings-reminder-description">${description}</div>
           <div class="settings-reminder-actions">
             ${accessJump}
+            <wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
+              @click=${this.handleScrollToChatGpt}
+            >
+              ${waIcon('comment-discussion', { slot: 'start' })} ChatGPT
+              Subscription
+            </wa-button>
             <wa-button
               appearance="outlined"
               variant="neutral"
@@ -174,12 +189,12 @@ export class ModelsTab extends LitElement {
     return html`
       <div class="models-container tab-content-container">
         ${this.renderTabHint()} ${apiAccessSection} ${quotaMeter}
+        ${this.renderChatGptSection()}
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
           .apiAccessMode=${this.apiAccessMode}
           .globalStreamingDefault=${this.globalStreamingDefault}
         ></provider-key-list>
-        ${this.renderChatGptSection()}
         <model-selection-list
           .models=${this.modelSelectionItems}
           .helperModel=${this.helperModel}
@@ -204,7 +219,7 @@ export class ModelsTab extends LitElement {
     const account =
       this.chatgptAuth?.email ?? this.chatgptAuth?.accountId ?? 'your account';
     return html`
-      <section class="chatgpt-subscription">
+      <section id="chatgpt-subscription" class="chatgpt-subscription">
         <div class="chatgpt-subscription__header">
           <span class="chatgpt-subscription__title">ChatGPT subscription</span>
           <span class="chatgpt-subscription__badge">experimental</span>
