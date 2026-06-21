@@ -79,12 +79,11 @@ This repository is a pnpm workspace. Repo-root `src/` contains shared core logic
   - `frontend/editor/` - Active file guards and editor utilities
   - `frontend/agents/` - Agent directory management (`AgentDirectoryManager`)
   - `frontend/files/` - File lister and discovery utilities
-  - `frontend/webview/` - Webview HTML builder (`buildWebviewHtml`)
   - `frontend/latex/` - LaTeX build integration, linting
   - `frontend/media/` - Image and audio handling
 - `src/common/` holds backend-only helpers (errors, state, files, base webview classes). Import them through the `@common/*` alias for clarity.
   - `common/state/` - State managers including `pendingStateManager`
-  - `common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), command constants
+  - `common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
 - `src/utils/` is reserved for utilities used by both the extension host and webviews. If a helper is specific to one side, place it under `frontend/` or `common/` instead of `utils/`.
   - `utils/core/` - Async utilities (`debounce`, `delay`)
   - `utils/files/` - Filesystem utilities, rules, and vars
@@ -333,7 +332,7 @@ See `docs/pocketflow/` for full framework documentation.
 
 **Webviews and UI**
 
-- Generate HTML through `BaseViewContentProvider` (`src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`packages/extension/src/frontend/webview/html.ts`). Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
+- Generate HTML through `BaseViewContentProvider` (`packages/extension/src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`packages/extension/src/common/webview/html.ts`). Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
 - Use Web Awesome (`<wa-icon>` via `waIcon()` from `@shared/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@shared/utils/path` for consistent interactions.
 - For webview dependencies, prefer CDN builds (jsdelivr for static assets, esm.sh for ES modules) for complex packages like markdown-it, KaTeX, or highlight.js, while keeping lightweight bundles (split.js) local to reduce extension size.
 - Keep CSS modular (per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`) and use Web Awesome icons (e.g., `${waIcon('chevron-down')}`) for toggle affordances.
