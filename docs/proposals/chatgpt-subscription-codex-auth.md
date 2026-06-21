@@ -79,11 +79,20 @@ Integration points already exist; this is additive.
 Add a `chatgpt-codex` (working name) provider distinct from the existing `openai`
 API-key provider, so the two can coexist and a user can have both configured.
 
-- Register in `src/model/apiProviders.ts` / `API_PROVIDERS`.
-- Unlike other providers it is **not** keyed by `apiKey.<provider>` secret; its
-  credential is an OAuth token bundle (see §3). Key-status UI
-  (`resolveApiKey`/`lookupApiKeyOrigin`) needs an OAuth-aware origin so the
-  Settings → Models tab can show "Signed in as <email>" instead of "API key set".
+- **Do not** add it to `API_PROVIDERS` in `src/model/apiProviders.ts`. That
+  constant is `API_KEY_PROVIDER_IDS` — membership wires a provider into the
+  api-key resolution path (`apiKeySecretName` secret, `<PROVIDER>_API_KEY` env
+  fallback, the Settings key-row UI), which is exactly what an OAuth-only provider
+  must *not* use. Putting it there would surface a spurious "enter API key" field
+  and resolve the wrong credential.
+- Instead, model it as a separate provider kind whose credential is an OAuth token
+  bundle (see §3), not an api key. Concretely: a distinct provider id that is
+  recognized by the model registry / handler-selection path but is **excluded**
+  from `API_KEY_PROVIDER_IDS`, with its own credential lookup (OAuth coordinator)
+  and its own key-status origin so the Settings → Models tab can show
+  "Signed in as <email>" instead of an API-key row. If the provider-status
+  plumbing (`resolveApiKey`/`lookupApiKeyOrigin`) cannot represent a non-api-key
+  origin today, extending it to do so is part of this work.
 
 ### 2. Model handler (reuse the Responses handler)
 
@@ -93,12 +102,18 @@ API-key provider, so the two can coexist and a user can have both configured.
 
 - Subclass / parameterize the Responses handler so it can:
   - set `baseURL = https://chatgpt.com/backend-api/codex`,
-  - inject per-request headers `Authorization: Bearer <access_token>`,
-    `chatgpt-account-id: <id>`, `originator: texra` (our own originator string —
-    do **not** masquerade as `codex_cli_rs`),
-  - omit the platform `apiKey` (use a dummy; auth is via the bearer header).
-- The OpenAI SDK supports `defaultHeaders` and a custom `fetch`; prefer a custom
-  header injector + token-refresh hook over forking request code.
+  - **authenticate by passing the OAuth access token as the SDK's `apiKey`** —
+    `new OpenAI({ apiKey: accessToken, baseURL })`. The OpenAI Node client derives
+    `Authorization: Bearer <apiKey>` from that field, so this *is* the bearer
+    header; do **not** pass a dummy key and separately hand-set `Authorization`
+    (the two would fight, and the SDK's value wins). On refresh, recreate the
+    client (or use a token-getter) so the new access token is used.
+  - add the **non-auth** headers via `defaultHeaders`: `chatgpt-account-id: <id>`
+    and `originator: texra` (our own originator string — do **not** masquerade as
+    `codex_cli_rs`).
+- Where per-request token freshness matters, a custom `fetch` wrapper that injects
+  the current bearer + account-id is the alternative; prefer the
+  token-getter/`defaultHeaders` route over forking request code.
 - Keep the `/responses` path (the `chatgpt.com/backend-api/codex` base already
   includes the `codex` segment, so the SDK's `/responses` suffix yields
   `…/codex/responses`). Verify against a live request before finalizing.
