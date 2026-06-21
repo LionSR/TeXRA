@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import {
   ChatExportController,
+  type ChatExportInput,
   type ExportInputStatus,
 } from '@controllers/settingsView/ChatExportController';
 import {
@@ -138,11 +139,12 @@ export class HistoryHandlers {
         data.historyId,
       );
 
-      if (!this.reportExportInputError(result.status)) {
+      if (result.status !== 'ok') {
+        this.reportExportInputError(result.status);
         return;
       }
 
-      const exportInput = result.exportInput!;
+      const { exportInput } = result;
 
       if (format === 'html') {
         await this.exportAndOpenHtml(data.historyId, exportInput);
@@ -169,26 +171,26 @@ export class HistoryHandlers {
 
   /**
    * Translate the controller's export-input status into a user-visible
-   * error message. Returns `true` when the caller should proceed.
+   * error message.
    */
-  private reportExportInputError(status: ExportInputStatus): boolean {
+  private reportExportInputError(
+    status: Exclude<ExportInputStatus, 'ok'>,
+  ): void {
     switch (status) {
       case 'config_missing':
         void vscode.window.showErrorMessage('History item not found');
-        return false;
+        return;
       case 'conversation_missing':
         void vscode.window.showErrorMessage(
           'No conversation data available for this execution',
         );
-        return false;
-      case 'ok':
-        return true;
+        return;
     }
   }
 
   private async exportAndOpenMarkdown(
     historyId: string,
-    exportInput: Parameters<ChatExportController['exportAsMarkdown']>[1],
+    exportInput: ChatExportInput,
   ): Promise<void> {
     const { absolutePath, storagePath } =
       await this.chatExportController.exportAsMarkdown(historyId, exportInput);
@@ -200,7 +202,7 @@ export class HistoryHandlers {
 
   private async exportAndOpenLatex(
     historyId: string,
-    exportInput: Parameters<ChatExportController['exportAsLatex']>[1],
+    exportInput: ChatExportInput,
   ): Promise<void> {
     const { absolutePath, storagePath, pdfPath } =
       await this.chatExportController.exportAsLatex(historyId, exportInput);
@@ -225,7 +227,7 @@ export class HistoryHandlers {
 
   private async exportAndOpenHtml(
     historyId: string,
-    exportInput: Parameters<ChatExportController['exportAsHtml']>[1],
+    exportInput: ChatExportInput,
   ): Promise<void> {
     const { absolutePath, folderName } =
       await this.chatExportController.exportAsHtml(
