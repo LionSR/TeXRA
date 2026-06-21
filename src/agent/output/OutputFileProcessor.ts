@@ -13,7 +13,6 @@ import {
   extractTextFromTag,
 } from '@utils/text/xmlUtils';
 
-import { indentLatexFiles } from './LatexOutputUtils';
 import { tryOperation } from './outputOperations';
 import type { XmlOutputManager } from './XmlOutputManager';
 
@@ -55,10 +54,6 @@ export class OutputFileProcessor {
         if (processedPairs.length > 0) {
           const locations = processedPairs.map(
             (p: OutputFileInfo) => p.location,
-          );
-          await indentLatexFiles(locations, logger);
-          logger.debug(
-            `Indented multiple output files: ${locations.map((l) => l.absolutePath).join(',')}`,
           );
 
           if (this.ctx.baseFiles.length > 0) {

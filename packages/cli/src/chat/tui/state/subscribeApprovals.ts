@@ -1,4 +1,4 @@
-// Approval-event interception per docs/prd/cli-tui-ink/10-architecture.md §9.
+// Approval-event interception per docs/prds/cli-tui-ink/10-architecture.md §9.
 //
 // Wraps the runtime host so approval-kind events get diverted to the typed
 // queue (-> ApprovalModal -> user) instead of the legacy stderr prompt.

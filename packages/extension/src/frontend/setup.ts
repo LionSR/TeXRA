@@ -67,10 +67,10 @@ export async function initializeToolDefaults(): Promise<void> {
 /**
  * Reconciles bundled agents in global storage:
  *  - Always prunes renamed/removed legacy files (idempotent; cheap).
- *  - Re-copies bundled agents only on version bump or when files are missing.
+ *  - Refreshes bundled agents from packaged resources.
  *
- * Splitting these concerns means a stale legacy file gets cleaned up on
- * every activation, even when the bundled set is otherwise unchanged.
+ * Built-in agent directories are generated cache; user-owned edits belong in
+ * custom agent directories.
  */
 export async function copyDefaultAgents(
   context: vscode.ExtensionContext,
