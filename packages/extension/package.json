@@ -1101,18 +1101,19 @@
       {
         "id": "texra.gettingStarted",
         "title": "Get started with TeXRA",
-        "description": "Sign in or add a key, let the setup assistant run your first polish, then meet the orchestrator. Setup is the doorman, polish is the demo, the orchestrator is the habit.",
+        "description": "Choose a credential, let the setup assistant run your first polish, then meet the orchestrator. Setup is the doorman, polish is the demo, the orchestrator is the habit.",
         "steps": [
           {
             "id": "texra.gettingStarted.signIn",
-            "title": "Sign in — free for academics — or add a key",
-            "description": "A credential is the one step no agent can do for you. Two ways in:\n\n**Sign in — free for academics** — Researcher Access: no API key needed (recommended). Signing in also unlocks remote agents, including the orchestrator.\n\n[Sign In](command:texra.auth.signIn)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Heads up: chat subscriptions (ChatGPT Plus, Claude Pro) don't come with API access.\n\n[Set API key](command:texra.setApiKey)",
+            "title": "Choose how TeXRA should sign in",
+            "description": "A credential is the one step no agent can do for you. Three ways in:\n\n**Sign in — free for academics** — Researcher Access: no API key needed (recommended). Signing in also unlocks remote agents, including the orchestrator.\n\n[Sign In](command:texra.auth.signIn)\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Open Models & ChatGPT](command:texra.showModels)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
-              "altText": "Screenshot of the API key configuration view"
+              "altText": "Screenshot of the model credential configuration view"
             },
             "completionEvents": [
               "onCommand:texra.auth.signIn",
+              "onCommand:texra.showModels",
               "onCommand:texra.setApiKey"
             ]
           },

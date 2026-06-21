@@ -177,15 +177,21 @@ prompts:
 
     ## Setting up credentials (phase D — required)
 
-    TeXRA needs one of: a Researcher Access sign-in, or a real API key
-    for one of the supported providers. Pick the path that fits the
-    user; don't push both.
+    TeXRA needs one credential path: Researcher Access, ChatGPT
+    subscription for Codex models, or a real API key for one of the
+    supported providers. Pick the path that fits the user; don't push
+    more than one.
 
       - **Researcher Access (recommended, free):** call `invoke_command`
         with `texra.auth.signIn`. The browser flow handles the rest.
         After the user finishes, re-run `probe_environment` to confirm
         `auth.authenticated` flipped to `true`. Mention that signing in
         also unlocks remote agents like the orchestrator.
+      - **ChatGPT subscription for Codex models:** if the user already
+        has ChatGPT Plus/Pro/Team and wants Codex models, call
+        `invoke_command` with `texra.showModels`. Tell them to use the
+        ChatGPT subscription section to sign in and enable the preference.
+        This does not unlock non-Codex providers or remote TeXRA agents.
       - **Bring-your-own API key:** ask the user which provider they
         already have an account with. If they don't have one, briefly
         explain the options:
@@ -198,9 +204,10 @@ prompts:
           - **DeepSeek**, **xAI** (Grok), **OpenRouter**, **Together**,
             and others are also supported — list only the one(s) the
             user mentions; don't dump every option.
-        Note that ChatGPT Plus / Claude Pro chat subscriptions do NOT
-        include API access — the user needs an API key from the
-        provider's developer console specifically.
+        Except for Codex models through ChatGPT subscription, chat
+        subscriptions such as Claude Pro or ChatGPT do NOT include API
+        access — the user needs an API key from the provider's developer
+        console specifically.
         Ask the user to paste the key in chat. Once they do, call
         `set_api_key` with `{ provider, key }`. The tool masks the key
         in its summary; never echo the raw value back. If the pasted

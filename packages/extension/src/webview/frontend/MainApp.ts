@@ -1441,9 +1441,13 @@ export class MainApp extends MainAppBase {
   }
 
   // Welcome-card choices reuse the existing host flows: sign-in reuses
-  // handleComponentSignIn (SIGN_IN_FROM_BANNER → texra.auth.signIn), API key
-  // invokes texra.setApiKey (OPEN_SET_API_KEY); only skip is onboarding-specific
-  // (declined flag).
+  // handleComponentSignIn (SIGN_IN_FROM_BANNER -> texra.auth.signIn), ChatGPT
+  // opens Models, API key invokes texra.setApiKey (OPEN_SET_API_KEY); only skip
+  // is onboarding-specific (declined flag).
+  private handleWelcomeChatGpt(): void {
+    postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS);
+  }
+
   private handleWelcomeApiKey(): void {
     postMessage(MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY);
   }
@@ -1732,6 +1736,7 @@ export class MainApp extends MainAppBase {
           <div class="main-content">
             <onboarding-welcome-card
               @welcome-sign-in=${this.handleComponentSignIn}
+              @welcome-chatgpt=${this.handleWelcomeChatGpt}
               @welcome-api-key=${this.handleWelcomeApiKey}
               @welcome-skip=${this.handleWelcomeSkip}
             ></onboarding-welcome-card>

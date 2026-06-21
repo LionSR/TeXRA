@@ -9,6 +9,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   ONBOARDING_CARD_TITLE,
   ONBOARDING_CHOICE_API_KEY,
+  ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_CHOICE_SIGN_IN,
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
@@ -18,9 +19,11 @@ import { MainViewEvents } from '../events';
 /**
  * State 0 welcome card (PRD: agent-native onboarding) — a port of the CLI
  * first-run picker, not a new design: sign-in recommended first, provider
- * API key second, a quiet "Skip for now" link last. Stateless: renders the
+ * ChatGPT/API key alternatives, and a quiet "Skip for now" link last.
+ * Stateless: renders the
  * shared onboarding copy verbatim and emits `welcome-sign-in` /
- * `welcome-api-key` / `welcome-skip`; the host owns the funnel state.
+ * `welcome-chatgpt` / `welcome-api-key` / `welcome-skip`; the host owns the
+ * funnel state.
  */
 @customElement('onboarding-welcome-card')
 export class OnboardingWelcomeCard extends LitElement {
@@ -92,6 +95,10 @@ export class OnboardingWelcomeCard extends LitElement {
     this.dispatchEvent(MainViewEvents.welcomeApiKey());
   }
 
+  private handleChatGpt(): void {
+    this.dispatchEvent(MainViewEvents.welcomeChatGpt());
+  }
+
   private handleSkip(): void {
     this.dispatchEvent(MainViewEvents.welcomeSkip());
   }
@@ -113,6 +120,18 @@ export class OnboardingWelcomeCard extends LitElement {
             </wa-button>
             <span class="choice-description">
               ${ONBOARDING_CHOICE_SIGN_IN.description}
+            </span>
+          </div>
+          <div class="choice">
+            <wa-button
+              id="onboardingChatGptButton"
+              appearance="outlined"
+              @click=${this.handleChatGpt}
+            >
+              ${waIcon('comment-discussion')} ${ONBOARDING_CHOICE_CHATGPT.label}
+            </wa-button>
+            <span class="choice-description">
+              ${ONBOARDING_CHOICE_CHATGPT.description}
             </span>
           </div>
           <div class="choice">

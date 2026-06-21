@@ -28,7 +28,7 @@ export async function applyCliSubscriptionToggle(input: string): Promise<void> {
   const status = await getCodexStatus();
   const accountLine = status.signedIn
     ? `Signed in with ChatGPT as ${status.email ?? status.accountId ?? 'your account'}.`
-    : 'Not signed in with ChatGPT — run `texra auth chatgpt login`.';
+    : 'Not signed in with ChatGPT - run `/login chatgpt`.';
 
   if (!normalized || normalized === 'status') {
     appendLocalAssistantTranscript(
@@ -58,7 +58,7 @@ export async function applyCliSubscriptionToggle(input: string): Promise<void> {
   ];
   if (enabled && update.effective && !status.signedIn) {
     lines.push(
-      'You are not signed in with ChatGPT yet — run `texra auth chatgpt login` to use it.',
+      'You are not signed in with ChatGPT yet - run `/login chatgpt` to use it.',
     );
   } else if (enabled && update.effective) {
     lines.push(accountLine);

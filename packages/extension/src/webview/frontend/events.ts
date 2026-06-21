@@ -88,6 +88,8 @@ export const MainViewEvents = {
   // Onboarding welcome card events (State 0 of the onboarding funnel)
   welcomeSignIn: () => createEvent('welcome-sign-in', undefined),
 
+  welcomeChatGpt: () => createEvent('welcome-chatgpt', undefined),
+
   welcomeApiKey: () => createEvent('welcome-api-key', undefined),
 
   welcomeSkip: () => createEvent('welcome-skip', undefined),

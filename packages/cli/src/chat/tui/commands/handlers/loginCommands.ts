@@ -1,8 +1,16 @@
+import { setPreferCodexSubscription } from '@auth/codex';
+import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
+import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
+import {
+  chatGptAccountLabel,
+  signInCliChatGpt,
+} from '@cli/runtime/chatgptLogin';
 import {
   githubSelectAccountWarning,
   parseChatLoginSlashArgs,
   type CliLoginSlashArgs,
+  type CliTexraLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import {
   formatCliManualAuthUrlMessage,
@@ -12,18 +20,80 @@ import {
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
-import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 import { setCliSessionApiMode } from './apiModeCommands';
 
-export const CHAT_LOGIN_USAGE =
-  'Usage: /login [github | google] [--no-browser] [--device] [--select-account] [--login-hint <account>]';
+export const CHAT_LOGIN_USAGE = [
+  'Usage: /login [texra [github | google]] [--no-browser] [--device] [--select-account] [--login-hint <account>]',
+  '       /login chatgpt [--no-browser] [--device]',
+].join('\n');
 
 function loginStartMessage(args: CliLoginSlashArgs): string {
+  if (args.target === 'chatgpt') {
+    if (args.device) return 'Starting ChatGPT device-code sign-in.';
+    if (args.noBrowser) return 'Starting ChatGPT sign-in.';
+    return 'Opening browser for ChatGPT sign-in...';
+  }
   if (args.device) return 'Starting TeXRA device-code sign-in.';
   if (args.noBrowser) return `Starting TeXRA ${args.provider} sign-in.`;
   return `Opening browser for TeXRA ${args.provider} sign-in...`;
+}
+
+async function loginToChatGptSubscription(
+  args: Extract<CliLoginSlashArgs, { target: 'chatgpt' }>,
+): Promise<void> {
+  const session = await signInCliChatGpt(args, {
+    writeProgress: appendLocalAssistantTranscript,
+  });
+  const update = await setPreferCodexSubscription(true);
+  invalidateModelOptionsCache();
+  bumpCodexPreferenceVersion();
+
+  appendLocalAssistantTranscript(
+    [
+      `Signed in with ChatGPT as ${chatGptAccountLabel(session)}.`,
+      update.effective
+        ? 'ChatGPT subscription enabled for Codex models.'
+        : `ChatGPT subscription preference is still disabled because a more specific setting overrides ${update.target} config.`,
+    ].join('\n'),
+  );
+}
+
+async function loginToTexraIncludedAccess(
+  args: CliTexraLoginSlashArgs,
+): Promise<void> {
+  const accountWarning = githubSelectAccountWarning(args);
+  if (accountWarning) appendLocalAssistantTranscript(accountWarning);
+
+  const session = args.device
+    ? await signInCliSupabaseDeviceCode({
+        onDeviceCode: (authorization) => {
+          appendLocalAssistantTranscript(
+            formatCliDeviceAuthMessage(authorization),
+          );
+        },
+      })
+    : await signInCliSupabase({
+        provider: args.provider,
+        openBrowser: !args.noBrowser,
+        selectAccount: args.selectAccount,
+        loginHint: args.loginHint,
+        manualBrowserHint: '/login --no-browser',
+        onAuthUrl: (url) => {
+          if (args.noBrowser) {
+            appendLocalAssistantTranscript(formatCliManualAuthUrlMessage(url));
+          }
+        },
+      });
+  setCliSessionApiMode('included');
+  appendLocalAssistantTranscript(
+    [
+      `Signed in as ${session.account.label}.`,
+      ...(await loadCliApiStatusLines({ apiMode: 'included' })),
+    ].join('\n'),
+  );
 }
 
 export async function loginFromChat(input: string): Promise<void> {
@@ -33,40 +103,14 @@ export async function loginFromChat(input: string): Promise<void> {
     return;
   }
 
-  const accountWarning = githubSelectAccountWarning(args);
-  if (accountWarning) appendLocalAssistantTranscript(accountWarning);
   appendLocalAssistantTranscript(loginStartMessage(args));
 
   try {
-    const session = args.device
-      ? await signInCliSupabaseDeviceCode({
-          onDeviceCode: (authorization) => {
-            appendLocalAssistantTranscript(
-              formatCliDeviceAuthMessage(authorization),
-            );
-          },
-        })
-      : await signInCliSupabase({
-          provider: args.provider,
-          openBrowser: !args.noBrowser,
-          selectAccount: args.selectAccount,
-          loginHint: args.loginHint,
-          manualBrowserHint: '/login --no-browser',
-          onAuthUrl: (url) => {
-            if (args.noBrowser) {
-              appendLocalAssistantTranscript(
-                formatCliManualAuthUrlMessage(url),
-              );
-            }
-          },
-        });
-    setCliSessionApiMode('included');
-    appendLocalAssistantTranscript(
-      [
-        `Signed in as ${session.account.label}.`,
-        ...(await loadCliApiStatusLines({ apiMode: 'included' })),
-      ].join('\n'),
-    );
+    if (args.target === 'chatgpt') {
+      await loginToChatGptSubscription(args);
+      return;
+    }
+    await loginToTexraIncludedAccess(args);
   } catch (error: unknown) {
     appendLocalAssistantTranscript(toErrorMessage(error));
   }
