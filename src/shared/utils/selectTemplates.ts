@@ -20,8 +20,6 @@ import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
  */
 export const BROWSE_ALL_AGENTS_OPTION_VALUE = '__browse-all-agents__';
 
-export { formatAgentOptionLabel } from './agentOptionLabels';
-
 function buildAgentTooltip(opt: AgentOptionData, displayLabel: string): string {
   const { properties } = AGENT_DECORATORS;
   const hints: string[] = [];
