@@ -19,7 +19,15 @@ import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
  */
 export const BROWSE_ALL_AGENTS_OPTION_VALUE = '__browse-all-agents__';
 
-function buildAgentTooltip(opt: AgentOptionData): string {
+const AGENT_LABEL_SEPARATOR_PATTERN =
+  /^(.*?)(?:\s*---\s*|\s*[\u2013\u2014]\s*)/u;
+
+export function formatAgentOptionLabel(label: string): string {
+  const shortLabel = label.match(AGENT_LABEL_SEPARATOR_PATTERN)?.[1]?.trim();
+  return shortLabel || label;
+}
+
+function buildAgentTooltip(opt: AgentOptionData, displayLabel: string): string {
   const { properties } = AGENT_DECORATORS;
   const hints: string[] = [];
 
@@ -29,6 +37,7 @@ function buildAgentTooltip(opt: AgentOptionData): string {
     );
   if (opt.isRemote) hints.push(properties.remote.hint);
   if (opt.isCustom) hints.push(properties.custom.hint);
+  if (opt.label !== displayLabel) hints.push(opt.label);
   if (opt.description) hints.push(opt.description);
   if (opt.isToolUse) hints.push('Can execute tools and code');
   // When a displayName label hides the canonical identifier, surface it
@@ -40,14 +49,15 @@ function buildAgentTooltip(opt: AgentOptionData): string {
 }
 
 function renderAgentOption(opt: AgentOptionData): TemplateResult {
-  const tooltip = buildAgentTooltip(opt);
+  const displayLabel = formatAgentOptionLabel(opt.label);
+  const tooltip = buildAgentTooltip(opt, displayLabel);
 
   const isOrch = opt.isOrchestrator;
   return html`
     <wa-option
       value=${opt.value}
       title=${tooltip || nothing}
-      data-label=${opt.label}
+      data-label=${displayLabel}
       data-tool-use=${opt.isToolUse ? 'true' : nothing}
       data-remote=${opt.isRemote ? 'true' : nothing}
       data-custom=${opt.isCustom ? 'true' : nothing}
@@ -55,7 +65,7 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
     >
       ${isOrch
         ? html`<span class="agent-icon">${waIcon('bullseye')} </span>`
-        : nothing}${opt.label}
+        : nothing}${displayLabel}
       ${opt.isRemote
         ? html`<span class="agent-icon">
             ${waIcon(AGENT_DECORATORS.properties.remote.icon)}</span
