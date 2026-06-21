@@ -490,6 +490,7 @@ export function createDesktopSettingsIpc(
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
       customPresets: agentCatalogController.getCustomPresets(),
+      orchestratorAgents: agentCatalogController.getOrchestratorAgentNames(),
     });
   }
 
