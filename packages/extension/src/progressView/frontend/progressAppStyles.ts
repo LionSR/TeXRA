@@ -1,6 +1,9 @@
 // Third-party imports
 import { css } from 'lit';
 
+// Shared styles
+import { headerActionStyles } from '@shared/styles';
+
 /** Layout and empty-state styles for the <progress-app> root component. */
 export const progressAppStyles = css`
   :host {
@@ -37,13 +40,7 @@ export const progressAppStyles = css`
     cursor: default;
   }
 
-  .header-action {
-    flex-shrink: 0;
-  }
-
-  .header-action::part(base) {
-    min-height: var(--height-control, 24px);
-  }
+  ${headerActionStyles}
 
   .split-container {
     display: flex;
