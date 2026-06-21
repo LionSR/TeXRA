@@ -77,11 +77,14 @@ export const approvalQueueStatus = STATUS as Signal.State<ApprovalQueueStatus>;
 
 const queue = new PQueue({ concurrency: 1 });
 
-const pendingPayloads = new Map<
-  (decision: ApprovalDecision) => void,
-  ApprovalPayload
->();
-let currentAdvance: (() => void) | undefined;
+interface ApprovalQueueItem {
+  readonly payload: ApprovalPayload;
+  readonly resolve: (decision: ApprovalDecision) => void;
+  advance: (() => void) | undefined;
+}
+
+const pendingItems = new Set<ApprovalQueueItem>();
+let currentItem: ApprovalQueueItem | undefined;
 
 const INTERRUPT: ApprovalDecision = {
   accepted: false,
@@ -120,6 +123,10 @@ function approvalQueueStatusKind(
   return sawQuestion ? 'question' : 'approval';
 }
 
+function* pendingApprovalPayloads(): Iterable<ApprovalPayload> {
+  for (const item of pendingItems) yield item.payload;
+}
+
 export function approvalPayloadStreamId(
   payload: ApprovalPayload,
 ): StreamTabId | undefined {
@@ -139,13 +146,13 @@ export function approvalPayloadStreamId(
 }
 
 function syncApprovalStatus(): void {
-  const depth = pendingPayloads.size;
+  const depth = pendingItems.size;
   STATUS.set({
     depth,
     kind:
       depth === 0
         ? 'approval'
-        : approvalQueueStatusKind(pendingPayloads.values()),
+        : approvalQueueStatusKind(pendingApprovalPayloads()),
   });
 }
 
@@ -153,20 +160,20 @@ export function enqueueApproval(
   payload: ApprovalPayload,
   options: EnqueueApprovalOptions = {},
 ): Promise<ApprovalDecision> {
-  let resolveOuter!: (decision: ApprovalDecision) => void;
+  let item!: ApprovalQueueItem;
   const outer = new Promise<ApprovalDecision>((resolve) => {
-    resolveOuter = resolve;
+    item = { payload, resolve, advance: undefined };
   });
-  pendingPayloads.set(resolveOuter, payload);
+  pendingItems.add(item);
   syncApprovalStatus();
 
   void queue
     .add(async () => {
-      // Already cleared before scheduling — resolveOuter was settled
-      // by clearApprovals; nothing more to do.
-      if (!pendingPayloads.has(resolveOuter)) return;
+      // Already cleared before scheduling: clearApprovals settled the caller.
+      if (!pendingItems.has(item)) return;
       await new Promise<void>((advance) => {
-        currentAdvance = advance;
+        item.advance = advance;
+        currentItem = item;
         try {
           options.onPresent?.();
         } catch {
@@ -176,11 +183,12 @@ export function enqueueApproval(
         CURRENT.set({
           payload,
           decide: (decision) => {
-            if (!pendingPayloads.delete(resolveOuter)) return;
+            if (!pendingItems.delete(item)) return;
             syncApprovalStatus();
             CURRENT.set(undefined);
-            currentAdvance = undefined;
-            resolveOuter(decision);
+            if (currentItem === item) currentItem = undefined;
+            item.advance = undefined;
+            item.resolve(decision);
             advance();
           },
         });
@@ -190,9 +198,9 @@ export function enqueueApproval(
       // p-queue rejects when `queue.clear()` drops the task. Settle the
       // outer promise so the requester (e.g. ToolEditApprovalHandler)
       // doesn't hang forever.
-      if (pendingPayloads.delete(resolveOuter)) {
+      if (pendingItems.delete(item)) {
         syncApprovalStatus();
-        resolveOuter(INTERRUPT);
+        item.resolve(INTERRUPT);
       }
     });
 
@@ -207,13 +215,15 @@ export function enqueueApproval(
 export function clearApprovals(): void {
   queue.clear();
   CURRENT.set(undefined);
-  const pendingResolves = [...pendingPayloads.keys()];
-  pendingPayloads.clear();
+  const items = [...pendingItems];
+  pendingItems.clear();
   syncApprovalStatus();
-  for (const resolve of pendingResolves) resolve(INTERRUPT);
-  if (currentAdvance) {
-    const advance = currentAdvance;
-    currentAdvance = undefined;
-    advance();
+  const activeItem = currentItem;
+  currentItem = undefined;
+  for (const item of items) {
+    const advance = item.advance;
+    item.advance = undefined;
+    item.resolve(INTERRUPT);
+    if (item === activeItem) advance?.();
   }
 }
