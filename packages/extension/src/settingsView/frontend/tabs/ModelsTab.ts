@@ -10,6 +10,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Local imports - shared schemas
 import type {
@@ -27,6 +28,7 @@ import '../components/profile/ProviderKeyList';
 import '../components/profile/ModelSelectionList';
 import '../components/profile/ReliabilitySettingsSection';
 import { ChatGptAuthEvents } from '../components/profile/events';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('models-tab')
 export class ModelsTab extends LitElement {
@@ -73,6 +75,9 @@ export class ModelsTab extends LitElement {
         align-items: center;
         gap: 0.75rem;
         flex-wrap: wrap;
+      }
+      .chatgpt-subscription__setting {
+        margin-bottom: 0.6rem;
       }
       .chatgpt-subscription__account {
         display: inline-flex;
@@ -195,6 +200,7 @@ export class ModelsTab extends LitElement {
    */
   private renderChatGptSection(): TemplateResult {
     const signedIn = this.chatgptAuth?.signedIn ?? false;
+    const preferSubscription = this.chatgptAuth?.preferSubscription ?? false;
     const account =
       this.chatgptAuth?.email ?? this.chatgptAuth?.accountId ?? 'your account';
     return html`
@@ -205,9 +211,21 @@ export class ModelsTab extends LitElement {
         </div>
         <p class="chatgpt-subscription__hint">
           Use your own ChatGPT Plus/Pro/Team subscription for Codex models
-          instead of an API key. After signing in, turn on “Prefer ChatGPT
-          subscription” in settings.
+          instead of an API key.
         </p>
+        <div class="chatgpt-subscription__setting">
+          <wa-switch
+            ?checked=${preferSubscription}
+            @change=${(event: Event) => {
+              const enabled = (event.target as WaSwitch).checked;
+              this.dispatchEvent(
+                ChatGptAuthEvents.setPreferSubscription({ enabled }),
+              );
+            }}
+          >
+            Prefer ChatGPT subscription
+          </wa-switch>
+        </div>
         ${signedIn
           ? html`<div class="chatgpt-subscription__row">
               <span class="chatgpt-subscription__account">

@@ -1,10 +1,10 @@
 /**
- * CLI runtime–only settings.
+ * CLI runtime settings.
  *
  * These fields are read from the CLI's `.texra/config.json` workspace
  * configuration to choose an agent, model, output format, etc. for each
- * `texra` command run. They do not appear in the VS Code extension's
- * settings tree and are not meaningful to the Electron desktop host.
+ * `texra` command run. Shared keys used by CLI commands can also appear in
+ * non-terminal hosts.
  *
  * The CLI parses values via hand-written Zod schemas inside
  * `packages/cli/src/runtime/cliConfig.ts`. This file exposes only the
@@ -27,7 +27,6 @@ export const CLI_SETTING_PATHS = [
   'model',
   'outputFormat',
   'approvalPolicy',
-  // CLI-only until non-terminal hosts expose ChatGPT Codex sign-in.
   'chatgptCodex.preferSubscription',
   'chat',
   'run',

@@ -192,7 +192,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.latexHandlers = new LatexSettingsHandlers(ctx);
     this.historyHandlers = new HistoryHandlers(ctx);
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
-    this.chatgptHandlers = new ChatGptSubscriptionHandlers(ctx);
+    this.chatgptHandlers = new ChatGptSubscriptionHandlers(ctx, () =>
+      this.refreshAfterChatGptAuthChange(),
+    );
     this.goalController = new SettingsGoalController({
       listGoals: () => GoalStore.list(),
     });
@@ -418,6 +420,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.chatgptHandlers.handleSignInChatGpt(),
       [SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT]: () =>
         this.chatgptHandlers.handleSignOutChatGpt(),
+      [SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION]: (data) =>
+        this.chatgptHandlers.handleSetPreferSubscription(data.enabled),
       [SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS]: () =>
         this.withActiveWebview((w) =>
           this.githubHandlers.sendPRSubscriptions(w),
@@ -945,6 +949,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await Promise.all([
       vscode.commands.executeCommand('texra.refreshAllOptions'),
       this.withActiveWebview((w) => this.sendProfileAndModelSelectionData(w)),
+    ]);
+  }
+
+  private async refreshAfterChatGptAuthChange(): Promise<void> {
+    invalidateModelOptionsCache();
+    await Promise.all([
+      vscode.commands.executeCommand('texra.refreshAllOptions'),
+      this.withActiveWebview((w) => this.sendModelSelectionData(w)),
     ]);
   }
 

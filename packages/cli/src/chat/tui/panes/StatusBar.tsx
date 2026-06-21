@@ -181,6 +181,7 @@ const STATUS_BAR_HORIZONTAL_PADDING = 2;
 const STATUS_BAR_MIN_RIGHT_PREVIEW = 12;
 // Preserve a readable separator between the left status group and right preview.
 const STATUS_BAR_RIGHT_PREVIEW_GAP = 2;
+const CODEX_SIGN_IN_REFRESH_MS = 10_000;
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
   activeProcess: 10,
@@ -836,21 +837,27 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
 
   useEffect(() => {
     let cancelled = false;
+    const refreshSignedIn = () => {
+      void isCodexSignedIn()
+        .then((signedIn) => {
+          if (!cancelled) setCodexSignedIn(signedIn);
+        })
+        .catch(() => {
+          if (!cancelled) setCodexSignedIn(false);
+        });
+    };
     if (!subscriptionEligible) {
       setCodexSignedIn(false);
       return () => {
         cancelled = true;
       };
     }
-    void isCodexSignedIn()
-      .then((signedIn) => {
-        if (!cancelled) setCodexSignedIn(signedIn);
-      })
-      .catch(() => {
-        if (!cancelled) setCodexSignedIn(false);
-      });
+    refreshSignedIn();
+    const refreshTimer = setInterval(refreshSignedIn, CODEX_SIGN_IN_REFRESH_MS);
+    refreshTimer.unref?.();
     return () => {
       cancelled = true;
+      clearInterval(refreshTimer);
     };
   }, [sessionMeta.model, subscriptionEligible]);
 

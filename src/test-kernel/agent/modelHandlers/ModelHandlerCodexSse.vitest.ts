@@ -44,6 +44,57 @@ describe('Codex SSE collapse', () => {
     expect(body.output?.[1]?.type).toBe('message');
   });
 
+  it('recovers streamed text when completed output has no text item', () => {
+    const result = sseToResponseJson(
+      [
+        'data: {"type":"response.output_text.delta","delta":"hello "}',
+        '',
+        'data: {"type":"response.output_text.delta","delta":"world"}',
+        '',
+        'data: {"type":"response.completed","response":{"id":"final","status":"completed","output":[{"type":"reasoning","id":"rs_1","summary":[]}]}}',
+        '',
+        'data: [DONE]',
+      ].join('\n'),
+    );
+
+    expect(result).toEqual({
+      body: {
+        id: 'final',
+        status: 'completed',
+        output: [{ type: 'reasoning', id: 'rs_1', summary: [] }],
+        output_text: 'hello world',
+      },
+      status: 200,
+    });
+  });
+
+  it('preserves completed output text instead of overwriting it', () => {
+    const result = sseToResponseJson(
+      [
+        'data: {"type":"response.output_text.delta","delta":"streamed"}',
+        '',
+        'data: {"type":"response.completed","response":{"id":"final","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"final text"}]}]}}',
+        '',
+        'data: [DONE]',
+      ].join('\n'),
+    );
+
+    expect(result).toEqual({
+      body: {
+        id: 'final',
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'final text' }],
+          },
+        ],
+      },
+      status: 200,
+    });
+  });
+
   it('marks failed response events as unsuccessful', () => {
     const result = sseToResponseJson(
       [

@@ -143,6 +143,12 @@
             "default": false,
             "description": "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
             "scope": "resource"
+          },
+          "texra.chatgptCodex.preferSubscription": {
+            "type": "boolean",
+            "default": false,
+            "description": "Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental.",
+            "scope": "resource"
           }
         }
       },
