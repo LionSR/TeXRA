@@ -97,15 +97,13 @@ export class VerifySetupTool extends defineTool({
     lines.push(
       `LaTeX Workshop extension: ${latexWorkshopInstalled ? 'installed' : 'NOT installed'}.`,
     );
-    // `anyKey` (from SecretManager.anyApiKeyExists) is already the
-    // authoritative signal — it covers both direct provider keys and
-    // Researcher Access signed-in users who have Included Access on. A
-    // bare auth.authenticated without usable server-side keys is NOT a
-    // working credential, so we don't let it count toward "ready".
+    // The setup adapter's historical `anyApiKeyExists` name means "any usable
+    // model credential": direct provider key, ChatGPT subscription, or
+    // Researcher Access with Included Access on. A bare auth.authenticated
+    // without usable server-side keys is NOT a working credential, so we don't
+    // let it count toward "ready".
     const credSummary = anyKey
-      ? auth.authenticated
-        ? 'API key or Researcher Access available'
-        : 'API key set'
+      ? 'usable model credential available'
       : auth.authenticated
         ? 'signed in but Included Access is OFF — need an API key or re-enable it'
         : 'NONE — need an API key or sign-in';
