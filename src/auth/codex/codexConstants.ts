@@ -112,11 +112,12 @@ export const CODEX_SUBSCRIPTION_MODEL_FULLNAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Whether a model (by its llm-zoo `fullName`) is eligible to route through the
- * ChatGPT subscription. True for the curated set above or any `*-codex*` name,
- * so newer Codex models are picked up without a code change.
+ * Whether a model id is eligible to route through the ChatGPT subscription.
+ * True for the curated set above, date-pinned variants of those ids, or any
+ * `*-codex*` name so newer Codex models are picked up without a code change.
  */
 export function isCodexSubscriptionEligible(fullName: string): boolean {
-  if (CODEX_SUBSCRIPTION_MODEL_FULLNAMES.has(fullName)) return true;
+  const unpinnedName = fullName.replace(/-\d{4}-\d{2}-\d{2}$/, '');
+  if (CODEX_SUBSCRIPTION_MODEL_FULLNAMES.has(unpinnedName)) return true;
   return /codex/i.test(fullName);
 }

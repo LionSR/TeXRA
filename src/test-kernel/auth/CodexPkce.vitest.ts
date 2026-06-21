@@ -52,6 +52,10 @@ describe('codex model eligibility', () => {
     expect(isCodexSubscriptionEligible('gpt-5.4-mini')).toBe(true);
   });
 
+  it('accepts date-pinned variants of curated models', () => {
+    expect(isCodexSubscriptionEligible('gpt-5.5-2026-04-23')).toBe(true);
+  });
+
   it('accepts any codex-named model (future-proof)', () => {
     expect(isCodexSubscriptionEligible('gpt-5.9-codex')).toBe(true);
     expect(isCodexSubscriptionEligible('gpt-6-codex-mini')).toBe(true);
