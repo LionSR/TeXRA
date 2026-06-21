@@ -14,7 +14,10 @@ import * as vscode from 'vscode';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
-import { buildToolDashboardItems } from '@controllers/settingsView/ToolDashboardData';
+import {
+  buildToolDashboardItems,
+  buildToolDashboardTerminalAction,
+} from '@controllers/settingsView/ToolDashboardData';
 import { platform } from '@platform/platform';
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
 import {
@@ -75,7 +78,6 @@ import {
   refreshToolAvailability,
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
-import { findExternalToolDef } from '@tools/externalToolDefs';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
@@ -510,18 +512,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private handleRunToolCommand(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.RUN_TOOL_COMMAND>,
   ): void {
-    const def = findExternalToolDef(data.toolId);
-    const command =
-      data.kind === 'install' ? def?.installCommand : def?.authCommand;
-    if (!command) {
-      this.logger.debug(this.channel, 'No command for tool', { data });
+    const action = buildToolDashboardTerminalAction({
+      toolId: data.toolId,
+      commandKind: data.kind,
+    });
+    if (action.kind === 'none') {
+      this.logger.debug(this.channel, 'No command for tool', {
+        data: { ...data, reason: action.reason },
+      });
       return;
     }
     const terminal = vscode.window.createTerminal({
-      name: `TeXRA: ${def?.name ?? data.toolId}`,
+      name: action.name,
     });
     terminal.show();
-    terminal.sendText(command);
+    terminal.sendText(action.command);
   }
 
   public override async handleMessage(
