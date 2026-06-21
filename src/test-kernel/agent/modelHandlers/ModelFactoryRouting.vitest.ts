@@ -22,6 +22,11 @@ import {
   modelHandlerCompatibilityKey,
   shouldUseResponsesAPI,
 } from '@agent/runtime/ModelFactory';
+import {
+  CODEX_SESSION_SECRET_KEY,
+  resetCodexCoordinator,
+  type CodexSession,
+} from '@auth/codex';
 
 function modelConfig(
   provider: ModelProvider,
@@ -45,6 +50,7 @@ function modelConfig(
 describe('OpenAI model handler routing', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    resetCodexCoordinator();
   });
 
   it('routes current GPT reasoning tool-use models to Responses by default', () => {
@@ -198,6 +204,40 @@ describe('OpenAI model handler routing', () => {
       expect(activeModelHandlerCompatibilityKey(handler)).toBe(
         'ModelHandlerOpenAIResponse',
       );
+    } finally {
+      handler.dispose();
+    }
+  });
+
+  it('uses an unpinned Codex model id even when shortName is absent', async () => {
+    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/FakePlatform'),
+    ]);
+    const codexSession: CodexSession = {
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAtMs: Date.now() + 60_000,
+      accountId: 'account-id',
+    };
+    initPlatform(
+      createFakePlatform({
+        config: { 'texra.chatgptCodex.preferSubscription': true },
+        secrets: {
+          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
+        },
+      }),
+    );
+
+    const handler = await createModelHandler({
+      ...codexEligibleConfig,
+      shortName: '',
+    });
+    try {
+      expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+        'ModelHandlerOpenAIResponse',
+      );
+      expect(handler.config.fullName).toBe('gpt-5.5');
     } finally {
       handler.dispose();
     }
