@@ -31,6 +31,7 @@ import {
 } from '@auth/codex';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
+import type { ResponseUsage } from 'openai/resources/responses/responses';
 
 /** Flatten Responses message content (string or typed parts) to plain text. */
 function partsToText(content: unknown): string {
@@ -192,6 +193,11 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return false;
   }
 
+  /** Subscription usage consumes ChatGPT quota, not TeXRA-tracked API spend. */
+  public override computePrice(_responseUsage: ResponseUsage): number {
+    return 0;
+  }
+
   /** OAuth access token in place of an API key (becomes the Bearer header). */
   public override async getApiKey(): Promise<string> {
     return this.resolveAccessToken();
@@ -230,7 +236,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     } catch (error) {
       if (error instanceof CodexAuthError) {
         const action = error.needsReauth
-          ? 'Sign in with ChatGPT again (Settings → Models), or turn off "Prefer ChatGPT subscription".'
+          ? 'Sign in with ChatGPT again, or turn off "Prefer ChatGPT subscription".'
           : 'Try again in a moment, or turn off "Prefer ChatGPT subscription".';
         throw new Error(
           `ChatGPT subscription unavailable: ${error.message} ${action}`,
