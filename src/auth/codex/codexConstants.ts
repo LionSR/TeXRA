@@ -98,7 +98,9 @@ export const CODEX_PREFER_SUBSCRIPTION_KEY =
  * OpenAI models the Codex backend currently serves to ChatGPT subscribers. This
  * is a hardcoded mirror of openai/codex's bundled models.json picker set and
  * WILL go stale; the backend also rejects models above the account's tier. Keep
- * it small and easy to edit. Matched against `ModelConfig.fullName`.
+ * it small and easy to edit. Matched against the model id passed to
+ * `isCodexSubscriptionEligible`; routing passes `shortName || fullName` so
+ * date-pinned llm-zoo names still match the bare Codex backend ids.
  */
 export const CODEX_SUBSCRIPTION_MODEL_FULLNAMES: ReadonlySet<string> = new Set([
   'gpt-5.5',

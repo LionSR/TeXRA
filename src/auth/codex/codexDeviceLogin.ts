@@ -4,6 +4,8 @@
  * The user opens a URL and types a one-time code; we poll until they approve.
  * Host-neutral: the host renders the prompt (`onPrompt`) however it likes.
  */
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import { CODEX_DEVICE_VERIFICATION_URL } from './codexConstants';
 import {
   type CodexLogger,
@@ -35,10 +37,6 @@ export interface CodexDeviceLoginOptions {
   log?: CodexLogger;
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Run the device-code flow end to end and persist the session. Resolves to the
  * stored session once the user approves; rejects on timeout or a hard failure.
@@ -60,7 +58,7 @@ export async function loginWithDeviceCode(
 
   const deadline = Date.now() + DEVICE_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    await delay(intervalMs);
+    await sleep(intervalMs);
     options.onPoll?.();
     try {
       const token = await pollDeviceToken({

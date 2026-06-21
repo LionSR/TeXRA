@@ -78,6 +78,7 @@ export class CodexSessionCoordinator {
   private readonly log?: CodexLogger;
   private readonly now: () => number;
   private refreshInFlight: Promise<CodexSession> | null = null;
+  private sessionGeneration = 0;
 
   constructor(init: CodexSessionCoordinatorInit) {
     this.storage = init.storage;
@@ -114,6 +115,7 @@ export class CodexSessionCoordinator {
 
   /** Forget the session (sign out). */
   async signOut(): Promise<void> {
+    this.sessionGeneration += 1;
     this.refreshInFlight = null;
     await this.storage.delete();
   }
@@ -159,6 +161,7 @@ export class CodexSessionCoordinator {
   }): Promise<CodexSession> {
     const tokens = await this.client.exchangeAuthorizationCode(params);
     const session = this.buildSession(tokens);
+    this.sessionGeneration += 1;
     await this.storeSession(session);
     return session;
   }
@@ -211,14 +214,18 @@ export class CodexSessionCoordinator {
   private async refresh(previous: CodexSession): Promise<CodexSession> {
     // Single-flight: concurrent callers await the same refresh.
     if (this.refreshInFlight) return this.refreshInFlight;
-    const task = this.performRefresh(previous).finally(() => {
-      this.refreshInFlight = null;
+    const generation = this.sessionGeneration;
+    const task = this.performRefresh(previous, generation).finally(() => {
+      if (this.refreshInFlight === task) this.refreshInFlight = null;
     });
     this.refreshInFlight = task;
     return task;
   }
 
-  private async performRefresh(previous: CodexSession): Promise<CodexSession> {
+  private async performRefresh(
+    previous: CodexSession,
+    generation: number,
+  ): Promise<CodexSession> {
     let tokens: CodexTokenResponse;
     try {
       tokens = await this.client.refreshTokens(previous.refreshToken);
@@ -231,6 +238,12 @@ export class CodexSessionCoordinator {
       throw error;
     }
     const session = this.buildSession(tokens, previous);
+    if (generation !== this.sessionGeneration) {
+      throw new CodexAuthError(
+        'ChatGPT session changed while refreshing. Try again.',
+        'expired',
+      );
+    }
     await this.storeSession(session);
     return session;
   }
