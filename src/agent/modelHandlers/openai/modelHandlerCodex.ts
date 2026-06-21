@@ -74,8 +74,10 @@ function isGenerationRequest(url: string): boolean {
 function sseToResponseJson(sse: string): unknown | null {
   let completed: unknown = null;
   let last: unknown = null;
-  for (const block of sse.split('\n\n')) {
-    const dataLine = block.split('\n').find((line) => line.startsWith('data:'));
+  for (const block of sse.split(/\r?\n\r?\n/)) {
+    const dataLine = block
+      .split(/\r?\n/)
+      .find((line) => line.startsWith('data:'));
     if (!dataLine) continue;
     const payload = dataLine.slice('data:'.length).trim();
     if (!payload || payload === '[DONE]') continue;
@@ -178,6 +180,8 @@ const codexFetch = (async (input, init) => {
 }) satisfies typeof fetch;
 
 export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
+  protected override backgroundModeSupported = false;
+
   // The Codex backend has no `/responses/input_tokens` or `/compact` endpoint
   // (they return 403); rely on the handler's heuristic fallbacks instead.
   public override get supportsTokenCounting(): boolean {

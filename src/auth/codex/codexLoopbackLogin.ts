@@ -28,6 +28,12 @@ const SUCCESS_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Si
 <p>You can close this tab and return to TeXRA.</p>
 </body></html>`;
 
+const ERROR_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Sign-in error</title></head>
+<body style="font-family:system-ui;text-align:center;padding-top:4rem">
+<h2>Sign-in error</h2>
+<p>Return to TeXRA and try signing in again.</p>
+</body></html>`;
+
 export interface CodexLoopbackLoginOptions {
   coordinator: CodexSessionCoordinator;
   /** Open the consent URL in the user's browser. */
@@ -35,8 +41,12 @@ export interface CodexLoopbackLoginOptions {
   log?: CodexLogger;
 }
 
-function respondHtml(res: http.ServerResponse, html: string): void {
-  res.statusCode = 200;
+function respondHtml(
+  res: http.ServerResponse,
+  html: string,
+  statusCode = 200,
+): void {
+  res.statusCode = statusCode;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.end(html);
 }
@@ -86,6 +96,16 @@ export async function loginWithLoopback(
       reject(new Error('Timed out waiting for the ChatGPT sign-in callback.'));
     }, CALLBACK_TIMEOUT_MS);
 
+    const rejectCallback = (
+      res: http.ServerResponse,
+      message: string,
+      statusCode = 400,
+    ) => {
+      respondHtml(res, ERROR_HTML, statusCode);
+      clearTimeout(timer);
+      reject(new Error(message));
+    };
+
     server.on('request', (req, res) => {
       try {
         const url = new URL(req.url ?? '', `http://127.0.0.1:${port}`);
@@ -96,20 +116,19 @@ export async function loginWithLoopback(
         }
         const oauthError = url.searchParams.get('error');
         if (oauthError) {
-          respondHtml(res, SUCCESS_HTML.replace('Signed in', 'Sign-in error'));
-          clearTimeout(timer);
-          reject(new Error(`ChatGPT sign-in failed: ${oauthError}`));
+          rejectCallback(res, `ChatGPT sign-in failed: ${oauthError}`);
           return;
         }
         if (url.searchParams.get('state') !== authorize.state) {
-          res.statusCode = 400;
-          res.end('State mismatch');
+          rejectCallback(res, 'ChatGPT sign-in callback state did not match.');
           return;
         }
         const code = url.searchParams.get('code');
         if (!code) {
-          res.statusCode = 400;
-          res.end('Missing authorization code');
+          rejectCallback(
+            res,
+            'ChatGPT sign-in callback did not include an authorization code.',
+          );
           return;
         }
         respondHtml(res, SUCCESS_HTML);
