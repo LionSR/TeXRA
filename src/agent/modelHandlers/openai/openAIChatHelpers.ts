@@ -1,5 +1,6 @@
 import { takeTail } from '@common/errors/sdkErrorUtils';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
+import type { ChatCompletionSnapshot } from 'openai/lib/ChatCompletionStream';
 
 // Reasoning content type for DeepSeek, o1 models (not in SDK)
 type ReasoningContent = string | Array<{ type: string; text?: string }>;
@@ -25,9 +26,7 @@ export function extractReasoningDelta(chunk: ChatCompletionChunk): string {
  * suffix because continuation prompts reference the tail of the response.
  */
 export function extractOpenAIPartialTail(
-  snapshot:
-    | { choices?: Array<{ message?: { content?: string | null } }> }
-    | undefined,
+  snapshot: ChatCompletionSnapshot | undefined,
   maxChars: number,
 ): string {
   const content = snapshot?.choices?.[0]?.message?.content ?? '';
