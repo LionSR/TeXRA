@@ -242,6 +242,40 @@ describe('CLI session status formatter', () => {
     );
   });
 
+  it('shows the subscription line after api when subscription routing is active', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'gpt55',
+      api: 'included relay',
+      subscription: true,
+      approval: 'ask',
+      status: 'running',
+      queuedFollowUpMessages: [],
+    });
+
+    expect(status).toContain(
+      [
+        'api: included relay',
+        'subscription: on (Codex models use your ChatGPT plan)',
+        'approval: ask',
+      ].join('\n'),
+    );
+  });
+
+  it('omits the subscription line when subscription routing is inactive', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'gpt55',
+      api: 'included relay',
+      subscription: false,
+      approval: 'ask',
+      status: 'running',
+      queuedFollowUpMessages: [],
+    });
+
+    expect(status).not.toContain('subscription:');
+  });
+
   it('includes team identity when a chat was launched from a preset', () => {
     expect(
       formatCliSessionStatus({
