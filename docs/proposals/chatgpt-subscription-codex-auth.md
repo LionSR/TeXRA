@@ -158,7 +158,11 @@ one-file edit.
 
 ### 5. Platform / VS Code separation
 
-Per `CLAUDE.md`, `src/agent/`, `src/model/`, and `src/auth/` core stay VS Code-free.
+Per `CLAUDE.md`, `src/agent/` and `src/model/` are VS Code-free zones and must
+not import `vscode`. (`src/auth/` is listed under CLAUDE.md's *VS Code-allowed*
+zones, but in practice it is host-agnostic — it only reaches host services through
+`@platform` — so the Codex coordinator added here should keep that property and
+stay `vscode`-free too.)
 
 - The loopback server, browser-open, and keychain access go through existing host
   ports (`platform().secrets`, the opener host capability), not `vscode` imports.
