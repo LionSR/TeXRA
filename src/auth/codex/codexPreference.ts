@@ -27,10 +27,7 @@ function codexPreferenceUpdateTarget(): ConfigTarget {
   const inspection = tryPlatform()?.config.inspect<boolean>(
     CODEX_PREFER_SUBSCRIPTION_KEY,
   );
-  return inspection?.workspaceValue !== undefined ||
-    inspection?.workspaceFolderValue !== undefined
-    ? 'workspace'
-    : 'global';
+  return inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
 }
 
 /** Update the preference at the scope that currently controls its value. */
