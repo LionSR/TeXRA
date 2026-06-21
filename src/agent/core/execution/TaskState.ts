@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   MULTIPLE_DOCUMENT_FILE_TYPES,
   type MultipleDocumentFileType,
-} from '@shared/schemas/mainView';
+} from '@shared/schemas/fileTypes';
 
 import { AgentCategory } from '../definition/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '../definition/AgentConfig';
