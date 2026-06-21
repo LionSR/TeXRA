@@ -3,7 +3,6 @@ import * as path from 'node:path';
 
 // Third-party imports
 import fsExtra from 'fs-extra';
-import { glob } from 'glob';
 
 // Local imports
 import { toErrorMessage } from '@common/errors';
@@ -26,7 +25,6 @@ const LEGACY_AGENT_FILES = [
 ];
 
 export interface AgentDirectoryBundleSource {
-  listYamlFiles(directoryName: BundledAgentDirectoryName): Promise<string[]>;
   copyDirectory(
     directoryName: BundledAgentDirectoryName,
     destinationPath: string,
@@ -59,13 +57,6 @@ export interface BundledAgentDirectorySyncOptions {
 
 export class PathAgentDirectoryBundleSource implements AgentDirectoryBundleSource {
   constructor(private readonly resourcesBasePath: string) {}
-
-  listYamlFiles(directoryName: BundledAgentDirectoryName): Promise<string[]> {
-    return glob('**/*.yaml', {
-      cwd: path.join(this.resourcesBasePath, directoryName),
-      nodir: true,
-    });
-  }
 
   async copyDirectory(
     directoryName: BundledAgentDirectoryName,
@@ -103,14 +94,6 @@ export class BundledAgentDirectorySync {
   async reconcile(currentVersion: string | undefined): Promise<boolean> {
     await this.deleteLegacyAgentFiles();
 
-    const lastKnownVersion = this.options.versionStore.get();
-    if (
-      currentVersion === lastKnownVersion &&
-      !(await this.hasMissingBundledAgentFiles())
-    ) {
-      return false;
-    }
-
     for (const directoryName of BUNDLED_AGENT_DIRECTORY_NAMES) {
       await this.options.storage.ensureDir(directoryName);
       await this.options.bundleSource.copyDirectory(
@@ -121,27 +104,6 @@ export class BundledAgentDirectorySync {
 
     await this.options.versionStore.update(currentVersion);
     return true;
-  }
-
-  private async hasMissingBundledAgentFiles(): Promise<boolean> {
-    for (const directoryName of BUNDLED_AGENT_DIRECTORY_NAMES) {
-      const bundledFiles =
-        await this.options.bundleSource.listYamlFiles(directoryName);
-
-      for (const relativePath of bundledFiles) {
-        const storagePath = path.join(directoryName, relativePath);
-        if (await this.options.storage.exists(storagePath)) {
-          continue;
-        }
-
-        this.options.logger.info(
-          `Bundled agent missing from global storage, re-syncing defaults: ${storagePath}`,
-        );
-        return true;
-      }
-    }
-
-    return false;
   }
 
   private async deleteLegacyAgentFiles(): Promise<void> {
