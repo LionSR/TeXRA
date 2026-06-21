@@ -25,8 +25,7 @@ import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
 import {
   codexCoordinator,
-  getCodexStatus,
-  isPreferCodexSubscription,
+  getChatGptAuthStatus,
   loginWithLoopback,
   setPreferCodexSubscription,
 } from '@auth/codex';
@@ -354,10 +353,9 @@ export function createDesktopSettingsIpc(
   }
 
   async function postChatGptAuthStatus(): Promise<void> {
-    const status = await getCodexStatus();
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      status: { ...status, preferSubscription: isPreferCodexSubscription() },
+      status: await getChatGptAuthStatus(),
     });
   }
 

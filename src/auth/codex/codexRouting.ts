@@ -10,7 +10,10 @@
  */
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { isCodexSubscriptionEligible } from './codexConstants';
+import {
+  codexBackendModelId,
+  isCodexSubscriptionEligible,
+} from './codexConstants';
 import { isPreferCodexSubscription } from './codexPreference';
 
 /**
@@ -26,7 +29,7 @@ export function shouldUseCodexSubscription(
   if (config.provider !== ModelProvider.OPENAI) return false;
   if (config.openRouterOnly) return false;
   if (!isPreferCodexSubscription()) return false;
-  // Match the unpinned id: llm-zoo `fullName`s are date-pinned
-  // (`gpt-5.5-2026-04-23`), but the Codex backend keys on the bare `gpt-5.5`.
-  return isCodexSubscriptionEligible(config.shortName || config.fullName);
+  // Match the bare id the Codex backend keys on (`gpt-5.5`), not the date-pinned
+  // llm-zoo `fullName` (`gpt-5.5-2026-04-23`) — the same derivation dispatch uses.
+  return isCodexSubscriptionEligible(codexBackendModelId(config));
 }
