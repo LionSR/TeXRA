@@ -139,6 +139,42 @@ interface ResponseFinalizeContext {
   readonly compactedMessages: ResponseInputItem[] | undefined;
 }
 
+function responseOutputItemKey(item: ResponseOutputItem): string | undefined {
+  if (typeof item.id === 'string') return `id:${item.id}`;
+  if (item.type === 'function_call' && typeof item.call_id === 'string') {
+    return `function_call:${item.call_id}`;
+  }
+  return undefined;
+}
+
+function mergeMissingStreamedOutputItems(
+  finalOutput: Response['output'],
+  streamedItems: Response['output'],
+): Response['output'] {
+  if (streamedItems.length === 0) return finalOutput;
+  if (!Array.isArray(finalOutput) || finalOutput.length === 0) {
+    return streamedItems;
+  }
+
+  const finalKeys = new Set(
+    finalOutput.map(responseOutputItemKey).filter(filterNotNullish),
+  );
+  const hasMissingStreamedItem = streamedItems.some((item) => {
+    const key = responseOutputItemKey(item);
+    return key != null && !finalKeys.has(key);
+  });
+  if (!hasMissingStreamedItem) return finalOutput;
+
+  const streamedKeys = new Set(
+    streamedItems.map(responseOutputItemKey).filter(filterNotNullish),
+  );
+  const finalOnlyItems = finalOutput.filter((item) => {
+    const key = responseOutputItemKey(item);
+    return key == null || !streamedKeys.has(key);
+  });
+  return [...streamedItems, ...finalOnlyItems];
+}
+
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
  * the native response message types instead of reusing the chat completion
@@ -1566,20 +1602,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
-      // Some backends (the ChatGPT-subscription Codex endpoint) stream the
-      // output items (text, tool calls, reasoning) but leave the completed
-      // response's `output` empty, so the whole turn — function calls included —
-      // would otherwise be dropped (usage counted, nothing produced). Rebuild
-      // `output` from the streamed `output_item.done` events. The guard keeps
-      // the standard OpenAI path (which populates `output`) intact.
+      // Some backends (the ChatGPT-subscription Codex endpoint) stream output
+      // items (text, tool calls, reasoning) but leave the completed response's
+      // `output` empty or partial. Fill missing items from streamed
+      // `output_item.done` events so function calls are not dropped.
       // `finalResponse()` returns a `ParsedResponse`, but `output` /
-      // `output_text` are mutable fields on the base `Response`; assign through
-      // that view so the streamed items replace the empty values natively,
-      // without a hand-rolled shape cast.
-      const hasFinalOutput =
-        Array.isArray(response.output) && response.output.length > 0;
-      if (!hasFinalOutput && streamedItems.length > 0) {
-        (response as Response).output = streamedItems;
+      // `output_text` are mutable fields on the base `Response`; assign
+      // through that view so no hand-rolled response shape is needed.
+      const mergedOutput = mergeMissingStreamedOutputItems(
+        response.output,
+        streamedItems,
+      );
+      if (mergedOutput !== response.output) {
+        (response as Response).output = mergedOutput;
       }
       if (streamedText && !hasResponseOutputText(response)) {
         (response as Response).output_text = streamedText;
