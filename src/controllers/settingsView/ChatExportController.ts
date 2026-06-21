@@ -22,6 +22,8 @@ import {
   type ChatExportInput,
 } from '@commands/history/chatExportFormatter';
 
+export type { ChatExportInput };
+
 // Local imports - LaTeX
 import { compileLatex2Pdf } from '@latex/texTools';
 
@@ -41,10 +43,9 @@ export type ExportInputStatus =
   | 'config_missing'
   | 'conversation_missing';
 
-export interface ExportInputResult {
-  readonly status: ExportInputStatus;
-  readonly exportInput?: ChatExportInput;
-}
+export type ExportInputResult =
+  | { readonly status: 'ok'; readonly exportInput: ChatExportInput }
+  | { readonly status: Exclude<ExportInputStatus, 'ok'> };
 
 export interface ChatExportResult {
   /** Storage-relative path to the exported file. */
@@ -163,7 +164,6 @@ export class ChatExportController {
     exportInput: ChatExportInput,
     assetsSrc: string,
   ): Promise<HtmlExportResult> {
-    const path = await import('node:path');
     const { formatChatAsHtml } =
       await import('@commands/history/htmlExport/htmlFormatter');
     const fsExtra = (await import('fs-extra')).default;
