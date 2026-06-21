@@ -3,7 +3,9 @@ import { Badge } from '@inkjs/ui';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import stringWidth from 'string-width';
 
+import { shouldUseCodexSubscription } from '@auth/codex';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 import {
   defaultShortcutModifierLabel,
   metaChordLabel,
@@ -90,6 +92,9 @@ export interface StatusBarDisplayInput {
   readonly hasMultipleStreams: boolean;
   readonly model: string;
   readonly apiMode: string;
+  /** True when the active model routes through the ChatGPT subscription; the
+   *  mode segment then reads "subscription" instead of the api-mode. */
+  readonly subscriptionActive?: boolean;
   readonly approvalPolicy?: CliApprovalPolicy;
   readonly shortcutModifierLabel?: string;
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
@@ -696,7 +701,11 @@ export function buildStatusBarDisplay(
   const rootActive = rootActiveSegment(input);
   if (rootActive) left.push(rootActive);
 
-  left.push({ text: input.apiMode, color: 'dim' });
+  left.push(
+    input.subscriptionActive
+      ? { text: 'subscription', color: 'cyan', compactText: 'sub' }
+      : { text: input.apiMode, color: 'dim' },
+  );
   const policy = approvalPolicySegment(input.approvalPolicy);
   if (policy) left.push(policy);
 
@@ -845,6 +854,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
+    subscriptionActive: (() => {
+      const config = MODEL_CONFIGS[sessionMeta.model];
+      return config
+        ? shouldUseCodexSubscription(config, getUseOpenRouter())
+        : false;
+    })(),
     approvalPolicy: sessionMeta.approvalPolicy,
     shiftEnterNewline: caps.kittyKeyboard,
     transcriptAvailable: props.transcriptAvailable,
