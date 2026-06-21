@@ -13,12 +13,12 @@ _texra_agents() {
 
 _texra_workflow_agents() {
   _texra_completion_dynamic || return 0
-  texra agents list --quiet --category workflow 2>/dev/null | awk '{print $2}'
+  texra agents list --quiet --all --category workflow 2>/dev/null | awk '{print $2}'
 }
 
 _texra_tool_use_agents() {
   _texra_completion_dynamic || return 0
-  texra agents list --quiet --category toolUse 2>/dev/null | awk '{print $2}'
+  texra agents list --quiet --all --category toolUse 2>/dev/null | awk '{print $2}'
 }
 
 _texra_models() {
@@ -732,13 +732,13 @@ complete -c texra -n '__fish_seen_subcommand_from version' -l 'color' -d 'Emit A
 complete -c texra -n '__fish_seen_subcommand_from version' -l 'no-color' -d 'Disable ANSI color on every stream'
 complete -c texra -n '__fish_seen_subcommand_from version' -l 'no-input' -d 'For headless commands, disable prompts and default approvals to never'
 complete -c texra -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
-complete -c texra -n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from multi-agent' -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --category workflow 2>/dev/null | awk "{print \\$2}")'
-complete -c texra -n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from run' -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --category toolUse 2>/dev/null | awk "{print \\$2}")'
+complete -c texra -n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from multi-agent' -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --all --category workflow 2>/dev/null | awk "{print \\$2}")'
+complete -c texra -n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from run' -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --all --category toolUse 2>/dev/null | awk "{print \\$2}")'
 complete -c texra -n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from show' -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet 2>/dev/null | awk "{print \\$2}")'
 complete -c texra -n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from inspect' -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet 2>/dev/null | awk "{print \\$2}")'
 complete -c texra -n '__fish_seen_subcommand_from models; and __fish_seen_subcommand_from show' -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra models list --quiet 2>/dev/null | awk "{print \\$1}")'
 complete -c texra -l model -s m -r -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra models list --quiet 2>/dev/null | awk "{print \\$1}")'
-complete -c texra -l agent -r -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --category toolUse 2>/dev/null | awk "{print \\$2}")'
+complete -c texra -l agent -r -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --all --category toolUse 2>/dev/null | awk "{print \\$2}")'
 "
 `;
 
@@ -752,12 +752,12 @@ _texra_agents() {
 
 _texra_workflow_agents() {
   [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
-  texra agents list --quiet --category workflow 2>/dev/null | awk '{print $2}'
+  texra agents list --quiet --all --category workflow 2>/dev/null | awk '{print $2}'
 }
 
 _texra_tool_use_agents() {
   [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
-  texra agents list --quiet --category toolUse 2>/dev/null | awk '{print $2}'
+  texra agents list --quiet --all --category toolUse 2>/dev/null | awk '{print $2}'
 }
 
 _texra_models() {

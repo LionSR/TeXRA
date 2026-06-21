@@ -31,8 +31,12 @@ describe('CLI shell completion', () => {
 
     expect(bash).toContain('TEXRA_COMPLETION_DYNAMIC');
     expect(bash).toContain('texra agents list --quiet');
-    expect(bash).toContain('texra agents list --quiet --category workflow');
-    expect(bash).toContain('texra agents list --quiet --category toolUse');
+    expect(bash).toContain(
+      'texra agents list --quiet --all --category workflow',
+    );
+    expect(bash).toContain(
+      'texra agents list --quiet --all --category toolUse',
+    );
     expect(bash).toContain('texra models list --quiet');
   });
 
@@ -126,9 +130,9 @@ describe('CLI shell completion', () => {
       writeFileSync(
         path.join(bin, 'texra'),
         `#!/usr/bin/env bash
-if [[ "$*" == "agents list --quiet --category workflow" ]]; then
+if [[ "$*" == "agents list --quiet --all --category workflow" ]]; then
   printf 'workflow\\tpolish\\nworkflow\\tcorrect\\n'
-elif [[ "$*" == "agents list --quiet --category toolUse" ]]; then
+elif [[ "$*" == "agents list --quiet --all --category toolUse" ]]; then
   printf 'toolUse\\treview\\ntoolUse\\tlean\\n'
 elif [[ "$*" == "agents list --quiet" ]]; then
   printf 'workflow\\tpolish\\ntoolUse\\treview\\n'
@@ -185,10 +189,10 @@ printf 'agents-inspect:%s\\n' "\${COMPREPLY[@]}"
     const fish = await generateCompletionScript(rootCommand, 'fish');
 
     expect(fish).toContain(
-      "complete -c texra -n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from multi-agent' -a '(test \"$TEXRA_COMPLETION_DYNAMIC\" != 0; and texra agents list --quiet --category workflow",
+      "complete -c texra -n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from multi-agent' -a '(test \"$TEXRA_COMPLETION_DYNAMIC\" != 0; and texra agents list --quiet --all --category workflow",
     );
     expect(fish).toContain(
-      "complete -c texra -n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from run' -a '(test \"$TEXRA_COMPLETION_DYNAMIC\" != 0; and texra agents list --quiet --category toolUse",
+      "complete -c texra -n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from run' -a '(test \"$TEXRA_COMPLETION_DYNAMIC\" != 0; and texra agents list --quiet --all --category toolUse",
     );
   });
 
