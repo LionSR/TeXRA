@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@common/errors';
-import { buildWebviewHtml } from '@frontend/webview/html';
 import * as logger from '@logger/logUtils';
+
+import { buildWebviewHtml } from './html';
 
 export interface ModuleDescriptor {
   key: string;
