@@ -33,8 +33,10 @@ export function getZoteroPort(): number {
 // JSON-RPC envelope and result shapes are the single source of truth here (the
 // types are derived via z.infer) and validated once in callBetterBibTeX. The
 // result schemas assert only the fields consumers read; z.object strips any
-// extra fields the API adds (it tolerates them rather than rejecting), and the
-// inferred types match the original interfaces exactly.
+// extra fields the API adds (it tolerates them rather than rejecting). Optional
+// fields use .nullish() (not .optional()) because the CSL-JSON BBT emits may send
+// an explicit null as well as omit a field — .optional() alone would reject null.
+// Consumers already guard every such field with truthiness / optional chaining.
 // ============================================================================
 
 /** JSON-RPC error object. */
@@ -58,27 +60,27 @@ function jsonRpcResponseSchema<T>(result: z.ZodType<T>) {
  */
 const CslCreatorSchema = z.object({
   /** Family name (surname) in CSL format */
-  family: z.string().optional(),
+  family: z.string().nullish(),
   /** Given name (first name) in CSL format */
-  given: z.string().optional(),
+  given: z.string().nullish(),
   /** Institutional or single-field name */
-  literal: z.string().optional(),
+  literal: z.string().nullish(),
   // Zotero native format (may appear in some responses)
-  lastName: z.string().optional(),
-  firstName: z.string().optional(),
-  name: z.string().optional(),
-  creatorType: z.string().optional(),
+  lastName: z.string().nullish(),
+  firstName: z.string().nullish(),
+  name: z.string().nullish(),
+  creatorType: z.string().nullish(),
 });
 export type CslCreator = z.infer<typeof CslCreatorSchema>;
 
 /** CSL JSON date format. */
 const CslDateSchema = z.object({
   /** Date parts as [[year, month?, day?]] */
-  'date-parts': z.array(z.array(z.number())).optional(),
+  'date-parts': z.array(z.array(z.number())).nullish(),
   /** Raw date string */
-  raw: z.string().optional(),
+  raw: z.string().nullish(),
   /** Literal date text */
-  literal: z.string().optional(),
+  literal: z.string().nullish(),
 });
 export type CslDate = z.infer<typeof CslDateSchema>;
 
@@ -86,7 +88,7 @@ export type CslDate = z.infer<typeof CslDateSchema>;
 export const BbtCollectionSchema = z.object({
   key: z.string(),
   name: z.string(),
-  parentCollection: z.union([z.string(), z.literal(false)]).optional(),
+  parentCollection: z.union([z.string(), z.literal(false)]).nullish(),
 });
 export type BbtCollection = z.infer<typeof BbtCollectionSchema>;
 
@@ -94,7 +96,7 @@ export type BbtCollection = z.infer<typeof BbtCollectionSchema>;
 export const BbtLibrarySchema = z.object({
   id: z.number(),
   name: z.string(),
-  collections: z.array(BbtCollectionSchema).optional(),
+  collections: z.array(BbtCollectionSchema).nullish(),
 });
 export type BbtLibrary = z.infer<typeof BbtLibrarySchema>;
 
@@ -138,57 +140,57 @@ export const BbtSearchResultItemSchema = z.object({
 
   // ─── CSL JSON core fields ──────────────────────────────────────────
   /** Internal Zotero item ID (as URI or number) */
-  id: z.union([z.string(), z.number()]).optional(),
+  id: z.union([z.string(), z.number()]).nullish(),
   /** CSL item type (article-journal, book, chapter, etc.) */
-  type: z.string().optional(),
+  type: z.string().nullish(),
   /** Item title */
-  title: z.string().optional(),
+  title: z.string().nullish(),
   /** Authors */
-  author: z.array(CslCreatorSchema).optional(),
+  author: z.array(CslCreatorSchema).nullish(),
   /** Editors */
-  editor: z.array(CslCreatorSchema).optional(),
+  editor: z.array(CslCreatorSchema).nullish(),
   /** Publication/issue date */
-  issued: CslDateSchema.optional(),
+  issued: CslDateSchema.nullish(),
   /** Access date */
-  accessed: CslDateSchema.optional(),
+  accessed: CslDateSchema.nullish(),
 
   // ─── Zotero-style fields (legacy, may appear) ──────────────────────
-  itemType: z.string().optional(),
-  creators: z.array(CslCreatorSchema).optional(),
-  date: z.string().optional(),
+  itemType: z.string().nullish(),
+  creators: z.array(CslCreatorSchema).nullish(),
+  date: z.string().nullish(),
 
   // ─── Identifiers ───────────────────────────────────────────────────
-  DOI: z.string().optional(),
-  ISBN: z.string().optional(),
-  ISSN: z.string().optional(),
-  PMID: z.string().optional(),
-  PMCID: z.string().optional(),
-  URL: z.string().optional(),
+  DOI: z.string().nullish(),
+  ISBN: z.string().nullish(),
+  ISSN: z.string().nullish(),
+  PMID: z.string().nullish(),
+  PMCID: z.string().nullish(),
+  URL: z.string().nullish(),
 
   // ─── Publication info ──────────────────────────────────────────────
   /** Journal/book title */
-  'container-title': z.string().optional(),
+  'container-title': z.string().nullish(),
   /** Short container title */
-  'container-title-short': z.string().optional(),
+  'container-title-short': z.string().nullish(),
   /** Publisher name */
-  publisher: z.string().optional(),
+  publisher: z.string().nullish(),
   /** Publisher location */
-  'publisher-place': z.string().optional(),
+  'publisher-place': z.string().nullish(),
   /** Volume number */
-  volume: z.string().optional(),
+  volume: z.string().nullish(),
   /** Issue number */
-  issue: z.string().optional(),
+  issue: z.string().nullish(),
   /** Page range */
-  page: z.string().optional(),
+  page: z.string().nullish(),
   /** Number of pages */
-  'number-of-pages': z.string().optional(),
+  'number-of-pages': z.string().nullish(),
   /** Edition */
-  edition: z.string().optional(),
+  edition: z.string().nullish(),
 
   // ─── Content ───────────────────────────────────────────────────────
-  abstract: z.string().optional(),
-  note: z.string().optional(),
-  language: z.string().optional(),
+  abstract: z.string().nullish(),
+  note: z.string().nullish(),
+  language: z.string().nullish(),
 });
 export type BbtSearchResultItem = z.infer<typeof BbtSearchResultItemSchema>;
 
