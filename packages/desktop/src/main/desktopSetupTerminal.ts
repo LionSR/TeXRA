@@ -1,7 +1,7 @@
-// Third-party imports
+// Node imports
 import { spawn } from 'node:child_process';
 
-// Local imports - shared utilities
+// Third-party imports
 import { quote } from 'shell-quote';
 
 const OPEN_TERMINAL_TIMEOUT_MS = 10_000;

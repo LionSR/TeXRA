@@ -5,6 +5,8 @@
 // (only tool-use agents do). Reads only the in-memory stream tree, which still
 // holds finished subagents for the session, so no exit-time disk I/O is needed.
 
+import { quote } from 'shell-quote';
+
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
   AgentCategory,
@@ -12,7 +14,6 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { quote } from 'shell-quote';
 
 import { childExecutionLabel } from './childExecutions';
 import type { StreamSlice } from './cliState';
