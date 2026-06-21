@@ -90,9 +90,10 @@ export async function loginWithLoopback(
   const { coordinator, openBrowser, log } = options;
   const { server, port } = await bindLoopbackServer();
   const authorize = coordinator.buildAuthorizeRequest(port);
+  let callbackTimer: ReturnType<typeof setTimeout> | undefined;
 
   const codePromise = new Promise<string>((resolve, reject) => {
-    const timer = setTimeout(() => {
+    callbackTimer = setTimeout(() => {
       reject(new Error('Timed out waiting for the ChatGPT sign-in callback.'));
     }, CALLBACK_TIMEOUT_MS);
 
@@ -102,7 +103,7 @@ export async function loginWithLoopback(
       statusCode = 400,
     ) => {
       respondHtml(res, ERROR_HTML, statusCode);
-      clearTimeout(timer);
+      clearTimeout(callbackTimer);
       reject(new Error(message));
     };
 
@@ -132,12 +133,12 @@ export async function loginWithLoopback(
           return;
         }
         respondHtml(res, SUCCESS_HTML);
-        clearTimeout(timer);
+        clearTimeout(callbackTimer);
         resolve(code);
       } catch (error) {
         res.statusCode = 500;
         res.end('Internal error');
-        clearTimeout(timer);
+        clearTimeout(callbackTimer);
         reject(error as Error);
       }
     });
@@ -153,6 +154,7 @@ export async function loginWithLoopback(
       redirectUri: authorize.redirectUri,
     });
   } finally {
+    clearTimeout(callbackTimer);
     server.close();
   }
 }
