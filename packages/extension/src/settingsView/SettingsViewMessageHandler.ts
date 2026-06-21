@@ -100,6 +100,7 @@ import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { HistoryHandlers } from './handlers/historyHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
+import { ChatGptSubscriptionHandlers } from './handlers/chatgptSubscriptionHandlers';
 import type { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import type { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
@@ -118,6 +119,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly latexHandlers: LatexSettingsHandlers;
   private readonly historyHandlers: HistoryHandlers;
   private readonly githubHandlers: GitHubSubscriptionHandlers;
+  private readonly chatgptHandlers: ChatGptSubscriptionHandlers;
   private readonly memoryController: SettingsMemoryController;
   private readonly modelSelectionController: SettingsModelSelectionController;
   private readonly profileController: SettingsProfileController;
@@ -190,6 +192,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.latexHandlers = new LatexSettingsHandlers(ctx);
     this.historyHandlers = new HistoryHandlers(ctx);
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
+    this.chatgptHandlers = new ChatGptSubscriptionHandlers(ctx);
     this.goalController = new SettingsGoalController({
       listGoals: () => GoalStore.list(),
     });
@@ -405,6 +408,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.githubHandlers.handleRemoveGitHubToken(),
       [SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL]: () =>
         this.githubHandlers.openGitHubTokenUrl(),
+
+      // ChatGPT subscription sign-in handlers
+      [SETTINGS_VIEW_COMMANDS.GET_CHATGPT_AUTH_STATUS]: () =>
+        this.withActiveWebview((w) =>
+          this.chatgptHandlers.sendChatGptAuthStatus(w),
+        ),
+      [SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT]: () =>
+        this.chatgptHandlers.handleSignInChatGpt(),
+      [SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT]: () =>
+        this.chatgptHandlers.handleSignOutChatGpt(),
       [SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS]: () =>
         this.withActiveWebview((w) =>
           this.githubHandlers.sendPRSubscriptions(w),
@@ -570,6 +583,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.agentHandlers.sendAgentModePresets(webview),
       this.sendGitAuthorSettings(webview),
       this.githubHandlers.sendGitHubTokenStatus(webview),
+      this.chatgptHandlers.sendChatGptAuthStatus(webview),
       this.githubHandlers.sendPRSubscriptions(webview),
       this.sendApprovalSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),

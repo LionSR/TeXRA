@@ -13,6 +13,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared schemas
 import type {
+  ChatGptAuthStatus,
   ModelSelectionItem,
   NumberVscodeSetting,
   ProviderKeyStatus,
@@ -25,6 +26,7 @@ import '../components/profile/RelayQuotaMeter';
 import '../components/profile/ProviderKeyList';
 import '../components/profile/ModelSelectionList';
 import '../components/profile/ReliabilitySettingsSection';
+import { ChatGptAuthEvents } from '../components/profile/events';
 
 @customElement('models-tab')
 export class ModelsTab extends LitElement {
@@ -37,6 +39,46 @@ export class ModelsTab extends LitElement {
       }
 
       /* max-width and centering provided by .tab-content-container */
+
+      .chatgpt-subscription {
+        margin-top: var(--wa-space-l, 1rem);
+        padding-top: var(--wa-space-m, 0.75rem);
+        border-top: 1px solid
+          var(--wa-color-surface-border, rgba(127, 127, 127, 0.2));
+      }
+      .chatgpt-subscription__header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .chatgpt-subscription__title {
+        font-weight: 600;
+      }
+      .chatgpt-subscription__badge {
+        font-size: 0.72em;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        opacity: 0.65;
+        border: 1px solid currentColor;
+        border-radius: 0.4em;
+        padding: 0 0.4em;
+      }
+      .chatgpt-subscription__hint {
+        margin: 0.35rem 0 0.6rem;
+        opacity: 0.8;
+        font-size: 0.9em;
+      }
+      .chatgpt-subscription__row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .chatgpt-subscription__account {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
     `,
   ];
 
@@ -46,6 +88,7 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
   @property({ type: Boolean }) quotaAutoSwitched = false;
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
+  @property({ attribute: false }) chatgptAuth: ChatGptAuthStatus | null = null;
   @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
@@ -131,6 +174,7 @@ export class ModelsTab extends LitElement {
           .apiAccessMode=${this.apiAccessMode}
           .globalStreamingDefault=${this.globalStreamingDefault}
         ></provider-key-list>
+        ${this.renderChatGptSection()}
         <model-selection-list
           .models=${this.modelSelectionItems}
           .helperModel=${this.helperModel}
@@ -141,6 +185,50 @@ export class ModelsTab extends LitElement {
           .settings=${this.reliabilitySettings}
         ></reliability-settings-section>
       </div>
+    `;
+  }
+
+  /**
+   * Experimental "Sign in with ChatGPT" control. After sign-in, the configured
+   * Codex-eligible models run on the user's own ChatGPT subscription (when
+   * `chatgptCodex.preferSubscription` is enabled) instead of an API key.
+   */
+  private renderChatGptSection(): TemplateResult {
+    const signedIn = this.chatgptAuth?.signedIn ?? false;
+    const account =
+      this.chatgptAuth?.email ?? this.chatgptAuth?.accountId ?? 'your account';
+    return html`
+      <section class="chatgpt-subscription">
+        <div class="chatgpt-subscription__header">
+          <span class="chatgpt-subscription__title">ChatGPT subscription</span>
+          <span class="chatgpt-subscription__badge">experimental</span>
+        </div>
+        <p class="chatgpt-subscription__hint">
+          Use your own ChatGPT Plus/Pro/Team subscription for Codex models
+          instead of an API key. After signing in, turn on “Prefer ChatGPT
+          subscription” in settings.
+        </p>
+        ${signedIn
+          ? html`<div class="chatgpt-subscription__row">
+              <span class="chatgpt-subscription__account">
+                ${waIcon('circle-check')} Signed in as ${account}
+              </span>
+              <wa-button
+                appearance="outlined"
+                size="small"
+                @click=${() => this.dispatchEvent(ChatGptAuthEvents.signOut())}
+              >
+                Sign out
+              </wa-button>
+            </div>`
+          : html`<wa-button
+              variant="brand"
+              size="small"
+              @click=${() => this.dispatchEvent(ChatGptAuthEvents.signIn())}
+            >
+              Sign in with ChatGPT
+            </wa-button>`}
+      </section>
     `;
   }
 }
