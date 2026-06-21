@@ -3080,14 +3080,33 @@ function orderedTextFailure(frame, check) {
   return `${JSON.stringify(check.before)} should appear before ${JSON.stringify(check.after)}`;
 }
 
-function snapshotFileName(index, name, extension = 'txt') {
+const SNAPSHOT_WORKSPACES_DIR = 'workspaces';
+
+function snapshotScenarioSlug(index, name) {
   const prefix = String(index + 1).padStart(2, '0');
-  return `${prefix}-${name.replace(/[^a-z0-9._-]+/gi, '-')}.${extension}`;
+  return `${prefix}-${name.replace(/[^a-z0-9._-]+/gi, '-')}`;
+}
+
+function snapshotFileName(index, name, extension = 'txt') {
+  return `${snapshotScenarioSlug(index, name)}.${extension}`;
+}
+
+function snapshotWorkspaceDir(index, name) {
+  if (!snapshotDir) return undefined;
+  return path.join(
+    snapshotDir,
+    SNAPSHOT_WORKSPACES_DIR,
+    snapshotScenarioSlug(index, name),
+  );
 }
 
 function resetSnapshotDir(dir) {
   mkdirSync(dir, { recursive: true });
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name === SNAPSHOT_WORKSPACES_DIR) {
+      rmSync(path.join(dir, entry.name), { recursive: true, force: true });
+      continue;
+    }
     if (!entry.isFile()) {
       continue;
     }
@@ -3285,7 +3304,7 @@ function writeSnapshotReport(results) {
   );
 }
 
-async function runScenario(scenario) {
+async function runScenario(scenario, index) {
   if (scenario.platforms && !scenario.platforms.includes(process.platform)) {
     const skipReason = `scenario is only supported on ${scenario.platforms.join(', ')}`;
     return {
@@ -3313,7 +3332,7 @@ async function runScenario(scenario) {
     };
   }
   try {
-    return await runScenarioWithResources(scenario, fakeClipboard);
+    return await runScenarioWithResources(scenario, fakeClipboard, index);
   } finally {
     cleanupFakeClipboard(fakeClipboard);
   }
@@ -3324,7 +3343,7 @@ function cleanupFakeClipboard(fakeClipboard) {
   rmSync(fakeClipboard.dir, { recursive: true, force: true });
 }
 
-async function runScenarioWithResources(scenario, fakeClipboard) {
+async function runScenarioWithResources(scenario, fakeClipboard, index) {
   const term = makeTerm(scenario);
   const cols = scenarioCols(scenario);
   const rows = scenarioRows(scenario);
@@ -3343,6 +3362,11 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
     COLUMNS: String(cols),
     LINES: String(rows),
   };
+  const workspaceDir = snapshotWorkspaceDir(index, scenario.name);
+  if (workspaceDir && childEnv.HARNESS_CWD == null) {
+    mkdirSync(workspaceDir, { recursive: true });
+    childEnv.HARNESS_CWD = workspaceDir;
+  }
   if (scenario.colorEnabled === false) {
     delete childEnv.FORCE_COLOR;
     childEnv.NO_COLOR = '1';
@@ -3550,7 +3574,7 @@ let skipped = 0;
 const results = [];
 for (const [index, scenario] of scenarios.entries()) {
   // eslint-disable-next-line no-await-in-loop
-  const result = await runScenario(scenario);
+  const result = await runScenario(scenario, index);
   results.push(result);
   writeSnapshot(index, result.name, result.frame);
   if (result.skipped) {
