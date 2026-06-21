@@ -4,7 +4,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { useEffect, useState } from 'react';
 import stringWidth from 'string-width';
 
-import { isCodexSignedIn, shouldUseCodexSubscription } from '@auth/codex';
+import { isCodexSubscriptionActive } from '@auth/codex';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   defaultShortcutModifierLabel,
@@ -25,7 +25,6 @@ import {
   formatCompactDuration,
   formatCompactTokenCount,
 } from '@utils/core';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
@@ -181,7 +180,7 @@ const STATUS_BAR_HORIZONTAL_PADDING = 2;
 const STATUS_BAR_MIN_RIGHT_PREVIEW = 12;
 // Preserve a readable separator between the left status group and right preview.
 const STATUS_BAR_RIGHT_PREVIEW_GAP = 2;
-const CODEX_SIGN_IN_REFRESH_MS = 10_000;
+const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
   activeProcess: 10,
@@ -827,39 +826,40 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     streams,
   });
   const statusSlice = target.displaySlice;
-  const subscriptionEligible = (() => {
-    const config = MODEL_CONFIGS[sessionMeta.model];
-    return config
-      ? shouldUseCodexSubscription(config, getUseOpenRouter())
-      : false;
-  })();
-  const [codexSignedIn, setCodexSignedIn] = useState(false);
+
+  // Whether the active model is currently routing through the ChatGPT
+  // subscription (preference + eligibility + signed in). Kept in polled state
+  // rather than read on every render: the poll re-reads the preference so an
+  // external config change is reflected within the interval, and an in-process
+  // `/subscription` toggle bumps `codexPreferenceVersion` to refresh at once.
+  const codexPreferenceVersion = useSignal(cliState.codexPreferenceVersion);
+  const [subscriptionActive, setSubscriptionActive] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    const refreshSignedIn = () => {
-      void isCodexSignedIn()
-        .then((signedIn) => {
-          if (!cancelled) setCodexSignedIn(signedIn);
+    let inFlight = false;
+    const refresh = (): void => {
+      if (inFlight) return; // Skip if the previous read has not resolved.
+      inFlight = true;
+      void isCodexSubscriptionActive(sessionMeta.model)
+        .then((active) => {
+          if (!cancelled) setSubscriptionActive(active);
         })
         .catch(() => {
-          if (!cancelled) setCodexSignedIn(false);
+          if (!cancelled) setSubscriptionActive(false);
+        })
+        .finally(() => {
+          inFlight = false;
         });
     };
-    if (!subscriptionEligible) {
-      setCodexSignedIn(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-    refreshSignedIn();
-    const refreshTimer = setInterval(refreshSignedIn, CODEX_SIGN_IN_REFRESH_MS);
+    refresh();
+    const refreshTimer = setInterval(refresh, CODEX_SUBSCRIPTION_REFRESH_MS);
     refreshTimer.unref?.();
     return () => {
       cancelled = true;
       clearInterval(refreshTimer);
     };
-  }, [sessionMeta.model, subscriptionEligible]);
+  }, [sessionMeta.model, codexPreferenceVersion]);
 
   const runStartedAt =
     statusSlice?.status === STREAM_STATUS.RUNNING
@@ -889,7 +889,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
-    subscriptionActive: subscriptionEligible && codexSignedIn,
+    subscriptionActive,
     approvalPolicy: sessionMeta.approvalPolicy,
     shiftEnterNewline: caps.kittyKeyboard,
     transcriptAvailable: props.transcriptAvailable,
