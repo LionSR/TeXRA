@@ -5,7 +5,7 @@ updated: 2026-02-21
 
 # PRD: Progress View Streaming Cleanup
 
-> **Parent doc:** [progress-view-performance-architecture.md](./progress-view-performance-architecture.md)
+> **Parent doc:** [2026-02-20-progress-view-performance-architecture.md](./2026-02-20-progress-view-performance-architecture.md)
 > **Branch:** `codex/progress-view-prd-refactor`
 
 ## Problem Statement
@@ -20,7 +20,7 @@ These aren't theoretical — they fire on every streaming token, every status ch
 
 ## What's Already Done (This Branch)
 
-From the [architecture doc's implementation plan](./progress-view-performance-architecture.md#14-implementation-plan-internal-cleanup-zero-ui-regression):
+From the [architecture doc's implementation plan](./2026-02-20-progress-view-performance-architecture.md#14-implementation-plan-internal-cleanup-zero-ui-regression):
 
 | Arch Doc Phase                                   | Status      | Key Commits                                                                                                                 |
 | ------------------------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------- |

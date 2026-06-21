@@ -5,8 +5,8 @@ updated: 2026-02-10
 
 # PRD: UI & Logic Regression Audit - Round 2
 
-> **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
-> **Prior audit:** [prd-ui-regression-audit.md](./prd-ui-regression-audit.md)
+> **Parent doc:** [2026-01-24-prd-progressview-modernization.md](./2026-01-24-prd-progressview-modernization.md)
+> **Prior audit:** [2026-01-27-prd-ui-regression-audit.md](./2026-01-27-prd-ui-regression-audit.md)
 
 ## Overview
 
@@ -340,5 +340,5 @@ Three review comments were left by automated bots. Investigation results:
 
 ## Out of Scope
 
-- Backend regressions covered in `prd-ui-regression-audit.md`.
-- Any issues already documented in `ui-regressions-lit-migration.md` or prior PRDs.
+- Backend regressions covered in `2026-01-27-prd-ui-regression-audit.md`.
+- Any issues already documented in `2026-01-26-ui-regressions-lit-migration.md` or prior PRDs.

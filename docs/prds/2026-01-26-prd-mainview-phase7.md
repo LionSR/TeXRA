@@ -5,9 +5,9 @@ updated: 2026-02-10
 
 # PRD: MainView Modernization - Phase 7
 
-> **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
-> **Prior phase:** [prd-progressview-phase6.md](./prd-progressview-phase6.md)
-> **Next phase:** [prd-lit-native-phase8.md](./prd-lit-native-phase8.md)
+> **Parent doc:** [2026-01-24-prd-progressview-modernization.md](./2026-01-24-prd-progressview-modernization.md)
+> **Prior phase:** [2026-01-26-prd-progressview-phase6.md](./2026-01-26-prd-progressview-phase6.md)
+> **Next phase:** [2026-01-26-prd-lit-native-phase8.md](./2026-01-26-prd-lit-native-phase8.md)
 
 ## Overview
 

@@ -9,7 +9,7 @@ updated: 2026-05-10
 **Owner:** TBD
 **Date:** 2026-05-05
 **Branch:** `claude/refactor-texra-cli-tOC5U`
-**Companions:** [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md), [`prd-cli-app.md`](./prd-cli-app.md), [`prd-electron-app.md`](./prd-electron-app.md)
+**Companions:** [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md), [`2026-05-04-prd-cli-app.md`](./2026-05-04-prd-cli-app.md), [`2026-05-02-prd-electron-app.md`](./2026-05-02-prd-electron-app.md)
 
 > **Canonical status:** §15 is the current design when it differs from earlier sections. In particular, `Logger.swapSink()`
 > replaces `BootstrapLogger.flushTo()`, and logs + progress share NDJSON transport without sharing one schema.
@@ -20,7 +20,7 @@ Today's logger (`src/logger/logUtils.ts`) is a serviceable VS Code-shaped string
 
 - Emits **`LogRecord`s** (timestamp + level + message + structured fields + group stack), not pre-formatted strings.
 - Routes every record through a per-host **`LogSink`** (extension → `vscode.OutputChannel`, desktop → `electron-log`, CLI text → stderr, CLI JSON → stdout NDJSON, CLI MCP → MCP `notifications/progress`, tests → in-memory).
-- Lives on **`RunContext`** (per `prd-runcontext-refactor.md`) — one logger per run, no module globals, no second ALS scope.
+- Lives on **`RunContext`** (per `2026-05-06-prd-runcontext-refactor.md`) — one logger per run, no module globals, no second ALS scope.
 - Shares the **same NDJSON transport** as the CLI progress stream while keeping `LogRecordSchema` and
   `ProgressEventSchema` versioned independently (per §15.1).
 - Starts on an immediate stderr sink, then uses **`Logger.swapSink()`** to hand off to the resolved host sink without
@@ -41,7 +41,7 @@ The total kernel work is ~430 LOC new + ~130 LOC modified + ~5 LOC deleted. None
 ## 3. Non-goals
 
 - **Not** a logging-framework selection — no `pino`, no `winston`. The interface is small; the impl per host is small. We do not adopt a third-party framework's opinions.
-- **Not** a redaction subsystem. The `prd-cli-app.md` round-1 §16 risk row mentions secret-redaction in the `consoleLog` adapter; that's a sink-level concern, sized separately, and not in scope here.
+- **Not** a redaction subsystem. The `2026-05-04-prd-cli-app.md` round-1 §16 risk row mentions secret-redaction in the `consoleLog` adapter; that's a sink-level concern, sized separately, and not in scope here.
 - **Not** a tracing system. Spans, trace IDs, and OpenTelemetry exporter wiring are future work. `LogRecord.fields` is open, so adding `traceId` later is non-breaking.
 - **Not** a per-line filter language. Filtering by level / channel / agent is a sink concern — implemented in the host's sink, not in the kernel.
 - **Not** a UI surface for browsing logs. The extension's existing OutputChannel pickers and the desktop's `electron-log` UI don't change.
@@ -52,7 +52,7 @@ The total kernel work is ~430 LOC new + ~130 LOC modified + ~5 LOC deleted. None
 
 ### 4.1 Module-level state collides under concurrency
 
-`outputChannelFactory` (line 21) and the `channels` Map (line 19) are module-level. The general concurrency case for retiring this kind of binding is in `prd-runcontext-refactor.md` §4.5 (and `setOutputChannelFactory` is one of the 19 setter pairs in that PRD's §4.2 table). Logger-specific consequence: the `setOutputChannelFactory(null)` reset in test teardown calls `dispose?.()` on every cached channel and disposes channels for _other_ concurrent runs — visible today only as occasional vitest flakes; visible always in an MCP-server or re-entrant-SDK process.
+`outputChannelFactory` (line 21) and the `channels` Map (line 19) are module-level. The general concurrency case for retiring this kind of binding is in `2026-05-06-prd-runcontext-refactor.md` §4.5 (and `setOutputChannelFactory` is one of the 19 setter pairs in that PRD's §4.2 table). Logger-specific consequence: the `setOutputChannelFactory(null)` reset in test teardown calls `dispose?.()` on every cached channel and disposes channels for _other_ concurrent runs — visible today only as occasional vitest flakes; visible always in an MCP-server or re-entrant-SDK process.
 
 ### 4.2 Two ALS scopes that shadow each other
 
@@ -72,7 +72,7 @@ The CLI's round-1 §11.2 NDJSON event stream is a _separate_ code path from the 
 
 ### 5.1 The `Logger` interface
 
-Lives on `RunContext` (per `prd-runcontext-refactor.md` §5). One `Logger` per run, plus a module-level bootstrap queue (§5.3) for the pre-`initPlatform()` window.
+Lives on `RunContext` (per `2026-05-06-prd-runcontext-refactor.md` §5). One `Logger` per run, plus a module-level bootstrap queue (§5.3) for the pre-`initPlatform()` window.
 
 ```ts
 // packages/core/src/runtime/logger.ts
@@ -184,7 +184,7 @@ export const RunStreamEventSchema = z.discriminatedUnion('event', [
 Implications:
 
 - The CLI's `--output-format ndjson` writes one `RunStreamEvent` per line. Consumers filter `event === 'log'` for logs and `event !== 'log'` for progress.
-- The session JSONL format (per `prd-cli-app.md` §27) uses the same schema. A run's transcript is byte-equivalent to its NDJSON output (modulo synthetic `session_start` / `session_end` markers).
+- The session JSONL format (per `2026-05-04-prd-cli-app.md` §27) uses the same schema. A run's transcript is byte-equivalent to its NDJSON output (modulo synthetic `session_start` / `session_end` markers).
 - A schema bump in either pipeline is a schema bump in the other. `@texra/shared/schemas` versioning gates both.
 
 ## 7. Per-host sinks
@@ -194,7 +194,7 @@ Each host installs the sinks it wants. The mapping:
 | Host                                | Sink                      | Rendering                                                                                                      |
 | ----------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | Extension                           | `VscodeOutputChannelSink` | Formatted string per line, written to one `vscode.OutputChannel` per agent (today's behavior).                 |
-| Desktop                             | `ElectronLogSink`         | Wraps `electron-log` (per `prd-electron-app.md` §6.4); same channel-per-agent shape.                           |
+| Desktop                             | `ElectronLogSink`         | Wraps `electron-log` (per `2026-05-02-prd-electron-app.md` §6.4); same channel-per-agent shape.                           |
 | CLI headless (`--print` or non-TTY) | `StderrTextSink`          | picocolors-formatted; respects `--quiet` / `--verbose` / `NO_COLOR`; copies to `--log-file` if passed.         |
 | CLI JSON (`--output-format json     | ndjson`)                  | `NdjsonStdoutSink`                                                                                             | One `RunStreamEvent` per line on stdout; schema-validated. |
 | CLI MCP server (`texra mcp serve`)  | `McpProgressSink`         | Converts each record to an MCP `notifications/progress` payload; respects the client's progress-update opt-in. |
@@ -263,7 +263,7 @@ Today these go through `console.info`. After this PRD: the CLI's `bin/texra.ts` 
 
 - Add `core/runtime/logger.ts` with `Logger`, `LogRecord`, `LogSink`, `BootstrapLogger`.
 - Add `core/shared/schemas/runStream.ts` with `LogRecordSchema` + the `RunStreamEventSchema` union. Move existing progress-event Zod schemas alongside.
-- `Logger` is a field on `RunContext` (per `prd-runcontext-refactor.md`); add it to `buildRunContext()`.
+- `Logger` is a field on `RunContext` (per `2026-05-06-prd-runcontext-refactor.md`); add it to `buildRunContext()`.
 - The default sink during this phase is `consoleLog`-shaped: `class LegacyConsoleSink implements LogSink { write(r) { console[r.level](formatLikeBefore(r)); } }`. Keeps existing behavior.
 - **Exit criteria:** `ctx.log.info('hi', { foo: 'bar' })` from inside `executeAgent()` produces the same console output the old logger did, plus the structured `{ foo: 'bar' }` payload visible to a `MemorySink` in tests.
 
@@ -292,12 +292,12 @@ Today these go through `console.info`. After this PRD: the CLI's `bin/texra.ts` 
 
 - Delete `outputChannelFactory`, `channels`, `mainOutputChannel`, `setOutputChannelFactory` from `logUtils.ts`. The extension's old call site (`packages/extension/src/extension.ts`) instead installs `VscodeOutputChannelSink` via `Platform.log`.
 - The `LogBackend` interface in `core/platform/interfaces/log.ts` is renamed to `LogSink` and moved to `core/hosts/logSink.ts` to live alongside the other host ports.
-- **Exit criteria:** `git grep "outputChannelFactory\|setOutputChannelFactory" packages/` returns zero hits. Phase aligns with `prd-runcontext-refactor.md` Phase 2 (singleton retirement); the two should land in the same release.
+- **Exit criteria:** `git grep "outputChannelFactory\|setOutputChannelFactory" packages/` returns zero hits. Phase aligns with `2026-05-06-prd-runcontext-refactor.md` Phase 2 (singleton retirement); the two should land in the same release.
 
 ### Phase 5 — `McpProgressSink` (lands when `texra mcp serve` ships, post-v1.x — see §15.5) (~0.3 weeks)
 
 - `McpProgressSink` in `packages/cli/src/mcp/sinks/`.
-- Wires into the per-`tools/call` `RunContext` in the MCP server (per `prd-cli-app.md` §24.6).
+- Wires into the per-`tools/call` `RunContext` in the MCP server (per `2026-05-04-prd-cli-app.md` §24.6).
 - **Exit criteria:** an MCP client running `tools/call` with `progressToken` set receives `notifications/progress` for each log + progress event in the run.
 
 ### Aggregate timeline
@@ -495,7 +495,7 @@ The single `idle` promise resolves only when the queue is genuinely empty — th
 
 ### 15.5 Defer: Phase 5 (`McpProgressSink`) is out of the v1.x roadmap
 
-**Problem.** Round 1 Phase 5 lands `McpProgressSink` for `texra mcp serve`. Per [`prd-cli-app.md`](./prd-cli-app.md) round 4 §34.6, `texra mcp serve` itself is **not part of the v1.x roadmap** (user direction reinforced 2026-05-09: "Don't do MCP yet").
+**Problem.** Round 1 Phase 5 lands `McpProgressSink` for `texra mcp serve`. Per [`2026-05-04-prd-cli-app.md`](./2026-05-04-prd-cli-app.md) round 4 §34.6, `texra mcp serve` itself is **not part of the v1.x roadmap** (user direction reinforced 2026-05-09: "Don't do MCP yet").
 
 **Resolution.** Phase 5 stays in the plan as a future deliverable that lands alongside `texra mcp serve` whenever that ships. The CLI v1.x logger pipeline never instantiates `McpProgressSink` — the only sinks v1.x needs are `StderrTextSink` (headless + interactive log lines), `NdjsonStdoutSink` (for `--output-format ndjson`), `InkLogSink` (for routing log records into the `<StreamPane />` component), and `MemorySink` (tests).
 
@@ -510,7 +510,7 @@ The single `idle` promise resolves only when the queue is genuinely empty — th
 | 4                     | `outputChannelFactory` / `channels` / `mainOutputChannel` removals (channel-derivation cleanup already landed in Phase 3, so only the deletions remain) | 0.3             |
 | 5                     | `McpProgressSink` — lands when `texra mcp serve` ships (out of v1.x per round 4 §34.6)                                                                  | 0.3             |
 | **Total to CLI v1.0** | Phases 0 / 1 / 3 (interactive + workflow; no MCP)                                                                                                       | **~2.7**        |
-| **Total to CLI v1.1** | + Phase 4 (when `prd-runcontext-refactor.md` Phase 2 lands)                                                                                             | **~3.0**        |
+| **Total to CLI v1.1** | + Phase 4 (when `2026-05-06-prd-runcontext-refactor.md` Phase 2 lands)                                                                                             | **~3.0**        |
 | **Total with MCP**    | + Phase 5 (when `texra mcp serve` ships, post-v1.x)                                                                                                     | **~3.3**        |
 
 Net code reduction vs round 1: Phase 2 cut saves ~30 LOC, simpler bootstrap saves ~50 LOC, simpler shim saves ~80 LOC of mechanical changes. Round-1 §9 estimated +600/-290 ≈ +310 net; round-2 estimate is **~+200 net** to v1.0, **~+220 net** to v1.1 (Phase 4 only — Phase 5 / `McpProgressSink` is no longer in v1.x; it adds ~+80 net whenever MCP eventually ships).

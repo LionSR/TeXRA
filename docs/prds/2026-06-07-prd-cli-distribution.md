@@ -9,7 +9,7 @@ updated: 2026-06-07
 **Owner:** TBD
 **Date:** 2026-06-07
 **Branch:** `main`
-**Companion to:** [`prd-cli-app.md`](./prd-cli-app.md)
+**Companion to:** [`2026-05-04-prd-cli-app.md`](./2026-05-04-prd-cli-app.md)
 
 > **Pending decision.** This document records the distribution options and a
 > recommendation, but the path has not been chosen. It exists to be **fact-checked**

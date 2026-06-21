@@ -5,8 +5,8 @@ updated: 2026-02-10
 
 # PRD: UI Regression Audit - All Views
 
-> **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
-> **Prior doc:** [ui-regressions-lit-migration.md](./ui-regressions-lit-migration.md)
+> **Parent doc:** [2026-01-24-prd-progressview-modernization.md](./2026-01-24-prd-progressview-modernization.md)
+> **Prior doc:** [2026-01-26-ui-regressions-lit-migration.md](./2026-01-26-ui-regressions-lit-migration.md)
 
 ## Overview
 

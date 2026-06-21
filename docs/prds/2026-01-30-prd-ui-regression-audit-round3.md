@@ -5,11 +5,11 @@ updated: 2026-02-10
 
 # PRD: UI & Logic Regression Audit - Round 3 (Consolidated)
 
-> **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
+> **Parent doc:** [2026-01-24-prd-progressview-modernization.md](./2026-01-24-prd-progressview-modernization.md)
 > **Prior audits:**
 >
-> - [prd-ui-regression-audit.md](./prd-ui-regression-audit.md)
-> - [prd-ui-regression-audit-round2.md](./prd-ui-regression-audit-round2.md)
+> - [2026-01-27-prd-ui-regression-audit.md](./2026-01-27-prd-ui-regression-audit.md)
+> - [2026-01-29-prd-ui-regression-audit-round2.md](./2026-01-29-prd-ui-regression-audit-round2.md)
 
 ## Overview
 

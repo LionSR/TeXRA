@@ -5,7 +5,7 @@ updated: 2026-05-04
 
 # PRD: ProgressView Modernization - Phase 2
 
-> **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
+> **Parent doc:** [2026-01-24-prd-progressview-modernization.md](./2026-01-24-prd-progressview-modernization.md)
 
 ## Phase 2: Extract Shared Infrastructure
 

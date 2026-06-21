@@ -22,7 +22,7 @@ This PRD supersedes two earlier drafts:
    sessions, and migration that would mis-route non-default orchestrators
    such as `leanOrchestrator`.
 
-2. **The launcher portion of `docs/prds/orchestrator-ui-redesign.md`**. That
+2. **The launcher portion of `docs/prds/2026-04-13-orchestrator-ui-redesign.md`**. That
    PRD's hero-textarea, inline orchestrator tip, Ctrl+Enter shortcut, and
    placeholder copy are still good and should ship; this PRD does not
    re-decide those. What it does replace is that document's Designs A/B/C/D
@@ -181,7 +181,7 @@ its display surface.
 
 - Redesigning file selectors, output management, or progress view behavior.
 - Re-deciding the textarea-as-hero, Ctrl+Enter, inline orchestrator tip, or
-  placeholder copy from `orchestrator-ui-redesign.md` — those still ship.
+  placeholder copy from `2026-04-13-orchestrator-ui-redesign.md` — those still ship.
 - Replacing the VS Code walkthrough framework. The walkthrough remains the
   canonical "manual" onboarding path; the launcher is the conversational
   one. Walkthrough _step copy_ is updated to match team-first vocabulary
@@ -200,7 +200,7 @@ its display surface.
 
 Two stacked controls sit above the textarea: the **team picker** (top) and
 the **agent picker** (below). The textarea, action buttons, model picker,
-and Run button stay where `orchestrator-ui-redesign.md` puts them. A
+and Run button stay where `2026-04-13-orchestrator-ui-redesign.md` puts them. A
 **roster strip** is rendered below the controls and lists the agents the
 active team groups, with the lead marked.
 

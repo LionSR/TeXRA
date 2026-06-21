@@ -13,8 +13,8 @@ by the size of their duplicated surface, and applies an **adversarial review** t
 each (the strongest case _against_ consolidating).
 
 It deliberately extends, rather than repeats, the earlier dual-logic work
-(`docs/prds/dual-logic-features.md`, `docs/prds/dual-logic-infrastructure.md`,
-`docs/prds/dual-logic-audit-2026-02.md`), which already shipped the small shared
+(`docs/prds/2026-01-30-dual-logic-features.md`, `docs/prds/2026-01-30-dual-logic-infrastructure.md`,
+`docs/prds/2026-01-31-dual-logic-audit-2026-02.md`), which already shipped the small shared
 helpers (`streamSort`, `optionsLoader`, `sessionDefaults`, `recentCommits`,
 `fileSelectionRegistry`) and deliberately rejected ~10 smaller candidates as
 premature abstraction. The findings here are filtered through the same
@@ -110,7 +110,7 @@ share the component framework and similar tab/panel scaffolding.
 **Adversarial review:** Structural similarity is not duplication. ProgressView is
 a real-time streaming/approval surface, SettingsView is config persistence,
 MainView is execution control — three domains with different state models. The
-prior `dual-logic-features.md` already shipped the genuinely shared bits
+prior `2026-01-30-dual-logic-features.md` already shipped the genuinely shared bits
 (`streamSort`, `optionsLoader`, `sessionDefaults`) and **deliberately deferred**
 stream-rendering normalization because follow-up sections are intentionally
 different. `ApprovalRequestHandler` already de-dupes the recurring approval
@@ -128,7 +128,7 @@ content providers (MainView 418, Progress 758, Settings 77) over
 `BaseViewContentProvider` (148).
 
 **Adversarial review:** The base classes already absorb dispatch, theme/ready/debug
-handling, active-view tracking, and URI building — `dual-logic-infrastructure.md`
+handling, active-view tracking, and URI building — `2026-01-30-dual-logic-infrastructure.md`
 did this and marked it complete. What remains is _typed, per-view message routing
 over distinct discriminated unions_, which that PRD explicitly ruled must stay
 per-view ("do not consolidate typed dispatch"). Merging re-introduces stringly
@@ -179,6 +179,6 @@ rejected ~10 similar candidates.
 
 ## Related
 
-- `docs/prds/dual-logic-audit-2026-02.md`
-- `docs/prds/dual-logic-features.md`
-- `docs/prds/dual-logic-infrastructure.md`
+- `docs/prds/2026-01-31-dual-logic-audit-2026-02.md`
+- `docs/prds/2026-01-30-dual-logic-features.md`
+- `docs/prds/2026-01-30-dual-logic-infrastructure.md`

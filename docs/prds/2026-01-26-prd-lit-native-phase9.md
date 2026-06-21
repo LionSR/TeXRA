@@ -5,8 +5,8 @@ updated: 2026-02-10
 
 # PRD: Lit-Native Improvements - Phase 9
 
-> **Parent doc:** [prd-lit-native-phase8.md](./prd-lit-native-phase8.md)
-> **Related:** [ui-regressions-lit-migration.md](./ui-regressions-lit-migration.md)
+> **Parent doc:** [2026-01-26-prd-lit-native-phase8.md](./2026-01-26-prd-lit-native-phase8.md)
+> **Related:** [2026-01-26-ui-regressions-lit-migration.md](./2026-01-26-ui-regressions-lit-migration.md)
 
 ## Overview
 
@@ -553,7 +553,7 @@ private sortableController = new SortableController(
 - `src/webview/frontend/components/FileSelectGroup.ts` - Lazy document listener
 - `src/progressView/frontend/components/LogList.ts` - Component-level listeners
 - `src/shared/utils/icons.ts` - Added getCodiconClasses()
-- `docs/prd-lit-native-phase9.md` - This document
+- `docs/2026-01-26-prd-lit-native-phase9.md` - This document
 
 **Files Created:**
 
@@ -628,7 +628,7 @@ private sortableController = new SortableController(
 
 - `src/historyView/frontend/HistoryApp.ts` - Reactive properties instead of @query
 - `src/historyView/frontend/components/HistoryList.ts` - willUpdate lifecycle for reactive updates
-- `docs/prd-lit-native-phase9.md` - This document
+- `docs/2026-01-26-prd-lit-native-phase9.md` - This document
 
 ### 2026-01-26 - Additional Lit-native Refactoring
 
@@ -750,4 +750,4 @@ These patterns exist in shared utilities and are lower priority since they're he
 - [Lit Event Handling](https://lit.dev/docs/components/events/)
 - [Lit Reactive Properties](https://lit.dev/docs/components/properties/)
 - [classMap Directive](https://lit.dev/docs/templates/directives/#classmap)
-- [prd-lit-native-phase8.md](./prd-lit-native-phase8.md) - Previous phase
+- [2026-01-26-prd-lit-native-phase8.md](./2026-01-26-prd-lit-native-phase8.md) - Previous phase

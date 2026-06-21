@@ -5,11 +5,11 @@ updated: 2026-06-07
 
 # PRD: RunContext + ambient-state retirement
 
-**Status:** Draft (v1 — extracted from `prd-cli-app.md` round 2 §§22, 29; 2026-05-05)
+**Status:** Draft (v1 — extracted from `2026-05-04-prd-cli-app.md` round 2 §§22, 29; 2026-05-05)
 **Owner:** TBD
 **Date:** 2026-05-05
 **Branch:** `claude/refactor-texra-cli-tOC5U`
-**Companions:** [`prd-cli-app.md`](./prd-cli-app.md), [`prd-electron-app.md`](./prd-electron-app.md), [`prd-logger-v2.md`](./prd-logger-v2.md)
+**Companions:** [`2026-05-04-prd-cli-app.md`](./2026-05-04-prd-cli-app.md), [`2026-05-02-prd-electron-app.md`](./2026-05-02-prd-electron-app.md), [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md)
 
 ## 1. Summary
 
@@ -37,7 +37,7 @@ The kernel migration is independently valuable to all three hosts (extension, de
 - **Not** an OS-level sandbox / capability-based-security project. `RunCapabilities` is a _value-typed_ capability bag ("does this run have a github token?"), not a syscall sandbox.
 - **Not** an attempt to delete `getConfig`-style platform service lookups. `platform()` from `@platform` is composition-root state, not per-run state, and stays.
 - **Not** a rewrite of any modelHandler, flow node, or tool. Their interfaces gain a `ctx: RunContext` parameter; their bodies do not change.
-- **Not** a host-specific logger redesign. Logger v2 is its own PRD (`prd-logger-v2.md`); this PRD only states that `Logger` is a field on `RunContext`.
+- **Not** a host-specific logger redesign. Logger v2 is its own PRD (`2026-05-06-prd-logger-v2.md`); this PRD only states that `Logger` is a field on `RunContext`.
 
 ## 4. Background — what's ambient today
 
@@ -97,8 +97,8 @@ These are intentional caches of _immutable_ data (registry, model templates) and
 
 Three concurrent forces:
 
-1. **CLI v1 is in flight** (`prd-cli-app.md`). Round 2 of that PRD names `texra mcp serve` as a v1 deliverable. MCP-server safety with concurrent sessions requires per-context coordinators; that's the v1.1 milestone of this refactor.
-2. **The host-neutral split is at the right point.** Per `prd-electron-app.md` §9, almost all VS Code-coupling has been factored out. The remaining hot spot — ambient runtime state — is the natural next refactor before the kernel moves into `packages/core/`.
+1. **CLI v1 is in flight** (`2026-05-04-prd-cli-app.md`). Round 2 of that PRD names `texra mcp serve` as a v1 deliverable. MCP-server safety with concurrent sessions requires per-context coordinators; that's the v1.1 milestone of this refactor.
+2. **The host-neutral split is at the right point.** Per `2026-05-02-prd-electron-app.md` §9, almost all VS Code-coupling has been factored out. The remaining hot spot — ambient runtime state — is the natural next refactor before the kernel moves into `packages/core/`.
 3. **Tests already pay the cost.** `setDefaultProgressSink(noop)` and `setRunStorageService(fake)` calls in `beforeEach` / `afterEach` total ~150 LOC across the test suite. Removing them is a strict win for test hermeticity.
 
 ## 5. The shape: `RunContext`
@@ -115,7 +115,7 @@ export interface RunContext {
 
   /** Where progress events go. Replaces `getAgentRuntimeHost()`. */
   readonly progress: ProgressSink;
-  /** Structured logger scoped to this run. (See prd-logger-v2.md.) */
+  /** Structured logger scoped to this run. (See 2026-05-06-prd-logger-v2.md.) */
   readonly log: Logger;
 
   /** Cooperative cancel signal. Replaces InterruptManager-as-singleton. */
@@ -201,7 +201,7 @@ Each phase is independently mergeable and ships a concrete kernel improvement.
 - Wire `withRunContext` at every `executeAgent()`, `executeMergeAgent()`, `resumeToolUseFromSnapshot()` call site.
 - Rename `buildAgentLaunchContext` → `buildRunContext` and have it return a `RunContext` directly (instead of the bag of fields it currently returns).
 - Test harness: `withRunContext(synthesizedContext, fn)` available from `packages/core/src/runtime/testing.ts`.
-- Add ESLint rule `no-ambient-runtime-state` that flags new `let X: T | undefined` + `setX` pairs in `packages/core/src/agent/`, `core/tools/`, `core/auth/`. Existing pairs are grandfathered with `// eslint-disable-line` + `// PRD: prd-runcontext-refactor.md` comments to make them visible at sweep time.
+- Add ESLint rule `no-ambient-runtime-state` that flags new `let X: T | undefined` + `setX` pairs in `packages/core/src/agent/`, `core/tools/`, `core/auth/`. Existing pairs are grandfathered with `// eslint-disable-line` + `// PRD: 2026-05-06-prd-runcontext-refactor.md` comments to make them visible at sweep time.
 - **Exit criteria:** every entry from `executeAgent()` runs inside a `withRunContext`. The grandfathered list of `eslint-disable` lines exactly matches §4.2's table.
 
 ### Phase 1 — Per-context coordinators (~1 week)
@@ -217,7 +217,7 @@ Each phase is independently mergeable and ships a concrete kernel improvement.
 - Delete `setDefaultProgressSink`, `setDefaultAgentRuntimeHost`, `getDefaultProgressSink`. The only valid path to a sink is `useRunContext().progress`.
 - Delete `runStorageService` singleton (`RunStorageService.ts:10`); per-context storage handle on `ctx.coordinators` (or its own `ctx.storage` field if the API justifies it).
 - Walk the remaining ~40 reader sites; convert each to `useRunContext().progress` / `tryUseRunContext()`. The audit lists 0 reader sites outside `getStore()`-aware code, so this is mechanical.
-- **Exit criteria:** `git grep "defaultProgressSink\|defaultAgentRuntimeHost\|runStorageService = "` returns zero hits in `packages/core/`. `texra mcp serve` integration test (`prd-cli-app.md` §30.3) runs two concurrent `tools/call`s with no progress-event interleaving.
+- **Exit criteria:** `git grep "defaultProgressSink\|defaultAgentRuntimeHost\|runStorageService = "` returns zero hits in `packages/core/`. `texra mcp serve` integration test (`2026-05-04-prd-cli-app.md` §30.3) runs two concurrent `tools/call`s with no progress-event interleaving.
 
 ### Phase 3 — Approval handlers + capabilities injection (~1 week)
 
@@ -234,7 +234,7 @@ Each phase is independently mergeable and ships a concrete kernel improvement.
 ### Phase 5 — `then()`-boundary fix + sweep (~3 days)
 
 - The LangSmith-style "ALS lost across `.then()`" foot-gun: `RunStorageService`'s background poll timer (`executionRegistry.ts:335`) currently fires outside any context scope. Refactor `pollInFlight` from `bool` to `Map<RunId, RunContext>` and wrap the timer callback in `withRunContext(stored, fn)`.
-- ESLint sweep: remove every `// PRD: prd-runcontext-refactor.md` grandfather comment introduced in Phase 0. The list shrinks to zero by definition once Phases 1–4 land.
+- ESLint sweep: remove every `// PRD: 2026-05-06-prd-runcontext-refactor.md` grandfather comment introduced in Phase 0. The list shrinks to zero by definition once Phases 1–4 land.
 - **Exit criteria:** zero ambient-state lints disabled in agnostic zones. `git grep "let .*: .* | undefined" packages/core/src/agent packages/core/src/tools packages/core/src/auth | grep -v test` returns only legitimate caches (the four §4.4 entries).
 
 ### Aggregate timeline
@@ -263,7 +263,7 @@ The audit revealed three categories of shared code that today live mixed togethe
 - `core/model/`, `core/latex/`, `core/replacement/`.
 - `core/eventBus/` — schemas only, no emitters.
 - `core/tools/` minus `core/tools/approval/`.
-- `core/shared/` — IPC schemas, including `runStream.ts` (the unified log+progress envelope from `prd-logger-v2.md`).
+- `core/shared/` — IPC schemas, including `runStream.ts` (the unified log+progress envelope from `2026-05-06-prd-logger-v2.md`).
 
 These take a `ctx: RunContext` argument (post-this-PRD) but never reach for the ambient store. Test harnesses synthesize a `RunContext` and never need a fake host.
 
@@ -272,7 +272,7 @@ These take a `ctx: RunContext` argument (post-this-PRD) but never reach for the 
 - `core/runtime/` — `RunContext`, `Logger` interface, `ProgressSink` interface, `executeAgent`, all coordinators.
 - `core/tools/approval/` — gates and controllers.
 - `core/auth/` — `SupabaseSessionCoordinator`, `TierService`, `ServerSideKeyService` (post-Phase-4 per-context).
-- `core/hosts/` — every host port (`PromptHost`, `ExternalOpener`, `DiffViewHost`, `TerminalHost`, `ClipboardHost`, plus `LogSink` from `prd-logger-v2.md`, plus `HookHost` and `SessionStore` from forthcoming PRDs).
+- `core/hosts/` — every host port (`PromptHost`, `ExternalOpener`, `DiffViewHost`, `TerminalHost`, `ClipboardHost`, plus `LogSink` from `2026-05-06-prd-logger-v2.md`, plus `HookHost` and `SessionStore` from forthcoming PRDs).
 - `core/storage/sessionStore.ts` (interface only; impls in Ring 3).
 
 These import Ring 1 freely and accept host services through their constructor / `RunContext` — but they never `import 'vscode'`, never `import 'electron'`, never `process.exit`.
@@ -329,7 +329,7 @@ A flat-config rule that the host of each package can import only the rings it ca
 
 - After Phase 5, `git grep "let [a-zA-Z_]*: .* | undefined" packages/core/src/agent packages/core/src/tools packages/core/src/auth packages/core/src/logger | grep -v // | grep -v test` returns only the four §4.4 caches.
 - `git grep "AsyncLocalStorage" packages/core/src/` returns exactly one hit (`runContext.ts`).
-- `texra mcp serve` integration test (per `prd-cli-app.md` §30.3) runs two concurrent `tools/call`s and the resulting NDJSON streams contain zero cross-session events when grouped by `runId`.
+- `texra mcp serve` integration test (per `2026-05-04-prd-cli-app.md` §30.3) runs two concurrent `tools/call`s and the resulting NDJSON streams contain zero cross-session events when grouped by `runId`.
 - `npm run typecheck` and the existing kernel test suite both pass on every phase merge.
 - The three-ring ESLint rule has zero exceptions in `packages/core/src/agent/`, `core/tools/`, `core/auth/` after Phase 5.
 - A new "synthetic host" package (~80 LOC scaffold, used in tests and as a reference) imports Rings 1+2+3 and runs `executeAgent('polish', …)` end-to-end.

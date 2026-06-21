@@ -5,7 +5,7 @@ updated: 2026-02-10
 
 # PRD: ProgressView Modernization - Phase 3
 
-> **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
+> **Parent doc:** [2026-01-24-prd-progressview-modernization.md](./2026-01-24-prd-progressview-modernization.md)
 
 ## Phase 3 Status Summary
 
@@ -18,7 +18,7 @@ updated: 2026-02-10
 | **3b-2**   | Utility conversion         | 🟡 In Progress | 1 JS import remains (themeHandlers.js) |
 | **3b-3**   | Formatter → TemplateResult | 🔶 Bridge      | Using renderToElement() bridge pattern |
 
-**Note:** Phase 3c (other webview migrations) has been moved to **[Phase 4](./prd-progressview-phase4.md)**.
+**Note:** Phase 3c (other webview migrations) has been moved to **[Phase 4](./2026-01-25-prd-progressview-phase4.md)**.
 
 ---
 
@@ -628,7 +628,7 @@ export function formatBannerContent(
 
 ## Phase 3c: Other Webview Migrations → MOVED TO PHASE 4
 
-> **See [prd-progressview-phase4.md](./prd-progressview-phase4.md) for other webview migrations (MemoryView, HistoryView, ProfileView, MainView).**
+> **See [2026-01-25-prd-progressview-phase4.md](./2026-01-25-prd-progressview-phase4.md) for other webview migrations (MemoryView, HistoryView, ProfileView, MainView).**
 
 ---
 

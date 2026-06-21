@@ -13,14 +13,14 @@ updated: 2026-02-10
 
 ---
 
-> **PRD Decision:** The main PRD (`docs/prd-context-compactization.md`, Section 4.6) explicitly chose **client-side summarization** over server-side compaction for Anthropic. Reasons cited:
+> **PRD Decision:** The main PRD (`docs/2026-02-02-prd-context-compactization.md`, Section 4.6) explicitly chose **client-side summarization** over server-side compaction for Anthropic. Reasons cited:
 >
 > - Server-side compaction is **opaque** — no visibility into what was preserved
 > - Server-side uses the **same expensive model** for summarization (Opus at ~$12/200K)
 > - **Inconsistent** — only works on Opus 4.6, not Sonnet/Haiku
 > - **No user control** — can't inspect or override the summary
 >
-> This plan is preserved as a **reference and future option**, not a recommended near-term approach. Implement `docs/plan-claude-client-compactization.md` first.
+> This plan is preserved as a **reference and future option**, not a recommended near-term approach. Implement `docs/2026-02-05-plan-claude-client-compactization.md` first.
 
 ---
 
@@ -33,13 +33,13 @@ Add server-side compaction to `ModelHandlerAnthropic` using Anthropic's native `
 1. **SDK types not available** — The current SDK (v0.72.1) only supports `BetaClearToolUses20250919Edit` and `BetaClearThinking20251015Edit` in `BetaContextManagementConfig.edits`. Implementing without types would require extensive type augmentation.
 2. **PRD recommends against it** — The PRD's architecture (Section 4.6) uses client-side for all providers except OpenAI Responses. Adopting server-side for Anthropic would deviate from the PRD's design.
 
-**Relationship to client-side plan:** Client-side compaction (`docs/plan-claude-client-compactization.md`) is the **primary and recommended** approach. This plan documents the server-side API for reference and as a potential future optimization if the trade-offs shift (e.g., server-side summary quality proves significantly better, or cost becomes comparable).
+**Relationship to client-side plan:** Client-side compaction (`docs/2026-02-05-plan-claude-client-compactization.md`) is the **primary and recommended** approach. This plan documents the server-side API for reference and as a potential future optimization if the trade-offs shift (e.g., server-side summary quality proves significantly better, or cost becomes comparable).
 
 ---
 
 ## 2. API Overview
 
-From `docs/prds/claude-documentation-compactization-2026-02.md`:
+From `docs/prds/2026-02-05-claude-documentation-compactization-2026-02.md`:
 
 ### How it works
 

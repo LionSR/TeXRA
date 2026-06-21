@@ -8,7 +8,7 @@ updated: 2026-05-11
 **Status:** Draft
 **Owner:** TBD
 **Date:** 2026-05-10
-**Companions:** [`prd-cli-app.md`](./prd-cli-app.md), [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md), [`prd-logger-v2.md`](./prd-logger-v2.md)
+**Companions:** [`2026-05-04-prd-cli-app.md`](./2026-05-04-prd-cli-app.md), [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md), [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md)
 
 ## 1. Summary
 
@@ -608,7 +608,7 @@ Focused follow-up #3842 owns the next narrow Logger v2 PR. Its scope is host sin
 
 ## Machine-readable manifest
 
-A compact orchestration manifest lives at `docs/prds/prd-cli-runcontext-logger-orchestration.manifest.json`. It maps each issue to its PRD, source of truth, and acceptance gates. Loop agents should use the manifest as an index, not as a replacement for the PRD text.
+A compact orchestration manifest lives at `docs/prds/2026-05-10-prd-cli-runcontext-logger-orchestration.manifest.json`. It maps each issue to its PRD, source of truth, and acceptance gates. Loop agents should use the manifest as an index, not as a replacement for the PRD text.
 
 ## CLI package publish-readiness gate
 
@@ -684,7 +684,7 @@ A root script `check:cli-orchestration-manifest` runs `scripts/check-cli-orchest
 
 ### Ledger update: PR acceptance-gate evidence
 
-The root PR template now includes an `Issue acceptance gates` section. Every PR in this loop should list the issue numbers it addresses and the exact acceptance gates satisfied from `prd-cli-runcontext-logger-orchestration.manifest.json`. If a gate remains incomplete, the PR must say so rather than implying completion through a broad summary.
+The root PR template now includes an `Issue acceptance gates` section. Every PR in this loop should list the issue numbers it addresses and the exact acceptance gates satisfied from `2026-05-10-prd-cli-runcontext-logger-orchestration.manifest.json`. If a gate remains incomplete, the PR must say so rather than implying completion through a broad summary.
 
 ### Ledger update: reference-only enforcement
 

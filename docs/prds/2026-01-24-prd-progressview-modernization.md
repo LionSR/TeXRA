@@ -51,15 +51,15 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 
 | Phase       | Scope                                        | Status         | Doc                                                        |
 | ----------- | -------------------------------------------- | -------------- | ---------------------------------------------------------- |
-| **Phase 1** | ProgressView — schema relocation + Lit UI    | ✅ Complete    | [prd-progressview-phase1.md](./prd-progressview-phase1.md) |
-| **Phase 2** | Extract shared infrastructure                | ✅ Complete    | [prd-progressview-phase2.md](./prd-progressview-phase2.md) |
-| **Phase 3** | ProgressView stabilization + native Lit      | ✅ Complete    | [prd-progressview-phase3.md](./prd-progressview-phase3.md) |
-| **Phase 4** | Migrate other webviews (History/Profile/etc) | ✅ Complete    | [prd-progressview-phase4.md](./prd-progressview-phase4.md) |
-| **Phase 5** | Regression fixes + Zod validation            | ✅ 99%         | [prd-progressview-phase5.md](./prd-progressview-phase5.md) |
-| **Phase 6** | Component extraction + performance           | ✅ Complete    | [prd-progressview-phase6.md](./prd-progressview-phase6.md) |
-| **Phase 7** | Zod-native types & MainApp decomposition     | ⬜ Not Started | [prd-mainview-phase7.md](./prd-mainview-phase7.md)         |
-| **Phase 8** | Lit-native improvements                      | ⬜ Not Started | [prd-lit-native-phase8.md](./prd-lit-native-phase8.md)     |
-| **Phase 9** | Task group state, UI, and persistence        | ⬜ Not Started | [prd-taskgroup-phase9.md](./prd-taskgroup-phase9.md)       |
+| **Phase 1** | ProgressView — schema relocation + Lit UI    | ✅ Complete    | [2026-01-24-prd-progressview-phase1.md](./2026-01-24-prd-progressview-phase1.md) |
+| **Phase 2** | Extract shared infrastructure                | ✅ Complete    | [2026-01-24-prd-progressview-phase2.md](./2026-01-24-prd-progressview-phase2.md) |
+| **Phase 3** | ProgressView stabilization + native Lit      | ✅ Complete    | [2026-01-24-prd-progressview-phase3.md](./2026-01-24-prd-progressview-phase3.md) |
+| **Phase 4** | Migrate other webviews (History/Profile/etc) | ✅ Complete    | [2026-01-25-prd-progressview-phase4.md](./2026-01-25-prd-progressview-phase4.md) |
+| **Phase 5** | Regression fixes + Zod validation            | ✅ 99%         | [2026-01-25-prd-progressview-phase5.md](./2026-01-25-prd-progressview-phase5.md) |
+| **Phase 6** | Component extraction + performance           | ✅ Complete    | [2026-01-26-prd-progressview-phase6.md](./2026-01-26-prd-progressview-phase6.md) |
+| **Phase 7** | Zod-native types & MainApp decomposition     | ⬜ Not Started | [2026-01-26-prd-mainview-phase7.md](./2026-01-26-prd-mainview-phase7.md)         |
+| **Phase 8** | Lit-native improvements                      | ⬜ Not Started | [2026-01-26-prd-lit-native-phase8.md](./2026-01-26-prd-lit-native-phase8.md)     |
+| **Phase 9** | Task group state, UI, and persistence        | ⬜ Not Started | [2026-01-26-prd-taskgroup-phase9.md](./2026-01-26-prd-taskgroup-phase9.md)       |
 
 \*Phase 4 webview migrations complete, but MainView requires Phase 5 refactoring (see below).
 
@@ -123,7 +123,7 @@ The legacy codebase has accumulated sequential band-aid workarounds. **These mus
 | Scattered conditionals  | 18× `isToolUse` checks         | Logic spread across 1000+ lines       |
 | Save-blocking counters  | `blockSave()/unblockSave()`    | Easy to leak, manual batching         |
 
-**See [Phase 2 Anti-Patterns](./prd-progressview-phase2.md#anti-patterns-to-avoid) for detailed analysis and Lit solutions.**
+**See [Phase 2 Anti-Patterns](./2026-01-24-prd-progressview-phase2.md#anti-patterns-to-avoid) for detailed analysis and Lit solutions.**
 
 ---
 

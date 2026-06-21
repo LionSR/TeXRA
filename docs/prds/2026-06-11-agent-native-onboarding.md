@@ -10,7 +10,7 @@ updated: 2026-06-11
 ## Relationship to other PRDs
 
 This PRD supersedes the onboarding slice of
-`docs/prds/launcher-and-onboarding.md` (the "Setup is a peer" /
+`docs/prds/2026-04-30-launcher-and-onboarding.md` (the "Setup is a peer" /
 first-run-landing parts) and is deliberately smaller than it. It does
 **not** touch that PRD's team-first launcher, roster strip, or team
 editor — those remain future work. Everything here is a stepping stone

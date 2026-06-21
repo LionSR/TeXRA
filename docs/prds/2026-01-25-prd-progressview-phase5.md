@@ -5,7 +5,7 @@ updated: 2026-02-10
 
 # PRD: ProgressView Modernization - Phase 5
 
-> **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
+> **Parent doc:** [2026-01-24-prd-progressview-modernization.md](./2026-01-24-prd-progressview-modernization.md)
 
 ## Overview
 
@@ -21,15 +21,15 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 > **Overall Phase 5 Completion: 99% (regressions & validation)**
 >
-> Remaining refactoring tasks moved to [Phase 6](./prd-progressview-phase6.md).
+> Remaining refactoring tasks moved to [Phase 6](./2026-01-26-prd-progressview-phase6.md).
 >
 > - ✅ All critical regressions fixed (R1-R15, H1-H15, J1-J2, P1-P3, R11)
 > - 🟡 R16 (FollowUp sticky positioning) partial - uses `flex-shrink: 0` but no sticky/fixed positioning
 > - ✅ Zod message validation complete (mainViewMessages.ts, commonViewMessages.ts)
 > - ✅ Cross-webview infrastructure unified (BaseWebviewApp pattern)
 > - ✅ All JavaScript behavioral issues resolved (debounce, checkbox timing)
-> - ➡️ Component extraction → [Phase 6](./prd-progressview-phase6.md)
-> - ➡️ Formatters migration → [Phase 6](./prd-progressview-phase6.md)
+> - ➡️ Component extraction → [Phase 6](./2026-01-26-prd-progressview-phase6.md)
+> - ➡️ Formatters migration → [Phase 6](./2026-01-26-prd-progressview-phase6.md)
 >
 > **Verified 2026-01-26** via code inspection.
 
@@ -109,7 +109,7 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 | Formatters → TemplateResult    | ✅ Complete | 14 formatters use Lit templates; bridge pattern intentional for Light DOM streaming |
 | renderLogs incremental updates | 🟡 Hybrid   | appendLog/updateLog are incremental; full rebuild only on stream switch             |
 
-> **Open to ideas:** We welcome suggestions for more native Lit patterns that could improve the architecture. See [Phase 6 section 6.2b](./prd-progressview-phase6.md#62b-lit-directive--native-feature-improvements) for areas open for exploration.
+> **Open to ideas:** We welcome suggestions for more native Lit patterns that could improve the architecture. See [Phase 6 section 6.2b](./2026-01-26-prd-progressview-phase6.md#62b-lit-directive--native-feature-improvements) for areas open for exploration.
 > | Create commonViewMessages.ts | ✅ Complete | Zod schemas for 5 common cmds |
 > | themeHandlers.ts Zod migration | ✅ Complete | commonMessageHandlers.ts |
 > | Eliminate normalization layers | ✅ Complete | -160 lines (done in Phase 3) |
@@ -119,7 +119,7 @@ Phase 5 addresses technical debt accumulated during the MainView Lit migration. 
 
 ## 5.1 Monolithic Component (Critical)
 
-➡️ **Moved to [Phase 6](./prd-progressview-phase6.md#61-monolithic-component-extraction)**
+➡️ **Moved to [Phase 6](./2026-01-26-prd-progressview-phase6.md#61-monolithic-component-extraction)**
 
 MainApp.ts (~2,900 lines) requires component extraction. See Phase 6 for target structure and extraction plan.
 
@@ -380,7 +380,7 @@ export const THEME_HANDLERS: Record<string, (message: unknown) => void> = {
 
 ## 5.7-5.8 Performance Optimizations
 
-➡️ **Moved to [Phase 6](./prd-progressview-phase6.md#62-inline-arrow-functions-37-instances)**
+➡️ **Moved to [Phase 6](./2026-01-26-prd-progressview-phase6.md#62-inline-arrow-functions-37-instances)**
 
 - Inline arrow function extraction (37 instances)
 - Computed getters for derived state
@@ -409,7 +409,7 @@ export const THEME_HANDLERS: Record<string, (message: unknown) => void> = {
 | `any` types            | 2      | 0 ✅    |
 | Duplicate handlers     | 1      | 0 ✅    |
 
-**Remaining metrics → [Phase 6](./prd-progressview-phase6.md#success-metrics)**
+**Remaining metrics → [Phase 6](./2026-01-26-prd-progressview-phase6.md#success-metrics)**
 
 ---
 
@@ -1213,7 +1213,7 @@ Icon usage is consistent with VS Code codicon classes.
 
 ## Architectural Debt & Performance (ProgressView)
 
-➡️ **Moved to [Phase 6](./prd-progressview-phase6.md#66-architectural-debt-progressview)**
+➡️ **Moved to [Phase 6](./2026-01-26-prd-progressview-phase6.md#66-architectural-debt-progressview)**
 
 - A1. TaskGroupDomManager coupling
 - A2. renderLogs() full DOM rebuild
@@ -1429,7 +1429,7 @@ The following normalizers were eliminated during ProgressView migration:
 
 ## Known Bugs (Code Review Findings)
 
-➡️ **Moved to [Phase 6](./prd-progressview-phase6.md#67-known-bugs-from-phase-5-code-review)**
+➡️ **Moved to [Phase 6](./2026-01-26-prd-progressview-phase6.md#67-known-bugs-from-phase-5-code-review)**
 
 6 bugs identified during code review (5.9.1-5.9.6) including state persistence, truthy array issues, and missing handlers.
 
@@ -1437,7 +1437,7 @@ The following normalizers were eliminated during ProgressView migration:
 
 ## Risks
 
-➡️ **Moved to [Phase 6](./prd-progressview-phase6.md#risks)**
+➡️ **Moved to [Phase 6](./2026-01-26-prd-progressview-phase6.md#risks)**
 
 ---
 
@@ -1445,4 +1445,4 @@ The following normalizers were eliminated during ProgressView migration:
 
 - [Lit Documentation](https://lit.dev/)
 - [Zod Documentation](https://zod.dev/)
-- [ProgressView patterns](./prd-progressview-phase3.md) - Reference implementation
+- [ProgressView patterns](./2026-01-24-prd-progressview-phase3.md) - Reference implementation

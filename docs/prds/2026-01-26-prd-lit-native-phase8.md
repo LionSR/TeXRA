@@ -5,10 +5,10 @@ updated: 2026-02-10
 
 # PRD: Lit-Native Improvements - Phase 8
 
-> **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
-> **Prior phase:** [prd-mainview-phase7.md](./prd-mainview-phase7.md)
-> **Next phase:** [prd-taskgroup-phase9.md](./prd-taskgroup-phase9.md)
-> **Related:** [ui-regressions-lit-migration.md](./ui-regressions-lit-migration.md)
+> **Parent doc:** [2026-01-24-prd-progressview-modernization.md](./2026-01-24-prd-progressview-modernization.md)
+> **Prior phase:** [2026-01-26-prd-mainview-phase7.md](./2026-01-26-prd-mainview-phase7.md)
+> **Next phase:** [2026-01-26-prd-taskgroup-phase9.md](./2026-01-26-prd-taskgroup-phase9.md)
+> **Related:** [2026-01-26-ui-regressions-lit-migration.md](./2026-01-26-ui-regressions-lit-migration.md)
 
 ## Overview
 
@@ -708,5 +708,5 @@ private get messages(): LogMessageData[] {
 - [Lit Directives Documentation](https://lit.dev/docs/templates/directives/)
 - [@lit-labs/virtualizer](https://github.com/lit/lit/tree/main/packages/labs/virtualizer)
 - [@lit/context](https://lit.dev/docs/data/context/)
-- [ui-regressions-lit-migration.md](./ui-regressions-lit-migration.md) - CSS regression tracking
-- [prd-progressview-phase6.md](./prd-progressview-phase6.md) - Component extraction patterns
+- [2026-01-26-ui-regressions-lit-migration.md](./2026-01-26-ui-regressions-lit-migration.md) - CSS regression tracking
+- [2026-01-26-prd-progressview-phase6.md](./2026-01-26-prd-progressview-phase6.md) - Component extraction patterns

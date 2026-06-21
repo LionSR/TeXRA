@@ -9,7 +9,7 @@ updated: 2026-06-07
 **Owner:** TBD
 **Date:** 2026-05-03
 **Branch:** `claude/texra-cli-electron-prd-AXNBu`
-**Companion to:** [`prd-electron-app.md`](./prd-electron-app.md)
+**Companion to:** [`2026-05-02-prd-electron-app.md`](./2026-05-02-prd-electron-app.md)
 
 ## 1. Summary
 
@@ -409,7 +409,7 @@ export function listModels(opts?: {
 
 Internally `runAgent` builds an `AgentConfigPayload` (agent + model + file fields), constructs a per-call `AgentRuntimeHost` whose `ProgressSink` forwards each kernel event to the user's `onProgress`, then calls `executeAgent(payload, undefined, { runtimeHost, onProgress, onStreamResolved, … })`. Types come from `@shared/schemas` so consumers get the same Zod-validated union the kernel emits.
 
-**Caveat (today's runtime shape):** `executeAgent`'s `runtimeHost` is optional and falls back through `AsyncLocalStorage` to a process-global default set by `setDefaultAgentRuntimeHost()`. Two SDK callers in the same process can therefore step on each other's defaults, and approval handlers (`setToolEditApprovalHandler`, `bashApprovalController`) are also module-level singletons. The SDK as specified here is honest about that boundary: it is safe for one consumer per process at v1. Concurrent in-process embedding is gated on [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md) Phase 0 + 1 (RunContext threading + coordinator retirement, ~2.5 weeks); not v1 scope. Phase 2+ of that PRD (full sink/host retirement) is the prerequisite for the post-v1 `texra mcp serve` feature, not for the v1 CLI.
+**Caveat (today's runtime shape):** `executeAgent`'s `runtimeHost` is optional and falls back through `AsyncLocalStorage` to a process-global default set by `setDefaultAgentRuntimeHost()`. Two SDK callers in the same process can therefore step on each other's defaults, and approval handlers (`setToolEditApprovalHandler`, `bashApprovalController`) are also module-level singletons. The SDK as specified here is honest about that boundary: it is safe for one consumer per process at v1. Concurrent in-process embedding is gated on [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md) Phase 0 + 1 (RunContext threading + coordinator retirement, ~2.5 weeks); not v1 scope. Phase 2+ of that PRD (full sink/host retirement) is the prerequisite for the post-v1 `texra mcp serve` feature, not for the v1 CLI.
 
 Total surface: ~300 LOC of facade + re-exports.
 
@@ -1171,23 +1171,23 @@ Round 2 lands six concrete deltas plus one cross-cutting kernel refactor that al
 
 | Delta                                                                         | Round 1 status                                       | Round 2 position                                                                                                                                                                     | New §      |
 | ----------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | ---- | ----- | ---------------------------------------------------------------------------------------------------------------------------- | --- |
-| Explicit `RunContext` replaces ambient ALS + singletons (§7.6 caveat / #3397) | Tracked as future work                               | **Promoted to standalone PRD — see [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md). CLI v1.0 consumes Phase 1; v1.1 consumes Phase 2 (gates concurrent MCP sessions).** | §22 (stub) |
-| Structured logger with explicit context, no module globals                    | Hand-waved as "consoleLog plus filter wrapper"       | **Promoted to standalone PRD — see [`prd-logger-v2.md`](./prd-logger-v2.md). CLI installs four sinks (stderr text, NDJSON stdout, Ink, MCP).**                                       | §23 (stub) |
+| Explicit `RunContext` replaces ambient ALS + singletons (§7.6 caveat / #3397) | Tracked as future work                               | **Promoted to standalone PRD — see [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md). CLI v1.0 consumes Phase 1; v1.1 consumes Phase 2 (gates concurrent MCP sessions).** | §22 (stub) |
+| Structured logger with explicit context, no module globals                    | Hand-waved as "consoleLog plus filter wrapper"       | **Promoted to standalone PRD — see [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md). CLI installs four sinks (stderr text, NDJSON stdout, Ink, MCP).**                                       | §23 (stub) |
 | `texra mcp serve` (callable from Claude Code, Codex, opencode)                | Listed as v1.1 future                                | **Promoted to v1; minimum surface = three tools (`run_workflow`, `run_chat`, `list_agents`)**                                                                                        | §24        |
 | Hook system (SessionStart, PreToolUse, PostToolUse, …)                        | Not mentioned                                        | **v1.1 — copy Claude Code's contract verbatim; spec'd here so v1 doesn't paint itself into a corner**                                                                                | §25        |
 | Approval policy revisited (no 2D sandbox axis)                                | 1D `never                                            | ask                                                                                                                                                                                  | auto-edits | auto | yolo` | **Stays 1D per user feedback. Round 2 sharpens the "in-project / outside-project" semantics with concrete file:line rules.** | §26 |
 | Session transcripts as JSONL under project-hash sharding                      | Implicit reuse of `RunStorageService` snapshot files | **Explicit format; `texra resume` / `--continue` / `--fork-session` semantics**                                                                                                      | §27        |
 | GitHub Action: composite + Bun (not JS Action)                                | §12 picked JS Action                                 | **Reverse — match `claude-code-base-action`'s composite pattern; faster iteration, no `dist/` checked in**                                                                           | §28        |
-| Cross-platform shared structure refactor (kernel side)                        | Implicit                                             | **Promoted into [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md) §8 (three-ring kernel structure). CLI-side consumption details retained here.**                         | §29 (stub) |
+| Cross-platform shared structure refactor (kernel side)                        | Implicit                                             | **Promoted into [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md) §8 (three-ring kernel structure). CLI-side consumption details retained here.**                         | §29 (stub) |
 | Container / GitHub-runner target matrix (slim, alpine, texlive)               | Sketched in §12.3                                    | **Refined per survey; `node:20-alpine` is downgraded to "best-effort" because of glibc/Bun/native-deps issues**                                                                      | §30        |
 | Phase plan delta + LOC delta                                                  | —                                                    | **Aggregated**                                                                                                                                                                       | §31        |
 | Parking lot — unified agent-SDK / message-SDK / context compaction            | —                                                    | **Out of v1; sized in §32 for visibility**                                                                                                                                           | §32        |
 
 The rest of round 2 is the spec for these deltas, in dependency order: §22 → §23 unblock §24 (an MCP server can't safely host concurrent sessions until the kernel's ambient state is gone); §24 + §25 + §26 are independent hosts on the new context; §27 + §28 + §29 + §30 are deployment / packaging concerns that don't gate kernel work.
 
-## 22. RunContext — replace ambient ALS + singletons → see [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md)
+## 22. RunContext — replace ambient ALS + singletons → see [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md)
 
-§22 has been promoted to a standalone PRD because the work is kernel-shaped, benefits all three hosts (extension, desktop, CLI), and is not a CLI-specific concern. See [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md) for the full design — the inventory of ambient state, the `RunContext` interface, the migration shim, the phased deletion of singletons, and the three-ring `packages/core/` structure (which previously lived in §29 of this PRD and is now §8 of the RunContext PRD).
+§22 has been promoted to a standalone PRD because the work is kernel-shaped, benefits all three hosts (extension, desktop, CLI), and is not a CLI-specific concern. See [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md) for the full design — the inventory of ambient state, the `RunContext` interface, the migration shim, the phased deletion of singletons, and the three-ring `packages/core/` structure (which previously lived in §29 of this PRD and is now §8 of the RunContext PRD).
 
 ### 22.1 What the CLI consumes
 
@@ -1217,11 +1217,11 @@ The CLI's relationship to the RunContext PRD is one of _consumer_, not _driver_:
 | Test harness updates to `withRunContext`-wrap all CLI tests              | —                   | ~50      |
 | **Subtotal (CLI side)**                                                  | **~60**             | **~50**  |
 
-The kernel work is sized in `prd-runcontext-refactor.md` §7 (~6.5 engineering weeks across Phases 0–5).
+The kernel work is sized in `2026-05-06-prd-runcontext-refactor.md` §7 (~6.5 engineering weeks across Phases 0–5).
 
-## 23. Logger v2 — structured records, host sinks → see [`prd-logger-v2.md`](./prd-logger-v2.md)
+## 23. Logger v2 — structured records, host sinks → see [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md)
 
-§23 has been promoted to a standalone PRD for the same reason as §22 — the work is kernel-shaped infrastructure, not CLI-specific. See [`prd-logger-v2.md`](./prd-logger-v2.md) for the design: the `Logger` / `LogRecord` / `LogSink` interfaces, the `BootstrapLogger`, schema unification with the round-1 §11.2 NDJSON event stream, per-host sink mapping, and the phased migration off `src/logger/logUtils.ts` and the `outputChannelFactory` module global.
+§23 has been promoted to a standalone PRD for the same reason as §22 — the work is kernel-shaped infrastructure, not CLI-specific. See [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md) for the design: the `Logger` / `LogRecord` / `LogSink` interfaces, the `BootstrapLogger`, schema unification with the round-1 §11.2 NDJSON event stream, per-host sink mapping, and the phased migration off `src/logger/logUtils.ts` and the `outputChannelFactory` module global.
 
 ### 23.1 What the CLI installs
 
@@ -1245,7 +1245,7 @@ All four CLI-side sinks live in `packages/cli/src/render/sinks/`. `BootstrapLogg
 | Bootstrap wiring in `cli/src/bin/texra.ts` and `cli/src/runtime/initPlatform.ts` | ~30      |
 | **Subtotal (CLI side)**                                                          | **~290** |
 
-The kernel work is sized in `prd-logger-v2.md` §9 (~3.8 engineering weeks across Phases 0–5).
+The kernel work is sized in `2026-05-06-prd-logger-v2.md` §9 (~3.8 engineering weeks across Phases 0–5).
 
 ## 24. `texra mcp serve` — callable from Claude Code, Codex, and opencode
 
@@ -1319,9 +1319,9 @@ Three policies for those inner gates, selected by tool argument:
 - Three tools above.
 - `notifications/progress` streaming.
 - Cancellation via `notifications/cancelled`.
-- Session isolation **only** to the extent `prd-runcontext-refactor.md` Phase 1 achieves it (per-context coordinators). One concurrent run per process; concurrent calls serialize. Documented limitation.
+- Session isolation **only** to the extent `2026-05-06-prd-runcontext-refactor.md` Phase 1 achieves it (per-context coordinators). One concurrent run per process; concurrent calls serialize. Documented limitation.
 
-**v1.1 ships (gated on `prd-runcontext-refactor.md` Phase 2 — singleton retirement):**
+**v1.1 ships (gated on `2026-05-06-prd-runcontext-refactor.md` Phase 2 — singleton retirement):**
 
 - True concurrent sessions in one MCP-server process. The audit's singleton-retirement work removes the leak risk.
 - Optional MCP `resources` surface exposing `~/.texra/projects/<hash>/<sessionId>.jsonl` (§27) for transcript replay.
@@ -1333,7 +1333,7 @@ Three policies for those inner gates, selected by tool argument:
 | -------------------------------------------------------------------------------------------------------- | -------- | -------- |
 | `packages/cli/src/mcp/server.ts` (server bootstrap, capability advertising)                              | ~120     | —        |
 | `packages/cli/src/mcp/tools/{runWorkflow,runChat,listAgents}.ts`                                         | ~250     | —        |
-| `packages/cli/src/mcp/sinks/McpProgressSink.ts` (also used by Logger v2; see `prd-logger-v2.md` Phase 5) | ~80      | —        |
+| `packages/cli/src/mcp/sinks/McpProgressSink.ts` (also used by Logger v2; see `2026-05-06-prd-logger-v2.md` Phase 5) | ~80      | —        |
 | `packages/cli/src/runtime/initPlatform.ts` (McpHostAdapter branch)                                       | —        | ~30      |
 | `packages/cli/src/commands/mcp.ts` (`texra mcp serve`)                                                   | ~40      | —        |
 | **Subtotal**                                                                                             | **~490** | **~30**  |
@@ -1507,7 +1507,7 @@ Match Claude Code's pattern, with TeXRA's run/stream lineage:
 
 ### 27.3 What's in the JSONL
 
-Each line is exactly one `RunStreamEvent` from `prd-logger-v2.md` §6 (the union of `LogRecord` and `ProgressEventPayloads`). The first line is a synthetic `event: "session_start"` carrying the `AgentConfigPayload`, the resolved model, the workspace root, and the approval policy. The last line is `event: "session_end"` with `AgentFlowResult`. Everything between is the round-1 §11.2 NDJSON event stream as it happened, with timestamps preserved.
+Each line is exactly one `RunStreamEvent` from `2026-05-06-prd-logger-v2.md` §6 (the union of `LogRecord` and `ProgressEventPayloads`). The first line is a synthetic `event: "session_start"` carrying the `AgentConfigPayload`, the resolved model, the workspace root, and the approval policy. The last line is `event: "session_end"` with `AgentFlowResult`. Everything between is the round-1 §11.2 NDJSON event stream as it happened, with timestamps preserved.
 
 This gives us several wins for free:
 
@@ -1636,7 +1636,7 @@ runs:
 
 No other round-1 picks change.
 
-## 29. Cross-platform shared structure → see [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md) §8
+## 29. Cross-platform shared structure → see [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md) §8
 
 The CLI is purely a _consumer_ of the three-ring structure: imports Rings 1 + 2 + 3 from `packages/core/` plus its own deps (`commander`, `ink`, `@modelcontextprotocol/sdk`, `@clack/prompts`, `picocolors`, `log-update`, `ora`); contributes nothing into the rings (CLI-side platform adapters `ConfConfigProvider` and `KeyringSecrets` from §7.3 live in the CLI package, not Ring 3). Cross-host imports (CLI → extension, CLI → desktop) are forbidden by the same ESLint rule that scopes `vscode` / `electron` to the extension and desktop packages.
 
@@ -1698,9 +1698,9 @@ Round 2 adds new work into existing phases plus one new phase (Phase 1.5) for th
 
 | Phase     | Round-1 scope                        | Round-2 additions                                                                                                                      |
 | --------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 0         | Workspace + headless workflow runner | + `RunContext` shim (`prd-runcontext-refactor.md` Phase 0) + Ring 1/2/3 reorg (`prd-runcontext-refactor.md` §8)                        |
-| 1         | Tool-use + approval engine           | + per-context coordinators (`prd-runcontext-refactor.md` Phase 1) + Logger v2 (`prd-logger-v2.md` Phases 0–1) + bash predicate (§26.3) |
-| 1.5 (new) | —                                    | `texra mcp serve` v1.0 surface (§24.5) + Logger MCP sink (`prd-logger-v2.md` Phase 5) + integration test (§30.3)                       |
+| 0         | Workspace + headless workflow runner | + `RunContext` shim (`2026-05-06-prd-runcontext-refactor.md` Phase 0) + Ring 1/2/3 reorg (`2026-05-06-prd-runcontext-refactor.md` §8)                        |
+| 1         | Tool-use + approval engine           | + per-context coordinators (`2026-05-06-prd-runcontext-refactor.md` Phase 1) + Logger v2 (`2026-05-06-prd-logger-v2.md` Phases 0–1) + bash predicate (§26.3) |
+| 1.5 (new) | —                                    | `texra mcp serve` v1.0 surface (§24.5) + Logger MCP sink (`2026-05-06-prd-logger-v2.md` Phase 5) + integration test (§30.3)                       |
 | 2         | Config + secrets + auth              | unchanged                                                                                                                              |
 | 3         | Interactive REPL                     | unchanged                                                                                                                              |
 | 4         | GitHub Action                        | composite-action revision (§28)                                                                                                        |
@@ -1721,8 +1721,8 @@ Kernel work that the CLI consumes but does not own (sized in the linked PRDs):
 
 | PRD                                                          | Kernel net new                  | Engineering weeks |
 | ------------------------------------------------------------ | ------------------------------- | ----------------- |
-| [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md) | ~-10 (refactor pays for itself) | ~6.5              |
-| [`prd-logger-v2.md`](./prd-logger-v2.md)                     | ~+310                           | ~3.8              |
+| [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md) | ~-10 (refactor pays for itself) | ~6.5              |
+| [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md)                     | ~+310                           | ~3.8              |
 
 CLI v1.0 consumes RunContext Phase 1 + Logger Phase 1; CLI v1.1 consumes RunContext Phase 2 + Logger Phase 5. Both kernel PRDs land alongside CLI Phase 0–1 on the engineering plan. v1 of the CLI ships in **~9–11 weeks** for a single engineer, **~6–8** for two engineers running CLI + kernel work in parallel.
 
@@ -1793,7 +1793,7 @@ Two features plus minimum plumbing.
 
 - Workflow agents only: `polish`, `correct`, `elevate`, `devise`, `criticize`, `merge`, OCR, transcribe.
 - Env-var auth only — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc. (existing `lookupApiKey` resolution path; no keyring, no OAuth).
-- `--output-format text|ndjson`. In `text` mode (default): final output file path on stdout, progress on stderr. In `ndjson` mode: structured events on stdout (progress events per §11.2; log records per `prd-logger-v2.md` §5.2 — the two share transport but version independently per logger §15.1), human messages and errors on stderr.
+- `--output-format text|ndjson`. In `text` mode (default): final output file path on stdout, progress on stderr. In `ndjson` mode: structured events on stdout (progress events per §11.2; log records per `2026-05-06-prd-logger-v2.md` §5.2 — the two share transport but version independently per logger §15.1), human messages and errors on stderr.
 - Reuses all 6 existing Node platform defaults byte-for-byte (`consoleLog`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`, `memoryState` — exporting `createMemoryStore()` — and `EnvSecrets`). v1.0 keeps `EnvSecrets` since auth is env-vars-only; the keyring-backed replacement (round 1 §7.3) lands in v1.2.
 - No interactive features. No approval engine — workflow agents don't trigger edit/bash gates.
 - Exit codes per round 1 §5.1.
@@ -1804,7 +1804,7 @@ Two features plus minimum plumbing.
 - stdio JSON-RPC 2.0; one process per client connection.
 - `notifications/progress` streaming.
 - Cancellation via `notifications/cancelled`.
-- Documented v1.0 limitation: one concurrent `tools/call` per process; concurrent calls serialize. Singleton retirement (per `prd-runcontext-refactor.md` Phase 2) gates true concurrency in v1.1.
+- Documented v1.0 limitation: one concurrent `tools/call` per process; concurrent calls serialize. Singleton retirement (per `2026-05-06-prd-runcontext-refactor.md` Phase 2) gates true concurrency in v1.1.
 
 This is the leverage feature. It makes every TeXRA agent callable from Claude Code, Codex, opencode, Cursor, and any future MCP host without TeXRA writing its own TUI. Users get an interactive surface for free via the calling host's UI.
 
@@ -1830,7 +1830,7 @@ This is the leverage feature. It makes every TeXRA agent callable from Claude Co
 | Hook system (round 2 §25)                                   | v2           | Speculative. Wait for concrete user requests.                                                     |
 | `texra doctor` (§8.5)                                       | nice-to-have | ~80 LOC whenever; not blocking v1.0.                                                              |
 | Self-contained Bun binaries (§13.3)                         | nice-to-have | Convenience artifact, never the canonical install path.                                           |
-| `RunContext` Phase 2 (per `prd-runcontext-refactor.md`)     | v1.1         | Required for _concurrent_ MCP sessions; not for the documented one-call-at-a-time v1.0.           |
+| `RunContext` Phase 2 (per `2026-05-06-prd-runcontext-refactor.md`)     | v1.1         | Required for _concurrent_ MCP sessions; not for the documented one-call-at-a-time v1.0.           |
 | Logger v2 Phase 2 (schema unification with progress)        | cut          | Over-couples slow-changing progress events to fast-changing log records (see logger PRD §15.1).   |
 | Logger v2 Phase 5 (`McpProgressSink`)                       | v1.1         | Gated on RunContext Phase 2 anyway.                                                               |
 
@@ -1856,7 +1856,7 @@ When `texra resume` lands in v1.2, matching Claude Code's directory layout buys 
 
 ### 33.5 Logger v2 — round 3 consumes a trimmed subset
 
-Logger v2's direction is right, but the v1.0 CLI consumes a trimmed subset (see [`prd-logger-v2.md`](./prd-logger-v2.md) §15 for full revisions):
+Logger v2's direction is right, but the v1.0 CLI consumes a trimmed subset (see [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md) §15 for full revisions):
 
 - **Phase 2 cut** (schema unification) — share NDJSON transport, version log/progress schemas independently.
 - **Phase 5 deferred** to v1.1 (MCP sink, gated on RunContext Phase 2).
@@ -1971,11 +1971,11 @@ Phase B largely gates Phase C — `texra chat` cannot _ship_ without working app
 
 Per user direction reinforced 2026-05-09 ("Don't do MCP yet"): `texra mcp serve` is not in v1.x. The round 2 §24 design stays in the PRD as a **future** option to revisit when there is concrete demand from a calling host (Claude Code / Codex / opencode user wiring TeXRA into their flow). Until then, the CLI is sized and shipped purely as a standalone product.
 
-The logger PRD's `McpProgressSink` (Phase 5, see [`prd-logger-v2.md`](./prd-logger-v2.md) §15.5) lands alongside MCP whenever that ships — not part of the v1.x logger work.
+The logger PRD's `McpProgressSink` (Phase 5, see [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md) §15.5) lands alongside MCP whenever that ships — not part of the v1.x logger work.
 
 ### 34.7 What round 4 does NOT change
 
-Round 1's architecture, platform impls, repo layout, and tech-stack picks all stand. Round 2's MCP-server design (§24) is correct — it just is not part of v1.x. Round 3's logger v2 trims (§33.5, see also `prd-logger-v2.md` §15) all stay in force. Round 4 is a scope reordering, not a redesign.
+Round 1's architecture, platform impls, repo layout, and tech-stack picks all stand. Round 2's MCP-server design (§24) is correct — it just is not part of v1.x. Round 3's logger v2 trims (§33.5, see also `2026-05-06-prd-logger-v2.md` §15) all stay in force. Round 4 is a scope reordering, not a redesign.
 
 The intended shape stays coherent across hosts:
 

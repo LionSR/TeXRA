@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 
 const manifestPath =
-  'docs/prds/prd-cli-runcontext-logger-orchestration.manifest.json';
+  'docs/prds/2026-05-10-prd-cli-runcontext-logger-orchestration.manifest.json';
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 const errors = [];
 

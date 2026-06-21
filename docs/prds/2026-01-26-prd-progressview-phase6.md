@@ -5,8 +5,8 @@ updated: 2026-02-10
 
 # PRD: ProgressView Modernization - Phase 6
 
-> **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
-> **Prior phase:** [prd-progressview-phase5.md](./prd-progressview-phase5.md)
+> **Parent doc:** [2026-01-24-prd-progressview-modernization.md](./2026-01-24-prd-progressview-modernization.md)
+> **Prior phase:** [2026-01-25-prd-progressview-phase5.md](./2026-01-25-prd-progressview-phase5.md)
 
 ## Overview
 
@@ -34,8 +34,8 @@ Phase 6 addresses remaining technical debt from the Lit migration. Phase 5 compl
 >
 > **Verified 2026-01-26** via code inspection.
 >
-> **Next:** [Phase 7](./prd-mainview-phase7.md) - Zod-native types & MainApp decomposition
-> **Then:** [Phase 8](./prd-lit-native-phase8.md) - Lit-native improvements (styleMap, virtualizer, context)
+> **Next:** [Phase 7](./2026-01-26-prd-mainview-phase7.md) - Zod-native types & MainApp decomposition
+> **Then:** [Phase 8](./2026-01-26-prd-lit-native-phase8.md) - Lit-native improvements (styleMap, virtualizer, context)
 
 | Task                             | Status            | Impact                                                                  |
 | -------------------------------- | ----------------- | ----------------------------------------------------------------------- |
@@ -542,7 +542,7 @@ Breaking existing functionality while extracting components.
 
 ## References
 
-- [Phase 5 PRD](./prd-progressview-phase5.md) - Completed regression fixes
+- [Phase 5 PRD](./2026-01-25-prd-progressview-phase5.md) - Completed regression fixes
 - [Lit Documentation](https://lit.dev/)
-- [ProgressView patterns](./prd-progressview-phase3.md) - Reference implementation
+- [ProgressView patterns](./2026-01-24-prd-progressview-phase3.md) - Reference implementation
 - [progressView/state/ProgressViewState.ts](../src/progressView/state/ProgressViewState.ts) - Zod schema pattern reference

@@ -4,7 +4,7 @@
   "updated": "2026-05-12",
   "status": "complete",
   "trackingIssue": "https://github.com/LionSR/TeXRA/issues/3838",
-  "primaryPrd": "docs/prds/prd-cli-runcontext-logger-orchestration.md",
+  "primaryPrd": "docs/prds/2026-05-10-prd-cli-runcontext-logger-orchestration.md",
   "currentAudit": {
     "date": "2026-05-12",
     "basePr": "https://github.com/LionSR/TeXRA/pull/3839",
@@ -85,7 +85,7 @@
       "id": 3833,
       "title": "Logger v2",
       "url": "https://github.com/LionSR/TeXRA/issues/3833",
-      "prd": "docs/prds/prd-logger-v2.md",
+      "prd": "docs/prds/2026-05-06-prd-logger-v2.md",
       "implementationPrs": [
         3839,
         3845
@@ -102,7 +102,7 @@
       "id": 3834,
       "title": "CLI texra run",
       "url": "https://github.com/LionSR/TeXRA/issues/3834",
-      "prd": "docs/prds/prd-cli-app.md",
+      "prd": "docs/prds/2026-05-04-prd-cli-app.md",
       "implementationPrs": [
         3839,
         3843
@@ -121,7 +121,7 @@
       "id": 3835,
       "title": "CLI approval policy",
       "url": "https://github.com/LionSR/TeXRA/issues/3835",
-      "prd": "docs/prds/prd-cli-app.md",
+      "prd": "docs/prds/2026-05-04-prd-cli-app.md",
       "implementationPrs": [
         3839,
         3844,
@@ -140,7 +140,7 @@
       "id": 3836,
       "title": "CLI texra chat",
       "url": "https://github.com/LionSR/TeXRA/issues/3836",
-      "prd": "docs/prds/prd-cli-app.md",
+      "prd": "docs/prds/2026-05-04-prd-cli-app.md",
       "implementationPrs": [
         3839,
         3846
@@ -163,7 +163,7 @@
       "id": 3837,
       "title": "ToolFileInteractionContext ownership",
       "url": "https://github.com/LionSR/TeXRA/issues/3837",
-      "prd": "docs/prds/prd-runcontext-refactor.md",
+      "prd": "docs/prds/2026-05-06-prd-runcontext-refactor.md",
       "implementationPrs": [
         3839,
         3847

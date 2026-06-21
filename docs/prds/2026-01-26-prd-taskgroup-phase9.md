@@ -5,9 +5,9 @@ updated: 2026-02-10
 
 # PRD: Task Group State, UI, and Persistence - Phase 9
 
-> **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
-> **Prior phase:** [prd-lit-native-phase8.md](./prd-lit-native-phase8.md)
-> **Related:** [ui-regressions-lit-migration.md](./ui-regressions-lit-migration.md)
+> **Parent doc:** [2026-01-24-prd-progressview-modernization.md](./2026-01-24-prd-progressview-modernization.md)
+> **Prior phase:** [2026-01-26-prd-lit-native-phase8.md](./2026-01-26-prd-lit-native-phase8.md)
+> **Related:** [2026-01-26-ui-regressions-lit-migration.md](./2026-01-26-ui-regressions-lit-migration.md)
 
 ## Overview
 

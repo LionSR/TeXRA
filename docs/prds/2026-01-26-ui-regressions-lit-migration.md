@@ -1612,7 +1612,7 @@ This dual approach is intentional:
 
 ## Lit-Native Improvements (Phase 8 Opportunities)
 
-> See [prd-lit-native-phase8.md](./prd-lit-native-phase8.md) for full implementation plan.
+> See [2026-01-26-prd-lit-native-phase8.md](./2026-01-26-prd-lit-native-phase8.md) for full implementation plan.
 
 ### Summary of Opportunities (Verified 2026-01-26)
 

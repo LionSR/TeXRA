@@ -10,7 +10,7 @@ updated: 2026-05-17
 ## Context
 
 This PRD is a continuation of
-[`logging-pipeline-refactor.md`](./logging-pipeline-refactor.md). That
+[`2026-02-21-logging-pipeline-refactor.md`](./2026-02-21-logging-pipeline-refactor.md). That
 PRD's Phases 0–3 have shipped:
 
 - Winston, `VSCodeTransport`, `LogChannelRegistry`, `StreamEventQueue`,
@@ -331,5 +331,5 @@ because `structuredLogger.ts` stays.
   runtime host depends on its surface. The earlier feasibility note
   got this wrong; this PRD does not.
 - It does not relitigate the original PRD. Phases 0–3 of
-  `logging-pipeline-refactor.md` shipped and work. This is a focused
+  `2026-02-21-logging-pipeline-refactor.md` shipped and work. This is a focused
   cleanup of the layer that PRD waved at in two bullets.

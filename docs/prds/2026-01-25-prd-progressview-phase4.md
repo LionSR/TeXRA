@@ -5,7 +5,7 @@ updated: 2026-02-10
 
 # PRD: ProgressView Modernization - Phase 4
 
-> **Parent doc:** [prd-progressview-modernization.md](./prd-progressview-modernization.md)
+> **Parent doc:** [2026-01-24-prd-progressview-modernization.md](./2026-01-24-prd-progressview-modernization.md)
 
 ## Overview
 
@@ -453,7 +453,7 @@ src/profileView/
 
 **Complexity:** High (file selection, recording, multiple managers)
 
-**Status:** ✅ Migrated to Lit (2026-01-25) — but requires **[Phase 5 refactoring](./prd-progressview-phase5.md)**
+**Status:** ✅ Migrated to Lit (2026-01-25) — but requires **[Phase 5 refactoring](./2026-01-25-prd-progressview-phase5.md)**
 
 ### Current Structure (Post-Migration)
 
@@ -484,7 +484,7 @@ MainView migration is functionally complete but requires Phase 5 refactoring for
 - **Missing validation:** 58 message types lack Zod validation (security risk)
 - **Known bugs:** 6 bugs identified during code review (see Phase 5)
 
-**See [prd-progressview-phase5.md](./prd-progressview-phase5.md) for full details.**
+**See [2026-01-25-prd-progressview-phase5.md](./2026-01-25-prd-progressview-phase5.md) for full details.**
 
 ---
 
