@@ -181,15 +181,15 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const agents: AgentGroups = data ?? { toolUse: [], workflow: [] };
   const primarySectionTitle = agentPickerPrimarySectionTitle(agents.toolUse);
   const items = agents.toolUse.map((agent) => ({
-    value: agent.label,
+    value: agent.value,
     label: agent.label,
     description: agentDescription(agent),
   }));
   // The current agent may be stored as a canonical key (`source:name`) or a
-  // bare name; rows are keyed by bare name, so resolve to the matching label
-  // so Select can render the ✓ on the active row.
+  // bare name; rows are keyed by canonical value, so match Select in that same
+  // identity space when rendering the ✓ on the active row.
   const activeAgent = currentVisibleAgent(agents.toolUse, props.currentAgent);
-  const activeValue = activeAgent?.label ?? props.currentAgent;
+  const activeValue = activeAgent?.value ?? props.currentAgent;
   const currentAgentHint = hiddenCurrentAgentHint(
     agents.toolUse,
     props.currentAgent,

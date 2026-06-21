@@ -36,9 +36,10 @@ describe('CLI AgentListForm row budget', () => {
       { value: 'remote:orchestrator', label: 'Orchestrator' },
     ];
 
-    expect(currentVisibleAgent(displayAgents, 'setup')?.label).toBe(
-      'Setup assistant',
-    );
+    const setupAgent = currentVisibleAgent(displayAgents, 'setup');
+
+    expect(setupAgent?.label).toBe('Setup assistant');
+    expect(setupAgent?.value).toBe('builtInToolUse:setup');
     expect(
       currentVisibleAgent(displayAgents, 'remote:orchestrator')?.label,
     ).toBe('Orchestrator');
