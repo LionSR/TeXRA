@@ -22,16 +22,6 @@ import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-type ChatgptLoginArgs = Record<string, unknown>;
-
-function readBool(
-  args: ChatgptLoginArgs,
-  hyphen: string,
-  camel: string,
-): boolean {
-  return args[hyphen] === true || args[camel] === true;
-}
-
 /**
  * Device-code is the right default when there's no interactive browser to reach:
  * non-text output, a non-TTY/headless/dumb terminal, or `--no-input`. An
@@ -67,6 +57,7 @@ function emitLogin(context: CliContext, session: CodexSession): void {
       kind: 'chatgpt-auth',
       authenticated: true,
       email: session.email ?? null,
+      accountId: session.accountId ?? null,
     },
     text: `Signed in with ChatGPT as ${accountLabel(session)}.\nEnable "chatgptCodex.preferSubscription" in your TeXRA config to route Codex models through your subscription.`,
   });
@@ -134,8 +125,8 @@ const chatgptLoginCommand = defineCliCommand({
   },
   run: (context, ctx) =>
     runChatgptLogin(context, {
-      device: readBool(ctx.args, 'device', 'device'),
-      noBrowser: readBool(ctx.args, 'no-browser', 'noBrowser'),
+      device: ctx.args.device === true,
+      noBrowser: ctx.args.noBrowser === true,
     }),
 });
 
