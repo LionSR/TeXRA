@@ -2,10 +2,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  handleTuiSlashCommand,
-  type SlashCommandContext,
-} from '@cli/chat/tui/commands/handleSlashCommand';
+import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
+import { type SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import {
   listSlashCommands,

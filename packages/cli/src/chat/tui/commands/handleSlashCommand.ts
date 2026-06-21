@@ -42,21 +42,6 @@ import {
   suggestSlashCommand,
 } from './slashRegistry';
 
-// Public surface preserved for `runChatTui` and the slash-command tests, which
-// import these from `handleSlashCommand` rather than the per-domain modules.
-export {
-  applyCliModelSelection,
-  applyInitialCliAgentSelection,
-  chatAgentSupportsDelegation,
-  chatToolUseAgentUsageError,
-} from './handlers/agentModelCommands';
-export { applyCliApiModeSelection } from './handlers/apiModeCommands';
-export { showCliMemoryPreview } from './handlers/memoryCommands';
-export {
-  CHAT_API_MODE_MODEL_RECOVERY,
-  type SlashCommandContext,
-} from './handlers/slashContext';
-
 export async function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
