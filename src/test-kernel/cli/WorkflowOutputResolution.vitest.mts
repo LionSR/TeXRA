@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { resolveWorkflowOutput } from '@cli/runtime/workflowOutput';
+import {
+  expectedOutputFilesForOutputDir,
+  resolveWorkflowOutput,
+} from '@cli/runtime/workflowOutput';
 import type { CliContext } from '@cli/runtime/cliContext';
 import {
   END_GROUP_STATUS,
@@ -47,6 +50,7 @@ function workflowResult(
   outputs: Array<{
     absolutePath: string;
     relativePath: string;
+    originalPath?: string | null;
     round?: number;
   }>,
 ): WorkflowResult {
@@ -61,7 +65,7 @@ function workflowResult(
       relativePath: output.relativePath,
       absolutePath: output.absolutePath,
       location: 'runStorage',
-      originalPath: null,
+      originalPath: output.originalPath ?? null,
       added: null,
       removed: null,
     })),
@@ -130,6 +134,188 @@ describe('CLI workflow output resolution', () => {
     await expect(readFile(join(cwd, 'out', 'b.tex'), 'utf8')).resolves.toBe(
       'B',
     );
+  });
+
+  it('preserves expected nested input paths when copying flattened workflow outputs', async () => {
+    const cwd = await makeTempDir();
+    const runMain = join(cwd, 'run', 'r1', 'main.tex');
+    const runSeries = join(cwd, 'run', 'r1', 'series.tex');
+    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
+    await writeFile(runMain, 'main');
+    await writeFile(runSeries, 'series');
+
+    const { displayResult } = await resolveWorkflowOutput(
+      undefined,
+      'out',
+      workflowResult([
+        {
+          absolutePath: runMain,
+          relativePath: 'r1/main.tex',
+          originalPath: join(cwd, 'run', 'original', 'paper', 'main.tex'),
+        },
+        {
+          absolutePath: runSeries,
+          relativePath: 'r1/series.tex',
+          originalPath: join(
+            cwd,
+            'run',
+            'original',
+            'paper',
+            'chapters',
+            'series.tex',
+          ),
+        },
+      ]),
+      testContext(cwd),
+      {
+        expectedOutputFiles: ['paper/main.tex', 'paper/chapters/series.tex'],
+        runDirectory: join(cwd, 'run'),
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+      },
+    );
+
+    expect(displayResult).toMatchObject({
+      copiedOutputs: [
+        join(cwd, 'out', 'paper', 'main.tex'),
+        join(cwd, 'out', 'paper', 'chapters', 'series.tex'),
+      ],
+    });
+    await expect(
+      readFile(join(cwd, 'out', 'paper', 'main.tex'), 'utf8'),
+    ).resolves.toBe('main');
+    await expect(
+      readFile(join(cwd, 'out', 'paper', 'chapters', 'series.tex'), 'utf8'),
+    ).resolves.toBe('series');
+  });
+
+  it('uses original-path lineage before flat generated names when basenames collide', async () => {
+    const cwd = await makeTempDir();
+    const runRoot = join(cwd, 'run', 'root', 'main.tex');
+    const runNested = join(cwd, 'run', 'nested', 'main.tex');
+    await mkdir(join(cwd, 'run', 'root'), { recursive: true });
+    await mkdir(join(cwd, 'run', 'nested'), { recursive: true });
+    await writeFile(runRoot, 'root');
+    await writeFile(runNested, 'nested');
+
+    const { displayResult } = await resolveWorkflowOutput(
+      undefined,
+      'out',
+      workflowResult([
+        {
+          absolutePath: runRoot,
+          relativePath: 'r1/main.tex',
+          originalPath: join(cwd, 'run', 'original', 'paper', 'main.tex'),
+        },
+        {
+          absolutePath: runNested,
+          relativePath: 'r1/main.tex',
+          originalPath: join(
+            cwd,
+            'run',
+            'original',
+            'paper',
+            'chapters',
+            'main.tex',
+          ),
+        },
+      ]),
+      testContext(cwd),
+      {
+        expectedOutputFiles: ['paper/main.tex', 'paper/chapters/main.tex'],
+        runDirectory: join(cwd, 'run'),
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+      },
+    );
+
+    expect(displayResult).toMatchObject({
+      copiedOutputs: [
+        join(cwd, 'out', 'paper', 'main.tex'),
+        join(cwd, 'out', 'paper', 'chapters', 'main.tex'),
+      ],
+    });
+    await expect(
+      readFile(join(cwd, 'out', 'paper', 'main.tex'), 'utf8'),
+    ).resolves.toBe('root');
+    await expect(
+      readFile(join(cwd, 'out', 'paper', 'chapters', 'main.tex'), 'utf8'),
+    ).resolves.toBe('nested');
+  });
+
+  it('does not remap arbitrary same-source outputs to an expected input name', async () => {
+    const cwd = await makeTempDir();
+    const runDerived = join(cwd, 'run', 'r1', 'derived.tex');
+    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
+    await writeFile(runDerived, 'derived');
+
+    await expect(
+      resolveWorkflowOutput(
+        undefined,
+        'out',
+        workflowResult([
+          {
+            absolutePath: runDerived,
+            relativePath: 'r1/derived.tex',
+            originalPath: join(cwd, 'run', 'original', 'paper', 'input.tex'),
+          },
+        ]),
+        testContext(cwd),
+        {
+          expectedOutputFiles: ['paper/input.tex'],
+          runDirectory: join(cwd, 'run'),
+          terminalStatus: EXECUTION_STATUS.COMPLETED,
+        },
+      ),
+    ).rejects.toThrow(/paper[/\\]input\.tex/);
+  });
+
+  it('derives safe expected --output-dir paths from relative and absolute inputs', async () => {
+    const external = await makeTempDir();
+
+    expect(
+      expectedOutputFilesForOutputDir(undefined, [
+        'paper/main.tex',
+        'paper/chapters/series.tex',
+      ]),
+    ).toEqual(['paper/main.tex', 'paper/chapters/series.tex']);
+    expect(
+      expectedOutputFilesForOutputDir(undefined, [
+        join(external, 'paper', 'main.tex'),
+        join(external, 'paper', 'chapters', 'series.tex'),
+      ]),
+    ).toEqual(['main.tex', join('chapters', 'series.tex')]);
+  });
+
+  it('does not remap output paths on partial original-path segment matches', async () => {
+    const cwd = await makeTempDir();
+    const runSeries = join(cwd, 'run', 'r1', 'series.tex');
+    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
+    await writeFile(runSeries, 'series');
+
+    await expect(
+      resolveWorkflowOutput(
+        undefined,
+        'out',
+        workflowResult([
+          {
+            absolutePath: runSeries,
+            relativePath: 'r1/series.tex',
+            originalPath: join(
+              cwd,
+              'run',
+              'original',
+              'mychapters',
+              'series.tex',
+            ),
+          },
+        ]),
+        testContext(cwd),
+        {
+          expectedOutputFiles: ['chapters/series.tex'],
+          runDirectory: join(cwd, 'run'),
+          terminalStatus: EXECUTION_STATUS.COMPLETED,
+        },
+      ),
+    ).rejects.toThrow(/chapters[/\\]series\.tex/);
   });
 
   it('uses the latest round when --output-dir workflow outputs arrive out of order', async () => {
