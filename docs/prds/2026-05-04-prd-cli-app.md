@@ -1169,19 +1169,19 @@ Round 1 above defined the CLI as a thin Node shell over an already host-neutral 
 
 Round 2 lands six concrete deltas plus one cross-cutting kernel refactor that all three hosts (extension, desktop, CLI) benefit from. None of these change the round-1 LOC band by more than ~600 lines combined; most are about replacing ad-hoc patterns with the kernel-shaped abstractions the audit revealed are already partially in place.
 
-| Delta                                                                         | Round 1 status                                       | Round 2 position                                                                                                                                                                     | New §      |
-| ----------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | ---- | ----- | ---------------------------------------------------------------------------------------------------------------------------- | --- |
+| Delta                                                                         | Round 1 status                                       | Round 2 position                                                                                                                                                                                           | New §      |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---- | ----- | ---------------------------------------------------------------------------------------------------------------------------- | --- |
 | Explicit `RunContext` replaces ambient ALS + singletons (§7.6 caveat / #3397) | Tracked as future work                               | **Promoted to standalone PRD — see [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md). CLI v1.0 consumes Phase 1; v1.1 consumes Phase 2 (gates concurrent MCP sessions).** | §22 (stub) |
 | Structured logger with explicit context, no module globals                    | Hand-waved as "consoleLog plus filter wrapper"       | **Promoted to standalone PRD — see [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md). CLI installs four sinks (stderr text, NDJSON stdout, Ink, MCP).**                                       | §23 (stub) |
-| `texra mcp serve` (callable from Claude Code, Codex, opencode)                | Listed as v1.1 future                                | **Promoted to v1; minimum surface = three tools (`run_workflow`, `run_chat`, `list_agents`)**                                                                                        | §24        |
-| Hook system (SessionStart, PreToolUse, PostToolUse, …)                        | Not mentioned                                        | **v1.1 — copy Claude Code's contract verbatim; spec'd here so v1 doesn't paint itself into a corner**                                                                                | §25        |
-| Approval policy revisited (no 2D sandbox axis)                                | 1D `never                                            | ask                                                                                                                                                                                  | auto-edits | auto | yolo` | **Stays 1D per user feedback. Round 2 sharpens the "in-project / outside-project" semantics with concrete file:line rules.** | §26 |
-| Session transcripts as JSONL under project-hash sharding                      | Implicit reuse of `RunStorageService` snapshot files | **Explicit format; `texra resume` / `--continue` / `--fork-session` semantics**                                                                                                      | §27        |
-| GitHub Action: composite + Bun (not JS Action)                                | §12 picked JS Action                                 | **Reverse — match `claude-code-base-action`'s composite pattern; faster iteration, no `dist/` checked in**                                                                           | §28        |
+| `texra mcp serve` (callable from Claude Code, Codex, opencode)                | Listed as v1.1 future                                | **Promoted to v1; minimum surface = three tools (`run_workflow`, `run_chat`, `list_agents`)**                                                                                                              | §24        |
+| Hook system (SessionStart, PreToolUse, PostToolUse, …)                        | Not mentioned                                        | **v1.1 — copy Claude Code's contract verbatim; spec'd here so v1 doesn't paint itself into a corner**                                                                                                      | §25        |
+| Approval policy revisited (no 2D sandbox axis)                                | 1D `never                                            | ask                                                                                                                                                                                                        | auto-edits | auto | yolo` | **Stays 1D per user feedback. Round 2 sharpens the "in-project / outside-project" semantics with concrete file:line rules.** | §26 |
+| Session transcripts as JSONL under project-hash sharding                      | Implicit reuse of `RunStorageService` snapshot files | **Explicit format; `texra resume` / `--continue` / `--fork-session` semantics**                                                                                                                            | §27        |
+| GitHub Action: composite + Bun (not JS Action)                                | §12 picked JS Action                                 | **Reverse — match `claude-code-base-action`'s composite pattern; faster iteration, no `dist/` checked in**                                                                                                 | §28        |
 | Cross-platform shared structure refactor (kernel side)                        | Implicit                                             | **Promoted into [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md) §8 (three-ring kernel structure). CLI-side consumption details retained here.**                         | §29 (stub) |
-| Container / GitHub-runner target matrix (slim, alpine, texlive)               | Sketched in §12.3                                    | **Refined per survey; `node:20-alpine` is downgraded to "best-effort" because of glibc/Bun/native-deps issues**                                                                      | §30        |
-| Phase plan delta + LOC delta                                                  | —                                                    | **Aggregated**                                                                                                                                                                       | §31        |
-| Parking lot — unified agent-SDK / message-SDK / context compaction            | —                                                    | **Out of v1; sized in §32 for visibility**                                                                                                                                           | §32        |
+| Container / GitHub-runner target matrix (slim, alpine, texlive)               | Sketched in §12.3                                    | **Refined per survey; `node:20-alpine` is downgraded to "best-effort" because of glibc/Bun/native-deps issues**                                                                                            | §30        |
+| Phase plan delta + LOC delta                                                  | —                                                    | **Aggregated**                                                                                                                                                                                             | §31        |
+| Parking lot — unified agent-SDK / message-SDK / context compaction            | —                                                    | **Out of v1; sized in §32 for visibility**                                                                                                                                                                 | §32        |
 
 The rest of round 2 is the spec for these deltas, in dependency order: §22 → §23 unblock §24 (an MCP server can't safely host concurrent sessions until the kernel's ambient state is gone); §24 + §25 + §26 are independent hosts on the new context; §27 + §28 + §29 + §30 are deployment / packaging concerns that don't gate kernel work.
 
@@ -1329,14 +1329,14 @@ Three policies for those inner gates, selected by tool argument:
 
 ### 24.6 LOC
 
-| Item                                                                                                     | New      | Modified |
-| -------------------------------------------------------------------------------------------------------- | -------- | -------- |
-| `packages/cli/src/mcp/server.ts` (server bootstrap, capability advertising)                              | ~120     | —        |
-| `packages/cli/src/mcp/tools/{runWorkflow,runChat,listAgents}.ts`                                         | ~250     | —        |
+| Item                                                                                                                | New      | Modified |
+| ------------------------------------------------------------------------------------------------------------------- | -------- | -------- |
+| `packages/cli/src/mcp/server.ts` (server bootstrap, capability advertising)                                         | ~120     | —        |
+| `packages/cli/src/mcp/tools/{runWorkflow,runChat,listAgents}.ts`                                                    | ~250     | —        |
 | `packages/cli/src/mcp/sinks/McpProgressSink.ts` (also used by Logger v2; see `2026-05-06-prd-logger-v2.md` Phase 5) | ~80      | —        |
-| `packages/cli/src/runtime/initPlatform.ts` (McpHostAdapter branch)                                       | —        | ~30      |
-| `packages/cli/src/commands/mcp.ts` (`texra mcp serve`)                                                   | ~40      | —        |
-| **Subtotal**                                                                                             | **~490** | **~30**  |
+| `packages/cli/src/runtime/initPlatform.ts` (McpHostAdapter branch)                                                  | —        | ~30      |
+| `packages/cli/src/commands/mcp.ts` (`texra mcp serve`)                                                              | ~40      | —        |
+| **Subtotal**                                                                                                        | **~490** | **~30**  |
 
 ## 25. Hook system (Claude Code-style)
 
@@ -1696,15 +1696,15 @@ Documented as `texra config path` output for fast diagnosis from `texra doctor`.
 
 Round 2 adds new work into existing phases plus one new phase (Phase 1.5) for the MCP-server surface. Phases 0, 2, 3, 4, 5 from round 1 keep their scope; Phase 1 absorbs §22 + §23 + §26 (all kernel-side, all on the critical path for tool-use agents).
 
-| Phase     | Round-1 scope                        | Round-2 additions                                                                                                                      |
-| --------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase     | Round-1 scope                        | Round-2 additions                                                                                                                                            |
+| --------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 0         | Workspace + headless workflow runner | + `RunContext` shim (`2026-05-06-prd-runcontext-refactor.md` Phase 0) + Ring 1/2/3 reorg (`2026-05-06-prd-runcontext-refactor.md` §8)                        |
 | 1         | Tool-use + approval engine           | + per-context coordinators (`2026-05-06-prd-runcontext-refactor.md` Phase 1) + Logger v2 (`2026-05-06-prd-logger-v2.md` Phases 0–1) + bash predicate (§26.3) |
-| 1.5 (new) | —                                    | `texra mcp serve` v1.0 surface (§24.5) + Logger MCP sink (`2026-05-06-prd-logger-v2.md` Phase 5) + integration test (§30.3)                       |
-| 2         | Config + secrets + auth              | unchanged                                                                                                                              |
-| 3         | Interactive REPL                     | unchanged                                                                                                                              |
-| 4         | GitHub Action                        | composite-action revision (§28)                                                                                                        |
-| 5         | Polish, docs                         | + JSONL session migration (§27.5) + hook system v1 (§25.5)                                                                             |
+| 1.5 (new) | —                                    | `texra mcp serve` v1.0 surface (§24.5) + Logger MCP sink (`2026-05-06-prd-logger-v2.md` Phase 5) + integration test (§30.3)                                  |
+| 2         | Config + secrets + auth              | unchanged                                                                                                                                                    |
+| 3         | Interactive REPL                     | unchanged                                                                                                                                                    |
+| 4         | GitHub Action                        | composite-action revision (§28)                                                                                                                              |
+| 5         | Polish, docs                         | + JSONL session migration (§27.5) + hook system v1 (§25.5)                                                                                                   |
 
 ### 31.2 Aggregate LOC
 
@@ -1719,8 +1719,8 @@ After the §22/§23/§29 split into dedicated kernel PRDs, the CLI PRD's LOC acc
 
 Kernel work that the CLI consumes but does not own (sized in the linked PRDs):
 
-| PRD                                                          | Kernel net new                  | Engineering weeks |
-| ------------------------------------------------------------ | ------------------------------- | ----------------- |
+| PRD                                                                                | Kernel net new                  | Engineering weeks |
+| ---------------------------------------------------------------------------------- | ------------------------------- | ----------------- |
 | [`2026-05-06-prd-runcontext-refactor.md`](./2026-05-06-prd-runcontext-refactor.md) | ~-10 (refactor pays for itself) | ~6.5              |
 | [`2026-05-06-prd-logger-v2.md`](./2026-05-06-prd-logger-v2.md)                     | ~+310                           | ~3.8              |
 
@@ -1818,21 +1818,21 @@ This is the leverage feature. It makes every TeXRA agent callable from Claude Co
 
 ### 33.2 What v1.0 explicitly does NOT ship
 
-| Round 1+2 item                                              | Defer to     | Why it can wait                                                                                   |
-| ----------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------- |
-| `texra chat` Ink REPL (round 1 §5.2 / §11.3)                | v1.1+        | MCP server gives users an interactive surface via the calling host's UI. May never need our own.  |
-| Tool-use headless with `auto-edits` / `auto` / `ask` (§9.2) | v1.1         | Only `never` and `yolo` are useful headlessly; both are exposed via MCP `run_chat`.               |
-| OAuth loopback + device-code (round 1 §10)                  | v1.2         | Env vars cover ~95% of users (CI, scripts, dev containers).                                       |
-| Keyring + file-secrets fallback (§10.3)                     | v1.2         | Env vars + a `--api-key` flag cover the gap.                                                      |
-| `conf` + Zod layered config (§6.1, §8.4)                    | v1.2         | Env vars + flags are enough until users complain.                                                 |
-| `texra-base-action` GitHub Action (§12, round 2 §28)        | v1.2         | Users `npm install -g @texra/cli` in a workflow step today.                                       |
-| `texra resume` / session JSONL (round 2 §27)                | v1.2         | Workflow agents are stateless; tool-use sessions live in the MCP client's transcript (see §33.4). |
-| Hook system (round 2 §25)                                   | v2           | Speculative. Wait for concrete user requests.                                                     |
-| `texra doctor` (§8.5)                                       | nice-to-have | ~80 LOC whenever; not blocking v1.0.                                                              |
-| Self-contained Bun binaries (§13.3)                         | nice-to-have | Convenience artifact, never the canonical install path.                                           |
-| `RunContext` Phase 2 (per `2026-05-06-prd-runcontext-refactor.md`)     | v1.1         | Required for _concurrent_ MCP sessions; not for the documented one-call-at-a-time v1.0.           |
-| Logger v2 Phase 2 (schema unification with progress)        | cut          | Over-couples slow-changing progress events to fast-changing log records (see logger PRD §15.1).   |
-| Logger v2 Phase 5 (`McpProgressSink`)                       | v1.1         | Gated on RunContext Phase 2 anyway.                                                               |
+| Round 1+2 item                                                     | Defer to     | Why it can wait                                                                                   |
+| ------------------------------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------- |
+| `texra chat` Ink REPL (round 1 §5.2 / §11.3)                       | v1.1+        | MCP server gives users an interactive surface via the calling host's UI. May never need our own.  |
+| Tool-use headless with `auto-edits` / `auto` / `ask` (§9.2)        | v1.1         | Only `never` and `yolo` are useful headlessly; both are exposed via MCP `run_chat`.               |
+| OAuth loopback + device-code (round 1 §10)                         | v1.2         | Env vars cover ~95% of users (CI, scripts, dev containers).                                       |
+| Keyring + file-secrets fallback (§10.3)                            | v1.2         | Env vars + a `--api-key` flag cover the gap.                                                      |
+| `conf` + Zod layered config (§6.1, §8.4)                           | v1.2         | Env vars + flags are enough until users complain.                                                 |
+| `texra-base-action` GitHub Action (§12, round 2 §28)               | v1.2         | Users `npm install -g @texra/cli` in a workflow step today.                                       |
+| `texra resume` / session JSONL (round 2 §27)                       | v1.2         | Workflow agents are stateless; tool-use sessions live in the MCP client's transcript (see §33.4). |
+| Hook system (round 2 §25)                                          | v2           | Speculative. Wait for concrete user requests.                                                     |
+| `texra doctor` (§8.5)                                              | nice-to-have | ~80 LOC whenever; not blocking v1.0.                                                              |
+| Self-contained Bun binaries (§13.3)                                | nice-to-have | Convenience artifact, never the canonical install path.                                           |
+| `RunContext` Phase 2 (per `2026-05-06-prd-runcontext-refactor.md`) | v1.1         | Required for _concurrent_ MCP sessions; not for the documented one-call-at-a-time v1.0.           |
+| Logger v2 Phase 2 (schema unification with progress)               | cut          | Over-couples slow-changing progress events to fast-changing log records (see logger PRD §15.1).   |
+| Logger v2 Phase 5 (`McpProgressSink`)                              | v1.1         | Gated on RunContext Phase 2 anyway.                                                               |
 
 ### 33.3 On Ink
 

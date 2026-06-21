@@ -324,7 +324,7 @@ This is used by:
 | 13  | `src/settingsView/frontend/components/profile/styles.ts`                      | Add model list CSS                                                                                                      |
 | 14  | `src/settingsView/frontend/SettingsApp.ts`                                    | Wire state + event handlers + message handler                                                                           |
 | 15  | `src/settingsView/frontend/tabs/ModelsTab.ts`                                 | Add properties, render `<model-selection-list>` + polish model dropdown                                                 |
-| 16  | `docs/prds/2026-01-11-settings-view-unified.md`                                           | Update implementation status                                                                                            |
+| 16  | `docs/prds/2026-01-11-settings-view-unified.md`                               | Update implementation status                                                                                            |
 
 ### Backend: `buildModelSelectionItems()`
 

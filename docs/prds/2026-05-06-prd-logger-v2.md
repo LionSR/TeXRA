@@ -194,7 +194,7 @@ Each host installs the sinks it wants. The mapping:
 | Host                                | Sink                      | Rendering                                                                                                      |
 | ----------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | Extension                           | `VscodeOutputChannelSink` | Formatted string per line, written to one `vscode.OutputChannel` per agent (today's behavior).                 |
-| Desktop                             | `ElectronLogSink`         | Wraps `electron-log` (per `2026-05-02-prd-electron-app.md` §6.4); same channel-per-agent shape.                           |
+| Desktop                             | `ElectronLogSink`         | Wraps `electron-log` (per `2026-05-02-prd-electron-app.md` §6.4); same channel-per-agent shape.                |
 | CLI headless (`--print` or non-TTY) | `StderrTextSink`          | picocolors-formatted; respects `--quiet` / `--verbose` / `NO_COLOR`; copies to `--log-file` if passed.         |
 | CLI JSON (`--output-format json     | ndjson`)                  | `NdjsonStdoutSink`                                                                                             | One `RunStreamEvent` per line on stdout; schema-validated. |
 | CLI MCP server (`texra mcp serve`)  | `McpProgressSink`         | Converts each record to an MCP `notifications/progress` payload; respects the client's progress-update opt-in. |
@@ -510,7 +510,7 @@ The single `idle` promise resolves only when the queue is genuinely empty — th
 | 4                     | `outputChannelFactory` / `channels` / `mainOutputChannel` removals (channel-derivation cleanup already landed in Phase 3, so only the deletions remain) | 0.3             |
 | 5                     | `McpProgressSink` — lands when `texra mcp serve` ships (out of v1.x per round 4 §34.6)                                                                  | 0.3             |
 | **Total to CLI v1.0** | Phases 0 / 1 / 3 (interactive + workflow; no MCP)                                                                                                       | **~2.7**        |
-| **Total to CLI v1.1** | + Phase 4 (when `2026-05-06-prd-runcontext-refactor.md` Phase 2 lands)                                                                                             | **~3.0**        |
+| **Total to CLI v1.1** | + Phase 4 (when `2026-05-06-prd-runcontext-refactor.md` Phase 2 lands)                                                                                  | **~3.0**        |
 | **Total with MCP**    | + Phase 5 (when `texra mcp serve` ships, post-v1.x)                                                                                                     | **~3.3**        |
 
 Net code reduction vs round 1: Phase 2 cut saves ~30 LOC, simpler bootstrap saves ~50 LOC, simpler shim saves ~80 LOC of mechanical changes. Round-1 §9 estimated +600/-290 ≈ +310 net; round-2 estimate is **~+200 net** to v1.0, **~+220 net** to v1.1 (Phase 4 only — Phase 5 / `McpProgressSink` is no longer in v1.x; it adds ~+80 net whenever MCP eventually ships).

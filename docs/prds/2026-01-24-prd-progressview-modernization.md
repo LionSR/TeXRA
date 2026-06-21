@@ -49,8 +49,8 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 
 ## Goals & Phases
 
-| Phase       | Scope                                        | Status         | Doc                                                        |
-| ----------- | -------------------------------------------- | -------------- | ---------------------------------------------------------- |
+| Phase       | Scope                                        | Status         | Doc                                                                              |
+| ----------- | -------------------------------------------- | -------------- | -------------------------------------------------------------------------------- |
 | **Phase 1** | ProgressView — schema relocation + Lit UI    | ✅ Complete    | [2026-01-24-prd-progressview-phase1.md](./2026-01-24-prd-progressview-phase1.md) |
 | **Phase 2** | Extract shared infrastructure                | ✅ Complete    | [2026-01-24-prd-progressview-phase2.md](./2026-01-24-prd-progressview-phase2.md) |
 | **Phase 3** | ProgressView stabilization + native Lit      | ✅ Complete    | [2026-01-24-prd-progressview-phase3.md](./2026-01-24-prd-progressview-phase3.md) |
