@@ -30,7 +30,7 @@ import {
   resolveRunDir,
 } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
-import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
+import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 import { CHANNEL } from './service';
 
@@ -120,14 +120,20 @@ export async function scanRunDirForOutputs(
     const rounds = new Map<number, OutputFileInfo[]>();
 
     for (const [entryName, fileType] of dirEntries) {
-      // Skip symlinked round dirs, matching the prior strict
-      // `!== FileType.Directory` check (platform FS reports symlinks as
-      // `SymbolicLink | targetType`).
-      if (!isDirectory(fileType) || isSymlink(fileType)) continue;
+      if (!isDirectory(fileType)) continue;
       const round = parseWorkflowOutputRoundDir(entryName);
       if (round == null) continue;
 
       const roundDirAbsolute = path.join(runDirAbsolute, entryName);
+      // Skip symlinked round dirs. Use lstat through the platform because
+      // readDirectory FileType values do not reliably include SymbolicLink.
+      if (
+        await platform()
+          .fs.isSymlink(roundDirAbsolute)
+          .catch(() => false)
+      )
+        continue;
+
       const outputs: OutputFileInfo[] = [];
       // Collect .tex files recursively — extracted docs may live in subdirs
       // (e.g. r0/chapters/main.tex) when source names include path segments.
