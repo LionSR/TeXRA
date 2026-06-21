@@ -83,7 +83,7 @@ API-key provider, so the two can coexist and a user can have both configured.
   constant is `API_KEY_PROVIDER_IDS` — membership wires a provider into the
   api-key resolution path (`apiKeySecretName` secret, `<PROVIDER>_API_KEY` env
   fallback, the Settings key-row UI), which is exactly what an OAuth-only provider
-  must *not* use. Putting it there would surface a spurious "enter API key" field
+  must _not_ use. Putting it there would surface a spurious "enter API key" field
   and resolve the wrong credential.
 - Instead, model it as a separate provider kind whose credential is an OAuth token
   bundle (see §3), not an api key. Concretely: a distinct provider id that is
@@ -104,7 +104,7 @@ API-key provider, so the two can coexist and a user can have both configured.
   - set `baseURL = https://chatgpt.com/backend-api/codex`,
   - **authenticate by passing the OAuth access token as the SDK's `apiKey`** —
     `new OpenAI({ apiKey: accessToken, baseURL })`. The OpenAI Node client derives
-    `Authorization: Bearer <apiKey>` from that field, so this *is* the bearer
+    `Authorization: Bearer <apiKey>` from that field, so this _is_ the bearer
     header; do **not** pass a dummy key and separately hand-set `Authorization`
     (the two would fight, and the SDK's value wins). On refresh, recreate the
     client (or use a token-getter) so the new access token is used.
@@ -159,7 +159,7 @@ one-file edit.
 ### 5. Platform / VS Code separation
 
 Per `CLAUDE.md`, `src/agent/` and `src/model/` are VS Code-free zones and must
-not import `vscode`. (`src/auth/` is listed under CLAUDE.md's *VS Code-allowed*
+not import `vscode`. (`src/auth/` is listed under CLAUDE.md's _VS Code-allowed_
 zones, but in practice it is host-agnostic — it only reaches host services through
 `@platform` — so the Codex coordinator added here should keep that property and
 stay `vscode`-free too.)
