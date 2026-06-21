@@ -1,6 +1,7 @@
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { notifyFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { isCodexSubscriptionActive } from '@auth/codex';
 import { formatCliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { parseCliHistoryId } from '@cli/runtime/history';
@@ -141,6 +142,10 @@ export async function handleTuiSlashCommand(
       const slice = activeStreamId
         ? cliState.streams.get().get(activeStreamId)
         : undefined;
+      // Mirror the status bar's `subscription` badge so the two never disagree.
+      const subscriptionActive = await isCodexSubscriptionActive(
+        meta.model || context.initialModel,
+      );
       appendLocalAssistantTranscript(
         formatCliSessionStatus({
           agent: meta.agent || context.initialAgent,
@@ -149,6 +154,7 @@ export async function handleTuiSlashCommand(
           // Read the session's own mode (which honors a --api-mode/env override)
           // so /status agrees with the header instead of re-reading the global.
           api: formatCliApiMode(meta.apiMode),
+          subscription: subscriptionActive,
           approval: formatCliApprovalPolicy(context.getApprovalPolicy()),
           approvalBypasses: slice?.bypass,
           status: slice?.status ?? 'not started',

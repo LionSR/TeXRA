@@ -64,6 +64,7 @@ export {
   type CodexSubscriptionPreferenceUpdate,
 } from './codexPreference';
 export { shouldUseCodexSubscription } from './codexRouting';
+export { isCodexSubscriptionActive } from './codexActive';
 export {
   loginWithLoopback,
   type CodexLoopbackLoginOptions,
