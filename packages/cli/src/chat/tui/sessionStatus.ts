@@ -19,6 +19,9 @@ export interface CliSessionStatusInput {
   readonly model: string;
   readonly teamName?: string;
   readonly api: string;
+  /** True when the active model routes through the ChatGPT subscription, so the
+   *  text command agrees with the status bar's `subscription` badge. */
+  readonly subscription?: boolean;
   readonly approval: string;
   readonly approvalBypasses?: Partial<BypassState>;
   readonly status: string;
@@ -73,6 +76,9 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     `agent: ${input.agent}`,
     `model: ${input.model}`,
     `api: ${input.api}`,
+    ...(input.subscription
+      ? ['subscription: on (Codex models use your ChatGPT plan)']
+      : []),
     `approval: ${input.approval}`,
     ...(bypassLabels.length > 0
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]

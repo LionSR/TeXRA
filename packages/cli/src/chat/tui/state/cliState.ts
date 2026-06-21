@@ -197,6 +197,12 @@ const TRANSCRIPT_VIEWER_STREAM_ID = signal<StreamTabId | undefined>(undefined);
 const PENDING_EXIT_HINT = signal<boolean>(false);
 const PENDING_EXIT_RESUME_ID = signal<string | undefined>(undefined);
 
+// Bumped whenever the in-process ChatGPT-subscription preference changes (via
+// `/subscription`) so the status bar re-reads it immediately instead of waiting
+// for its periodic poll. External changes (extension/desktop/config edits) are
+// still picked up by that poll.
+const CODEX_PREFERENCE_VERSION = signal<number>(0);
+
 const RESET_HOOKS = new Set<() => void>();
 
 export const cliState = {
@@ -218,7 +224,15 @@ export const cliState = {
   pendingExitResumeId: PENDING_EXIT_RESUME_ID as Signal.State<
     string | undefined
   >,
+  codexPreferenceVersion: CODEX_PREFERENCE_VERSION as Signal.State<number>,
 };
+
+/** Signal the status bar to re-read the ChatGPT-subscription preference now. */
+export function bumpCodexPreferenceVersion(): void {
+  cliState.codexPreferenceVersion.set(
+    cliState.codexPreferenceVersion.get() + 1,
+  );
+}
 
 export function setCliSessionModelOverride(model: string): void {
   cliState.sessionMeta.set({
