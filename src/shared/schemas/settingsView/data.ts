@@ -346,6 +346,22 @@ export type UpdateGitHubTokenStatusMessage = z.infer<
   typeof UpdateGitHubTokenStatusMessageSchema
 >;
 
+/** Outbound: backend → frontend ChatGPT-subscription sign-in status. */
+export const ChatGptAuthStatusSchema = z.object({
+  signedIn: z.boolean(),
+  email: z.string().nullish(),
+  accountId: z.string().nullish(),
+});
+export type ChatGptAuthStatus = z.infer<typeof ChatGptAuthStatusSchema>;
+
+export const UpdateChatGptAuthStatusMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS),
+  status: ChatGptAuthStatusSchema,
+});
+export type UpdateChatGptAuthStatusMessage = z.infer<
+  typeof UpdateChatGptAuthStatusMessageSchema
+>;
+
 /** Outbound: backend → frontend desktop crash reporting status. */
 export const UpdateDesktopCrashReportingMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING),
@@ -517,6 +533,7 @@ export const SettingsViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateToolDashboardMessageSchema,
     UpdateGitAuthorSettingsMessageSchema,
     UpdateGitHubTokenStatusMessageSchema,
+    UpdateChatGptAuthStatusMessageSchema,
     UpdateDesktopCrashReportingMessageSchema,
     UpdatePRSubscriptionsMessageSchema,
     UpdateLatexSettingsStatusMessageSchema,

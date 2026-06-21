@@ -17,6 +17,11 @@ export const ModelSelectionEvents = {
     createEvent('prefer-short-model-names-set', detail),
 } as const;
 
+export const ChatGptAuthEvents = {
+  signIn: () => createEvent('chatgpt-sign-in', {}),
+  signOut: () => createEvent('chatgpt-sign-out', {}),
+} as const;
+
 export const ProviderKeyEvents = {
   setKey: (detail: { provider: string }) =>
     createEvent('provider-key-set', detail),
