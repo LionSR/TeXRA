@@ -159,7 +159,7 @@ describe('desktop agent directory bootstrap', () => {
     );
   });
 
-  it('preserves current copied agents on same-version runs and restores missing bundled files', async () => {
+  it('refreshes copied bundled agents on same-version runs', async () => {
     const { bootstrapElectronAgentDirectories, resourcesPath, storage } =
       await createHarness();
 
@@ -172,13 +172,6 @@ describe('desktop agent directory bootstrap', () => {
     await writeFile(copiedAgent, 'name: locally-edited\n');
 
     await bootstrapElectronAgentDirectories(resourcesPath, '1.2.3');
-    await expect(readFile(copiedAgent, 'utf8')).resolves.toBe(
-      'name: locally-edited\n',
-    );
-
-    await rm(copiedAgent);
-    await bootstrapElectronAgentDirectories(resourcesPath, '1.2.3');
-
     await expect(readFile(copiedAgent, 'utf8')).resolves.toBe('name: writer\n');
   });
 });
