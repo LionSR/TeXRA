@@ -124,6 +124,29 @@ describe('CodexSessionCoordinator', () => {
     expect(refreshTokens).toHaveBeenCalledOnce();
   });
 
+  it('does not restore a session when sign-out races with refresh', async () => {
+    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    let resolve!: (r: CodexTokenResponse) => void;
+    const pending = new Promise<CodexTokenResponse>((r) => {
+      resolve = r;
+    });
+    const refreshTokens = vi.fn(() => pending);
+    const { coordinator } = makeCoordinator(storage, { refreshTokens });
+
+    const token = coordinator.getFreshAccessToken();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(refreshTokens).toHaveBeenCalledOnce();
+
+    await coordinator.signOut();
+    resolve(tokenResponse());
+
+    await expect(token).rejects.toMatchObject({
+      kind: 'expired',
+      needsReauth: true,
+    });
+    expect(storage.peek()).toBeUndefined();
+  });
+
   it('keeps the previous refresh token when the response omits a new one', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
     const refreshTokens = vi.fn(async () =>
