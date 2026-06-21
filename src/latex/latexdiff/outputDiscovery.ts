@@ -5,7 +5,6 @@
  */
 
 // Standard library imports
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // Local imports
@@ -57,14 +56,8 @@ export async function collectTexFiles(
   for (const [name, type] of entries) {
     const absPath = path.join(dir, name);
     // Skip symlinks — they are mirrored dependency copies placed by
-    // ensureMirroredInRoundDir, not revised outputs.  Use lstat because
-    // some vscode.workspace.fs implementations don't set the SymbolicLink
-    // flag in the returned FileType bitmask.
-    try {
-      if ((await fs.promises.lstat(absPath)).isSymbolicLink()) continue;
-    } catch {
-      // lstat failed; fall through and include the entry
-    }
+    // ensureMirroredInRoundDir, not revised outputs.
+    if (await platform().fs.isSymlink(absPath).catch(() => false)) continue;
     if (isFile(type)) {
       if (hasExtension(name, '.tex')) {
         results.push(prefix ? `${prefix}/${name}` : name);

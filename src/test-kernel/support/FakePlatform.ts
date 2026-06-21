@@ -290,6 +290,11 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     return fileStat(this.requireRecord(target));
   }
 
+  async isSymlink(_target: string): Promise<boolean> {
+    // FakeFileSystemProvider does not model symlinks.
+    return false;
+  }
+
   async realPath(target: string): Promise<string> {
     this.requireRecord(target);
     return normalizePath(target);
