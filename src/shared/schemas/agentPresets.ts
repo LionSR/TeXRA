@@ -187,7 +187,6 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'codeReviewer',
       'testEngineer',
       'codeSimplifier',
-      'progressCheck',
     ],
   },
 ];
