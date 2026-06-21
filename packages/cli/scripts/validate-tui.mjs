@@ -567,7 +567,7 @@ const SCENARIOS = [
       '/auth',
       'Show TeXRA login status',
       '/login',
-      'Sign in to TeXRA included',
+      'Sign in to TeXRA or ChatGPT',
       '… 11 more',
     ],
     unexpect: [
@@ -577,6 +577,29 @@ const SCENARIOS = [
       'automatically',
     ],
     maxLineColumns: 52,
+  },
+  {
+    name: 'login-form',
+    rows: 16,
+    cols: 80,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/login\r'],
+    frame: 'tail',
+    settleMs: ASYNC_FORM_SETTLE_MS,
+    expect: [
+      '/login',
+      'TeXRA included access',
+      'ChatGPT subscription',
+      'TeXRA device code',
+      'ChatGPT device code',
+      '↑/↓ navigate',
+      '1-4 select now',
+      'Enter select highlighted',
+      'Esc cancel',
+    ],
+    maxBlankLinesBetween: [
+      { from: 'entry-4 chat history line', to: '/login', max: 2 },
+    ],
   },
   {
     name: 'slash-palette-ctrl-u-clears-raw-control',
