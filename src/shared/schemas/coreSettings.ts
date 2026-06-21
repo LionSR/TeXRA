@@ -69,6 +69,9 @@ export const DEFAULT_CORE_SETTINGS = {
   goal: {
     enabled: true,
   },
+  chatgptCodex: {
+    preferSubscription: false,
+  },
   ui: {
     showApiKeyReminders: true,
     showLoginBanner: true,
@@ -295,6 +298,13 @@ export const CoreSettingsShape = {
       enabled: z.boolean().prefault(DEFAULT_CORE_SETTINGS.goal.enabled),
     })
     .prefault(DEFAULT_CORE_SETTINGS.goal),
+  chatgptCodex: z
+    .strictObject({
+      preferSubscription: z
+        .boolean()
+        .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex.preferSubscription),
+    })
+    .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex),
   ui: z
     .strictObject({
       showApiKeyReminders: z
@@ -545,6 +555,7 @@ export const CORE_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',
   'inlineCriticism.enabled',
   'goal.enabled',
+  'chatgptCodex.preferSubscription',
   'ui.showApiKeyReminders',
   'ui.showLoginBanner',
   'ui.showGettingStartedBanner',
