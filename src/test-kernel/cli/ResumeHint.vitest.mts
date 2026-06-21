@@ -170,9 +170,7 @@ describe('formatResumeHint', () => {
         processCwd: '/tmp/launcher',
         approvalPolicy: 'never',
       }),
-    ).toBe(
-      'texra-local resume root --cwd /tmp/paper --approval-policy never',
-    );
+    ).toBe('texra-local resume root --cwd /tmp/paper --approval-policy never');
   });
 
   it('renders one resume line per target', () => {
