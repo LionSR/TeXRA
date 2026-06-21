@@ -1,4 +1,4 @@
-// Typed approval pipeline per docs/prd/cli-tui-ink/10-architecture.md §9.
+// Typed approval pipeline per docs/prds/cli-tui-ink/10-architecture.md §9.
 //
 // Each enqueued approval or human-input prompt becomes a `p-queue` task.
 // When its turn comes up it publishes itself on the `currentApproval` signal
