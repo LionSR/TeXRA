@@ -1,21 +1,29 @@
 /**
  * Minimal subset of GitHub REST response shapes used by the PR poller.
- * Only the fields we consume are declared; extra fields are tolerated.
+ * Only the fields we consume are declared; extra fields are tolerated
+ * (z.looseObject). The schemas are the single source of truth — the types are
+ * derived via z.infer. Always-present-but-nullable fields use .nullable();
+ * may-be-absent fields use .nullish() (GitHub both sends explicit null and omits
+ * fields, and .optional() alone would reject null); `state` is a permissive transform,
+ * never a strict enum, so a novel value coerces instead of throwing on the
+ * 200 path (a throw there would risk the pollers' 24h detach).
  */
+import { z } from 'zod';
 
-export interface GhUser {
-  login: string;
+export const GhUserSchema = z.looseObject({
+  login: z.string(),
   /** 'User' | 'Bot' | 'Organization' — used by the bot filter to drop CI noise. */
-  type?: string;
-}
+  type: z.string().optional(),
+});
+export type GhUser = z.infer<typeof GhUserSchema>;
 
-export interface GhIssueComment {
-  id: number;
-  body: string | null;
-  user: GhUser | null;
-  created_at: string;
-  updated_at?: string;
-  html_url: string;
+export const GhIssueCommentSchema = z.looseObject({
+  id: z.number(),
+  body: z.string().nullable(),
+  user: GhUserSchema.nullable(),
+  created_at: z.string(),
+  updated_at: z.string().optional(),
+  html_url: z.string(),
   /**
    * Canonical link to the parent issue (PRs are issues internally), e.g.
    * `https://api.github.com/repos/o/r/issues/{number}`. Always present on
@@ -23,74 +31,88 @@ export interface GhIssueComment {
    * target number because `html_url` shape varies between issue and PR
    * comments depending on GitHub's redirect behavior.
    */
-  issue_url?: string;
-}
+  issue_url: z.string().optional(),
+});
+export type GhIssueComment = z.infer<typeof GhIssueCommentSchema>;
 
-export interface GhReviewComment {
-  id: number;
-  body: string | null;
-  user: GhUser | null;
-  path: string;
-  line?: number | null;
-  original_line?: number | null;
-  in_reply_to_id?: number | null;
-  html_url: string;
-  created_at: string;
-  updated_at?: string;
-}
+export const GhReviewCommentSchema = z.looseObject({
+  id: z.number(),
+  body: z.string().nullable(),
+  user: GhUserSchema.nullable(),
+  path: z.string(),
+  line: z.number().nullish(),
+  original_line: z.number().nullish(),
+  in_reply_to_id: z.number().nullish(),
+  html_url: z.string(),
+  created_at: z.string(),
+  updated_at: z.string().optional(),
+});
+export type GhReviewComment = z.infer<typeof GhReviewCommentSchema>;
 
-export interface GhReview {
-  id: number;
-  body: string | null;
-  state: string; // APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED, PENDING
-  user: GhUser | null;
-  html_url: string;
-  submitted_at: string | null;
-}
+export const GhReviewSchema = z.looseObject({
+  id: z.number(),
+  body: z.string().nullable(),
+  // APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED, PENDING — kept a
+  // permissive string so a novel review state never throws on the 200 path.
+  state: z.string(),
+  user: GhUserSchema.nullable(),
+  html_url: z.string(),
+  submitted_at: z.string().nullable(),
+});
+export type GhReview = z.infer<typeof GhReviewSchema>;
 
-export interface GhCheckRunOutput {
-  title?: string | null;
-  summary?: string | null;
+export const GhCheckRunOutputSchema = z.looseObject({
+  title: z.string().nullish(),
+  summary: z.string().nullish(),
   /** Treat undefined / null / 0 as "no annotations to fetch". */
-  annotations_count?: number | null;
-}
+  annotations_count: z.number().nullish(),
+});
+export type GhCheckRunOutput = z.infer<typeof GhCheckRunOutputSchema>;
 
-export interface GhCheckRun {
-  id: number;
-  name: string;
-  status: string; // queued, in_progress, completed
-  conclusion: string | null; // success, failure, cancelled, timed_out, ...
-  html_url: string;
-  completed_at: string | null;
+export const GhCheckRunSchema = z.looseObject({
+  id: z.number(),
+  name: z.string(),
+  status: z.string(), // queued, in_progress, completed
+  conclusion: z.string().nullable(), // success, failure, cancelled, timed_out, ...
+  html_url: z.string(),
+  completed_at: z.string().nullable(),
   /** Surfaced for `annotations_count` so the poller can skip the separate
    * annotations endpoint on the common case of zero annotations. */
-  output?: GhCheckRunOutput | null;
-}
+  output: GhCheckRunOutputSchema.nullish(),
+});
+export type GhCheckRun = z.infer<typeof GhCheckRunSchema>;
 
 /**
  * Subset of `GET /repos/{o}/{r}/check-runs/{id}/annotations` we consume.
  * GitHub renders these as inline warning/notice bubbles on the PR diff view.
  */
-export interface GhCheckAnnotation {
-  path: string;
-  start_line: number;
-  end_line: number;
-  start_column?: number | null;
-  end_column?: number | null;
+export const GhCheckAnnotationSchema = z.looseObject({
+  path: z.string(),
+  start_line: z.number(),
+  end_line: z.number(),
+  start_column: z.number().nullish(),
+  end_column: z.number().nullish(),
   /** notice | warning | failure (per GitHub); tolerate unexpected values. */
-  annotation_level: string | null;
-  title?: string | null;
-  message: string;
-  raw_details?: string | null;
-  blob_href?: string;
-}
+  annotation_level: z.string().nullable(),
+  title: z.string().nullish(),
+  message: z.string(),
+  raw_details: z.string().nullish(),
+  blob_href: z.string().optional(),
+});
+export type GhCheckAnnotation = z.infer<typeof GhCheckAnnotationSchema>;
 
-export interface GhPullRequest {
-  state: 'open' | 'closed';
-  merged: boolean;
-  mergeable_state?: string;
-  head: { sha: string };
-}
+export const GhPullRequestSchema = z.looseObject({
+  // Permissive transform: a novel GitHub state must coerce to a known value,
+  // never throw (a throw on the 200 path would strand lastSuccessAt and risk
+  // the 24h detach). Anything that isn't exactly 'closed' is treated as open.
+  state: z
+    .string()
+    .transform((s): 'open' | 'closed' => (s === 'closed' ? 'closed' : 'open')),
+  merged: z.boolean(),
+  mergeable_state: z.string().optional(),
+  head: z.looseObject({ sha: z.string() }),
+});
+export type GhPullRequest = z.infer<typeof GhPullRequestSchema>;
 
 /**
  * GitHub computes `mergeable_state` asynchronously after every push or base
@@ -109,16 +131,20 @@ export function isDefiniteMergeableState(s: string | undefined): s is string {
  * field is GitHub's discriminator: present (with a `url`) iff this issue
  * record is actually a PR. The disambiguator on subscribe uses it.
  */
-export interface GhIssue {
-  number: number;
-  state: 'open' | 'closed';
+export const GhIssueSchema = z.looseObject({
+  number: z.number(),
+  // Permissive transform (see GhPullRequest): coerce, never throw.
+  state: z
+    .string()
+    .transform((s): 'open' | 'closed' => (s === 'closed' ? 'closed' : 'open')),
   /** GitHub: `completed | not_planned | reopened | null`. */
-  state_reason?: string | null;
-  title: string;
-  html_url: string;
-  user: GhUser | null;
-  pull_request?: { url: string };
-}
+  state_reason: z.string().nullish(),
+  title: z.string(),
+  html_url: z.string(),
+  user: GhUserSchema.nullable(),
+  pull_request: z.looseObject({ url: z.string() }).optional(),
+});
+export type GhIssue = z.infer<typeof GhIssueSchema>;
 
 /**
  * Subset of `GET /repos/{o}/{r}/pulls` list-entry fields used by the repo
@@ -126,14 +152,23 @@ export interface GhIssue {
  * does NOT return `merged` (that's only on the single-PR endpoint), so we
  * rely on `merged_at` to distinguish merged-closed from plain closed.
  */
-export interface GhPullsListEntry {
-  number: number;
-  state: 'open' | 'closed';
-  title: string;
-  html_url: string;
-  user: GhUser | null;
-  created_at: string;
-  updated_at: string;
-  closed_at: string | null;
-  merged_at: string | null;
-}
+export const GhPullsListEntrySchema = z.looseObject({
+  number: z.number(),
+  // Permissive transform (see GhPullRequest): coerce, never throw.
+  state: z
+    .string()
+    .transform((s): 'open' | 'closed' => (s === 'closed' ? 'closed' : 'open')),
+  title: z.string(),
+  html_url: z.string(),
+  user: GhUserSchema.nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  closed_at: z.string().nullable(),
+  merged_at: z.string().nullable(),
+});
+export type GhPullsListEntry = z.infer<typeof GhPullsListEntrySchema>;
+
+/** Array wrappers consumed by the repo poller's non-throwing boundary parse. */
+export const GhIssueCommentArraySchema = z.array(GhIssueCommentSchema);
+export const GhReviewCommentArraySchema = z.array(GhReviewCommentSchema);
+export const GhPullsListEntryArraySchema = z.array(GhPullsListEntrySchema);
