@@ -110,6 +110,23 @@ describe('ProgressFollowUpPolishController', () => {
     });
   });
 
+  it('skips when the model helper reports failure without an error', async () => {
+    const controller = new ProgressFollowUpPolishController({
+      polishText: async () => ({
+        success: false,
+        text: 'draft text',
+      }),
+    });
+
+    const result = await controller.polishFollowUp({
+      stream: 'stream-a',
+      text: 'draft text',
+      taskState: createWorkflowTaskState(),
+    });
+
+    assert.deepEqual(result, { kind: 'skipped' });
+  });
+
   it('returns a logged exception result when polishing throws', async () => {
     const error = new Error('network down');
     const controller = new ProgressFollowUpPolishController({
