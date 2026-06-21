@@ -121,6 +121,10 @@ export async function handleTuiSlashCommand(
       }
       return true;
     case 'login':
+      if (!rest) {
+        openCanonicalSlashForm('login', registered, rest);
+        return true;
+      }
       await loginFromChat(rest);
       return true;
     case 'logout':

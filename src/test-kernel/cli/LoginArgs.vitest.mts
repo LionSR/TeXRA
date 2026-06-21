@@ -86,6 +86,7 @@ describe('CLI login arguments (texra login)', () => {
 
   it('parses in-chat login slash command options through the same runtime owner', () => {
     expect(parseChatLoginSlashArgs('')).toEqual({
+      target: 'texra',
       provider: 'github',
       noBrowser: false,
       device: false,
@@ -95,6 +96,7 @@ describe('CLI login arguments (texra login)', () => {
     expect(
       parseChatLoginSlashArgs('google --no-browser --select-account'),
     ).toEqual({
+      target: 'texra',
       provider: 'google',
       noBrowser: true,
       device: false,
@@ -102,6 +104,7 @@ describe('CLI login arguments (texra login)', () => {
       loginHint: undefined,
     });
     expect(parseChatLoginSlashArgs('--login-hint user@example.edu')).toEqual({
+      target: 'texra',
       provider: 'github',
       noBrowser: false,
       device: false,
@@ -109,13 +112,38 @@ describe('CLI login arguments (texra login)', () => {
       loginHint: 'user@example.edu',
     });
     expect(parseChatLoginSlashArgs('github --login-hint=octocat')).toEqual({
+      target: 'texra',
       provider: 'github',
       noBrowser: false,
       device: false,
       selectAccount: false,
       loginHint: 'octocat',
     });
+    expect(parseChatLoginSlashArgs('texra github --device')).toEqual({
+      target: 'texra',
+      provider: 'github',
+      noBrowser: false,
+      device: true,
+      selectAccount: false,
+      loginHint: undefined,
+    });
+    expect(parseChatLoginSlashArgs('chatgpt')).toEqual({
+      target: 'chatgpt',
+      noBrowser: false,
+      device: false,
+    });
+    expect(parseChatLoginSlashArgs('chatgpt --device')).toEqual({
+      target: 'chatgpt',
+      noBrowser: false,
+      device: true,
+    });
+    expect(parseChatLoginSlashArgs('codex --no-browser')).toEqual({
+      target: 'chatgpt',
+      noBrowser: true,
+      device: false,
+    });
     expect(parseChatLoginSlashArgs('--device')).toMatchObject({
+      target: 'texra',
       device: true,
       noBrowser: false,
     });
@@ -124,6 +152,11 @@ describe('CLI login arguments (texra login)', () => {
   it('rejects invalid in-chat login slash command options', () => {
     expect(parseChatLoginSlashArgs('slack')).toBeUndefined();
     expect(parseChatLoginSlashArgs('github google')).toBeUndefined();
+    expect(parseChatLoginSlashArgs('chatgpt github')).toBeUndefined();
+    expect(parseChatLoginSlashArgs('chatgpt --select-account')).toBeUndefined();
+    expect(
+      parseChatLoginSlashArgs('chatgpt --login-hint user@example.edu'),
+    ).toBeUndefined();
     expect(parseChatLoginSlashArgs('--login-hint')).toBeUndefined();
     expect(
       parseChatLoginSlashArgs('--login-hint --no-browser'),
