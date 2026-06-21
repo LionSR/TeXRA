@@ -11,14 +11,7 @@ import * as vscode from 'vscode';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import {
-  createKey,
-  getAgent,
-  getAgentsByCategory,
-  loadAgents,
-} from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@agent/index/agentRegistry';
+import { createKey, getAgent, loadAgents } from '@agent/index';
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { workspaceSM, globalSM } from '@common/state';
@@ -29,7 +22,6 @@ import {
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -399,7 +391,7 @@ export class AgentHandlers {
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
       customPresets: this.catalogController.getCustomPresets(),
-      orchestratorAgents: collectOrchestratorAgentNames(),
+      orchestratorAgents: this.catalogController.getOrchestratorAgentNames(),
     });
   }
 
@@ -550,18 +542,4 @@ export class AgentHandlers {
       vscode.commands.executeCommand('texra.refreshAllOptions'),
     ]);
   }
-}
-
-/**
- * Agent names that can lead a team. Combines the known built-in team roots
- * (valid even before the registry has loaded remote agents) with any loaded
- * tool-use agent that carries delegation tools, so custom orchestrators are
- * recognized by capability instead of by name.
- */
-function collectOrchestratorAgentNames(): string[] {
-  const names = new Set<string>(BUILTIN_TEAM_ROOT_AGENT_NAMES);
-  for (const agent of getAgentsByCategory(AgentCategory.ToolUse)) {
-    if (hasDelegationTool(agent.tools)) names.add(agent.name);
-  }
-  return [...names].sort();
 }
