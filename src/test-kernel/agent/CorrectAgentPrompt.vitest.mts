@@ -41,6 +41,15 @@ describe('correct agent prompt', () => {
       'Preserve every mathematical claim, equation, theorem statement, and factual assertion.',
     );
     expect(promptText).toContain(
+      'Do not change the meaning of math expressions inside inline math, display math, theorem statements, or derivations.',
+    );
+    expect(promptText).toContain(
+      'Preserve valid math delimiter style (`\\(...\\)`, `$...$`, `\\[...\\]`, `$$...$$`, environments), indentation, and spacing by default',
+    );
+    expect(promptText).toContain(
+      'Do not normalize delimiter style merely for preference',
+    );
+    expect(promptText).toContain(
       'Do not replace a false or unsupported mathematical statement with a different true statement.',
     );
     expect(promptText).toContain(
