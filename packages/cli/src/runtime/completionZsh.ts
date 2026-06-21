@@ -46,9 +46,7 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
         ...command.flags.flatMap(zshFlagSpec),
         ...(positionalSpec ? [positionalSpec] : []),
       ];
-      const args = specs.length
-        ? `_arguments ${quote(specs)}`
-        : 'true';
+      const args = specs.length ? `_arguments ${quote(specs)}` : 'true';
       return `${quote([key])}) ${subs}; ${args} ;;`;
     })
     .join('\n    ');
