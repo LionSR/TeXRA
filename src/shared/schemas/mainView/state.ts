@@ -48,6 +48,10 @@ export const ModelAvailabilityKindSchema = z.enum([
   'not-included',
   'included-login-required',
   'relay-quota-exhausted',
+  // ChatGPT-subscription (Codex) access via the user's own OAuth session. Kept
+  // distinct from relay `included-access` because it is the user's own
+  // credential and runs regardless of relay-vs-personal API mode.
+  'subscription-access',
 ]);
 export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
 

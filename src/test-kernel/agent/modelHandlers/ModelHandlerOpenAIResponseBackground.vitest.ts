@@ -13,6 +13,7 @@ import {
 
 // Local imports - agent
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import * as configModule from '@utils/config/configUtils';
 
@@ -92,5 +93,25 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
 
     assert.equal(handler.isBackgroundModeActive(), false);
     assert.equal(handler.getStreamingConfig(), true);
+  });
+
+  it('keeps Codex subscription handlers out of background mode', () => {
+    const handler = new ModelHandlerCodex(createOpenAIConfig('gpt-5'));
+    handler.setAgentCategory(AgentCategory.Workflow);
+
+    assert.equal(handler.isBackgroundModeActive(), false);
+    assert.equal(handler.getStreamingConfig(), true);
+  });
+
+  it('reports Codex subscription usage without API-key spend', () => {
+    const handler = new ModelHandlerCodex(createOpenAIConfig('gpt-5'));
+
+    assert.equal(
+      handler.computePrice({
+        input_tokens: 10_000,
+        output_tokens: 10_000,
+      } as any),
+      0,
+    );
   });
 });

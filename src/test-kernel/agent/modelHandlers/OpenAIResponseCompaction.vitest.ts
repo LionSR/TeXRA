@@ -53,6 +53,20 @@ function createHandler(): ModelHandlerOpenAIResponse {
   return handler;
 }
 
+class UnsupportedCompactionHandler extends ModelHandlerOpenAIResponse {
+  override get supportsManualCompaction(): boolean {
+    return false;
+  }
+}
+
+function createUnsupportedCompactionHandler(): ModelHandlerOpenAIResponse {
+  const handler = new UnsupportedCompactionHandler(createConfig());
+  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+  (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
+    false;
+  return handler;
+}
+
 function createResponse(id: string, inputTokens: number) {
   return {
     id,
@@ -122,5 +136,50 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(requests[1].previous_response_id).toBeUndefined();
     expect(requests[1].input).toEqual(compactedMessages);
     expect(result.updatedMessages).toEqual(compactedMessages);
+  });
+
+  it('does not call the Responses compact endpoint when compaction is unsupported', async () => {
+    const handler = createUnsupportedCompactionHandler();
+    const requests: any[] = [];
+    const compactRequests: any[] = [];
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => ({ input_tokens: 100 }),
+        },
+        compact: async (params: any) => {
+          compactRequests.push(params);
+          return {
+            output: createMessages(1),
+            usage: { output_tokens: 100 },
+          };
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return requests.length === 1
+            ? createResponse('resp-before-threshold', 800)
+            : createResponse('resp-without-compaction', 850);
+        },
+      },
+    };
+    const firstTurnMessages = createMessages(2);
+    const secondTurnMessages = createMessages(3);
+
+    await handler.createResponse({
+      client: client as any,
+      messages: firstTurnMessages,
+      temperature: 0,
+    });
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: secondTurnMessages,
+      temperature: 0,
+    });
+
+    expect(compactRequests).toHaveLength(0);
+    expect(requests).toHaveLength(2);
+    expect(requests[1].previous_response_id).toBe('resp-before-threshold');
+    expect(requests[1].input).toEqual([secondTurnMessages.at(-1)]);
+    expect(result.updatedMessages).toBeUndefined();
   });
 });
