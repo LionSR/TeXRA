@@ -27,6 +27,8 @@ export const CLI_SETTING_PATHS = [
   'model',
   'outputFormat',
   'approvalPolicy',
+  // CLI-only until non-terminal hosts expose ChatGPT Codex sign-in.
+  'chatgptCodex.preferSubscription',
   'chat',
   'run',
 ] as const;

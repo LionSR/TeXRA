@@ -83,8 +83,18 @@ export type CliNoRunnableModelsMessageOptions =
 export type NoRunnableModelAccessReason = CliApiMode | 'includedLoginRequired';
 
 const CLI_MODEL_AVAILABILITY_BY_API_MODE = {
-  included: new Set<ModelAvailabilityKind>(['included-access']),
-  personal: new Set<ModelAvailabilityKind>(['provider-key', 'openrouter-key']),
+  // The ChatGPT subscription is the user's own credential, and the Codex
+  // routing overrides the relay/personal credential either way, so a
+  // subscription model is runnable in both API modes.
+  included: new Set<ModelAvailabilityKind>([
+    'included-access',
+    'subscription-access',
+  ]),
+  personal: new Set<ModelAvailabilityKind>([
+    'provider-key',
+    'openrouter-key',
+    'subscription-access',
+  ]),
 } satisfies Record<CliApiMode, ReadonlySet<ModelAvailabilityKind>>;
 
 const RELAY_STATUS_BY_AVAILABILITY = {
@@ -95,6 +105,7 @@ const RELAY_STATUS_BY_AVAILABILITY = {
   'provider-key': 'relay: unavailable; api key set',
   'openrouter-key': 'relay: unavailable; openrouter key set',
   'missing-key': 'relay: unavailable; missing api key',
+  'subscription-access': 'chatgpt subscription',
 } satisfies Record<ModelAvailabilityKind, string>;
 
 const NO_RUNNABLE_MODEL_ACCESS_COPY = {
@@ -328,6 +339,7 @@ function toCliModelAccess(
 }
 
 function toIncludedLoginRequiredAccess(entry: CliModelAccess): CliModelAccess {
+  if (entry.model.availability === 'subscription-access') return entry;
   return {
     model: {
       ...entry.model,
