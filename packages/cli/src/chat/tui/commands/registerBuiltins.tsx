@@ -8,12 +8,14 @@ import type { ExecutionId } from '@shared/schemas';
 import { ApiModeForm } from '../forms/ApiModeForm';
 import { AgentListForm } from '../forms/AgentListForm';
 import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
+import { LoginForm, type LoginFormValue } from '../forms/LoginForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
 import { cliState, setCliSessionModelOverride } from '../state/cliState';
+import { loginFromChat } from './handlers/loginCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 
 type AgentSelectHandler = (value: string) => void | Promise<void>;
@@ -22,6 +24,7 @@ type ApprovalPolicySelectHandler = (
 ) => void | Promise<void>;
 type ModelSelectHandler = (value: string) => void | Promise<void>;
 type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
+type LoginSelectHandler = (value: LoginFormValue) => void | Promise<void>;
 type MemorySelectHandler = (storagePath: string) => void | Promise<void>;
 type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
 type SkillSelectHandler = (value: SkillActivation) => void | Promise<void>;
@@ -72,6 +75,7 @@ export function registerBuiltinSlashCommands(options?: {
   canSelectModel?: () => boolean;
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
   onApiModeSelect?: ApiModeSelectHandler;
+  onLoginSelect?: LoginSelectHandler;
   onMemorySelect?: MemorySelectHandler;
   onResumeSelect?: ResumeSelectHandler;
   onSkillSelect?: SkillSelectHandler;
@@ -89,6 +93,8 @@ export function registerBuiltinSlashCommands(options?: {
     ((apiMode) => {
       cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), apiMode });
     });
+  const onLoginSelect: LoginSelectHandler =
+    options?.onLoginSelect ?? loginFromChat;
   const canSelectAgent = options?.canSelectAgent ?? (() => true);
   const canSelectModel = options?.canSelectModel ?? (() => true);
 
@@ -163,6 +169,24 @@ export function registerBuiltinSlashCommands(options?: {
             action: () => options?.onApprovalPolicySelect?.(value),
             value,
             onDone: props.onDone,
+            completion: 'beforeAction',
+          })
+        }
+        onCancel={() => props.onDone(undefined)}
+      />
+    );
+  }
+
+  function LoginFormAdapter(props: SlashFormProps): React.JSX.Element {
+    return (
+      <LoginForm
+        availableRows={props.availableRows}
+        onSelect={(value) =>
+          runFormSelection({
+            action: () => onLoginSelect(value),
+            value,
+            onDone: props.onDone,
+            onError: options?.onError,
             completion: 'beforeAction',
           })
         }
@@ -301,8 +325,9 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'login',
-    description: 'Sign in to TeXRA included access',
+    description: 'Sign in to TeXRA or ChatGPT subscription',
     category: 'account',
+    formComponent: LoginFormAdapter,
   });
   registerSlashCommand({
     name: 'logout',

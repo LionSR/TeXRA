@@ -84,8 +84,11 @@ export class ChatGptSubscriptionHandlers {
         },
         () => this.runSignIn(),
       );
+      const update = await setPreferCodexSubscription(true);
       void vscode.window.showInformationMessage(
-        `Signed in with ChatGPT as ${session.email ?? session.accountId ?? 'your account'}.`,
+        update.effective
+          ? `Signed in with ChatGPT as ${session.email ?? session.accountId ?? 'your account'}. ChatGPT subscription is enabled for Codex models.`
+          : `Signed in with ChatGPT as ${session.email ?? session.accountId ?? 'your account'}, but a more specific setting kept the subscription preference disabled.`,
       );
       await this.refreshChatGptState();
     } catch (error) {

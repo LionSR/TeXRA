@@ -39,6 +39,9 @@ describe('formatSlashCommandHelp', () => {
     );
     expect(help).toContain('- `/exit` (`/quit`) — Exit the CLI session');
     expect(help).toContain('- `/model` (`/models`) — List available models');
+    expect(help).toContain(
+      '- `/login` — Sign in to TeXRA or ChatGPT subscription',
+    );
   });
 
   it('collects uncategorized commands under a trailing Other section', () => {
