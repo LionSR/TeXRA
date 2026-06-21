@@ -10,84 +10,79 @@
  *   1. top-level `chatgpt_account_id`
  *   2. `["https://api.openai.com/auth"].chatgpt_account_id`
  *   3. `organizations[0].id`
+ *
+ * The decoded payload is UNTRUSTED, so it is validated through a Zod schema at
+ * the boundary instead of hand-walked with casts. Every claim self-heals
+ * (`.catch`) so a single malformed field degrades to `undefined` rather than
+ * dropping the whole payload — preserving the old per-location probing where a
+ * valid account id survives garbage in a sibling claim. The same schema folds
+ * the three locations into the canonical `{ accountId, email }` shape.
  */
+import { z } from 'zod';
+
 import { CODEX_JWT_AUTH_CLAIM } from './codexConstants';
 
+/** Account id + email distilled from a JWT (either may be absent). */
 export interface CodexJwtClaims {
   accountId?: string;
   email?: string;
 }
 
-/** Decode a JWT payload (the middle base64url segment). Returns null on any error. */
-export function decodeJwtPayload(
-  token: string,
-): Record<string, unknown> | null {
+/** A claim we read as a non-empty string, tolerating any other shape. */
+const NonEmptyClaim = z.string().min(1).optional().catch(undefined);
+
+/** Validates an UNTRUSTED decoded JWT payload and distills the claims we read. */
+const CodexJwtClaimsSchema = z
+  .object({
+    chatgpt_account_id: NonEmptyClaim,
+    [CODEX_JWT_AUTH_CLAIM]: z
+      .object({ chatgpt_account_id: NonEmptyClaim })
+      .optional()
+      .catch(undefined),
+    organizations: z
+      .array(z.object({ id: NonEmptyClaim }).catch({ id: undefined }))
+      .optional()
+      .catch(undefined),
+    email: NonEmptyClaim,
+  })
+  .transform(
+    (claims): CodexJwtClaims => ({
+      accountId:
+        claims.chatgpt_account_id ??
+        claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_account_id ??
+        claims.organizations?.[0]?.id,
+      email: claims.email,
+    }),
+  );
+
+/**
+ * Decode + validate a JWT's claims (the middle base64url segment). Returns empty
+ * claims on any structural error; never throws.
+ */
+export function decodeJwtPayload(token: string): CodexJwtClaims {
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return null;
+    if (parts.length !== 3) return {};
     const json = Buffer.from(parts[1], 'base64url').toString('utf-8');
-    const parsed: unknown = JSON.parse(json);
-    return parsed && typeof parsed === 'object'
-      ? (parsed as Record<string, unknown>)
-      : null;
+    const result = CodexJwtClaimsSchema.safeParse(JSON.parse(json));
+    return result.success ? result.data : {};
   } catch {
-    return null;
+    return {};
   }
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-/** Extract the ChatGPT account id from a decoded payload, trying all 3 locations. */
-export function extractAccountId(
-  claims: Record<string, unknown>,
-): string | undefined {
-  const topLevel = asString(claims['chatgpt_account_id']);
-  if (topLevel) return topLevel;
-
-  const auth = claims[CODEX_JWT_AUTH_CLAIM];
-  if (auth && typeof auth === 'object') {
-    const nested = asString(
-      (auth as Record<string, unknown>)['chatgpt_account_id'],
-    );
-    if (nested) return nested;
-  }
-
-  const organizations = claims['organizations'];
-  if (Array.isArray(organizations) && organizations.length > 0) {
-    const first = organizations[0];
-    if (first && typeof first === 'object') {
-      const orgId = asString((first as Record<string, unknown>)['id']);
-      if (orgId) return orgId;
-    }
-  }
-  return undefined;
-}
-
-/** Extract the email claim from a decoded payload. */
-export function extractEmail(
-  claims: Record<string, unknown>,
-): string | undefined {
-  return asString(claims['email']);
 }
 
 /**
  * Extract account id + email, preferring the id_token and falling back to the
- * access_token. Either token may be absent.
+ * access_token field-by-field. Either token may be absent.
  */
 export function extractCodexClaims(
   idToken: string | undefined,
   accessToken: string | undefined,
 ): CodexJwtClaims {
-  const idClaims = idToken ? decodeJwtPayload(idToken) : null;
-  const accessClaims = accessToken ? decodeJwtPayload(accessToken) : null;
+  const idClaims = idToken ? decodeJwtPayload(idToken) : {};
+  const accessClaims = accessToken ? decodeJwtPayload(accessToken) : {};
   return {
-    accountId:
-      (idClaims ? extractAccountId(idClaims) : undefined) ??
-      (accessClaims ? extractAccountId(accessClaims) : undefined),
-    email:
-      (idClaims ? extractEmail(idClaims) : undefined) ??
-      (accessClaims ? extractEmail(accessClaims) : undefined),
+    accountId: idClaims.accountId ?? accessClaims.accountId,
+    email: idClaims.email ?? accessClaims.email,
   };
 }

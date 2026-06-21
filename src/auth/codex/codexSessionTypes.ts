@@ -35,7 +35,10 @@ export const CodexDeviceUserCodeSchema = z.object({
   device_auth_id: z.string().min(1),
   user_code: z.string().min(1).nullish(),
   usercode: z.string().min(1).nullish(),
-  interval: z.union([z.string(), z.number()]).nullish(),
+  // The endpoint sends the poll interval (seconds) as a string or a number, may
+  // omit it, and could send junk. Normalize at the boundary to a positive
+  // number, defaulting to 5 (matches Codex CLI / Zed).
+  interval: z.coerce.number().positive().catch(5).prefault(5),
 });
 export type CodexDeviceUserCode = z.infer<typeof CodexDeviceUserCodeSchema>;
 
