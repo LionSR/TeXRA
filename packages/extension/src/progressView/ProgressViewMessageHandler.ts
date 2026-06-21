@@ -6,6 +6,10 @@ import {
   ProgressFollowUpController,
   type ProgressFollowUpPlan,
 } from '@controllers/progressView/ProgressFollowUpController';
+import {
+  ProgressFollowUpPolishController,
+  type ProgressFollowUpPolishResult,
+} from '@controllers/progressView/ProgressFollowUpPolishController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
@@ -17,10 +21,6 @@ import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/execution/executionRequests';
-import {
-  buildFileContextFromTaskState,
-  polishTextWithAI,
-} from '@agent/runtime/textEnhancement';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
@@ -79,6 +79,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly agentProposalController: ProgressAgentProposalController;
   private readonly apiKeyRetryController: ProgressApiKeyRetryController;
   private readonly followUpController: ProgressFollowUpController;
+  private readonly followUpPolishController: ProgressFollowUpPolishController;
 
   /**
    * Type-safe handler registry - handlers receive typed data.
@@ -112,6 +113,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.agentProposalController = this.createAgentProposalController();
     this.apiKeyRetryController = this.createApiKeyRetryController();
     this.followUpController = this.createFollowUpController();
+    this.followUpPolishController = new ProgressFollowUpPolishController();
     this.handlerRegistry = this.createHandlerRegistry();
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
@@ -643,18 +645,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const taskState = this.provider.state.snapshots.getTaskState(data.stream);
     if (!taskState) return;
 
-    const fileContext = buildFileContextFromTaskState(taskState);
-
-    const sendPolishError = (errorMsg: string): void => {
-      this.postToActiveView({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-        stream: data.stream,
-        kind: 'polishError',
-        text: null,
-        error: errorMsg,
-      });
-    };
-
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -667,26 +657,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             message: 'Sending to AI for polishing...',
             increment: 30,
           });
-          const result = await polishTextWithAI(data.text, fileContext);
+          const result = await this.followUpPolishController.polishFollowUp({
+            stream: data.stream,
+            text: data.text,
+            taskState,
+          });
           progress.report({
             message: 'Applying changes...',
             increment: 60,
           });
-
-          if (result.success) {
-            this.postToActiveView({
-              command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-              stream: data.stream,
-              kind: 'polished',
-              text: result.text,
-            });
-          } else if (result.error) {
-            sendPolishError(result.error);
-            await vscode.window.showErrorMessage(result.error);
-          }
+          await this.applyFollowUpPolishResult(result);
         } catch (error) {
           const errorMsg = toErrorMessage(error);
-          sendPolishError(errorMsg);
           await vscode.window.showErrorMessage(
             `Error polishing follow-up: ${errorMsg}`,
           );
@@ -700,6 +682,29 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         }
       },
     );
+  }
+
+  private async applyFollowUpPolishResult(
+    result: ProgressFollowUpPolishResult,
+  ): Promise<void> {
+    switch (result.kind) {
+      case 'skipped':
+        return;
+      case 'updated':
+        this.postToActiveView(result.update);
+        return;
+      case 'failed':
+        this.postToActiveView(result.update);
+        await vscode.window.showErrorMessage(result.userMessage);
+        return;
+      case 'exception':
+        this.postToActiveView(result.update);
+        await vscode.window.showErrorMessage(result.userMessage);
+        this.logger.error(this.channel, result.logMessage, {
+          data: result.logData,
+        });
+        return;
+    }
   }
 
   private handlePlanApprovalAction(

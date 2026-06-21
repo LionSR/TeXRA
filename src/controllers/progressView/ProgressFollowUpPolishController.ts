@@ -1,0 +1,123 @@
+// Local imports - agent
+import type { TaskState } from '@agent/core/execution/TaskState';
+import {
+  buildFileContextFromTaskState,
+  polishTextWithAI,
+  type FileContext,
+} from '@agent/runtime/textEnhancement';
+
+// Local imports - common
+import { toErrorMessage } from '@common/errors';
+
+// Local imports - shared
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
+
+type UpdateFollowUpTextMessage = Extract<
+  ProgressViewOutboundMessage,
+  { command: typeof PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT }
+>;
+
+export interface ProgressFollowUpPolishInput {
+  readonly stream: StreamTabId;
+  readonly text: string;
+  readonly taskState: TaskState | undefined;
+}
+
+export interface ProgressFollowUpPolishTextResult {
+  readonly success: boolean;
+  readonly text: string;
+  readonly error?: string;
+}
+
+export type ProgressFollowUpPolishText = (
+  text: string,
+  fileContext?: FileContext,
+) => Promise<ProgressFollowUpPolishTextResult>;
+
+export interface ProgressFollowUpPolishControllerDeps {
+  readonly polishText: ProgressFollowUpPolishText;
+}
+
+export type ProgressFollowUpPolishResult =
+  | { readonly kind: 'skipped' }
+  | {
+      readonly kind: 'updated';
+      readonly update: UpdateFollowUpTextMessage;
+    }
+  | {
+      readonly kind: 'failed';
+      readonly update: UpdateFollowUpTextMessage;
+      readonly userMessage: string;
+    }
+  | {
+      readonly kind: 'exception';
+      readonly update: UpdateFollowUpTextMessage;
+      readonly userMessage: string;
+      readonly logMessage: string;
+      readonly logData?: Error;
+    };
+
+export class ProgressFollowUpPolishController {
+  constructor(
+    private readonly deps: ProgressFollowUpPolishControllerDeps = {
+      polishText: polishTextWithAI,
+    },
+  ) {}
+
+  async polishFollowUp(
+    input: ProgressFollowUpPolishInput,
+  ): Promise<ProgressFollowUpPolishResult> {
+    if (!input.taskState) {
+      return { kind: 'skipped' };
+    }
+
+    try {
+      const fileContext = buildFileContextFromTaskState(input.taskState);
+      const result = await this.deps.polishText(input.text, fileContext);
+      if (result.success) {
+        return {
+          kind: 'updated',
+          update: this.createUpdate(input.stream, 'polished', result.text),
+        };
+      }
+      if (!result.error) {
+        return { kind: 'skipped' };
+      }
+      return {
+        kind: 'failed',
+        update: this.createUpdate(input.stream, 'polishError', null, {
+          error: result.error,
+        }),
+        userMessage: result.error,
+      };
+    } catch (error) {
+      const errorMsg = toErrorMessage(error);
+      const logMessage = `Error polishing follow-up: ${errorMsg}`;
+      return {
+        kind: 'exception',
+        update: this.createUpdate(input.stream, 'polishError', null, {
+          error: errorMsg,
+        }),
+        userMessage: logMessage,
+        logMessage,
+        ...(error instanceof Error && { logData: error }),
+      };
+    }
+  }
+
+  private createUpdate(
+    stream: StreamTabId,
+    kind: 'polished' | 'polishError',
+    text: string | null,
+    options: { readonly error?: string } = {},
+  ): UpdateFollowUpTextMessage {
+    return {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+      stream,
+      kind,
+      text,
+      ...(options.error && { error: options.error }),
+    };
+  }
+}
