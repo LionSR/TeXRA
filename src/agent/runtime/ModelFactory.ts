@@ -24,7 +24,6 @@ type ModelHandlerConstructor = new (
 type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
 export type ModelHandlerCompatibilityKey =
   | 'ModelHandlerValidation'
-  | 'ModelHandlerCodex'
   | 'ModelHandlerOpenAIResponse'
   | 'ModelHandlerOpenRouterNative'
   | 'ModelHandlerAnthropic'
@@ -252,9 +251,6 @@ export function modelHandlerCompatibilityKey(
     originalConfig,
     preferShortModelNames,
   );
-  if (shouldUseCodexSubscription(config, useOpenRouter)) {
-    return 'ModelHandlerCodex';
-  }
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     return 'ModelHandlerOpenAIResponse';
   }
@@ -351,7 +347,7 @@ export async function createModelHandler(
       : config;
     return withModelHandlerCompatibilityKey(
       withReasoningOverride(new ModelHandlerCodex(codexConfig)),
-      'ModelHandlerCodex',
+      'ModelHandlerOpenAIResponse',
     );
   }
 

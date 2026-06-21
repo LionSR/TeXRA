@@ -96,12 +96,6 @@ const AVAILABILITY_STATUS: Record<
     available: true,
     requiresKey: false,
   },
-  'subscription-login-required': {
-    kind: 'subscription-login-required',
-    label: 'ChatGPT sign-in required',
-    available: false,
-    requiresKey: false,
-  },
   'relay-quota-exhausted': {
     kind: 'relay-quota-exhausted',
     label: 'Relay quota exhausted',
@@ -263,11 +257,6 @@ export async function getModelUnavailableReason(
   const ctx = await buildAvailabilityContext(effectiveAccess, access == null);
   const availability = await resolveModelAvailability(model, config, ctx);
   if (availability.available) return null;
-
-  // Determine the specific reason
-  if (availability.kind === 'subscription-login-required') {
-    return `Model "${model}" needs you to sign in with ChatGPT to use your subscription. Sign in with \`texra auth chatgpt login\`, or turn off "Prefer ChatGPT subscription".`;
-  }
 
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
     return `Model "${model}" requires an OpenRouter API key.`;
