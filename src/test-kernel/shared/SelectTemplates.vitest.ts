@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - shared
-import { formatAgentOptionLabel } from '@shared/utils/selectTemplates';
+import { formatAgentOptionLabel } from '@shared/utils/agentOptionLabels';
 
 describe('select template labels', () => {
   it('trims agent picker labels before description separators', () => {
