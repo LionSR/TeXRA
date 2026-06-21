@@ -110,7 +110,7 @@ export class ProgressApp extends ProgressAppBase {
   static styles = [designTokens, viewTabStyles, progressAppStyles];
 
   // --- Signal-based state ---
-  // State lives at module scope in `progressState.ts` (PRD: docs/prd/electron-shell-layout.md § 7.A)
+  // State lives at module scope in `progressState.ts` (PRD: docs/prds/2026-05-08-electron-shell-layout.md § 7.A)
   // so the rail and the conversation can mount independently in different DOM
   // trees. Identity is preserved — selectors here are simple imports.
   private hasHandledInitialProgressTabShow = false;
