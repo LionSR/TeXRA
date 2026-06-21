@@ -63,6 +63,40 @@ export function extractTextContentPart(part: unknown): string | undefined {
     : undefined;
 }
 
+function contentHasText(content: unknown): boolean {
+  if (typeof content === 'string') return content.trim().length > 0;
+  if (!Array.isArray(content)) return false;
+  return content.some(
+    (part) => (extractTextContentPart(part)?.trim().length ?? 0) > 0,
+  );
+}
+
+/** Whether a completed Responses payload already carries assistant text. */
+export function hasResponseOutputText(response: {
+  readonly output_text?: unknown;
+  readonly output?: unknown;
+}): boolean {
+  if (
+    typeof response.output_text === 'string' &&
+    response.output_text.trim().length > 0
+  ) {
+    return true;
+  }
+  if (!Array.isArray(response.output)) return false;
+
+  return response.output.some((item) => {
+    if (!item || typeof item !== 'object') return false;
+    const candidate = item as {
+      readonly type?: unknown;
+      readonly role?: unknown;
+      readonly content?: unknown;
+    };
+    if (candidate.type !== 'message') return false;
+    if (candidate.role != null && candidate.role !== 'assistant') return false;
+    return contentHasText(candidate.content);
+  });
+}
+
 /** Type guard for input_file content parts. */
 export function isInputFileContent(
   content: ResponseInputContent,

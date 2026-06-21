@@ -29,9 +29,11 @@ import {
   CodexAuthError,
   codexCoordinator,
 } from '@auth/codex';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
+import { hasResponseOutputText } from './openAIResponseContent';
 import type { ResponseUsage } from 'openai/resources/responses/responses';
 
 const CHANNEL = 'ModelHandlerCodex';
@@ -141,10 +143,7 @@ export function sseToResponseJson(sse: string): CodexSseCollapseResult | null {
     ) {
       obj.output = outputItems;
     }
-    const hasText =
-      (typeof obj.output_text === 'string' && obj.output_text.trim().length) ||
-      (Array.isArray(obj.output) && obj.output.length > 0);
-    if (!hasText && textDelta) obj.output_text = textDelta;
+    if (textDelta && !hasResponseOutputText(obj)) obj.output_text = textDelta;
   }
   return { body, status: failure == null ? 200 : 502 };
 }
@@ -220,7 +219,7 @@ const codexFetch = (async (input, init) => {
     // stream/instructions). Log so the resulting 400 is diagnosable.
     logger.warn(
       CHANNEL,
-      `Could not adapt Codex request body: ${(error as Error).message}`,
+      `Could not adapt Codex request body: ${toErrorMessage(error)}`,
     );
   }
 
