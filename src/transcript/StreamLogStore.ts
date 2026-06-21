@@ -25,17 +25,13 @@ const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const LOG_TAG = 'StreamLogStore';
 
 type StreamLogListener = (streamId: StreamTabId) => void;
-interface StreamLogSummary {
-  firstTimestamp?: number;
-  lastTimestamp?: number;
-  hasRunningGroup?: boolean;
-}
 
 const StreamLogSummarySchema = z.object({
   firstTimestamp: z.number().finite().optional().catch(undefined),
   lastTimestamp: z.number().finite().optional().catch(undefined),
   hasRunningGroup: z.boolean().optional().catch(undefined),
 });
+type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 
 interface StreamLoadResult {
   streamId: StreamTabId;
