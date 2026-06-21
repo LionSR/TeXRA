@@ -17,6 +17,8 @@ import {
   type SlashCommandContext,
 } from './slashContext';
 
+const API_MODE_USAGE = 'Usage: /api personal | /api included';
+
 async function reconcileRootModelAfterApiModeChange(
   context: SlashCommandContext | undefined,
   apiMode: CliApiMode,
@@ -60,9 +62,7 @@ export async function applyCliApiModeSelection(
     const lines = await loadCliApiStatusLines({
       apiMode: cliState.sessionMeta.get().apiMode,
     });
-    appendLocalAssistantTranscript(
-      [...lines, 'Usage: /api personal | /api included'].join('\n'),
-    );
+    appendLocalAssistantTranscript([...lines, API_MODE_USAGE].join('\n'));
     return;
   }
 
@@ -88,7 +88,7 @@ export async function applyCliApiModeSelection(
     return;
   }
 
-  appendLocalAssistantTranscript('Usage: /api personal | /api included');
+  appendLocalAssistantTranscript(API_MODE_USAGE);
 }
 
 export async function showCliAuthStatus(): Promise<void> {
