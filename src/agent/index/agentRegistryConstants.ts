@@ -62,7 +62,7 @@ export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [
  * Remote orchestrators come first because they need sign-in, then bundled
  * orchestrators such as `engineer`, then `assistant` — the general-purpose
  * default for users without sign-in (State 2 of
- * docs/prd/agent-native-onboarding.md) — then `research`/`review` as
+ * docs/prds/agent-native-onboarding.md) — then `research`/`review` as
  * task-flavored fallbacks. This keeps signed-out users in presets like
  * Physicist/Mathematician from landing on task-specific agents (e.g.
  * `presenter`) by alphabetical accident.

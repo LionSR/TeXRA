@@ -1,7 +1,7 @@
 /**
  * Module-level reactive state for the Progress view.
  *
- * Hoisted from `ProgressApp` private fields (PRD: docs/prd/electron-shell-layout.md § 7.A).
+ * Hoisted from `ProgressApp` private fields (PRD: docs/prds/electron-shell-layout.md § 7.A).
  * Both the rail (`<stream-tabs>`) and the conversation body need to observe the
  * same signals from independent DOM trees once PR 2 extracts `<stream-conversation>`.
  *
@@ -302,7 +302,7 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
 // ---------------------------------------------------------------------------
 // Mutators — module-level helpers for stream-scoped updates.
 //
-// Hoisted from `ProgressApp` private methods (PRD: docs/prd/electron-shell-layout.md
+// Hoisted from `ProgressApp` private methods (PRD: docs/prds/electron-shell-layout.md
 // § 7.A) so the desktop renderer can drive the same `appState` updates without
 // mounting `<progress-app>`. Behavior preserved exactly: same fast-path,
 // same skip-no-op short-circuit, same Mutative structural sharing.

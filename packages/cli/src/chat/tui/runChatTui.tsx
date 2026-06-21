@@ -329,7 +329,7 @@ export async function runChat(
   }
   const apiMode = effectiveCliApiMode(context);
   const initialResume = init.initialResume;
-  // State 1 continuation (docs/prd/agent-native-onboarding.md): on a true
+  // State 1 continuation (docs/prds/agent-native-onboarding.md): on a true
   // first run the post-picker session starts with the setup agent. Threaded
   // through the same override slot resolveChatDefaults already honors, and
   // only when the user didn't pin an agent (--agent, resume, or env) — an
