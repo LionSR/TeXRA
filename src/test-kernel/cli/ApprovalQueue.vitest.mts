@@ -122,6 +122,44 @@ describe('CLI approval queue', () => {
     await expect(mixedQuestionResult).resolves.toEqual({ accepted: false });
   });
 
+  it('interrupts active and queued approvals without wedging the queue', async () => {
+    const first = bashPayload('child-1');
+    const second = bashPayload('child-2');
+    const firstResult = enqueueApproval(first);
+    const secondResult = enqueueApproval(second);
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(first);
+    });
+    expect(approvalQueueStatus.get()).toEqual({
+      depth: 2,
+      kind: 'approval',
+    });
+
+    clearApprovals();
+
+    const interrupted = {
+      accepted: false,
+      userMessage: 'Session interrupted.',
+    };
+    await expect(firstResult).resolves.toEqual(interrupted);
+    await expect(secondResult).resolves.toEqual(interrupted);
+    expect(currentApproval.get()).toBeUndefined();
+    expect(approvalQueueStatus.get()).toEqual({
+      depth: 0,
+      kind: 'approval',
+    });
+
+    const next = bashPayload('child-3');
+    const nextResult = enqueueApproval(next);
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(next);
+    });
+
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(nextResult).resolves.toEqual({ accepted: true });
+  });
+
   it('notifies only when a TUI approval becomes the foreground modal', async () => {
     const host = { emit: vi.fn() } as unknown as CliRuntimeHost;
     const first = bashPayload('child-1');
