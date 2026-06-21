@@ -80,9 +80,14 @@ export function extractCodexClaims(
   idToken: string | undefined,
   accessToken: string | undefined,
 ): CodexJwtClaims {
-  const jwt = idToken || accessToken;
-  if (!jwt) return {};
-  const claims = decodeJwtPayload(jwt);
-  if (!claims) return {};
-  return { accountId: extractAccountId(claims), email: extractEmail(claims) };
+  const idClaims = idToken ? decodeJwtPayload(idToken) : null;
+  const accessClaims = accessToken ? decodeJwtPayload(accessToken) : null;
+  return {
+    accountId:
+      (idClaims ? extractAccountId(idClaims) : undefined) ??
+      (accessClaims ? extractAccountId(accessClaims) : undefined),
+    email:
+      (idClaims ? extractEmail(idClaims) : undefined) ??
+      (accessClaims ? extractEmail(accessClaims) : undefined),
+  };
 }
