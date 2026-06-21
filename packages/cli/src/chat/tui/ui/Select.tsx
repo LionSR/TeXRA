@@ -2,7 +2,7 @@
 //
 // Renders each item with a `›` pointer on the focused row (Ink figures.pointer
 // equivalent in plain ASCII) and a `✓` on the currently-active value per
-// docs/prd/cli-tui-ink/10-architecture.md § Intuitiveness conventions.
+// docs/prds/cli-tui-ink/10-architecture.md § Intuitiveness conventions.
 //
 // `↑/↓` walks the rows, Enter calls `onSelect`, Esc calls `onCancel`. Items
 // receive a single-key shortcut prefix so the row can be jumped to directly:

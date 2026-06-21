@@ -45,7 +45,7 @@ export const srcExclude = [
   'dev/**',
   'architecture/**',
   'pocketflow/**',
-  'prd/**',
+  'prds/**',
   'proposals/**',
   'reference/**',
   'skills/**',
