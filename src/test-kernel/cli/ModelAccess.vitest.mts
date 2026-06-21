@@ -11,6 +11,7 @@ import {
   modelSelectItemsForCliMode,
   noRunnableModelAccessReason,
   runnableCliModelAccessEntries,
+  resolveCliModelAccessEntry,
   resolveCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
@@ -967,6 +968,35 @@ describe('CLI model access resolution', () => {
         ],
       }),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
+    expect(computeModelOptionsDataMock).toHaveBeenCalledWith([
+      'hiddenFixtureModel',
+    ]);
+  });
+
+  it('resolves hidden model entries for diagnostic commands', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('hiddenFixtureModel', {
+        availability: 'missing-key',
+        availabilityLabel: 'Missing API key',
+        disabled: true,
+        requiresKey: true,
+      }),
+    ]);
+
+    await expect(
+      resolveCliModelAccessEntry('HIDDENFIXTUREMODEL', {
+        apiMode: 'personal',
+        accessList: [model('sonnet46T')],
+      }),
+    ).resolves.toMatchObject({
+      available: false,
+      status: 'missing api key',
+      model: {
+        value: 'hiddenFixtureModel',
+        availability: 'missing-key',
+        availabilityLabel: 'Missing API key',
+      },
+    });
     expect(computeModelOptionsDataMock).toHaveBeenCalledWith([
       'hiddenFixtureModel',
     ]);
