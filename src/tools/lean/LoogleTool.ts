@@ -43,32 +43,37 @@ const LeanLoogleInputSchema = z.strictObject({
 export type LeanLoogleInput = z.infer<typeof LeanLoogleInputSchema>;
 
 // ============================================================================
-// Types
+// Response schemas (Loogle is an external network boundary — validate it)
 // ============================================================================
 
-interface LoogleHit {
-  name: string;
-  type: string;
-  module: string;
-  doc: string;
-}
+const LoogleHitSchema = z.looseObject({
+  name: z.string(),
+  type: z.string(),
+  module: z.string(),
+  // Loogle may omit or empty `doc`; formatHit already guards on truthiness.
+  doc: z.string().optional(),
+});
+type LoogleHit = z.infer<typeof LoogleHitSchema>;
 
-interface LoogleSuccessResponse {
-  count: number;
-  header: string;
-  hits: LoogleHit[];
-}
+const LoogleSuccessSchema = z.looseObject({
+  count: z.number(),
+  header: z.string(),
+  hits: z.array(LoogleHitSchema),
+});
 
-interface LoogleErrorResponse {
-  error: string;
-  suggestions?: string[];
-}
+const LoogleErrorSchema = z.looseObject({
+  error: z.string(),
+  suggestions: z.array(z.string()).optional(),
+});
 
-type LoogleResponse = LoogleSuccessResponse | LoogleErrorResponse;
+// Not a discriminatedUnion: success/error bodies share no tagged key. Try the
+// error arm first so an `{ error }` body is never mis-read as an empty success.
+const LoogleResponseSchema = z.union([LoogleErrorSchema, LoogleSuccessSchema]);
+type LoogleResponse = z.infer<typeof LoogleResponseSchema>;
 
 function isErrorResponse(
   response: LoogleResponse,
-): response is LoogleErrorResponse {
+): response is z.infer<typeof LoogleErrorSchema> {
   return 'error' in response;
 }
 
@@ -130,21 +135,31 @@ Useful for finding the right lemma when you know roughly what type it should hav
   private async fetchLoogle(query: string): Promise<LoogleResponse> {
     return pRetry(
       async () => {
-        try {
-          const response = await axios.get<LoogleResponse>(LOOGLE_API_URL, {
+        const response = await axios
+          .get<unknown>(LOOGLE_API_URL, {
             params: { q: query },
             headers: {
               'User-Agent': 'TeXRA-VSCode-Extension',
             },
             timeout: LOOGLE_TIMEOUT_MS,
+          })
+          .catch((error: unknown) => {
+            if (isTransientHttpError(error)) throw error;
+            throw new AbortError(
+              error instanceof Error ? error : new Error(String(error)),
+            );
           });
-          return response.data;
-        } catch (error) {
-          if (isTransientHttpError(error)) throw error;
+        // Validate the body at the boundary. A malformed shape is not transient,
+        // so abort retries and let executeSingle surface it as a tool error.
+        const parsed = LoogleResponseSchema.safeParse(response.data);
+        if (!parsed.success) {
           throw new AbortError(
-            error instanceof Error ? error : new Error(String(error)),
+            new Error(
+              `Unexpected Loogle response shape: ${parsed.error.message}`,
+            ),
           );
         }
+        return parsed.data;
       },
       {
         retries: LOOGLE_RETRIES,
