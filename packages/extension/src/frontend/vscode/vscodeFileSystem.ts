@@ -35,6 +35,14 @@ export class VscodeFileSystem implements FileSystemProvider {
     };
   }
 
+  async isSymlink(target: string): Promise<boolean> {
+    // vscode.workspace.fs.readDirectory does not reliably set the SymbolicLink
+    // bit in the returned FileType bitmask on all platforms. Use lstat directly
+    // (the extension host is always Node) to get the authoritative answer.
+    const lstats = await fs.promises.lstat(target);
+    return lstats.isSymbolicLink();
+  }
+
   async realPath(target: string): Promise<string> {
     return fs.promises.realpath(target);
   }

@@ -92,6 +92,11 @@ export const nodeFilesystem: FileSystemProvider = {
     };
   },
 
+  async isSymlink(target: string): Promise<boolean> {
+    const lstats = await fs.promises.lstat(target);
+    return lstats.isSymbolicLink();
+  },
+
   async realPath(target: string): Promise<string> {
     return fs.promises.realpath(target);
   },
