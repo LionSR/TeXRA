@@ -11,7 +11,7 @@ updated: 2026-06-13
 
 This PRD supersedes two earlier drafts:
 
-1. **`docs/prds/main-view-role-first-launcher.md`** (proposed in PR #3107). That
+1. **`docs/prd/main-view-role-first-launcher.md`** (proposed in PR #3107). That
    draft correctly identified that "orchestrator" is a role, not a singleton
    agent, but its top-level model — three peer launch styles
    (Orchestrated / Interactive / Workflow) — leaves first-run users with no
@@ -30,7 +30,7 @@ This PRD supersedes two earlier drafts:
    and treated the launcher as a chooser between two or three modes. Once
    the team is the primary frame, the mode question disappears.
 
-The earlier `docs/prds/main-view-onboarding.md` referenced by PR #3107 is not
+The earlier `docs/prd/main-view-onboarding.md` referenced by PR #3107 is not
 present in the working tree; refer to PR #3105 for that draft.
 
 ---
