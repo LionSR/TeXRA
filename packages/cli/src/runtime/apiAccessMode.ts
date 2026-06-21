@@ -39,7 +39,7 @@ export function formatCliApiMode(mode: CliApiMode): string {
 }
 
 export function shortCliApiMode(mode: CliApiMode): string {
-  return mode === 'included' ? 'relay' : 'keys';
+  return mode === 'included' ? 'relay' : 'byok';
 }
 
 export function parseCliApiMode(input: string): CliApiMode | undefined {
