@@ -16,6 +16,8 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import {
   callBetterBibTeX,
   getZoteroPort,
+  BbtCollectionChainSchema,
+  BbtSearchResultItemSchema,
   type BbtCollectionChain,
   type BbtSearchResultItem,
 } from './bbtClient';
@@ -155,10 +157,11 @@ export class ZoteroSearchTool extends defineTool({
 
     const params: unknown[] = library ? [searchTerms, library] : [searchTerms];
 
-    const result = await callBetterBibTeX<BbtSearchResultItem[]>(
+    const result = await callBetterBibTeX(
       'item.search',
       params,
       port,
+      z.array(BbtSearchResultItemSchema),
     );
 
     const label = describeSearch({ query, title, author, year });
@@ -200,10 +203,11 @@ export class ZoteroSearchTool extends defineTool({
     port: number,
   ): Promise<Record<string, BbtCollectionChain[]>> {
     if (citekeys.length === 0) return {};
-    return callBetterBibTeX<Record<string, BbtCollectionChain[]>>(
+    return callBetterBibTeX(
       'item.collections',
       [citekeys, true],
       port,
+      z.record(z.string(), z.array(BbtCollectionChainSchema)),
     );
   }
 }
