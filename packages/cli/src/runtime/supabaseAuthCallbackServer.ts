@@ -6,6 +6,8 @@ import {
   type ServerResponse,
 } from 'node:http';
 
+import { z } from 'zod';
+
 // Local imports - auth
 import { AUTH_CALLBACK_TIMEOUT_MS } from '@auth/config';
 import {
@@ -173,29 +175,33 @@ function readRequestBody(request: IncomingMessage): Promise<string> {
   });
 }
 
+/**
+ * The loopback callback body we accept. A non-object body is rejected; a
+ * present-but-non-string field degrades to `undefined` (per-field `.catch`),
+ * matching the previous manual `typeof === 'string'` guards.
+ */
+const CallbackBodySchema = z.object({
+  query: z.string().nullish().catch(undefined),
+  fragment: z.string().nullish().catch(undefined),
+  nonce: z.string().nullish().catch(undefined),
+});
+
 function parseCallbackBody(rawBody: string): {
   query?: string;
   fragment?: string;
   nonce?: string;
 } {
   try {
-    const body = JSON.parse(rawBody) as unknown;
-    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    const parsed = CallbackBodySchema.safeParse(JSON.parse(rawBody));
+    if (!parsed.success) {
       throw new RecoverableCallbackRequestError(
         'Authentication callback request was malformed.',
       );
     }
-
-    const candidate = body as {
-      query?: unknown;
-      fragment?: unknown;
-      nonce?: unknown;
-    };
     return {
-      query: typeof candidate.query === 'string' ? candidate.query : undefined,
-      fragment:
-        typeof candidate.fragment === 'string' ? candidate.fragment : undefined,
-      nonce: typeof candidate.nonce === 'string' ? candidate.nonce : undefined,
+      query: parsed.data.query ?? undefined,
+      fragment: parsed.data.fragment ?? undefined,
+      nonce: parsed.data.nonce ?? undefined,
     };
   } catch (error) {
     if (isRecoverableCallbackRequestError(error)) throw error;
