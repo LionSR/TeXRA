@@ -10,8 +10,7 @@ import * as vscode from 'vscode';
 
 import {
   codexCoordinator,
-  getCodexStatus,
-  isPreferCodexSubscription,
+  getChatGptAuthStatus,
   loginWithDeviceCode,
   loginWithLoopback,
   setPreferCodexSubscription,
@@ -29,10 +28,9 @@ export class ChatGptSubscriptionHandlers {
   ) {}
 
   async sendChatGptAuthStatus(webview: vscode.Webview): Promise<void> {
-    const status = await getCodexStatus();
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      status: { ...status, preferSubscription: isPreferCodexSubscription() },
+      status: await getChatGptAuthStatus(),
     });
   }
 

@@ -111,13 +111,31 @@ export const CODEX_SUBSCRIPTION_MODEL_FULLNAMES: ReadonlySet<string> = new Set([
   'gpt-5.2-codex',
 ]);
 
+/** Trailing llm-zoo date pin (`-2026-04-23`) on a model `fullName`. */
+const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * The bare model id the Codex backend keys on: the `shortName` when present,
+ * else the `fullName` with its llm-zoo date pin stripped (`gpt-5.5-2026-04-23`
+ * → `gpt-5.5`). The single source of truth for that mapping, shared by
+ * eligibility ({@link isCodexSubscriptionEligible}) and handler dispatch
+ * (ModelFactory) so the id a model is judged eligible under is the same id it
+ * is dispatched with.
+ */
+export function codexBackendModelId(config: {
+  readonly shortName?: string;
+  readonly fullName: string;
+}): string {
+  return config.shortName || config.fullName.replace(CODEX_MODEL_DATE_PIN, '');
+}
+
 /**
  * Whether a model id is eligible to route through the ChatGPT subscription.
  * True for the curated set above, date-pinned variants of those ids, or any
  * `*-codex*` name so newer Codex models are picked up without a code change.
  */
 export function isCodexSubscriptionEligible(fullName: string): boolean {
-  const unpinnedName = fullName.replace(/-\d{4}-\d{2}-\d{2}$/, '');
+  const unpinnedName = fullName.replace(CODEX_MODEL_DATE_PIN, '');
   if (CODEX_SUBSCRIPTION_MODEL_FULLNAMES.has(unpinnedName)) return true;
   return /codex/i.test(fullName);
 }
