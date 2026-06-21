@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process';
 
 // Local imports - shared utilities
-import { quotePosixShellArg } from '@utils/system/shellQuote';
+import { quote } from 'shell-quote';
 
 const OPEN_TERMINAL_TIMEOUT_MS = 10_000;
 
@@ -62,7 +62,7 @@ export async function openMacTerminalCommand(
 }
 
 export function buildMacTerminalCommand(command: string, cwd: string): string {
-  return `cd ${quotePosixShellArg(cwd)} && ${command}`;
+  return `cd ${quote([cwd])} && ${command}`;
 }
 
 function escapeAppleScriptString(value: string): string {
