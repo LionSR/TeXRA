@@ -27,7 +27,6 @@ export const CLI_SETTING_PATHS = [
   'model',
   'outputFormat',
   'approvalPolicy',
-  'chatgptCodex.preferSubscription',
   'chat',
   'run',
 ] as const;
