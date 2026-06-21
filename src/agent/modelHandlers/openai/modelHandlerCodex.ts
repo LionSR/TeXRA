@@ -76,11 +76,11 @@ function sseToResponseJson(sse: string): unknown | null {
   let completed: unknown = null;
   let last: unknown = null;
   for (const block of sse.split(/\r?\n\r?\n/)) {
-    const dataLine = block
+    const payload = block
       .split(/\r?\n/)
-      .find((line) => line.startsWith('data:'));
-    if (!dataLine) continue;
-    const payload = dataLine.slice('data:'.length).trim();
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice('data:'.length).trim())
+      .join('\n');
     if (!payload || payload === '[DONE]') continue;
     try {
       const event = JSON.parse(payload) as {
