@@ -43,7 +43,7 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { requireRunStream } from '@tools/contextHelpers';
 import { AbsoluteFS, StorageFS } from '@utils/files';
-import { clamp } from '@utils/core';
+import { clamp, unique } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
@@ -369,7 +369,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     ids?: readonly string[] | null,
   ): Promise<void> {
     const candidateIds = ids?.length
-      ? [...new Set(ids)]
+      ? unique(ids)
       : currentSession().executions.getActiveIds();
     if (candidateIds.length === 0) return;
 

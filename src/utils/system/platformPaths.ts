@@ -12,6 +12,7 @@ import which from 'which';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
+import { unique } from '@utils/core';
 
 /** Whether the current platform is Windows (cached at module load). */
 export const IS_WINDOWS = process.platform === 'win32';
@@ -208,7 +209,7 @@ function getExtraDirs(): string[] {
   }
 
   // Cache and return the unique directories
-  cachedExtraDirs = [...new Set(dirs)];
+  cachedExtraDirs = unique(dirs);
   return cachedExtraDirs;
 }
 
