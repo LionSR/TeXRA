@@ -2,6 +2,7 @@
 export {
   commonViewStyles,
   compactIconActionButtonStyles,
+  headerActionStyles,
 } from './commonViewStyles';
 export { designTokens, animationStyles } from './litStyles';
 
