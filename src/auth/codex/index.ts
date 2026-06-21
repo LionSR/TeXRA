@@ -15,8 +15,6 @@ export {
 } from './codexPkce';
 export {
   decodeJwtPayload,
-  extractAccountId,
-  extractEmail,
   extractCodexClaims,
   type CodexJwtClaims,
 } from './codexJwt';
@@ -35,7 +33,6 @@ export {
   requestDeviceUserCode,
   pollDeviceToken,
   deviceUserCode,
-  deviceInterval,
   codexDeviceRedirectUri,
 } from './codexOAuthClient';
 export {
