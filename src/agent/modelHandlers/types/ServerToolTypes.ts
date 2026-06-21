@@ -369,14 +369,13 @@ export function extractAnthropicWebFetchResults(
         status: 'completed',
       });
     } else {
-      // Error result
-      const errorBlock = block.content as { error_code?: string };
+      // Error result — block.content is narrowed to WebFetchToolResultErrorBlock
       results.push({
         url: fetchUrl,
         provider: 'anthropic',
         callId: block.tool_use_id,
         status: 'failed',
-        errorCode: errorBlock.error_code,
+        errorCode: block.content.error_code,
       });
     }
   }
