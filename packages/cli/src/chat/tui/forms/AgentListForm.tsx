@@ -34,12 +34,6 @@ interface AgentGroups {
 type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
 type AgentDelegationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
 
-export function agentPickerLabel(
-  agent: Pick<AgentOptionData, 'label'>,
-): string {
-  return formatAgentOptionLabel(agent.label);
-}
-
 function agentDescription(agent: AgentOptionData): string {
   const source = agent.isRemote
     ? 'remote'
@@ -189,7 +183,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const primarySectionTitle = agentPickerPrimarySectionTitle(agents.toolUse);
   const items = agents.toolUse.map((agent) => ({
     value: agent.value,
-    label: agentPickerLabel(agent),
+    label: formatAgentOptionLabel(agent.label),
     description: agentDescription(agent),
   }));
   // The current agent may be stored as a canonical key (`source:name`) or a
@@ -202,7 +196,8 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     props.currentAgent,
   );
   const workflowRows = agents.workflow.map((agent) => ({
-    name: agentPickerLabel(agent),
+    value: agent.value,
+    name: formatAgentOptionLabel(agent.label),
     description: agentDescription(agent),
   }));
   const selectWindow = agentSelectWindow({
@@ -278,7 +273,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         <Box marginTop={1} flexDirection="column">
           <Text bold>Workflows</Text>
           {visibleWorkflowRows.map((workflow) => (
-            <Text key={workflow.name} wrap="truncate-end">
+            <Text key={workflow.value} wrap="truncate-end">
               {'  '}
               {workflow.name}
               <Text dimColor>{` — ${workflow.description}`}</Text>
