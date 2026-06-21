@@ -52,6 +52,20 @@ describe('CLI shell completion', () => {
     expect(fish).toContain("-l 'no-color'");
   });
 
+  it('uses dynamic zsh completions for agent and model flag values', async () => {
+    const zsh = await generateCompletionScript(rootCommand, 'zsh');
+
+    expect(zsh).toContain(
+      "'--agent[Tool-use agent for the session]:agent:($(_texra_tool_use_agents))'",
+    );
+    expect(zsh).toContain(
+      "'--model[Model for the session]:model:($(_texra_models))'",
+    );
+    expect(zsh).toContain(
+      "'-m[Model for the session]:model:($(_texra_models))'",
+    );
+  });
+
   it('consumes every bash value flag while resolving command paths', async () => {
     const [bash, commands] = await Promise.all([
       generateCompletionScript(rootCommand, 'bash'),
