@@ -4,17 +4,13 @@ import { ToolCallAccumulator } from '../utils/toolCallAccumulator';
 import type {
   ChatAssistantMessage,
   ChatFinishReasonEnum,
-  ChatRequest,
+  ChatRequestEffort,
   ChatResult,
   ChatStreamChunk,
   ChatToolCall,
   ChatUsage,
   ReasoningDetailUnion,
 } from '@openrouter/sdk/models';
-
-type OpenRouterReasoningEffort = NonNullable<
-  NonNullable<ChatRequest['reasoning']>['effort']
->;
 
 // OpenRouter's reasoning tiers passed through unchanged. It has no 'max' tier,
 // so 'max' maps to the top tier 'xhigh' and anything unknown falls back to 'low'.
@@ -27,12 +23,10 @@ const OPENROUTER_REASONING_EFFORTS: ReadonlySet<string> = new Set([
   'none',
 ]);
 
-export function toOpenRouterReasoningEffort(
-  effort: string,
-): OpenRouterReasoningEffort {
+export function toOpenRouterReasoningEffort(effort: string): ChatRequestEffort {
   if (effort === 'max') return 'xhigh';
   return OPENROUTER_REASONING_EFFORTS.has(effort)
-    ? (effort as OpenRouterReasoningEffort)
+    ? (effort as ChatRequestEffort)
     : 'low';
 }
 
