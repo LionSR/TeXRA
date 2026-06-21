@@ -53,6 +53,7 @@ export {
   codexCoordinator,
   resetCodexCoordinator,
   getCodexStatus,
+  getChatGptAuthStatus,
   isCodexSignedIn,
 } from './codexAuthAccess';
 export {
