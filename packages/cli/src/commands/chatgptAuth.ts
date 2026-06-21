@@ -2,13 +2,16 @@ import { defineCommand } from 'citty';
 
 import {
   codexCoordinator,
-  loginWithDeviceCode,
-  loginWithLoopback,
+  setPreferCodexSubscription,
   type CodexSession,
 } from '@auth/codex';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
-import { tryOpenBrowser } from '../runtime/browser';
+import {
+  chatGptAccountLabel,
+  shouldUseChatGptDeviceCode,
+  signInCliChatGpt,
+} from '../runtime/chatgptLogin';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
@@ -16,51 +19,34 @@ import {
   writeTextStderr,
   writeTextStdout,
 } from '../runtime/logSinks';
-import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-/**
- * Device-code is the right default when there's no interactive browser to reach:
- * non-text output, a non-TTY/headless/dumb terminal, or `--no-input`. An
- * explicit `--no-browser` keeps the loopback flow but prints the URL to paste.
- */
-function shouldUseDeviceCode(
+function emitLogin(
   context: CliContext,
-  deviceFlag: boolean,
-  noBrowser: boolean,
-): boolean {
-  if (deviceFlag) return true;
-  if (noBrowser) return false;
-  // `interactiveTerminalFailure` already returns a reason for headless mode
-  // (which `--no-input` forces), non-TTY stdout, and dumb terminals.
-  return (
-    context.outputFormat !== 'text' ||
-    interactiveTerminalFailure(context) !== undefined
-  );
-}
-
-function accountLabel(session: CodexSession): string {
-  return session.email ?? session.accountId ?? 'your ChatGPT account';
-}
-
-function emitLogin(context: CliContext, session: CodexSession): void {
+  session: CodexSession,
+  preferenceEffective: boolean,
+): void {
   emitCliResult(context, {
     json: {
       authenticated: true,
       email: session.email ?? null,
       accountId: session.accountId ?? null,
+      preferSubscription: preferenceEffective,
     },
     ndjson: {
       kind: 'chatgpt-auth',
       authenticated: true,
       email: session.email ?? null,
       accountId: session.accountId ?? null,
+      preferSubscription: preferenceEffective,
     },
-    text: `Signed in with ChatGPT as ${accountLabel(session)}.\nEnable "chatgptCodex.preferSubscription" in your TeXRA config to route Codex models through your subscription.`,
+    text: preferenceEffective
+      ? `Signed in with ChatGPT as ${chatGptAccountLabel(session)}.\nChatGPT subscription enabled for Codex models.`
+      : `Signed in with ChatGPT as ${chatGptAccountLabel(session)}.\nChatGPT subscription preference could not be enabled because a more specific setting overrides the config.`,
   });
 }
 
@@ -69,40 +55,25 @@ async function runChatgptLogin(
   init: { device: boolean; noBrowser: boolean },
 ): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
-  const coordinator = codexCoordinator();
   const writeProgress =
     context.outputFormat === 'text' ? writeTextStdout : writeTextStderr;
 
   let session: CodexSession;
   try {
-    if (shouldUseDeviceCode(context, init.device, init.noBrowser)) {
-      session = await loginWithDeviceCode({
-        coordinator,
-        onPrompt: ({ userCode, verificationUrl }) => {
-          writeProgress(
-            `To sign in with ChatGPT:\n  1. Open ${verificationUrl}\n  2. Enter the one-time code: ${userCode}\nWaiting for approval… (Ctrl-C cancels)`,
-          );
-        },
-      });
-    } else {
-      session = await loginWithLoopback({
-        coordinator,
-        openBrowser: async (url) => {
-          if (!init.noBrowser) {
-            writeProgress('Opening your browser to sign in with ChatGPT…');
-            const opened = await tryOpenBrowser(url);
-            if (opened) return;
-          }
-          writeProgress(`Open this URL to sign in with ChatGPT:\n${url}`);
-        },
-      });
-    }
+    session = await signInCliChatGpt(
+      {
+        ...init,
+        device: shouldUseChatGptDeviceCode(context, init),
+      },
+      { writeProgress },
+    );
   } catch (error) {
     writeErrorStderr(error);
     return CliExitCode.ModelOrNetworkError;
   }
 
-  emitLogin(context, session);
+  const update = await setPreferCodexSubscription(true);
+  emitLogin(context, session, update.effective);
   invalidateModelOptionsCache();
   return CliExitCode.Success;
 }

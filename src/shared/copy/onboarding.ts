@@ -18,12 +18,18 @@ export const ONBOARDING_CHOICE_SIGN_IN = {
 } as const;
 
 /** State 0 choice 2. */
+export const ONBOARDING_CHOICE_CHATGPT = {
+  label: 'Use ChatGPT subscription',
+  description: 'Codex models through your ChatGPT plan',
+} as const;
+
+/** State 0 choice 3. */
 export const ONBOARDING_CHOICE_API_KEY = {
   label: 'Use your own provider API key',
   description: 'Anthropic, OpenAI, Google, and more',
 } as const;
 
-/** State 0 choice 3 — quiet link, persists the shared declined flag. */
+/** State 0 choice 4 - quiet link, persists the shared declined flag. */
 export const ONBOARDING_CHOICE_SKIP_LABEL = 'Skip for now';
 
 /**
