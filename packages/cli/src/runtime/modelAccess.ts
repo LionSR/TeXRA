@@ -106,7 +106,6 @@ const RELAY_STATUS_BY_AVAILABILITY = {
   'openrouter-key': 'relay: unavailable; openrouter key set',
   'missing-key': 'relay: unavailable; missing api key',
   'subscription-access': 'chatgpt subscription',
-  'subscription-login-required': 'chatgpt subscription: sign-in required',
 } satisfies Record<ModelAvailabilityKind, string>;
 
 const NO_RUNNABLE_MODEL_ACCESS_COPY = {

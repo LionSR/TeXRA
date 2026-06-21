@@ -52,7 +52,6 @@ export const ModelAvailabilityKindSchema = z.enum([
   // distinct from relay `included-access` because it is the user's own
   // credential and runs regardless of relay-vs-personal API mode.
   'subscription-access',
-  'subscription-login-required',
 ]);
 export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
 
