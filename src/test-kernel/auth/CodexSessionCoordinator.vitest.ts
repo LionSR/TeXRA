@@ -147,6 +147,43 @@ describe('CodexSessionCoordinator', () => {
     expect(storage.peek()).toBeUndefined();
   });
 
+  it('does not clear a newer login when a stale refresh is rejected', async () => {
+    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    let reject!: (error: unknown) => void;
+    const pending = new Promise<CodexTokenResponse>((_, r) => {
+      reject = r;
+    });
+    const refreshTokens = vi.fn(() => pending);
+    const exchangeAuthorizationCode = vi.fn(async () =>
+      tokenResponse({
+        access_token: 'access-new',
+        refresh_token: 'refresh-new',
+      }),
+    );
+    const { coordinator } = makeCoordinator(storage, {
+      exchangeAuthorizationCode,
+      refreshTokens,
+    });
+
+    const token = coordinator.getFreshAccessToken();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(refreshTokens).toHaveBeenCalledOnce();
+
+    await coordinator.completeLoginWithCode({
+      code: 'new-code',
+      verifier: 'new-verifier',
+      redirectUri: 'http://localhost:1455/auth/callback',
+    });
+    reject(new CodexAuthError('revoked', 'fatal', 401));
+
+    await expect(token).rejects.toMatchObject({
+      kind: 'fatal',
+      needsReauth: true,
+    });
+    expect(storage.peek()?.accessToken).toBe('access-new');
+    expect(storage.peek()?.refreshToken).toBe('refresh-new');
+  });
+
   it('keeps the previous refresh token when the response omits a new one', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
     const refreshTokens = vi.fn(async () =>

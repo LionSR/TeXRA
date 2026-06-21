@@ -200,6 +200,18 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return false;
   }
 
+  protected override get supportsResponseChaining(): boolean {
+    return false;
+  }
+
+  protected override get supportsInlineInputFileUpload(): boolean {
+    return false;
+  }
+
+  protected override get supportsToolResultFileUpload(): boolean {
+    return false;
+  }
+
   /** Subscription usage consumes ChatGPT quota, not TeXRA-tracked API spend. */
   public override computePrice(_responseUsage: ResponseUsage): number {
     return 0;

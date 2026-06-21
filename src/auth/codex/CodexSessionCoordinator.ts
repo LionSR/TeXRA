@@ -231,9 +231,12 @@ export class CodexSessionCoordinator {
       tokens = await this.client.refreshTokens(previous.refreshToken);
     } catch (error) {
       if (error instanceof CodexAuthError && error.kind === 'fatal') {
-        // Revoked / invalid refresh token: drop the dead session.
-        this.log?.warn?.('Codex token refresh was rejected; signing out.');
-        await this.storage.delete();
+        // Revoked / invalid refresh token: drop the dead session only if no
+        // newer login/sign-out happened while this refresh was in flight.
+        if (generation === this.sessionGeneration) {
+          this.log?.warn?.('Codex token refresh was rejected; signing out.');
+          await this.storage.delete();
+        }
       }
       throw error;
     }
