@@ -8,6 +8,7 @@ import * as logger from '@logger/logUtils';
 import type { FileOpResult } from '@shared/schemas/opResults';
 import { EXCLUDED_DIRS } from '@shared/constants/workspaceDirs';
 import { WorkspaceFS } from '@utils/files';
+import { unique } from '@utils/core';
 
 // Local file imports
 import { TEMP_EXTENSIONS, PACK_EXTENSIONS, HISTORY_DIR } from './constants';
@@ -148,7 +149,7 @@ export async function runCleanOutput(): Promise<void> {
   }
 
   const modelsPattern = MODELS.join(',');
-  const ignorePatterns = [...new Set([...EXCLUDED_DIRS, HISTORY_DIR])].map(
+  const ignorePatterns = unique([...EXCLUDED_DIRS, HISTORY_DIR]).map(
     (d) => `**/${d}/**`,
   );
 
