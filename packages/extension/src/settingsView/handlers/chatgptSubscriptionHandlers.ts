@@ -114,12 +114,20 @@ export class ChatGptSubscriptionHandlers {
   }
 
   async handleSetPreferSubscription(enabled: boolean): Promise<void> {
-    const update = await setPreferCodexSubscription(enabled);
-    if (update.effective !== enabled) {
-      void vscode.window.showWarningMessage(
-        `A more specific setting still keeps ChatGPT subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+    try {
+      const update = await setPreferCodexSubscription(enabled);
+      if (update.effective !== enabled) {
+        void vscode.window.showWarningMessage(
+          `A more specific setting still keeps ChatGPT subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+        );
+      }
+      await this.refreshChatGptState();
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        'Could not update the ChatGPT subscription preference',
+        error,
       );
     }
-    await this.refreshChatGptState();
   }
 }
