@@ -2,20 +2,18 @@
  * Minimal subset of GitHub REST response shapes used by the PR poller.
  * Only the fields we consume are declared; extra fields are tolerated
  * (z.looseObject). The schemas are the single source of truth — the types are
- * derived via z.infer. Fields that can be null use .nullable() (always present)
- * or .nullish() (may also be absent) — GitHub sends explicit null and .optional()
- * alone rejects null. The remaining .optional() fields (user `type`,
- * `pull_request`, `blob_href`) are absent-only, never null. `state` is a
- * permissive transform,
- * never a strict enum, so a novel value coerces instead of throwing on the
- * 200 path (a throw there would risk the pollers' 24h detach).
+ * derived via z.infer. Always-present-but-nullable fields use .nullable();
+ * fields GitHub may omit or send as explicit null use .nullish(); `state`
+ * is a permissive transform, never a strict enum, so a novel value coerces
+ * instead of throwing on the 200 path (a throw there would risk the pollers'
+ * 24h detach).
  */
 import { z } from 'zod';
 
 export const GhUserSchema = z.looseObject({
   login: z.string(),
   /** 'User' | 'Bot' | 'Organization' — used by the bot filter to drop CI noise. */
-  type: z.string().optional(),
+  type: z.string().nullish(),
 });
 export type GhUser = z.infer<typeof GhUserSchema>;
 
@@ -99,7 +97,7 @@ export const GhCheckAnnotationSchema = z.looseObject({
   title: z.string().nullish(),
   message: z.string(),
   raw_details: z.string().nullish(),
-  blob_href: z.string().optional(),
+  blob_href: z.string().nullish(),
 });
 export type GhCheckAnnotation = z.infer<typeof GhCheckAnnotationSchema>;
 
@@ -146,7 +144,7 @@ export const GhIssueSchema = z.looseObject({
   title: z.string(),
   html_url: z.string(),
   user: GhUserSchema.nullable(),
-  pull_request: z.looseObject({ url: z.string() }).optional(),
+  pull_request: z.looseObject({ url: z.string() }).nullish(),
 });
 export type GhIssue = z.infer<typeof GhIssueSchema>;
 
