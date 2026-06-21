@@ -7,12 +7,16 @@
  * Stays `vscode`-free: reaches the keychain only through the platform port.
  */
 import { tryPlatform } from '@platform/platform';
+import * as logger from '@logger/logUtils';
 
 import { createCodexAuthCoordinator } from './CodexAuthCoordinator';
 import {
   type CodexSessionCoordinator,
   type CodexSessionStatus,
 } from './CodexSessionCoordinator';
+
+const CHANNEL = 'codexAuth';
+logger.initialize(CHANNEL);
 
 let singleton: CodexSessionCoordinator | null = null;
 
@@ -40,7 +44,13 @@ export async function getCodexStatus(): Promise<CodexSessionStatus> {
   if (!tryPlatform()) return { signedIn: false };
   try {
     return await codexCoordinator().getStatus();
-  } catch {
+  } catch (error) {
+    // Treat an unreadable session as signed-out, but surface the unexpected
+    // failure (corrupted keychain entry, platform misconfig) for diagnosis.
+    logger.warn(
+      CHANNEL,
+      `Failed to read ChatGPT session status: ${(error as Error).message}`,
+    );
     return { signedIn: false };
   }
 }
