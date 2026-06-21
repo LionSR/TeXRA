@@ -4,6 +4,7 @@ import {
   setPreferCodexSubscription,
 } from '@auth/codex';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 const SUBSCRIPTION_ON = new Set(['on', 'enable', 'enabled', 'true', 'yes']);
@@ -48,6 +49,7 @@ export async function applyCliSubscriptionToggle(input: string): Promise<void> {
 
   const update = await setPreferCodexSubscription(enabled);
   invalidateModelOptionsCache();
+  bumpCodexPreferenceVersion();
 
   const lines = [
     update.effective === enabled
