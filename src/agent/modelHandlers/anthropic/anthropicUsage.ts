@@ -7,7 +7,6 @@
  * overrides that delegate here with the model's pricing config.
  */
 
-import type { AnthropicUsage } from '@agent/core/usage/ResponseUsage';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 
@@ -40,12 +39,9 @@ interface AnthropicUsageTokenTotals {
  * Uses per-iteration usage when available so compaction requests are fully billed.
  */
 function getAnthropicUsageTokenTotals(
-  responseUsage: AnthropicUsage,
+  responseUsage: BetaUsage,
 ): AnthropicUsageTokenTotals {
-  const usageWithIterations = responseUsage as AnthropicUsage & {
-    iterations?: BetaUsage['iterations'];
-  };
-  const iterations = usageWithIterations.iterations;
+  const iterations = responseUsage.iterations;
   if (Array.isArray(iterations) && iterations.length > 0) {
     let baseInputTokens = 0;
     let outputTokens = 0;
@@ -89,7 +85,7 @@ function getAnthropicUsageTokenTotals(
 
 /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
 export function computeAnthropicPrice(
-  responseUsage: AnthropicUsage,
+  responseUsage: BetaUsage,
   config: AnthropicPricingConfig,
 ): number {
   if (!responseUsage) {
@@ -158,7 +154,7 @@ export function computeAnthropicPrice(
 
 /** Normalizes Anthropic usage data into a unified format. */
 export function normalizeAnthropicUsage(
-  rawUsage: AnthropicUsage,
+  rawUsage: BetaUsage,
   responseTimeMs: number,
   config: AnthropicPricingConfig,
 ): NormalizedUsage {
