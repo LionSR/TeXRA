@@ -9,6 +9,7 @@ import type {
   AgentSource,
 } from '@shared/schemas/agent';
 import { agentKey as createKey, agentName } from '@shared/schemas/agent';
+import { unique } from '@utils/core';
 import { getAgentDirectories } from './agentDirectoriesRegistry';
 import {
   DEFAULT_WORKFLOW_AGENT,
@@ -215,7 +216,7 @@ function migrateLegacyAgentNameKeys(): void {
     });
     if (migrated.every((key, i) => key === stored[i])) continue;
 
-    void platform().workspaceState.update(stateKey, [...new Set(migrated)]);
+    void platform().workspaceState.update(stateKey, unique(migrated));
     logger.info(CHANNEL, `Migrated legacy agent names in ${stateKey}`);
   }
 }

@@ -21,6 +21,7 @@ export {
   filterNotNull,
   filterNotNullish,
   ensureArray,
+  unique,
 } from './typeGuards';
 export { debounce, delay } from './async';
 export { byName, byString, byStringProp } from './comparators';
