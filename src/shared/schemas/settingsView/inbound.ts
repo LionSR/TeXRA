@@ -321,6 +321,10 @@ const GetChatGptAuthStatusMessageSchema = commandOnly(
 );
 const SignInChatGptMessageSchema = commandOnly(CMD.SIGN_IN_CHATGPT);
 const SignOutChatGptMessageSchema = commandOnly(CMD.SIGN_OUT_CHATGPT);
+const SetChatGptPreferSubscriptionMessageSchema = z.object({
+  command: z.literal(CMD.SET_CHATGPT_PREFER_SUBSCRIPTION),
+  enabled: z.boolean(),
+});
 
 const GetDesktopCrashReportingMessageSchema = commandOnly(
   CMD.GET_DESKTOP_CRASH_REPORTING,
@@ -544,6 +548,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetChatGptAuthStatusMessageSchema,
     SignInChatGptMessageSchema,
     SignOutChatGptMessageSchema,
+    SetChatGptPreferSubscriptionMessageSchema,
     GetDesktopCrashReportingMessageSchema,
     SetDesktopCrashReportingEnabledMessageSchema,
     SetDesktopCrashReportingDsnMessageSchema,

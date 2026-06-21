@@ -7,6 +7,7 @@
  * Stays `vscode`-free: reaches the keychain only through the platform port.
  */
 import { tryPlatform } from '@platform/platform';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 import { createCodexAuthCoordinator } from './CodexAuthCoordinator';
@@ -48,7 +49,7 @@ export async function getCodexStatus(): Promise<CodexSessionStatus> {
     // failure (corrupted keychain entry, platform misconfig) for diagnosis.
     logger.warn(
       CHANNEL,
-      `Failed to read ChatGPT session status: ${(error as Error).message}`,
+      `Failed to read ChatGPT session status: ${toErrorMessage(error)}`,
     );
     return { signedIn: false };
   }

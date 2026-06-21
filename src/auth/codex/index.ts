@@ -58,7 +58,11 @@ export {
   getCodexStatus,
   isCodexSignedIn,
 } from './codexAuthAccess';
-export { isPreferCodexSubscription } from './codexPreference';
+export {
+  isPreferCodexSubscription,
+  setPreferCodexSubscription,
+  type CodexSubscriptionPreferenceUpdate,
+} from './codexPreference';
 export { shouldUseCodexSubscription } from './codexRouting';
 export {
   loginWithLoopback,

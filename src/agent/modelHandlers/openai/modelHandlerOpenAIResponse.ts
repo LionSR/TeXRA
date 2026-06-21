@@ -86,6 +86,7 @@ import { isResponseFunctionToolCallItem } from './responseStreamEvents';
 import {
   createInputText,
   extractTextContentPart,
+  hasResponseOutputText,
   isAssistantTextMessage,
   isMessageItem,
 } from './openAIResponseContent';
@@ -1575,6 +1576,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         Array.isArray(response.output) && response.output.length > 0;
       if (!hasFinalOutput && streamedItems.length > 0) {
         (response as { output: Response['output'] }).output = streamedItems;
+      }
+      if (streamedText && !hasResponseOutputText(response)) {
+        (response as { output_text: string }).output_text = streamedText;
       }
 
       processor.finalize(response);
