@@ -46,8 +46,16 @@ type LoggerStub = Partial<AgentTrace> & {
 };
 
 function createLoggerStub(): LoggerStub {
+  const stream = {
+    id: 'stream-test',
+    append: () => {
+      /* no-op for tests */
+    },
+    finalize: () => '',
+  };
   return {
     streamId: 'test-channel',
+    openStream: () => stream,
     debug: () => {
       /* no-op for tests */
     },
@@ -268,6 +276,60 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
 
     assert.equal(requests.length, 1);
     assert.deepEqual(requests[0].input, [fileMessage]);
+  });
+
+  it('merges streamed output items when final streaming output is partial', async () => {
+    const handler = createHandler();
+    handler.getStreamingConfig = () => true;
+
+    const reasoningItem = {
+      type: 'reasoning',
+      id: 'rs_1',
+      summary: [],
+    };
+    const functionCallItem = {
+      type: 'function_call',
+      id: 'fc_1',
+      call_id: 'call_1',
+      name: 'read_file',
+      arguments: '{}',
+      status: 'completed',
+    };
+    const finalResponse = {
+      id: 'resp-partial-stream',
+      status: 'completed',
+      output: [reasoningItem],
+      output_text: '',
+      usage: {
+        input_tokens: 1,
+        output_tokens: 2,
+        total_tokens: 3,
+        input_tokens_details: { cached_tokens: 0 },
+        output_tokens_details: { reasoning_tokens: 0 },
+      },
+    };
+    const events = [
+      { type: 'response.output_item.done', item: reasoningItem },
+      { type: 'response.output_item.done', item: functionCallItem },
+    ];
+    const client = {
+      responses: {
+        stream: () => ({
+          async *[Symbol.asyncIterator]() {
+            yield* events;
+          },
+          finalResponse: async () => finalResponse,
+        }),
+      },
+    };
+
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: createMessages(1),
+      temperature: 0,
+    });
+
+    assert.deepEqual(result.response.output, [reasoningItem, functionCallItem]);
   });
 
   it('uses the preserved token baseline after an invalid previous response id clears chaining', async () => {

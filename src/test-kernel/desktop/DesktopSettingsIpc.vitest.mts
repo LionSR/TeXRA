@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
+import { createFakePlatform } from '@test/support/FakePlatform';
 import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
@@ -722,6 +723,72 @@ describe('desktop settings IPC', () => {
           SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       ),
     ).toBe(false);
+  });
+
+  it('handles ChatGPT subscription preference commands in desktop settings', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform());
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      modelListRefresh: Promise.resolve(),
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_CHATGPT_AUTH_STATUS,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+      status: {
+        signedIn: false,
+        preferSubscription: false,
+      },
+    });
+
+    posted.length = 0;
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
+        enabled: true,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
+    expect(
+      posted.findLast(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+      ),
+    ).toMatchObject({
+      status: {
+        signedIn: false,
+        preferSubscription: true,
+      },
+    });
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      ),
+    ).toBe(true);
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+      ),
+    ).toBe(true);
   });
 
   it('round-trips LaTeX config writes through workspace state and refreshes the renderer', async () => {

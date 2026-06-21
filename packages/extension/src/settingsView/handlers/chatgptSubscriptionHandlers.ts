@@ -121,13 +121,14 @@ export class ChatGptSubscriptionHandlers {
           `A more specific setting still keeps ChatGPT subscription ${update.effective ? 'enabled' : 'disabled'}.`,
         );
       }
-      await this.refreshChatGptState();
     } catch (error) {
       await showLoggedErrorMessage(
         this.ctx.channel,
         'Could not update the ChatGPT subscription preference',
         error,
       );
+    } finally {
+      await this.refreshChatGptState();
     }
   }
 }

@@ -24,6 +24,14 @@ import {
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
 import {
+  codexCoordinator,
+  getCodexStatus,
+  isPreferCodexSubscription,
+  loginWithLoopback,
+  setPreferCodexSubscription,
+} from '@auth/codex';
+import { toErrorMessage } from '@common/errors';
+import {
   API_PROVIDERS,
   apiKeySecretName,
   invalidateApiKeyCache,
@@ -345,6 +353,14 @@ export function createDesktopSettingsIpc(
     options.postToRenderer(message);
   }
 
+  async function postChatGptAuthStatus(): Promise<void> {
+    const status = await getCodexStatus();
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+      status: { ...status, preferSubscription: isPreferCodexSubscription() },
+    });
+  }
+
   async function postMemoryData(): Promise<void> {
     options.postToRenderer(await memoryController.getMemoryDataMessage());
   }
@@ -518,6 +534,7 @@ export function createDesktopSettingsIpc(
       postHistoryData(),
       modelSelectionDataPosted,
       postProfileData(),
+      postChatGptAuthStatus(),
       postLatexSettingsStatus(),
       postDesktopCrashReportingStatus(),
       postAgentSelectionData(),
@@ -681,6 +698,72 @@ export function createDesktopSettingsIpc(
     }
     invalidateModelOptionsCache();
     await Promise.all([postProfileData(), postModelSelectionData()]);
+  }
+
+  async function refreshAfterChatGptAuthChange(): Promise<void> {
+    invalidateModelOptionsCache();
+    await Promise.all([
+      postChatGptAuthStatus(),
+      postModelSelectionData(),
+      postMainModelOptionsData(),
+    ]);
+  }
+
+  async function signInChatGpt(): Promise<void> {
+    try {
+      if (!options.openExternalUrl) {
+        await options.showErrorMessage?.(
+          'ChatGPT sign-in is not connected in this desktop build.',
+        );
+        return;
+      }
+      const session = await loginWithLoopback({
+        coordinator: codexCoordinator(),
+        openBrowser: options.openExternalUrl,
+      });
+      await options.showInfoMessage?.(
+        `Signed in with ChatGPT as ${session.email ?? session.accountId ?? 'your account'}.`,
+      );
+    } catch (error) {
+      await options.showErrorMessage?.(
+        `ChatGPT sign-in failed: ${toErrorMessage(error)}`,
+      );
+      onError(error);
+    } finally {
+      await refreshAfterChatGptAuthChange();
+    }
+  }
+
+  async function signOutChatGpt(): Promise<void> {
+    try {
+      await codexCoordinator().signOut();
+      await options.showInfoMessage?.('Signed out of ChatGPT.');
+    } catch (error) {
+      await options.showErrorMessage?.(
+        `ChatGPT sign-out failed: ${toErrorMessage(error)}`,
+      );
+      onError(error);
+    } finally {
+      await refreshAfterChatGptAuthChange();
+    }
+  }
+
+  async function setChatGptPreferSubscription(enabled: boolean): Promise<void> {
+    try {
+      const update = await setPreferCodexSubscription(enabled);
+      if (update.effective !== enabled) {
+        await options.showInfoMessage?.(
+          `A more specific setting still keeps ChatGPT subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+        );
+      }
+    } catch (error) {
+      await options.showErrorMessage?.(
+        `ChatGPT subscription preference update failed: ${toErrorMessage(error)}`,
+      );
+      onError(error);
+    } finally {
+      await refreshAfterChatGptAuthChange();
+    }
   }
 
   async function updateDesktopCrashReportingEnabled(
@@ -940,6 +1023,12 @@ export function createDesktopSettingsIpc(
     [SETTINGS_VIEW_COMMANDS.SIGN_OUT]: () => signOut(),
     [SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE]: (d) =>
       setApiAccessMode(d.mode),
+    [SETTINGS_VIEW_COMMANDS.GET_CHATGPT_AUTH_STATUS]: () =>
+      postChatGptAuthStatus(),
+    [SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT]: () => signInChatGpt(),
+    [SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT]: () => signOutChatGpt(),
+    [SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION]: (d) =>
+      setChatGptPreferSubscription(d.enabled),
     [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY]: (d) =>
       setProviderKey(d.provider, d.apiKey),
     [SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY]: (d) =>
