@@ -30,7 +30,12 @@ import {
   type BasePollSubscriptionState,
 } from './PollingSourceBase';
 import { emitGitHubSubscriptionChangedToHosts } from './subscriptionEventEmitter';
-import type { GhIssue, GhIssueComment } from './prTypes';
+import {
+  GhIssueCommentArraySchema,
+  GhIssueSchema,
+  type GhIssue,
+  type GhIssueComment,
+} from './prTypes';
 
 import type { Disposable } from '@platform/interfaces/disposable';
 
@@ -147,56 +152,90 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     ]);
 
     if (issueRes.status === 200) {
-      state.etags.issue = issueRes.etag;
-      const newState = issueRes.data.state;
-      // Issues, unlike PRs, can reopen after close — and that's a genuine
-      // signal a subscriber wants. So we keep polling on close: emit the
-      // close event but stay subscribed so a later reopen surfaces too.
-      // Slot release is via explicit unsubscribe or the 24 h unreachable
-      // failsafe. Bound by `maxConcurrent` (10).
-      if (
-        state.initialized &&
-        state.state === 'open' &&
-        newState === 'closed'
-      ) {
-        this.emit(
-          state,
-          formatIssueClosed(state.slug, issue.issueNumber, issueRes.data),
+      // Validate the issue payload non-throwingly. On failure, skip ONLY the
+      // issue-state check (don't advance state.etags.issue) and fall through to
+      // the independent comments fetch below — a malformed issue payload must
+      // not block comment delivery. Never throw: a throw would stall
+      // lastSuccessAt and risk the 24 h detach of a live subscription.
+      const parsedIssue = GhIssueSchema.safeParse(issueRes.data);
+      if (parsedIssue.success) {
+        const issueData = parsedIssue.data;
+        state.etags.issue = issueRes.etag;
+        const newState = issueData.state;
+        // Issues, unlike PRs, can reopen after close — and that's a genuine
+        // signal a subscriber wants. So we keep polling on close: emit the
+        // close event but stay subscribed so a later reopen surfaces too.
+        // Slot release is via explicit unsubscribe or the 24 h unreachable
+        // failsafe. Bound by `maxConcurrent` (10).
+        if (
+          state.initialized &&
+          state.state === 'open' &&
+          newState === 'closed'
+        ) {
+          this.emit(
+            state,
+            formatIssueClosed(state.slug, issue.issueNumber, issueData),
+          );
+        }
+        if (
+          state.initialized &&
+          state.state === 'closed' &&
+          newState === 'open'
+        ) {
+          this.emit(
+            state,
+            formatIssueReopened(state.slug, issue.issueNumber, issueData),
+          );
+        }
+        state.state = newState;
+      } else {
+        this.logger.warn(
+          `Skipping issue-state check for ${state.slug}#${issue.issueNumber}: ` +
+            `malformed issue payload: ${parsedIssue.error.message}`,
         );
       }
-      if (
-        state.initialized &&
-        state.state === 'closed' &&
-        newState === 'open'
-      ) {
-        this.emit(
-          state,
-          formatIssueReopened(state.slug, issue.issueNumber, issueRes.data),
+    }
+
+    // Parse the comments array once; both the seeding and diff branches below
+    // consume `comments`. Non-throwing: on a malformed payload, log + skip this
+    // tick. state.etags.comments and state.sinceCursor are advanced only inside
+    // the guarded branches, so a skip re-fetches next tick (no If-None-Match)
+    // and lastSuccessAt still advances → no 24 h detach. A bad single element
+    // triggers a whole-array skip instead of a mid-loop TypeError throw.
+    let comments: GhIssueComment[] | undefined;
+    if (commentsRes.status === 200) {
+      const parsedComments = GhIssueCommentArraySchema.safeParse(
+        commentsRes.data,
+      );
+      if (!parsedComments.success) {
+        this.logger.warn(
+          `Skipping comments tick for ${state.slug}#${issue.issueNumber}: ` +
+            `malformed comments payload: ${parsedComments.error.message}`,
         );
+        return;
       }
-      state.state = newState;
+      comments = parsedComments.data;
     }
 
     if (!state.initialized) {
-      if (commentsRes.status === 200) {
+      if (commentsRes.status === 200 && comments) {
         state.etags.comments = commentsRes.etag;
-        for (const c of commentsRes.data) state.seenCommentIds.add(c.id);
-        state.sinceCursor = getNewestTimestamp(commentsRes.data);
+        for (const c of comments) state.seenCommentIds.add(c.id);
+        state.sinceCursor = getNewestTimestamp(comments);
       }
       state.initialized = true;
       return;
     }
 
-    if (commentsRes.status === 200) {
+    if (commentsRes.status === 200 && comments) {
       state.etags.comments = commentsRes.etag;
-      for (const c of commentsRes.data) {
+      for (const c of comments) {
         if (state.seenCommentIds.has(c.id)) continue;
         state.seenCommentIds.add(c.id);
         if (shouldDropBotEvent(c.user)) continue;
         this.emit(state, formatIssueComment(state.slug, issue.issueNumber, c));
       }
-      state.sinceCursor =
-        getNewestTimestamp(commentsRes.data) ?? state.sinceCursor;
+      state.sinceCursor = getNewestTimestamp(comments) ?? state.sinceCursor;
       trimSet(state.seenCommentIds, MAX_SEEN_IDS);
     }
   }

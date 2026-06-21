@@ -67,6 +67,7 @@ import {
 } from './prSubscriptionConstants';
 import {
   isDefiniteMergeableState,
+  GhPullRequestSchema,
   type GhCheckAnnotation,
   type GhCheckRun,
   type GhIssueComment,
@@ -320,11 +321,28 @@ export class PRPollingSource extends PollingSourceBase<
 
     const prRes = await ghGet<GhPullRequest>(prPath, state.etags.pr);
     if (prRes.status === 200) {
+      // Validate the state-driving PR payload. A parse failure must NOT throw:
+      // pollOne runs inside pollEntry's try/catch, and a throw here would bump
+      // consecutiveFailures every tick without advancing lastSuccessAt, so a
+      // persistently-odd-but-200 payload would detach this live subscription
+      // after the 24 h failure window. Log + return instead: returning lets
+      // pollEntry reset lastSuccessAt/consecutiveFailures, so the detach gate
+      // never trips. We skip BEFORE writing state.etags.pr, so the PR-detail
+      // ETag is not advanced on a bad body — the next tick re-fetches the same
+      // resource and re-validates (no strand).
+      const parsed = GhPullRequestSchema.safeParse(prRes.data);
+      if (!parsed.success) {
+        this.logger.warn(
+          `Skipping PR poll for ${prKeyToString(pr)}: malformed pull-request payload; ${parsed.error.message}`,
+        );
+        return;
+      }
+      const prData = parsed.data;
       state.etags.pr = prRes.etag;
-      const newHead = prRes.data.head.sha;
-      const newState = prRes.data.state;
-      const newMerged = prRes.data.merged;
-      const newMergeable = prRes.data.mergeable_state;
+      const newHead = prData.head.sha;
+      const newState = prData.state;
+      const newMerged = prData.merged;
+      const newMergeable = prData.mergeable_state;
 
       // Detect close/merge on initialized subscriptions.
       if (
