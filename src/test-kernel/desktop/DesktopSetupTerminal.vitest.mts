@@ -36,6 +36,6 @@ describe('desktop setup terminal', () => {
         'brew install texlive',
         "/tmp/TeXRA user's workspace",
       ),
-    ).toBe("cd '/tmp/TeXRA user'\\''s workspace' && brew install texlive");
+    ).toBe('cd "/tmp/TeXRA user\'s workspace" && brew install texlive');
   });
 });

@@ -12,7 +12,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { quotePosixShellArg } from '@utils/system/shellQuote';
+import { quote } from 'shell-quote';
 
 import { childExecutionLabel } from './childExecutions';
 import type { StreamSlice } from './cliState';
@@ -51,7 +51,7 @@ export function formatResumeCommand(
   const cwd = options.cwd?.trim();
   const cwdArg =
     cwd && cwd !== options.processCwd?.trim()
-      ? ` --cwd ${quotePosixShellArg(cwd)}`
+      ? ` --cwd ${quote([cwd])}`
       : '';
   const policyFlag =
     options.approvalPolicy && options.approvalPolicy !== 'ask'
