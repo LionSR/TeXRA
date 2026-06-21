@@ -472,6 +472,12 @@
         },
         {
           "properties": {
+            "texra.chatgptCodex.preferSubscription": {
+              "default": false,
+              "description": "Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental.",
+              "scope": "resource",
+              "type": "boolean"
+            },
             "texra.model.compactionThresholdPercent": {
               "default": 75,
               "description": "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",

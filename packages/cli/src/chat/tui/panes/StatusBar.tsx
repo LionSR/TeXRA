@@ -1,8 +1,10 @@
 import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { MODEL_CONFIGS } from 'llm-zoo';
+import { useEffect, useState } from 'react';
 import stringWidth from 'string-width';
 
+import { isCodexSignedIn, shouldUseCodexSubscription } from '@auth/codex';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   defaultShortcutModifierLabel,
@@ -23,6 +25,7 @@ import {
   formatCompactDuration,
   formatCompactTokenCount,
 } from '@utils/core';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
@@ -90,6 +93,9 @@ export interface StatusBarDisplayInput {
   readonly hasMultipleStreams: boolean;
   readonly model: string;
   readonly apiMode: string;
+  /** True when the active model routes through the ChatGPT subscription; the
+   *  mode segment then reads "subscription" instead of the api-mode. */
+  readonly subscriptionActive?: boolean;
   readonly approvalPolicy?: CliApprovalPolicy;
   readonly shortcutModifierLabel?: string;
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
@@ -175,6 +181,7 @@ const STATUS_BAR_HORIZONTAL_PADDING = 2;
 const STATUS_BAR_MIN_RIGHT_PREVIEW = 12;
 // Preserve a readable separator between the left status group and right preview.
 const STATUS_BAR_RIGHT_PREVIEW_GAP = 2;
+const CODEX_SIGN_IN_REFRESH_MS = 10_000;
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
   activeProcess: 10,
@@ -696,7 +703,11 @@ export function buildStatusBarDisplay(
   const rootActive = rootActiveSegment(input);
   if (rootActive) left.push(rootActive);
 
-  left.push({ text: input.apiMode, color: 'dim' });
+  left.push(
+    input.subscriptionActive
+      ? { text: 'subscription', color: 'cyan', compactText: 'sub' }
+      : { text: input.apiMode, color: 'dim' },
+  );
   const policy = approvalPolicySegment(input.approvalPolicy);
   if (policy) left.push(policy);
 
@@ -816,6 +827,39 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     streams,
   });
   const statusSlice = target.displaySlice;
+  const subscriptionEligible = (() => {
+    const config = MODEL_CONFIGS[sessionMeta.model];
+    return config
+      ? shouldUseCodexSubscription(config, getUseOpenRouter())
+      : false;
+  })();
+  const [codexSignedIn, setCodexSignedIn] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refreshSignedIn = () => {
+      void isCodexSignedIn()
+        .then((signedIn) => {
+          if (!cancelled) setCodexSignedIn(signedIn);
+        })
+        .catch(() => {
+          if (!cancelled) setCodexSignedIn(false);
+        });
+    };
+    if (!subscriptionEligible) {
+      setCodexSignedIn(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    refreshSignedIn();
+    const refreshTimer = setInterval(refreshSignedIn, CODEX_SIGN_IN_REFRESH_MS);
+    refreshTimer.unref?.();
+    return () => {
+      cancelled = true;
+      clearInterval(refreshTimer);
+    };
+  }, [sessionMeta.model, subscriptionEligible]);
 
   const runStartedAt =
     statusSlice?.status === STREAM_STATUS.RUNNING
@@ -845,6 +889,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
+    subscriptionActive: subscriptionEligible && codexSignedIn,
     approvalPolicy: sessionMeta.approvalPolicy,
     shiftEnterNewline: caps.kittyKeyboard,
     transcriptAvailable: props.transcriptAvailable,
