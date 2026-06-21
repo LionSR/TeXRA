@@ -70,6 +70,19 @@ describe('codex JWT claim extraction', () => {
     });
   });
 
+  it('keeps a valid claim when a sibling claim is malformed', () => {
+    // A wrong-typed / garbage sibling must degrade to undefined on its own
+    // rather than dropping the whole payload (per-field tolerance).
+    const jwt = makeJwt({
+      chatgpt_account_id: 'acct-top',
+      organizations: 'garbage',
+      email: 123,
+    });
+    expect(extractCodexClaims(jwt, undefined)).toEqual({
+      accountId: 'acct-top',
+    });
+  });
+
   it('returns empty claims for malformed or missing tokens', () => {
     expect(extractCodexClaims(undefined, undefined)).toEqual({});
     expect(extractCodexClaims('not-a-jwt', undefined)).toEqual({});
