@@ -1526,6 +1526,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Text accumulated from `response.output_text.delta` events; surfaced as
     // partial text if the stream fails mid-flight.
     let streamedText = '';
+    // Each `output_item.done` carries one complete output item (message, tool
+    // call, or reasoning). Some backends (the Codex subscription endpoint) leave
+    // the completed response's `output` empty, so we keep the items to rebuild
+    // it below — otherwise the whole turn, tool calls included, is dropped.
+    const streamedItems: Response['output'] = [];
     try {
       const { stream: _stream, ...rest } = params;
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
@@ -1539,6 +1544,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         processor.process(event);
         if (event.type === 'response.output_text.delta') {
           streamedText += event.delta;
+        } else if (event.type === 'response.output_item.done') {
+          streamedItems.push(event.item);
         }
       }
 
@@ -1559,15 +1566,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       // Some backends (the ChatGPT-subscription Codex endpoint) stream the
-      // assistant text via `output_text.delta` but leave the completed
-      // response's `output` empty, so the message would otherwise be dropped
-      // (usage counted, no text). Recover it from the accumulated deltas. The
-      // guard keeps the standard OpenAI path (which populates `output`) intact.
-      const hasFinalText =
-        Boolean(response.output_text?.trim()) ||
-        (Array.isArray(response.output) && response.output.length > 0);
-      if (streamedText && !hasFinalText) {
-        (response as { output_text: string }).output_text = streamedText;
+      // output items (text, tool calls, reasoning) but leave the completed
+      // response's `output` empty, so the whole turn — function calls included —
+      // would otherwise be dropped (usage counted, nothing produced). Rebuild
+      // `output` from the streamed `output_item.done` events. The guard keeps
+      // the standard OpenAI path (which populates `output`) intact.
+      const hasFinalOutput =
+        Array.isArray(response.output) && response.output.length > 0;
+      if (!hasFinalOutput && streamedItems.length > 0) {
+        (response as { output: Response['output'] }).output = streamedItems;
       }
 
       processor.finalize(response);
