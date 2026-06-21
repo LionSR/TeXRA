@@ -9,6 +9,7 @@
 // Local imports
 import type {
   ToolDashboardItem,
+  ToolCommandKind,
   ToolInfo,
 } from '@shared/schemas/settingsViewMessages';
 import { findExternalToolDef } from '@tools/externalToolDefs';
@@ -18,6 +19,17 @@ import {
   type ExternalToolCheckResult,
 } from '@tools/toolAvailability';
 import { getDisabledToolIds } from '@utils/config/constants';
+
+export type ToolDashboardTerminalAction =
+  | {
+      readonly kind: 'terminal';
+      readonly name: string;
+      readonly command: string;
+    }
+  | {
+      readonly kind: 'none';
+      readonly reason: 'unknownTool' | 'missingCommand';
+    };
 
 // ============================================================
 // Tool description enrichment
@@ -173,4 +185,22 @@ export async function buildToolDashboardItems(
   }
 
   return [...builtinItems, ...externalItems];
+}
+
+export function buildToolDashboardTerminalAction(input: {
+  readonly toolId: string;
+  readonly commandKind: ToolCommandKind;
+}): ToolDashboardTerminalAction {
+  const def = findExternalToolDef(input.toolId);
+  if (!def) return { kind: 'none', reason: 'unknownTool' };
+
+  const command =
+    input.commandKind === 'install' ? def.installCommand : def.authCommand;
+  if (!command) return { kind: 'none', reason: 'missingCommand' };
+
+  return {
+    kind: 'terminal',
+    name: `TeXRA: ${def.name}`,
+    command,
+  };
 }
