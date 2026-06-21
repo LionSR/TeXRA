@@ -3,6 +3,12 @@ import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
 
+import {
+  MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES,
+  normalizeMainViewFileExtension,
+  planMainViewDroppedFileAttachments,
+  type MainViewAllowedDropExtensions,
+} from '@controllers/mainView/MainViewDroppedFilesController';
 import { ExtensionCategory, getIncludedExtensions } from '@common/files';
 import {
   FILE_SELECTION_COMMAND_IDS,
@@ -17,10 +23,7 @@ import {
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  MainViewInboundMessage,
-  MultipleDocumentFileType,
-} from '@shared/schemas';
+import type { MainViewInboundMessage } from '@shared/schemas';
 import {
   WorkspaceFS,
   parseLatexDiffMetadata,
@@ -79,15 +82,6 @@ type UpdateFilesMessage = MessageFor<
 
 const CHANNEL = 'FileManager';
 logger.initialize(CHANNEL);
-
-const ATTACHABLE_DROP_CATEGORIES = [
-  'input',
-  'context',
-  'media',
-] as const satisfies readonly MultipleDocumentFileType[];
-
-type AttachableDropCategory = (typeof ATTACHABLE_DROP_CATEGORIES)[number];
-type AllowedDropExtensions = Map<AttachableDropCategory, Set<string>>;
 
 type FileUpdateOptions = {
   notifyWhenEmpty?: boolean;
@@ -303,17 +297,15 @@ export class FileManager extends BaseWebviewManager {
   async handleAddOpenedFiles(fileType: string): Promise<void> {
     const openedFiles = await this.getOpenedFiles();
     const allowedExtensions = new Set(
-      getIncludedExtensions(fileType as ExtensionCategory).map((ext) =>
-        ext.replace('.', '').toLowerCase(),
+      getIncludedExtensions(fileType as ExtensionCategory).map(
+        normalizeMainViewFileExtension,
       ),
     );
 
     const filteredFiles =
       allowedExtensions.size > 0
         ? openedFiles.filter((file) =>
-            allowedExtensions.has(
-              path.extname(file).toLowerCase().replace('.', ''),
-            ),
+            allowedExtensions.has(normalizeMainViewFileExtension(file)),
           )
         : openedFiles;
 
@@ -328,33 +320,18 @@ export class FileManager extends BaseWebviewManager {
   async handleAttachDroppedFiles(
     message: AttachDroppedFilesMessage,
   ): Promise<void> {
-    const grouped = new Map<AttachableDropCategory, Set<string>>(
-      ATTACHABLE_DROP_CATEGORIES.map((category) => [category, new Set()]),
+    const paths = await Promise.all(
+      message.paths.map((rawPath) => this.resolveWorkspaceDropFile(rawPath)),
     );
-    const allowedExtensions = this.getAllowedDropExtensions();
-    let rejectedCount = 0;
+    const plan = planMainViewDroppedFileAttachments({
+      paths,
+      allowedExtensions: this.getAllowedDropExtensions(),
+      target: message.target ?? undefined,
+    });
 
-    for (const rawPath of message.paths) {
-      const filePath = await this.resolveWorkspaceDropFile(rawPath);
-      const category = filePath
-        ? this.resolveDroppedFileCategory(
-            filePath,
-            allowedExtensions,
-            message.target ?? undefined,
-          )
-        : null;
-      if (!filePath || !category) {
-        rejectedCount += 1;
-        continue;
-      }
-      grouped.get(category)?.add(filePath);
-    }
-
-    let attachedCount = 0;
-    for (const [fileType, files] of grouped) {
-      if (files.size === 0) continue;
-      const droppedFiles = [...files];
-      attachedCount += droppedFiles.length;
+    for (const fileType of MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES) {
+      const droppedFiles = plan.filesByCategory[fileType];
+      if (droppedFiles.length === 0) continue;
       this.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_OPENED_FILES,
         files: droppedFiles,
@@ -363,7 +340,7 @@ export class FileManager extends BaseWebviewManager {
       });
     }
 
-    this.showDroppedFilesResult(attachedCount, rejectedCount);
+    this.showDroppedFilesResult(plan.attachedCount, plan.rejectedCount);
   }
 
   handleUpdateFiles(message: UpdateFilesMessage): void {
@@ -498,72 +475,12 @@ export class FileManager extends BaseWebviewManager {
     }
   }
 
-  private resolveDroppedFileCategory(
-    filePath: string,
-    allowedExtensions: AllowedDropExtensions,
-    target?: MultipleDocumentFileType,
-  ): AttachableDropCategory | null {
-    if (target) {
-      return this.isAttachableDropCategory(target) &&
-        this.isExtensionAllowed(target, filePath, allowedExtensions)
-        ? target
-        : null;
-    }
-
-    const extension = this.normalizedExtension(filePath);
-    if (this.isExtensionAllowed('media', filePath, allowedExtensions)) {
-      return 'media';
-    }
-    if (
-      (extension === 'bib' ||
-        extension === 'bbl' ||
-        extension === 'cls' ||
-        extension === 'sty') &&
-      this.isExtensionAllowed('context', filePath, allowedExtensions)
-    ) {
-      return 'context';
-    }
-    if (this.isExtensionAllowed('input', filePath, allowedExtensions)) {
-      return 'input';
-    }
-    if (this.isExtensionAllowed('context', filePath, allowedExtensions)) {
-      return 'context';
-    }
-    return null;
-  }
-
-  private isAttachableDropCategory(
-    category: MultipleDocumentFileType,
-  ): category is AttachableDropCategory {
-    return (ATTACHABLE_DROP_CATEGORIES as readonly string[]).includes(category);
-  }
-
-  private isExtensionAllowed(
-    category: AttachableDropCategory,
-    filePath: string,
-    allowedExtensions: AllowedDropExtensions,
-  ): boolean {
-    const extension = this.normalizedExtension(filePath);
-    if (!extension) return false;
-    return allowedExtensions.get(category)?.has(extension) ?? false;
-  }
-
-  private getAllowedDropExtensions(): AllowedDropExtensions {
-    return new Map(
-      ATTACHABLE_DROP_CATEGORIES.map((category) => [
-        category,
-        new Set(
-          getIncludedExtensions(category).map((ext) =>
-            this.normalizedExtension(ext),
-          ),
-        ),
-      ]),
-    );
-  }
-
-  private normalizedExtension(filePath: string): string {
-    const extension = path.extname(filePath) || filePath;
-    return extension.trim().toLowerCase().replace(/^\./, '');
+  private getAllowedDropExtensions(): MainViewAllowedDropExtensions {
+    return {
+      input: getIncludedExtensions('input'),
+      context: getIncludedExtensions('context'),
+      media: getIncludedExtensions('media'),
+    };
   }
 
   private showDroppedFilesResult(
