@@ -171,6 +171,18 @@ describe('CLI context config defaults', () => {
     );
   });
 
+  it('accepts the CLI-only ChatGPT Codex preference key', async () => {
+    const workspace = await workspaceWithConfig(
+      JSON.stringify({
+        'texra.chatgptCodex.preferSubscription': true,
+      }),
+    );
+
+    const loaded = await loadWorkspaceCliConfig(workspace);
+
+    expect(loaded.warnings).toEqual([]);
+  });
+
   it('accepts prefixed command sections from unified workspace config', async () => {
     const workspace = await workspaceWithConfig(
       JSON.stringify({

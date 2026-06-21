@@ -143,8 +143,14 @@ const codexFetch = (async (input, init) => {
             ? (item as { role?: unknown }).role
             : undefined;
         if (role === 'system' || role === 'developer') {
-          const text = partsToText((item as { content?: unknown }).content);
-          if (text.trim()) instructions.push(text.trim());
+          const text = partsToText((item as { content?: unknown }).content)
+            .trim();
+          if (
+            text &&
+            !instructions.some((instruction) => instruction.includes(text))
+          ) {
+            instructions.push(text);
+          }
         } else {
           kept.push(item);
         }
