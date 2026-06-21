@@ -11,6 +11,22 @@ import { compactFormControlStyles } from './selectStyles';
  * `commonViewStyles` below interpolates this block to keep a single source
  * of truth for the selectors.
  */
+/**
+ * Header action button — `<wa-button class="header-action">` in view headers.
+ * Prevents the button from shrinking and pins its minimum hit area to the
+ * shared `--height-control` token. Both the main webview and the progress view
+ * root components share this pattern.
+ */
+export const headerActionStyles: CSSResult = css`
+  .header-action {
+    flex-shrink: 0;
+  }
+
+  .header-action::part(base) {
+    min-height: var(--height-control, 24px);
+  }
+`;
+
 export const compactIconActionButtonStyles: CSSResult = css`
   .action-icon-button {
     flex-shrink: 0;
@@ -231,6 +247,7 @@ export const commonViewStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
+  ${headerActionStyles}
   ${compactIconActionButtonStyles}
   ${busyIconButtonStyles}
   ${compactFormControlStyles}
