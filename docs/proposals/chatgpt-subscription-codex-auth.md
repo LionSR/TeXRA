@@ -210,5 +210,3 @@ this for shared/server deployments.
   [using Codex with your ChatGPT plan](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan),
   [Services Agreement](https://openai.com/policies/services-agreement/)
 - Third-party sign-in feature request: [openai/codex#10974](https://github.com/openai/codex/issues/10974)
-</content>
-</invoke>
