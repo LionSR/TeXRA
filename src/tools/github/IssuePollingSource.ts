@@ -152,47 +152,48 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     ]);
 
     if (issueRes.status === 200) {
-      // Non-throwing on purpose: a throw here would stall lastSuccessAt and
-      // risk the 24 h detach of a live subscription. Log + skip this tick;
-      // state.etags.issue and state.state are NOT advanced, so the next tick
-      // re-fetches and re-evaluates cleanly.
+      // Validate the issue payload non-throwingly. On failure, skip ONLY the
+      // issue-state check (don't advance state.etags.issue) and fall through to
+      // the independent comments fetch below — a malformed issue payload must
+      // not block comment delivery. Never throw: a throw would stall
+      // lastSuccessAt and risk the 24 h detach of a live subscription.
       const parsedIssue = GhIssueSchema.safeParse(issueRes.data);
-      if (!parsedIssue.success) {
+      if (parsedIssue.success) {
+        const issueData = parsedIssue.data;
+        state.etags.issue = issueRes.etag;
+        const newState = issueData.state;
+        // Issues, unlike PRs, can reopen after close — and that's a genuine
+        // signal a subscriber wants. So we keep polling on close: emit the
+        // close event but stay subscribed so a later reopen surfaces too.
+        // Slot release is via explicit unsubscribe or the 24 h unreachable
+        // failsafe. Bound by `maxConcurrent` (10).
+        if (
+          state.initialized &&
+          state.state === 'open' &&
+          newState === 'closed'
+        ) {
+          this.emit(
+            state,
+            formatIssueClosed(state.slug, issue.issueNumber, issueData),
+          );
+        }
+        if (
+          state.initialized &&
+          state.state === 'closed' &&
+          newState === 'open'
+        ) {
+          this.emit(
+            state,
+            formatIssueReopened(state.slug, issue.issueNumber, issueData),
+          );
+        }
+        state.state = newState;
+      } else {
         this.logger.warn(
-          `Skipping issue tick for ${state.slug}#${issue.issueNumber}: ` +
+          `Skipping issue-state check for ${state.slug}#${issue.issueNumber}: ` +
             `malformed issue payload: ${parsedIssue.error.message}`,
         );
-        return;
       }
-      const issueData = parsedIssue.data;
-      state.etags.issue = issueRes.etag;
-      const newState = issueData.state;
-      // Issues, unlike PRs, can reopen after close — and that's a genuine
-      // signal a subscriber wants. So we keep polling on close: emit the
-      // close event but stay subscribed so a later reopen surfaces too.
-      // Slot release is via explicit unsubscribe or the 24 h unreachable
-      // failsafe. Bound by `maxConcurrent` (10).
-      if (
-        state.initialized &&
-        state.state === 'open' &&
-        newState === 'closed'
-      ) {
-        this.emit(
-          state,
-          formatIssueClosed(state.slug, issue.issueNumber, issueData),
-        );
-      }
-      if (
-        state.initialized &&
-        state.state === 'closed' &&
-        newState === 'open'
-      ) {
-        this.emit(
-          state,
-          formatIssueReopened(state.slug, issue.issueNumber, issueData),
-        );
-      }
-      state.state = newState;
     }
 
     // Parse the comments array once; both the seeding and diff branches below
