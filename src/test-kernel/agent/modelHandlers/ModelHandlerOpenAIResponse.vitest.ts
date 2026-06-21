@@ -96,6 +96,25 @@ function createHandler(
   return handler;
 }
 
+class NonChainingResponseHandler extends ModelHandlerOpenAIResponse {
+  protected override get supportsResponseChaining(): boolean {
+    return false;
+  }
+
+  protected override get supportsInlineInputFileUpload(): boolean {
+    return false;
+  }
+}
+
+function createNonChainingHandler(
+  configOverrides: Partial<ModelConfig> = {},
+): ModelHandlerOpenAIResponse {
+  const handler = new NonChainingResponseHandler(createConfig(configOverrides));
+  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+  handler.getStreamingConfig = () => false;
+  return handler;
+}
+
 function createResponse(id: string, usage?: { input_tokens: number }) {
   return {
     id,
@@ -176,6 +195,79 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(requests[0].previous_response_id, undefined);
     assert.equal(requests[1].previous_response_id, undefined);
     assert.deepEqual(requests[1].input, secondTurnMessages);
+  });
+
+  it('sends full history when response chaining is unsupported', async () => {
+    const handler = createNonChainingHandler();
+    const requests: any[] = [];
+    const client = {
+      responses: {
+        create: async (params: any) => {
+          requests.push(params);
+          return createResponse(`resp-${requests.length}`, {
+            input_tokens: 20,
+          });
+        },
+      },
+    };
+    const firstTurnMessages = createMessages(2);
+    const secondTurnMessages = createMessages(3);
+
+    await handler.createResponse({
+      client: client as any,
+      messages: firstTurnMessages,
+      temperature: 0,
+    });
+    await handler.createResponse({
+      client: client as any,
+      messages: secondTurnMessages,
+      temperature: 0,
+    });
+
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].previous_response_id, undefined);
+    assert.deepEqual(requests[1].input, secondTurnMessages);
+  });
+
+  it('leaves inline input files in place when upload is unsupported', async () => {
+    const handler = createNonChainingHandler({ openRouterOnly: false });
+    const requests: any[] = [];
+    const client = {
+      files: {
+        create: () => {
+          throw new Error('files.create should not be called');
+        },
+      },
+      responses: {
+        inputTokens: {
+          count: async () => ({ input_tokens: 12 }),
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return createResponse('resp-inline-file', { input_tokens: 12 });
+        },
+      },
+    };
+    const fileMessage = {
+      type: 'message',
+      role: 'user',
+      content: [
+        {
+          type: 'input_file',
+          filename: 'paper.pdf',
+          file_data: 'data:application/pdf;base64,AA==',
+        },
+      ],
+    } as unknown as ResponseInputItem;
+
+    await handler.createResponse({
+      client: client as any,
+      messages: [fileMessage],
+      temperature: 0,
+    });
+
+    assert.equal(requests.length, 1);
+    assert.deepEqual(requests[0].input, [fileMessage]);
   });
 
   it('uses the preserved token baseline after an invalid previous response id clears chaining', async () => {

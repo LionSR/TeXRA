@@ -1,0 +1,71 @@
+/**
+ * Experimental "Sign in with ChatGPT" (Codex subscription) auth.
+ *
+ * Public surface for hosts (CLI/extension/desktop login commands), the Codex
+ * model handler, and the model-availability gate. Rides an UNOFFICIAL OpenAI
+ * endpoint + borrowed client id — opt-in, off by default, personal use only.
+ */
+export * from './codexConstants';
+export {
+  generateCodeVerifier,
+  computeCodeChallenge,
+  generatePkcePair,
+  generateOAuthState,
+  type PkcePair,
+} from './codexPkce';
+export {
+  decodeJwtPayload,
+  extractAccountId,
+  extractEmail,
+  extractCodexClaims,
+  type CodexJwtClaims,
+} from './codexJwt';
+export {
+  CodexAuthError,
+  CodexSessionSchema,
+  type CodexSession,
+  type CodexTokenResponse,
+  type CodexDeviceUserCode,
+  type CodexDeviceToken,
+  type CodexAuthErrorKind,
+} from './codexSessionTypes';
+export {
+  exchangeAuthorizationCode,
+  refreshTokens,
+  requestDeviceUserCode,
+  pollDeviceToken,
+  deviceUserCode,
+  deviceInterval,
+  codexDeviceRedirectUri,
+} from './codexOAuthClient';
+export {
+  CodexSessionCoordinator,
+  type CodexSessionCoordinatorInit,
+  type CodexSessionStorage,
+  type CodexOAuthClient,
+  type CodexSessionStatus,
+  type CodexAuthorizeRequest,
+  type CodexLogger,
+} from './CodexSessionCoordinator';
+export {
+  createCodexAuthCoordinator,
+  type CodexAuthCoordinatorInit,
+  type CodexSecretStore,
+} from './CodexAuthCoordinator';
+export {
+  codexCoordinator,
+  resetCodexCoordinator,
+  getCodexStatus,
+  isCodexSignedIn,
+} from './codexAuthAccess';
+export { isPreferCodexSubscription } from './codexPreference';
+export { shouldUseCodexSubscription } from './codexRouting';
+export {
+  loginWithLoopback,
+  type CodexLoopbackLoginOptions,
+} from './codexLoopbackLogin';
+export {
+  loginWithDeviceCode,
+  type CodexDeviceLoginOptions,
+  type CodexDevicePrompt,
+} from './codexDeviceLogin';

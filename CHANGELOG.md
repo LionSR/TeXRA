@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 
 - **More reliable Lean theorem search** — Loogle queries now retry automatically when the server times out, drops the connection, or returns a transient server error, so a brief hiccup no longer surfaces as a failed search; genuine bad requests still fail fast.
 
+### CLI
+
+#### Features
+
+- **Experimental: use your own ChatGPT subscription for Codex models** — sign in with your ChatGPT Plus/Pro/Team account from the terminal with `texra auth chatgpt login`, then turn on "chatgptCodex.preferSubscription" in your CLI config to route Codex models through your subscription instead of a separate API key. The command opens your browser or, on a headless shell, shows a one-time device code; check or end the session with `texra auth chatgpt status` and `logout`. Off by default and clearly marked experimental and personal-use: it relies on an unofficial OpenAI endpoint that can change or stop working without notice, and it only ever uses your own signed-in session.
+
 ## [0.38.9] - 2026-06-18
 
 ### Shared (all surfaces)
