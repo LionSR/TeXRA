@@ -63,12 +63,12 @@ _texra_agents() {
 
 _texra_workflow_agents() {
   [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
-  texra agents list --quiet --category workflow 2>/dev/null | awk '{print $2}'
+  texra agents list --quiet --all --category workflow 2>/dev/null | awk '{print $2}'
 }
 
 _texra_tool_use_agents() {
   [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
-  texra agents list --quiet --category toolUse 2>/dev/null | awk '{print $2}'
+  texra agents list --quiet --all --category toolUse 2>/dev/null | awk '{print $2}'
 }
 
 _texra_models() {
