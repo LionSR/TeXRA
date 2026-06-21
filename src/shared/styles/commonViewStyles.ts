@@ -3,15 +3,6 @@ import { css, type CSSResult } from 'lit';
 import { compactFormControlStyles } from './selectStyles';
 
 /**
- * Compact icon-only action button — stricter minimalism.
- * 20×20, no hover fill, opacity-driven hover/disabled.
- *
- * Exported as a focused subset so file-select/main-view components can pull
- * just the icon-button rules without inheriting the full common view sheet.
- * `commonViewStyles` below interpolates this block to keep a single source
- * of truth for the selectors.
- */
-/**
  * Header action button — `<wa-button class="header-action">` in view headers.
  * Prevents the button from shrinking and pins its minimum hit area to the
  * shared `--height-control` token. Both the main webview and the progress view
@@ -27,6 +18,15 @@ export const headerActionStyles: CSSResult = css`
   }
 `;
 
+/**
+ * Compact icon-only action button — stricter minimalism.
+ * 20×20, no hover fill, opacity-driven hover/disabled.
+ *
+ * Exported as a focused subset so file-select/main-view components can pull
+ * just the icon-button rules without inheriting the full common view sheet.
+ * `commonViewStyles` below interpolates this block to keep a single source
+ * of truth for the selectors.
+ */
 export const compactIconActionButtonStyles: CSSResult = css`
   .action-icon-button {
     flex-shrink: 0;
