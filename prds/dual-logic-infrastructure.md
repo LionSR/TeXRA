@@ -4,13 +4,13 @@
 
 Implementation complete (2026-01-30):
 
-| Item                    | Status         | Implementation                                                                                     |
-| ----------------------- | -------------- | -------------------------------------------------------------------------------------------------- |
-| File selection commands | ✅ Implemented | `@common/files/fileSelectionRegistry.ts` - shared command registry used by all consumers           |
-| Configuration access    | ✅ Implemented | `@utils/config` expanded with `isConfigExplicitlySet`; `authCommands.ts` migrated                  |
-| URI construction        | ✅ Implemented | `buildUri`/`buildUriRecord` changed to `protected`; all content providers use base class methods   |
-| File watchers           | ✅ Implemented | `AgentDirectoryManager.watchAgentDirectories` with subscription pattern, deferred promise for race |
-| Active-view tracking    | ✅ Implemented | `withActiveView`/`clearActiveView` in `BaseViewMessageHandler`; cleanup on dispose                 |
+| Item                    | Status         | Implementation                                                                                      |
+| ----------------------- | -------------- | --------------------------------------------------------------------------------------------------- |
+| File selection commands | ✅ Implemented | `@frontend/files/fileSelectionRegistry.ts` - extension command registry used by extension consumers |
+| Configuration access    | ✅ Implemented | `@utils/config` expanded with `isConfigExplicitlySet`; `authCommands.ts` migrated                   |
+| URI construction        | ✅ Implemented | `buildUri`/`buildUriRecord` changed to `protected`; all content providers use base class methods    |
+| File watchers           | ✅ Implemented | `AgentDirectoryManager.watchAgentDirectories` with subscription pattern, deferred promise for race  |
+| Active-view tracking    | ✅ Implemented | `withActiveView`/`clearActiveView` in `BaseViewMessageHandler`; cleanup on dispose                  |
 
 ## Overview
 
@@ -172,7 +172,7 @@ Do **not** consolidate typed dispatch functions.
 
 ### Phase 1a: Low-Risk Consolidations (Items 1, 2, 5) ✅ COMPLETE
 
-- [x] Shared file selection command registry - `@common/files/fileSelectionRegistry.ts`
+- [x] Extension file selection command registry - `@frontend/files/fileSelectionRegistry.ts`
 - [x] Expanded `@utils/config` with `isConfigExplicitlySet` inspection semantics
 - [x] Active-view tracking via `withActiveView`/`clearActiveView` in `BaseViewMessageHandler`
 
