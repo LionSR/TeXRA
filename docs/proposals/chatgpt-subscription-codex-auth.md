@@ -34,14 +34,14 @@ and must never be presented as an OpenAI-sanctioned integration.
 
 Both implementations were read directly from their repos. Key facts:
 
-| | OpenCode plugin | Zed |
-|---|---|---|
-| OAuth client id | `app_EMoamEEZ73f0CkXaXp7hrann` | `app_EMoamEEZ73f0CkXaXp7hrann` (identical) |
-| Authorize / token | `auth.openai.com/oauth/{authorize,token}` | same |
-| Redirect URI | `http://localhost:1455/auth/callback` | `localhost:1455`, fallback `1457` |
-| Backend base | `chatgpt.com/backend-api` → rewrites `/responses`→`/codex/responses` | `chatgpt.com/backend-api/codex` |
-| Headers | `Authorization: Bearer`, `chatgpt-account-id`, `originator: codex_cli_rs` | same, `originator: zed` |
-| Account id | decoded from JWT claim `https://api.openai.com/auth.chatgpt_account_id` | same (3 candidate claim locations) |
+|                   | OpenCode plugin                                                           | Zed                                        |
+| ----------------- | ------------------------------------------------------------------------- | ------------------------------------------ |
+| OAuth client id   | `app_EMoamEEZ73f0CkXaXp7hrann`                                            | `app_EMoamEEZ73f0CkXaXp7hrann` (identical) |
+| Authorize / token | `auth.openai.com/oauth/{authorize,token}`                                 | same                                       |
+| Redirect URI      | `http://localhost:1455/auth/callback`                                     | `localhost:1455`, fallback `1457`          |
+| Backend base      | `chatgpt.com/backend-api` → rewrites `/responses`→`/codex/responses`      | `chatgpt.com/backend-api/codex`            |
+| Headers           | `Authorization: Bearer`, `chatgpt-account-id`, `originator: codex_cli_rs` | same, `originator: zed`                    |
+| Account id        | decoded from JWT claim `https://api.openai.com/auth.chatgpt_account_id`   | same (3 candidate claim locations)         |
 
 Evidence (file:line):
 
@@ -57,7 +57,7 @@ Evidence (file:line):
 
 No — and the source says so. Both projects **borrow the Codex CLI's own OAuth
 client id** rather than registering their own, and Zed's comments describe being
-*constrained by* that client's registration:
+_constrained by_ that client's registration:
 
 > `openai_subscribed.rs:697` — "The OAuth client registered for `CLIENT_ID` (the
 > Codex CLI's client) only allows `…1455…` and `…1457…` as redirect URIs … Keep
@@ -113,7 +113,7 @@ Add a Codex OAuth coordinator alongside the existing Supabase coordinator. It do
   scopes `openid profile email offline_access`, `response_type=code`.
 - **Loopback callback server:** bind `127.0.0.1:1455` (fallback `1457`) to capture
   `code`, exchange at `auth.openai.com/oauth/token` for `{access_token,
-  refresh_token, id_token, expires_in}`.
+refresh_token, id_token, expires_in}`.
 - **Headless / remote (important for TeXRA CLI + web sessions):** also support the
   **device-code flow** (`auth.openai.com/codex/device`) so SSH/container/CLI users
   who can't open a loopback browser can still log in. This is the
@@ -144,9 +144,10 @@ one-file edit.
 ### 5. Platform / VS Code separation
 
 Per `CLAUDE.md`, `src/agent/`, `src/model/`, and `src/auth/` core stay VS Code-free.
+
 - The loopback server, browser-open, and keychain access go through existing host
   ports (`platform().secrets`, the opener host capability), not `vscode` imports.
-- The login *command* (button in Settings → Models) lives in
+- The login _command_ (button in Settings → Models) lives in
   `packages/extension/src/commands/auth/` and calls the host-neutral coordinator.
 
 ## UX
