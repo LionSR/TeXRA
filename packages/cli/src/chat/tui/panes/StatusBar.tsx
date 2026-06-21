@@ -1,11 +1,11 @@
 import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { MODEL_CONFIGS } from 'llm-zoo';
+import { useEffect, useState } from 'react';
 import stringWidth from 'string-width';
 
-import { shouldUseCodexSubscription } from '@auth/codex';
+import { isCodexSignedIn, shouldUseCodexSubscription } from '@auth/codex';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 import {
   defaultShortcutModifierLabel,
   metaChordLabel,
@@ -25,6 +25,7 @@ import {
   formatCompactDuration,
   formatCompactTokenCount,
 } from '@utils/core';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
@@ -825,6 +826,33 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     streams,
   });
   const statusSlice = target.displaySlice;
+  const subscriptionEligible = (() => {
+    const config = MODEL_CONFIGS[sessionMeta.model];
+    return config
+      ? shouldUseCodexSubscription(config, getUseOpenRouter())
+      : false;
+  })();
+  const [codexSignedIn, setCodexSignedIn] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!subscriptionEligible) {
+      setCodexSignedIn(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    void isCodexSignedIn()
+      .then((signedIn) => {
+        if (!cancelled) setCodexSignedIn(signedIn);
+      })
+      .catch(() => {
+        if (!cancelled) setCodexSignedIn(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionMeta.model, subscriptionEligible]);
 
   const runStartedAt =
     statusSlice?.status === STREAM_STATUS.RUNNING
@@ -854,12 +882,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
-    subscriptionActive: (() => {
-      const config = MODEL_CONFIGS[sessionMeta.model];
-      return config
-        ? shouldUseCodexSubscription(config, getUseOpenRouter())
-        : false;
-    })(),
+    subscriptionActive: subscriptionEligible && codexSignedIn,
     approvalPolicy: sessionMeta.approvalPolicy,
     shiftEnterNewline: caps.kittyKeyboard,
     transcriptAvailable: props.transcriptAvailable,
