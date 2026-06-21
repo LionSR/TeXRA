@@ -49,9 +49,12 @@ export type LeanLoogleInput = z.infer<typeof LeanLoogleInputSchema>;
 const LoogleHitSchema = z.looseObject({
   name: z.string(),
   type: z.string(),
-  module: z.string(),
-  // Loogle may omit or empty `doc`; formatHit already guards on truthiness.
-  doc: z.string().optional(),
+  module: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? ''),
+  // Loogle may omit, null, or empty `doc`; formatHit already guards on truthiness.
+  doc: z.string().nullish(),
 });
 type LoogleHit = z.infer<typeof LoogleHitSchema>;
 
@@ -63,7 +66,7 @@ const LoogleSuccessSchema = z.looseObject({
 
 const LoogleErrorSchema = z.looseObject({
   error: z.string(),
-  suggestions: z.array(z.string()).optional(),
+  suggestions: z.array(z.string()).nullish(),
 });
 
 // Not a discriminatedUnion: success/error bodies share no tagged key. Try the
