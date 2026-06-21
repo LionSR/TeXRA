@@ -10,6 +10,12 @@ const SUBSCRIPTION_ON = new Set(['on', 'enable', 'enabled', 'true', 'yes']);
 const SUBSCRIPTION_OFF = new Set(['off', 'disable', 'disabled', 'false', 'no']);
 const SUBSCRIPTION_USAGE = 'Usage: /subscription on | off';
 
+function parseSubscriptionToggle(normalized: string): boolean | undefined {
+  if (SUBSCRIPTION_ON.has(normalized)) return true;
+  if (SUBSCRIPTION_OFF.has(normalized)) return false;
+  return undefined;
+}
+
 /**
  * Toggle "prefer ChatGPT subscription" for Codex-eligible models. The
  * preference is orthogonal to the relay/personal api-mode (it only changes
@@ -34,10 +40,8 @@ export async function applyCliSubscriptionToggle(input: string): Promise<void> {
     return;
   }
 
-  let enabled: boolean;
-  if (SUBSCRIPTION_ON.has(normalized)) enabled = true;
-  else if (SUBSCRIPTION_OFF.has(normalized)) enabled = false;
-  else {
+  const enabled = parseSubscriptionToggle(normalized);
+  if (enabled === undefined) {
     appendLocalAssistantTranscript(SUBSCRIPTION_USAGE);
     return;
   }
