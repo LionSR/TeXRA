@@ -15,6 +15,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import { ModelHandler } from './ModelHandler';
 import type { ModelConfig } from 'llm-zoo';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type { CompletionUsage } from 'openai/resources/completions';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
@@ -26,11 +27,7 @@ import type { ToolResultPayload } from './utils/toolAttachmentUtils';
 
 interface ValidationResponse {
   text: string;
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
+  usage: CompletionUsage;
   stopReason: ProviderStopReason;
 }
 

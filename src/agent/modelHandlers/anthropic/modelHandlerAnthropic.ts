@@ -14,10 +14,7 @@ import {
   type AgentSetting,
   hasEndTag,
 } from '@agent/core/definition/AgentDataclass';
-import type {
-  AnthropicAPIResponseUsage,
-  AnthropicUsage,
-} from '@agent/core/usage/ResponseUsage';
+import type { AnthropicAPIResponseUsage } from '@agent/core/usage/ResponseUsage';
 import type {
   AgentWorkspaceState,
   ThinkingBlock,
@@ -130,6 +127,7 @@ import type {
   BetaRedactedThinkingBlock,
   BetaRequestDocumentBlock,
   BetaThinkingBlock,
+  BetaUsage,
   MessageCountTokensParams,
   MessageCreateParams,
 } from '@anthropic-ai/sdk/resources/beta/messages';
@@ -186,7 +184,7 @@ const INTERLEAVED_THINKING_BETA: AnthropicBeta =
 
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
-  AnthropicUsage,
+  BetaUsage,
   AnthropicAPIResponseUsage,
   AnthropicToolCall,
   Anthropic,
@@ -1114,15 +1112,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
-  computePrice(responseUsage: AnthropicUsage): number {
+  computePrice(responseUsage: BetaUsage): number {
     return computeAnthropicPrice(responseUsage, this.pricingConfig());
   }
 
   /** Normalizes Anthropic usage data into a unified format. */
-  normalizeUsage(
-    rawUsage: AnthropicUsage,
-    responseTimeMs: number,
-  ): NormalizedUsage {
+  normalizeUsage(rawUsage: BetaUsage, responseTimeMs: number): NormalizedUsage {
     return normalizeAnthropicUsage(
       rawUsage,
       responseTimeMs,
