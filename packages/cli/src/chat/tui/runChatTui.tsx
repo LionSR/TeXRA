@@ -80,17 +80,19 @@ import { generateExecutionId } from '@utils/core/executionId';
 
 import { App } from './App';
 import { assertNever } from './assertNever';
+import { handleTuiSlashCommand } from './commands/handleSlashCommand';
 import {
-  applyCliApiModeSelection,
   applyCliModelSelection,
   applyInitialCliAgentSelection,
-  CHAT_API_MODE_MODEL_RECOVERY,
   chatAgentSupportsDelegation,
   chatToolUseAgentUsageError,
-  handleTuiSlashCommand,
-  showCliMemoryPreview,
+} from './commands/handlers/agentModelCommands';
+import { applyCliApiModeSelection } from './commands/handlers/apiModeCommands';
+import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
+import {
+  CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
-} from './commands/handleSlashCommand';
+} from './commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
