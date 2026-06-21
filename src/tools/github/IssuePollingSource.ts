@@ -30,7 +30,13 @@ import {
   type BasePollSubscriptionState,
 } from './PollingSourceBase';
 import { emitGitHubSubscriptionChangedToHosts } from './subscriptionEventEmitter';
-import type { GhIssue, GhIssueComment } from './prTypes';
+import {
+  GhIssueCommentSchema,
+  GhIssueSchema,
+  type GhIssue,
+  type GhIssueComment,
+} from './prTypes';
+import { z } from 'zod';
 
 import type { Disposable } from '@platform/interfaces/disposable';
 
@@ -147,8 +153,21 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     ]);
 
     if (issueRes.status === 200) {
+      // Non-throwing on purpose: a throw here would stall lastSuccessAt and
+      // risk the 24 h detach of a live subscription. Log + skip this tick;
+      // state.etags.issue and state.state are NOT advanced, so the next tick
+      // re-fetches and re-evaluates cleanly.
+      const parsedIssue = GhIssueSchema.safeParse(issueRes.data);
+      if (!parsedIssue.success) {
+        this.logger.warn(
+          `Skipping issue tick for ${state.slug}#${issue.issueNumber}: ` +
+            `malformed issue payload: ${parsedIssue.error.message}`,
+        );
+        return;
+      }
+      const issueData = parsedIssue.data;
       state.etags.issue = issueRes.etag;
-      const newState = issueRes.data.state;
+      const newState = issueData.state;
       // Issues, unlike PRs, can reopen after close — and that's a genuine
       // signal a subscriber wants. So we keep polling on close: emit the
       // close event but stay subscribed so a later reopen surfaces too.
@@ -161,7 +180,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
       ) {
         this.emit(
           state,
-          formatIssueClosed(state.slug, issue.issueNumber, issueRes.data),
+          formatIssueClosed(state.slug, issue.issueNumber, issueData),
         );
       }
       if (
@@ -171,32 +190,52 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
       ) {
         this.emit(
           state,
-          formatIssueReopened(state.slug, issue.issueNumber, issueRes.data),
+          formatIssueReopened(state.slug, issue.issueNumber, issueData),
         );
       }
       state.state = newState;
     }
 
+    // Parse the comments array once; both the seeding and diff branches below
+    // consume `comments`. Non-throwing: on a malformed payload, log + skip this
+    // tick. state.etags.comments and state.sinceCursor are advanced only inside
+    // the guarded branches, so a skip re-fetches next tick (no If-None-Match)
+    // and lastSuccessAt still advances → no 24 h detach. A bad single element
+    // triggers a whole-array skip instead of a mid-loop TypeError throw.
+    let comments: GhIssueComment[] | undefined;
+    if (commentsRes.status === 200) {
+      const parsedComments = z
+        .array(GhIssueCommentSchema)
+        .safeParse(commentsRes.data);
+      if (!parsedComments.success) {
+        this.logger.warn(
+          `Skipping comments tick for ${state.slug}#${issue.issueNumber}: ` +
+            `malformed comments payload: ${parsedComments.error.message}`,
+        );
+        return;
+      }
+      comments = parsedComments.data;
+    }
+
     if (!state.initialized) {
-      if (commentsRes.status === 200) {
+      if (commentsRes.status === 200 && comments) {
         state.etags.comments = commentsRes.etag;
-        for (const c of commentsRes.data) state.seenCommentIds.add(c.id);
-        state.sinceCursor = getNewestTimestamp(commentsRes.data);
+        for (const c of comments) state.seenCommentIds.add(c.id);
+        state.sinceCursor = getNewestTimestamp(comments);
       }
       state.initialized = true;
       return;
     }
 
-    if (commentsRes.status === 200) {
+    if (commentsRes.status === 200 && comments) {
       state.etags.comments = commentsRes.etag;
-      for (const c of commentsRes.data) {
+      for (const c of comments) {
         if (state.seenCommentIds.has(c.id)) continue;
         state.seenCommentIds.add(c.id);
         if (shouldDropBotEvent(c.user)) continue;
         this.emit(state, formatIssueComment(state.slug, issue.issueNumber, c));
       }
-      state.sinceCursor =
-        getNewestTimestamp(commentsRes.data) ?? state.sinceCursor;
+      state.sinceCursor = getNewestTimestamp(comments) ?? state.sinceCursor;
       trimSet(state.seenCommentIds, MAX_SEEN_IDS);
     }
   }
