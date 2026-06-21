@@ -151,7 +151,7 @@ describe('OpenAI model handler routing', () => {
     requiresResponsesAPI: true,
   };
 
-  it('routes Codex-eligible OpenAI models to the Codex handler when the subscription switch is on', async () => {
+  it('keeps Codex-eligible subscription models on the Responses compatibility key', async () => {
     const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
       import('@platform/platform'),
       import('@test/support/FakePlatform'),
@@ -162,11 +162,9 @@ describe('OpenAI model handler routing', () => {
       }),
     );
 
-    // The switch is on and the model is Codex-eligible → subscription handler,
-    // ahead of the normal Responses path.
     expect(
       modelHandlerCompatibilityKey(codexEligibleConfig, false, false),
-    ).toBe('ModelHandlerCodex');
+    ).toBe('ModelHandlerOpenAIResponse');
     // The active OpenRouter proxy disables the subscription path entirely.
     expect(shouldUseResponsesAPI(codexEligibleConfig, true)).toBe(true);
   });
