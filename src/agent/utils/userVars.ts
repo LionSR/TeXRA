@@ -14,7 +14,7 @@ import { toErrorMessage } from '@common/errors';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
-import { filterNotNull, isNonEmptyString } from '@utils/core';
+import { filterNotNull, isNonEmptyString, unique } from '@utils/core';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import {
   getListOfFiles,
@@ -233,7 +233,7 @@ function getCategoryFiles(config: AgentConfig, category: string): string[] {
   if (!cat) return [];
   const list = (config[cat.multiple] as string[] | undefined) ?? [];
   const single = cat.single ? (config[cat.single] as string | null) : null;
-  return [...new Set([single, ...list].filter(isNonEmptyString))];
+  return unique([single, ...list].filter(isNonEmptyString));
 }
 
 /** Categories used for building file vars (excludes MEDIA which is display-only) */

@@ -13,7 +13,7 @@ import {
   type Goal,
   type GoalStatus,
 } from '@shared/schemas/goal';
-import { filterNotNull } from '@utils/core';
+import { filterNotNull, unique } from '@utils/core';
 import { hexId12 } from '@utils/core/executionId';
 
 const STREAM_KEY_PREFIX = 'goals:byStream:';
@@ -103,7 +103,7 @@ function readIndex(): StreamTabId[] {
   // dangling entry whose record no longer exists under either key.
   const current = parseIndex(state.get<unknown>(INDEX_KEY));
   const legacy = parseIndex(state.get<unknown>(LEGACY_INDEX_KEY));
-  return [...new Set([...current, ...legacy])];
+  return unique([...current, ...legacy]);
 }
 
 async function addToIndex(streamId: StreamTabId): Promise<void> {
@@ -323,7 +323,7 @@ export const GoalStore = {
     // Stream ids include the execution id as a final `#${executionId}` suffix.
     // ExecutionIdSchema permits only hex/dash characters, so `#` is a safe
     // delimiter rather than a character that can appear inside the id itself.
-    const suffixes = [...new Set(executionIds.map((id) => `#${id}`))];
+    const suffixes = unique(executionIds.map((id) => `#${id}`));
     const streamIds = readIndex().filter((streamId) =>
       suffixes.some((suffix) => streamId.endsWith(suffix)),
     );

@@ -9,6 +9,7 @@
  * conclusion is a one-line table edit.
  */
 
+import { unique } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
@@ -205,7 +206,7 @@ export function formatCIStarted(
   runs: GhCheckRun[],
   totalCount: number,
 ): string {
-  const uniqueNames = [...new Set(runs.map((r) => r.name))].sort();
+  const uniqueNames = unique(runs.map((r) => r.name)).sort();
   const shownNames = uniqueNames.slice(0, MAX_CI_STARTED_CHECK_NAMES);
   const remainingNames = uniqueNames.length - shownNames.length;
   const totalCheckLabel = totalCount === 1 ? 'check' : 'checks';
