@@ -24,8 +24,10 @@ Central home for all TeXRA Product Requirement Documents, plans, and design audi
 | [PRD: RunContext + ambient-state retirement](./2026-05-06-prd-runcontext-refactor.md)                                                    | 2026-05-06 | 2026-06-07 |
 | [PRD: TeXRA CLI Distribution (Homebrew + native binary)](./2026-06-07-prd-cli-distribution.md)                                           | 2026-06-07 | 2026-06-07 |
 | [25 · Attachments And File Mentions](./cli-tui-ink/25-attachments-and-mentions.md)                                                       | 2026-05-21 | 2026-05-21 |
+| [PRD: TeXRA CLI Ink-based TUI](./cli-tui-ink/README.md)                                                                                  | 2026-05-14 | 2026-05-21 |
 | [30 · Reference](./cli-tui-ink/30-reference.md)                                                                                          | 2026-05-14 | 2026-05-20 |
 | [PRD: Logger Surface Cleanup](./2026-05-17-logger-surface-cleanup.md)                                                                    | 2026-05-17 | 2026-05-17 |
+| [Mockups](./cli-tui-ink/mockups/README.md)                                                                                               | 2026-05-14 | 2026-05-15 |
 | [00 · Idle](./cli-tui-ink/mockups/00-idle.md)                                                                                            | 2026-05-14 | 2026-05-15 |
 | [01 · Streaming with tool use](./cli-tui-ink/mockups/01-streaming.md)                                                                    | 2026-05-14 | 2026-05-15 |
 | [02 · Multi-agent](./cli-tui-ink/mockups/02-multi-agent.md)                                                                              | 2026-05-14 | 2026-05-15 |
