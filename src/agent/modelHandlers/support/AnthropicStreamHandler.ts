@@ -22,7 +22,6 @@ import type {
   WebSearchToolResultBlock,
   WebSearchResultBlock,
   WebFetchToolResultBlock,
-  WebFetchBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 /**
@@ -391,27 +390,25 @@ export class AnthropicStreamHandler {
     // Parse URL from accumulated input JSON
     const fetchUrl = this.parseFetchUrl(fetchData?.input);
 
-    // Determine if fetch succeeded or failed
-    const isSuccess =
-      typeof block.content === 'object' &&
-      block.content !== null &&
-      block.content.type === 'web_fetch_result';
-
-    const result: WebFetchResult = isSuccess
-      ? {
-          url: (block.content as WebFetchBlock).url || fetchUrl,
-          title: (block.content as WebFetchBlock).content?.title ?? undefined,
-          provider: 'anthropic',
-          callId: block.tool_use_id,
-          status: 'completed',
-        }
-      : {
-          url: fetchUrl,
-          provider: 'anthropic',
-          callId: block.tool_use_id,
-          status: 'failed',
-          errorCode: (block.content as { error_code?: string }).error_code,
-        };
+    // Native discriminated-union narrowing on block.content
+    // (WebFetchBlock | WebFetchToolResultErrorBlock) replaces the prior
+    // structural casts.
+    const result: WebFetchResult =
+      block.content.type === 'web_fetch_result'
+        ? {
+            url: block.content.url || fetchUrl,
+            title: block.content.content?.title ?? undefined,
+            provider: 'anthropic',
+            callId: block.tool_use_id,
+            status: 'completed',
+          }
+        : {
+            url: fetchUrl,
+            provider: 'anthropic',
+            callId: block.tool_use_id,
+            status: 'failed',
+            errorCode: block.content.error_code,
+          };
 
     // Emit to progress view
     if (result.url || result.status === 'failed') {

@@ -74,6 +74,7 @@ import { toGoogleTools } from '../toolConversion';
 import type {
   Part,
   Content,
+  Candidate,
   GenerateContentResponse,
   FunctionCall,
   FunctionResponsePart,
@@ -511,9 +512,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const output = this.createOutputStream();
 
         let baseResponse: GenerateContentResponse | undefined;
-        let latestCandidate:
-          | NonNullable<GenerateContentResponse['candidates']>[number]
-          | undefined;
+        let latestCandidate: Candidate | undefined;
         const aggregatedParts: Part[] = [];
         let usageFromChunks: GenerateContentResponseUsageMetadata | undefined;
 
