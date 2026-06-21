@@ -228,12 +228,10 @@ export class AnthropicStreamHandler {
     switch (event.type) {
       case 'message_start':
         this.diagnostics.messageStartReceived = true;
-        this.diagnostics.anthropicMessageId =
-          (event.message as { id?: string })?.id ?? null;
+        this.diagnostics.anthropicMessageId = event.message.id;
         break;
       case 'message_delta':
-        this.diagnostics.stopReason =
-          (event.delta as { stop_reason?: string | null })?.stop_reason ?? null;
+        this.diagnostics.stopReason = event.delta.stop_reason;
         break;
       case 'message_stop':
         this.diagnostics.messageStopReceived = true;
