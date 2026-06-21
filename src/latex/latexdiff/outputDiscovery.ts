@@ -57,7 +57,12 @@ export async function collectTexFiles(
     const absPath = path.join(dir, name);
     // Skip symlinks — they are mirrored dependency copies placed by
     // ensureMirroredInRoundDir, not revised outputs.
-    if (await platform().fs.isSymlink(absPath).catch(() => false)) continue;
+    if (
+      await platform()
+        .fs.isSymlink(absPath)
+        .catch(() => false)
+    )
+      continue;
     if (isFile(type)) {
       if (hasExtension(name, '.tex')) {
         results.push(prefix ? `${prefix}/${name}` : name);
