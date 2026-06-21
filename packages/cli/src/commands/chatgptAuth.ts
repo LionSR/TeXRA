@@ -126,7 +126,10 @@ const chatgptLoginCommand = defineCliCommand({
   run: (context, ctx) =>
     runChatgptLogin(context, {
       device: ctx.args.device === true,
-      noBrowser: ctx.args.noBrowser === true,
+      noBrowser:
+        ctx.args['no-browser'] === true ||
+        ctx.args.noBrowser === true ||
+        ctx.args.browser === false,
     }),
 });
 
