@@ -9,9 +9,9 @@ import {
 const AGENTS_LIST_SOURCE =
   '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet 2>/dev/null | awk "{print \\$2}")';
 const WORKFLOW_AGENTS_LIST_SOURCE =
-  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --category workflow 2>/dev/null | awk "{print \\$2}")';
+  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --all --category workflow 2>/dev/null | awk "{print \\$2}")';
 const TOOL_USE_AGENTS_LIST_SOURCE =
-  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --category toolUse 2>/dev/null | awk "{print \\$2}")';
+  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --all --category toolUse 2>/dev/null | awk "{print \\$2}")';
 const MODELS_LIST_SOURCE =
   '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra models list --quiet 2>/dev/null | awk "{print \\$1}")';
 const TOP_LEVEL_RUN_CONDITION =
