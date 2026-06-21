@@ -102,4 +102,16 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
     assert.equal(handler.isBackgroundModeActive(), false);
     assert.equal(handler.getStreamingConfig(), true);
   });
+
+  it('reports Codex subscription usage without API-key spend', () => {
+    const handler = new ModelHandlerCodex(createOpenAIConfig('gpt-5'));
+
+    assert.equal(
+      handler.computePrice({
+        input_tokens: 10_000,
+        output_tokens: 10_000,
+      } as any),
+      0,
+    );
+  });
 });

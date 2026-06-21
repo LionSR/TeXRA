@@ -340,6 +340,7 @@ function toCliModelAccess(
 }
 
 function toIncludedLoginRequiredAccess(entry: CliModelAccess): CliModelAccess {
+  if (entry.model.availability === 'subscription-access') return entry;
   return {
     model: {
       ...entry.model,
