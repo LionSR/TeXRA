@@ -6,11 +6,11 @@ import { writeTextStderr } from '../runtime/logSinks';
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import {
   cliModelRecord,
-  findCliModelAccessEntry,
   formatCliModelDetails,
   getCliModelAccessList,
   formatNoListableModelsMessage,
   listableModelAccessEntries,
+  resolveCliModelAccessEntry,
   type CliModelListOptions,
 } from '../runtime/modelAccess';
 
@@ -81,7 +81,19 @@ async function showModel(context: CliContext, id: string): Promise<number> {
     return CliExitCode.ModelOrNetworkError;
   }
 
-  const entry = findCliModelAccessEntry(result.models, id);
+  let entry: Awaited<ReturnType<typeof resolveCliModelAccessEntry>>;
+  try {
+    entry = await suppressCliFetchStackLogs(() =>
+      resolveCliModelAccessEntry(id, {
+        apiMode: result.apiMode,
+        accessList: result.models,
+      }),
+    );
+  } catch (error) {
+    writeTextStderr(formatCliModelListError(error));
+    return CliExitCode.ModelOrNetworkError;
+  }
+
   if (!entry) {
     writeTextStderr(`Model not found: ${id}`);
     return CliExitCode.Usage;
