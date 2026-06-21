@@ -139,7 +139,7 @@ describe('formatResumeHint', () => {
         cwd: "/tmp/texra user's paper",
         processCwd: '/tmp/launcher',
       }),
-    ).toBe("texra-local resume root --cwd '/tmp/texra user'\\''s paper'");
+    ).toBe('texra-local resume root --cwd "/tmp/texra user\'s paper"');
   });
 
   it('omits cwd when the resume command is already printed from that workspace', () => {
@@ -171,7 +171,7 @@ describe('formatResumeHint', () => {
         approvalPolicy: 'never',
       }),
     ).toBe(
-      "texra-local resume root --cwd '/tmp/paper' --approval-policy never",
+      'texra-local resume root --cwd /tmp/paper --approval-policy never',
     );
   });
 
@@ -224,8 +224,8 @@ describe('formatResumeHint', () => {
     ).toBe(
       [
         'Resume this session with:',
-        "  texra-local resume root --cwd '/tmp/paper'  (main)",
-        "  texra-local resume rev --cwd '/tmp/paper'  (reviewer)",
+        '  texra-local resume root --cwd /tmp/paper  (main)',
+        '  texra-local resume rev --cwd /tmp/paper  (reviewer)',
       ].join('\n'),
     );
   });

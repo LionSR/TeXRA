@@ -1,4 +1,4 @@
-import { quotePosixShellArg as shellQuote } from '@utils/system/shellQuote';
+import { quote } from 'shell-quote';
 
 import {
   CLI_COMPLETION_SHELLS,
@@ -48,7 +48,7 @@ function fixedFlagValueCases(commands: readonly CompletionCommand[]): string {
   return [...cases.entries()]
     .map(
       ([flag, values]) =>
-        `${flag}) COMPREPLY=( $(compgen -W ${shellQuote(values.join(' '))} -- "$cur") ); return ;;`,
+        `${flag}) COMPREPLY=( $(compgen -W ${quote([values.join(' ')])} -- "$cur") ); return ;;`,
     )
     .join('\n    ');
 }
@@ -112,7 +112,7 @@ function commandCaseBlock(command: CompletionCommand): string {
   const key = commandKey(command.path);
   const commands = command.subcommands.join(' ');
   const flags = command.flags.flatMap(completionFlagTokens).join(' ');
-  return `${shellQuote(key)}) subcommands=${shellQuote(commands)}; flags=${shellQuote(flags)} ;;`;
+  return `${quote([key])}) subcommands=${quote([commands])}; flags=${quote([flags])} ;;`;
 }
 
 export function bashCompletion(commands: readonly CompletionCommand[]): string {

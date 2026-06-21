@@ -133,7 +133,7 @@ describe('CLI session status formatter', () => {
     });
 
     expect(status).toContain(
-      "resume later with: texra-local resume abc123 --cwd '/tmp/paper'",
+      'resume later with: texra-local resume abc123 --cwd /tmp/paper',
     );
   });
 
@@ -171,7 +171,7 @@ describe('CLI session status formatter', () => {
     });
 
     expect(status).toContain(
-      "resume later with: texra-local resume abc123 --cwd '/tmp/paper' --approval-policy never",
+      'resume later with: texra-local resume abc123 --cwd /tmp/paper --approval-policy never',
     );
   });
 
