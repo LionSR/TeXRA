@@ -53,6 +53,10 @@ import {
   type BasePollSubscriptionState,
 } from './PollingSourceBase';
 import {
+  GhIssueCommentArraySchema,
+  GhPullRequestSchema,
+  GhPullsListEntryArraySchema,
+  GhReviewCommentArraySchema,
   isDefiniteMergeableState,
   type GhIssueComment,
   type GhPullRequest,
@@ -219,6 +223,45 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       ghGet<GhPullsListEntry[]>(pullsPath),
     ]);
 
+    // Non-throwing 200-path validation. A parse failure MUST log + return (skip
+    // this tick), NEVER throw: pollEntry() resets lastSuccessAt on a normal
+    // return, but a throw routes to handleFailure, and a generic failure that
+    // persists past maxFailureDurationMs (24 h) DETACHES the live subscription.
+    // Skipping is safe because nothing is mutated yet — the `since` cursors and
+    // prStateByNumber/prUpdatedAtByNumber maps are untouched, comment dedup is
+    // by seen-id Sets, and PR transitions compare prev-vs-next — so the same
+    // window is re-evaluated idempotently next tick.
+    if (issueRes.status === 200) {
+      const parsed = GhIssueCommentArraySchema.safeParse(issueRes.data);
+      if (!parsed.success) {
+        this.logger.warn(
+          `Skipping ${owner}/${repo} tick: issue-comments payload failed validation: ${parsed.error.message}`,
+        );
+        return;
+      }
+      issueRes.data = parsed.data;
+    }
+    if (reviewRes.status === 200) {
+      const parsed = GhReviewCommentArraySchema.safeParse(reviewRes.data);
+      if (!parsed.success) {
+        this.logger.warn(
+          `Skipping ${owner}/${repo} tick: review-comments payload failed validation: ${parsed.error.message}`,
+        );
+        return;
+      }
+      reviewRes.data = parsed.data;
+    }
+    if (pullsRes.status === 200) {
+      const parsed = GhPullsListEntryArraySchema.safeParse(pullsRes.data);
+      if (!parsed.success) {
+        this.logger.warn(
+          `Skipping ${owner}/${repo} tick: pulls-list payload failed validation: ${parsed.error.message}`,
+        );
+        return;
+      }
+      pullsRes.data = parsed.data;
+    }
+
     // First tick seeds state but emits nothing — we don't want to replay
     // history when an orchestrator first attaches to a repo.
     if (!state.initialized) {
@@ -368,10 +411,22 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
         const path = `/repos/${state.owner}/${state.repo}/pulls/${pr.number}`;
         const res = await ghGet<GhPullRequest>(path);
         if (res.status !== 200) return undefined;
+        // Non-throwing: drop just this PR's probe (return undefined) instead of
+        // throwing. A throw would abort the whole pollOne tick and, if it
+        // persisted 24 h, detach the subscription. Dropping the probe leaves
+        // this PR's updated_at cursor un-advanced (it only advances after a
+        // definite reading below), so it is simply re-probed next tick.
+        const parsed = GhPullRequestSchema.safeParse(res.data);
+        if (!parsed.success) {
+          this.logger.warn(
+            `Skipping merge probe for ${state.owner}/${state.repo}#${pr.number}: payload failed validation: ${parsed.error.message}`,
+          );
+          return undefined;
+        }
         return {
           number: pr.number,
           updatedAt: pr.updated_at,
-          mergeable: res.data.mergeable_state,
+          mergeable: parsed.data.mergeable_state,
         };
       }),
     );
