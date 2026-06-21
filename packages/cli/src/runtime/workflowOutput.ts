@@ -96,12 +96,79 @@ function outputCopyRelativePath(output: OutputFileSummary): string {
   return getSafeDocumentRelativePath(withoutRoundDir.join('/'));
 }
 
+function outputCopyRelativePathForExpectedOutput(
+  output: OutputFileSummary,
+  expectedOutputFiles: readonly string[],
+): string {
+  const generatedRelativePath = outputCopyRelativePath(output);
+  if (expectedOutputFiles.length === 0) return generatedRelativePath;
+  const expectedRelativePaths = expectedOutputFiles.map((file) =>
+    getSafeDocumentRelativePath(file),
+  );
+
+  const normalizedGeneratedPath = generatedRelativePath.replaceAll('\\', '/');
+  const generatedName = path.posix.basename(normalizedGeneratedPath);
+  const normalizedOriginalPath = output.originalPath?.replaceAll('\\', '/');
+  const matchingExpectedPaths =
+    normalizedOriginalPath == null
+      ? []
+      : expectedRelativePaths.filter((expected) => {
+          const normalizedExpected = expected.replaceAll('\\', '/');
+          if (path.posix.basename(normalizedExpected) !== generatedName) {
+            return false;
+          }
+          return (
+            normalizedOriginalPath === normalizedExpected ||
+            normalizedOriginalPath.endsWith(`/${normalizedExpected}`)
+          );
+        });
+  return matchingExpectedPaths.length === 1
+    ? matchingExpectedPaths[0]
+    : generatedRelativePath;
+}
+
+function commonDirectory(paths: readonly string[]): string {
+  if (paths.length === 0) return '';
+  const root = path.parse(paths[0]!).root;
+  const [first, ...rest] = paths.map((file) =>
+    path.resolve(file).split(path.sep),
+  );
+  let sharedLength = first.length;
+  for (const parts of rest) {
+    sharedLength = Math.min(sharedLength, parts.length);
+    while (
+      sharedLength > 0 &&
+      first.slice(0, sharedLength).join(path.sep) !==
+        parts.slice(0, sharedLength).join(path.sep)
+    ) {
+      sharedLength -= 1;
+    }
+  }
+  return first.slice(0, Math.max(1, sharedLength)).join(path.sep) || root;
+}
+
+function expectedInputOutputFiles(
+  inputFiles: readonly string[],
+): readonly string[] {
+  const absoluteInputs = inputFiles
+    .filter((input) => path.isAbsolute(input))
+    .map((input) => path.resolve(input));
+  const absoluteRoot = commonDirectory(absoluteInputs.map(path.dirname));
+
+  return inputFiles.map((input) => {
+    if (!path.isAbsolute(input)) return getSafeDocumentRelativePath(input);
+    return getSafeDocumentRelativePath(path.relative(absoluteRoot, input));
+  });
+}
+
 export function expectedOutputFilesForOutputDir(
   agent: AgentEntry | undefined,
   inputFiles: readonly string[],
 ): readonly string[] {
   const defaultOutputFiles = (agent?.defaultOutputFiles ?? []).filter(Boolean);
-  return defaultOutputFiles.length > 0 ? defaultOutputFiles : inputFiles;
+  return defaultOutputFiles.length > 0
+    ? defaultOutputFiles
+    : expectedInputOutputFiles(inputFiles);
 }
 
 function shouldUseOutputForCopy(
@@ -165,9 +232,13 @@ export async function resolveWorkflowOutput(
       : undefined;
   if (outputDir && result.category === AgentCategory.Workflow) {
     const targetRoot = joinCwdRelative(outputDir, context.cwd);
+    const expectedOutputFiles = options.expectedOutputFiles ?? [];
     const outputsByRelativePath = new Map<string, OutputFileSummary>();
     for (const output of result.outputs) {
-      const relativePath = outputCopyRelativePath(output);
+      const relativePath = outputCopyRelativePathForExpectedOutput(
+        output,
+        expectedOutputFiles,
+      );
       if (
         shouldUseOutputForCopy(outputsByRelativePath.get(relativePath), output)
       ) {
@@ -183,7 +254,6 @@ export async function resolveWorkflowOutput(
       copiedOutputs.push(targetPath);
     }
 
-    const expectedOutputFiles = options.expectedOutputFiles ?? [];
     const missing = expectedOutputFiles
       .map((f) => getSafeDocumentRelativePath(f))
       .filter((expected) => !outputsByRelativePath.has(expected));
