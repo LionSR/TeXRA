@@ -10,13 +10,12 @@
  * yet wired Goal, or under tests), template lookups fall back to the
  * inline copy in `inlineTemplates` so the continuation loop still works.
  */
-import { readFile } from 'node:fs/promises';
-
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const GoalPromptsYamlSchema = z.object({
   continuation: z.object({ template: z.string().min(1) }),
@@ -83,7 +82,7 @@ async function loadPrompts(): Promise<GoalPrompts> {
     return cached;
   }
   try {
-    const content = await readFile(goalYamlPath, 'utf8');
+    const content = await AbsoluteFS.read(goalYamlPath);
     cached = GoalPromptsYamlSchema.parse(yaml.parse(content));
   } catch (err) {
     // Fall back to inline templates, but warn so a broken/missing bundled
