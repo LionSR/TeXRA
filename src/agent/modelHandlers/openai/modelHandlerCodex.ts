@@ -72,8 +72,14 @@ function isGenerationRequest(url: string): boolean {
  * Response JSON the SDK's non-streaming path expects. Returns the final
  * `response.completed` payload (falling back to the last response seen).
  */
-function sseToResponseJson(sse: string): unknown | null {
+export interface CodexSseCollapseResult {
+  body: unknown;
+  status: number;
+}
+
+export function sseToResponseJson(sse: string): CodexSseCollapseResult | null {
   let completed: unknown = null;
+  let failure: unknown = null;
   let last: unknown = null;
   for (const block of sse.split(/\r?\n\r?\n/)) {
     const payload = block
@@ -85,8 +91,16 @@ function sseToResponseJson(sse: string): unknown | null {
     try {
       const event = JSON.parse(payload) as {
         type?: string;
+        error?: unknown;
         response?: unknown;
       };
+      if (
+        event.type === 'response.failed' ||
+        event.type === 'response.incomplete' ||
+        event.type === 'error'
+      ) {
+        failure = event.response ?? event.error ?? event;
+      }
       if (event.response) {
         last = event.response;
         if (event.type === 'response.completed') completed = event.response;
@@ -95,7 +109,9 @@ function sseToResponseJson(sse: string): unknown | null {
       // Ignore non-JSON keepalive lines.
     }
   }
-  return completed ?? last;
+  const body = failure ?? completed ?? last;
+  if (body == null) return null;
+  return { body, status: failure == null ? 200 : 502 };
 }
 
 /**
@@ -181,8 +197,8 @@ const codexFetch = (async (input, init) => {
       headers: response.headers,
     });
   }
-  return new Response(JSON.stringify(json), {
-    status: 200,
+  return new Response(JSON.stringify(json.body), {
+    status: json.status,
     headers: { 'content-type': 'application/json' },
   });
 }) satisfies typeof fetch;

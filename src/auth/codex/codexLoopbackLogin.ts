@@ -107,6 +107,10 @@ export async function loginWithLoopback(
       reject(new Error(message));
     };
 
+    const ignoreCallback = (res: http.ServerResponse, statusCode = 400) => {
+      respondHtml(res, ERROR_HTML, statusCode);
+    };
+
     server.on('request', (req, res) => {
       try {
         const url = new URL(req.url ?? '', `http://127.0.0.1:${port}`);
@@ -115,21 +119,18 @@ export async function loginWithLoopback(
           res.end('Not found');
           return;
         }
+        if (url.searchParams.get('state') !== authorize.state) {
+          ignoreCallback(res);
+          return;
+        }
         const oauthError = url.searchParams.get('error');
         if (oauthError) {
           rejectCallback(res, `ChatGPT sign-in failed: ${oauthError}`);
           return;
         }
-        if (url.searchParams.get('state') !== authorize.state) {
-          rejectCallback(res, 'ChatGPT sign-in callback state did not match.');
-          return;
-        }
         const code = url.searchParams.get('code');
         if (!code) {
-          rejectCallback(
-            res,
-            'ChatGPT sign-in callback did not include an authorization code.',
-          );
+          ignoreCallback(res);
           return;
         }
         respondHtml(res, SUCCESS_HTML);
