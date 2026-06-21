@@ -2,9 +2,11 @@
  * Minimal subset of GitHub REST response shapes used by the PR poller.
  * Only the fields we consume are declared; extra fields are tolerated
  * (z.looseObject). The schemas are the single source of truth — the types are
- * derived via z.infer. Always-present-but-nullable fields use .nullable();
- * may-be-absent fields use .nullish() (GitHub both sends explicit null and omits
- * fields, and .optional() alone would reject null); `state` is a permissive transform,
+ * derived via z.infer. Fields that can be null use .nullable() (always present)
+ * or .nullish() (may also be absent) — GitHub sends explicit null and .optional()
+ * alone rejects null. The remaining .optional() fields (user `type`,
+ * `pull_request`, `blob_href`) are absent-only, never null. `state` is a
+ * permissive transform,
  * never a strict enum, so a novel value coerces instead of throwing on the
  * 200 path (a throw there would risk the pollers' 24h detach).
  */
@@ -22,7 +24,7 @@ export const GhIssueCommentSchema = z.looseObject({
   body: z.string().nullable(),
   user: GhUserSchema.nullable(),
   created_at: z.string(),
-  updated_at: z.string().optional(),
+  updated_at: z.string().nullish(),
   html_url: z.string(),
   /**
    * Canonical link to the parent issue (PRs are issues internally), e.g.
@@ -31,7 +33,7 @@ export const GhIssueCommentSchema = z.looseObject({
    * target number because `html_url` shape varies between issue and PR
    * comments depending on GitHub's redirect behavior.
    */
-  issue_url: z.string().optional(),
+  issue_url: z.string().nullish(),
 });
 export type GhIssueComment = z.infer<typeof GhIssueCommentSchema>;
 
@@ -45,7 +47,7 @@ export const GhReviewCommentSchema = z.looseObject({
   in_reply_to_id: z.number().nullish(),
   html_url: z.string(),
   created_at: z.string(),
-  updated_at: z.string().optional(),
+  updated_at: z.string().nullish(),
 });
 export type GhReviewComment = z.infer<typeof GhReviewCommentSchema>;
 
@@ -109,7 +111,7 @@ export const GhPullRequestSchema = z.looseObject({
     .string()
     .transform((s): 'open' | 'closed' => (s === 'closed' ? 'closed' : 'open')),
   merged: z.boolean(),
-  mergeable_state: z.string().optional(),
+  mergeable_state: z.string().nullish(),
   head: z.looseObject({ sha: z.string() }),
 });
 export type GhPullRequest = z.infer<typeof GhPullRequestSchema>;
@@ -122,8 +124,10 @@ export type GhPullRequest = z.infer<typeof GhPullRequestSchema>;
  * than two — recording `'unknown'` as the prior state would mask the
  * resolved-side transition.
  */
-export function isDefiniteMergeableState(s: string | undefined): s is string {
-  return s !== undefined && s !== 'unknown';
+export function isDefiniteMergeableState(
+  s: string | null | undefined,
+): s is string {
+  return s != null && s !== 'unknown';
 }
 
 /**
