@@ -1558,6 +1558,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
+      // Some backends (the ChatGPT-subscription Codex endpoint) stream the
+      // assistant text via `output_text.delta` but leave the completed
+      // response's `output` empty, so the message would otherwise be dropped
+      // (usage counted, no text). Recover it from the accumulated deltas. The
+      // guard keeps the standard OpenAI path (which populates `output`) intact.
+      const hasFinalText =
+        Boolean(response.output_text?.trim()) ||
+        (Array.isArray(response.output) && response.output.length > 0);
+      if (streamedText && !hasFinalText) {
+        (response as { output_text: string }).output_text = streamedText;
+      }
+
       processor.finalize(response);
 
       this.finalizeResponse(
