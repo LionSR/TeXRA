@@ -41,19 +41,14 @@ logger.initialize(CHANNEL);
 /** Flatten Responses message content (string or typed parts) to plain text. */
 function partsToText(content: unknown): string {
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((part) =>
-        part &&
-        typeof part === 'object' &&
-        typeof (part as { text?: unknown }).text === 'string'
-          ? (part as { text: string }).text
-          : '',
-      )
-      .filter(Boolean)
-      .join('\n');
-  }
-  return '';
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((part) => {
+      const text = (part as { text?: unknown } | null)?.text;
+      return typeof text === 'string' ? text : '';
+    })
+    .filter(Boolean)
+    .join('\n');
 }
 
 function requestUrl(input: RequestInfo | URL): string {
