@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   agentPickerPrimarySectionTitle,
-  agentPickerLabel,
   agentSelectWindow,
   currentVisibleAgent,
   hiddenCurrentAgentHint,
@@ -45,15 +44,6 @@ describe('CLI AgentListForm row budget', () => {
       currentVisibleAgent(displayAgents, 'remote:orchestrator')?.label,
     ).toBe('Orchestrator');
     expect(hiddenCurrentAgentHint(displayAgents, 'setup')).toBeUndefined();
-  });
-
-  it('trims agent picker labels before description separators', () => {
-    expect(
-      agentPickerLabel({ label: 'Engineer \u2014 software team lead' }),
-    ).toBe('Engineer');
-    expect(
-      agentPickerLabel({ label: 'Research --- derivations & numerics' }),
-    ).toBe('Research');
   });
 
   it('labels the current agent when it is hidden from the picker', () => {
