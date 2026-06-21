@@ -16,7 +16,6 @@ import {
 } from './CodexSessionCoordinator';
 
 const CHANNEL = 'codexAuth';
-logger.initialize(CHANNEL);
 
 let singleton: CodexSessionCoordinator | null = null;
 
