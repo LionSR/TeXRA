@@ -20,6 +20,8 @@ export const ModelSelectionEvents = {
 export const ChatGptAuthEvents = {
   signIn: () => createEvent('chatgpt-sign-in', {}),
   signOut: () => createEvent('chatgpt-sign-out', {}),
+  setPreferSubscription: (detail: { enabled: boolean }) =>
+    createEvent('chatgpt-prefer-subscription-set', detail),
 } as const;
 
 export const ProviderKeyEvents = {

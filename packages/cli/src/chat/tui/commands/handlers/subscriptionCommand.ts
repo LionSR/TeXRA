@@ -1,9 +1,7 @@
-import { platform } from '@platform/platform';
 import {
-  CODEX_PREFER_SUBSCRIPTION_KEY,
   getCodexStatus,
-  isCodexSignedIn,
   isPreferCodexSubscription,
+  setPreferCodexSubscription,
 } from '@auth/codex';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
@@ -44,23 +42,19 @@ export async function applyCliSubscriptionToggle(input: string): Promise<void> {
     return;
   }
 
-  await platform().config.update(
-    CODEX_PREFER_SUBSCRIPTION_KEY,
-    enabled,
-    'global',
-  );
+  const update = await setPreferCodexSubscription(enabled);
   invalidateModelOptionsCache();
-  // Prime the synchronous sign-in hint so routing reflects the change at once.
-  await isCodexSignedIn();
 
   const lines = [
-    `ChatGPT subscription ${enabled ? 'enabled' : 'disabled'} for Codex models.`,
+    update.effective === enabled
+      ? `ChatGPT subscription ${enabled ? 'enabled' : 'disabled'} for Codex models.`
+      : `ChatGPT subscription preference is still ${update.effective ? 'enabled' : 'disabled'} because a more specific setting overrides ${update.target} config.`,
   ];
-  if (enabled && !status.signedIn) {
+  if (enabled && update.effective && !status.signedIn) {
     lines.push(
       'You are not signed in with ChatGPT yet — run `texra auth chatgpt login` to use it.',
     );
-  } else if (enabled) {
+  } else if (enabled && update.effective) {
     lines.push(accountLine);
   }
   appendLocalAssistantTranscript(lines.join('\n'));
