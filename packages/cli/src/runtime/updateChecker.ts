@@ -3,6 +3,7 @@ import { constants as osConstants } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { gt as semverGt, valid as semverValid } from 'semver';
+import { z } from 'zod';
 
 import {
   cliEnvValue,
@@ -179,23 +180,39 @@ async function readCommandStdout(
   });
 }
 
+/**
+ * Shape of `brew info --json=v2` that we read. Tolerant by design: a single
+ * malformed formula entry degrades to `null` (skipped) rather than failing the
+ * whole parse, matching the previous per-entry type guards.
+ */
+const HomebrewInfoSchema = z.object({
+  formulae: z
+    .array(
+      z
+        .object({
+          name: z.string(),
+          versions: z.object({ stable: z.string().nullish() }).nullish(),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .nullish(),
+});
+
 function parseHomebrewFormulaVersion(
   stdout: string,
   formula = CLI_HOMEBREW_FORMULA,
 ): string | undefined {
+  let raw: unknown;
   try {
-    const body = JSON.parse(stdout) as { formulae?: unknown };
-    if (!Array.isArray(body.formulae)) return undefined;
-    const entry = body.formulae.find((candidate) => {
-      if (typeof candidate !== 'object' || candidate === null) return false;
-      return (candidate as { name?: unknown }).name === formula;
-    });
-    if (typeof entry !== 'object' || entry === null) return undefined;
-    const { versions } = entry as { versions?: { stable?: unknown } };
-    return typeof versions?.stable === 'string' ? versions.stable : undefined;
+    raw = JSON.parse(stdout);
   } catch {
     return undefined;
   }
+  const parsed = HomebrewInfoSchema.safeParse(raw);
+  if (!parsed.success) return undefined;
+  const entry = parsed.data.formulae?.find((f) => f?.name === formula);
+  return entry?.versions?.stable ?? undefined;
 }
 
 /**
