@@ -10,6 +10,7 @@
 // Third-party imports
 import axios from 'axios';
 import { StatusCodes } from 'http-status-codes';
+import { z } from 'zod';
 
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
@@ -27,14 +28,28 @@ export function getZoteroPort(): number {
   return getConfig<number>('texra.bib.zoteroPort', 23119);
 }
 
-/**
- * JSON-RPC response envelope.
- */
-interface JsonRpcResponse<T = unknown> {
-  jsonrpc: string;
-  id?: number;
-  result?: T;
-  error?: { code: number; message: string };
+// ============================================================================
+// Response schemas — Better BibTeX is an external network boundary, so its
+// JSON-RPC envelope and result shapes are the single source of truth here (the
+// types are derived via z.infer) and validated once in callBetterBibTeX. The
+// result schemas assert only the fields consumers read; z.object strips any
+// extra fields the API adds (it tolerates them rather than rejecting). Optional
+// fields use .nullish() (not .optional()) because the CSL-JSON BBT emits may send
+// an explicit null as well as omit a field — .optional() alone would reject null.
+// Consumers already guard every such field with truthiness / optional chaining.
+// ============================================================================
+
+/** JSON-RPC error object. */
+const JsonRpcErrorSchema = z.object({ code: z.number(), message: z.string() });
+
+/** JSON-RPC response envelope around a method's typed result. */
+function jsonRpcResponseSchema<T>(result: z.ZodType<T>) {
+  return z.object({
+    jsonrpc: z.string(),
+    id: z.number().nullish(),
+    result: result.optional(),
+    error: JsonRpcErrorSchema.optional(),
+  });
 }
 
 /**
@@ -43,130 +58,141 @@ interface JsonRpcResponse<T = unknown> {
  *
  * From BBT source: Zotero.Utilities.Item.itemToCSLJSON(item)
  */
-export interface CslCreator {
+const CslCreatorSchema = z.object({
   /** Family name (surname) in CSL format */
-  family?: string;
+  family: z.string().nullish(),
   /** Given name (first name) in CSL format */
-  given?: string;
+  given: z.string().nullish(),
   /** Institutional or single-field name */
-  literal?: string;
+  literal: z.string().nullish(),
   // Zotero native format (may appear in some responses)
-  lastName?: string;
-  firstName?: string;
-  name?: string;
-  creatorType?: string;
-}
+  lastName: z.string().nullish(),
+  firstName: z.string().nullish(),
+  name: z.string().nullish(),
+  creatorType: z.string().nullish(),
+});
+export type CslCreator = z.infer<typeof CslCreatorSchema>;
 
-/**
- * CSL JSON date format.
- */
-export interface CslDate {
+/** CSL JSON date format. */
+const CslDateSchema = z.object({
   /** Date parts as [[year, month?, day?]] */
-  'date-parts'?: number[][];
+  'date-parts': z.array(z.array(z.number())).nullish(),
   /** Raw date string */
-  raw?: string;
+  raw: z.string().nullish(),
   /** Literal date text */
-  literal?: string;
-}
+  literal: z.string().nullish(),
+});
+export type CslDate = z.infer<typeof CslDateSchema>;
 
-/**
- * Zotero collection metadata returned by `user.groups(true)`.
- */
-export interface BbtCollection {
-  key: string;
-  name: string;
-  parentCollection?: string | false;
-}
+/** Zotero collection metadata returned by `user.groups(true)`. */
+export const BbtCollectionSchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  parentCollection: z.union([z.string(), z.literal(false)]).nullish(),
+});
+export type BbtCollection = z.infer<typeof BbtCollectionSchema>;
 
-/**
- * Library (group) entry returned by `user.groups`.
- */
-export interface BbtLibrary {
-  id: number;
-  name: string;
-  collections?: BbtCollection[];
-}
+/** Library (group) entry returned by `user.groups`. */
+export const BbtLibrarySchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  collections: z.array(BbtCollectionSchema).nullish(),
+});
+export type BbtLibrary = z.infer<typeof BbtLibrarySchema>;
 
 /**
  * Collection with nested parent chain, returned by `item.collections(citekeys, true)`.
  * When `includeParents` is true, `parentCollection` is recursively expanded
  * into a full object instead of a key string.
+ *
+ * The type is self-referential, so the interface is kept and the recursive
+ * schema is annotated against it (z.lazy).
  */
 export interface BbtCollectionChain {
   key: string;
   name: string;
   parentCollection?: BbtCollectionChain | false;
 }
+export const BbtCollectionChainSchema: z.ZodType<BbtCollectionChain> = z.lazy(
+  () =>
+    z.object({
+      key: z.string(),
+      name: z.string(),
+      parentCollection: z
+        .union([BbtCollectionChainSchema, z.literal(false)])
+        .optional(),
+    }),
+);
 
 /**
  * CSL JSON item returned by Better BibTeX item.search.
  *
- * This is standard CSL JSON (from Zotero.Utilities.Item.itemToCSLJSON)
- * plus BBT-specific `library` and `citekey` fields.
- *
- * Reference: https://github.com/retorquere/zotero-better-bibtex/blob/master/content/json-rpc.ts
+ * This is standard CSL JSON (from Zotero.Utilities.Item.itemToCSLJSON) plus
+ * BBT-specific `library` and `citekey` fields. Reference:
+ * https://github.com/retorquere/zotero-better-bibtex/blob/master/content/json-rpc.ts
  */
-export interface BbtSearchResultItem {
+export const BbtSearchResultItemSchema = z.object({
   // ─── Better BibTeX additions ───────────────────────────────────────
   /** Citation key from Better BibTeX KeyManager */
-  citekey: string;
+  citekey: z.string(),
   /** Library name or fallback `library#${libraryID}` */
-  library: string;
+  library: z.string(),
 
   // ─── CSL JSON core fields ──────────────────────────────────────────
   /** Internal Zotero item ID (as URI or number) */
-  id?: string | number;
+  id: z.union([z.string(), z.number()]).nullish(),
   /** CSL item type (article-journal, book, chapter, etc.) */
-  type?: string;
+  type: z.string().nullish(),
   /** Item title */
-  title?: string;
+  title: z.string().nullish(),
   /** Authors */
-  author?: CslCreator[];
+  author: z.array(CslCreatorSchema).nullish(),
   /** Editors */
-  editor?: CslCreator[];
+  editor: z.array(CslCreatorSchema).nullish(),
   /** Publication/issue date */
-  issued?: CslDate;
+  issued: CslDateSchema.nullish(),
   /** Access date */
-  accessed?: CslDate;
+  accessed: CslDateSchema.nullish(),
 
   // ─── Zotero-style fields (legacy, may appear) ──────────────────────
-  itemType?: string;
-  creators?: CslCreator[];
-  date?: string;
+  itemType: z.string().nullish(),
+  creators: z.array(CslCreatorSchema).nullish(),
+  date: z.string().nullish(),
 
   // ─── Identifiers ───────────────────────────────────────────────────
-  DOI?: string;
-  ISBN?: string;
-  ISSN?: string;
-  PMID?: string;
-  PMCID?: string;
-  URL?: string;
+  DOI: z.string().nullish(),
+  ISBN: z.string().nullish(),
+  ISSN: z.string().nullish(),
+  PMID: z.string().nullish(),
+  PMCID: z.string().nullish(),
+  URL: z.string().nullish(),
 
   // ─── Publication info ──────────────────────────────────────────────
   /** Journal/book title */
-  'container-title'?: string;
+  'container-title': z.string().nullish(),
   /** Short container title */
-  'container-title-short'?: string;
+  'container-title-short': z.string().nullish(),
   /** Publisher name */
-  publisher?: string;
+  publisher: z.string().nullish(),
   /** Publisher location */
-  'publisher-place'?: string;
+  'publisher-place': z.string().nullish(),
   /** Volume number */
-  volume?: string;
+  volume: z.string().nullish(),
   /** Issue number */
-  issue?: string;
+  issue: z.string().nullish(),
   /** Page range */
-  page?: string;
+  page: z.string().nullish(),
   /** Number of pages */
-  'number-of-pages'?: string;
+  'number-of-pages': z.string().nullish(),
   /** Edition */
-  edition?: string;
+  edition: z.string().nullish(),
 
   // ─── Content ───────────────────────────────────────────────────────
-  abstract?: string;
-  note?: string;
-  language?: string;
-}
+  abstract: z.string().nullish(),
+  note: z.string().nullish(),
+  language: z.string().nullish(),
+});
+export type BbtSearchResultItem = z.infer<typeof BbtSearchResultItemSchema>;
 
 /**
  * Call Better BibTeX JSON-RPC endpoint.
@@ -174,59 +200,65 @@ export interface BbtSearchResultItem {
  * @param method - JSON-RPC method name (e.g., 'item.search', 'item.export')
  * @param params - Method parameters
  * @param port - Zotero Connector port (default: 23119)
+ * @param resultSchema - Zod schema for the method's `result`, validated at the boundary
  * @param timeout - Request timeout in milliseconds
- * @returns Promise resolving to the typed result
- * @throws ToolError if Zotero is not running or BBT is not installed
+ * @returns Promise resolving to the validated result
+ * @throws ToolError if Zotero is not running, BBT is not installed, or the response is malformed
  */
-export async function callBetterBibTeX<T = unknown>(
+export async function callBetterBibTeX<T>(
   method: string,
   params: unknown[],
   port: number,
+  resultSchema: z.ZodType<T>,
   timeout: number = ZOTERO_BBT_TIMEOUT_MS,
 ): Promise<T> {
   const url = `http://127.0.0.1:${port}/better-bibtex/json-rpc`;
 
-  try {
-    const response = await axios.post<JsonRpcResponse<T>>(
+  const response = await axios
+    .post<unknown>(
       url,
-      {
-        jsonrpc: '2.0',
-        method,
-        params,
-        id: 1,
-      },
-      {
-        timeout,
-        headers: { 'Content-Type': 'application/json' },
-      },
+      { jsonrpc: '2.0', method, params, id: 1 },
+      { timeout, headers: { 'Content-Type': 'application/json' } },
+    )
+    .catch((error: unknown) => {
+      if (axios.isAxiosError(error)) {
+        if (isTimeoutErrorCode(error.code)) {
+          throw new ToolError(
+            `Zotero API request timed out after ${timeout / 1000}s. ` +
+              `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
+          );
+        }
+        if (error.code === 'ECONNREFUSED') {
+          throw new ToolError(
+            `Zotero is not reachable on port ${port}. ` +
+              `Ask the user to start Zotero or verify the port (setting: texra.bib.zoteroPort).`,
+          );
+        }
+        if (error.response?.status === StatusCodes.NOT_FOUND) {
+          throw new ToolError(
+            'Better BibTeX plugin is not installed in Zotero. ' +
+              'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',
+          );
+        }
+      }
+      throw new ToolError(`Better BibTeX API error: ${toErrorMessage(error)}`);
+    });
+
+  const parsed = jsonRpcResponseSchema(resultSchema).safeParse(response.data);
+  if (!parsed.success) {
+    throw new ToolError(
+      `Better BibTeX returned an unexpected response for ${method}: ${parsed.error.message}`,
     );
-
-    if (response.data.error) {
-      throw new Error(response.data.error.message);
-    }
-
-    return response.data.result as T;
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      if (isTimeoutErrorCode(error.code)) {
-        throw new ToolError(
-          `Zotero API request timed out after ${timeout / 1000}s. ` +
-            `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
-        );
-      }
-      if (error.code === 'ECONNREFUSED') {
-        throw new ToolError(
-          `Zotero is not reachable on port ${port}. ` +
-            `Ask the user to start Zotero or verify the port (setting: texra.bib.zoteroPort).`,
-        );
-      }
-      if (error.response?.status === StatusCodes.NOT_FOUND) {
-        throw new ToolError(
-          'Better BibTeX plugin is not installed in Zotero. ' +
-            'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',
-        );
-      }
-    }
-    throw new ToolError(`Better BibTeX API error: ${toErrorMessage(error)}`);
   }
+  if (parsed.data.error) {
+    throw new ToolError(
+      `Better BibTeX API error: ${parsed.data.error.message}`,
+    );
+  }
+  if (parsed.data.result === undefined) {
+    throw new ToolError(
+      `Better BibTeX returned an empty response for ${method}.`,
+    );
+  }
+  return parsed.data.result;
 }

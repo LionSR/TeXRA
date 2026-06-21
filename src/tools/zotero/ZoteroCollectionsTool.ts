@@ -21,6 +21,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import {
   callBetterBibTeX,
   getZoteroPort,
+  BbtLibrarySchema,
   type BbtCollection,
   type BbtLibrary,
 } from './bbtClient';
@@ -161,10 +162,11 @@ export class ZoteroCollectionsTool extends defineTool({
   protected async execute({ query, library }: ZoteroCollectionsInput) {
     const port = getZoteroPort();
 
-    const libraries = await callBetterBibTeX<BbtLibrary[]>(
+    const libraries = await callBetterBibTeX(
       'user.groups',
       [true],
       port,
+      z.array(BbtLibrarySchema),
     );
 
     if (!Array.isArray(libraries) || libraries.length === 0) {

@@ -54,10 +54,11 @@ export class ZoteroExportTool extends defineTool({
       params.push(library);
     }
 
-    const result = await callBetterBibTeX<string>(
+    const result = await callBetterBibTeX(
       'item.export',
       params,
       port,
+      z.string(),
       ZOTERO_EXPORT_TIMEOUT_MS,
     );
 
