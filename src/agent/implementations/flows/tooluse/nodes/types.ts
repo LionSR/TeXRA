@@ -1,20 +1,28 @@
 import { z } from 'zod';
 
-import type { AgentRunStateSnapshot } from '@agent/core/execution/AgentState';
-import type {
-  AgentWorkspaceState,
-  AgentWorkspaceSnapshot,
+import {
+  AgentRunStateSnapshotSchema,
+  type AgentRunStateSnapshot,
+} from '@agent/core/execution/AgentState';
+import {
+  AgentWorkspaceStateSnapshotSchema,
+  type AgentWorkspaceState,
 } from '@agent/core/execution/AgentWorkspaceState';
-import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
+import {
+  UserVariableChannelsSchema,
+  type UserVariableChannels,
+} from '@agent/core/definition/AgentCycleOptions';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { FollowUpQueueBatchItem } from '@agent/toolUse/FollowUpQueue';
 import type { RetryErrorInfo } from '@shared/schemas';
 
-export interface StateSlicesSnapshot {
-  runStateSnapshot: AgentRunStateSnapshot;
-  workspaceSnapshot: AgentWorkspaceSnapshot;
-  userChannels: UserVariableChannels;
-}
+export const StateSlicesSchema = z.object({
+  runStateSnapshot: AgentRunStateSnapshotSchema,
+  workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
+  userChannels: UserVariableChannelsSchema,
+});
+
+export type StateSlicesSnapshot = z.infer<typeof StateSlicesSchema>;
 
 /** Extract edited file paths from a workspace state snapshot. */
 export function extractTouchedFiles(
