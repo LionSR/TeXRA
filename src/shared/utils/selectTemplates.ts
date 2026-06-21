@@ -10,6 +10,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { formatAgentOptionLabel } from './agentOptionLabels';
 import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
 
 /**
@@ -18,14 +19,6 @@ import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
  * and open Settings → Agents instead.
  */
 export const BROWSE_ALL_AGENTS_OPTION_VALUE = '__browse-all-agents__';
-
-const AGENT_LABEL_SEPARATOR_PATTERN =
-  /^(.*?)(?:\s*---\s*|\s*[\u2013\u2014]\s*)/u;
-
-export function formatAgentOptionLabel(label: string): string {
-  const shortLabel = label.match(AGENT_LABEL_SEPARATOR_PATTERN)?.[1]?.trim();
-  return shortLabel || label;
-}
 
 function buildAgentTooltip(opt: AgentOptionData, displayLabel: string): string {
   const { properties } = AGENT_DECORATORS;

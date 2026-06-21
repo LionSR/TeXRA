@@ -7,6 +7,7 @@ import { Spinner } from '@inkjs/ui';
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
+import { formatAgentOptionLabel } from '@shared/utils/agentOptionLabels';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
@@ -182,7 +183,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const primarySectionTitle = agentPickerPrimarySectionTitle(agents.toolUse);
   const items = agents.toolUse.map((agent) => ({
     value: agent.value,
-    label: agent.label,
+    label: formatAgentOptionLabel(agent.label),
     description: agentDescription(agent),
   }));
   // The current agent may be stored as a canonical key (`source:name`) or a
@@ -195,7 +196,8 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     props.currentAgent,
   );
   const workflowRows = agents.workflow.map((agent) => ({
-    name: agent.label,
+    value: agent.value,
+    name: formatAgentOptionLabel(agent.label),
     description: agentDescription(agent),
   }));
   const selectWindow = agentSelectWindow({
@@ -271,7 +273,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         <Box marginTop={1} flexDirection="column">
           <Text bold>Workflows</Text>
           {visibleWorkflowRows.map((workflow) => (
-            <Text key={workflow.name} wrap="truncate-end">
+            <Text key={workflow.value} wrap="truncate-end">
               {'  '}
               {workflow.name}
               <Text dimColor>{` — ${workflow.description}`}</Text>
