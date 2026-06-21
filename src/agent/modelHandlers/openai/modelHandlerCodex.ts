@@ -85,6 +85,9 @@ export function sseToResponseJson(sse: string): CodexSseCollapseResult | null {
   let completed: unknown = null;
   let failure: unknown = null;
   let last: unknown = null;
+  // The Codex backend streams text via `output_text.delta` but returns an empty
+  // `output` in `response.completed`, so accumulate the deltas to recover it.
+  let textDelta = '';
   for (const block of sse.split(/\r?\n\r?\n/)) {
     const payload = block
       .split(/\r?\n/)
@@ -97,6 +100,7 @@ export function sseToResponseJson(sse: string): CodexSseCollapseResult | null {
         type?: string;
         error?: unknown;
         response?: unknown;
+        delta?: unknown;
       };
       if (
         event.type === 'response.failed' ||
@@ -104,6 +108,12 @@ export function sseToResponseJson(sse: string): CodexSseCollapseResult | null {
         event.type === 'error'
       ) {
         failure = event.response ?? event.error ?? event;
+      }
+      if (
+        event.type === 'response.output_text.delta' &&
+        typeof event.delta === 'string'
+      ) {
+        textDelta += event.delta;
       }
       if (event.response) {
         last = event.response;
@@ -115,6 +125,15 @@ export function sseToResponseJson(sse: string): CodexSseCollapseResult | null {
   }
   const body = failure ?? completed ?? last;
   if (body == null) return null;
+  // When the completed response carries no text/output items, surface the
+  // accumulated streamed text through the SDK's `output_text` convenience field.
+  if (failure == null && textDelta && body && typeof body === 'object') {
+    const obj = body as { output_text?: unknown; output?: unknown };
+    const hasText =
+      (typeof obj.output_text === 'string' && obj.output_text.trim().length) ||
+      (Array.isArray(obj.output) && obj.output.length > 0);
+    if (!hasText) obj.output_text = textDelta;
+  }
   return { body, status: failure == null ? 200 : 502 };
 }
 
