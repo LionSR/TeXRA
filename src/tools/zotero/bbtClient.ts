@@ -44,7 +44,7 @@ const JsonRpcErrorSchema = z.object({ code: z.number(), message: z.string() });
 function jsonRpcResponseSchema<T>(result: z.ZodType<T>) {
   return z.object({
     jsonrpc: z.string(),
-    id: z.number().optional(),
+    id: z.number().nullish(),
     result: result.optional(),
     error: JsonRpcErrorSchema.optional(),
   });
