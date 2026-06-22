@@ -19,6 +19,7 @@ import {
   handleFollowUpClear,
   handleFollowUpPolish,
   handleFollowUpSend,
+  handleGettingStartedAction,
   handlePermissionAction,
   handleStreamDelete,
   handleStreamSwitch,
@@ -47,7 +48,7 @@ import { COMMON_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
 import { postMessage } from '@shared/hostBridge';
-import type { StreamTabId } from '@shared/schemas';
+import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
 import { Signal } from '@shared/signals';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import {
@@ -820,6 +821,12 @@ function wireConversation(): void {
   conversationView.addEventListener('compile-fixer-run', () =>
     runCompileFixer(ctx()),
   );
+  conversationView.addEventListener('getting-started-action', ((
+    e: CustomEvent,
+  ) =>
+    handleGettingStartedAction(
+      e.detail.action as GettingStartedAction,
+    )) as EventListener);
   conversationView.addEventListener('followup-request-options', () =>
     handleFollowupRequestOptions(ctx()),
   );

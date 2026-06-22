@@ -74,6 +74,7 @@ import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { getConfig } from '@utils/config/configUtils';
 
+import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 import {
   createDesktopToolEditApprovalController,
@@ -602,6 +603,24 @@ export class DesktopProgressBridge {
     });
     return {
       ...sharedHandlers,
+      // Getting-started actions from the progress empty-state. openWalkthrough
+      // has a desktop equivalent; the remaining four actions are VS Code-only.
+      [PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (data) => {
+        if (data.action === 'openWalkthrough') {
+          this.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
+          return;
+        }
+        const labels: Record<typeof data.action, string> = {
+          runSetup: 'Run setup assistant',
+          createSampleProject: 'Create sample project',
+          cloneOverleaf: 'Import from Overleaf',
+          downloadArxiv: 'Import from arXiv',
+          openWalkthrough: 'Open walkthrough',
+        };
+        await this.options.showInfoMessage?.(
+          `"${labels[data.action]}" requires the VS Code extension.`,
+        );
+      },
       // External inquiry rides outside the shared registry (as in the
       // extension's ProgressViewMessageHandler): draft persists the open
       // turn, submit/drop settle the durable thread.
