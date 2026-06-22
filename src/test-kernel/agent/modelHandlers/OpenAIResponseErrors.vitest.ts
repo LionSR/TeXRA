@@ -11,7 +11,10 @@ import {
 } from '@agent/modelHandlers/openai/openAIResponseErrors';
 
 // Local imports - common errors
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import {
+  formatProviderHttpError,
+  normalizeProviderError,
+} from '@common/errors/sdkErrorUtils';
 
 describe('OpenAI Responses error normalization', () => {
   it('normalizes provider errors at the OpenAI Responses boundary', () => {
@@ -77,6 +80,11 @@ describe('OpenAI Responses error normalization', () => {
     expect(providerError.requestId).toBe('req_poll');
     expect(providerError.userRetryable).toBe(true);
     expect(providerError.message).toContain('resp_123');
+
+    const normalized = normalizeProviderError(wrapped);
+    expect(normalized.statusCode).toBeUndefined();
+    expect(normalized.requestId).toBe('req_poll');
+    expect(normalized.userRetryable).toBe(true);
   });
 
   it('keeps terminal background statuses retryable without HTTP metadata', () => {

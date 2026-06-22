@@ -1115,7 +1115,7 @@
             "description": "A credential is the one step no agent can do for you. Three ways in:\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Sign in with Researcher Access** — Free for academics; no API key needed. Signing in also unlocks remote agents, including the orchestrator.\n\n[Sign In](command:texra.auth.signIn)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
-              "altText": "Screenshot of the model credential configuration view"
+              "altText": "Screenshot of the API key configuration view"
             },
             "completionEvents": [
               "onCommand:texra.auth.signIn",
@@ -1705,8 +1705,8 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.177",
-    "@anthropic-ai/sdk": "^0.104.2",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.185",
+    "@anthropic-ai/sdk": "^0.105.0",
     "@awesome.me/webawesome": "^3.9.0",
     "@cantoo/pdf-lib": "^2.7.1",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
@@ -1747,7 +1747,7 @@
     "mime-types": "^3.0.1",
     "minimatch": "^10.2.5",
     "mutative": "^1.3.0",
-    "nanoid": "^5.1.14",
+    "nanoid": "^5.1.15",
     "node-pandoc": "^0.3.0",
     "openai": "^6.44.0",
     "p-map": "^7.0.4",

@@ -106,6 +106,8 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
       proposal: new AgentProposalCoordinator(explicit.host),
       retry: new RetryRequestCoordinatorImpl(explicit.host),
     },
+    getActiveChildren: () => ({ subagents: [], processes: [] }),
+    waitForRetry: vi.fn(),
   };
   return { ctx, streamStatus };
 }

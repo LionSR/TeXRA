@@ -209,6 +209,8 @@ describe('BashTool', () => {
       executionId: 'test-execution-id',
       run,
       workspace: workspaceState,
+      getActiveChildren: () => ({ subagents: [], processes: [] }),
+      waitForRetry: vi.fn(),
     };
 
     const messages: ProviderMessage[] = [];
@@ -335,6 +337,8 @@ describe('BashTool', () => {
       executionId: 'test-execution-id',
       run,
       workspace: workspaceState,
+      getActiveChildren: () => ({ subagents: [], processes: [] }),
+      waitForRetry: vi.fn(),
     };
 
     const call = {

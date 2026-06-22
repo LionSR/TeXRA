@@ -21,6 +21,7 @@ import { PersistedState } from '@shared/state';
 // Local imports - shared schemas
 import {
   AgentCategoryFilterSchema,
+  type GettingStartedActionDetail,
   type ProgressViewOutboundMessage,
   type StreamTabId,
 } from '@shared/schemas';
@@ -70,6 +71,7 @@ import {
   handleFollowUpClear,
   handleFollowUpPolish,
   handleFollowUpSend,
+  handleGettingStartedAction,
   handlePermissionAction,
   handleStreamDelete,
   handleStreamSwitch,
@@ -246,6 +248,7 @@ export class ProgressApp extends ProgressAppBase {
                     @permission-action=${this.onPermissionAction}
                     @file-action=${this.onFileAction}
                     @compile-fixer-run=${this.onCompileFixerRun}
+                    @getting-started-action=${this.onGettingStartedAction}
                     @followup-request-options=${this.onFollowupRequestOptions}
                     @followup-setup=${this.onFollowupSetup}
                     @followup-run=${this.onFollowupRun}
@@ -484,6 +487,10 @@ export class ProgressApp extends ProgressAppBase {
 
   private onCompileFixerRun = (): void =>
     runCompileFixer(this.getEventHandlerContext());
+
+  private onGettingStartedAction = (
+    e: CustomEvent<GettingStartedActionDetail>,
+  ): void => handleGettingStartedAction(e.detail.action);
 
   private onFollowupRequestOptions = (): void =>
     handleFollowupRequestOptions(this.getEventHandlerContext());
