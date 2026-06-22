@@ -18,8 +18,8 @@ import { MainViewEvents } from '../events';
 
 /**
  * State 0 welcome card (PRD: agent-native onboarding) — a port of the CLI
- * first-run picker, not a new design: sign-in recommended first, provider
- * ChatGPT/API key alternatives, and a quiet "Skip for now" link last.
+ * first-run picker, not a new design: ChatGPT subscription first, Researcher
+ * Access/API-key alternatives, and a quiet "Skip for now" link last.
  * Stateless: renders the
  * shared onboarding copy verbatim and emits `welcome-sign-in` /
  * `welcome-chatgpt` / `welcome-api-key` / setup navigation events; the host
@@ -172,7 +172,7 @@ export class OnboardingWelcomeCard extends LitElement {
               ${waIcon('right-to-bracket')} 1. Connect
             </span>
             <p class="path-step__copy">
-              Researcher Access, ChatGPT subscription, or a provider API key.
+              ChatGPT subscription, Researcher Access, or a provider API key.
             </p>
           </div>
           <div class="path-step">
@@ -193,27 +193,27 @@ export class OnboardingWelcomeCard extends LitElement {
         <div class="choices">
           <div class="choice">
             <wa-button
-              id="onboardingSignInButton"
+              id="onboardingChatGptButton"
               variant="brand"
               appearance="filled"
-              @click=${this.handleSignIn}
-            >
-              ${waIcon('right-to-bracket')} ${ONBOARDING_CHOICE_SIGN_IN.label}
-            </wa-button>
-            <span class="choice-description">
-              ${ONBOARDING_CHOICE_SIGN_IN.description}
-            </span>
-          </div>
-          <div class="choice">
-            <wa-button
-              id="onboardingChatGptButton"
-              appearance="outlined"
               @click=${this.handleChatGpt}
             >
               ${waIcon('comment-discussion')} ${ONBOARDING_CHOICE_CHATGPT.label}
             </wa-button>
             <span class="choice-description">
               ${ONBOARDING_CHOICE_CHATGPT.description}
+            </span>
+          </div>
+          <div class="choice">
+            <wa-button
+              id="onboardingSignInButton"
+              appearance="outlined"
+              @click=${this.handleSignIn}
+            >
+              ${waIcon('right-to-bracket')} ${ONBOARDING_CHOICE_SIGN_IN.label}
+            </wa-button>
+            <span class="choice-description">
+              ${ONBOARDING_CHOICE_SIGN_IN.description}
             </span>
           </div>
           <div class="choice">

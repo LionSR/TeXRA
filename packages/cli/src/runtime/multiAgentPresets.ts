@@ -76,12 +76,12 @@ export const MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION =
 const MULTI_AGENT_INSPECT_HINT =
   'Hint: run `texra multi-agent inspect <team-id>` to see missing agents for degraded or unavailable presets.';
 const MULTI_AGENT_LOGIN_HINT =
-  'Hint: built-in teams may load additional relay-served agents after `texra login`.';
+  'Hint: Researcher Access sign-in may load additional remote team agents.';
 export const MULTI_AGENT_NO_TEAM_ROOT_REASON = 'no runnable team root';
 const MULTI_AGENT_LAUNCHER_INSPECT_HINT =
   'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.';
 const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
-  'Relay teams may unlock more agents after texra login.';
+  'Researcher Access sign-in may unlock more remote team agents.';
 const MULTI_AGENT_LAUNCHER_NO_TEAM_ROOT_REASON = 'no team root';
 
 export function formatCliMultiAgentInspectCommand(preset: string): string {

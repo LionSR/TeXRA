@@ -614,11 +614,11 @@ async function validateOrchestrateOnboardingPickers() {
     env: {},
     expected: [
       'Not signed in, and no provider API key is configured. Choose how to power model calls:',
-      'Sign in — free for academics',
       'Use ChatGPT subscription',
+      'Sign in with Researcher Access',
       'Use your own provider API key',
-      'Researcher Access: no API key needed (recommended)',
-      'Codex models through your ChatGPT plan',
+      'Codex models through ChatGPT Plus, Pro, or Team',
+      'Free for academics; no API key needed',
       'Anthropic, OpenAI, Google, and more',
     ],
     forbidden: truncatedOnboardingLabels,
@@ -628,11 +628,11 @@ async function validateOrchestrateOnboardingPickers() {
     args: ['orchestrate', '--api-mode', 'included'],
     env: { ANTHROPIC_API_KEY: 'texra-validation-fake-key' },
     expected: [
-      'Included relay or subscription access needs sign-in for this run:',
-      'Sign in — free for academics',
+      'Subscription or included access needs sign-in for this run:',
       'Use ChatGPT subscription',
-      'Researcher Access: no API key needed (recommended)',
-      'Codex models through your ChatGPT plan',
+      'Sign in with Researcher Access',
+      'Codex models through ChatGPT Plus, Pro, or Team',
+      'Free for academics; no API key needed',
     ],
     forbidden: [
       'Use your own provider API key',
@@ -648,14 +648,10 @@ async function validateOrchestrateOnboardingPickers() {
       'Personal mode needs ChatGPT sign-in or a provider key for this run:',
       'Use ChatGPT subscription',
       'Use your own provider API key',
-      'Codex models through your ChatGPT plan',
+      'Codex models through ChatGPT Plus, Pro, or Team',
       'Anthropic, OpenAI, Google, and more',
     ],
-    forbidden: [
-      'Sign in — free for academics',
-      'Researcher Access: no API key needed',
-      ...truncatedOnboardingLabels,
-    ],
+    forbidden: ['Sign in with Researcher Access', ...truncatedOnboardingLabels],
   });
 }
 

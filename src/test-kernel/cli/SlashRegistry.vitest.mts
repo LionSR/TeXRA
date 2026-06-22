@@ -18,6 +18,7 @@ import {
   openCliSlashCommandForm,
   openRegisteredCliSlashForm,
 } from '@cli/chat/tui/commands/slashForms';
+import { LOGIN_FORM_ITEMS } from '@cli/chat/tui/forms/LoginForm';
 import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
@@ -147,6 +148,15 @@ describe('slashRegistry', () => {
         description: 'Request context compaction',
       }),
     );
+  });
+
+  it('keeps ChatGPT subscription first in the login picker', () => {
+    expect(LOGIN_FORM_ITEMS.map((item) => item.value)).toEqual([
+      'chatgpt',
+      'texra',
+      'chatgpt --device',
+      'texra --device',
+    ]);
   });
 
   it('opens registered structured forms through the shared form opener', () => {

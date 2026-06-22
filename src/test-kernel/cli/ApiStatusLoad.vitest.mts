@@ -37,7 +37,7 @@ describe('loadCliApiStatusLines', () => {
     ).resolves.toEqual([
       'api: included relay',
       'auth: signed out',
-      'actions: `texra login` enables included relay; `--api-mode personal` uses provider keys',
+      'actions: `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
     ]);
     expect(mocks.getCliApiMode).not.toHaveBeenCalled();
   });
