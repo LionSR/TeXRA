@@ -25,10 +25,6 @@ export class GettingStartedBanner extends LitElement {
     commonViewStyles,
     bannerStyles,
     css`
-      wa-callout.getting-started-banner a {
-        text-decoration: none;
-      }
-
       .getting-started-row {
         display: flex;
         align-items: flex-start;
@@ -64,35 +60,6 @@ export class GettingStartedBanner extends LitElement {
         display: flex;
         flex-wrap: wrap;
         gap: var(--wa-space-3xs);
-      }
-
-      .action-link {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: var(--wa-space-3xs);
-        min-height: 24px;
-        max-width: 100%;
-        padding: 2px var(--wa-space-xs);
-        border: 1px solid var(--vscode-button-border, transparent);
-        border-radius: var(--wa-border-radius-s, 4px);
-        background: var(--vscode-button-secondaryBackground);
-        color: var(--vscode-button-secondaryForeground);
-        line-height: var(--line-height-normal);
-        white-space: nowrap;
-      }
-
-      .action-link:hover {
-        background: var(--vscode-button-secondaryHoverBackground);
-      }
-
-      .action-link--primary {
-        background: var(--vscode-button-background);
-        color: var(--vscode-button-foreground);
-      }
-
-      .action-link--primary:hover {
-        background: var(--vscode-button-hoverBackground);
       }
 
       .dismiss-button {
@@ -131,27 +98,41 @@ export class GettingStartedBanner extends LitElement {
                 </span>
               </div>
               <div class="getting-started-actions">
-                <a
-                  class="action-link action-link--primary"
+                <wa-button
+                  appearance="filled"
+                  size="small"
                   href=${COMMAND_LINKS.RUN_SETUP_ASSISTANT}
                 >
-                  ${waIcon('rocket')} Run setup
-                </a>
-                <a
-                  class="action-link"
+                  ${waIcon('rocket', { slot: 'start' })} Run setup
+                </wa-button>
+                <wa-button
+                  appearance="outlined"
+                  size="small"
                   href=${COMMAND_LINKS.CREATE_SAMPLE_PROJECT}
                 >
-                  ${waIcon('file-circle-plus')} Sample project
-                </a>
-                <a class="action-link" href=${COMMAND_LINKS.CLONE_OVERLEAF}>
-                  ${waIcon('cloud-arrow-down')} Overleaf
-                </a>
-                <a class="action-link" href=${COMMAND_LINKS.DOWNLOAD_ARXIV}>
-                  ${waIcon('download')} arXiv
-                </a>
-                <a class="action-link" href=${COMMAND_LINKS.GETTING_STARTED}>
-                  ${waIcon('book')} Walkthrough
-                </a>
+                  ${waIcon('file-circle-plus', { slot: 'start' })} Sample project
+                </wa-button>
+                <wa-button
+                  appearance="outlined"
+                  size="small"
+                  href=${COMMAND_LINKS.CLONE_OVERLEAF}
+                >
+                  ${waIcon('cloud-arrow-down', { slot: 'start' })} Overleaf
+                </wa-button>
+                <wa-button
+                  appearance="outlined"
+                  size="small"
+                  href=${COMMAND_LINKS.DOWNLOAD_ARXIV}
+                >
+                  ${waIcon('download', { slot: 'start' })} arXiv
+                </wa-button>
+                <wa-button
+                  appearance="outlined"
+                  size="small"
+                  href=${COMMAND_LINKS.GETTING_STARTED}
+                >
+                  ${waIcon('book', { slot: 'start' })} Walkthrough
+                </wa-button>
               </div>
             </div>
             <wa-button
