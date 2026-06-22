@@ -118,7 +118,9 @@ export const rootCommand = withUsageSections(
       title: 'EXAMPLES',
       rows: [
         ['texra', 'open the interactive launcher'],
-        ['texra setup', 'sign in or add a provider API key (guided)'],
+        ['texra setup', 'choose ChatGPT, sign in, or add a key (guided)'],
+        ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
+        ['texra login', 'sign in with Researcher Access'],
         ['texra chat', 'start an interactive tool-use session'],
         ['texra run <agent> --input file.tex', 'run a workflow agent headless'],
         ['texra agents list', 'list the available agents'],

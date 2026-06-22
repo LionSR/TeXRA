@@ -40,7 +40,7 @@ describe('formatSlashCommandHelp', () => {
     expect(help).toContain('- `/exit` (`/quit`) — Exit the CLI session');
     expect(help).toContain('- `/model` (`/models`) — List available models');
     expect(help).toContain(
-      '- `/login` — Sign in to TeXRA or ChatGPT subscription',
+      '- `/login` — Sign in to ChatGPT or Researcher Access',
     );
   });
 

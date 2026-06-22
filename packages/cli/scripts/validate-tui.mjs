@@ -567,7 +567,7 @@ const SCENARIOS = [
       '/auth',
       'Show TeXRA login status',
       '/login',
-      'Sign in to TeXRA or ChatGPT',
+      'Sign in to ChatGPT or Research',
       '… 11 more',
     ],
     unexpect: [
