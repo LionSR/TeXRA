@@ -233,8 +233,7 @@ export class FileManager extends BaseWebviewManager {
     currentOpenFile: string,
   ): Promise<void> {
     if (plan.log) {
-      const logFn =
-        plan.log.level === 'info' ? logger.info : logger.warn;
+      const logFn = plan.log.level === 'info' ? logger.info : logger.warn;
       logFn(CHANNEL, plan.log.message);
     }
 

@@ -43,11 +43,7 @@ describe('MainViewBaseFileController', () => {
     });
 
     it('selects the current file as-is when it is not a latexdiff file (no-workspace / no derivation)', () => {
-      const plan = planCurrentFileAsBase(
-        '/workspace/paper.tex',
-        null,
-        false,
-      );
+      const plan = planCurrentFileAsBase('/workspace/paper.tex', null, false);
 
       expect(plan).toEqual({
         filePathToSelect: '/workspace/paper.tex',
