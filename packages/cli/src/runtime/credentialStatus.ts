@@ -7,6 +7,8 @@
 
 import { platform } from '@platform/platform';
 import { hasAnyProviderApiKey } from '@controllers/onboarding/onboardingFunnel';
+import { isCodexSubscriptionActive } from '@auth/codex';
+import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 
 import { getCliAuthProvider } from './supabaseAuth';
 import type { CliApiMode } from './apiAccessMode';
@@ -20,6 +22,11 @@ async function hasIncludedRelaySignIn(): Promise<boolean> {
 export async function hasCliCredentialForApiMode(
   apiMode: CliApiMode | undefined,
 ): Promise<boolean> {
+  const hasChatGptSubscription = await isCodexSubscriptionActive(
+    CHATGPT_SETUP_MODEL,
+  ).catch(() => false);
+  if (hasChatGptSubscription) return true;
+
   switch (apiMode) {
     case 'included':
       return hasIncludedRelaySignIn();

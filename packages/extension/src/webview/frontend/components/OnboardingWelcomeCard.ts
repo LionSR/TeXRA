@@ -22,8 +22,8 @@ import { MainViewEvents } from '../events';
  * ChatGPT/API key alternatives, and a quiet "Skip for now" link last.
  * Stateless: renders the
  * shared onboarding copy verbatim and emits `welcome-sign-in` /
- * `welcome-chatgpt` / `welcome-api-key` / `welcome-skip`; the host owns the
- * funnel state.
+ * `welcome-chatgpt` / `welcome-api-key` / setup navigation events; the host
+ * owns the funnel state.
  */
 @customElement('onboarding-welcome-card')
 export class OnboardingWelcomeCard extends LitElement {
@@ -47,7 +47,13 @@ export class OnboardingWelcomeCard extends LitElement {
         font-weight: var(--font-weight-semibold, 600);
         font-size: 1.05em;
         letter-spacing: -0.005em;
-        margin-bottom: var(--wa-space-s);
+        margin-bottom: var(--wa-space-2xs);
+      }
+
+      .card-copy {
+        margin: 0 0 var(--wa-space-s);
+        color: var(--vscode-descriptionForeground);
+        line-height: var(--line-height-normal, 1.4);
       }
 
       .choices {
@@ -76,7 +82,10 @@ export class OnboardingWelcomeCard extends LitElement {
 
       .skip-row {
         display: flex;
+        align-items: center;
         justify-content: center;
+        flex-wrap: wrap;
+        gap: var(--wa-space-2xs);
         margin-top: var(--wa-space-s);
       }
 
@@ -103,11 +112,19 @@ export class OnboardingWelcomeCard extends LitElement {
     this.dispatchEvent(MainViewEvents.welcomeSkip());
   }
 
+  private handleOpenGettingStarted(): void {
+    this.dispatchEvent(MainViewEvents.onboardingOpenGettingStarted());
+  }
+
   override render(): TemplateResult {
     return html`
       <wa-callout id="onboardingWelcomeCard" variant="brand">
         ${waIcon('wand-magic-sparkles', { slot: 'icon' })}
         <span class="card-title">${ONBOARDING_CARD_TITLE}</span>
+        <p class="card-copy">
+          Choose a credential first. TeXRA will start the setup assistant once
+          it can call a model.
+        </p>
         <div class="choices">
           <div class="choice">
             <wa-button
@@ -148,6 +165,14 @@ export class OnboardingWelcomeCard extends LitElement {
           </div>
         </div>
         <div class="skip-row">
+          <wa-button
+            id="onboardingWalkthroughButton"
+            appearance="plain"
+            size="small"
+            @click=${this.handleOpenGettingStarted}
+          >
+            ${waIcon('book')} Open walkthrough
+          </wa-button>
           <wa-button
             id="onboardingSkipButton"
             appearance="plain"

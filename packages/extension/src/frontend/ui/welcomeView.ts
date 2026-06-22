@@ -69,7 +69,8 @@ function renderWelcomeHtml(): string {
   <ol>
     <li>Open a folder containing your LaTeX project — or create the bundled
         sample project if you just want to try TeXRA.</li>
-    <li>TeXRA will reload and walk you through sign-in or API key setup.</li>
+    <li>TeXRA will reload and walk you through a credential: Researcher
+        Access sign-in, ChatGPT subscription, or a provider API key.</li>
     <li>Pick an input file, choose the orchestrator, and hit Execute.</li>
   </ol>
   <div class="actions">

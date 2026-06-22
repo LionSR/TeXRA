@@ -15,7 +15,12 @@ import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
+import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import * as logger from '@logger/logUtils';
+import {
+  CHATGPT_SETUP_MODEL,
+  SETUP_MODEL_BY_PROVIDER,
+} from '@model/setupModelDefaults';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
@@ -24,24 +29,6 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const CHANNEL = 'SetupAssistant';
 logger.initialize(CHANNEL);
-
-/**
- * Provider → model mapping used when the user only has a direct API key.
- * Each mapping points at a model routed through that same provider, so the
- * agent can actually authenticate with the key it's been given.
- */
-const API_KEY_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
-  anthropic: 'opus48T',
-  openai: 'gpt55',
-  google: 'gemini31p',
-  deepseek: 'deepseekproT',
-  openRouter: 'sonnet46T',
-  xai: 'grok4',
-  moonshot: 'kimi25T',
-  dashscope: 'qwen3max',
-  minimax: 'minimax01',
-  glm: 'glm5',
-};
 
 const SETUP_INSTRUCTION =
   'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.';
@@ -79,7 +66,7 @@ interface LaunchModelResolution {
  *      `DEFAULT_AGENT_MODEL`; we'd otherwise fall through preflight
  *      and fail at runtime when tier enforcement kicks in.
  *   2. If the user is signed in but `DEFAULT_AGENT_MODEL` is not in
- *      tier, scan `API_KEY_MODEL_BY_PROVIDER` for any model that IS in
+ *      tier, scan `SETUP_MODEL_BY_PROVIDER` for any model that IS in
  *      tier so a lower-tier signed-in user still gets a working launch.
  *   3. Any direct API key for a provider whose default model routes
  *      through that same provider directly (iterating
@@ -101,14 +88,14 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
   // global flag is already on, so this doesn't mutate anything.
   if (getUseOpenRouter()) {
     return {
-      model: API_KEY_MODEL_BY_PROVIDER.openRouter,
+      model: SETUP_MODEL_BY_PROVIDER.openRouter,
       requiresOpenRouter: true,
     };
   }
 
-  if (await isCodexSubscriptionActive(API_KEY_MODEL_BY_PROVIDER.openai)) {
+  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
     return {
-      model: API_KEY_MODEL_BY_PROVIDER.openai,
+      model: CHATGPT_SETUP_MODEL,
       requiresOpenRouter: false,
     };
   }
@@ -123,7 +110,7 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
   // model (e.g. `sonnet46T`) is specifically for OR-routed calls and
   // routing it direct via server-side keys would pick the wrong backend.
   if (await serverKeys.canUseServerSideKeys()) {
-    for (const [provider, model] of Object.entries(API_KEY_MODEL_BY_PROVIDER)) {
+    for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
       if (provider === 'openRouter') continue;
       if (serverKeys.canUseModelSync(model)) {
         return { model, requiresOpenRouter: false };
@@ -137,7 +124,7 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
   // auth failure with a credential that can't reach Google.
   for (const provider of SecretManager.API_PROVIDERS) {
     if (provider === 'openRouter') continue;
-    const model = API_KEY_MODEL_BY_PROVIDER[provider];
+    const model = SETUP_MODEL_BY_PROVIDER[provider];
     if (!model) continue;
     if (await SecretManager.hasUsableApiKey(provider)) {
       return { model, requiresOpenRouter: false };
@@ -145,11 +132,11 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
   }
 
   // Step 4: only OpenRouter key present. The `openRouter` entry is
-  // statically declared in `API_KEY_MODEL_BY_PROVIDER`, so no fallback
+  // statically declared in `SETUP_MODEL_BY_PROVIDER`, so no fallback
   // is needed.
   if (await SecretManager.hasUsableApiKey('openRouter')) {
     return {
-      model: API_KEY_MODEL_BY_PROVIDER.openRouter,
+      model: SETUP_MODEL_BY_PROVIDER.openRouter,
       requiresOpenRouter: true,
     };
   }
@@ -200,7 +187,7 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
  * agreed on what "has a credential" means.
  */
 export async function hasAnyUsableSetupCredential(): Promise<boolean> {
-  if (await isCodexSubscriptionActive(API_KEY_MODEL_BY_PROVIDER.openai)) {
+  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
     return true;
   }
   for (const provider of SecretManager.API_PROVIDERS) {
@@ -254,11 +241,8 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
   }
 
   if (picked.id === 'chatgpt') {
-    await vscode.commands.executeCommand('texra.showModels');
-    void vscode.window.showInformationMessage(
-      'Sign in with ChatGPT in the Models tab, then run the setup assistant again.',
-    );
-    return false;
+    await signInWithChatGptSubscription(CHANNEL);
+    return hasAnyUsableSetupCredential();
   }
 
   // walkthrough

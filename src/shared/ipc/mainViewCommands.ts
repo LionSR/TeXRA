@@ -72,7 +72,11 @@ export const MAIN_VIEW_COMMANDS = {
   HIDE_ORCHESTRATOR_BANNER: 'hideOrchestratorBanner',
 
   // Onboarding funnel (PRD: agent-native onboarding)
+  ONBOARDING_SIGN_IN_CHATGPT: 'onboardingSignInChatGpt',
+  ONBOARDING_RUN_SETUP: 'onboardingRunSetup',
+  ONBOARDING_OPEN_GETTING_STARTED: 'onboardingOpenGettingStarted',
   ONBOARDING_SKIP: 'onboardingSkip',
+  ONBOARDING_SKIP_SETUP: 'onboardingSkipSetup',
   SET_ONBOARDING_FUNNEL: 'setOnboardingFunnel',
 
   // Extension response events
