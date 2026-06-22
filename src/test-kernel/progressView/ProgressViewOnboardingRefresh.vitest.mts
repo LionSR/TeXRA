@@ -76,10 +76,7 @@ describe('progress-view onboarding refresh wiring', () => {
       refreshOnboardingFunnel: ReturnType<typeof vi.fn>;
     };
     provider.refreshOnboardingFunnel.mockResolvedValue(undefined);
-    const handler = new ProgressViewMessageHandler(
-      provider as never,
-      context,
-    );
+    const handler = new ProgressViewMessageHandler(provider as never, context);
 
     void handler.handleMessage(
       {
