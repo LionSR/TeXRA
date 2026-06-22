@@ -178,7 +178,6 @@ export class ToolUseProcessNode<C> extends BaseNode<
 
     recordCycleMetrics(
       run,
-      shared.roundIndex,
       shared.roundResponseTimeMs,
       shared.roundNormalizedUsage ?? null,
     );

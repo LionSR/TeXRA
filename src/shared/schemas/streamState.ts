@@ -2,13 +2,17 @@ import { z } from 'zod';
 
 import { GoalStatusSchema } from './goal';
 import { AgentCategory, AgentCategorySchema } from './agent';
-import { CompileFailureSchema, OutputFileInfoSchema } from './output';
+import {
+  CompileFailureSchema,
+  OutputFileInfoSchema,
+  roundIndexedRecord,
+} from './output';
 import { STREAM_STATUS, StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
 import { ContextStateDataSchema } from './contextManagement';
-import { TokenUsageStatsSchema } from './usage';
+import { RunUsageMapSchema, TokenUsageStatsSchema } from './usage';
 
 // Active Child Info (shared shape for subagent and process badges)
 
@@ -90,12 +94,6 @@ export const ToolUseUIStateSchema = z.object({
 
 export type ToolUseUIState = z.infer<typeof ToolUseUIStateSchema>;
 
-// Shared helper for run-keyed records
-
-function RunScopedRecord<T extends z.ZodType>(valueSchema: T) {
-  return z.record(z.string(), valueSchema).prefault({});
-}
-
 // Tool-Use Stream State
 
 export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
@@ -110,7 +108,7 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   goalStatus: GoalStatusSchema.optional(),
   goalObjective: z.string().optional(),
   // Per-run usage for accumulation; sessionUsage is derived as their sum.
-  runUsage: RunScopedRecord(TokenUsageStatsSchema),
+  runUsage: RunUsageMapSchema.prefault({}),
   sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
   // Frontend-owned (nested under ui)
   ui: ToolUseUIStateSchema.prefault({}),
@@ -121,20 +119,16 @@ export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
 // Workflow Stream State
 // One run per tab — all run-scoped data is flat, not keyed by runId.
 
-function RoundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
-  return z.record(z.string(), z.array(valueSchema)).prefault({});
-}
-
 export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AgentCategory.Workflow),
   // Frontend-owned fields updated by targeted progress-view messages.
   // Per-run usage mirrors tool-use so resume correctly accumulates across
   // the original and resumed runs; sessionUsage is derived as their sum.
-  runUsage: RunScopedRecord(TokenUsageStatsSchema),
+  runUsage: RunUsageMapSchema.prefault({}),
   sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
-  files: RoundIndexedRecord(OutputFileInfoSchema),
-  missingOutputs: RoundIndexedRecord(z.string()),
-  compileFailures: RoundIndexedRecord(CompileFailureSchema),
+  files: roundIndexedRecord(OutputFileInfoSchema),
+  missingOutputs: roundIndexedRecord(z.string()),
+  compileFailures: roundIndexedRecord(CompileFailureSchema),
 });
 
 export type WorkflowStreamState = z.infer<typeof WorkflowStreamStateSchema>;
