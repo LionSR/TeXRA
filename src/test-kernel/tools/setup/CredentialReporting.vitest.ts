@@ -16,7 +16,7 @@ function installChatGptOnlySetupPlatform(): void {
     ...platform,
     secrets: {
       ...platform.secrets,
-      async anyApiKeyExists() {
+      async anyUsableCredentialExists() {
         return true;
       },
     },
