@@ -620,7 +620,7 @@ const SCENARIOS = [
     expect: [
       '/agent',
       'Tool-use and delegating agents',
-      'texra chat --agent=<name>',
+      'texra chat --agent <name>',
     ],
     unexpect: ['//agent', 'Harness received: //agent', '/agent - error'],
   },
@@ -671,7 +671,7 @@ const SCENARIOS = [
       'Tool-use and delegating agents',
       'Creator',
       'Current: chat (hidden from picker)',
-      'texra chat --agent=<name>',
+      'texra chat --agent <name>',
       'Esc close',
     ],
     unexpect: [
@@ -698,7 +698,7 @@ const SCENARIOS = [
       'Tool-use and delegating agents',
       'Creator',
       'Current: chat (hidden from picker)',
-      'texra chat --agent=<name>',
+      'texra chat --agent <name>',
       'Esc close',
     ],
     unexpect: [

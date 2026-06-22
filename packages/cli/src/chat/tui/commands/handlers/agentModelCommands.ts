@@ -50,7 +50,7 @@ export function applyInitialCliAgentSelection(
 ): void {
   if (!chatTuiCanStartRootRun(context.session)) {
     appendLocalAssistantTranscript(
-      'Agent changes are only available before the first message. Start a new chat with texra chat --agent=<name> to choose a different root agent.',
+      'Agent changes are only available before the first message. Use texra chat --agent <name> to choose a root agent in a new chat.',
     );
     return;
   }
