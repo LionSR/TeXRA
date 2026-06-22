@@ -9,12 +9,12 @@
 > `@google/genai@2.9.0` type definitions** (`node_modules/.../@google/genai/dist/genai.d.ts`)
 > — the exact version already pinned in `package.json:108` and
 > `packages/extension/package.json:1713`. The Interactions surface ships in that
-> version, so **no dependency bump is required to start.** Google's `ai.google.dev`
-> doc pages returned HTTP 403 to automated fetch, so the few facts that live only
-> on the service (GA model/agent ids, $/token pricing, retention window, Flex/
-> Priority cost deltas) remain marked `⚠️ confirm at impl time`. Everything about
-> the **SDK request/response shape is byte-verified** and cited to `genai.d.ts`
-> line numbers.
+> version, so **no dependency bump is required to start.** Google's official
+> Interactions overview was reachable on 2026-06-22 and confirms GA status,
+> recommended use for new projects, supported model/agent IDs, and storage
+> retention. Pricing and Flex/Priority cost deltas remain `⚠️ confirm at impl
+time`. Everything about the **SDK request/response shape is byte-verified**
+> and cited to `genai.d.ts` line numbers.
 
 ## Summary
 
@@ -309,9 +309,11 @@ Models; document in `docs/guide/configuration.md`.
 
 ### 5. Model registry
 
-Register GA Gemini model ids / agent ids (`llm-zoo` `MODEL_CONFIGS` + `src/model/`
-capability/pricing), marking agent-only entries Interactions-required.
-⚠️ confirm exact ids + pricing at impl time.
+Register the Interactions-supported model and agent ids (`llm-zoo`
+`MODEL_CONFIGS` + `src/model/` capability/pricing), marking agent-only entries
+Interactions-required. The official overview currently includes Gemini
+3.1/3/2.5 model ids, Lyria preview model ids, and Deep Research / Antigravity
+preview agent ids; confirm the exact set to expose and pricing at impl time.
 
 ## Platform / VS Code separation
 
@@ -335,20 +337,23 @@ schema; no new ports.
    a resend-able local transcript. Decide per the OpenAI Responses resolution:
    stateless (send full `Step[]` each round; simplest, loses payload win) vs
    `previous_interaction_id` (define behaviour when the stored interaction has
-   expired or a run is restored from old history). `store?`/retention interact.
-3. **Preview vs GA stability in 2.9.0.** The types ship in the pinned version;
-   `response_mime_type` is already deprecated in favour of `response_format`,
-   signalling churn. Pin/snapshot the working version and keep `generateContent`
-   as fallback. ⚠️ confirm the endpoint is GA (not preview) for our key.
+   expired or a run is restored from old history). Official retention is 55 days
+   on paid tier and 1 day on free tier; `store=false` opts out but is
+   incompatible with `background=true` and later `previous_interaction_id` use.
+3. **GA service with active SDK churn.** The official overview marks the API GA,
+   and the types ship in the pinned SDK version; `response_mime_type` is already
+   deprecated in favour of `response_format`, signalling churn. Pin/snapshot the
+   working version, verify key/model access in a real-key smoke test, and keep
+   `generateContent` as fallback.
 4. **Usage/pricing remap.** `Usage.total_*` field names → `googleUsage.ts`
    re-derivation; re-validate cache-rebate and reasoning-token accounting.
 5. **Managed agents are a different product.** `agent=` + `environment:'remote'`
    provisions a remote sandbox (browse/exec). **Out of scope for v0**
    (model-mode only); track separately.
-6. **Service ids / pricing / retention** (`⚠️ confirm`): GA model ids
-   (`gemini-3.5-flash`, Deep Research / Antigravity agents), `ServiceTier`
-   Flex/Priority cost deltas, and the retention window are service facts not in
-   the SDK types.
+6. **Service ids / pricing** (`⚠️ confirm`): supported model and agent ids are
+   listed in the official overview, but TeXRA still needs an implementation-time
+   decision about which ids to register plus current $/token pricing and
+   `ServiceTier` Flex/Priority cost deltas.
 
 ## Scope
 
@@ -367,7 +372,8 @@ the **default** for Gemini (ship behind the flag, flip later); OpenRouter suppor
 ## Milestones
 
 1. ~~Verify the SDK schema~~ ✅ done (this proposal; `@google/genai@2.9.0`).
-   Remaining: confirm GA model/agent ids + pricing + retention (`⚠️` items).
+   Remaining: choose/register the supported model/agent ids and confirm pricing
+   (`⚠️` items).
 2. `ModelHandlerGoogleInteractions` (model mode): SSE streaming + custom tools;
    compatibility key; factory routing behind `useGoogleInteractionsAPI` (default
    **off**). Unit tests on input/tool/usage translation (mocked SDK), explicitly
@@ -391,6 +397,7 @@ the **default** for Gemini (ship behind the flag, flip later); OpenRouter suppor
 - TeXRA precedent: [`openai-responses-api.md`](./openai-responses-api.md);
   routing `src/agent/runtime/ModelFactory.ts:175`; settings `src/shared/schemas/coreSettings.ts`.
 
-> _`ai.google.dev` pages returned HTTP 403 to automated fetch; the SDK `.d.ts`
-> (verified above) is the source of truth for every shape, with `⚠️` reserved
-> for service-only facts (ids/pricing/retention)._
+> _The SDK `.d.ts` (verified above) is the source of truth for request/response
+> shapes. The official overview is the source for GA status, recommended use,
+> supported ids, and retention; `⚠️` is reserved for implementation-time pricing
+> and model-registration decisions._
