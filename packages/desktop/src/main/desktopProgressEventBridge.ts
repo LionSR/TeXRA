@@ -387,7 +387,6 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       });
     });
   }
-
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
