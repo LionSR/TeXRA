@@ -94,6 +94,13 @@ export const MainViewEvents = {
 
   welcomeSkip: () => createEvent('welcome-skip', undefined),
 
+  onboardingRunSetup: () => createEvent('onboarding-run-setup', undefined),
+
+  onboardingOpenGettingStarted: () =>
+    createEvent('onboarding-open-getting-started', undefined),
+
+  onboardingSkipSetup: () => createEvent('onboarding-skip-setup', undefined),
+
   dismissGettingStarted: () =>
     createEvent('dismiss-getting-started', undefined),
 

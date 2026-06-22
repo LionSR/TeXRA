@@ -60,6 +60,7 @@ import { handleParseYaml as sysParseYaml } from '@commands/system/yamlCommands';
 import { handleTestTextEditor as sysTestTextEditor } from '@commands/system/textEditorCommands';
 import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
 import { type ApiProvider, SecretManager } from '@frontend/secretManager';
+import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
@@ -105,6 +106,7 @@ const CreateAgentWithAIArgSchema = AgentCategorySchema.optional();
 const ShowProgressViewArgSchema = z.unknown();
 
 const RESET_CHANNEL = 'mainViewCommands';
+const CHATGPT_SIGN_IN_CHANNEL = 'ChatGptSubscription';
 
 /**
  * Subset of `CommandId` whose registration is now driven by the shared
@@ -133,6 +135,7 @@ export type ExtensionRegistryCommandId = Extract<
   | 'texra.cleanBuild'
   | 'texra.indentTeX'
   | 'texra.auth.signIn'
+  | 'texra.auth.chatgpt.signIn'
   | 'texra.auth.signOut'
   | 'texra.auth.viewProfile'
   | 'texra.runSetupAssistant'
@@ -212,6 +215,7 @@ export interface ExtensionCommandActions {
   cleanOutput(): Promise<void>;
   indentTeX(): Promise<void>;
   signIn(): Promise<boolean>;
+  signInChatGpt(): Promise<boolean>;
   signOut(): Promise<void>;
   viewProfile(): Promise<void>;
   runSetupAssistant(): Promise<void>;
@@ -291,6 +295,16 @@ export function createExtensionCommandActions(
     cleanOutput: runCleanOutput,
     indentTeX: handleIndentTeX,
     signIn: authSignIn,
+    async signInChatGpt() {
+      const signedIn = await signInWithChatGptSubscription(
+        CHATGPT_SIGN_IN_CHANNEL,
+      );
+      await Promise.all([
+        vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
+        vscode.commands.executeCommand('texra.refreshAllOptions'),
+      ]);
+      return signedIn;
+    },
     signOut: authSignOut,
     viewProfile: authViewProfile,
     runSetupAssistant: setupRunAssistant,
@@ -358,6 +372,7 @@ const EXTENSION_COMMAND_HANDLERS = {
   'texra.cleanBuild': (actions) => awaitTrue(actions.cleanBuild()),
   'texra.indentTeX': (actions) => awaitTrue(actions.indentTeX()),
   'texra.auth.signIn': (actions) => awaitTrue(actions.signIn()),
+  'texra.auth.chatgpt.signIn': (actions) => awaitTrue(actions.signInChatGpt()),
   'texra.auth.signOut': (actions) => awaitTrue(actions.signOut()),
   'texra.auth.viewProfile': (actions) => awaitTrue(actions.viewProfile()),
   'texra.runSetupAssistant': (actions) =>

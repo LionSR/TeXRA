@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  isCodexSubscriptionActive: vi.fn(),
   isAuthenticated: vi.fn(),
   lookupApiKey: vi.fn(),
+}));
+
+vi.mock('@auth/codex', () => ({
+  isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', () => ({
@@ -23,8 +28,25 @@ const { hasCliCredentialForApiMode } =
 
 describe('CLI credential status', () => {
   beforeEach(() => {
+    mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
     mocks.isAuthenticated.mockReset();
     mocks.lookupApiKey.mockReset();
+  });
+
+  it('counts an active ChatGPT subscription in every API mode', async () => {
+    mocks.isCodexSubscriptionActive.mockResolvedValue(true);
+    mocks.isAuthenticated.mockRejectedValue(
+      new Error('relay sign-in must not be checked'),
+    );
+    mocks.lookupApiKey.mockRejectedValue(
+      new Error('provider keys must not be checked'),
+    );
+
+    await expect(hasCliCredentialForApiMode(undefined)).resolves.toBe(true);
+    await expect(hasCliCredentialForApiMode('included')).resolves.toBe(true);
+    await expect(hasCliCredentialForApiMode('personal')).resolves.toBe(true);
+    expect(mocks.isAuthenticated).not.toHaveBeenCalled();
+    expect(mocks.lookupApiKey).not.toHaveBeenCalled();
   });
 
   it('is true when signed in, without checking any provider key', async () => {

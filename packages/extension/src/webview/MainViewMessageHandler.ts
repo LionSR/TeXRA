@@ -5,12 +5,16 @@ import {
   type MainViewCommandPlan,
 } from '@controllers/mainView/MainViewInteractionController';
 import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
-import { setOnboardingDeclined } from '@controllers/onboarding/onboardingFunnel';
+import {
+  setFirstRunDone,
+  setOnboardingDeclined,
+} from '@controllers/onboarding/onboardingFunnel';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
 import { loadOptions } from '@frontend/agents/optionsLoader';
+import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -290,6 +294,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
             this.postToActiveView({
               command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
             });
+            await Promise.all([
+              vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
+              vscode.commands.executeCommand('texra.refreshAllOptions'),
+              this.onboarding?.refreshOnboardingFunnel(),
+            ]);
           }
         } catch (error) {
           this.logger.debug(
@@ -311,6 +320,24 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         // writes), then re-derive so the card disappears and the normal
         // launcher renders.
         await setOnboardingDeclined(this.context.globalState, true);
+        await this.onboarding?.refreshOnboardingFunnel();
+      },
+      [MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT]: async () => {
+        await signInWithChatGptSubscription(this.channel);
+        await Promise.all([
+          vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
+          vscode.commands.executeCommand('texra.refreshAllOptions'),
+          this.onboarding?.refreshOnboardingFunnel(),
+        ]);
+      },
+      [MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP]: async () => {
+        await safeExecuteCommand('texra.runSetupAssistant', [], this.viewName);
+        await this.onboarding?.refreshOnboardingFunnel();
+      },
+      [MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED]: () =>
+        safeExecuteCommand('texra.openGettingStarted', [], this.viewName),
+      [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP]: async () => {
+        await setFirstRunDone(this.context.globalState, true);
         await this.onboarding?.refreshOnboardingFunnel();
       },
 
