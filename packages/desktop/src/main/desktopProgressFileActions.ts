@@ -11,13 +11,23 @@ import {
 } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
+import {
+  runLatexdiffFromMetadata,
+  runLatexdiffViaWorkspaceScan,
+} from '@latex/latexdiff/diffOperations';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
-import type { FileLocation } from '@shared/schemas';
+import type {
+  DiffProgressReporter,
+  DiffRunOutcome,
+  DiffRunResult,
+} from '@latex/latexdiff/types';
+import type { FileLocation, OutputFileInfo } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
   AbsoluteFS,
   createExternalLocation,
   pathToLocation,
+  TaskRunFileService,
 } from '@utils/files';
 
 export interface DesktopProgressFileActionOptions {
@@ -39,6 +49,18 @@ export interface DesktopProgressFileActionHost {
   runtimeHost: AgentRuntimeHost;
   runExecution(request: ValidatedExecutionRequest): Promise<void>;
   listWorkspaceCandidateFiles(): Promise<string[]>;
+}
+
+export interface DesktopLatexdiffWorkspaceScan {
+  agent: string;
+  model: string;
+  inputFile: string;
+}
+
+export interface DesktopLatexdiffRunContext {
+  outputsByRound: Map<number, OutputFileInfo[]>;
+  executionId?: string;
+  workspaceScan?: DesktopLatexdiffWorkspaceScan;
 }
 
 function toFileLocation(filePath: string): FileLocation {
@@ -142,6 +164,20 @@ export class DesktopProgressFileActions {
     return true;
   }
 
+  async runLatexdiffForRun(
+    baseFile: string,
+    editedFile: string,
+    runContext: DesktopLatexdiffRunContext,
+  ): Promise<void> {
+    const outcome = await this.runSharedLatexdiff(runContext);
+    if (outcome && outcome.totalOperations > 0) {
+      await this.openSharedLatexdiffResult(outcome);
+      return;
+    }
+
+    await this.runLatexdiffFile(baseFile, editedFile);
+  }
+
   async runLatexdiffFile(baseFile: string, editedFile: string): Promise<void> {
     const service = new LaTeXdiffService('DesktopProgressBridge');
     const result = await service.runDiff(
@@ -177,5 +213,67 @@ export class DesktopProgressFileActions {
         await this.options.openPath?.(file);
       },
     );
+  }
+
+  private async runSharedLatexdiff(
+    runContext: DesktopLatexdiffRunContext,
+  ): Promise<DiffRunOutcome | undefined> {
+    const progress: DiffProgressReporter = {
+      report: () => {
+        // Desktop has no per-operation progress UI.
+      },
+    };
+
+    if (runContext.outputsByRound.size > 0) {
+      const outcome = await runLatexdiffFromMetadata({
+        rounds: runContext.outputsByRound,
+        mathMarkup: DEFAULT_MATH_MARKUP,
+        generateBetweenRoundDiffs: true,
+        progress,
+        fileService: new TaskRunFileService(runContext.executionId),
+      });
+      if (outcome.totalOperations > 0) return outcome;
+    }
+
+    if (runContext.workspaceScan) {
+      return runLatexdiffViaWorkspaceScan({
+        ...runContext.workspaceScan,
+        mathMarkup: DEFAULT_MATH_MARKUP,
+        generateBetweenRoundDiffs: true,
+        progress,
+      });
+    }
+
+    return undefined;
+  }
+
+  private async openSharedLatexdiffResult(
+    outcome: DiffRunOutcome,
+  ): Promise<void> {
+    const result = outcome.results.find(
+      (
+        entry,
+      ): entry is DiffRunResult & { basePath: string; diffFileName: string } =>
+        entry.success && Boolean(entry.basePath) && Boolean(entry.diffFileName),
+    );
+    if (!result) {
+      const firstMessage = outcome.results.find(
+        (entry) => entry.message,
+      )?.message;
+      await this.options.showErrorMessage?.(
+        firstMessage ?? 'All LaTeX diff operations failed for this run.',
+      );
+      return;
+    }
+
+    const diffFilePath = path.join(
+      path.dirname(result.basePath),
+      result.diffFileName,
+    );
+    if (this.options.openBuildDisplay) {
+      await this.options.openBuildDisplay(createExternalLocation(diffFilePath));
+      return;
+    }
+    await this.options.openPath?.(diffFilePath);
   }
 }

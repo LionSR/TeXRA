@@ -76,7 +76,11 @@ import {
   createDesktopToolEditApprovalController,
   type DesktopToolEditApprovalController,
 } from './desktopToolEditApproval.js';
-import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
+import {
+  DesktopProgressFileActions,
+  type DesktopLatexdiffRunContext,
+  type DesktopLatexdiffWorkspaceScan,
+} from './desktopProgressFileActions.js';
 import {
   createDesktopProgressEventBridge,
   type DesktopProgressEventBridge,
@@ -453,7 +457,7 @@ export class DesktopProgressBridge {
         mergeFile: (baseFile, editedFile) =>
           this.fileActions.runMergeFile(baseFile, editedFile),
         latexdiffFile: (baseFile, editedFile) =>
-          this.fileActions.runLatexdiffFile(baseFile, editedFile),
+          this.runLatexdiffFile(baseFile, editedFile),
         openDirectory: async (directory) => {
           await this.options.openPath?.(directory);
         },
@@ -943,6 +947,49 @@ export class DesktopProgressBridge {
 
   isResumeInFlight(streamId: StreamTabId): boolean {
     return this.resumeAttempts.has(streamId);
+  }
+
+  private async runLatexdiffFile(
+    baseFile: string,
+    editedFile: string,
+  ): Promise<void> {
+    const context = this.getActiveLatexdiffRunContext(editedFile);
+    if (!context) {
+      await this.fileActions.runLatexdiffFile(baseFile, editedFile);
+      return;
+    }
+
+    await this.fileActions.runLatexdiffForRun(baseFile, editedFile, context);
+  }
+
+  private getActiveLatexdiffRunContext(
+    editedFile: string,
+  ): DesktopLatexdiffRunContext | undefined {
+    const stream = this.state.activeStream;
+    if (!stream) return undefined;
+
+    const outputsByRound = new Map(this.state.snapshots.getOutputFiles(stream));
+    const workspaceScan = this.getLatexdiffWorkspaceScan(stream, editedFile);
+    if (outputsByRound.size === 0 && !workspaceScan) return undefined;
+
+    const executionId = this.getStreamExecutionId(stream);
+    return {
+      outputsByRound,
+      ...(executionId && { executionId }),
+      ...(workspaceScan && { workspaceScan }),
+    };
+  }
+
+  private getLatexdiffWorkspaceScan(
+    stream: StreamTabId,
+    editedFile: string,
+  ): DesktopLatexdiffWorkspaceScan | undefined {
+    const taskState = this.state.snapshots.getTaskState(stream);
+    if (!taskState) return undefined;
+
+    const { agent, model, inputFiles } = taskState.agentConfig;
+    const inputFile = inputFiles.at(0) ?? editedFile;
+    return { agent, model, inputFile };
   }
 
   private async resolveResumeState(
