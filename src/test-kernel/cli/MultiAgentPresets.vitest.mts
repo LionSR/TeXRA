@@ -84,8 +84,9 @@ describe('CLI multi-agent presets', () => {
     const output = formatCliMultiAgentPresetList([plan]);
 
     expect(output).toContain(
-      'built-in\tlean-project\tLean Project\tworkflow:0\ttool-use:2/7\tunavailable',
+      'built-in\tlean-project\tLean Project\ttool-use:2/7\tunavailable',
     );
+    expect(output).not.toContain('workflow:0');
     expect(output).toContain('texra multi-agent inspect <team-id>');
     expect(output).toContain(
       'Researcher Access sign-in may load additional remote team agents',
