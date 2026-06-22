@@ -99,6 +99,14 @@ export interface DesktopAgentExecutionOptions {
    */
   streamSnapshotStore?: DesktopStreamSnapshotStore;
   progressSnapshotStore?: StreamSnapshotStore;
+  /**
+   * Fired once a run in this window's session reaches a completed terminal
+   * result. Used to recompute the onboarding funnel after a user's first run
+   * (the lifecycle has already persisted `firstRunDone` by the time the
+   * terminal `result` event reaches `session.onResult`), so the renderer leaves
+   * the setup card without waiting for a restart.
+   */
+  onRunCompleted?: () => void;
 }
 
 export interface DesktopAgentExecution {
@@ -128,6 +136,8 @@ export interface DesktopProgressBridgeOptions {
   showErrorMessage?: (message: string) => Promise<void> | void;
   streamSnapshotStore?: DesktopStreamSnapshotStore;
   progressSnapshotStore?: StreamSnapshotStore;
+  /** See DesktopAgentExecutionOptions.onRunCompleted. */
+  onRunCompleted?: () => void;
 }
 
 class MemoryProgressStorage implements MementoStorage {
@@ -377,11 +387,23 @@ export class DesktopProgressBridge {
     const unsubscribeShowError = bus.on('requestShowError', ({ message }) => {
       void this.options.showErrorMessage?.(message);
     });
+    // Onboarding funnel (PRD: agent-native onboarding): a completed run ends
+    // State 1. `AgentRunLifecycle` persists `firstRunDone` BEFORE it emits the
+    // terminal `result` event, so by the time this listener fires the funnel
+    // derivation will read the up-to-date flag. The setup agent's own run does
+    // not flip `firstRunDone` (the lifecycle skips it), but recomputing here is
+    // still safe — the derivation is idempotent.
+    const unsubscribeResult = this.session.onResult((event) => {
+      if (event.outcome === 'completed') {
+        this.options.onRunCompleted?.();
+      }
+    });
     this.unsubscribe = () => {
       backendSubscription.dispose();
       unsubscribeGoal();
       unsubscribeEnsureProgress();
       unsubscribeShowError();
+      unsubscribeResult();
     };
     this.runtimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),
@@ -1317,6 +1339,7 @@ export function createDesktopAgentExecution(
     showErrorMessage: options.showErrorMessage,
     streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore: options.progressSnapshotStore,
+    onRunCompleted: options.onRunCompleted,
   });
 
   return {

@@ -27,12 +27,25 @@ export interface DesktopOnboardingIpcOptions {
    * and the secrets read can involve disk/network I/O.
    */
   hasCredential?: () => boolean | Promise<boolean>;
+  /**
+   * Resolves once the host's one-shot first-run backfill has settled. The first
+   * funnel derivation waits for it so a returning veteran isn't transiently
+   * pushed into State 1 (firing `selectSetupAgent`) before the backfill marks
+   * them `done`. Optional: when absent, refreshes derive immediately.
+   */
+  readyGate?: Promise<void>;
   /** Post SET_SELECTED_AGENT to the renderer when entering State 1. */
   selectSetupAgent?: () => Promise<void>;
   /** Auto-start the setup conversation on the State 0→1 transition. */
   kickoffSetup?: () => Promise<void>;
   /** Run ChatGPT sign-in flow from the welcome card. */
   signInWithChatGpt?: () => Promise<void>;
+  /**
+   * Open the getting-started walkthrough from the State 0 welcome card. The
+   * desktop shell can't host the VS Code walkthrough, so the host wires this to
+   * the closest analog: opening the desktop getting-started docs externally.
+   */
+  openGettingStarted?: () => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -48,6 +61,16 @@ export function createDesktopOnboardingIpc(
   const state = options.state ?? platform().globalState;
   let previousFunnelState: OnboardingFunnelState | undefined;
   let setupKickoffStarted = false;
+  // Serialize refreshes so concurrent callers (WEBVIEW_READY, post-backfill,
+  // auth refresh, api-key hooks, run completion) never interleave. The funnel
+  // derivation has an internal `await` (the credential probe) and mutates the
+  // shared `previousFunnelState`; without serialization the last caller to
+  // finish could push a `SET_ONBOARDING_FUNNEL` derived from a stale previous
+  // state. A latch coalesces overlapping requests: while one refresh is in
+  // flight, a single re-run is queued and run once the current one settles, so
+  // callers always observe a consistent terminal state.
+  let refreshChain: Promise<void> = Promise.resolve();
+  let rerunRequested = false;
 
   function postCurrentState(): void {
     const dismissed = state.get<boolean>(
@@ -57,7 +80,12 @@ export function createDesktopOnboardingIpc(
     renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(!dismissed));
   }
 
-  async function refreshOnboardingFunnel(): Promise<void> {
+  async function runOnboardingFunnelRefresh(): Promise<void> {
+    // Wait for the host's first-run backfill to settle before the first
+    // derivation; resolves instantly on every subsequent refresh.
+    if (options.readyGate) {
+      await options.readyGate.catch(() => undefined);
+    }
     const hasCredential = options.hasCredential
       ? await Promise.resolve(options.hasCredential()).catch(() => false)
       : false;
@@ -89,6 +117,24 @@ export function createDesktopOnboardingIpc(
     }
   }
 
+  function refreshOnboardingFunnel(): Promise<void> {
+    // If a refresh is already running, mark that another full pass is needed
+    // and return the chain tail — every caller resolves only once the queued
+    // pass has settled, so they all observe the same terminal funnel state.
+    rerunRequested = true;
+    refreshChain = refreshChain
+      .catch(() => undefined)
+      .then(async () => {
+        // Collapse multiple overlapping requests that arrived while a pass was
+        // running into a single re-run.
+        while (rerunRequested) {
+          rerunRequested = false;
+          await runOnboardingFunnelRefresh();
+        }
+      });
+    return refreshChain;
+  }
+
   async function dismiss(): Promise<void> {
     await state.update(DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, true);
     renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(false));
@@ -115,6 +161,10 @@ export function createDesktopOnboardingIpc(
     await refreshOnboardingFunnel();
   }
 
+  async function openGettingStarted(): Promise<void> {
+    await options.openGettingStarted?.();
+  }
+
   return {
     ...createCommandHandler(
       {
@@ -137,6 +187,11 @@ export function createDesktopOnboardingIpc(
         [MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP]: () => runSetup(),
         [MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT]: () =>
           signInWithChatGpt(),
+        // State 0 walkthrough button. The desktop shell can't host the VS Code
+        // getting-started walkthrough, so this opens the desktop docs externally
+        // (the host wires `openGettingStarted`).
+        [MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED]: () =>
+          openGettingStarted(),
       },
       { onAsyncError: options.onAsyncError },
     ),

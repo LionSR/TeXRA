@@ -68,6 +68,7 @@ import {
   type DesktopAuthCallbackState,
   type DesktopAuthCoordinator,
 } from './desktopSupabaseAuth.js';
+import { DESKTOP_DOCS_URL } from '../desktopCommandSurface.js';
 import { reportFatalStartupError } from './fatalStartupError.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
@@ -265,6 +266,12 @@ function createWindow(options: {
   initializeCrashReporting: () => Promise<void>;
   streamSnapshotStore?: DesktopStreamSnapshotStore;
   progressSnapshotStore: StreamSnapshotStore;
+  /**
+   * Captured in `initializeElectronPlatform` BEFORE the bundled-agent sync
+   * writes LAST_KNOWN_VERSION, so the onboarding backfill can tell a returning
+   * veteran from a fresh install. See ElectronPlatformInitResult.hasPriorInstall.
+   */
+  hasPriorInstall: boolean;
 }): void {
   const window = new BrowserWindow({
     width: 960,
@@ -304,6 +311,25 @@ function createWindow(options: {
   const onboardingIpcRef: {
     current?: DesktopOnboardingIpc;
   } = {};
+  // Single source of truth for "does the user have a usable credential" on
+  // desktop: active ChatGPT (Codex) subscription, relay sign-in with Included
+  // Access to server-side keys, or a non-blank provider API key. Shared by the
+  // onboarding-funnel derivation and the first-run backfill (formerly two
+  // near-verbatim copies — Codex review).
+  const probeCredential = async (): Promise<boolean> => {
+    if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
+    const isRelaySignedIn = await SupabaseClient.isAuthenticated();
+    if (isRelaySignedIn) {
+      const serverKeyService = getServerSideKeyService();
+      if (
+        serverKeyService.getUseIncludedModelAccess() &&
+        (await serverKeyService.canUseServerSideKeys())
+      ) {
+        return true;
+      }
+    }
+    return hasAnyProviderApiKey(platform().secrets);
+  };
   const showErrorMessage = async (message: string) => {
     await dialog.showMessageBox(window, { message, type: 'error' });
   };
@@ -470,6 +496,13 @@ function createWindow(options: {
     showErrorMessage,
     streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore: options.progressSnapshotStore,
+    // Recompute the onboarding funnel after a run completes so a user's first
+    // successful run leaves the setup card without waiting for a restart
+    // (the run lifecycle has already persisted firstRunDone). Mirrors the
+    // extension's post-run refresh hooks in MainViewMessageHandler.
+    onRunCompleted: () => {
+      void onboardingIpcRef.current?.refreshOnboardingFunnel();
+    },
   };
   let agentExecution: DesktopAgentExecution | undefined;
   let agentExecutionLoad: Promise<DesktopAgentExecution> | undefined;
@@ -624,23 +657,20 @@ function createWindow(options: {
     ensureProgress: async () => (await getAgentExecution()).progress,
     onAsyncError: reportAsyncError,
   });
+  // Opened once the one-shot backfill below has settled. The onboarding IPC
+  // awaits this before its first funnel derivation so a returning veteran
+  // (credential present, `firstRunDone` not yet written) can't have WEBVIEW_READY
+  // transiently derive State 1 — firing `selectSetupAgent` and clobbering the
+  // launcher's agent selection — before the backfill marks them `done`.
+  let openOnboardingReadyGate: () => void = () => {};
+  const onboardingReadyGate = new Promise<void>((resolve) => {
+    openOnboardingReadyGate = resolve;
+  });
   const onboardingIpc = createDesktopOnboardingIpc(
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
     {
-      hasCredential: async () => {
-        if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
-          return true;
-        }
-        const isRelaySignedIn = await SupabaseClient.isAuthenticated();
-        if (isRelaySignedIn) {
-          const serverKeyService = getServerSideKeyService();
-          if (serverKeyService.getUseIncludedModelAccess()) {
-            const canUseServer = await serverKeyService.canUseServerSideKeys();
-            if (canUseServer) return true;
-          }
-        }
-        return hasAnyProviderApiKey(platform().secrets);
-      },
+      hasCredential: probeCredential,
+      readyGate: onboardingReadyGate,
       selectSetupAgent: async () => {
         const entry = getAgent('setup', AgentCategory.ToolUse);
         ipcRef.current?.postToRenderer({
@@ -649,14 +679,45 @@ function createWindow(options: {
           sessionType: 'toolUse' as const,
         });
       },
-      // Auto-kickoff is declared as a callback so the planner's output is not
-      // silently discarded (see MainViewProvider.refreshOnboardingFunnel for
-      // the extension-side equivalent). Desktop wires it as a no-op for now;
-      // a future PR can replace it with `handleExecute` once the setup launch
-      // path is host-neutral.
-      kickoffSetup: async () => {},
+      // Auto-start the setup conversation, mirroring the extension's
+      // `launchSetupAssistant` → `handleExecute` path: resolve a model the
+      // user's credentials can call, build the setup execute message, and run
+      // it through the same desktop execute path the renderer's Execute button
+      // uses. The per-session `setupKickoffStarted` dedup guard inside the
+      // onboarding IPC keeps this one-shot; on a resolution failure it throws so
+      // that guard resets and a later credential change can retry.
+      kickoffSetup: async () => {
+        const { buildDesktopSetupExecuteMessage } = await import(
+          '@controllers/onboarding/setupLaunch'
+        );
+        const message = await buildDesktopSetupExecuteMessage();
+        if (!message) {
+          await showErrorMessage(
+            'No model is available for your current credentials. Sign in with ChatGPT, add a provider API key, or check your Researcher Access tier, then try setup again.',
+          );
+          // Throw so the onboarding IPC clears its kickoff guard and a later
+          // credential change can re-trigger the auto-start.
+          throw new Error('Setup launch: no runnable model resolved.');
+        }
+        // Idempotent: returns the in-flight/initialized registry so a kickoff
+        // racing the startup `loadAgents()` cannot hit "Could not find agent:
+        // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
+        const { loadAgents } = await import('@agent/index');
+        await loadAgents();
+        await (await getAgentExecution()).handleExecute(message);
+      },
       signInWithChatGpt: async () => {
-        await settingsIpc.signInChatGpt();
+        // Welcome-card sign-in enables ChatGPT subscription routing so the
+        // funnel recognises the new credential instead of bouncing back to
+        // `needs-credential`.
+        await settingsIpc.signInChatGpt({ enableSubscription: true });
+      },
+      // The desktop shell can't host the VS Code getting-started walkthrough, so
+      // the State 0 walkthrough button opens the desktop docs externally — the
+      // closest desktop analog, reusing the same docs URL the Help menu's
+      // "Desktop Documentation" item opens.
+      openGettingStarted: async () => {
+        await previewHost.openExternal(DESKTOP_DOCS_URL);
       },
       onAsyncError: reportAsyncError,
     },
@@ -668,6 +729,7 @@ function createWindow(options: {
   // (`runOnboarding.tsx:154`) backfill, which desktop formerly skipped by
   // hardcoding `'done'`.
   void (async () => {
+    let didBackfill = false;
     try {
       const globalState = platform().globalState;
       // Gate the whole probe + backfill on the flag being unwritten, so the
@@ -680,24 +742,13 @@ function createWindow(options: {
       ) {
         return;
       }
-      const hasCredential = await (async () => {
-        if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
-        const isRelaySignedIn = await SupabaseClient.isAuthenticated();
-        if (isRelaySignedIn) {
-          const serverKeyService = getServerSideKeyService();
-          if (
-            serverKeyService.getUseIncludedModelAccess() &&
-            (await serverKeyService.canUseServerSideKeys())
-          ) {
-            return true;
-          }
-        }
-        return hasAnyProviderApiKey(platform().secrets);
-      })().catch(() => false);
-      const hasPriorInstall =
-        globalState.get<string | undefined>(
-          GlobalStateKey.LAST_KNOWN_VERSION,
-        ) !== undefined;
+      const hasCredential = await probeCredential().catch(() => false);
+      // `options.hasPriorInstall` was read in `initializeElectronPlatform`
+      // BEFORE the bundled-agent sync wrote LAST_KNOWN_VERSION during this same
+      // session. Reading the key here instead would always be defined (the sync
+      // already ran and is awaited before createWindow), wrongly classifying a
+      // fresh credentialed user as a veteran → 'done', so State 1 never shows.
+      const hasPriorInstall = options.hasPriorInstall;
       // Inline `listExecutions` import so the agent storage module tree-shakes
       // from the desktop main bundle unless we actually reach the backfill
       // path on the first launch.
@@ -710,12 +761,20 @@ function createWindow(options: {
         hasPriorInstall,
         hasRunHistory,
       });
-      // The backfill can finish after the webview has already mounted and
-      // pushed an initial funnel state, so re-derive once it lands to avoid
-      // stranding an upgraded user on the welcome/setup card for the session.
-      await onboardingIpcRef.current?.refreshOnboardingFunnel();
+      didBackfill = true;
     } catch {
       // Swallow — backfill failure must not block window creation.
+    } finally {
+      // Open the gate whether we backfilled or early-returned, so the
+      // onboarding IPC's first refresh can proceed. Opening it here (before the
+      // post-backfill refresh below) also avoids a self-deadlock, since that
+      // refresh awaits this same gate.
+      openOnboardingReadyGate();
+    }
+    // Only when we actually wrote the flag does the renderer need a re-derive:
+    // the webview may have mounted mid-backfill, so push the settled state.
+    if (didBackfill) {
+      await onboardingIpcRef.current?.refreshOnboardingFunnel().catch(() => {});
     }
   })();
   // Real desktop git host — closes audit item A from
@@ -881,6 +940,7 @@ if (protocolLifecycle.shouldContinue) {
           initializeCrashReporting,
           streamSnapshotStore,
           progressSnapshotStore: platformInit.progressSnapshotStore,
+          hasPriorInstall: platformInit.hasPriorInstall,
         });
       reopenMainWindow();
 

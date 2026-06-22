@@ -70,6 +70,11 @@ type RunExecutionRequest = (
       outcome: RunOutcome;
       outputs: Array<{ absolutePath: string }>;
     }): Promise<void>;
+    // This window's SessionHandle. The onboarding run-completion test drives a
+    // terminal `result` event through it via `attachRunTrace`.
+    session: {
+      attachRunTrace(trace: { subscribe(fn: (event: unknown) => void): unknown }): () => void;
+    };
   },
 ) => Promise<void>;
 
@@ -88,6 +93,7 @@ interface DesktopAgentExecutionModule {
       openBuildDisplay?(location: { absolutePath: string }): Promise<void>;
     };
     showErrorMessage?: (message: string) => Promise<void> | void;
+    onRunCompleted?: () => void;
   }): DesktopExecution;
 }
 
@@ -266,6 +272,7 @@ async function createExecution(options: {
   showErrorMessage?: (message: string) => Promise<void> | void;
   prepareMainViewExecutionRequest: (message: unknown) => unknown;
   runAgent?: RunExecutionRequest;
+  onRunCompleted?: () => void;
 }): Promise<DesktopExecution> {
   vi.resetModules();
   vi.doMock('@agent/runtime/ProgressViewBridge', () => ({
@@ -320,6 +327,7 @@ async function createExecution(options: {
     postToRenderer: options.postToRenderer ?? vi.fn(),
     opener: options.opener,
     showErrorMessage: options.showErrorMessage,
+    onRunCompleted: options.onRunCompleted,
   });
 }
 
@@ -1300,6 +1308,101 @@ describe('DesktopProgressBridge', () => {
     try {
       await execution.handleExecute({ command: 'execute' });
       expect(opener.openPath).toHaveBeenCalledWith('/tmp/result.pdf');
+    } finally {
+      execution.dispose();
+    }
+  });
+
+  // Minimal AgentTrace stand-in: the desktop bridge bridges a run's trace into
+  // the window session's onResult channel via `session.attachRunTrace`, which
+  // only needs `subscribe`. `emit` fans an event out to subscribers, matching
+  // how the real lifecycle publishes the terminal `result` event.
+  function makeFakeTrace(): {
+    subscribe(fn: (event: unknown) => void): () => void;
+    emit(event: unknown): void;
+  } {
+    const subscribers = new Set<(event: unknown) => void>();
+    return {
+      subscribe(fn) {
+        subscribers.add(fn);
+        return () => subscribers.delete(fn);
+      },
+      emit(event) {
+        for (const fn of subscribers) fn(event);
+      },
+    };
+  }
+
+  it('fires onRunCompleted when a run reaches a completed terminal result', async () => {
+    const onRunCompleted = vi.fn();
+    // The mock run bridges a trace into the window session's onResult channel
+    // (mirroring AgentLaunchContext.attachRunTrace) and emits a completed
+    // result — exactly what the lifecycle does after persisting firstRunDone.
+    const runAgent = vi.fn(async (_request, options) => {
+      const trace = makeFakeTrace();
+      options.session.attachRunTrace(trace);
+      trace.emit({
+        type: 'result',
+        outcome: RUN_OUTCOME.COMPLETED,
+        executionId: 'exec-1',
+        streamId: 'stream-1',
+        agentName: 'proofreader',
+        category: 'workflow',
+        isSubagent: false,
+      });
+    });
+    const execution = await createExecution({
+      runAgent,
+      onRunCompleted,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: true,
+        request: {
+          agentName: 'default',
+          filePath: 'main.tex',
+          prompt: 'run',
+        },
+      })),
+    });
+
+    try {
+      await execution.handleExecute({ command: 'execute' });
+      expect(onRunCompleted).toHaveBeenCalledOnce();
+    } finally {
+      execution.dispose();
+    }
+  });
+
+  it('does not fire onRunCompleted on a failed terminal result', async () => {
+    const onRunCompleted = vi.fn();
+    const runAgent = vi.fn(async (_request, options) => {
+      const trace = makeFakeTrace();
+      options.session.attachRunTrace(trace);
+      trace.emit({
+        type: 'result',
+        outcome: RUN_OUTCOME.FAILED,
+        executionId: 'exec-2',
+        streamId: 'stream-2',
+        agentName: 'proofreader',
+        category: 'workflow',
+        isSubagent: false,
+      });
+    });
+    const execution = await createExecution({
+      runAgent,
+      onRunCompleted,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: true,
+        request: {
+          agentName: 'default',
+          filePath: 'main.tex',
+          prompt: 'run',
+        },
+      })),
+    });
+
+    try {
+      await execution.handleExecute({ command: 'execute' });
+      expect(onRunCompleted).not.toHaveBeenCalled();
     } finally {
       execution.dispose();
     }

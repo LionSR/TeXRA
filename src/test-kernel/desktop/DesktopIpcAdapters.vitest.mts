@@ -72,9 +72,11 @@ interface DesktopOnboardingIpcModule {
         update(key: string, value: unknown): PromiseLike<void>;
       };
       hasCredential?: () => boolean | Promise<boolean>;
+      readyGate?: Promise<void>;
       selectSetupAgent?: () => Promise<void>;
       kickoffSetup?: () => Promise<void>;
       signInWithChatGpt?: () => Promise<void>;
+      openGettingStarted?: () => Promise<void>;
       onAsyncError?: (error: unknown) => void;
     },
   ): {
@@ -440,6 +442,9 @@ describe('desktop IPC adapters', () => {
         view: 'main',
       }),
     ).toBe(false);
+    // The refresh is serialized through a promise chain (concurrency guard), so
+    // drain microtasks before asserting the pushed state.
+    await flushAsync();
     // Fresh install with no credential → State 0 (welcome card).
     expect(postToRenderer).toHaveBeenLastCalledWith({
       command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
@@ -484,8 +489,9 @@ describe('desktop IPC adapters', () => {
     expect(
       onboarding.handleMessage({ command: MAIN_VIEW_COMMANDS.ONBOARDING_SKIP }),
     ).toBe(true);
-    await Promise.resolve();
-    await Promise.resolve();
+    // The skip persists the declined flag then refreshes through the serialized
+    // chain, so drain microtasks before asserting.
+    await flushAsync();
     expect(update).toHaveBeenLastCalledWith(
       GlobalStateKey.ONBOARDING_DECLINED,
       true,
@@ -667,6 +673,192 @@ describe('desktop IPC adapters', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(signInCalled).toHaveBeenCalled();
+  });
+
+  it('runs the real kickoff path on ONBOARDING_RUN_SETUP and refreshes after', async () => {
+    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
+    const values = new Map<string, unknown>();
+    const update = vi.fn(async (key: string, value: unknown) => {
+      values.set(key, value);
+    });
+    const state = {
+      get<T>(key: string, defaultValue?: T): T {
+        return (values.has(key) ? values.get(key) : defaultValue) as T;
+      },
+      update,
+    };
+    const postToRenderer = vi.fn();
+    const callOrder: string[] = [];
+    const selectSetupAgent = vi.fn(async () => {
+      callOrder.push('select');
+    });
+    const kickoffSetup = vi.fn(async () => {
+      callOrder.push('kickoff');
+    });
+    const onboarding = createDesktopOnboardingIpc(
+      { postToRenderer },
+      {
+        state,
+        hasCredential: () => true,
+        selectSetupAgent,
+        kickoffSetup,
+      },
+    );
+
+    expect(
+      onboarding.handleMessage({
+        command: MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP,
+      }),
+    ).toBe(true);
+    await flushAsync();
+
+    // Real run-setup path: `runSetup` selects the setup agent and kicks off the
+    // conversation, then recomputes the funnel. The follow-up refresh enters
+    // State 1 (credential present) so it also selects the setup agent — hence
+    // `select` fires twice, framing `kickoff`. The terminal state is 'setup'.
+    expect(kickoffSetup).toHaveBeenCalledOnce();
+    expect(selectSetupAgent).toHaveBeenCalledTimes(2);
+    expect(callOrder).toEqual(['select', 'kickoff', 'select']);
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      state: 'setup',
+    });
+  });
+
+  it('opens the getting-started docs on ONBOARDING_OPEN_GETTING_STARTED', async () => {
+    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
+    const values = new Map<string, unknown>();
+    const state = {
+      get<T>(key: string, defaultValue?: T): T {
+        return (values.has(key) ? values.get(key) : defaultValue) as T;
+      },
+      update: vi.fn(async (key: string, value: unknown) => {
+        values.set(key, value);
+      }),
+    };
+    const postToRenderer = vi.fn();
+    const openGettingStarted = vi.fn(async () => {});
+    const onboarding = createDesktopOnboardingIpc(
+      { postToRenderer },
+      { state, openGettingStarted },
+    );
+
+    expect(
+      onboarding.handleMessage({
+        command: MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED,
+      }),
+    ).toBe(true);
+    await flushAsync();
+    expect(openGettingStarted).toHaveBeenCalledOnce();
+    // Opening the walkthrough does not push a funnel state (no derivation
+    // change), so no SET_ONBOARDING_FUNNEL is sent for this command.
+    expect(postToRenderer).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      }),
+    );
+  });
+
+  it('serializes overlapping funnel refreshes to one consistent terminal state', async () => {
+    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
+    const values = new Map<string, unknown>();
+    const state = {
+      get<T>(key: string, defaultValue?: T): T {
+        return (values.has(key) ? values.get(key) : defaultValue) as T;
+      },
+      update: vi.fn(async (key: string, value: unknown) => {
+        values.set(key, value);
+      }),
+    };
+    const postToRenderer = vi.fn();
+    // A credential probe that resolves on the next macrotask, so two refreshes
+    // started back-to-back genuinely overlap in flight. `selectSetupAgent`
+    // would only fire when `previous !== 'setup'`; if the two refreshes
+    // interleaved and both computed against `previous === undefined`, it would
+    // be called twice. Serialized, the second refresh sees `previous === 'setup'`
+    // and does not re-select.
+    let credentialPresent = false;
+    const hasCredential = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          setTimeout(() => resolve(credentialPresent), 0);
+        }),
+    );
+    const selectSetupAgent = vi.fn(async () => {});
+    const onboarding = createDesktopOnboardingIpc(
+      { postToRenderer },
+      { state, hasCredential, selectSetupAgent },
+    );
+
+    // First refresh: no credential yet → needs-credential. Second refresh: a
+    // credential lands → setup. Fire them overlapping (no await between).
+    const first = onboarding.refreshOnboardingFunnel();
+    credentialPresent = true;
+    const second = onboarding.refreshOnboardingFunnel();
+    await Promise.all([first, second]);
+    await flushAsync();
+
+    const funnelStates = postToRenderer.mock.calls
+      .map(([message]) => message as { command: string; state?: string })
+      .filter(
+        (message) =>
+          message.command === MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      )
+      .map((message) => message.state);
+
+    // The terminal state is consistent (setup), and the State 0→1 transition
+    // selected the setup agent exactly once — proof the refreshes did not
+    // interleave and clobber `previousFunnelState`.
+    expect(funnelStates.at(-1)).toBe('setup');
+    expect(selectSetupAgent).toHaveBeenCalledOnce();
+  });
+
+  it('defers the first funnel derivation until the readyGate resolves', async () => {
+    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
+    const values = new Map<string, unknown>();
+    const state = {
+      get<T>(key: string, defaultValue?: T): T {
+        return (values.has(key) ? values.get(key) : defaultValue) as T;
+      },
+      update: vi.fn(async (key: string, value: unknown) => {
+        values.set(key, value);
+      }),
+    };
+    const postToRenderer = vi.fn();
+    let openGate: () => void = () => {};
+    const readyGate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    // A returning veteran: credential present but firstRunDone not yet written.
+    // Before the backfill settles this derives 'setup'; the gate must hold the
+    // first derivation so the renderer never sees the transient State 1.
+    const selectSetupAgent = vi.fn(async () => {});
+    const onboarding = createDesktopOnboardingIpc(
+      { postToRenderer },
+      { state, readyGate, hasCredential: () => true, selectSetupAgent },
+    );
+
+    expect(
+      onboarding.handleMessage({
+        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'main',
+      }),
+    ).toBe(false);
+    await flushAsync();
+    // Gate still closed → no funnel pushed, no setup-agent selection yet.
+    expect(postToRenderer).not.toHaveBeenCalled();
+    expect(selectSetupAgent).not.toHaveBeenCalled();
+
+    // Backfill marks the veteran done, then opens the gate.
+    values.set(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
+    openGate();
+    await flushAsync();
+
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      state: 'done',
+    });
+    expect(selectSetupAgent).not.toHaveBeenCalled();
   });
 
   it('serves desktop log snapshots and copy/export actions', async () => {

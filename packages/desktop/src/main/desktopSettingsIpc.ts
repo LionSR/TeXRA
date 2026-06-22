@@ -172,7 +172,7 @@ export interface DesktopSettingsIpcOptions {
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
   refreshAuthDependentData(): Promise<void>;
-  signInChatGpt(): Promise<void>;
+  signInChatGpt(options?: { enableSubscription?: boolean }): Promise<void>;
 }
 
 export function createDesktopSettingsIpc(
@@ -700,6 +700,11 @@ export function createDesktopSettingsIpc(
     }
     invalidateModelOptionsCache();
     await Promise.all([postProfileData(), postModelSelectionData()]);
+    // Switching included ↔ personal access mode changes the credential
+    // predicate (`getUseIncludedModelAccess()`), so refresh the onboarding
+    // funnel — otherwise a user enabling included access stays on
+    // `needs-credential` until a reload.
+    await options.onApiKeyChanged?.();
   }
 
   async function refreshAfterChatGptAuthChange(): Promise<void> {
@@ -715,7 +720,9 @@ export function createDesktopSettingsIpc(
     await options.onApiKeyChanged?.();
   }
 
-  async function signInChatGpt(): Promise<void> {
+  async function signInChatGpt(signInOptions?: {
+    enableSubscription?: boolean;
+  }): Promise<void> {
     try {
       if (!options.openExternalUrl) {
         await options.showErrorMessage?.(
@@ -727,6 +734,15 @@ export function createDesktopSettingsIpc(
         coordinator: codexCoordinator(),
         openBrowser: options.openExternalUrl,
       });
+      // The onboarding welcome card's "Sign in with ChatGPT" implies the user
+      // wants subscription routing, so enable the preference after a successful
+      // login (mirrors the extension's `codexSubscriptionSignIn`). Without this
+      // `isCodexSubscriptionActive` stays false (the preference defaults off)
+      // and the funnel bounces the user straight back to `needs-credential`.
+      // The Settings sign-in command leaves the preference to its own toggle.
+      if (signInOptions?.enableSubscription) {
+        await setPreferCodexSubscription(true);
+      }
       await options.showInfoMessage?.(
         `Signed in with ChatGPT as ${session.email ?? session.accountId ?? 'your account'}.`,
       );
