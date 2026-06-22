@@ -261,7 +261,7 @@ JSON** — trust the `.d.ts` where they differ.
   open question in risk #2 — both are first-class.)
 - **Convenience accessors exist** on the returned interaction: `output_text`
   (`:7053`), `output_image?: ImageContent` (`:7057`), `output_audio?:
-  AudioContent` (`:7061`). `output_text` joins only the *trailing* `TextContent`
+AudioContent` (`:7061`). `output_text` joins only the _trailing_ `TextContent`
   run, so anything interleaved with thoughts/tools/images still requires walking
   `steps` — which TeXRA does anyway (thinking is separated, tools are handled).
 - **Function-result round-trip:** submit the result as a **new** `create` call
@@ -386,13 +386,13 @@ schema; no new ports.
    a resend-able local transcript. The guide confirms `store` makes both modes
    first-class: `store:false` = stateless drop-in parity (send full `Step[]` each
    round; simplest, keeps compaction working unchanged) vs `store:true` (default)
-   + `previous_interaction_id` (payload win, but the server — not TeXRA — then
-   owns compaction, and behaviour must be defined when the stored interaction has
-   expired or a run is restored from old history). Official retention is 55 days
-   on paid tier / 1 day on free tier; note `store:false` is incompatible with
-   `background=true` and with later `previous_interaction_id` use. **Recommend
-   `store:false` for v0** to preserve the existing history/compaction contract,
-   treating server-side continuation (+ background) as a later optimisation.
+   - `previous_interaction_id` (payload win, but the server — not TeXRA — then
+     owns compaction, and behaviour must be defined when the stored interaction has
+     expired or a run is restored from old history). Official retention is 55 days
+     on paid tier / 1 day on free tier; note `store:false` is incompatible with
+     `background=true` and with later `previous_interaction_id` use. **Recommend
+     `store:false` for v0** to preserve the existing history/compaction contract,
+     treating server-side continuation (+ background) as a later optimisation.
 3. **GA service with active SDK churn.** The official overview marks the API GA,
    and the types ship in the pinned SDK version; `response_mime_type` is already
    deprecated in favour of `response_format`, signalling churn. Pin/snapshot the
