@@ -21,6 +21,11 @@ import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
+import {
+  ONBOARDING_CHOICE_API_KEY,
+  ONBOARDING_CHOICE_CHATGPT,
+  ONBOARDING_CHOICE_SIGN_IN,
+} from '@shared/copy/onboarding';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
@@ -201,18 +206,18 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
 
   const picks = [
     {
-      label: '$(sign-in) Sign in for free (recommended)',
-      description: 'Researcher Access Program — no API key needed',
-      id: 'signIn' as const,
-    },
-    {
-      label: '$(comment-discussion) Use ChatGPT subscription',
-      description: 'Codex models through your ChatGPT plan',
+      label: `$(comment-discussion) ${ONBOARDING_CHOICE_CHATGPT.label}`,
+      description: ONBOARDING_CHOICE_CHATGPT.description,
       id: 'chatgpt' as const,
     },
     {
-      label: '$(key) I have an API key',
-      description: 'Paste a provider API key (OpenAI, Anthropic, etc.)',
+      label: `$(sign-in) ${ONBOARDING_CHOICE_SIGN_IN.label}`,
+      description: ONBOARDING_CHOICE_SIGN_IN.description,
+      id: 'signIn' as const,
+    },
+    {
+      label: `$(key) ${ONBOARDING_CHOICE_API_KEY.label}`,
+      description: ONBOARDING_CHOICE_API_KEY.description,
       id: 'apiKey' as const,
     },
     {

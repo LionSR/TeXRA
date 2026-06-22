@@ -88,7 +88,7 @@ describe('CLI multi-agent presets', () => {
     );
     expect(output).toContain('texra multi-agent inspect <team-id>');
     expect(output).toContain(
-      'built-in teams may load additional relay-served agents after `texra login`',
+      'Researcher Access sign-in may load additional remote team agents',
     );
   });
 
@@ -169,7 +169,7 @@ describe('CLI multi-agent presets', () => {
     );
     expect(formatCliMultiAgentPresetLauncherHints(plan)).toEqual([
       'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
-      'Relay teams may unlock more agents after texra login.',
+      'Researcher Access sign-in may unlock more remote team agents.',
     ]);
   });
 
@@ -565,7 +565,7 @@ describe('CLI multi-agent presets', () => {
         '  latexFixer',
         '  progressCheck',
         '',
-        'Hint: built-in teams may load additional relay-served agents after `texra login`.',
+        'Hint: Researcher Access sign-in may load additional remote team agents.',
       ].join('\n'),
     );
   });

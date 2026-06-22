@@ -77,7 +77,7 @@ export const setupCommand = withUsageSections(
       title: 'EXAMPLES',
       rows: [
         ['texra setup', 'agent-led setup: environment, roster, first task'],
-        ['texra login', 'sign in for included relay access (credentials only)'],
+        ['texra login', 'sign in with Researcher Access (credentials only)'],
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
         ['texra auth status', 'show TeXRA sign-in status'],
       ],
