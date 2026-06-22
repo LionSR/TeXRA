@@ -20,7 +20,7 @@ import {
 
 // Local file imports
 import { defineTool } from './core/define';
-import { type ToolResult, ToolError } from './result';
+import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 
 const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);

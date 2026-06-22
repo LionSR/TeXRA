@@ -44,7 +44,7 @@ import type {
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import {
   requestBashApproval,

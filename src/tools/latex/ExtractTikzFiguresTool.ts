@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { tikzPictureManager } from '@latex/TikzPictureManager';
-import { type ToolFileAttachment } from '@tools/result';
+import { type ToolFileAttachment } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';

@@ -11,7 +11,7 @@ import * as logger from '@logger/logUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { type ToolResult, ToolError } from './result';
+import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 
 const CHANNEL = 'ReportReviewIssueTool';
 logger.initialize(CHANNEL);

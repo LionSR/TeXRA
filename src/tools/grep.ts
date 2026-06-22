@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
 import { executeCommand } from '@utils/system/execUtils';

@@ -27,7 +27,7 @@ import {
   type InquiryActionMessage,
   type StreamTabId,
 } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRuntimeHost } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { formatResultCount } from '@utils/text/stringUtils';
