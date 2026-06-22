@@ -313,17 +313,23 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
       return 'already-running';
     }
 
-    const proceed = await ensureCredentialOrPrompt();
-    if (!proceed) {
+    // Check routing configuration before credentials: a ChatGPT-
+    // subscription user whose "Use OpenRouter" flag is on without an OR
+    // key would otherwise fall into the credential prompt first because
+    // isCodexSubscriptionActive returns false under OpenRouter routing
+    // (shouldUseCodexSubscription short-circuits when useOpenRouter is
+    // true — see codexRouting.ts:28).
+    if (!(await ensureRoutingConfigured())) {
       void vscode.window.showInformationMessage(
-        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, enabled ChatGPT subscription, or set an API key.',
+        'Setup assistant cancelled. Resolve the "Use OpenRouter" configuration (add an OpenRouter key or disable the setting in Dashboard → Models), then run `TeXRA: Run Setup Assistant` again.',
       );
       return 'not-started';
     }
 
-    if (!(await ensureRoutingConfigured())) {
+    const proceed = await ensureCredentialOrPrompt();
+    if (!proceed) {
       void vscode.window.showInformationMessage(
-        'Setup assistant cancelled. Resolve the "Use OpenRouter" configuration (add an OpenRouter key or disable the setting in Dashboard → Models), then run `TeXRA: Run Setup Assistant` again.',
+        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, enabled ChatGPT subscription, or set an API key.',
       );
       return 'not-started';
     }
