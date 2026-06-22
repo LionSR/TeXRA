@@ -2,7 +2,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - progress view
-import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
+import {
+  ProgressViewMessageHandler,
+  type ProgressViewMessageHost,
+} from '@progressView/ProgressViewMessageHandler';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 // Local imports - shared
@@ -28,6 +31,14 @@ function createWebviewView(): vscode.WebviewView {
   return {
     webview: { postMessage: vi.fn() },
   } as unknown as vscode.WebviewView;
+}
+
+function createMessageHost(): ProgressViewMessageHost {
+  return {
+    showInfo: vi.fn(async () => undefined),
+    showWarning: vi.fn(async () => undefined),
+    showError: vi.fn(async () => undefined),
+  };
 }
 
 type ProgressViewProviderFake = ProgressViewProvider & {
@@ -93,7 +104,11 @@ describe('progress-view onboarding refresh wiring', () => {
     const context = createExtensionContext();
     const provider = createProgressViewProvider();
     provider.refreshOnboardingFunnel.mockResolvedValue(undefined);
-    const handler = new ProgressViewMessageHandler(provider, context);
+    const handler = new ProgressViewMessageHandler(
+      provider,
+      context,
+      createMessageHost(),
+    );
 
     await handler.handleMessage(
       {
@@ -130,7 +145,11 @@ describe('progress-view onboarding refresh wiring', () => {
     async (action) => {
       const context = createExtensionContext();
       const provider = createProgressViewProvider();
-      const handler = new ProgressViewMessageHandler(provider, context);
+      const handler = new ProgressViewMessageHandler(
+        provider,
+        context,
+        createMessageHost(),
+      );
 
       await handler.handleMessage(
         {

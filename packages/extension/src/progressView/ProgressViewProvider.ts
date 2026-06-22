@@ -45,7 +45,10 @@ import {
   readExternalInquiryThread,
 } from '@tools/inquiry/externalInquiryStorage';
 
-import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
+import {
+  ProgressViewMessageHandler,
+  type ProgressViewMessageHost,
+} from './ProgressViewMessageHandler';
 
 import type { MainViewProvider } from '../MainViewProvider';
 
@@ -237,7 +240,19 @@ export class ProgressViewProvider
         styleKey: 'progressStyleUri',
       },
     );
-    this.messageHandler = new ProgressViewMessageHandler(this, context);
+    const messageHost: ProgressViewMessageHost = {
+      showInfo: (message) => vscode.window.showInformationMessage(message),
+      showWarning: (message, options, ...items) =>
+        options
+          ? vscode.window.showWarningMessage(message, options, ...items)
+          : vscode.window.showWarningMessage(message, ...items),
+      showError: (message) => vscode.window.showErrorMessage(message),
+    };
+    this.messageHandler = new ProgressViewMessageHandler(
+      this,
+      context,
+      messageHost,
+    );
 
     ProgressViewProvider._instance = this;
     setProgressViewBridge(this);
