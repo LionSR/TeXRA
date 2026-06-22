@@ -34,14 +34,15 @@ interface AgentGroups {
 type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
 type AgentDelegationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
 
-function agentDescription(agent: AgentOptionData): string {
-  const source = agent.isRemote
-    ? 'remote'
-    : agent.isCustom
-      ? 'custom'
-      : 'built-in';
-  const kind = isDelegatingAgent(agent) ? 'delegating' : 'tool-use';
-  return agent.description ? `${kind}; ${source}; ${agent.description}` : kind;
+export function agentDescription(agent: AgentOptionData): string {
+  return [
+    isDelegatingAgent(agent) ? 'delegating' : undefined,
+    agent.isRemote ? 'remote' : undefined,
+    agent.isCustom ? 'custom' : undefined,
+    agent.description,
+  ]
+    .filter((part) => part != null && part.length > 0)
+    .join('; ');
 }
 
 function isDelegatingAgent(agent: AgentDelegationFlag): boolean {
@@ -276,7 +277,9 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
             <Text key={workflow.value} wrap="truncate-end">
               {'  '}
               {workflow.name}
-              <Text dimColor>{` — ${workflow.description}`}</Text>
+              {workflow.description ? (
+                <Text dimColor>{` — ${workflow.description}`}</Text>
+              ) : null}
             </Text>
           ))}
           {selectWindow.showWorkflowOverflow ? (
