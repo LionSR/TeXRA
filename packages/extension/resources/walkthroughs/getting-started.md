@@ -8,8 +8,8 @@ The shortest path is: choose a credential, run setup once, then let the orchestr
 
 A credential is the one step no agent can do for you. Three ways in:
 
-- **Sign in — free for academics** -- Researcher Access: no API key needed (recommended). Signing in also unlocks remote agents, including the orchestrator.
-- **Use ChatGPT subscription** -- ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan from the Models tab.
+- **Use ChatGPT subscription** -- ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.
+- **Sign in with Researcher Access** -- Free for academics; no API key needed. Signing in also unlocks remote agents, including the orchestrator.
 - **Use your own provider API key** -- Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions (Claude Pro, ChatGPT for non-Codex models, etc.) do not include API access; you need a key from the provider's developer platform.
 
 You can also pick **Skip for now** and come back later, but nothing below runs without a credential.
