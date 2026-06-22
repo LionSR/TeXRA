@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { XMLParser } from 'fast-xml-parser';
 
 import {
@@ -32,6 +34,7 @@ async function writeRoundOutput(
   absolutePath: string,
   content: string,
 ): Promise<void> {
+  await AbsoluteFS.ensureDir(path.dirname(absolutePath));
   if (await AbsoluteFS.isSymbolicLink(absolutePath)) {
     await AbsoluteFS.delete(absolutePath);
   }
