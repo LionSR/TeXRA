@@ -310,7 +310,8 @@ For good separation of concerns and platform independence, core business logic s
 **Agent execution and tool-use**
 
 - Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
-- Launch and resume executions via `executeAgent` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
+- Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns an `executionId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `executionId` (e.g. subagent dispatch in `DelegationTools.ts` or a resume path). Both functions require an explicit `runtimeHost`.
+- Resume a persisted tool-use session via `resumeToolUseFromSnapshot` (`src/agent/runtime/executeAgent.ts`), not `runAgent`.
 - Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/computeModelOptions.ts`.
 
 **PocketFlow architecture**
