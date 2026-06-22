@@ -19,23 +19,23 @@ export interface LoginFormProps {
 
 export const LOGIN_FORM_ITEMS = [
   {
-    value: 'texra',
-    label: 'TeXRA included access',
-    description: 'Researcher Access relay and remote agents',
-  },
-  {
     value: 'chatgpt',
     label: 'ChatGPT subscription',
-    description: 'route Codex models through your ChatGPT plan',
+    description: 'Codex via ChatGPT Plus/Pro/Team',
   },
   {
-    value: 'texra --device',
-    label: 'TeXRA device code',
-    description: 'sign in from SSH or another browser',
+    value: 'texra',
+    label: 'Researcher Access',
+    description: 'TeXRA relay and remote agents',
   },
   {
     value: 'chatgpt --device',
     label: 'ChatGPT device code',
+    description: 'sign in from SSH or another browser',
+  },
+  {
+    value: 'texra --device',
+    label: 'Researcher device code',
     description: 'sign in from SSH or another browser',
   },
 ] as const satisfies ReadonlyArray<SelectItem<LoginFormValue>>;

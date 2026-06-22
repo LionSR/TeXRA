@@ -4,23 +4,23 @@
  *
  * The CLI first-run picker, the extension/desktop welcome card, and the
  * walkthrough import these strings instead of paraphrasing each other, so the
- * choice order and recommendation can never drift between surfaces.
+ * choice order can never drift between surfaces.
  * Surface-specific hints (e.g. "run `texra login`" vs. a settings link) stay
  * in the surface that owns them.
  */
 
 export const ONBOARDING_CARD_TITLE = 'Welcome to TeXRA';
 
-/** State 0 choice 1 — recommended. */
-export const ONBOARDING_CHOICE_SIGN_IN = {
-  label: 'Sign in with Researcher Access',
-  description: 'Free for academics; no API key needed (recommended)',
-} as const;
-
-/** State 0 choice 2. */
+/** State 0 choice 1. */
 export const ONBOARDING_CHOICE_CHATGPT = {
   label: 'Use ChatGPT subscription',
   description: 'Codex models through ChatGPT Plus, Pro, or Team',
+} as const;
+
+/** State 0 choice 2. */
+export const ONBOARDING_CHOICE_SIGN_IN = {
+  label: 'Sign in with Researcher Access',
+  description: 'Free for academics; no API key needed',
 } as const;
 
 /** State 0 choice 3. */

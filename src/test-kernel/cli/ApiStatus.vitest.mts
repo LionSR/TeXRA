@@ -72,7 +72,7 @@ describe('CLI API status text', () => {
     expect(
       formatCliApiStatusActionHint('included', { authenticated: false }),
     ).toBe(
-      'actions: `texra login` enables included relay; `--api-mode personal` uses provider keys',
+      'actions: `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
     );
     expect(
       formatCliApiStatusActionHint('included', { authenticated: true }),
@@ -87,7 +87,7 @@ describe('CLI API status text', () => {
     expect(
       formatCliApiStatusActionHint('personal', { authenticated: false }),
     ).toBe(
-      'actions: configure a provider key, or run `texra login` for included relay',
+      'actions: use ChatGPT, add a provider key, or sign in with Researcher Access',
     );
   });
 });
