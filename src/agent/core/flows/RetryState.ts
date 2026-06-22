@@ -5,8 +5,10 @@ import { StatusCodes } from 'http-status-codes';
 import { Node, type NonIterableObject } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { type RetryResult } from '@agent/runtime/RetryRequestCoordinator';
-import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  type RetryResult,
+  type RetryRequestOptions,
+} from '@agent/runtime/RetryRequestCoordinator';
 import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
@@ -54,6 +56,10 @@ interface RetryableNodeServices {
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
   refreshClient?: () => Promise<void>;
+  waitForRetry: (
+    streamId: string,
+    options: RetryRequestOptions,
+  ) => Promise<RetryResult>;
 }
 
 /**
@@ -276,13 +282,12 @@ export abstract class RetryableInvocationNode<
     streamStatus.set(streamId, STREAM_STATUS.WAITING, {
       runtimeHost,
     });
-    const result: RetryResult =
-      await currentSession().coordinators.waitForRetry(streamId, {
-        operation: operationName,
-        errorMessage: formatted.message,
-        logger,
-        errorDetails: formatted,
-      });
+    const result: RetryResult = await this.services.waitForRetry(streamId, {
+      operation: operationName,
+      errorMessage: formatted.message,
+      logger,
+      errorDetails: formatted,
+    });
 
     if (result.action === 'retry') {
       logger.debug('Manual retry triggered');
