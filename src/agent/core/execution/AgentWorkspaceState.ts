@@ -1,5 +1,7 @@
+// Third-party imports
 import { z } from 'zod';
 
+// Local imports
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import {
   FileLocationSchema,

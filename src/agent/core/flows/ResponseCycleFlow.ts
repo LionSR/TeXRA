@@ -19,7 +19,6 @@ import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import { K_SLICE } from '@agent/core/constants';
-import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import type { ToolDefinition } from '@model';
 import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
@@ -299,7 +298,7 @@ class ResponseProcessNode<C> extends BaseNode<
       if (newResponse) {
         processedResponse = replacementEngine.applyAll(newResponse);
 
-        const connector = await bestConnectionMethod(
+        const connector = await this.services.bestConnectionMethod(
           prepRes.lastResponse.slice(-K_SLICE),
           processedResponse.slice(0, K_SLICE),
         );

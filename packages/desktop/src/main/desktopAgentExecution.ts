@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
-import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
@@ -49,17 +48,13 @@ import {
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
   type ExecutionId,
-  type RestoredStreamSnapshot,
   type StreamTabId,
 } from '@shared/schemas';
-import { isGoalInFlight } from '@shared/schemas/goal';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
-import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
-import { AgentCategory } from '@shared/schemas/agent';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
@@ -74,13 +69,19 @@ import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { getConfig } from '@utils/config/configUtils';
 
+import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 import {
   createDesktopToolEditApprovalController,
   type DesktopToolEditApprovalController,
 } from './desktopToolEditApproval.js';
 import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
+import {
+  createDesktopProgressEventBridge,
+  type DesktopProgressEventBridge,
+} from './desktopProgressEventBridge.js';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
+import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
@@ -99,6 +100,14 @@ export interface DesktopAgentExecutionOptions {
    */
   streamSnapshotStore?: DesktopStreamSnapshotStore;
   progressSnapshotStore?: StreamSnapshotStore;
+  /**
+   * Fired once a run in this window's session reaches a completed terminal
+   * result. Used to recompute the onboarding funnel after a user's first run
+   * (the lifecycle has already persisted `firstRunDone` by the time the
+   * terminal `result` event reaches `session.onResult`), so the renderer leaves
+   * the setup card without waiting for a restart.
+   */
+  onRunCompleted?: () => void;
 }
 
 export interface DesktopAgentExecution {
@@ -128,6 +137,8 @@ export interface DesktopProgressBridgeOptions {
   showErrorMessage?: (message: string) => Promise<void> | void;
   streamSnapshotStore?: DesktopStreamSnapshotStore;
   progressSnapshotStore?: StreamSnapshotStore;
+  /** See DesktopAgentExecutionOptions.onRunCompleted. */
+  onRunCompleted?: () => void;
 }
 
 class MemoryProgressStorage implements MementoStorage {
@@ -170,19 +181,11 @@ export class DesktopProgressBridge {
   private readonly toolEditApprovals: DesktopToolEditApprovalController;
   private readonly fileActions: DesktopProgressFileActions;
   /**
-   * Restored "ghost" streams hydrated from the cross-launch snapshot.
-   * Keyed by streamId. An entry is removed once a live progress event
-   * with the same id arrives (the live entry takes over and the
-   * ghost is no longer needed). Audit item D / trajectory #19.
+   * Extracted progress-event bridge that owns ghost-stream hydration,
+   * stream-snapshot persistence, restored-display sending, and
+   * progress-event → rail-update translation.  See #6329.
    */
-  private readonly restoredStreams = new Map<
-    StreamTabId,
-    RestoredStreamSnapshot
-  >();
-  /** Ghost streams whose persisted display has already been restored this session. */
-  private readonly restoredDisplaySent = new Set<StreamTabId>();
-  /** Ghost streams with an async persisted-display restore already pending. */
-  private readonly restoredDisplayInFlight = new Set<StreamTabId>();
+  private readonly progressEvents: DesktopProgressEventBridge;
 
   readonly runtimeHost: AgentRuntimeHost;
   readonly progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
@@ -362,26 +365,42 @@ export class DesktopProgressBridge {
     this.state = this.backend.state;
     this.streamLogs = this.state.streamLogs;
     const backendSubscription = this.backend.setupEventListeners();
-    const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
-      this.updateGoalActiveFromStore(streamId);
-    });
-    const unsubscribeEnsureProgress = bus.on(
-      'requestEnsureProgressView',
-      () => {
-        this.routeToProgress();
+    // Compose the extracted progress-event bridge for ghost-stream hydration,
+    // stream-snapshot persistence, restored-display sending, and progress-event
+    // → rail-update translation.  See #6329.
+    this.progressEvents = createDesktopProgressEventBridge({
+      state: this.state,
+      streamSnapshotStore: options.streamSnapshotStore,
+      sendMessage: (message) => this.send(message),
+      logger: this.logger,
+      getActiveStream: () => this.state.activeStream,
+      routeToProgress: () => this.routeToProgress(),
+      onGoalStateChanged: (streamId, active, goalOpts) => {
+        this.backend.webviewUpdater.updateGoalActive(
+          streamId,
+          active,
+          goalOpts,
+        );
       },
-    );
-    // Run failures surface only through this event for root runs; without a
-    // subscriber the message dies in the main process and the rail shows a
-    // bare ERROR status.
-    const unsubscribeShowError = bus.on('requestShowError', ({ message }) => {
-      void this.options.showErrorMessage?.(message);
+      onShowError: (message) => {
+        void this.options.showErrorMessage?.(message);
+      },
+    });
+    // Onboarding funnel (PRD: agent-native onboarding): a completed run ends
+    // State 1. `AgentRunLifecycle` persists `firstRunDone` BEFORE it emits the
+    // terminal `result` event, so by the time this listener fires the funnel
+    // derivation will read the up-to-date flag. The setup agent's own run does
+    // not flip `firstRunDone` (the lifecycle skips it), but recomputing here is
+    // still safe — the derivation is idempotent.
+    const unsubscribeResult = this.session.onResult((event) => {
+      if (event.outcome === 'completed') {
+        this.options.onRunCompleted?.();
+      }
     });
     this.unsubscribe = () => {
       backendSubscription.dispose();
-      unsubscribeGoal();
-      unsubscribeEnsureProgress();
-      unsubscribeShowError();
+      this.progressEvents.dispose();
+      unsubscribeResult();
     };
     this.runtimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),
@@ -498,32 +517,6 @@ export class DesktopProgressBridge {
       },
     });
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
-
-    // Hydrate previously-persisted "ghost" streams so the rail shows
-    // the user's prior runs at launch (audit item D / trajectory #19).
-    // We seed creation timestamps, statuses, descriptions, executionIds,
-    // and categories from the snapshot — but NOT taskState, since we
-    // can't resurrect runtime state. The renderer will show these as
-    // stopped/orphaned entries; "Resume run" funnels back through the
-    // existing storage-backed resume path when an executionId is
-    // available, otherwise falls back to "start fresh".
-    const hydrated = options.streamSnapshotStore?.hydrated ?? [];
-    for (const snapshot of hydrated) {
-      this.restoredStreams.set(snapshot.streamId, snapshot);
-      this.state.streamLogs.ensureStream(snapshot.streamId);
-      this.state.updateStreamHints(snapshot.streamId, {
-        agent: snapshot.agent,
-        agentCategory: snapshot.agentCategory,
-        inputFile: snapshot.inputFile,
-        creationTimestamp: snapshot.creationTimestamp,
-        executionId: snapshot.executionId,
-        parentStreamId: snapshot.parentStreamId,
-        description: snapshot.description,
-      });
-      StreamStatusService.set(snapshot.streamId, snapshot.lastKnownStatus, {
-        emit: false,
-      });
-    }
   }
 
   private createProgressViewInboundHandlers(): ProgressViewInboundHandlerRegistry {
@@ -602,6 +595,24 @@ export class DesktopProgressBridge {
     });
     return {
       ...sharedHandlers,
+      // Getting-started actions from the progress empty-state. openWalkthrough
+      // has a desktop equivalent; the remaining four actions are VS Code-only.
+      [PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (data) => {
+        if (data.action === 'openWalkthrough') {
+          this.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
+          return;
+        }
+        const labels: Record<typeof data.action, string> = {
+          runSetup: 'Run setup assistant',
+          createSampleProject: 'Create sample project',
+          cloneOverleaf: 'Import from Overleaf',
+          downloadArxiv: 'Import from arXiv',
+          openWalkthrough: 'Open walkthrough',
+        };
+        await this.options.showInfoMessage?.(
+          `"${labels[data.action]}" requires the VS Code extension.`,
+        );
+      },
       // External inquiry rides outside the shared registry (as in the
       // extension's ProgressViewMessageHandler): draft persists the open
       // turn, submit/drop settle the durable thread.
@@ -644,54 +655,6 @@ export class DesktopProgressBridge {
     };
   }
 
-  private persistStreamSnapshot(streamId: StreamTabId): void {
-    const store = this.options.streamSnapshotStore;
-    if (!store) return;
-
-    const taskState = this.state.snapshots.getTaskState(streamId);
-    const info = buildStreamInfo(this.state, streamId, 'all');
-    const restored = this.restoredStreams.get(streamId);
-    const snapshot: RestoredStreamSnapshot = {
-      streamId,
-      label: info?.label ?? restored?.label ?? streamId,
-      agent: info?.agent ?? restored?.agent,
-      agentCategory:
-        info?.agentCategory ??
-        restored?.agentCategory ??
-        AgentCategory.Workflow,
-      inputFile: info?.inputFile || restored?.inputFile,
-      instruction: taskState?.agentConfig.instruction || restored?.instruction,
-      lastKnownStatus:
-        StreamStatusService.get(streamId) ??
-        restored?.lastKnownStatus ??
-        STREAM_STATUS.STOPPED,
-      description: info?.description ?? restored?.description,
-      executionId: info?.executionId ?? restored?.executionId,
-      parentStreamId: info?.parentStreamId ?? restored?.parentStreamId,
-      creationTimestamp:
-        info?.creationTimestamp ?? restored?.creationTimestamp ?? Date.now(),
-      lastTimestamp:
-        this.streamLogs.getLastTimestamp(streamId) ?? restored?.lastTimestamp,
-      persistedAt: Date.now(),
-    };
-    void store.upsert(snapshot).catch((error: unknown) => {
-      this.logger.warn('Failed to persist stream snapshot', {
-        data: error instanceof Error ? error : { error },
-      });
-    });
-  }
-
-  private removePersistedStream(streamId: StreamTabId): void {
-    this.restoredStreams.delete(streamId);
-    const store = this.options.streamSnapshotStore;
-    if (!store) return;
-    void store.remove(streamId).catch((error: unknown) => {
-      this.logger.warn('Failed to remove persisted stream snapshot', {
-        data: error instanceof Error ? error : { error },
-      });
-    });
-  }
-
   dispose(): void {
     this.detachResultToast?.();
     this.toolEditApprovals.dispose();
@@ -713,9 +676,8 @@ export class DesktopProgressBridge {
   private clearDesktopSessionMaps(): void {
     this.agentProposals.clear();
     this.pendingPermissionStreams.clear();
-    this.restoredStreams.clear();
-    this.restoredDisplaySent.clear();
-    this.restoredDisplayInFlight.clear();
+    // Ghost-stream state is owned by the extracted progressEvents bridge;
+    // onAllStreamsDeleted handles clearing it.
   }
 
   private send(message: ProgressViewOutboundMessage): void {
@@ -736,153 +698,12 @@ export class DesktopProgressBridge {
     });
   }
 
-  /**
-   * Restore a ghost (prior-session) stream's persisted sidecar display from
-   * `streamData/` the first time it becomes active — todos / plan / per-run
-   * usage / output files — matching what the CLI and extension show on resume.
-   * Sent once per stream; only durable data is restored (no liveness).
-   */
-  private sendRestoredDisplay(streamId: StreamTabId): void {
-    if (
-      !this.restoredStreams.has(streamId) ||
-      this.restoredDisplaySent.has(streamId) ||
-      this.restoredDisplayInFlight.has(streamId)
-    ) {
-      return;
-    }
-    this.restoredDisplayInFlight.add(streamId);
-    void this.state.snapshots
-      .read(streamId)
-      .then((snap) => {
-        if (
-          streamId !== this.state.activeStream ||
-          !this.restoredStreams.has(streamId)
-        ) {
-          return;
-        }
-        // The persisted snapshot is authoritative for a restored stream: send
-        // todos/plan verbatim so an intentionally-empty list or null plan CLEARS
-        // any stale renderer state instead of being skipped — matching the CLI
-        // and extension resume paths (both restore the persisted value as-is).
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
-          stream: streamId,
-          todos: snap.todos,
-        });
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PLAN,
-          stream: streamId,
-          plan: snap.plan,
-        });
-        for (const [runId, usage] of Object.entries(snap.runUsage)) {
-          this.send({
-            command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
-            stream: streamId,
-            runId,
-            usage,
-          });
-        }
-        if (Object.keys(snap.outputFilesByRound).length > 0) {
-          this.send({
-            command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
-            stream: streamId,
-            rounds: snap.outputFilesByRound,
-          });
-        }
-        if (Object.keys(snap.missingOutputsByRound).length > 0) {
-          this.send({
-            command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
-            stream: streamId,
-            rounds: snap.missingOutputsByRound,
-          });
-        }
-        if (Object.keys(snap.compileFailuresByRound).length > 0) {
-          this.send({
-            command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
-            stream: streamId,
-            rounds: snap.compileFailuresByRound,
-            reset: true,
-          });
-        }
-        this.restoredDisplaySent.add(streamId);
-      })
-      .catch((error: unknown) => {
-        this.logger.warn(`Failed to restore display for ${streamId}`, {
-          data: error,
-        });
-      })
-      .finally(() => {
-        this.restoredDisplayInFlight.delete(streamId);
-      });
-  }
-
-  private updateGoalActiveFromStore(streamId: StreamTabId): void {
-    const goal = GoalStore.getForStream(streamId);
-    this.backend.webviewUpdater.updateGoalActive(
-      streamId,
-      isGoalInFlight(goal),
-      {
-        status: goal?.status,
-        objective: goal?.objective,
-      },
-    );
-  }
-
   private handleProgressEvent<K extends keyof ProgressEventPayloads>(
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
     bus.emit(event, payload);
-    this.updateDesktopRailForProgressEvent(event, payload);
-  }
-
-  private updateDesktopRailForProgressEvent<
-    K extends keyof ProgressEventPayloads,
-  >(event: K, payload: ProgressEventPayloads[K]): void {
-    switch (event) {
-      case 'setActiveStream': {
-        const data = payload as ProgressEventPayloads['setActiveStream'];
-        if (!data.streamId) {
-          this.state.activeStream = '';
-          this.send({
-            command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-            activeStream: '',
-          });
-          return;
-        }
-        if (data.suppressViewSwitch !== true) {
-          this.routeToProgress();
-          this.sendRestoredDisplay(data.streamId);
-        }
-        return;
-      }
-      case 'setTaskState': {
-        const data = payload as ProgressEventPayloads['setTaskState'];
-        this.streamLogs.ensureStream(data.streamId);
-        this.restoredStreams.delete(data.streamId);
-        this.persistStreamSnapshot(data.streamId);
-        return;
-      }
-      case 'updateStreamStatus': {
-        const data = payload as ProgressEventPayloads['updateStreamStatus'];
-        this.restoredStreams.delete(data.streamId);
-        this.persistStreamSnapshot(data.streamId);
-        return;
-      }
-      case 'updateStreamDescription': {
-        const data =
-          payload as ProgressEventPayloads['updateStreamDescription'];
-        this.persistStreamSnapshot(data.streamId);
-        return;
-      }
-      case 'setParentStream': {
-        const data = payload as ProgressEventPayloads['setParentStream'];
-        this.persistStreamSnapshot(data.childStreamId);
-        return;
-      }
-      default:
-        return;
-    }
+    this.progressEvents.onProgressEvent(event, payload);
   }
 
   syncFullView(): void {
@@ -920,11 +741,14 @@ export class DesktopProgressBridge {
   }
 
   async deleteStream(streamId: StreamTabId): Promise<void> {
-    if (!this.streamLogs.has(streamId) && !this.restoredStreams.has(streamId)) {
+    if (
+      !this.streamLogs.has(streamId) &&
+      !this.progressEvents.hasRestoredStream(streamId)
+    ) {
       return;
     }
     this.deletedStreams.add(streamId);
-    this.removePersistedStream(streamId);
+    this.progressEvents.onStreamDeleted(streamId);
 
     // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
     cleanupApprovalsForStream(streamId, this.session);
@@ -933,8 +757,6 @@ export class DesktopProgressBridge {
     this.deleteAgentProposalsForStream(streamId);
     this.releasePendingPermissionsForStream(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
-    this.restoredDisplaySent.delete(streamId);
-    this.restoredDisplayInFlight.delete(streamId);
     await GoalStore.forget(streamId);
     await this.state.clearStream(streamId);
     this.send({
@@ -951,7 +773,7 @@ export class DesktopProgressBridge {
   async deleteAllStreams(): Promise<void> {
     const streamIds = new Set<StreamTabId>([
       ...this.streamLogs.keys(),
-      ...this.restoredStreams.keys(),
+      ...this.progressEvents.restoredStreams.keys(),
     ]);
     // Approval cleanup (incl. retry/proposal/plan coordinator state) is scoped
     // to THIS window's streams via the per-stream helper, NOT the process-wide
@@ -977,18 +799,7 @@ export class DesktopProgressBridge {
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
     // ghosts come back zombie-style after relaunch.
-    this.restoredStreams.clear();
-    this.restoredDisplaySent.clear();
-    this.restoredDisplayInFlight.clear();
-    if (this.options.streamSnapshotStore) {
-      void this.options.streamSnapshotStore
-        .replaceAll([])
-        .catch((error: unknown) => {
-          this.logger.warn('Failed to clear stream snapshot store', {
-            data: error instanceof Error ? error : { error },
-          });
-        });
-    }
+    await this.progressEvents.onAllStreamsDeleted();
 
     await this.state.clearAll();
     this.clearDesktopSessionMaps();
@@ -1011,7 +822,7 @@ export class DesktopProgressBridge {
       this.backend.eventHandler.syncStreamContent(streamId, {
         includeActiveState: true,
       });
-      this.sendRestoredDisplay(streamId);
+      this.progressEvents.sendRestoredDisplay(streamId);
     });
   }
 
@@ -1317,6 +1128,7 @@ export function createDesktopAgentExecution(
     showErrorMessage: options.showErrorMessage,
     streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore: options.progressSnapshotStore,
+    onRunCompleted: options.onRunCompleted,
   });
 
   return {
