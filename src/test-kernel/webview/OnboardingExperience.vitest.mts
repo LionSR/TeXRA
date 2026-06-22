@@ -25,6 +25,22 @@ describe('extension onboarding experience', () => {
     expect(source).toContain("waIcon('code-compare')");
   });
 
+  it('keeps ChatGPT subscription as the primary credential action', () => {
+    const source = readWebviewComponent('OnboardingWelcomeCard');
+    const chatGptButtonStart = source.indexOf('id="onboardingChatGptButton"');
+    const chatGptButton = source.slice(
+      chatGptButtonStart,
+      source.indexOf('</wa-button>', chatGptButtonStart),
+    );
+
+    expect(chatGptButtonStart).toBeGreaterThanOrEqual(0);
+    expect(chatGptButtonStart).toBeLessThan(
+      source.indexOf('id="onboardingSignInButton"'),
+    );
+    expect(chatGptButton).toContain('variant="brand"');
+    expect(chatGptButton).toContain('appearance="filled"');
+  });
+
   it('keeps empty-project onboarding action oriented', () => {
     const source = readWebviewComponent('GettingStartedBanner');
 
