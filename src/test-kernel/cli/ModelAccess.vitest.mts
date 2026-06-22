@@ -32,11 +32,20 @@ vi.mock('@cli/runtime/supabaseAuth', () => ({
   getCliAuthProvider: () => mocks.authProvider,
 }));
 
-vi.mock('llm-zoo', () => ({
-  MODEL_CONFIGS: {
-    hiddenFixtureModel: {},
-  },
-}));
+vi.mock('llm-zoo', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('llm-zoo')>();
+  return {
+    ...actual,
+    MODEL_CONFIGS: {
+      ...actual.MODEL_CONFIGS,
+      hiddenFixtureModel: {},
+      userFacingFixture: {
+        fullName: 'user-facing-fixture',
+        label: 'User Facing Fixture',
+      },
+    },
+  };
+});
 
 const computeModelOptionsDataMock = vi.mocked(computeModelOptionsData);
 
@@ -999,6 +1008,41 @@ describe('CLI model access resolution', () => {
     });
     expect(computeModelOptionsDataMock).toHaveBeenCalledWith([
       'hiddenFixtureModel',
+    ]);
+  });
+
+  it('resolves user-facing model names to canonical registry ids', async () => {
+    await expect(
+      resolveModelFromAccessList(
+        [model('userFacingFixture')],
+        'user-facing-fixture',
+        { fallbackSource: 'override' },
+      ),
+    ).resolves.toEqual({ model: 'userFacingFixture' });
+
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('userFacingFixture', {
+        availability: 'missing-key',
+        availabilityLabel: 'Missing API key',
+        disabled: true,
+        requiresKey: true,
+      }),
+    ]);
+
+    await expect(
+      resolveCliModelAccessEntry('User Facing Fixture', {
+        apiMode: 'personal',
+        accessList: [model('sonnet46T')],
+      }),
+    ).resolves.toMatchObject({
+      available: false,
+      model: {
+        value: 'userFacingFixture',
+        availability: 'missing-key',
+      },
+    });
+    expect(computeModelOptionsDataMock).toHaveBeenCalledWith([
+      'userFacingFixture',
     ]);
   });
 
