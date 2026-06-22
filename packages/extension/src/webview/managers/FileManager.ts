@@ -254,9 +254,8 @@ export class FileManager extends BaseWebviewManager {
         filePath: plan.filePathToSelect,
         fileType,
       });
+      await this.maybeSelectCommitFromDiffFile(currentOpenFile);
     }
-
-    await this.maybeSelectCommitFromDiffFile(currentOpenFile);
   }
 
   private async maybeSelectCommitFromDiffFile(filePath: string): Promise<void> {

@@ -17,7 +17,6 @@ describe('MainViewBaseFileController', () => {
       expect(plan).toEqual({
         filePathToSelect: '/workspace/paper.tex',
         shouldPostSetCurrentFile: true,
-        derivedBaseFile: '/workspace/paper.tex',
         shouldRequestBaseFile: true,
       });
     });
@@ -32,7 +31,6 @@ describe('MainViewBaseFileController', () => {
       expect(plan).toMatchObject({
         filePathToSelect: '/workspace/paper-diff1234abcd.tex',
         shouldPostSetCurrentFile: true,
-        derivedBaseFile: '/workspace/paper.tex',
         shouldRequestBaseFile: false,
       });
       expect(plan.notification).toBeDefined();
@@ -48,7 +46,6 @@ describe('MainViewBaseFileController', () => {
       expect(plan).toEqual({
         filePathToSelect: '/workspace/paper.tex',
         shouldPostSetCurrentFile: true,
-        derivedBaseFile: null,
         shouldRequestBaseFile: false,
       });
     });
@@ -64,7 +61,6 @@ describe('MainViewBaseFileController', () => {
       expect(plan).toEqual({
         filePathToSelect: '/workspace/paper-comments.tex',
         shouldPostSetCurrentFile: true,
-        derivedBaseFile: null,
         shouldRequestBaseFile: false,
       });
     });
@@ -78,7 +74,6 @@ describe('MainViewBaseFileController', () => {
       expect(plan).toMatchObject({
         filePathToSelect: '/workspace/paper-comments.tex',
         shouldPostSetCurrentFile: false,
-        derivedBaseFile: null,
         shouldRequestBaseFile: false,
       });
       expect(plan.notification).toBeDefined();
@@ -94,7 +89,6 @@ describe('MainViewBaseFileController', () => {
       expect(plan).toMatchObject({
         filePathToSelect: '/workspace/other.tex',
         shouldPostSetCurrentFile: false,
-        derivedBaseFile: null,
         shouldRequestBaseFile: false,
       });
       expect(plan.notification).toBeDefined();

@@ -12,8 +12,6 @@ export interface MainViewBaseFileSelectionPlan {
   readonly filePathToSelect: string;
   /** Whether the SET_CURRENT_FILE message should be posted to the webview. */
   readonly shouldPostSetCurrentFile: boolean;
-  /** The latexdiff-derived base file, or null if the current file is not a diff file. */
-  readonly derivedBaseFile: string | null;
   /** Whether the manager should refresh the base-file dropdown. */
   readonly shouldRequestBaseFile: boolean;
   /** Optional user-facing notification to display. */
@@ -54,7 +52,6 @@ export function planCurrentFileAsBase(
     return {
       filePathToSelect: currentOpenFile,
       shouldPostSetCurrentFile: true,
-      derivedBaseFile: null,
       shouldRequestBaseFile: false,
     };
   }
@@ -63,7 +60,6 @@ export function planCurrentFileAsBase(
     return {
       filePathToSelect: derivedBaseFile,
       shouldPostSetCurrentFile: true,
-      derivedBaseFile,
       shouldRequestBaseFile: true,
     };
   }
@@ -71,7 +67,6 @@ export function planCurrentFileAsBase(
   return {
     filePathToSelect: currentOpenFile,
     shouldPostSetCurrentFile: true,
-    derivedBaseFile,
     shouldRequestBaseFile: false,
     log: {
       level: 'info',
@@ -101,7 +96,6 @@ export function planCurrentFileAsEdited(
     return {
       filePathToSelect: currentOpenFile,
       shouldPostSetCurrentFile: false,
-      derivedBaseFile: null,
       shouldRequestBaseFile: false,
       notification: {
         message: 'Please select a base file first.',
@@ -123,7 +117,6 @@ export function planCurrentFileAsEdited(
     return {
       filePathToSelect: currentOpenFile,
       shouldPostSetCurrentFile: false,
-      derivedBaseFile: null,
       shouldRequestBaseFile: false,
       notification: {
         message:
@@ -135,7 +128,6 @@ export function planCurrentFileAsEdited(
   return {
     filePathToSelect: currentOpenFile,
     shouldPostSetCurrentFile: true,
-    derivedBaseFile: null,
     shouldRequestBaseFile: false,
   };
 }
