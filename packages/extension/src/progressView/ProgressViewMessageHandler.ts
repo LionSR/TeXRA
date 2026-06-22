@@ -389,7 +389,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           default: {
             const exhaustive: never = data.action;
             throw new Error(
-              `Unhandled getting-started action: ${String(exhaustive)}`,
+              `Unhandled getting-started action: ${exhaustive}`,
             );
           }
         }
