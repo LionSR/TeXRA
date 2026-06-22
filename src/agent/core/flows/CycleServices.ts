@@ -40,7 +40,8 @@ export interface TextConnectionService {
 
 /** Services for response cycle flow nodes. */
 export interface ResponseCycleServices<C = unknown>
-  extends BaseFlowContextInit<C>,
+  extends
+    BaseFlowContextInit<C>,
     ModelClientServices<C>,
     TextConnectionService {
   readonly fileService: TaskRunFileService;
