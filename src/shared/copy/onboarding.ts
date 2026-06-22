@@ -13,8 +13,8 @@ export const ONBOARDING_CARD_TITLE = 'Welcome to TeXRA';
 
 /** State 0 choice 1 — recommended. */
 export const ONBOARDING_CHOICE_SIGN_IN = {
-  label: 'Sign in for free',
-  description: 'Researcher Access: no API key needed (recommended)',
+  label: 'Sign in with Researcher Access',
+  description: 'Free for academics; no API key needed (recommended)',
 } as const;
 
 /** State 0 choice 2. */
