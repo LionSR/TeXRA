@@ -955,6 +955,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async refreshAfterChatGptAuthChange(): Promise<void> {
     invalidateModelOptionsCache();
     await Promise.all([
+      // ChatGPT subscription is now a setup credential, so reuse the same
+      // host refresh path as API-key changes to update the welcome card.
+      vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
       vscode.commands.executeCommand('texra.refreshAllOptions'),
       this.withActiveWebview((w) => this.sendModelSelectionData(w)),
     ]);
