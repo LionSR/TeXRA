@@ -4,7 +4,7 @@ import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import type { ToolDefinition } from '@model';
-import type { ToolResult } from '@tools/result';
+import type { ToolResult } from '@shared/schemas/toolResult';
 
 const logger = { warn: () => {} };
 

@@ -12,7 +12,7 @@ import {
   FileReferenceSchema,
   EditRecordSchema,
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-} from '@tools/result';
+} from '@shared/schemas/toolResult';
 
 // Local imports - utils
 import { isNonEmptyString } from '@utils/core';

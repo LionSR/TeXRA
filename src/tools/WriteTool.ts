@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Internal imports
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
-import { ToolResult } from '@tools/result';
+import { ToolResult } from '@shared/schemas/toolResult';
 import {
   recordToolFileRead,
   requireFileReadForEdit,

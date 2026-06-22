@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import { buildFileAttachment } from '@tools/attachments';
 import { formatFileView, READ_FILE_MAX_LINES } from '@tools/formatting';

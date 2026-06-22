@@ -10,7 +10,7 @@ import {
   type StreamTabId,
   type UserQuestionAnswers,
 } from '@shared/schemas';
-import type { ToolResult } from '@tools/result';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import { requireRuntimeHost } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 

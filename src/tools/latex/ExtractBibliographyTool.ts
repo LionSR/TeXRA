@@ -7,7 +7,7 @@ import {
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
-import { ToolError } from '@tools/result';
+import { ToolError } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';

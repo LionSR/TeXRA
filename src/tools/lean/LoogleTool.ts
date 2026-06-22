@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { ToolResult } from '@tools/result';
+import { ToolResult } from '@shared/schemas/toolResult';
 import { isTimeoutErrorCode, isTransientHttpError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { ensureArray } from '@utils/core';

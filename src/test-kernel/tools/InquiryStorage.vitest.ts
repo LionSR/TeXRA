@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import type { StreamTabId } from '@shared/schemas';
-import { ToolError } from '@tools/result';
+import { ToolError } from '@shared/schemas/toolResult';
 import {
   getOpenTurnDraft,
   listOpenThreads,
