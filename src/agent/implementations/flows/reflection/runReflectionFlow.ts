@@ -23,10 +23,7 @@ import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
 } from '@agent/output/workflowOutputLayout';
-import {
-  attachProviderError,
-  markErrorLogged,
-} from '@common/errors/sdkErrorUtils';
+import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
   RUN_OUTCOME,
@@ -317,7 +314,6 @@ export async function runReflectionFlow<C = unknown>(
       // sniffing the message string.
       const err = new Error(shared.lastError.message);
       attachProviderError(err, toProviderErrorFromRetry(shared.lastError));
-      markErrorLogged(err);
       throw err;
     } else {
       outcome = flowOutcome;

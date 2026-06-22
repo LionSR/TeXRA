@@ -20,10 +20,7 @@ import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
 import { deriveRunOutcome } from '@common/constants/streamStatus';
-import {
-  attachProviderError,
-  markErrorLogged,
-} from '@common/errors/sdkErrorUtils';
+import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import {
   RUN_OUTCOME,
   toProviderErrorFromRetry,
@@ -377,7 +374,6 @@ export async function runToolUseFlow<C = unknown>(
         totalCostUsd,
       });
       attachProviderError(err, toProviderErrorFromRetry(shared.lastError));
-      markErrorLogged(err);
       throw err;
     }
   } finally {
