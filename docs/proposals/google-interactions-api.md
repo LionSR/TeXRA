@@ -19,7 +19,7 @@
 ## Summary
 
 Google has made the **Interactions API** the primary, recommended interface for
-Gemini models *and* agents. In the SDK it is `client.interactions` →
+Gemini models _and_ agents. In the SDK it is `client.interactions` →
 `GeminiNextGenInteractions` (`genai.d.ts:5677`, `:4598`), with
 `create` / `get` / `delete` / `cancel` methods. It is a single **stateful**
 endpoint that supersedes the chat / `generateContent` surface for new work:
@@ -50,30 +50,30 @@ features, and flipping the default per-model once proven.
   (`:2385`) + `webhook_config?` (`:2416`) map onto TeXRA's existing
   background-response machinery (`texra.model.useBackgroundResponses`).
 - **Unified tool model.** `tools?: Array<Tool>` where `Tool = FunctionT |
-  CodeExecution | URLContext | ComputerUse | MCPServer | GoogleSearch |
-  FileSearch | GoogleMaps | Retrieval` (`:12272`) — built-in **and** custom
+CodeExecution | URLContext | ComputerUse | MCPServer | GoogleSearch |
+FileSearch | GoogleMaps | Retrieval` (`:12272`) — built-in **and** custom
   functions in one request. This removes the limitation TeXRA documents today:
   native `googleSearch` is disabled because the `generateContent` API cannot
   combine `googleSearch` with `functionDeclarations` (`toolConversion.ts:355-357`,
   attributed there to the Live API). Interactions lifts it on the regular surface.
 - **Tool results with images.** A `function_result` step's `result` can be
   `string | {} | Array<FunctionResultSubcontent>` where `FunctionResultSubcontent
-  = TextContent | ImageContent` (`:4543`,`:4553`).
+= TextContent | ImageContent` (`:4543`,`:4553`).
 - **Same SDK, same client, no new dependency.** `client.interactions` already
   exists on the `new GoogleGenAI({ apiKey })` instance TeXRA builds
   (`modelHandlerGoogleGenAI.ts:304`,`:323`).
 
 ## Current state (verified in repo)
 
-| File | Detail |
-| ---- | ------ |
+| File                                                                      | Detail                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/agent/modelHandlers/google/modelHandlerGoogleGenAI.ts` (~1366 lines) | `ModelHandlerGoogleGenAI`; `client.chats.create()` (`:496`) → `chat.sendMessageStream()` (`:507`) / `chat.sendMessage()` (`:617`); `client.models.countTokens()` (`:383`); `client.files.upload()` (`:245`); client built `new GoogleGenAI({ apiKey })` (`:304`,`:323`) via base `getApiKey()` (`:299`,`:319`) |
-| `src/agent/modelHandlers/google/googleMessageHelpers.ts` | Strict user/model alternation, `systemInstruction`, parts-based `Content[]` |
-| `src/agent/modelHandlers/google/googleUsage.ts` | Token/price/usage from `GenerateContentResponseUsageMetadata` |
-| `src/agent/modelHandlers/google/googleSdkError.ts` | `GoogleApiError` → TeXRA SDK error kinds (reusable as-is) |
-| `src/agent/modelHandlers/toolConversion.ts:360` | `toGoogleTools()` → `[{ functionDeclarations }]` (chat shape) |
-| `src/agent/runtime/ModelFactory.ts:73` | `PROVIDER_HANDLER_ROUTES[GOOGLE]` → `ModelHandlerGoogleGenAI`, key `'ModelHandlerGoogleGenAI'` |
-| `package.json:108`, `packages/extension/package.json:1713` | `@google/genai` `^2.9.0` (resolved `2.9.0`, exposes `interactions`) |
+| `src/agent/modelHandlers/google/googleMessageHelpers.ts`                  | Strict user/model alternation, `systemInstruction`, parts-based `Content[]`                                                                                                                                                                                                                                    |
+| `src/agent/modelHandlers/google/googleUsage.ts`                           | Token/price/usage from `GenerateContentResponseUsageMetadata`                                                                                                                                                                                                                                                  |
+| `src/agent/modelHandlers/google/googleSdkError.ts`                        | `GoogleApiError` → TeXRA SDK error kinds (reusable as-is)                                                                                                                                                                                                                                                      |
+| `src/agent/modelHandlers/toolConversion.ts:360`                           | `toGoogleTools()` → `[{ functionDeclarations }]` (chat shape)                                                                                                                                                                                                                                                  |
+| `src/agent/runtime/ModelFactory.ts:73`                                    | `PROVIDER_HANDLER_ROUTES[GOOGLE]` → `ModelHandlerGoogleGenAI`, key `'ModelHandlerGoogleGenAI'`                                                                                                                                                                                                                 |
+| `package.json:108`, `packages/extension/package.json:1713`                | `@google/genai` `^2.9.0` (resolved `2.9.0`, exposes `interactions`)                                                                                                                                                                                                                                            |
 
 Capabilities the new handler must preserve (all in `modelHandlerGoogleGenAI.ts`):
 streaming with thinking/output separation; **parallel tool calls with Gemini 3
@@ -115,24 +115,24 @@ get(id, params?)   // (:4609-4611)   delete(id, params?)   // (:4612)   cancel(i
 
 **Request — `CreateModelInteraction` (`:2373`)** — note **snake_case**:
 
-| field | type | line |
-| ----- | ---- | ---- |
-| `model` | `Model` (string id) | 2377 |
-| `input` | `InteractionsInput` (required) | 2442 |
-| `stream?` | `boolean` (discriminates streaming vs not) | 2381 |
-| `store?` | `boolean` (persist for later retrieval) | 2385 |
-| `background?` | `boolean` | 2389 |
-| `system_instruction?` | `string` | 2393 |
-| `tools?` | `Array<Tool>` | 2397 |
-| `previous_interaction_id?` | `string` (server-side continuation) | 2411 |
-| `response_format?` | `ResponseFormat \| ResponseFormat[]` (structured output) | 2420 |
-| `response_modalities?` | `Array<ResponseModality>` (TEXT/IMAGE/AUDIO) | 2401 |
-| `generation_config?` | `GenerationConfig` (temp, tokens, thinking, …) | 2428 |
-| `service_tier?` | `ServiceTier` (Flex/Priority) | 2412 |
-| `cached_content?` | `string` (explicit cache handle) | 2438 |
-| `webhook_config?` | `WebhookConfig` | 2416 |
-| `environment?` | `Environment \| string` | 2424 |
-| `response_mime_type?` | `string` — **deprecated**, use `response_format` | 2407 |
+| field                      | type                                                     | line |
+| -------------------------- | -------------------------------------------------------- | ---- |
+| `model`                    | `Model` (string id)                                      | 2377 |
+| `input`                    | `InteractionsInput` (required)                           | 2442 |
+| `stream?`                  | `boolean` (discriminates streaming vs not)               | 2381 |
+| `store?`                   | `boolean` (persist for later retrieval)                  | 2385 |
+| `background?`              | `boolean`                                                | 2389 |
+| `system_instruction?`      | `string`                                                 | 2393 |
+| `tools?`                   | `Array<Tool>`                                            | 2397 |
+| `previous_interaction_id?` | `string` (server-side continuation)                      | 2411 |
+| `response_format?`         | `ResponseFormat \| ResponseFormat[]` (structured output) | 2420 |
+| `response_modalities?`     | `Array<ResponseModality>` (TEXT/IMAGE/AUDIO)             | 2401 |
+| `generation_config?`       | `GenerationConfig` (temp, tokens, thinking, …)           | 2428 |
+| `service_tier?`            | `ServiceTier` (Flex/Priority)                            | 2412 |
+| `cached_content?`          | `string` (explicit cache handle)                         | 2438 |
+| `webhook_config?`          | `WebhookConfig`                                          | 2416 |
+| `environment?`             | `Environment \| string`                                  | 2424 |
+| `response_mime_type?`      | `string` — **deprecated**, use `response_format`         | 2407 |
 
 `CreateAgentInteraction` (`:1987`) swaps `model` for `agent` (`AgentOption`) +
 `agent_config` (`DynamicAgentConfig | DeepResearchAgentConfig`) + `environment`.
@@ -156,14 +156,14 @@ with `steps: Step[]`, `:5683`): `id`, `status: InteractionStatus`, `created`,
 
 **Steps — `Step` (`:11664`)** (discriminated by `type`):
 
-| step | shape | line |
-| ---- | ----- | ---- |
-| `UserInputStep` | `{ type:"user_input", content?: Content[] }` | 14035 |
-| `ModelOutputStep` | `{ type:"model_output", content?: Content[] }` | 9235 |
-| `ThoughtStep` | `{ type:"thought", signature?: string, summary?: ThoughtSummaryContent[] }` | 12112 |
-| `FunctionCallStep` | `{ type:"function_call", name: string, arguments: {}, id: string }` | 4403 |
-| `FunctionResultStep` | `{ type:"function_result", name?, is_error?, call_id: string, result: string \| {} \| FunctionResultSubcontent[] }` | 4526 |
-| built-in call/result | `CodeExecution*`, `GoogleSearch*`, `GoogleMaps*`, `FileSearch*`, `URLContext*`, `MCPServerTool*` Step variants | — |
+| step                 | shape                                                                                                               | line  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- | ----- |
+| `UserInputStep`      | `{ type:"user_input", content?: Content[] }`                                                                        | 14035 |
+| `ModelOutputStep`    | `{ type:"model_output", content?: Content[] }`                                                                      | 9235  |
+| `ThoughtStep`        | `{ type:"thought", signature?: string, summary?: ThoughtSummaryContent[] }`                                         | 12112 |
+| `FunctionCallStep`   | `{ type:"function_call", name: string, arguments: {}, id: string }`                                                 | 4403  |
+| `FunctionResultStep` | `{ type:"function_result", name?, is_error?, call_id: string, result: string \| {} \| FunctionResultSubcontent[] }` | 4526  |
+| built-in call/result | `CodeExecution*`, `GoogleSearch*`, `GoogleMaps*`, `FileSearch*`, `URLContext*`, `MCPServerTool*` Step variants      | —     |
 
 `FunctionResultSubcontent = TextContent | ImageContent` (`:4553`) → tool results
 can include images.
@@ -247,32 +247,34 @@ no cross-cutting refactor, no new platform port, no dependency bump.
 
 ## Mapping: `generateContent`/chat → Interactions
 
-| TeXRA concern | Today (chat/`generateContent`) | Interactions (verified) |
-| ------------- | ------------------------------ | ----------------------- |
-| Send a turn | `chat.sendMessage(parts)` | `interactions.create({ model, input })` |
-| Streaming | `sendMessageStream()` → `chunk.candidates[0].content.parts` | `Stream<InteractionSSEEvent>`; consume `event_type:"step.delta"` → `delta` (TextDelta etc.) |
-| Conversation state | resend full `Content[]` each round | `previous_interaction_id` (server-side) or pass prior `Step[]` in `input` |
-| System prompt | `systemInstruction` on chat params | `system_instruction` on create |
-| Custom tools | `[{ functionDeclarations:[…] }]` | `tools:[{ type:"function", name, description, parameters }]` |
-| Built-in search | **disabled** (can't mix w/ functions) | `tools:[{ type:"google_search" }, …functions]` — now mixable |
-| Tool call out | `functionCall` part | `FunctionCallStep` `{ name, arguments, id }` (+ streamed `ArgumentsDelta`) |
-| Tool result in | `functionResponse` part (user msg) | a `function_result` step/input `{ call_id, result }`; `result` may include images |
+| TeXRA concern                     | Today (chat/`generateContent`)                               | Interactions (verified)                                                                                                                          |
+| --------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Send a turn                       | `chat.sendMessage(parts)`                                    | `interactions.create({ model, input })`                                                                                                          |
+| Streaming                         | `sendMessageStream()` → `chunk.candidates[0].content.parts`  | `Stream<InteractionSSEEvent>`; consume `event_type:"step.delta"` → `delta` (TextDelta etc.)                                                      |
+| Conversation state                | resend full `Content[]` each round                           | `previous_interaction_id` (server-side) or pass prior `Step[]` in `input`                                                                        |
+| System prompt                     | `systemInstruction` on chat params                           | `system_instruction` on create                                                                                                                   |
+| Custom tools                      | `[{ functionDeclarations:[…] }]`                             | `tools:[{ type:"function", name, description, parameters }]`                                                                                     |
+| Built-in search                   | **disabled** (can't mix w/ functions)                        | `tools:[{ type:"google_search" }, …functions]` — now mixable                                                                                     |
+| Tool call out                     | `functionCall` part                                          | `FunctionCallStep` `{ name, arguments, id }` (+ streamed `ArgumentsDelta`)                                                                       |
+| Tool result in                    | `functionResponse` part (user msg)                           | a `function_result` step/input `{ call_id, result }`; `result` may include images                                                                |
 | **Parallel tools + thought sigs** | batched into one model `Content`, signature on the call part | sigs live on **`ThoughtStep.signature`** + `ThoughtSignatureDelta`, separate from `function_call` steps; server holds them when continuing by id |
-| Thinking | `thinkingConfig` + `thought` parts | `generation_config` thinking + `ThoughtStep`/`ThoughtSummaryDelta` |
-| Multimodal in | inline base64 / File API `uri` parts | typed `Content` (`ImageContent`/`DocumentContent`/…) in `input` |
-| Token counting | `client.models.countTokens()` | unchanged — still on `client.models` |
-| Usage/pricing | `GenerateContentResponseUsageMetadata` | `Usage` (`total_*_tokens`) → remap `googleUsage.ts` |
-| Background | n/a today | `background:true` (+ `store`, `webhook_config`) |
-| Caching | `cachedContentTokenCount` rebate | `cached_content` + `Usage.total_cached_tokens` |
+| Thinking                          | `thinkingConfig` + `thought` parts                           | `generation_config` thinking + `ThoughtStep`/`ThoughtSummaryDelta`                                                                               |
+| Multimodal in                     | inline base64 / File API `uri` parts                         | typed `Content` (`ImageContent`/`DocumentContent`/…) in `input`                                                                                  |
+| Token counting                    | `client.models.countTokens()`                                | unchanged — still on `client.models`                                                                                                             |
+| Usage/pricing                     | `GenerateContentResponseUsageMetadata`                       | `Usage` (`total_*_tokens`) → remap `googleUsage.ts`                                                                                              |
+| Background                        | n/a today                                                    | `background:true` (+ `store`, `webhook_config`)                                                                                                  |
+| Caching                           | `cachedContentTokenCount` rebate                             | `cached_content` + `Usage.total_cached_tokens`                                                                                                   |
 
 ## Design (additive, feature-flagged)
 
 Mirror the OpenAI Responses precedent end to end.
 
 ### 1. New handler
+
 `ModelHandlerGoogleInteractions` in
 `src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts`, extending
 `ModelHandler` like the existing Google handler.
+
 - **Reuse:** `googleSdkError.ts` (same `GoogleApiError`); the JSON-Schema
   flattening/`$schema`-stripping in `toolConversion.ts` (wire-agnostic) — feed it
   into `FunctionT.parameters` instead of `functionDeclarations`; the media
@@ -284,12 +286,14 @@ Mirror the OpenAI Responses precedent end to end.
   `googleUsage.ts` for the `Usage` shape.
 
 ### 2. Compatibility key
+
 Add `'ModelHandlerGoogleInteractions'` to `ModelHandlerCompatibilityKey`
 (`ModelFactory.ts:29`). Interactions persists state server-side and continues via
 `previous_interaction_id`; its history shape differs from the chat handler's
 `Content[]`, so a distinct key is mandatory for history restore/compaction.
 
 ### 3. Routing predicate + factory branch
+
 Add `shouldUseGoogleInteractionsAPI(config, useOpenRouter)` next to
 `shouldUseResponsesAPI`. Gate on a new setting plus per-model
 `requiresInteractionsAPI` (agents like Deep Research are Interactions-only and
@@ -297,12 +301,14 @@ force it). Branch in `createModelHandler()` **before** the default Google route,
 and exclude `useOpenRouter` (OpenRouter can't proxy Interactions).
 
 ### 4. Settings
+
 Add `model.useGoogleInteractionsAPI` to `coreSettings.ts` (the three sites at
 ~81/325/564), mirroring `useOpenAIResponsesAPI`; reuse
 `model.useBackgroundResponses` for `background:true`. Surface in Settings →
 Models; document in `docs/guide/configuration.md`.
 
 ### 5. Model registry
+
 Register GA Gemini model ids / agent ids (`llm-zoo` `MODEL_CONFIGS` + `src/model/`
 capability/pricing), marking agent-only entries Interactions-required.
 ⚠️ confirm exact ids + pricing at impl time.
