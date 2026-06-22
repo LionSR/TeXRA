@@ -10,13 +10,16 @@ import {
   listSlashCommands,
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
+import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import {
   cliState,
   patchStream,
   resetCliState,
 } from '@cli/chat/tui/state/cliState';
+import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
+import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import type { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
@@ -133,6 +136,87 @@ describe('handleTuiSlashCommand', () => {
       expect.objectContaining({ device: true, noBrowser: false }),
       expect.any(Object),
     );
+  });
+
+  it('clears TeXRA and ChatGPT credentials on /logout', async () => {
+    registerBuiltinSlashCommands();
+    const signOutSupabase = vi
+      .spyOn(supabaseAuth, 'signOutCliSupabase')
+      .mockResolvedValue(undefined);
+    const signOutChatGpt = vi
+      .spyOn(chatGptLogin, 'signOutCliChatGpt')
+      .mockResolvedValue({
+        preferenceUpdate: { effective: false, target: 'global' },
+      });
+    vi.spyOn(apiStatus, 'loadCliApiStatusLines').mockResolvedValue([
+      'API mode: personal',
+    ]);
+
+    const handled = await handleTuiSlashCommand(
+      '/logout',
+      createContext(createSession()),
+    );
+
+    expect(handled).toBe(true);
+    expect(signOutSupabase).toHaveBeenCalledOnce();
+    expect(signOutChatGpt).toHaveBeenCalledOnce();
+    const entry = cliState.streams
+      .get()
+      .get(CLI_LOCAL_STREAM_ID)
+      ?.entries.at(-1)?.text;
+    expect(entry).toContain('Signed out.');
+    expect(entry).toContain('ChatGPT subscription disabled for Codex models.');
+  });
+
+  it('reports successful TeXRA sign-out when ChatGPT logout fails', async () => {
+    registerBuiltinSlashCommands();
+    vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
+    vi.spyOn(chatGptLogin, 'signOutCliChatGpt').mockRejectedValue(
+      new Error('Codex logout failed'),
+    );
+    vi.spyOn(apiStatus, 'loadCliApiStatusLines').mockResolvedValue([
+      'API mode: personal',
+    ]);
+
+    const handled = await handleTuiSlashCommand(
+      '/logout',
+      createContext(createSession()),
+    );
+
+    expect(handled).toBe(true);
+    const entry = cliState.streams
+      .get()
+      .get(CLI_LOCAL_STREAM_ID)
+      ?.entries.at(-1)?.text;
+    expect(entry).toContain('Signed out.');
+    expect(entry).toContain('ChatGPT sign-out failed: Codex logout failed');
+  });
+
+  it('reports ChatGPT sign-out success when only preference cleanup fails', async () => {
+    registerBuiltinSlashCommands();
+    vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
+    vi.spyOn(chatGptLogin, 'signOutCliChatGpt').mockResolvedValue({
+      preferenceError: 'Config write failed',
+    });
+    vi.spyOn(apiStatus, 'loadCliApiStatusLines').mockResolvedValue([
+      'API mode: personal',
+    ]);
+
+    const handled = await handleTuiSlashCommand(
+      '/logout',
+      createContext(createSession()),
+    );
+
+    expect(handled).toBe(true);
+    const entry = cliState.streams
+      .get()
+      .get(CLI_LOCAL_STREAM_ID)
+      ?.entries.at(-1)?.text;
+    expect(entry).toContain('Signed out.');
+    expect(entry).toContain(
+      'ChatGPT subscription preference could not be disabled: Config write failed',
+    );
+    expect(entry).not.toContain('ChatGPT sign-out failed');
   });
 
   it('treats /quit as the canonical exit command without echoing it', async () => {
