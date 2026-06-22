@@ -19,15 +19,19 @@ on, and runs this same polish demo, ending at the diff. This page is the
 manual mirror of that conversation.
 :::
 
-## Step 0: sign in or add a key
+## Step 0: sign in, use ChatGPT, or add a key
 
-A credential is the one step no agent can do for you. Two ways in:
+A credential is the one step no agent can do for you. Three ways in:
 
 - **Sign in — free for academics** — Researcher Access: no API key
   needed (recommended). In VS Code, run **TeXRA: Sign In** from the
   command palette; in the terminal, run `texra login`.
+- **Use ChatGPT subscription** — Codex models through your ChatGPT plan.
+  In VS Code, open **Settings → Models** and use the ChatGPT subscription
+  sign-in section; in the terminal, run `texra auth chatgpt login`.
 - **Use your own provider API key** — Anthropic, OpenAI, Google, and
-  more. See [Quick start → Sign in or add a key](./quick-start.md#sign-in-or-add-a-key).
+  more. See
+  [Quick start → Sign in, use ChatGPT, or add a key](./quick-start.md#sign-in-use-chatgpt-or-add-a-key).
 
 ## What you'll do
 

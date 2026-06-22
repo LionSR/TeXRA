@@ -145,7 +145,8 @@ Expand a provider's row (click the chevron) to toggle streaming or, for provider
 
 You can also place a `.env` file in your workspace with variables like `OPENAI_API_KEY`. TeXRA loads this automatically so you don't need to enter keys every time.
 
-Prefer not to manage keys at all? Researcher Access is free for academics — no API key needed. See [Quick Start → Sign in or add a key](./quick-start.md#sign-in-or-add-a-key).
+Prefer not to manage keys at all? Researcher Access is free for academics — no API key needed. See
+[Quick Start → Sign in, use ChatGPT, or add a key](./quick-start.md#sign-in-use-chatgpt-or-add-a-key).
 
 ## Customizing the Model List
 

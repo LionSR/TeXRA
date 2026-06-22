@@ -8,7 +8,7 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 
 You have a paper draft and a deadline. Let's get TeXRA working for you in under five minutes. On a fresh install, the **setup assistant** offers to run this whole loop for you in one conversation; this page is the reference for the Launcher you'll drive every day after.
 
-The whole story in one line: **Setup is the doorman, polish is the demo, the orchestrator is the habit.**
+The shortest path is: choose a credential, run setup once, then let the orchestrator handle the daily paper work.
 
 <QuickStartHero />
 
@@ -24,7 +24,10 @@ TeXRA sits inside VS Code and helps you polish writing, fix errors, create figur
 4. Click Execute
 5. Review the diff
 
-> 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page (or by running `TeXRA: Open Getting Started Walkthrough`). It tells the same story in three beats — sign in or add a key, the setup assistant takes it from here, meet the orchestrator — and links directly to the relevant commands.
+> 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page
+> (or by running `TeXRA: Open Getting Started Walkthrough`). It tells the same story in three beats — sign in,
+> use ChatGPT, or add a key; the setup assistant takes it from here; meet the orchestrator — and links directly
+> to the relevant commands.
 
 ::: tip Prefer the terminal?
 This guide walks through the VS Code extension. If you installed the
@@ -34,20 +37,29 @@ interactive session with `texra chat`, or run a single agent with
 available.
 :::
 
-## Sign in or add a key
+## Sign in, use ChatGPT, or add a key
 
-A credential is the one step no agent can do for you. On a fresh install, the **Welcome to TeXRA** card in the TeXRA panel offers the same two choices, in the same order:
+A credential is the one step no agent can do for you. On a fresh install, the **Welcome to TeXRA** card in the
+TeXRA panel offers the same three choices, in the same order:
 
-1. **Sign in — free for academics** — Researcher Access: no API key needed (recommended). Run **TeXRA: Sign In** from the Command Palette, or pick the sign-in option on the welcome card. Signing in also unlocks remote agents, including the orchestrator.
-2. **Use your own provider API key** — Anthropic, OpenAI, Google, and more. Open the Dashboard's **Models** tab (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and set your provider's key in the **API Configuration** table, or place a `.env` file in your workspace with variables like `OPENAI_API_KEY`.
+1. **Sign in — free for academics** — Researcher Access: no API key needed (recommended). Run **TeXRA: Sign In**
+   from the Command Palette, or pick the sign-in option on the welcome card. Signing in also unlocks remote
+   agents, including the orchestrator.
+2. **Use ChatGPT subscription** — Codex models through your ChatGPT plan. Open the Dashboard's **Models** tab
+   (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
+   use the **ChatGPT subscription** sign-in section.
+3. **Use your own provider API key** — Anthropic, OpenAI, Google, and more. In the same **Models** tab, set your
+   provider's key in the **API Configuration** table, or place a `.env` file in your workspace with variables
+   like `OPENAI_API_KEY`.
 
 The full per-provider key reference — the API Configuration table, Set / Get / Remove actions, and per-provider toggles — lives in [Models → Setting API Keys](./models.md#setting-api-keys).
 
 Once a credential is in place, the setup assistant takes it from here: one conversation that checks your environment, applies a team for your field, and runs your first polish, ending at a diff. [First run](./first-run.md) is the manual mirror of that conversation.
 
 ::: tip CLI credentials
-The terminal uses the same two paths — `texra login` for included hosted
-access, or provider env vars for your own keys. See
+The terminal uses the same paths — `texra login` for included hosted
+access, `texra auth chatgpt login` for ChatGPT subscription, or provider
+env vars for your own keys. See
 [Authentication](./texra-cli.md#authentication) on the CLI page.
 :::
 
