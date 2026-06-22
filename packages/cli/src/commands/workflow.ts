@@ -1,6 +1,7 @@
-import { writeTerminalStatus } from '@agent/storage';
+import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS } from '@shared/schemas';
 
 import {
@@ -9,7 +10,7 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { writeErrorStderr } from '../runtime/logSinks';
+import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
   resolveCliRunModel,
@@ -133,6 +134,7 @@ export async function runWorkflowAgent(
             },
           )
         ).displayResult;
+        await persistWorkflowResultMeta(executionId, displayResult);
       } catch (error) {
         if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
           writeErrorStderr(error);
@@ -156,6 +158,30 @@ export async function runWorkflowAgent(
       return terminalStatusExitCode(terminalStatus, runContext);
     },
   );
+}
+
+async function persistWorkflowResultMeta(
+  executionId: string,
+  result: CliRunResult,
+): Promise<void> {
+  if (result.category !== AgentCategory.Workflow) return;
+  try {
+    if (result.copiedOutput) {
+      await getExecutionStore(executionId).writeResultMeta({
+        copiedOutput: result.copiedOutput,
+      });
+      return;
+    }
+    if (result.copiedOutputs?.length) {
+      await getExecutionStore(executionId).writeResultMeta({
+        copiedOutputs: result.copiedOutputs,
+      });
+    }
+  } catch (error) {
+    writeTextStderr(
+      `Warning: could not persist workflow result metadata: ${toErrorMessage(error)}`,
+    );
+  }
 }
 
 export const runWorkflowCommand = defineCliCommand({
