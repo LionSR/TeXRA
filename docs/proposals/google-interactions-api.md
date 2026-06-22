@@ -245,6 +245,55 @@ So the surface is ~one new ~800-1000 line handler file mirroring the chat one,
 one routing predicate, one settings field (×3 sites), and a handful of tests —
 no cross-cutting refactor, no new platform port, no dependency bump.
 
+## Official migration guide × SDK types (reconciliation)
+
+Google's `generateContent`→Interactions migration guide was cross-checked against
+the installed `@google/genai@2.9.0` `.d.ts`. Most of it matches; the mismatches
+matter because **TeXRA's TypeScript sees the SDK types, not the guide's prose/REST
+JSON** — trust the `.d.ts` where they differ.
+
+**Confirmed by both:**
+
+- **State on by default.** `store` defaults `true` (server-side history); set
+  `store:false` for stateless behaviour. So TeXRA has two clean options:
+  `store:false` for drop-in parity with today's stateless resend, or
+  `store:true` + `previous_interaction_id` for the payload win. (Resolves the
+  open question in risk #2 — both are first-class.)
+- **Convenience accessors exist** on the returned interaction: `output_text`
+  (`:7053`), `output_image?: ImageContent` (`:7057`), `output_audio?:
+  AudioContent` (`:7061`). `output_text` joins only the *trailing* `TextContent`
+  run, so anything interleaved with thoughts/tools/images still requires walking
+  `steps` — which TeXRA does anyway (thinking is separated, tools are handled).
+- **Function-result round-trip:** submit the result as a **new** `create` call
+  with `previous_interaction_id` and `input` = a `function_result`
+  `{ type:"function_result", call_id: <call.id>, name, result:[{type:"text",text}] }`.
+  The pending interaction reports `status:"requires_action"` and the
+  `function_call` step sits `status:"waiting"`. `InteractionStatus` (`:7620`) =
+  `in_progress|requires_action|completed|failed|cancelled|incomplete|budget_exceeded`.
+- **Structured output** is a top-level `response_format` array of
+  `{ type:"text", mime_type:"application/json", schema }` (`response_mime_type` is
+  deprecated). **Streaming** discriminates events on `event_type`
+  (`interaction.created` / `interaction.in_progress` / `step.start` /
+  `step.delta` / `step.stop` / `interaction.requires_action` /
+  `interaction.completed`). `TextDelta` = `{ type:"text", text }` (`:11995`).
+- **Built-in tools are transparent:** `google_search_call` + `google_search_result`
+  steps, with **inline** citations as an `annotations` array on the
+  `model_output` text content (vs the old separate `groundingMetadata`).
+
+**Discrepancies — follow the SDK, not the guide:**
+
+- **Streamed tool args.** Guide prose: `delta.type === "arguments"` /
+  `delta.partial_arguments`. SDK: `ArgumentsDelta` (`:527`) is
+  `{ type:"arguments_delta", arguments?: string }`. Use `"arguments_delta"` and
+  the `arguments` field.
+- **Usage field names.** Guide REST JSON shows `prompt_tokens` /
+  `completion_tokens` / `total_tokens`; the SDK `Usage` type (`:13952`) has
+  **none** of those — it exposes `total_input_tokens` / `total_output_tokens` /
+  `total_cached_tokens` / `total_tool_use_tokens` / `total_thought_tokens`
+  (+ `*_by_modality`). `googleUsage.ts` must map the SDK names.
+- **REST path** is `v1beta2/interactions` (vs `v1beta/models/…:generateContent`)
+  — informational only; TeXRA calls the SDK, not REST.
+
 ## Mapping: `generateContent`/chat → Interactions
 
 | TeXRA concern                     | Today (chat/`generateContent`)                               | Interactions (verified)                                                                                                                          |
@@ -334,12 +383,16 @@ schema; no new ports.
    `thought` steps verbatim. Needs a fixture test either way; this is still the
    place most likely to silently break parallel tool use.
 2. **Server-side state vs history/compaction.** TeXRA's restore/compaction assume
-   a resend-able local transcript. Decide per the OpenAI Responses resolution:
-   stateless (send full `Step[]` each round; simplest, loses payload win) vs
-   `previous_interaction_id` (define behaviour when the stored interaction has
+   a resend-able local transcript. The guide confirms `store` makes both modes
+   first-class: `store:false` = stateless drop-in parity (send full `Step[]` each
+   round; simplest, keeps compaction working unchanged) vs `store:true` (default)
+   + `previous_interaction_id` (payload win, but the server — not TeXRA — then
+   owns compaction, and behaviour must be defined when the stored interaction has
    expired or a run is restored from old history). Official retention is 55 days
-   on paid tier and 1 day on free tier; `store=false` opts out but is
-   incompatible with `background=true` and later `previous_interaction_id` use.
+   on paid tier / 1 day on free tier; note `store:false` is incompatible with
+   `background=true` and with later `previous_interaction_id` use. **Recommend
+   `store:false` for v0** to preserve the existing history/compaction contract,
+   treating server-side continuation (+ background) as a later optimisation.
 3. **GA service with active SDK churn.** The official overview marks the API GA,
    and the types ship in the pinned SDK version; `response_mime_type` is already
    deprecated in favour of `response_format`, signalling churn. Pin/snapshot the
