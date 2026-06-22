@@ -98,6 +98,20 @@ describe('XmlOutputManager', () => {
     );
   });
 
+  it('creates parent directories for extracted document names with subdirectories', async () => {
+    const manager = createXmlManager();
+
+    await manager.processMultipleLatexDocuments(
+      [{ name: 'sections/main.tex', content: 'Nested section.\n' }],
+      createExternalLocation('/tmp/run/output.xml'),
+      0,
+    );
+
+    await expect(AbsoluteFS.read('/tmp/run/sections/main.tex')).resolves.toBe(
+      'Nested section.\n',
+    );
+  });
+
   it('does not auto-format extracted workflow outputs', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
