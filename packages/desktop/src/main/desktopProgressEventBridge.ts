@@ -14,7 +14,7 @@ import type { AgentTrace } from '@agent/trace';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentCategory } from '@shared/schemas/agent';
-import { isGoalInFlight } from '@shared/schemas/goal';
+import { isGoalInFlight, type GoalStatus } from '@shared/schemas/goal';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import {
   STREAM_STATUS,
@@ -49,7 +49,7 @@ export interface DesktopProgressEventBridgeOptions {
   onGoalStateChanged: (
     streamId: StreamTabId,
     active: boolean,
-    opts?: { status?: string; objective?: string },
+    opts?: { status?: GoalStatus; objective?: string },
   ) => void;
   /** Called when a `requestShowError` event fires. */
   onShowError: (message: string) => void;
