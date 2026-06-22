@@ -388,9 +388,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             break;
           default: {
             const exhaustive: never = data.action;
-            throw new Error(
-              `Unhandled getting-started action: ${exhaustive}`,
-            );
+            throw new Error(`Unhandled getting-started action: ${exhaustive}`);
           }
         }
       },
