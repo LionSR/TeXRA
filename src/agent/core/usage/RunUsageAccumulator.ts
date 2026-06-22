@@ -30,22 +30,47 @@ const RunUsageTotalsSchema = z.object({
 });
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
-/** Schema for normalized usage snapshot. Internal only. */
-const NormalizedUsageSnapshotSchema = z.object({
-  round: z.int().nonnegative(),
-  usage: NormalizedUsageSchema,
-});
-
 /**
  * Schema for RunUsageAccumulator JSON serialization.
- * Uses .prefault() for input normalization before validation; the per-field
- * `.prefault(0)` declarations on `RunUsageTotalsSchema` expand `{}` into a
- * fully-defaulted totals object.
+ * Uses .prefault() for input normalization before validation.
+ *
+ * `latestUsage` replaces the old unbounded `normalizedSnapshots` array —
+ * only the most-recent round's usage is needed at runtime. The preprocess
+ * migrates legacy persisted data (with `normalizedSnapshots`) by extracting
+ * the last element, so existing sessions resume without data loss.
  */
-export const RunUsageAccumulatorJSONSchema = z.object({
-  totals: RunUsageTotalsSchema.prefault({}),
-  normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).prefault([]),
-});
+export const RunUsageAccumulatorJSONSchema = z.preprocess(
+  (raw) => {
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      !Array.isArray(raw) &&
+      !('latestUsage' in raw) &&
+      'normalizedSnapshots' in raw &&
+      Array.isArray((raw as Record<string, unknown>).normalizedSnapshots)
+    ) {
+      const snapshots = (raw as Record<string, unknown>)
+        .normalizedSnapshots as unknown[];
+      const last = snapshots.at(-1);
+      const usage =
+        last &&
+        typeof last === 'object' &&
+        !Array.isArray(last) &&
+        'usage' in (last as Record<string, unknown>)
+          ? (last as Record<string, unknown>).usage
+          : null;
+      return {
+        ...(raw as Record<string, unknown>),
+        latestUsage: usage ?? null,
+      };
+    }
+    return raw;
+  },
+  z.object({
+    totals: RunUsageTotalsSchema.prefault({}),
+    latestUsage: NormalizedUsageSchema.nullable().prefault(null),
+  }),
+);
 
 /**
  * Output type for RunUsageAccumulator serialization.
@@ -62,7 +87,6 @@ export type RunUsageAccumulatorJSON = z.output<
 /** Record a normalized usage entry. Mutates acc in place. */
 export function recordNormalizedUsage(
   acc: RunUsageAccumulatorJSON,
-  round: number,
   usage: NormalizedUsage,
 ): void {
   if (acc.totals.firstInputTokens === 0) {
@@ -79,5 +103,5 @@ export function recordNormalizedUsage(
   acc.totals.totalToolUsePromptTokens += usage.toolUsePromptTokens ?? 0;
   acc.totals.totalServerToolRequests += usage.serverToolRequests ?? 0;
 
-  acc.normalizedSnapshots.push({ round, usage });
+  acc.latestUsage = usage;
 }

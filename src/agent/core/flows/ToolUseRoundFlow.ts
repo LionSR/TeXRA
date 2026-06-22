@@ -22,7 +22,7 @@ import { defaultPostCompactionContext } from '@agent/core/flows/CommonCycleTypes
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
 import { ModelInvocationNode } from './ModelInvocationNode';
-import { ToolUsePrepNode } from './toolUseRound/ToolUsePrepNode';
+import { ToolUseRoundPrepNode } from './toolUseRound/ToolUseRoundPrepNode';
 import { ToolUseProcessNode } from './toolUseRound/ToolUseProcessNode';
 import { ToolUseDispatchNode } from './toolUseRound/ToolUseDispatchNode';
 import type { CycleParams, ToolUseRoundServices } from './CycleServices';
@@ -51,7 +51,7 @@ export function createToolUseRoundFlow<C>(): Flow<
   CycleParams,
   ToolUseRoundServices<C>
 > {
-  const prepNode = new ToolUsePrepNode<C>();
+  const prepNode = new ToolUseRoundPrepNode<C>();
   const callNode = new ModelInvocationNode<
     ToolUseRoundShared,
     CycleParams,

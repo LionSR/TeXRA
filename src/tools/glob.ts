@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
-import { ToolError, ToolResult } from '@tools/result';
+import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
 import {
   joinWorkspaceRelativePath,

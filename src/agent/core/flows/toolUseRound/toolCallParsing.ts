@@ -10,7 +10,7 @@ import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
-} from '@tools/result';
+} from '@shared/schemas/toolResult';
 
 export const DUPLICATE_CALL_ERROR =
   'Duplicate parallel call skipped — same tool name and arguments as an earlier call in this batch. ' +

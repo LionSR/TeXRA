@@ -4,7 +4,7 @@ import {
   resolveAndFormat,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
-import { ToolError, type ToolFileAttachment } from '@tools/result';
+import { ToolError, type ToolFileAttachment } from '@shared/schemas/toolResult';
 import { wrapApiCall } from '@tools/utils';
 
 // Local imports - core utilities

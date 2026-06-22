@@ -63,13 +63,57 @@ describe('extension onboarding experience', () => {
     }
   });
 
+  it('lands first-run extension users on the credential welcome card', () => {
+    const source = readRepoFile('packages/extension/src/extension.ts');
+    const firstRunBlock = source.slice(source.indexOf('const welcomeKey'));
+    const showMainView = firstRunBlock.indexOf(
+      "executeCommand('texra.showMainView')",
+    );
+    const openWalkthrough = firstRunBlock.indexOf(
+      "executeCommand('texra.openGettingStarted')",
+    );
+
+    expect(showMainView).toBeGreaterThanOrEqual(0);
+    expect(openWalkthrough).toBeGreaterThanOrEqual(0);
+    expect(showMainView).toBeLessThan(openWalkthrough);
+    expect(firstRunBlock).not.toContain(
+      "executeCommand('texra.showMultiAgent')",
+    );
+  });
+
   it('keeps empty-project onboarding action oriented', () => {
     const source = readWebviewComponent('GettingStartedBanner');
+    const normalizedSource = source.replaceAll(/\s+/g, ' ');
 
-    expect(source).toContain('Empty project');
-    expect(source).toContain('COMMAND_LINKS.RUN_SETUP_ASSISTANT');
-    expect(source).toContain('action-link--primary');
-    expect(source).toContain('COMMAND_LINKS.GETTING_STARTED');
-    expect(source).not.toContain('Empty folder');
+    expect(source).toContain('No LaTeX files yet');
+    expect(normalizedSource).toContain('Start from a sample');
+    expect(normalizedSource).toContain('run setup to connect TeXRA');
+    expect(source).toContain('Run setup assistant');
+    expect(normalizedSource).toContain('Sample project');
+    expect(normalizedSource).toContain('Import Overleaf');
+    expect(source).toContain('Import arXiv');
+    expect(source).toContain('MainViewEvents.gettingStartedAction');
+    expect(source).toContain('variant="brand"');
+    expect(source).toContain('appearance="filled"');
+    expect(source).not.toContain('COMMAND_LINKS');
+    expect(source).not.toContain('Empty project');
+    expect(source).not.toContain('action-link');
+  });
+
+  it('keeps the no-workspace welcome view project-first', () => {
+    const source = readRepoFile(
+      'packages/extension/src/frontend/ui/welcomeView.ts',
+    );
+    const openWorkspace = source.indexOf(
+      'Open a single-folder workspace containing your LaTeX project',
+    );
+    const credentialPicker = source.indexOf(
+      'The main view will show the credential picker',
+    );
+
+    expect(openWorkspace).toBeGreaterThanOrEqual(0);
+    expect(credentialPicker).toBeGreaterThanOrEqual(0);
+    expect(openWorkspace).toBeLessThan(credentialPicker);
+    expect(source).toContain('Run setup once to check LaTeX');
   });
 });

@@ -3,7 +3,7 @@ import axios from 'axios';
 import { z } from 'zod';
 
 // Internal imports
-import { ToolResult } from '@tools/result';
+import { ToolResult } from '@shared/schemas/toolResult';
 import { wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 

@@ -40,7 +40,7 @@ import { toErrorMessage } from '@common/errors';
 import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import {
   requestBashApproval,

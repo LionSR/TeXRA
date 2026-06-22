@@ -19,7 +19,7 @@ import {
   buildErrorLogData,
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
-import type { ToolFileAttachment } from '@tools/result';
+import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 

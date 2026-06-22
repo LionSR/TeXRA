@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 import { defineTool } from '../core/define';
 import { getSetupPlatform } from './platform';

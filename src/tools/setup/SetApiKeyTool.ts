@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
 import { defineTool } from '../core/define';

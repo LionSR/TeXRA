@@ -62,6 +62,7 @@ export interface DesktopShellActionFactoryOptions {
     commits: string[];
     isGitRepo: boolean;
   }>;
+  showInfoMessage?: (message: string) => Promise<void> | void;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -83,6 +84,7 @@ export interface DesktopShellActions extends DesktopCommandActions {
    * best-effort `isGitRepo` flag derived from `isWorkspaceGitRepo`.
    */
   sendRecentCommits(): void;
+  showInfoMessage?(message: string): void;
 }
 
 const SWITCH_VIEW_ROUTES = {
@@ -204,6 +206,13 @@ export function createDesktopShellActions(
     showFirstRunWalkthrough: () => {
       renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
     },
+    showInfoMessage: options.showInfoMessage
+      ? (message) => {
+          void Promise.resolve(options.showInfoMessage!(message)).catch(
+            reportAsyncError,
+          );
+        }
+      : undefined,
   };
 }
 
@@ -254,6 +263,22 @@ function dispatchMainViewInboundOnShell(
       return true;
     case MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS:
       actions.sendRecentCommits();
+      return true;
+    case MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION:
+      if (message.action === 'openWalkthrough') {
+        actions.showFirstRunWalkthrough?.();
+      } else {
+        const labels: Record<typeof message.action, string> = {
+          runSetup: 'Run setup assistant',
+          createSampleProject: 'Create sample project',
+          cloneOverleaf: 'Import from Overleaf',
+          downloadArxiv: 'Import from arXiv',
+          openWalkthrough: 'Open walkthrough',
+        };
+        actions.showInfoMessage?.(
+          `"${labels[message.action]}" requires the VS Code extension.`,
+        );
+      }
       return true;
     default:
       return false;

@@ -201,7 +201,7 @@ export async function initCliPlatform(
       fs: nodeFilesystem,
       workspace: createNodeWorkspace(() => cliWorkspaceCwd),
       storage: stateStores.storage,
-      secrets: getCliSecrets(),
+      secrets: getCliSecrets(context.storageRoot),
       lifecycle,
       agentResume: { tryResumeStream: async () => false },
       toolAvailability: {
@@ -233,7 +233,7 @@ export async function initCliPlatform(
   }
 
   if (!serverSideKeysInitialized) {
-    initializeCliSupabaseAuth(cliPlatformLog);
+    initializeCliSupabaseAuth(cliPlatformLog, context.storageRoot);
     initializeServerSideKeyAccess(
       { state: tryPlatform()?.globalState, logger: cliPlatformLog },
       getCliAuthProvider(),

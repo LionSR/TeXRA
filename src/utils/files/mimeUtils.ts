@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'node:path';
+
 // Third-party imports
 import mime from 'mime-types';
 
@@ -9,23 +12,28 @@ const AUDIO_MIME_TYPE_OVERRIDES: Readonly<Record<string, string>> = {
   '.opus': 'audio/opus',
 };
 
+/**
+ * Accepts a full path, a dotfile name (`.opus`), or a bare extension (`opus`).
+ * Returns the lowercase extension with a leading dot, or `''` for
+ * extensionless paths that have a directory separator.
+ */
 function getExtension(pathOrExtension: string): string {
-  const hasPathSeparator = /[\\/]/.test(pathOrExtension);
-  const fileName = pathOrExtension.split(/[\\/]/).at(-1) ?? pathOrExtension;
+  const normalized = pathOrExtension.replaceAll('\\', '/');
+  const hasPathSeparator = normalized.includes('/');
+  const fileName = normalized.split('/').at(-1) ?? normalized;
+
+  // Dotfile with no further dot (e.g. `.opus`) — treat the whole name as the extension.
   if (fileName.startsWith('.') && !fileName.slice(1).includes('.')) {
     return fileName.toLowerCase();
   }
 
-  const dotIndex = fileName.lastIndexOf('.');
-  if (dotIndex >= 0) {
-    return fileName.slice(dotIndex).toLowerCase();
-  }
+  const ext = path.extname(fileName);
+  if (ext) return ext.toLowerCase();
 
-  if (hasPathSeparator) {
-    return '';
-  }
+  // Bare extension string like `opus` (no separator, no dot) → `.opus`.
+  if (!hasPathSeparator) return `.${fileName.toLowerCase()}`;
 
-  return `.${fileName.toLowerCase()}`;
+  return '';
 }
 
 /**

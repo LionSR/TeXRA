@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolError, ToolResult } from '@tools/result';
+import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import {
   recordToolFileRead,
   requireFileReadForEdit,

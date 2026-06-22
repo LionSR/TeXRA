@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 
 // Local imports - tools
-import { ToolError } from '@tools/result';
+import { ToolError } from '@shared/schemas/toolResult';
 
 // Local imports - core utilities
 import { WorkspaceFS } from '@utils/files';

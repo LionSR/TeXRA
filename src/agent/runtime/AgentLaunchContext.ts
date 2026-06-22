@@ -375,6 +375,10 @@ async function assembleAgentLaunchContext(
     },
     session,
     disposeTrace: runTrace.dispose,
+    getActiveChildren: (parentStreamId) =>
+      session.executions.getActiveChildren(parentStreamId),
+    waitForRetry: (streamId, options) =>
+      session.coordinators.waitForRetry(streamId, options),
   };
 }
 

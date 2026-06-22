@@ -198,9 +198,17 @@ describe('CLI child execution controls', () => {
         activeStreamId: 'child-a',
         parentStream,
         streams,
-        zeroBasedIndex: 1,
+        zeroBasedIndex: 0,
       }),
     ).toBe('child-b');
+    expect(
+      numericFocusTargetForActiveStream({
+        activeStreamId: 'child-a',
+        parentStream,
+        streams,
+        zeroBasedIndex: 1,
+      }),
+    ).toBe('child-a');
   });
 
   it('builds subagent and process picker items with stable labels and tails', () => {
@@ -236,6 +244,16 @@ describe('CLI child execution controls', () => {
 
     expect(buildChildControlItems(state, 'subagents')).toMatchObject([
       {
+        executionId: 'agent-2',
+        childStreamId: 'child-b',
+        kind: 'subagent',
+        label: 'reviewer',
+        command: 'reviewer',
+        description: 'stopped · 20s',
+        killable: false,
+        tailLines: [],
+      },
+      {
         executionId: 'agent-1',
         childStreamId: 'child-a',
         kind: 'subagent',
@@ -245,6 +263,8 @@ describe('CLI child execution controls', () => {
         killable: true,
         tailLines: [],
       },
+    ]);
+    expect(buildChildControlItems(state, 'tasks')).toMatchObject([
       {
         executionId: 'agent-2',
         childStreamId: 'child-b',
@@ -253,10 +273,7 @@ describe('CLI child execution controls', () => {
         command: 'reviewer',
         description: 'stopped · 20s',
         killable: false,
-        tailLines: [],
       },
-    ]);
-    expect(buildChildControlItems(state, 'tasks')).toMatchObject([
       {
         executionId: 'agent-1',
         childStreamId: 'child-a',
@@ -264,15 +281,6 @@ describe('CLI child execution controls', () => {
         label: 'critic',
         command: 'critic',
         killable: true,
-      },
-      {
-        executionId: 'agent-2',
-        childStreamId: 'child-b',
-        kind: 'subagent',
-        label: 'reviewer',
-        command: 'reviewer',
-        description: 'stopped · 20s',
-        killable: false,
       },
       {
         executionId: 'proc-1',
@@ -547,20 +555,20 @@ describe('CLI child execution controls', () => {
 
     expect(buildChildControlItems(state, 'subagents')).toMatchObject([
       {
-        executionId: 'agent-2',
-        childStreamId: 'child-b',
-        kind: 'subagent',
-        label: 'polisher',
-        description: 'running',
-        killable: true,
-      },
-      {
         executionId: 'agent-1',
         childStreamId: 'child-a',
         kind: 'subagent',
         label: 'critic',
         description: 'completed',
         killable: false,
+      },
+      {
+        executionId: 'agent-2',
+        childStreamId: 'child-b',
+        kind: 'subagent',
+        label: 'polisher',
+        description: 'running',
+        killable: true,
       },
     ]);
   });
@@ -593,17 +601,61 @@ describe('CLI child execution controls', () => {
 
     expect(visibleSubagentRows(state)).toMatchObject([
       {
-        executionId: 'agent-2',
-        childStreamId: 'child-b',
-        status: 'running',
-      },
-      {
         executionId: 'agent-1',
         childStreamId: 'child-a',
         status: 'completed',
       },
+      {
+        executionId: 'agent-2',
+        childStreamId: 'child-b',
+        status: 'running',
+      },
     ]);
     expect(hasChildControlItems(state, 'tasks')).toBe(true);
+  });
+
+  it('keeps stopped subagents in their retained task order', () => {
+    const state = slice({
+      activeSubagents: [
+        {
+          executionId: 'agent-2',
+          agentName: 'polisher',
+          childStreamId: 'child-b',
+          status: 'running',
+        },
+      ],
+      childStreams: [
+        {
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+          status: 'stopped',
+        },
+        {
+          executionId: 'agent-2',
+          agentName: 'polisher',
+          childStreamId: 'child-b',
+          status: 'waiting',
+        },
+      ],
+    });
+
+    expect(buildChildControlItems(state, 'tasks')).toMatchObject([
+      {
+        executionId: 'agent-1',
+        childStreamId: 'child-a',
+        label: 'critic',
+        statusLabel: 'stopped',
+        killable: false,
+      },
+      {
+        executionId: 'agent-2',
+        childStreamId: 'child-b',
+        label: 'polisher',
+        statusLabel: 'running',
+        killable: true,
+      },
+    ]);
   });
 
   it('opens the child side panel when only retained subagent streams remain', () => {

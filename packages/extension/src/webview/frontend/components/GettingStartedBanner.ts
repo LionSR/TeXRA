@@ -12,7 +12,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { COMMAND_LINKS } from '@shared/utils/uiConstants';
+import type { GettingStartedAction } from '@shared/schemas';
 
 import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
@@ -25,10 +25,6 @@ export class GettingStartedBanner extends LitElement {
     commonViewStyles,
     bannerStyles,
     css`
-      wa-callout.getting-started-banner a {
-        text-decoration: none;
-      }
-
       .getting-started-row {
         display: flex;
         align-items: flex-start;
@@ -60,39 +56,20 @@ export class GettingStartedBanner extends LitElement {
         color: var(--vscode-descriptionForeground);
       }
 
+      .getting-started-copy {
+        margin: 0;
+        color: var(--vscode-descriptionForeground);
+        line-height: var(--line-height-normal, 1.4);
+      }
+
       .getting-started-actions {
         display: flex;
         flex-wrap: wrap;
         gap: var(--wa-space-3xs);
       }
 
-      .action-link {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: var(--wa-space-3xs);
-        min-height: 24px;
-        max-width: 100%;
-        padding: 2px var(--wa-space-xs);
-        border: 1px solid var(--vscode-button-border, transparent);
-        border-radius: var(--wa-border-radius-s, 4px);
-        background: var(--vscode-button-secondaryBackground);
-        color: var(--vscode-button-secondaryForeground);
-        line-height: var(--line-height-normal);
-        white-space: nowrap;
-      }
-
-      .action-link:hover {
-        background: var(--vscode-button-secondaryHoverBackground);
-      }
-
-      .action-link--primary {
-        background: var(--vscode-button-background);
-        color: var(--vscode-button-foreground);
-      }
-
-      .action-link--primary:hover {
-        background: var(--vscode-button-hoverBackground);
+      .getting-started-actions wa-button::part(base) {
+        min-height: 26px;
       }
 
       .dismiss-button {
@@ -113,6 +90,10 @@ export class GettingStartedBanner extends LitElement {
     this.dispatchEvent(MainViewEvents.dismissGettingStarted());
   }
 
+  private handleAction(action: GettingStartedAction): void {
+    this.dispatchEvent(MainViewEvents.gettingStartedAction({ action }));
+  }
+
   override render(): TemplateResult {
     return html`
       <div class="banner-frame">
@@ -124,31 +105,52 @@ export class GettingStartedBanner extends LitElement {
           <div class="getting-started-row">
             <div class="getting-started-body">
               <div class="getting-started-title">
-                <strong>Empty project</strong>
-                <span>Start with setup or bring in a LaTeX source.</span>
+                <strong>No LaTeX files yet</strong>
+                <span>Start from a sample or import an existing paper.</span>
               </div>
+              <p class="getting-started-copy">
+                Then run setup to connect TeXRA, check LaTeX, and choose a
+                starter agent team.
+              </p>
               <div class="getting-started-actions">
-                <a
-                  class="action-link action-link--primary"
-                  href=${COMMAND_LINKS.RUN_SETUP_ASSISTANT}
+                <wa-button
+                  variant="brand"
+                  appearance="filled"
+                  size="small"
+                  @click=${() => this.handleAction('runSetup')}
                 >
-                  ${waIcon('rocket')} Run setup
-                </a>
-                <a
-                  class="action-link"
-                  href=${COMMAND_LINKS.CREATE_SAMPLE_PROJECT}
+                  ${waIcon('rocket', { slot: 'start' })} Run setup assistant
+                </wa-button>
+                <wa-button
+                  appearance="outlined"
+                  size="small"
+                  @click=${() => this.handleAction('createSampleProject')}
                 >
-                  ${waIcon('file-circle-plus')} Sample project
-                </a>
-                <a class="action-link" href=${COMMAND_LINKS.CLONE_OVERLEAF}>
-                  ${waIcon('cloud-arrow-down')} Overleaf
-                </a>
-                <a class="action-link" href=${COMMAND_LINKS.DOWNLOAD_ARXIV}>
-                  ${waIcon('download')} arXiv
-                </a>
-                <a class="action-link" href=${COMMAND_LINKS.GETTING_STARTED}>
-                  ${waIcon('book')} Walkthrough
-                </a>
+                  ${waIcon('file-circle-plus', { slot: 'start' })} Sample
+                  project
+                </wa-button>
+                <wa-button
+                  appearance="outlined"
+                  size="small"
+                  @click=${() => this.handleAction('cloneOverleaf')}
+                >
+                  ${waIcon('cloud-arrow-down', { slot: 'start' })} Import
+                  Overleaf
+                </wa-button>
+                <wa-button
+                  appearance="outlined"
+                  size="small"
+                  @click=${() => this.handleAction('downloadArxiv')}
+                >
+                  ${waIcon('download', { slot: 'start' })} Import arXiv
+                </wa-button>
+                <wa-button
+                  appearance="outlined"
+                  size="small"
+                  @click=${() => this.handleAction('openWalkthrough')}
+                >
+                  ${waIcon('book', { slot: 'start' })} Walkthrough
+                </wa-button>
               </div>
             </div>
             <wa-button

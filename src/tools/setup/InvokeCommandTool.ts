@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Local imports
 import { AUTH_COMMANDS } from '@auth/constants';
 import type { CommandId } from '@shared/commands/catalog';
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
 import { defineTool } from '../core/define';

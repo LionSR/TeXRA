@@ -13,6 +13,14 @@ type PrepareExecResult =
   | { kind: 'success'; result: PrepareResult }
   | { kind: 'error'; error: Error };
 
+/**
+ * Session-init node: runs **once per tool-use session** to build the initial
+ * message array or restore from a persisted snapshot.
+ *
+ * This is the outer session-level prep. Compare `ToolUseRoundPrepNode` in
+ * `core/flows/toolUseRound/`, which is the inner per-LLM-call prep node that
+ * runs at the start of every model invocation inside `ToolUseRoundFlow`.
+ */
 export class ToolUsePrepareNode<C> extends Node<
   ToolUseRunShared,
   ToolUseFlowParams,

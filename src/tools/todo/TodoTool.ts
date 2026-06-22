@@ -19,7 +19,7 @@ import {
   countByStatus,
   type TodoItem,
 } from '@shared/schemas';
-import { type ToolResult } from '@tools/result';
+import { type ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
 
 const logger = createChannelTrace('TodoWriteTool');
