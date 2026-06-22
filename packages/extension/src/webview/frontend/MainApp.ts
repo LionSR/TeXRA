@@ -71,6 +71,7 @@ import './components/BannerGroup';
 import './components/LatexDiffsSection';
 import './components/InstructionPanel';
 import './components/OnboardingWelcomeCard';
+import './components/OnboardingSetupCard';
 import {
   ELEMENT_IDS,
   DOCUMENT_FILE_TYPES,
@@ -1440,12 +1441,12 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER);
   }
 
-  // Welcome-card choices reuse the existing host flows: sign-in reuses
-  // handleComponentSignIn (SIGN_IN_FROM_BANNER -> texra.auth.signIn), ChatGPT
-  // opens Models, API key invokes texra.setApiKey (OPEN_SET_API_KEY); only skip
-  // is onboarding-specific (declined flag).
+  // Welcome-card choices reuse the existing host flows where possible: sign-in
+  // reuses handleComponentSignIn (SIGN_IN_FROM_BANNER -> texra.auth.signIn),
+  // API key invokes texra.setApiKey, and ChatGPT uses the extension-host
+  // subscription sign-in helper directly so onboarding can continue in place.
   private handleWelcomeChatGpt(): void {
-    postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS);
+    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT);
   }
 
   private handleWelcomeApiKey(): void {
@@ -1454,6 +1455,18 @@ export class MainApp extends MainAppBase {
 
   private handleWelcomeSkip(): void {
     postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SKIP);
+  }
+
+  private handleOnboardingRunSetup(): void {
+    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP);
+  }
+
+  private handleOnboardingOpenGettingStarted(): void {
+    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED);
+  }
+
+  private handleOnboardingSkipSetup(): void {
+    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP);
   }
 
   private handleComponentDismissLogin(): void {
@@ -1739,6 +1752,8 @@ export class MainApp extends MainAppBase {
               @welcome-chatgpt=${this.handleWelcomeChatGpt}
               @welcome-api-key=${this.handleWelcomeApiKey}
               @welcome-skip=${this.handleWelcomeSkip}
+              @onboarding-open-getting-started=${this
+                .handleOnboardingOpenGettingStarted}
             ></onboarding-welcome-card>
           </div>
         </div>
@@ -1766,6 +1781,15 @@ export class MainApp extends MainAppBase {
         ${this.renderViewHeader()}
 
         <div class="main-content">
+          ${onboardingState === 'setup'
+            ? html`<onboarding-setup-card
+                @onboarding-run-setup=${this.handleOnboardingRunSetup}
+                @onboarding-open-getting-started=${this
+                  .handleOnboardingOpenGettingStarted}
+                @onboarding-skip-setup=${this.handleOnboardingSkipSetup}
+              ></onboarding-setup-card>`
+            : nothing}
+
           <instruction-panel
             .showSessionHint=${!this.sessionHintDismissed.get()}
             @session-type-change=${this.handleComponentSessionTypeChange}
