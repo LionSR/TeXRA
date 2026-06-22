@@ -87,7 +87,7 @@ describe('extension onboarding experience', () => {
     expect(source).toContain('No LaTeX files yet');
     expect(source).toContain('Run setup to connect TeXRA');
     expect(source).toContain('COMMAND_LINKS.RUN_SETUP_ASSISTANT');
-    expect(source).toContain('action-link--primary');
+    expect(source).toContain('appearance="filled"');
     expect(source).toContain('COMMAND_LINKS.GETTING_STARTED');
     expect(source).not.toContain('Empty project');
   });
