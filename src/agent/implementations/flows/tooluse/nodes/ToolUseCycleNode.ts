@@ -7,7 +7,8 @@ import {
 } from '@agent/core/flows/ToolUseRoundFlow';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { MESSAGE_TYPES, toRetryErrorInfo } from '@shared/schemas';
+import type { RetryErrorInfo } from '@shared/schemas';
 
 import {
   type ToolUseRunShared,
@@ -20,7 +21,12 @@ type ToolUseCycleOutcome =
   | { outcome: 'completed'; messages: ProviderMessage[] }
   | { outcome: 'skipped' }
   | { outcome: 'cancelled' }
-  | { outcome: 'failed'; message: string; userRetryable?: boolean };
+  | {
+      outcome: 'failed';
+      message: string;
+      userRetryable: boolean;
+      lastError?: RetryErrorInfo;
+    };
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,
@@ -117,6 +123,7 @@ export class ToolUseCycleNode<C> extends Node<
           outcome: 'failed',
           message: roundShared.lastError.message,
           userRetryable: roundShared.lastError.userRetryable,
+          lastError: roundShared.lastError,
         };
       }
       if (roundShared.shouldStop && !roundShared.endTurn) {
@@ -140,6 +147,7 @@ export class ToolUseCycleNode<C> extends Node<
       outcome: 'failed',
       message: error.message,
       userRetryable: formatted.userRetryable,
+      lastError: toRetryErrorInfo(formatted),
     };
   }
 
@@ -184,9 +192,9 @@ export class ToolUseCycleNode<C> extends Node<
       case 'skipped':
         break;
       case 'failed':
-        shared.lastError = {
+        shared.lastError = execRes.lastError ?? {
           message: execRes.message,
-          userRetryable: execRes.userRetryable ?? false,
+          userRetryable: execRes.userRetryable,
         };
         // Surface the failure in the transcript. Without this the WaitNode
         // resets lastError when the user sends a follow-up (see
