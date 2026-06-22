@@ -19,7 +19,9 @@ function installRemoteAgentListClient(
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
+      // ky passes a Request object; extract the URL string from it
+      const urlString = input instanceof Request ? input.url : String(input);
+      const url = new URL(urlString);
       selectedColumns.push(url.searchParams.get('select') ?? '');
       const result = queue.shift() ?? { data: null, error: null };
 
