@@ -108,7 +108,7 @@ describe('planPackClean', () => {
     expect(plan.valid).toBe(false);
     if (plan.valid) return;
     expect(plan.message).toBe(
-      'Please select all required fields (input file, agent, and model)',
+      'Please select all required fields (input file and model)',
     );
   });
 
@@ -117,7 +117,7 @@ describe('planPackClean', () => {
     expect(plan.valid).toBe(false);
     if (plan.valid) return;
     expect(plan.message).toBe(
-      'Please select all required fields (input file, agent, and model)',
+      'Please select all required fields (input file and model)',
     );
   });
 });

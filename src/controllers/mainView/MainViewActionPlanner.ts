@@ -51,8 +51,7 @@ export function planPackClean(
   if (!state.primaryInput || !state.model) {
     return {
       valid: false,
-      message:
-        'Please select all required fields (input file, agent, and model)',
+      message: 'Please select all required fields (input file and model)',
     };
   }
 
