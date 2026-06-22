@@ -97,7 +97,10 @@ export function countLines(text: string): number {
 export function truncateWithEllipsis(text: string, maxLen: number): string {
   const graphemes = [...graphemeSegmenter.segment(text)];
   if (graphemes.length <= maxLen) return text;
-  return `${graphemes.slice(0, maxLen - 1).map((s) => s.segment).join('')}…`;
+  return `${graphemes
+    .slice(0, maxLen - 1)
+    .map((s) => s.segment)
+    .join('')}…`;
 }
 
 /**
@@ -129,7 +132,10 @@ export function truncateSummary(text: string, maxLength: number): string {
 export function tailWithEllipsis(text: string, maxLen: number): string {
   const graphemes = [...graphemeSegmenter.segment(text)];
   if (graphemes.length <= maxLen) return text;
-  return `…${graphemes.slice(-(maxLen - 1)).map((s) => s.segment).join('')}`;
+  return `…${graphemes
+    .slice(-(maxLen - 1))
+    .map((s) => s.segment)
+    .join('')}`;
 }
 
 /**

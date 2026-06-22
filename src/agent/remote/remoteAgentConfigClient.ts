@@ -37,7 +37,11 @@ export async function fetchRemoteAgentConfigYaml(
       // error.response body methods (.text(), .json()) are not usable after that.
       const errorText = errorDataToString(error.data) ?? 'Unknown error';
       throw new Error(
-        mapRemoteAgentConfigHttpError(error.response.status, agentName, errorText),
+        mapRemoteAgentConfigHttpError(
+          error.response.status,
+          agentName,
+          errorText,
+        ),
       );
     }
     throw error;

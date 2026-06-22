@@ -232,7 +232,9 @@ async function fetchRemoteAgentListRows(
         error: {
           ...parsedError,
           message:
-            parsedError.message || fallbackMessage || 'remote list request failed',
+            parsedError.message ||
+            fallbackMessage ||
+            'remote list request failed',
         },
       };
     }
