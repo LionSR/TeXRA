@@ -24,7 +24,7 @@ export function createFakeSetupPlatform(
       async storedApiKeyExists() {
         return false;
       },
-      async anyApiKeyExists() {
+      async anyUsableCredentialExists() {
         return false;
       },
       async gitHubTokenExists() {

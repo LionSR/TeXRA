@@ -34,7 +34,8 @@ export interface SetupSecretsAdapter {
    * `PROVIDER_API_KEY` in the user's shell.
    */
   storedApiKeyExists(provider: ApiProvider): Promise<boolean>;
-  anyApiKeyExists(): Promise<boolean>;
+  /** True when any credential can launch a setup model right now. */
+  anyUsableCredentialExists(): Promise<boolean>;
   gitHubTokenExists(): Promise<'secret' | 'env' | 'none'>;
   /** List of provider names known to TeXRA (matches SecretManager.API_PROVIDERS). */
   providers: readonly ApiProvider[];
