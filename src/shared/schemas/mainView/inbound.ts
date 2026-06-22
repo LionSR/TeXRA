@@ -314,11 +314,15 @@ const NavigationMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY),
 ] as const;
 
-// Onboarding funnel (PRD: agent-native onboarding). The welcome card's
-// sign-in / api-key choices reuse SIGN_IN_FROM_BANNER / OPEN_SET_API_KEY;
-// only the explicit skip needs its own message (persists the declined flag).
+// Onboarding funnel (PRD: agent-native onboarding). Common commands stay
+// shared where possible; ChatGPT sign-in and State 1 setup actions need
+// explicit messages because they update the funnel after host-side effects.
 const OnboardingMessages = [
+  commandOnly(MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT),
+  commandOnly(MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP),
+  commandOnly(MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED),
   commandOnly(MAIN_VIEW_COMMANDS.ONBOARDING_SKIP),
+  commandOnly(MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP),
 ] as const;
 
 export const MainViewInboundMessageSchema = z.discriminatedUnion('command', [

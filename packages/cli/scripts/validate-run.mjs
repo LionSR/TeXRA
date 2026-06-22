@@ -604,6 +604,7 @@ async function validateOrchestrateOnboardingPickers() {
   const truncatedOnboardingLabels = [
     ...oldTruncatedLabels,
     'Sign in — free for acad…',
+    'Use ChatGPT subscription…',
     'Use your own provider A…',
   ];
 
@@ -614,8 +615,10 @@ async function validateOrchestrateOnboardingPickers() {
     expected: [
       'Not signed in, and no provider API key is configured. Choose how to power model calls:',
       'Sign in — free for academics',
+      'Use ChatGPT subscription',
       'Use your own provider API key',
       'Researcher Access: no API key needed (recommended)',
+      'Codex models through your ChatGPT plan',
       'Anthropic, OpenAI, Google, and more',
     ],
     forbidden: truncatedOnboardingLabels,
@@ -625,9 +628,11 @@ async function validateOrchestrateOnboardingPickers() {
     args: ['orchestrate', '--api-mode', 'included'],
     env: { ANTHROPIC_API_KEY: 'texra-validation-fake-key' },
     expected: [
-      'Included relay access needs sign-in for this run:',
+      'Included relay or subscription access needs sign-in for this run:',
       'Sign in — free for academics',
+      'Use ChatGPT subscription',
       'Researcher Access: no API key needed (recommended)',
+      'Codex models through your ChatGPT plan',
     ],
     forbidden: [
       'Use your own provider API key',
@@ -640,8 +645,10 @@ async function validateOrchestrateOnboardingPickers() {
     args: ['orchestrate', '--api-mode', 'personal'],
     env: {},
     expected: [
-      'Personal API-key mode needs a provider key for this run:',
+      'Personal mode needs ChatGPT sign-in or a provider key for this run:',
+      'Use ChatGPT subscription',
       'Use your own provider API key',
+      'Codex models through your ChatGPT plan',
       'Anthropic, OpenAI, Google, and more',
     ],
     forbidden: [

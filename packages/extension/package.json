@@ -926,6 +926,12 @@
         "icon": "$(sign-in)"
       },
       {
+        "command": "texra.auth.chatgpt.signIn",
+        "title": "Sign In with ChatGPT Subscription",
+        "category": "TeXRA",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "texra.auth.signOut",
         "title": "Sign Out",
         "category": "TeXRA",
@@ -1101,19 +1107,19 @@
       {
         "id": "texra.gettingStarted",
         "title": "Get started with TeXRA",
-        "description": "Choose a credential, let the setup assistant run your first polish, then meet the orchestrator. Setup is the doorman, polish is the demo, the orchestrator is the habit.",
+        "description": "Choose a credential, let the setup assistant check your project and run your first polish, then meet the orchestrator.",
         "steps": [
           {
             "id": "texra.gettingStarted.signIn",
             "title": "Choose how TeXRA should sign in",
-            "description": "A credential is the one step no agent can do for you. Three ways in:\n\n**Sign in — free for academics** — Researcher Access: no API key needed (recommended). Signing in also unlocks remote agents, including the orchestrator.\n\n[Sign In](command:texra.auth.signIn)\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Open Models & ChatGPT](command:texra.showModels)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)",
+            "description": "A credential is the one step no agent can do for you. Three ways in:\n\n**Sign in — free for academics** — Researcher Access: no API key needed (recommended). Signing in also unlocks remote agents, including the orchestrator.\n\n[Sign In](command:texra.auth.signIn)\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
               "altText": "Screenshot of the model credential configuration view"
             },
             "completionEvents": [
               "onCommand:texra.auth.signIn",
-              "onCommand:texra.showModels",
+              "onCommand:texra.auth.chatgpt.signIn",
               "onCommand:texra.setApiKey"
             ]
           },
@@ -1539,6 +1545,10 @@
         },
         {
           "command": "texra.auth.signIn",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.auth.chatgpt.signIn",
           "when": "texra.activated"
         },
         {

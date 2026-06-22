@@ -11,10 +11,9 @@ import * as vscode from 'vscode';
 import {
   codexCoordinator,
   getChatGptAuthStatus,
-  loginWithDeviceCode,
-  loginWithLoopback,
   setPreferCodexSubscription,
 } from '@auth/codex';
+import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
@@ -41,63 +40,9 @@ export class ChatGptSubscriptionHandlers {
     ]);
   }
 
-  private async runSignIn(): Promise<
-    Awaited<ReturnType<typeof loginWithLoopback>>
-  > {
-    const coordinator = codexCoordinator();
-    if (vscode.env.remoteName) {
-      return loginWithDeviceCode({
-        coordinator,
-        onPrompt: (prompt) => {
-          void vscode.env.clipboard.writeText(prompt.userCode);
-          void vscode.window
-            .showInformationMessage(
-              `Enter ChatGPT code ${prompt.userCode} at ${prompt.verificationUrl}. The code was copied to the clipboard.`,
-              'Open ChatGPT',
-            )
-            .then((choice) => {
-              if (choice === 'Open ChatGPT') {
-                void vscode.env.openExternal(
-                  vscode.Uri.parse(prompt.verificationUrl),
-                );
-              }
-            });
-        },
-      });
-    }
-
-    return loginWithLoopback({
-      coordinator,
-      openBrowser: async (url) => {
-        await vscode.env.openExternal(vscode.Uri.parse(url));
-      },
-    });
-  }
-
   async handleSignInChatGpt(): Promise<void> {
-    try {
-      const session = await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: 'Signing in with ChatGPT…',
-          cancellable: false,
-        },
-        () => this.runSignIn(),
-      );
-      const update = await setPreferCodexSubscription(true);
-      void vscode.window.showInformationMessage(
-        update.effective
-          ? `Signed in with ChatGPT as ${session.email ?? session.accountId ?? 'your account'}. ChatGPT subscription is enabled for Codex models.`
-          : `Signed in with ChatGPT as ${session.email ?? session.accountId ?? 'your account'}, but a more specific setting kept the subscription preference disabled.`,
-      );
-      await this.refreshChatGptState();
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'ChatGPT sign-in failed',
-        error,
-      );
-    }
+    await signInWithChatGptSubscription(this.ctx.channel);
+    await this.refreshChatGptState();
   }
 
   async handleSignOutChatGpt(): Promise<void> {
