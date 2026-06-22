@@ -63,6 +63,7 @@ export const MAIN_VIEW_COMMANDS = {
   HIDE_DEPENDENCY_BANNER: 'hideDependencyBanner',
   SHOW_GETTING_STARTED_BANNER: 'showGettingStartedBanner',
   HIDE_GETTING_STARTED_BANNER: 'hideGettingStartedBanner',
+  GETTING_STARTED_ACTION: 'gettingStartedAction',
   SHOW_LOGIN_BANNER: 'showLoginBanner',
   HIDE_LOGIN_BANNER: 'hideLoginBanner',
   SIGN_IN_FROM_BANNER: 'signInFromBanner',
