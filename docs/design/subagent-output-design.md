@@ -404,7 +404,7 @@ The delivery chain:
 
 3. If orchestrator is mid-cycle (model calling / tool executing):
    └→ Text sits in queue
-   └→ On NEXT cycle, ToolUseRoundPrepNode.prep() checks session.hasQueuedFollowUp()
+   └→ On NEXT round, ToolUseRoundPrepNode.prep() checks session.hasQueuedFollowUp()
    └→ Drains queue, calls modelHandler.createUserFollowUpMessages()
    └→ Appended to shared.messages as user message before next model call
 ```
@@ -445,7 +445,7 @@ If the orchestrator's session has ended (WaitNode returned stop, flow exited):
 
 1. `ToolUseFollowUpQueue.enqueue()` still works — it auto-creates the queue
 2. But nobody is listening — the orchestrator's flow has exited
-3. If the user resumes the session, `ToolUsePrepareNode` restores from snapshot and `ToolUseRoundPrepNode` drains the queue on the next cycle
+3. If the user resumes the session, `ToolUsePrepareNode` restores from snapshot and `ToolUseRoundPrepNode` drains the queue on the next round
 
 So results are NOT lost — they persist in the queue until the session resumes or the queue is released. The only true loss case is if `ToolUseFollowUpQueue.release(streamId)` is called before the subagent completes. This happens in `ToolUseSessionLifecycle.dispose()`.
 
