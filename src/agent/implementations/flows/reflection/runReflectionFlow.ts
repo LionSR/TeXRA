@@ -25,9 +25,11 @@ import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
 } from '@agent/output/workflowOutputLayout';
+import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
   RUN_OUTCOME,
+  toProviderErrorFromRetry,
   type AgentFileLocation,
   type EndGroupStatus,
   type RoundOutput,
@@ -310,7 +312,12 @@ export async function runReflectionFlow<C = unknown>(
       outcome = RUN_OUTCOME.FAILED;
       // Re-throw so runFlowWithLifecycle logs the error and shows
       // the user notification. State was already projected per-step.
-      throw new Error(shared.lastError.message);
+      // Attach the full structured provider error so downstream error
+      // formatters can surface statusCode, provider, etc. without
+      // sniffing the message string.
+      const err = new Error(shared.lastError.message);
+      attachProviderError(err, toProviderErrorFromRetry(shared.lastError));
+      throw err;
     } else {
       outcome = flowOutcome;
     }
