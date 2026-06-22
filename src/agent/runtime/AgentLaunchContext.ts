@@ -41,7 +41,6 @@ import { generateExecutionId } from '@utils/core/executionId';
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';
 import { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
-import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import {
   createRunContext,
   withRunContext,
@@ -368,7 +367,6 @@ async function assembleAgentLaunchContext(
     usageMonitor,
     runtimeHost,
     streamStatus,
-    bestConnectionMethod,
     workingDirectory: configPayload.workingDirectory?.trim() || undefined,
     coordinators: {
       plan: new PlanApprovalCoordinator(runtimeHost),

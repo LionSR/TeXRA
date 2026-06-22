@@ -50,15 +50,6 @@ export interface AgentCore<C = unknown> {
   approvalPromptsUnavailable?: boolean;
   /** Tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
-  /**
-   * Determines the best textual connector between two strings in a LaTeX
-   * document context (empty string, space, or newline). Injected so the
-   * core flow layer does not import from the runtime layer.
-   */
-  bestConnectionMethod: (
-    str1: string,
-    str2: string,
-  ) => Promise<{ connector: string; choice: string }>;
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {

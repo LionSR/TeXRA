@@ -27,9 +27,22 @@ export interface ModelClientServices<C = unknown> {
   readonly refreshClient?: () => Promise<void>;
 }
 
+export interface TextConnectionService {
+  /**
+   * Determines the best textual connector between two strings in a LaTeX
+   * document context (empty string, space, or newline).
+   */
+  readonly bestConnectionMethod: (
+    str1: string,
+    str2: string,
+  ) => Promise<{ connector: string; choice: string }>;
+}
+
 /** Services for response cycle flow nodes. */
 export interface ResponseCycleServices<C = unknown>
-  extends BaseFlowContextInit<C>, ModelClientServices<C> {
+  extends BaseFlowContextInit<C>,
+    ModelClientServices<C>,
+    TextConnectionService {
   readonly fileService: TaskRunFileService;
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;

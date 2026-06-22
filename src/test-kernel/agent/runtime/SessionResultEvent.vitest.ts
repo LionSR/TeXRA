@@ -101,9 +101,6 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
       dispose: vi.fn(),
     } as unknown as AgentLaunchContext['modelHandler'],
     disposeTrace: vi.fn(),
-    bestConnectionMethod: vi
-      .fn()
-      .mockResolvedValue({ connector: ' ', choice: 'B' }),
     coordinators: {
       plan: new PlanApprovalCoordinator(explicit.host),
       proposal: new AgentProposalCoordinator(explicit.host),

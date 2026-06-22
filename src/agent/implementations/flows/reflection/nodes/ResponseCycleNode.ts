@@ -10,8 +10,8 @@ import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/execution/AgentState';
-import { ensureError, normalizeProviderError } from '@common/errors';
 import { bestConnectionMethod } from '@agent/runtime/textConnection';
+import { ensureError, normalizeProviderError } from '@common/errors';
 import type { AgentFileLocation } from '@shared/schemas';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';

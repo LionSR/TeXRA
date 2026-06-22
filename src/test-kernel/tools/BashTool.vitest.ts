@@ -209,7 +209,6 @@ describe('BashTool', () => {
       executionId: 'test-execution-id',
       run,
       workspace: workspaceState,
-      bestConnectionMethod: async () => ({ connector: ' ', choice: 'B' }),
     };
 
     const messages: ProviderMessage[] = [];
@@ -336,7 +335,6 @@ describe('BashTool', () => {
       executionId: 'test-execution-id',
       run,
       workspace: workspaceState,
-      bestConnectionMethod: async () => ({ connector: ' ', choice: 'B' }),
     };
 
     const call = {
