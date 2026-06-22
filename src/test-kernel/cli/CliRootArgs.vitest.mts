@@ -1323,6 +1323,7 @@ describe('runCli usage output stream routing', () => {
       'explain autonomous goal mode and approved-plan startup',
     );
     expect(stdout).toContain('/login, /logout');
+    expect(stdout).toContain('ChatGPT or Researcher Access');
     expect(stdout).toContain('Ctrl-T');
     expect(stdout).toContain('Tab');
     expect(stdout).toContain('cycle visible streams');
@@ -1374,6 +1375,8 @@ describe('runCli usage output stream routing', () => {
     const result = await runCli(['--help']);
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('EXAMPLES');
+    expect(stdout).toContain('texra auth chatgpt login');
+    expect(stdout).toContain('texra login');
     expect(stdout).toContain('texra chat');
     expect(stdout).toContain('texra run <agent> --input file.tex');
     expect(stdout).toContain('texra agents list');

@@ -139,7 +139,7 @@ describe('slashRegistry', () => {
     );
     expect(listSlashCommands().find((cmd) => cmd.name === 'login')).toEqual(
       expect.objectContaining({
-        description: 'Sign in to TeXRA or ChatGPT subscription',
+        description: 'Sign in to ChatGPT or Researcher Access',
         formComponent: expect.any(Function),
       }),
     );

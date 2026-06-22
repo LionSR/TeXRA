@@ -497,7 +497,7 @@ const CHATGPT_PICKER_ITEM: OnboardingPickerItem = {
 const SKIP_PICKER_ITEM: OnboardingPickerItem = {
   value: 'skip',
   label: ONBOARDING_CHOICE_SKIP_LABEL,
-  description: 'set up later: texra login / texra setup',
+  description: 'set up ChatGPT, Researcher Access, or a key later',
 };
 
 function onboardingSetupPaths(props: {
