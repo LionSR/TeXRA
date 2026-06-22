@@ -27,6 +27,7 @@ import {
   UserQuestionAnswersSchema,
 } from '../prompts';
 import { AgentCategoryFilterSchema } from './data';
+import { GettingStartedActionSchema } from '../mainView/state';
 
 const TrimmedStringSchema = z
   .string()
@@ -344,6 +345,11 @@ const OpenLabelMessageSchema = z.object({
   label: z.string().min(1),
 });
 
+const GettingStartedActionMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION),
+  action: GettingStartedActionSchema,
+});
+
 export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
   'command',
   [
@@ -397,6 +403,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     GetFollowupOptionsMessageSchema,
     SetupFollowupMessageSchema,
     RunFollowupMessageSchema,
+    GettingStartedActionMessageSchema,
   ],
 );
 

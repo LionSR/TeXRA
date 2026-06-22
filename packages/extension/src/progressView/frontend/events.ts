@@ -3,8 +3,11 @@
  * Both dispatch and handler sides use these types.
  */
 
-import type { StringValueDetail } from '@shared/schemas';
-import type { UserQuestionAnswers } from '@shared/schemas';
+import type {
+  GettingStartedActionDetail,
+  StringValueDetail,
+  UserQuestionAnswers,
+} from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
@@ -124,4 +127,7 @@ export const ProgressEvents = {
 
   followupFocusComplete: () =>
     createEvent('followup-focus-complete', undefined),
+
+  gettingStartedAction: (detail: GettingStartedActionDetail) =>
+    createEvent('getting-started-action', detail),
 } as const;
