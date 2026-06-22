@@ -1191,6 +1191,15 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
+  it('rejects unknown commands before honoring explicit --help', async () => {
+    const result = await runCli(['workflows', '--help']);
+    expect(result.exitCode).toBe(2);
+    expect(stderr).toContain(
+      'Unknown command: texra workflows. Run `texra --help` for usage.',
+    );
+    expect(stdout).toBe('');
+  });
+
   it('points run-command agent arguments at the full agent catalog', async () => {
     let result = await runCli(['run', '--help']);
     expect(result.exitCode).toBe(0);
