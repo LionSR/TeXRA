@@ -7,20 +7,17 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
+import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   buildMainViewExecuteMessage,
-  type MainViewExecuteMessage,
-} from '@controllers/mainView/MainViewExecutionMessageController';
-import {
   planCompare,
   planLatexdiff,
   planLatexdiffVC,
   planLatexdiffVCPack,
   planMerge,
   planPackClean,
-} from '@controllers/mainView/MainViewActionPlanner';
-import { PREFERRED_TOOL_USE_AGENTS } from '@agent/index/agentRegistryConstants';
-import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
+  type MainViewExecuteMessage,
+} from '@shared/mainView';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { hostBridge, postMessage } from '@shared/hostBridge';
@@ -64,6 +61,7 @@ import {
   dispatchMainView,
   type MainViewHandlerRegistry,
 } from '@shared/schemas';
+import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 // Constants-only module: safe for the webview bundle (no platform imports).
 import {
   registerTeXRAWebAwesomeIcons,
