@@ -50,7 +50,9 @@ const ProviderErrorObjectSchema = z.object({
    *  true (because they need user action — a key swap or new API key —
    *  before any retry makes sense). */
   userRetryable: z.boolean(),
-  isRelayError: z.boolean(),
+  /** True when the error is known to come from the relay. Omitted when the
+   *  retry-state path cannot determine the relay verdict. */
+  isRelayError: z.boolean().optional(),
   /** True when the credential (relay monthly limit OR upstream provider
    *  account) has been exhausted. Auto-retry is skipped for these errors
    *  and the retry panel offers a "Use your own API key" button. */
@@ -146,7 +148,7 @@ export function toProviderErrorFromRetry(info: RetryErrorInfo): ProviderError {
   return {
     message: info.message,
     userRetryable: info.userRetryable,
-    isRelayError: info.isRelayError as boolean,
+    isRelayError: info.isRelayError,
     statusCode: info.statusCode,
     statusText: info.statusText,
     provider: info.provider,

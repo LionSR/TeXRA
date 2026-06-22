@@ -360,10 +360,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
 
   if (result.kind === 'failed') {
     const { kind: _, ...errorInfo } = result;
-    retryState.lastError = {
-      ...errorInfo,
-      userRetryable: errorInfo.userRetryable ?? false,
-    };
+    retryState.lastError = errorInfo;
     state.shouldStop = true;
     state.endTurn = false;
     return null;

@@ -223,14 +223,29 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   };
 }
 
+function detectCachedProviderError(err: unknown): ProviderError | undefined {
+  for (
+    let current: unknown = err;
+    current != null && typeof current === 'object';
+    current = (current as { cause?: unknown }).cause
+  ) {
+    const cached = providerErrorMetadata.detect(current);
+    if (cached) return cached;
+  }
+  return undefined;
+}
+
 /**
  * Normalize an upstream or SDK error once and attach the structured result to
  * the thrown value. Retry code should consume this helper so provider-boundary
  * code can own classification while downstream layers only read the shape.
  */
 export function normalizeProviderError(err: unknown): ProviderError {
-  const cached = providerErrorMetadata.detect(err);
-  if (cached) return cached;
+  const cached = detectCachedProviderError(err);
+  if (cached) {
+    providerErrorMetadata.attach(err, cached);
+    return cached;
+  }
 
   const formatted = formatProviderHttpError(err);
   providerErrorMetadata.attach(err, formatted);
@@ -238,7 +253,7 @@ export function normalizeProviderError(err: unknown): ProviderError {
 }
 
 export function getSdkErrorMessage(err: unknown): string {
-  return formatProviderHttpError(err).message;
+  return normalizeProviderError(err).message;
 }
 
 /** Builds consistent error data for logging with MESSAGE_TYPES.ERROR. */
@@ -246,7 +261,7 @@ export function buildErrorLogData(
   err: unknown,
   context?: ErrorContext,
 ): ErrorLogData {
-  const formatted = formatProviderHttpError(err);
+  const formatted = normalizeProviderError(err);
   const rawMessage = toErrorMessage(err);
 
   return {

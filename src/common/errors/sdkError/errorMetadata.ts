@@ -70,4 +70,3 @@ export const providerErrorMetadata =
 /** Cache a structured ProviderError on any object so downstream error
  *  formatters can recover it without sniffing the message string. */
 export const attachProviderError = providerErrorMetadata.attach;
-export const detectProviderError = providerErrorMetadata.detect;

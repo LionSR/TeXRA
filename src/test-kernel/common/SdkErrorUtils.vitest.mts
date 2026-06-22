@@ -25,7 +25,9 @@ import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import {
   attachProviderError,
   attachSdkErrorMetadata,
+  buildErrorLogData,
   formatProviderHttpError,
+  getSdkErrorMessage,
   isUserAbort,
   normalizeProviderError,
   sdkErrorKindFromStatusCode,
@@ -553,7 +555,9 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
     const reconstructed = toProviderErrorFromRetry(info);
 
     expect(reconstructed.streamDiagnostics?.eventsProcessed).toBe(15);
-    expect(reconstructed.streamDiagnostics?.anthropicMessageId).toBe('msg_01ABC');
+    expect(reconstructed.streamDiagnostics?.anthropicMessageId).toBe(
+      'msg_01ABC',
+    );
     expect(reconstructed.partialText).toBe('Here is the analysis of the');
   });
 
@@ -677,5 +681,33 @@ describe('attachProviderError end-to-end', () => {
     expect(recovered.userRetryable).toBe(true);
     // Verify the cache hit — second call returns the same object.
     expect(normalizeProviderError(err)).toBe(recovered);
+  });
+
+  it('recovers cached ProviderError data through wrapper causes', () => {
+    const retryInfo: RetryErrorInfo = {
+      message: 'HTTP 503 Service Unavailable – server overloaded',
+      userRetryable: true,
+      statusCode: 503,
+      provider: 'anthropic',
+      requestId: 'req_wrapped_503',
+    };
+
+    const reconstructed = toProviderErrorFromRetry(retryInfo);
+    const cause = new Error(retryInfo.message);
+    attachProviderError(cause, reconstructed);
+    const wrapper = new Error('Tool-use flow failed', { cause });
+
+    expect(getSdkErrorMessage(wrapper)).toBe(retryInfo.message);
+
+    const logData = buildErrorLogData(wrapper, {
+      operation: 'execute orchestrator',
+    });
+
+    expect(logData.statusCode).toBe(503);
+    expect(logData.provider).toBe('anthropic');
+    expect(logData.requestId).toBe('req_wrapped_503');
+    expect(logData.rawMessage).toBe('Tool-use flow failed');
+    expect(logData.operation).toBe('execute orchestrator');
+    expect(normalizeProviderError(wrapper)).toBe(reconstructed);
   });
 });
