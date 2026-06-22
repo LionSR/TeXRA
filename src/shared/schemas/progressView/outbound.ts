@@ -30,7 +30,7 @@ import {
 import { PlanSchema } from '../plan';
 import { TodoItemSchema } from '../todo';
 import { ContextStateDataSchema } from '../contextManagement';
-import { TokenUsageStatsSchema } from '../usage';
+import { RunUsageMapSchema, TokenUsageStatsSchema } from '../usage';
 import { AgentCategoryFilterSchema, ProgressViewPlacementSchema } from './data';
 
 export const UpdateStreamsMessageSchema = z.object({
@@ -276,7 +276,7 @@ export const SyncStreamContentMessageSchema = z.object({
     .optional(),
   // Per-run usage map — used by both workflow and tool-use so resume
   // correctly accumulates. Frontend derives sessionUsage as the sum.
-  runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),
+  runUsage: RunUsageMapSchema.optional(),
   contextState: ContextStateDataSchema.optional(),
   todos: z.array(TodoItemSchema),
   plan: PlanSchema.nullable(),
