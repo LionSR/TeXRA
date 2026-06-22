@@ -1570,7 +1570,7 @@ it adding a wrapper, barrel, or run-entry indirection:
 
 - **`2f062af` "split tool-use cycle flow and agent registry into modules" + `4bb4bbe` (PR #5803,
   `refactor/modularize-monoliths`).** The tool-use cycle flow was decomposed into
-  `core/flows/toolUseCycle/{ToolUsePrepNode,ToolUseProcessNode,ToolUseDispatchNode,cycleShared,toolCallParsing}.ts`
+  `core/flows/toolUseRound/{ToolUseRoundPrepNode,ToolUseProcessNode,ToolUseDispatchNode,roundShared,toolCallParsing}.ts`
   (the §16 backlog had no item here — this is proactive monolith-splitting), and the agent
   registry was split into `index/{agentEntry,agentOptionsBuilder,agentYamlScanner,remoteAgentMeta,agentRegistryConstants}.ts`.
   The latter **largely closes §16 new-finding #1** (the `agentRegistry` UI-altitude mix): the
