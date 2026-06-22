@@ -8,7 +8,7 @@ import {
 import { z } from 'zod';
 
 // Local imports
-import { ToolError } from '@tools/result';
+import { ToolError } from '@shared/schemas/toolResult';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { pluralize } from '@utils/text/stringUtils';

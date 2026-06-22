@@ -9,7 +9,7 @@ import {
   type BashApprovalAction,
 } from '@shared/schemas/prompts';
 import { requireRuntimeHost } from '@tools/contextHelpers';
-import { type ToolResult } from '@tools/result';
+import { type ToolResult } from '@shared/schemas/toolResult';
 import { getConfig } from '@utils/config/configUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 

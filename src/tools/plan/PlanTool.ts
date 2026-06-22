@@ -37,7 +37,7 @@ import {
   isGoalEnabled,
   setGoalSessionBashAutoApproval,
 } from '@tools/goal';
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 

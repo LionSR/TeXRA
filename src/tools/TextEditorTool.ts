@@ -25,7 +25,7 @@ import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { ToolResult, ToolError } from './result';
+import { ToolResult, ToolError } from '@shared/schemas/toolResult';
 import { formatFileView, formatLinesWithNumbers } from './formatting';
 import {
   assertWritable,

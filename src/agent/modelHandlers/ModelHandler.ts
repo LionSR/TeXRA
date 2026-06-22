@@ -45,7 +45,7 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - tools
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@tools/result';
+import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Local imports - utils
 import { roundTo } from '@utils/core';

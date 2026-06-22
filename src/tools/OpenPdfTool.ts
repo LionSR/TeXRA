@@ -15,7 +15,7 @@ import {
   currentToolRoot,
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local imports - utilities
 import {

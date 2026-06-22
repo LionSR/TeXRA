@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Local imports - latex
 import { toErrorMessage } from '@common/errors';
 import { arxivProcessor } from '@latex/arxivProcessor';
-import { ToolError } from '@tools/result';
+import { ToolError } from '@shared/schemas/toolResult';
 import {
   type ArxivPaperMetadata,
   createArxivClient,

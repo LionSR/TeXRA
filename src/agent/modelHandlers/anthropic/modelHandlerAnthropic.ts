@@ -36,7 +36,7 @@ import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
 import type { FileLocation } from '@shared/schemas';
-import type { ToolFileAttachment } from '@tools/result';
+import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Local imports - utils
 import { AbsoluteFS, flexibleFS } from '@utils/files';

@@ -2,10 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - shared schemas
-import {
-  LineChangesSchema,
-  LineCountSchema,
-} from '@shared/schemas/lineChanges';
+import { LineChangesSchema, LineCountSchema } from './lineChanges';
 
 // Type imports
 import type { ZodIssue } from 'zod';

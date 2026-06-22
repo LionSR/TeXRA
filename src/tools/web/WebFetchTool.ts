@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
-import { ToolError, ToolResult } from '@tools/result';
+import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import { isTimeoutErrorCode } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 

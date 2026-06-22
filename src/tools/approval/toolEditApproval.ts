@@ -18,7 +18,7 @@ import {
   LineChangesSchema,
   type LineChanges,
 } from '@shared/schemas/lineChanges';
-import { type ToolResult } from '@tools/result';
+import { type ToolResult } from '@shared/schemas/toolResult';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { countLines } from '@utils/text/stringUtils';

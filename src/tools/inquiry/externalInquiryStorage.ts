@@ -16,7 +16,7 @@ import {
   type InquiryThreadStatus,
 } from '@shared/schemas';
 import { normalizeFilePath } from '@shared/utils/path';
-import { ToolError } from '@tools/result';
+import { ToolError } from '@shared/schemas/toolResult';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 import { hexId12 } from '@utils/core/executionId';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';

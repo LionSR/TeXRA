@@ -2,7 +2,7 @@
 import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Local imports - tools
-import { type ToolResult } from '@tools/result';
+import { type ToolResult } from '@shared/schemas/toolResult';
 
 export function recordToolFileRead(path: string): void {
   const context = getCurrentToolCallContext();

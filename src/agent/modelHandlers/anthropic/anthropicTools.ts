@@ -8,7 +8,7 @@ import type { AgentTrace } from '@agent/trace';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Type imports - agent and tools
-import type { ToolFileAttachment } from '@tools/result';
+import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 
 // Local imports - model handlers
