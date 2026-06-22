@@ -66,3 +66,7 @@ export const detectPartialText = partialTextMetadata.detect;
 
 export const providerErrorMetadata =
   createErrorMetadata<ProviderError>('providerError');
+
+/** Cache a structured ProviderError on any object so downstream error
+ *  formatters can recover it without sniffing the message string. */
+export const attachProviderError = providerErrorMetadata.attach;

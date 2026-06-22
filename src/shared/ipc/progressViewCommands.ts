@@ -81,6 +81,8 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   OPEN_PROFILE: 'openProfile',
 
+  GETTING_STARTED_ACTION: 'progressGettingStartedAction',
+
   POP_OUT: 'popOut',
   POP_BACK: 'popBack',
   SET_PLACEMENT: 'setPlacement',
