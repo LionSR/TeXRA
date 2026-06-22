@@ -11,9 +11,13 @@ describe('fetchRemoteAgentConfigYaml', () => {
   });
 
   it('posts the agent name and returns the parsed YAML config', async () => {
-    const fetchMock = vi.fn(async () =>
-      Response.json({ config: 'settings: {}\nprompts: {}\n' }),
-    );
+    // ky buffers the request body for retry support, so read it inside the mock
+    // (via clone) before that stream is consumed rather than from mock.calls.
+    let requestBody: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      requestBody = await request.clone().json();
+      return Response.json({ config: 'settings: {}\nprompts: {}\n' });
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const config = await fetchRemoteAgentConfigYaml('remoteWriter', 'token');
@@ -21,11 +25,12 @@ describe('fetchRemoteAgentConfigYaml', () => {
     assert.equal(config, 'settings: {}\nprompts: {}\n');
     assert.equal(fetchMock.mock.calls.length, 1);
     // ky passes a Request object; inspect properties rather than raw fetch args
-    const request = fetchMock.mock.calls[0][0] as Request;
+    const request = fetchMock.mock.calls[0][0];
     assert.equal(request.url, SUPABASE_CONFIG.edgeFunctionUrl);
     assert.equal(request.method, 'POST');
     assert.equal(request.headers.get('Authorization'), 'Bearer token');
     assert.equal(request.headers.get('Content-Type'), 'application/json');
+    assert.deepEqual(requestBody, { agentName: 'remoteWriter' });
   });
 
   it('maps missing agents to the existing user-facing error text', async () => {

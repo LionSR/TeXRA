@@ -21,6 +21,7 @@ import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
 
 import { filterNotNull, filterNotNullish } from '@utils/core';
+import { errorDataToString } from './errorData';
 import {
   RemoteAgentListItemSchema,
   type RemoteAgentListItem,
@@ -30,6 +31,8 @@ import { fetchRemoteAgentConfigYaml } from './remoteAgentConfigClient';
 
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
+
+const FETCH_TIMEOUT_MS = 30_000;
 
 const REMOTE_AGENT_LIST_COLUMNS =
   'id, name, description, visibility, tools, agent_category';
@@ -216,6 +219,7 @@ async function fetchRemoteAgentListRows(
           Authorization: `Bearer ${accessToken}`,
           Accept: 'application/json',
         },
+        timeout: FETCH_TIMEOUT_MS,
       })
       .json<RemoteAgentListRow[]>();
     return { data, error: null };
@@ -240,13 +244,6 @@ async function fetchRemoteAgentListRows(
     }
     throw error;
   }
-}
-
-/** Convert ky's `error.data` (string or parsed JSON) to a plain string, or return undefined. */
-function errorDataToString(data: unknown): string | undefined {
-  if (typeof data === 'string') return data || undefined;
-  if (data != null) return JSON.stringify(data);
-  return undefined;
 }
 
 function parseRemoteAgentListErrorBody(

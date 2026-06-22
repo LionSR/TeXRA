@@ -6,16 +6,10 @@ import { StatusCodes } from 'http-status-codes';
 import { SUPABASE_CONFIG } from '@auth/config';
 
 // Local imports - agent
+import { errorDataToString } from './errorData';
 import { EdgeFunctionResponseSchema } from './types';
 
 const FETCH_TIMEOUT_MS = 30_000;
-
-/** Convert ky's `error.data` (string or parsed JSON) to a plain string, or return undefined for empty/null. */
-function errorDataToString(data: unknown): string | undefined {
-  if (typeof data === 'string') return data || undefined;
-  if (data != null) return JSON.stringify(data);
-  return undefined;
-}
 
 /** Fetch raw remote-agent YAML from the edge function. */
 export async function fetchRemoteAgentConfigYaml(
