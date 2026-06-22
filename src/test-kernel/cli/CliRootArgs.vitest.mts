@@ -1504,6 +1504,57 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toBe('');
   });
 
+  it('defaults bare history to list while accepting global flags', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-history-'));
+    try {
+      const result = await runCli([
+        'history',
+        '--cwd',
+        root,
+        '--output-format',
+        'json',
+      ]);
+
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(stdout)).toEqual([]);
+      expect(stderr).toBe('');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('forwards history globals before an explicit subcommand', async () => {
+    const missingRoot = path.join(
+      os.tmpdir(),
+      `texra-history-missing-${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}`,
+    );
+
+    const result = await runCli([
+      'history',
+      '--cwd',
+      missingRoot,
+      'list',
+      '--output-format',
+      'json',
+    ]);
+
+    expect(result.exitCode).toBe(2);
+    expect(stderr).toContain(`--cwd: path does not exist: ${missingRoot}`);
+    expect(stdout).toBe('');
+  });
+
+  it('shows the history parent default and global flags in help', async () => {
+    const result = await runCli(['history', '--help']);
+
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('USAGE texra history');
+    expect(stdout).toContain('--output-format=<text|json|ndjson>');
+    expect(stdout).toContain('list');
+    expect(stderr).toBe('');
+  });
+
   it('accepts the documented multi-agent inspect command', async () => {
     const result = await runCli(['multi-agent', 'inspect', 'mathematician']);
     expect(result.exitCode).toBe(0);
