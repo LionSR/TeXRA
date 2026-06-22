@@ -223,28 +223,38 @@ referenced from a small, known set:
   `EmptyPrefill` — plus `SdkErrorUtils` for the (reused) error tagging. New
   Interactions tests sit alongside these.
 
-A new handler must satisfy the `ModelHandler` contract — **19 abstract methods**
-(`ModelHandler.ts`) plus the hooks the Google handler overrides
-(`supportsTokenCounting`, `requiresBatchedParallelToolResults`,
+A new handler must satisfy the `ModelHandler` contract — **all 19 abstract
+methods** (`ModelHandler.ts`) plus the protected/override hooks the Google handler
+defines (`createResponseImpl`, `sdkErrorTagger`, `extractAssistantText`,
+`createMediaMessage`, `supportsTokenCounting`, `requiresBatchedParallelToolResults`,
 `estimateTokenCount`). They split cleanly:
 
 - **Reusable / thin port (≈ copy):** `getClient` (same client + `getApiKey()`),
-  `computePrice`/`normalizeUsage` (point at remapped `googleUsage.ts`),
+  `computePrice` / `normalizeUsage` (point at remapped `googleUsage.ts`),
   `processThinkingBlock`, `shouldContinue`, `estimateTokenCount`
-  (`client.models.countTokens` unchanged), media size/threshold logic.
-- **Wire-format rewrites (the real work):** `initializeMessages` /
-  `createRoundMessages` / `createMediaContent` / `addMediaToUserMessage` /
-  `prependTextToUserMessage` (typed `Content` + `Step[]` input vs chat parts);
-  `extractResponse` / `extractToolUse` (walk `steps` vs candidate parts);
-  `createToolUseFollowUpMessages` + the batched parallel variant (emit
-  `function_result` steps keyed by `call_id`, round-trip `thought` steps);
-  `createUserFollowUpMessages` / `createAssistantMessage` /
-  `updateMessageContentWith[out]Prefill` (steps-shaped); the streaming loop (SSE
-  `event_type` events vs chunk parts).
+  (`client.models.countTokens` unchanged), the `sdkErrorTagger` override (reuse
+  `googleSdkError.ts`), media size/threshold logic, and the
+  `supportsTokenCounting` / `requiresBatchedParallelToolResults` capability hooks.
+- **Core rewrite (the real work):** `createResponseImpl` (`:405`) — today builds
+  `chats.create()` → `sendMessageStream()` / `sendMessage()`; becomes
+  `interactions.create({ …, stream })` driving the SSE `event_type` lifecycle
+  (`step.start`/`step.delta`/`step.stop` → output vs `arguments_delta` vs
+  thought). **Single biggest piece.**
+- **Wire-format rewrites:** message build — `initializeMessages` /
+  `createRoundMessages` / `createUserFollowUpMessages` / `createAssistantMessage`
+  / `prependTextToUserMessage` / `addMediaToUserMessage` / `createMediaContent` /
+  `createMediaMessage` (typed `Content` + `Step[]` input vs chat parts); prefill —
+  `initializeOutputAndPrefill` (uses `fileContentUtils`) /
+  `addContinueMessageWithoutPrefill` / `updateMessageContentWith[out]Prefill`
+  (re-expressed for steps); extraction — `extractResponse` /
+  `extractAssistantText` / `extractToolUse` (walk `steps` vs candidate parts);
+  tool round-trip — `createToolUseFollowUpMessages` + the batched parallel variant
+  (emit `function_result` steps keyed by `call_id`, round-trip `thought` steps).
 
-So the surface is ~one new ~800-1000 line handler file mirroring the chat one,
-one routing predicate, one settings field (×3 sites), and a handful of tests —
-no cross-cutting refactor, no new platform port, no dependency bump.
+That accounts for all 19 abstract methods plus the 7 overrides. So the surface is
+~one new ~800-1000 line handler file mirroring the chat one, one routing
+predicate, one settings field (×3 sites), and a handful of tests — no
+cross-cutting refactor, no new platform port, no dependency bump.
 
 ## Official migration guide × SDK types (reconciliation)
 
