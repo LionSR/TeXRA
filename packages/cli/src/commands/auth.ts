@@ -395,7 +395,7 @@ export const authCommand = defineCommand({
   meta: {
     name: 'auth',
     description:
-      'Sign in with ChatGPT or Researcher Access, sign out, and check usage',
+      'Sign in with ChatGPT or Researcher Access, check status, and view usage',
   },
   args: {
     ...GLOBAL_ARGS,
