@@ -132,9 +132,8 @@ await import('@auth/serverKeys');
 await import('@common/state');
 
 // Module under test — imported after all mock factories are materialized.
-const { launchSetupAssistant } = await import(
-  '@commands/setup/setupAssistantCommand'
-);
+const { launchSetupAssistant } =
+  await import('@commands/setup/setupAssistantCommand');
 
 describe('setup assistant routing check ordering', () => {
   beforeEach(() => {
