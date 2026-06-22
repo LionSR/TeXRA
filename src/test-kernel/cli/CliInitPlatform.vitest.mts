@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
-import type { CliContext } from '@cli/runtime/cliContext';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SkillSource } from '@skills/loadSkills';
 
@@ -19,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   },
   defaultSkillSources: vi.fn<() => SkillSource[]>(() => []),
   setRuntimeSkillSources: vi.fn(),
+  getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   tryPlatform: vi.fn(),
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
   // so a test can run them and assert the usage-log dispose was wired.
@@ -92,6 +92,10 @@ vi.mock('@cli/runtime/cliStateStores', () => ({
   }),
 }));
 
+vi.mock('@cli/runtime/cliSecrets', () => ({
+  getCliSecrets: mocks.getCliSecrets,
+}));
+
 vi.mock('@cli/runtime/gitAuthor', () => ({ applyCliGitAuthorConfig: vi.fn() }));
 
 vi.mock('@tools/lean/direct/directLspAdapter', () => ({
@@ -99,10 +103,7 @@ vi.mock('@tools/lean/direct/directLspAdapter', () => ({
 }));
 
 function cliContext(
-  overrides: Partial<CliContext> & {
-    bestEffortIncludedModelAccess?: boolean;
-    installSignalHandlers?: boolean;
-  } = {},
+  overrides: Partial<Parameters<typeof initCliPlatform>[0]> = {},
 ): Parameters<typeof initCliPlatform>[0] {
   return {
     cwd: '/tmp/project',
@@ -127,6 +128,24 @@ describe('CLI platform init', () => {
     mocks.bootstrapPlatformAgentDirectories.mockResolvedValue(undefined);
     mocks.serverSideKeyService.setUseIncludedModelAccess.mockResolvedValue(
       undefined,
+    );
+  });
+
+  it('uses the configured storage root for CLI secrets', async () => {
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
+    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+
+    await initCliPlatform(
+      cliContext({
+        installSignalHandlers: false,
+        storageRoot: '/tmp/texra-storage-root',
+      }),
+    );
+
+    expect(mocks.getCliSecrets).toHaveBeenCalledWith('/tmp/texra-storage-root');
+    expect(mocks.initializeCliSupabaseAuth).toHaveBeenCalledWith(
+      expect.anything(),
+      '/tmp/texra-storage-root',
     );
   });
 

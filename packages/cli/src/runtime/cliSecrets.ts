@@ -32,12 +32,7 @@ function isSecretFileData(value: unknown): value is SecretFileData {
 export class CliSecrets implements PlatformSecrets {
   private mutationQueue: Promise<void> = Promise.resolve();
 
-  constructor(
-    private readonly filePath = path.join(
-      DEFAULT_NODE_STORAGE_ROOT,
-      'secrets.json',
-    ),
-  ) {}
+  constructor(private readonly filePath = cliSecretsPath()) {}
 
   async get(key: string): Promise<string | undefined> {
     return cliEnvValue(key) ?? (await this.readSecrets())[key];
@@ -89,9 +84,15 @@ export class CliSecrets implements PlatformSecrets {
   }
 }
 
+export function cliSecretsPath(
+  storageRoot = DEFAULT_NODE_STORAGE_ROOT,
+): string {
+  return path.join(storageRoot, 'secrets.json');
+}
+
 let cliSecrets: CliSecrets | undefined;
 
-export function getCliSecrets(): CliSecrets {
-  cliSecrets ??= new CliSecrets();
+export function getCliSecrets(storageRoot?: string): CliSecrets {
+  cliSecrets ??= new CliSecrets(cliSecretsPath(storageRoot));
   return cliSecrets;
 }
