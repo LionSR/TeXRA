@@ -85,6 +85,19 @@ describe('OpenAI Responses API', () => {
     expect(nodes[0]).toMatchObject({ kind: 'tool-call', name: 'unknown' });
   });
 
+  it('handles assistant messages with output_text content parts', () => {
+    const nodes = normalize([
+      {
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'response text' }],
+      },
+    ]);
+
+    expect(nodesOfKind(nodes, 'assistant-text')).toEqual([
+      { kind: 'assistant-text', text: 'response text' },
+    ]);
+  });
+
   it('handles function_call_output with array output (mixed parts)', () => {
     const nodes = normalize([
       {

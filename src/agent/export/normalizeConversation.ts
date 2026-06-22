@@ -17,6 +17,7 @@ import {
   isToolMessage,
 } from 'openai/lib/chatCompletionUtils';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
+import { z } from 'zod';
 import {
   extractTextContentPart,
   isFunctionCallOutputItem,
@@ -32,7 +33,6 @@ import type {
   ResponseFunctionToolCallItem,
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
-import { z } from 'zod';
 
 import type { ExportNode, UserPart } from './schemas';
 
