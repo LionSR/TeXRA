@@ -137,6 +137,9 @@ importers:
       keyv:
         specifier: ^5.6.0
         version: 5.6.0
+      ky:
+        specifier: ^2.0.2
+        version: 2.0.2
       lit:
         specifier: ^3.3.3
         version: 3.3.3
@@ -4454,6 +4457,10 @@ packages:
     resolution: {integrity: sha512-HcQsZSQ4Ymhuay4BVzJtM5pFZNDSomYYqcNCZOSITPQh9g18a09DqziWAxSt2G+BH9wGlG+0ZjWpEnaFlnKseQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
+
+  ky@2.0.2:
+    resolution: {integrity: sha512-/GmXpo9F9W+f8n4Ivr2iH+7h7wL7jLbLKWkMlpflcCRb6kGjBfTlASEXaZ9qUgNTn4VgS0P2pwxxzQ4EM6Ulgg==}
+    engines: {node: '>=22'}
 
   lazy-val@1.0.5:
     resolution: {integrity: sha512-0/BnGCCfyUMkBpeDgWihanIAF9JmZhHBgUhEqzvf+adhNGLoP6TaiI5oF8oyb3I45P+PcnrqihSf01M0l0G5+Q==}
@@ -10264,6 +10271,8 @@ snapshots:
       unbash: 4.0.1
       yaml: 2.9.0
       zod: 4.4.3
+
+  ky@2.0.2: {}
 
   lazy-val@1.0.5: {}
 

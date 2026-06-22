@@ -1,3 +1,4 @@
+import ky, { HTTPError } from 'ky';
 import yaml from 'yaml';
 import { z } from 'zod';
 
@@ -207,31 +208,43 @@ async function fetchRemoteAgentListRows(
   url.searchParams.set('select', columns);
   url.searchParams.set('order', 'name.asc');
 
-  const response = await fetch(url, {
-    headers: {
-      apikey: SUPABASE_CONFIG.publicKey,
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-    },
-  });
-
-  if (response.ok) {
-    return {
-      data: (await response.json()) as RemoteAgentListRow[],
-      error: null,
-    };
+  try {
+    const data = await ky
+      .get(url, {
+        headers: {
+          apikey: SUPABASE_CONFIG.publicKey,
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      })
+      .json<RemoteAgentListRow[]>();
+    return { data, error: null };
+  } catch (error) {
+    if (error instanceof HTTPError) {
+      // ky v2 auto-consumes the response body into error.data;
+      // error.response body methods are not usable after that.
+      const fallbackMessage =
+        `${error.response.status} ${error.response.statusText}`.trim();
+      const rawBody = errorDataToString(error.data);
+      const parsedError = parseRemoteAgentListErrorBody(rawBody ?? '');
+      return {
+        data: null,
+        error: {
+          ...parsedError,
+          message:
+            parsedError.message || fallbackMessage || 'remote list request failed',
+        },
+      };
+    }
+    throw error;
   }
+}
 
-  const fallbackMessage = `${response.status} ${response.statusText}`.trim();
-  const rawBody = await response.text().catch(() => '');
-  const error = parseRemoteAgentListErrorBody(rawBody);
-  return {
-    data: null,
-    error: {
-      ...error,
-      message: error.message || fallbackMessage || 'remote list request failed',
-    },
-  };
+/** Convert ky's `error.data` (string or parsed JSON) to a plain string, or return undefined. */
+function errorDataToString(data: unknown): string | undefined {
+  if (typeof data === 'string') return data || undefined;
+  if (data != null) return JSON.stringify(data);
+  return undefined;
 }
 
 function parseRemoteAgentListErrorBody(

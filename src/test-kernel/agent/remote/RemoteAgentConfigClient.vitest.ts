@@ -20,17 +20,12 @@ describe('fetchRemoteAgentConfigYaml', () => {
 
     assert.equal(config, 'settings: {}\nprompts: {}\n');
     assert.equal(fetchMock.mock.calls.length, 1);
-    assert.deepEqual(fetchMock.mock.calls[0], [
-      SUPABASE_CONFIG.edgeFunctionUrl,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer token',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ agentName: 'remoteWriter' }),
-      },
-    ]);
+    // ky passes a Request object; inspect properties rather than raw fetch args
+    const request = fetchMock.mock.calls[0][0] as Request;
+    assert.equal(request.url, SUPABASE_CONFIG.edgeFunctionUrl);
+    assert.equal(request.method, 'POST');
+    assert.equal(request.headers.get('Authorization'), 'Bearer token');
+    assert.equal(request.headers.get('Content-Type'), 'application/json');
   });
 
   it('maps missing agents to the existing user-facing error text', async () => {

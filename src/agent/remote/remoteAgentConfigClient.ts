@@ -1,4 +1,5 @@
 // Third-party imports
+import ky, { HTTPError } from 'ky';
 import { StatusCodes } from 'http-status-codes';
 
 // Local imports - auth
@@ -7,28 +8,40 @@ import { SUPABASE_CONFIG } from '@auth/config';
 // Local imports - agent
 import { EdgeFunctionResponseSchema } from './types';
 
+const FETCH_TIMEOUT_MS = 30_000;
+
+/** Convert ky's `error.data` (string or parsed JSON) to a plain string, or return undefined for empty/null. */
+function errorDataToString(data: unknown): string | undefined {
+  if (typeof data === 'string') return data || undefined;
+  if (data != null) return JSON.stringify(data);
+  return undefined;
+}
+
 /** Fetch raw remote-agent YAML from the edge function. */
 export async function fetchRemoteAgentConfigYaml(
   agentName: string,
   accessToken: string,
 ): Promise<string> {
-  const response = await fetch(SUPABASE_CONFIG.edgeFunctionUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ agentName }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => 'Unknown error');
-    throw new Error(
-      mapRemoteAgentConfigHttpError(response.status, agentName, errorText),
-    );
+  try {
+    const data = await ky
+      .post(SUPABASE_CONFIG.edgeFunctionUrl, {
+        json: { agentName },
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: FETCH_TIMEOUT_MS,
+      })
+      .json<unknown>();
+    return EdgeFunctionResponseSchema.parse(data).config;
+  } catch (error) {
+    if (error instanceof HTTPError) {
+      // ky v2 populates error.data by consuming the response body;
+      // error.response body methods (.text(), .json()) are not usable after that.
+      const errorText = errorDataToString(error.data) ?? 'Unknown error';
+      throw new Error(
+        mapRemoteAgentConfigHttpError(error.response.status, agentName, errorText),
+      );
+    }
+    throw error;
   }
-
-  return EdgeFunctionResponseSchema.parse(await response.json()).config;
 }
 
 /** Maps edge-function HTTP status codes to user-friendly error messages. */
