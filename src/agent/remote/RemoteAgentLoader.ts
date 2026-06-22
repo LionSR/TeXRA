@@ -212,6 +212,11 @@ async function fetchRemoteAgentListRows(
   url.searchParams.set('order', 'name.asc');
 
   try {
+    // retry: 0 preserves the old fetch's fail-fast contract — listRemoteAgents
+    // is awaited by registry/settings refreshes and treats failure as an empty
+    // list, so ky's default GET retries (which honor Retry-After on 429/503)
+    // would block the UI rather than surfacing immediately. AbortSignal.timeout
+    // (vs ky's header-only `timeout`) also guards the .json() body read.
     const data = await ky
       .get(url, {
         headers: {
@@ -219,7 +224,9 @@ async function fetchRemoteAgentListRows(
           Authorization: `Bearer ${accessToken}`,
           Accept: 'application/json',
         },
-        timeout: FETCH_TIMEOUT_MS,
+        retry: 0,
+        timeout: false,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       })
       .json<RemoteAgentListRow[]>();
     return { data, error: null };

@@ -17,11 +17,14 @@ export async function fetchRemoteAgentConfigYaml(
   accessToken: string,
 ): Promise<string> {
   try {
+    // AbortSignal.timeout guards the whole request including the body read; ky's
+    // own `timeout` clears once response headers arrive and wouldn't cover .json().
     const data = await ky
       .post(SUPABASE_CONFIG.edgeFunctionUrl, {
         json: { agentName },
         headers: { Authorization: `Bearer ${accessToken}` },
-        timeout: FETCH_TIMEOUT_MS,
+        timeout: false,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       })
       .json<unknown>();
     return EdgeFunctionResponseSchema.parse(data).config;
