@@ -15,6 +15,8 @@ import type { RoundFileEntry, RoundFileMapping } from './types';
 
 interface BaseEntry {
   readonly loc: FileLocation;
+  readonly relativePath: string;
+  readonly relativePathNoExt: string;
   readonly baseName: string;
   readonly baseNameNoExt: string;
 }
@@ -41,42 +43,47 @@ function invertMapping(
 
 function buildBaseEntries(baseFiles: FileLocation[]): BaseEntry[] {
   return baseFiles.map((baseLoc) => {
-    const baseName = path.basename(
-      baseLoc.kind !== 'external' ? baseLoc.relativePath : baseLoc.absolutePath,
-    );
+    const comparablePath = getComparablePath(baseLoc).replaceAll('\\', '/');
+    const parsedPath = path.posix.parse(comparablePath);
+    const relativePathNoExt = path.posix.join(parsedPath.dir, parsedPath.name);
+    const baseName = path.posix.basename(comparablePath);
     return {
       loc: baseLoc,
+      relativePath: comparablePath,
+      relativePathNoExt,
       baseName,
-      baseNameNoExt: path.parse(baseName).name,
+      baseNameNoExt: path.posix.parse(baseName).name,
     };
   });
 }
 
 /**
- * Find base file matching source name using prioritized heuristics:
- * 1. Exact match
- * 2. Names without extensions
- * 3. Base name matches source
- * 4. Source matches base name
+ * Find the base file matching a model-reported source path.
+ * Match full relative paths first, then fall back to basename-only matching for
+ * legacy outputs that report just a filename.
  */
 function findMatchingBaseFile(
   baseEntries: readonly BaseEntry[],
   source: string,
 ): FileLocation | undefined {
-  const sourceNoExt = path.parse(source).name;
+  const normalizedSource = source.replaceAll('\\', '/');
+  const parsedSource = path.posix.parse(normalizedSource);
+  const sourcePathNoExt = path.posix.join(parsedSource.dir, parsedSource.name);
+  const sourceBaseName = path.posix.basename(normalizedSource);
+  const sourceBaseNameNoExt = path.posix.parse(sourceBaseName).name;
 
-  const matchers: Array<(b: string, bNoExt: string) => boolean> = [
-    (b) => b === source,
-    (_b, bNoExt) => bNoExt === sourceNoExt,
-    (_b, bNoExt) => bNoExt === source,
-    (b) => b === sourceNoExt,
+  const matchers: Array<(entry: BaseEntry) => boolean> = [
+    (entry) => entry.relativePath === normalizedSource,
+    (entry) => entry.relativePathNoExt === sourcePathNoExt,
+    (entry) => entry.baseName === normalizedSource,
+    (entry) => entry.baseNameNoExt === sourceBaseNameNoExt,
+    (entry) => entry.baseNameNoExt === normalizedSource,
+    (entry) => entry.baseName === sourceBaseNameNoExt,
   ];
 
   for (const match of matchers) {
-    for (const { loc, baseName, baseNameNoExt } of baseEntries) {
-      if (match(baseName, baseNameNoExt)) {
-        return loc;
-      }
+    for (const entry of baseEntries) {
+      if (match(entry)) return entry.loc;
     }
   }
 
@@ -118,10 +125,11 @@ export function traceFileLineage(
   const mapping = new Map<string, RoundFileEntry>();
   for (const entry of currentOutputs) {
     const key = getComparablePath(entry.location);
+    const origin = findMatchingBaseFile(baseEntries, entry.source);
     mapping.set(key, {
-      base: baseToOutput.get(key),
+      base: origin ?? baseToOutput.get(key),
       prev: prevToOutput.get(key),
-      origin: findMatchingBaseFile(baseEntries, entry.source),
+      origin,
     });
   }
 
