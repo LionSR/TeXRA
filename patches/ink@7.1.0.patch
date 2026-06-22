@@ -1,24 +1,8 @@
-diff --git a/build/ink.d.ts b/build/ink.d.ts
-index 273dd13875b9f0441d55fe0738975ca7695b39c1..c3114a970ac495f9c5f5dece35b437c4f1b47962 100644
---- a/build/ink.d.ts
-+++ b/build/ink.d.ts
-@@ -120,6 +120,11 @@ export default class Ink {
-     waitUntilExit(): Promise<unknown>;
-     waitUntilRenderFlush(): Promise<void>;
-     clear(): void;
-+    repaint(options?: {
-+        clearScrollback?: boolean;
-+        emitLayout?: boolean;
-+        preserveStatic?: boolean;
-+    }): void;
-     patchConsole(): void;
-     private setAlternateScreen;
-     private resolveInteractiveOption;
 diff --git a/build/ink.js b/build/ink.js
-index b8fd45cc990adbc080eff28fc37463cd91337dff..7ec06768f5316b86e3c826d3c2de08df5065fe18 100644
+index 24d45ec..113ce4b 100644
 --- a/build/ink.js
 +++ b/build/ink.js
-@@ -259,18 +259,39 @@ export default class Ink {
+@@ -276,18 +276,39 @@ export default class Ink {
          // error but consumers never call waitUntilExit().
          void this.exitPromise.catch(noop);
      }
@@ -66,7 +50,7 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..7ec06768f5316b86e3c826d3c2de08df
      };
      resolveExitPromise = () => { };
      rejectExitPromise = () => { };
-@@ -456,6 +477,13 @@ export default class Ink {
+@@ -493,6 +514,13 @@ export default class Ink {
              return;
          }
          this.isUnmounting = true;
@@ -80,7 +64,7 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..7ec06768f5316b86e3c826d3c2de08df
          if (this.beforeExitHandler) {
              process.off('beforeExit', this.beforeExitHandler);
              this.beforeExitHandler = undefined;
-@@ -623,6 +651,44 @@ export default class Ink {
+@@ -660,6 +688,54 @@ export default class Ink {
              this.log.sync(this.lastOutputToRender || this.lastOutput + '\n');
          }
      }
@@ -115,7 +99,17 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..7ec06768f5316b86e3c826d3c2de08df
 +            ? output
 +            : output + '\n';
 +        this.log.reset();
++        // Wrap the clear+reprint in synchronized output (DECSET 2026) when the
++        // terminal supports it (ink 7.1.0's bsu/esu helpers) so the emulator
++        // shows the new frame atomically instead of mid-repaint tearing. (TeXRA patch)
++        const sync = this.shouldSync();
++        if (sync) {
++            this.options.stdout.write(bsu);
++        }
 +        this.options.stdout.write(clearSequence + previousStaticOutput + nextStaticOutput + outputToRender);
++        if (sync) {
++            this.options.stdout.write(esu);
++        }
 +        this.log.sync(outputToRender);
 +        this.lastOutput = output;
 +        this.lastOutputToRender = outputToRender;
@@ -125,8 +119,36 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..7ec06768f5316b86e3c826d3c2de08df
      patchConsole() {
          if (this.options.debug) {
              return;
+diff --git a/build/ink.d.ts b/build/ink.d.ts
+index db6a701..d94e9b5 100644
+--- a/build/ink.d.ts
++++ b/build/ink.d.ts
+@@ -125,6 +125,11 @@ export default class Ink {
+     waitUntilExit(): Promise<unknown>;
+     waitUntilRenderFlush(): Promise<void>;
+     clear(): void;
++    repaint(options?: {
++        clearScrollback?: boolean;
++        emitLayout?: boolean;
++        preserveStatic?: boolean;
++    }): void;
+     patchConsole(): void;
+     registerInputControl(pauseInput: () => void, resumeInput: () => void): void;
+     suspendTerminal(callback: () => void | Promise<void>): Promise<void>;
+diff --git a/build/render.js b/build/render.js
+index 6f185f6..faffcb3 100644
+--- a/build/render.js
++++ b/build/render.js
+@@ -32,6 +32,7 @@ const render = (node, options) => {
+             instance.unmount();
+         },
+         clear: instance.clear,
++        repaint: instance.repaint,
+     };
+ };
+ export default render;
 diff --git a/build/render.d.ts b/build/render.d.ts
-index 867edcaf84fe7229c30fb072227a10c2a97ba1c1..d133a9833ec275a5126cf6ecafaaf6cfa7ff0fc0 100644
+index 867edca..d133a98 100644
 --- a/build/render.d.ts
 +++ b/build/render.d.ts
 @@ -168,6 +168,10 @@ export type Instance = {
@@ -140,15 +162,3 @@ index 867edcaf84fe7229c30fb072227a10c2a97ba1c1..d133a9833ec275a5126cf6ecafaaf6cf
  };
  /**
  Mount a component and render the output.
-diff --git a/build/render.js b/build/render.js
-index 6f185f6212d7e1867fb5dc70d26cd64b3931c339..e57cf77f8e229538577140f876bfd095900d04ef 100644
---- a/build/render.js
-+++ b/build/render.js
-@@ -32,6 +32,7 @@ const render = (node, options) => {
-             instance.unmount();
-         },
-         clear: instance.clear,
-+        repaint: instance.repaint,
-     };
- };
- export default render;
