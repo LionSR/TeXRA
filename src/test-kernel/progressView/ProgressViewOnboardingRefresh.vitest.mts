@@ -77,10 +77,7 @@ function createProviderShell(
   ) as ProgressViewProvider;
   (
     provider as unknown as {
-      _mainViewProvider?: Pick<
-        ProgressViewProvider,
-        'refreshOnboardingFunnel'
-      >;
+      _mainViewProvider?: Pick<ProgressViewProvider, 'refreshOnboardingFunnel'>;
     }
   )._mainViewProvider = mainViewProvider;
   return provider;
