@@ -66,3 +66,20 @@ export const detectPartialText = partialTextMetadata.detect;
 
 export const providerErrorMetadata =
   createErrorMetadata<ProviderError>('providerError');
+
+/** Cache a structured ProviderError on any object so downstream error
+ *  formatters can recover it without sniffing the message string. */
+export const attachProviderError = providerErrorMetadata.attach;
+export const detectProviderError = providerErrorMetadata.detect;
+
+const loggedErrorMetadata = createErrorMetadata<true>('errorLogged');
+
+/** Mark an error as already logged so duplicate trace rows are skipped. */
+export function markErrorLogged(err: unknown): void {
+  loggedErrorMetadata.attach(err, true);
+}
+
+/** Check whether an error has already been logged to the trace. */
+export function isErrorLogged(err: unknown): boolean {
+  return loggedErrorMetadata.detect(err) === true;
+}

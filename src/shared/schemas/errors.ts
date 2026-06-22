@@ -104,9 +104,55 @@ export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
 /** Minimal error info for retry state tracking */
 export const RetryErrorInfoSchema = z.preprocess(
   normalizeProviderErrorRetryFlag,
-  ProviderErrorObjectSchema.pick({
-    message: true,
-    userRetryable: true,
+  z.object({
+    message: z.string(),
+    userRetryable: z.boolean(),
+    ...ProviderErrorObjectSchema.pick({
+      statusCode: true,
+      statusText: true,
+      provider: true,
+      isRelayError: true,
+      isCredentialExhausted: true,
+      isUpstreamCreditDepleted: true,
+      requestId: true,
+      streamDiagnostics: true,
+      partialText: true,
+    }).partial().shape,
   }),
 );
 export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
+
+/** Convert a full ProviderError into the retry-state record. */
+export function toRetryErrorInfo(err: ProviderError): RetryErrorInfo {
+  return {
+    message: err.message,
+    userRetryable: err.userRetryable,
+    statusCode: err.statusCode,
+    statusText: err.statusText,
+    provider: err.provider,
+    isRelayError: err.isRelayError,
+    isCredentialExhausted: err.isCredentialExhausted,
+    isUpstreamCreditDepleted: err.isUpstreamCreditDepleted,
+    requestId: err.requestId,
+    streamDiagnostics: err.streamDiagnostics,
+    partialText: err.partialText,
+  };
+}
+
+/** Reconstruct a ProviderError from retry-state info. Defaults `isRelayError`
+ *  to `false` when absent (it was optional in earlier persisted records). */
+export function toProviderErrorFromRetry(info: RetryErrorInfo): ProviderError {
+  return {
+    message: info.message,
+    userRetryable: info.userRetryable,
+    isRelayError: info.isRelayError ?? false,
+    statusCode: info.statusCode,
+    statusText: info.statusText,
+    provider: info.provider,
+    isCredentialExhausted: info.isCredentialExhausted,
+    isUpstreamCreditDepleted: info.isUpstreamCreditDepleted,
+    requestId: info.requestId,
+    streamDiagnostics: info.streamDiagnostics,
+    partialText: info.partialText,
+  };
+}

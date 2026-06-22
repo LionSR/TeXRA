@@ -20,7 +20,15 @@ import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
 import { deriveRunOutcome } from '@common/constants/streamStatus';
-import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
+import {
+  attachProviderError,
+  markErrorLogged,
+} from '@common/errors/sdkErrorUtils';
+import {
+  RUN_OUTCOME,
+  toProviderErrorFromRetry,
+  type RunOutcome,
+} from '@shared/schemas';
 import type { SubagentProgressUpdate } from '@shared/schemas';
 
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -359,12 +367,21 @@ export async function runToolUseFlow<C = unknown>(
     if (shared.lastError) {
       // Re-throw so runFlowWithLifecycle logs the error and shows
       // the user notification, while preserving terminal run accounting.
-      throw new ToolUseFlowError(shared.lastError.message, {
+      // Attach the full structured provider error so downstream error
+      // formatters can surface statusCode, provider, etc. without
+      // sniffing the message string.
+      const err = new ToolUseFlowError(shared.lastError.message, {
         outcome,
         lastResponse,
         touchedFiles,
         totalCostUsd,
       });
+      attachProviderError(
+        err,
+        toProviderErrorFromRetry(shared.lastError),
+      );
+      markErrorLogged(err);
+      throw err;
     }
   } finally {
     activePersistedFlow = undefined;

@@ -13,6 +13,7 @@ import {
   getSdkErrorMessage,
   type AgentErrorKind,
 } from '@common/errors';
+import { isErrorLogged } from '@common/errors/sdkErrorUtils';
 import { projectRunOutcome } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
@@ -237,7 +238,9 @@ export async function runFlowWithLifecycle(
     // Root-agent failures are surfaced in the stream log. Subagent failures
     // are delivered to the orchestrator below, so avoid adding a second
     // wrapper error that makes a child failure look like the parent failed.
-    if (kind !== 'abort' && !options?.isSubagent) {
+    // Skip when the flow already emitted an ERROR trace event for the same
+    // failure — prevents duplicate ERROR rows in the transcript.
+    if (kind !== 'abort' && !options?.isSubagent && !isErrorLogged(err)) {
       logSdkError(ctx.logger, errorMsg, err, {
         operation: `execute ${agentIdentifier}`,
       });
