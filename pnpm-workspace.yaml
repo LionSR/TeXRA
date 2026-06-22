@@ -20,7 +20,7 @@ allowBuilds:
   protobufjs: true
   unrs-resolver: true
 patchedDependencies:
-  ink@7.0.5: patches/ink@7.0.5.patch
+  ink@7.1.0: patches/ink@7.1.0.patch
 minimumReleaseAgeExclude:
   - '@anthropic-ai/sdk@0.103.0'
   # 2026-06-10: unblock installs; these cleared review but were <24h old.
