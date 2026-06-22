@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildMainViewExecuteMessage } from '@shared/schemas/mainView';
+import { buildMainViewExecuteMessage } from '@shared/mainView';
 
 describe('MainView execute message builder', () => {
   it('builds tool-use execute messages from form state', () => {
