@@ -183,6 +183,68 @@ StepDeltaData, event_id?, metadata? }`; `StepDeltaData` (`:11685`) includes
 `total_cached_tokens`, `total_output_tokens`, `total_tool_use_tokens`,
 `total_thought_tokens`, plus `*_by_modality: ModalityTokens[]` and a grand total.
 
+## Surface area
+
+### SDK surface (`@google/genai@2.9.0`)
+
+The same `GoogleGenAI` client TeXRA already constructs exposes three lazily-built
+"next-gen" getters (`genai.d.ts:5677-5679`) beside the existing
+`models`/`chats`/`files`/`caches`/`live`/`batches`/… :
+
+- `client.interactions` → `GeminiNextGenInteractions` — `create` (model/agent ×
+  streaming), `get`, `delete`, `cancel`. **This is all v0 needs.**
+- `client.agents` → `GeminiNextGenAgents` — `create`/`list`/`get`/`delete`
+  managed agents (out of scope v0).
+- `client.webhooks` → `GeminiNextGenWebhooks` — register/rotate/ping webhooks for
+  `background` completion callbacks (out of scope v0; relevant if we later wire
+  background runs to push instead of poll via `get`).
+
+The `interactions` namespace (`:7367-7550`) is broad — beyond the v0 surface it
+carries built-in tool steps + deltas for code execution, Google Search, Google
+Maps, file search, URL context, MCP servers; `Environment`/`Network` egress
+config; `ComputerUse`; `DeepResearchAgentConfig`/`DynamicAgentConfig`;
+`Visualization`. v0 touches only: `CreateModelInteraction`, `InteractionsInput`,
+`Content`, `FunctionT`/`GoogleSearch` tools, `Step` (`function_call` /
+`function_result` / `thought` / `model_output` / `user_input`),
+`InteractionSSEEvent` + deltas, and `Usage`. The rest is upside for later phases,
+not work for v0.
+
+### TeXRA implementation surface
+
+The change is **contained and additive** — the existing Google handler is
+referenced from a small, known set:
+
+- **Code:** `ModelFactory.ts` (the one wiring point); `googleUsage.ts` and
+  `utils/fileContentUtils.ts` (shared helpers, **reusable** — the latter already
+  consolidates Anthropic/OpenAI/Google patterns); `modelHandlers/README.md`.
+- **Tests (6):** `ModelFactoryRouting`, `ModelHandlerGoogle`,
+  `ModelHandlerGoogleGenAI`, `GoogleGenAIStreamingText`, `GoogleCachePricing`,
+  `EmptyPrefill` — plus `SdkErrorUtils` for the (reused) error tagging. New
+  Interactions tests sit alongside these.
+
+A new handler must satisfy the `ModelHandler` contract — **19 abstract methods**
+(`ModelHandler.ts`) plus the hooks the Google handler overrides
+(`supportsTokenCounting`, `requiresBatchedParallelToolResults`,
+`estimateTokenCount`). They split cleanly:
+
+- **Reusable / thin port (≈ copy):** `getClient` (same client + `getApiKey()`),
+  `computePrice`/`normalizeUsage` (point at remapped `googleUsage.ts`),
+  `processThinkingBlock`, `shouldContinue`, `estimateTokenCount`
+  (`client.models.countTokens` unchanged), media size/threshold logic.
+- **Wire-format rewrites (the real work):** `initializeMessages` /
+  `createRoundMessages` / `createMediaContent` / `addMediaToUserMessage` /
+  `prependTextToUserMessage` (typed `Content` + `Step[]` input vs chat parts);
+  `extractResponse` / `extractToolUse` (walk `steps` vs candidate parts);
+  `createToolUseFollowUpMessages` + the batched parallel variant (emit
+  `function_result` steps keyed by `call_id`, round-trip `thought` steps);
+  `createUserFollowUpMessages` / `createAssistantMessage` /
+  `updateMessageContentWith[out]Prefill` (steps-shaped); the streaming loop (SSE
+  `event_type` events vs chunk parts).
+
+So the surface is ~one new ~800-1000 line handler file mirroring the chat one,
+one routing predicate, one settings field (×3 sites), and a handful of tests —
+no cross-cutting refactor, no new platform port, no dependency bump.
+
 ## Mapping: `generateContent`/chat → Interactions
 
 | TeXRA concern | Today (chat/`generateContent`) | Interactions (verified) |
