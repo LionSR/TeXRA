@@ -138,11 +138,22 @@ function cliMultiAgentPresetAvailabilityParts(
 ): string[] {
   const availability = cliMultiAgentPresetAvailability(plan);
   const parts = [
-    `workflow:${availability.workflow.label}`,
-    `tool-use:${availability.toolUse.label}`,
-  ];
+    formatCliMultiAgentPresetAvailabilityPart(
+      'workflow',
+      availability.workflow,
+    ),
+    formatCliMultiAgentPresetAvailabilityPart('tool-use', availability.toolUse),
+  ].filter((part): part is string => part != null);
   if (availability.status !== 'available') parts.push(availability.status);
   return parts;
+}
+
+function formatCliMultiAgentPresetAvailabilityPart(
+  kind: 'workflow' | 'tool-use',
+  availability: CliMultiAgentPresetAgentAvailability,
+): string | undefined {
+  if (availability.total === 0) return undefined;
+  return `${kind}:${availability.label}`;
 }
 
 export function formatCliMultiAgentPresetList(
