@@ -41,6 +41,7 @@ import {
   type EditedFileChangeDetail,
   type FileActionDetail,
   type FocusInstructionDetail,
+  type GettingStartedActionDetail,
   type InstallGuideDetail,
   type InstructionChangeDetail,
   type LatexDiffsActionDetail,
@@ -1480,6 +1481,14 @@ export class MainApp extends MainAppBase {
     this.gettingStartedDismissed.set(true);
   }
 
+  private handleComponentGettingStartedAction(
+    e: CustomEvent<GettingStartedActionDetail>,
+  ): void {
+    postMessage(MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION, {
+      action: e.detail.action,
+    });
+  }
+
   private handleComponentDismissSessionHint(): void {
     postMessage(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER);
     this.sessionHintDismissed.set(true);
@@ -1833,6 +1842,7 @@ export class MainApp extends MainAppBase {
             @dismiss-login=${this.handleComponentDismissLogin}
             @dismiss-getting-started=${this
               .handleComponentDismissGettingStarted}
+            @getting-started-action=${this.handleComponentGettingStartedAction}
           ></banner-group>
 
           <wa-divider></wa-divider>

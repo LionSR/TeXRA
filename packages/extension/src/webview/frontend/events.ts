@@ -15,6 +15,7 @@ import type {
   EditedFileChangeDetail,
   FileActionDetail,
   FocusInstructionDetail,
+  GettingStartedActionDetail,
   InstallGuideDetail,
   InstructionChangeDetail,
   LatexDiffsActionDetail,
@@ -103,6 +104,9 @@ export const MainViewEvents = {
 
   dismissGettingStarted: () =>
     createEvent('dismiss-getting-started', undefined),
+
+  gettingStartedAction: (detail: GettingStartedActionDetail) =>
+    createEvent('getting-started-action', detail),
 
   dismissSessionHint: () => createEvent('dismiss-session-hint', undefined),
 

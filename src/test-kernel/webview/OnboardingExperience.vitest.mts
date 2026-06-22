@@ -83,13 +83,21 @@ describe('extension onboarding experience', () => {
 
   it('keeps empty-project onboarding action oriented', () => {
     const source = readWebviewComponent('GettingStartedBanner');
+    const normalizedSource = source.replaceAll(/\s+/g, ' ');
 
     expect(source).toContain('No LaTeX files yet');
-    expect(source).toContain('Run setup to connect TeXRA');
-    expect(source).toContain('COMMAND_LINKS.RUN_SETUP_ASSISTANT');
-    expect(source).toContain('action-link--primary');
-    expect(source).toContain('COMMAND_LINKS.GETTING_STARTED');
+    expect(normalizedSource).toContain('Start from a sample');
+    expect(normalizedSource).toContain('run setup to connect TeXRA');
+    expect(source).toContain('Run setup assistant');
+    expect(normalizedSource).toContain('Sample project');
+    expect(normalizedSource).toContain('Import Overleaf');
+    expect(source).toContain('Import arXiv');
+    expect(source).toContain('MainViewEvents.gettingStartedAction');
+    expect(source).toContain('variant="brand"');
+    expect(source).toContain('appearance="filled"');
+    expect(source).not.toContain('COMMAND_LINKS');
     expect(source).not.toContain('Empty project');
+    expect(source).not.toContain('action-link');
   });
 
   it('keeps the no-workspace welcome view project-first', () => {
