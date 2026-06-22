@@ -12,7 +12,6 @@ import {
 } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
-import { currentSession } from '@agent/runtime/SessionHandle';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   maybeSaveDebugObject,
@@ -127,8 +126,9 @@ export async function saveCycleDebug(
 export function defaultPostCompactionContext(
   services: CycleServices,
 ): string | null {
-  const { subagents, processes } =
-    currentSession().executions.getActiveChildren(services.streamId);
+  const { subagents, processes } = services.getActiveChildren(
+    services.streamId,
+  );
   return formatPostCompactionContext(
     subagents,
     processes,
