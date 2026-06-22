@@ -24,9 +24,9 @@ describe('CLI TipRow', () => {
     );
   });
 
-  it('keeps unrelated tips stable when the response state changes', () => {
+  it('shows queued follow-up guidance for any active response', () => {
     expect(tipRowText({ hour: 9, responseRunning: true })).toBe(
-      'Use /resume to continue a previous session',
+      'Type while a response is running to queue a follow-up',
     );
     expect(tipRowText({ hour: 9, responseRunning: false })).toBe(
       'Use /resume to continue a previous session',
