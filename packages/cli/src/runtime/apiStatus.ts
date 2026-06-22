@@ -56,13 +56,13 @@ const CLI_API_STATUS_ACTION_HINTS: Record<
     signedIn:
       'actions: `texra login --select-account` changes account; `--api-mode personal` uses provider keys',
     signedOut:
-      'actions: `texra login` enables included relay; `--api-mode personal` uses provider keys',
+      'actions: `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
   },
   personal: {
     signedIn:
       'actions: `--api-mode included` uses relay; `texra logout` signs out',
     signedOut:
-      'actions: configure a provider key, or run `texra login` for included relay',
+      'actions: use ChatGPT, add a provider key, or sign in with Researcher Access',
   },
 };
 

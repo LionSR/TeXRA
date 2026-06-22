@@ -2,9 +2,8 @@
 //
 // Replaces today's dead-end (a launcher full of "login required" models that
 // errors out when the user picks chat) with a credential picker, modeled on
-// Claude Code / Gemini CLI / aider: the no-key included-relay login is the
-// recommended default when both modes are viable, ChatGPT subscription and
-// bring-your-own provider key are first-class alternatives, and skip is
+// Claude Code / Gemini CLI / aider: ChatGPT subscription, Researcher Access,
+// and bring-your-own provider key are first-class credential paths, and skip is
 // explicit. After credentials are set the caller re-reads availability in the
 // SAME process (the relay/subscription/key paths invalidate the relevant
 // caches), so the launcher/chat continues with real models — no restart.
@@ -462,10 +461,10 @@ function onboardingPickerSubtitle(props: {
   readonly apiMode?: CliApiMode;
 }): string {
   if (!props.firstRun) {
-    return 'Choose how to power model calls — sign in, use ChatGPT, or add a provider API key:';
+    return 'Choose how to power model calls — use ChatGPT, sign in, or add a provider API key:';
   }
   if (props.apiMode === 'included') {
-    return 'Included relay or subscription access needs sign-in for this run:';
+    return 'Subscription or included access needs sign-in for this run:';
   }
   if (props.apiMode === 'personal') {
     return 'Personal mode needs ChatGPT sign-in or a provider key for this run:';
@@ -505,10 +504,10 @@ function onboardingSetupPaths(props: {
   readonly firstRun: boolean;
   readonly apiMode?: CliApiMode;
 }): readonly OnboardingSetupPath[] {
-  if (!props.firstRun) return ['relay', 'chatgpt', 'key'];
-  if (props.apiMode === 'included') return ['relay', 'chatgpt'];
+  if (!props.firstRun) return ['chatgpt', 'relay', 'key'];
+  if (props.apiMode === 'included') return ['chatgpt', 'relay'];
   if (props.apiMode === 'personal') return ['chatgpt', 'key'];
-  return ['relay', 'chatgpt', 'key'];
+  return ['chatgpt', 'relay', 'key'];
 }
 
 function onboardingPickerItems(
@@ -584,7 +583,7 @@ function RelayProviderStep(props: {
 
   return (
     <OnboardingFrame
-      title="Sign in · included relay"
+      title="Sign in · Researcher Access"
       subtitle={
         props.noBrowser
           ? 'No-browser mode: we print the sign-in URL instead of opening it.'
@@ -658,7 +657,7 @@ function RelayProgressFrame(props: {
       paddingX={1}
     >
       <Text bold color="cyan">
-        {props.title ?? 'Sign in · included relay'}
+        {props.title ?? 'Sign in · Researcher Access'}
       </Text>
       <Box marginTop={1} flexDirection="column">
         {props.children}

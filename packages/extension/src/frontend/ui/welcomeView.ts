@@ -114,7 +114,7 @@ function renderWelcomeHtml(): string {
   <p>${ONBOARDING_NARRATIVE}</p>
   <ol>
     <li>Open a single-folder workspace containing your LaTeX project.</li>
-    <li>Choose ${ONBOARDING_CHOICE_SIGN_IN.label}, ${ONBOARDING_CHOICE_CHATGPT.label}, or a provider API key.</li>
+    <li>Choose ${ONBOARDING_CHOICE_CHATGPT.label}, ${ONBOARDING_CHOICE_SIGN_IN.label}, or a provider API key.</li>
     <li>Let the setup assistant check the project and launch the first run.</li>
   </ol>
   <div class="actions">
