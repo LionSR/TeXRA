@@ -62,7 +62,6 @@ function createTestSnapshotStore(
  * ProgressViewState is a large, deeply-typed class and we only need a
  * tiny slice of its surface for these tests.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeMockState(overrides: Record<string, any> = {}): any {
   return {
     activeStream: '',
@@ -90,7 +89,6 @@ function makeMockState(overrides: Record<string, any> = {}): any {
 }
 
 /** A minimal logger that satisfies the consumed surface of AgentTrace. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeLogger(): any {
   return {
     debug: vi.fn(),
@@ -257,7 +255,7 @@ describe('DesktopProgressEventBridge', () => {
       const ensureStream = vi.fn();
       const updateStreamHints = vi.fn();
 
-      module.createDesktopProgressEventBridge({
+      const bridge = module.createDesktopProgressEventBridge({
         state: makeMockState({
           streamLogs: {
             ensureStream,
@@ -293,16 +291,20 @@ describe('DesktopProgressEventBridge', () => {
         onShowError: () => {},
       });
 
-      expect(ensureStream).toHaveBeenCalledWith('ghost-seeded');
-      expect(updateStreamHints).toHaveBeenCalledWith('ghost-seeded', {
-        agent: 'proofreader',
-        agentCategory: AgentCategory.Workflow,
-        inputFile: 'paper.tex',
-        creationTimestamp: 5_000,
-        executionId: 'exec-123',
-        parentStreamId: 'parent-456',
-        description: 'A seeded ghost',
-      });
+      try {
+        expect(ensureStream).toHaveBeenCalledWith('ghost-seeded');
+        expect(updateStreamHints).toHaveBeenCalledWith('ghost-seeded', {
+          agent: 'proofreader',
+          agentCategory: AgentCategory.Workflow,
+          inputFile: 'paper.tex',
+          creationTimestamp: 5_000,
+          executionId: 'exec-123',
+          parentStreamId: 'parent-456',
+          description: 'A seeded ghost',
+        });
+      } finally {
+        bridge.dispose();
+      }
     });
   });
 
@@ -344,7 +346,6 @@ describe('DesktopProgressEventBridge', () => {
       try {
         expect(bridge.hasRestoredStream('task-stream')).toBe(true);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         bridge.onProgressEvent('setTaskState', {
           streamId: 'task-stream',
           taskState: undefined as any,
@@ -419,7 +420,6 @@ describe('DesktopProgressEventBridge', () => {
 
       try {
         expect(() =>
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           bridge.onProgressEvent('unknownEvent' as any, {
             streamId: 'test',
           }),
@@ -728,13 +728,57 @@ describe('DesktopProgressEventBridge', () => {
       bridge.dispose();
 
       // These should not throw
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       bridge.onProgressEvent('setTaskState', {
         streamId: 'test',
         taskState: undefined as any,
       });
       bridge.onStreamDeleted('test');
       bridge.sendRestoredDisplay('test');
+    });
+
+    it('suppresses pending restored display sends after dispose', async () => {
+      const messages: unknown[] = [];
+      let resolveRead: (value: unknown) => void = () => {};
+      const mockState = makeMockState();
+      mockState.activeStream = 'ghost-pending';
+      mockState.snapshots.read.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveRead = resolve;
+          }),
+      );
+
+      const bridge = module.createDesktopProgressEventBridge({
+        state: mockState,
+        streamSnapshotStore: {
+          hydrated: [createSnapshot({ streamId: 'ghost-pending' })],
+          upsert: vi.fn(async () => {}),
+          remove: vi.fn(async () => {}),
+          replaceAll: vi.fn(async () => {}),
+          getAll: vi.fn(() => []),
+        },
+        sendMessage: (msg) => messages.push(msg),
+        logger: makeLogger(),
+        getActiveStream: () => 'ghost-pending',
+        routeToProgress: () => {},
+        onGoalStateChanged: () => {},
+        onShowError: () => {},
+      });
+
+      bridge.sendRestoredDisplay('ghost-pending');
+      bridge.dispose();
+      resolveRead({
+        todos: [],
+        plan: null,
+        runUsage: {},
+        outputFilesByRound: {},
+        missingOutputsByRound: {},
+        compileFailuresByRound: {},
+      });
+      await settleMicrotasks();
+
+      expect(bridge.hasRestoredStream('ghost-pending')).toBe(false);
+      expect(messages).toHaveLength(0);
     });
   });
 });
