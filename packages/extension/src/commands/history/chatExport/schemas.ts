@@ -1,16 +1,28 @@
 /**
  * Input and intermediate-representation schemas for chat export.
  *
- * Zod schemas are the single source of truth; types are derived with
- * `z.infer`. The input schemas accept Anthropic, OpenAI (Chat Completions
- * and Response API), and Google GenAI message shapes; the IR schemas
- * describe the format-agnostic `ExportNode` produced by normalization.
+ * The provider-independent IR schemas (`ExportNode`, `UserPart`,
+ * `ExportConfig`, `ChatExportInput`, `DocumentMeta`) are defined in
+ * `@agent/export/schemas` and re-exported here so the command-layer
+ * renderers don't pull in provider SDK types.
+ *
+ * Input schemas (`ContentBlock`, `ConversationMessage`) remain here as
+ * they describe raw provider message shapes consumed only by the
+ * normalization layer — these are kept for backward compatibility.
  */
 
 import { z } from 'zod';
 
+export {
+  type ChatExportInput,
+  type DocumentMeta,
+  type ExportConfig,
+  type ExportNode,
+  type UserPart,
+} from '@agent/export/schemas';
+
 // ============================================================
-// Input schemas
+// Input schemas (legacy — normalization now lives in src/agent/export/)
 // ============================================================
 
 /** Loose schema for API content blocks — accepts many optional fields.
@@ -55,77 +67,3 @@ export const ConversationMessageSchema = z.looseObject({
   tool_calls: z.array(z.unknown()).optional(),
 });
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
-
-export const ExportConfigSchema = z.object({
-  agent: z.string().optional(),
-  model: z.string().optional(),
-  instruction: z.string().optional(),
-  inputFiles: z.array(z.string()).optional(),
-  mediaFiles: z.array(z.string()).optional(),
-  contextFiles: z.array(z.string()).optional(),
-  outputFiles: z.array(z.string()).optional(),
-});
-export type ExportConfig = z.infer<typeof ExportConfigSchema>;
-
-export const ChatExportInputSchema = z.object({
-  timestamp: z.string(),
-  description: z.string().optional(),
-  config: ExportConfigSchema,
-  messages: z.array(z.unknown()),
-});
-export type ChatExportInput = z.infer<typeof ChatExportInputSchema>;
-
-// ============================================================
-// Intermediate representation — format-agnostic
-// ============================================================
-
-const WebSearchResultSchema = z.object({
-  title: z.string(),
-  url: z.string(),
-});
-
-const UserPartSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('text'), text: z.string() }),
-  z.object({
-    type: z.literal('attachment'),
-    attachmentType: z.enum(['image', 'document']),
-  }),
-]);
-export type UserPart = z.infer<typeof UserPartSchema>;
-
-const ExportNodeSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('user-message'), parts: z.array(UserPartSchema) }),
-  z.object({ kind: z.literal('assistant-text'), text: z.string() }),
-  z.object({
-    kind: z.literal('tool-call'),
-    name: z.string(),
-    input: z.string(),
-  }),
-  z.object({ kind: z.literal('tool-result'), text: z.string() }),
-  z.object({ kind: z.literal('web-search'), query: z.string() }),
-  z.object({
-    kind: z.literal('web-search-results'),
-    results: z.array(WebSearchResultSchema),
-  }),
-  z.object({
-    kind: z.literal('web-fetch'),
-    url: z.string().optional(),
-    title: z.string().optional(),
-    content: z.string().optional(),
-  }),
-]);
-export type ExportNode = z.infer<typeof ExportNodeSchema>;
-
-// ============================================================
-// Document metadata
-// ============================================================
-
-const DocumentMetaSchema = z.object({
-  date: z.string(),
-  agent: z.string().optional(),
-  model: z.string().optional(),
-  description: z.string().optional(),
-  instruction: z.string().optional(),
-  files: z.array(z.tuple([z.string(), z.string()])),
-});
-export type DocumentMeta = z.infer<typeof DocumentMetaSchema>;

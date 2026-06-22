@@ -1,0 +1,614 @@
+/**
+ * Tests for `normalizeConversationForExport` — the provider-shape normalization
+ * that collapses Anthropic, OpenAI (Chat Completions and Response API), and
+ * Google GenAI messages into format-agnostic `ExportNode[]`.
+ *
+ * Coverage targets from the issue:
+ *  - OpenAI Responses function-call items (top-level function_call,
+ *    function_call_output with mixed input_text/input_image/input_file parts)
+ *  - Google thought parts (field-based `thought` flag + `text`)
+ */
+
+import { describe, expect, it } from 'vitest';
+
+import { normalizeConversationForExport } from '@agent/export/normalizeConversation';
+import type { ExportNode } from '@agent/export/schemas';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function normalize(messages: unknown[]): ExportNode[] {
+  return normalizeConversationForExport(messages);
+}
+
+function nodesOfKind(nodes: ExportNode[], kind: ExportNode['kind']): ExportNode[] {
+  return nodes.filter((n) => n.kind === kind);
+}
+
+// ---------------------------------------------------------------------------
+// OpenAI Response API — function calls
+// ---------------------------------------------------------------------------
+
+describe('OpenAI Responses API', () => {
+  it('handles top-level function_call items', () => {
+    const nodes = normalize([
+      {
+        type: 'function_call',
+        call_id: 'call_42',
+        name: 'search_docs',
+        arguments: '{"query":"TypeScript generics"}',
+      },
+    ]);
+
+    const calls = nodesOfKind(nodes, 'tool-call');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      kind: 'tool-call',
+      name: 'search_docs',
+      input: '{"query":"TypeScript generics"}',
+    });
+  });
+
+  it('handles top-level function_call with object arguments', () => {
+    const nodes = normalize([
+      {
+        type: 'function_call',
+        call_id: 'call_1',
+        name: 'run',
+        arguments: { x: 1, y: 2 },
+      },
+    ]);
+
+    const calls = nodesOfKind(nodes, 'tool-call');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      kind: 'tool-call',
+      name: 'run',
+    });
+    // Object arguments should be serialised.
+    expect(JSON.parse((calls[0] as { input: string }).input)).toEqual({
+      x: 1,
+      y: 2,
+    });
+  });
+
+  it('handles function_call with missing name (falls back to "unknown")', () => {
+    const nodes = normalize([
+      { type: 'function_call', call_id: 'call_1', arguments: '{}' },
+    ]);
+
+    expect(nodesOfKind(nodes, 'tool-call')).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({ kind: 'tool-call', name: 'unknown' });
+  });
+
+  it('handles function_call_output with array output (mixed parts)', () => {
+    const nodes = normalize([
+      {
+        type: 'function_call',
+        call_id: 'call_1',
+        name: 'fetch_notes',
+        arguments: '{"topic":"sdk"}',
+      },
+      {
+        type: 'function_call_output',
+        call_id: 'call_1',
+        output: [
+          { type: 'input_text', text: 'first line' },
+          { type: 'input_text', text: '' },
+          { type: 'input_image', image_url: 'https://example.com/img.png' },
+          { type: 'input_file', file_id: 'file_123' },
+        ],
+      },
+    ]);
+
+    // First node is the tool call, second is the tool result.
+    const results = nodesOfKind(nodes, 'tool-result');
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      kind: 'tool-result',
+      text: 'first line\n\n[image attachment]\n[file attachment]',
+    });
+  });
+
+  it('handles function_call_output with string output', () => {
+    const nodes = normalize([
+      { type: 'function_call_output', call_id: 'call_1', output: 'plain string' },
+    ]);
+
+    const results = nodesOfKind(nodes, 'tool-result');
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      kind: 'tool-result',
+      text: 'plain string',
+    });
+  });
+
+  it('handles function_call_output with object output', () => {
+    const nodes = normalize([
+      {
+        type: 'function_call_output',
+        call_id: 'call_1',
+        output: { status: 'ok', data: [1, 2, 3] },
+      },
+    ]);
+
+    const results = nodesOfKind(nodes, 'tool-result');
+    expect(results).toHaveLength(1);
+    // Object output should be JSON-stringified.
+    const text = (results[0] as { text: string }).text;
+    expect(() => JSON.parse(text)).not.toThrow();
+  });
+
+  it('correctly resets lastAssistantHadToolUse after function_call_output', () => {
+    // A function_call_output should reset the flag so the next user message
+    // is rendered as a user-message, not a tool-result.
+    const nodes = normalize([
+      { type: 'function_call', call_id: 'c1', name: 't', arguments: '{}' },
+      { type: 'function_call_output', call_id: 'c1', output: 'done' },
+      { role: 'user', content: 'What next?' },
+    ]);
+
+    expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Google GenAI — thought parts
+// ---------------------------------------------------------------------------
+
+describe('Google GenAI', () => {
+  it('filters out thought parts (field-based discrimination)', () => {
+    // Google GenAI sets `thought: true` on the Part object itself.
+    // The exporter must suppress thinking blocks so they don't appear
+    // as visible assistant text.
+    const nodes = normalize([
+      {
+        role: 'model',
+        parts: [
+          { thought: true, text: 'Let me think about this carefully...' },
+          { text: 'Here is the answer.' },
+        ],
+      },
+    ]);
+
+    // Only the non-thought text should produce an assistant-text node.
+    const texts = nodesOfKind(nodes, 'assistant-text');
+    expect(texts).toHaveLength(1);
+    expect(texts[0]).toMatchObject({
+      kind: 'assistant-text',
+      text: 'Here is the answer.',
+    });
+  });
+
+  it('handles thought-only model messages (no visible output)', () => {
+    const nodes = normalize([
+      {
+        role: 'model',
+        parts: [{ thought: true, text: 'internal reasoning...' }],
+      },
+    ]);
+
+    // No visible nodes should be produced.
+    expect(nodes).toHaveLength(0);
+  });
+
+  it('uses "model" role like "assistant"', () => {
+    const nodes = normalize([
+      { role: 'model', parts: [{ text: 'Generated content' }] },
+    ]);
+
+    expect(nodesOfKind(nodes, 'assistant-text')).toHaveLength(1);
+  });
+
+  it('handles functionCall parts in Google GenAI messages', () => {
+    const nodes = normalize([
+      {
+        role: 'model',
+        parts: [
+          { functionCall: { name: 'get_weather', args: { city: 'London' } } },
+        ],
+      },
+    ]);
+
+    const calls = nodesOfKind(nodes, 'tool-call');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      kind: 'tool-call',
+      name: 'get_weather',
+    });
+  });
+
+  it('handles functionResponse parts in Google GenAI messages', () => {
+    // A functionResponse on a user message is rendered as a tool-result
+    // when it follows a model functionCall (set via lastAssistantHadToolUse).
+    const nodes = normalize([
+      {
+        role: 'model',
+        parts: [
+          { functionCall: { name: 'get_weather', args: { city: 'London' } } },
+        ],
+      },
+      {
+        role: 'user',
+        parts: [
+          { functionResponse: { name: 'get_weather', response: { temp: 22 } } },
+        ],
+      },
+    ]);
+
+    const results = nodesOfKind(nodes, 'tool-result');
+    expect(results).toHaveLength(1);
+  });
+
+  it('handles inlineData parts (image)', () => {
+    const nodes = normalize([
+      {
+        role: 'user',
+        parts: [{ inlineData: { mimeType: 'image/png', data: 'base64...' } }],
+      },
+    ]);
+
+    expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({
+      kind: 'user-message',
+      parts: [{ type: 'attachment', attachmentType: 'image' }],
+    });
+  });
+
+  it('handles inlineData parts (document)', () => {
+    const nodes = normalize([
+      {
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType: 'application/pdf', data: 'base64...' } },
+        ],
+      },
+    ]);
+
+    expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({
+      kind: 'user-message',
+      parts: [{ type: 'attachment', attachmentType: 'document' }],
+    });
+  });
+
+  it('handles fileData parts (URI-based uploaded files)', () => {
+    const nodes = normalize([
+      {
+        role: 'user',
+        parts: [{ fileData: { mimeType: 'image/jpeg', fileUri: 'gs://...' } }],
+      },
+    ]);
+
+    expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({
+      kind: 'user-message',
+      parts: [{ type: 'attachment', attachmentType: 'image' }],
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Anthropic-style content blocks
+// ---------------------------------------------------------------------------
+
+describe('Anthropic-style messages', () => {
+  it('handles simple text user message', () => {
+    const nodes = normalize([{ role: 'user', content: 'Hello' }]);
+
+    expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({
+      kind: 'user-message',
+      parts: [{ type: 'text', text: 'Hello' }],
+    });
+  });
+
+  it('handles assistant text block', () => {
+    const nodes = normalize([
+      { role: 'assistant', content: [{ type: 'text', text: 'Hi there!' }] },
+    ]);
+
+    expect(nodesOfKind(nodes, 'assistant-text')).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({
+      kind: 'assistant-text',
+      text: 'Hi there!',
+    });
+  });
+
+  it('handles tool_use block', () => {
+    const nodes = normalize([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'call_1',
+            name: 'read_file',
+            input: { path: '/tmp/test.txt' },
+          },
+        ],
+      },
+    ]);
+
+    const calls = nodesOfKind(nodes, 'tool-call');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ kind: 'tool-call', name: 'read_file' });
+  });
+
+  it('handles tool_result user message (converted to tool-result node)', () => {
+    const nodes = normalize([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'call_1',
+            name: 'read_file',
+            input: {},
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'call_1', content: 'file contents' },
+        ],
+      },
+    ]);
+
+    const results = nodesOfKind(nodes, 'tool-result');
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      kind: 'tool-result',
+      text: 'file contents',
+    });
+  });
+
+  it('handles web_search_tool_result blocks', () => {
+    const nodes = normalize([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'web_search_tool_result',
+            content: [
+              {
+                type: 'web_search_result',
+                url: 'https://example.com/page',
+                title: 'Example Page',
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const wsResults = nodesOfKind(nodes, 'web-search-results');
+    expect(wsResults).toHaveLength(1);
+    expect(wsResults[0]).toMatchObject({
+      kind: 'web-search-results',
+      results: [{ title: 'Example Page', url: 'https://example.com/page' }],
+    });
+  });
+
+  it('handles web_fetch_tool_result blocks', () => {
+    const nodes = normalize([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'web_fetch_tool_result',
+            url: 'https://example.com',
+            title: 'Fetched Page',
+            page_content: '<html>...</html>',
+          },
+        ],
+      },
+    ]);
+
+    const fetches = nodesOfKind(nodes, 'web-fetch');
+    expect(fetches).toHaveLength(1);
+    expect(fetches[0]).toMatchObject({
+      kind: 'web-fetch',
+      url: 'https://example.com',
+      title: 'Fetched Page',
+    });
+  });
+
+  it('handles server_tool_use (web_search)', () => {
+    const nodes = normalize([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'server_tool_use',
+            name: 'web_search',
+            input: { query: 'TypeScript generics' },
+          },
+        ],
+      },
+    ]);
+
+    const searches = nodesOfKind(nodes, 'web-search');
+    expect(searches).toHaveLength(1);
+    expect(searches[0]).toMatchObject({
+      kind: 'web-search',
+      query: 'TypeScript generics',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OpenAI Chat Completions
+// ---------------------------------------------------------------------------
+
+describe('OpenAI Chat Completions', () => {
+  it('handles assistant tool_calls array', () => {
+    const nodes = normalize([
+      {
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'get_weather', arguments: '{"city":"NYC"}' },
+          },
+        ],
+      },
+    ]);
+
+    const calls = nodesOfKind(nodes, 'tool-call');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      kind: 'tool-call',
+      name: 'get_weather',
+      input: '{"city":"NYC"}',
+    });
+  });
+
+  it('filters out non-function tool_calls (custom type)', () => {
+    const nodes = normalize([
+      {
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'call_fn',
+            type: 'function',
+            function: { name: 'valid_tool', arguments: '{}' },
+          },
+          {
+            id: 'call_custom',
+            type: 'custom',
+            custom: { name: 'custom_tool', input: '{}' },
+          },
+        ],
+      },
+    ]);
+
+    const calls = nodesOfKind(nodes, 'tool-call');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ name: 'valid_tool' });
+  });
+
+  it('handles tool role messages', () => {
+    const nodes = normalize([
+      { role: 'tool', tool_call_id: 'call_1', content: 'result text' },
+    ]);
+
+    const results = nodesOfKind(nodes, 'tool-result');
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      kind: 'tool-result',
+      text: 'result text',
+    });
+  });
+
+  it('handles system messages (ignored — no visible node)', () => {
+    const nodes = normalize([
+      { role: 'system', content: 'You are a helpful assistant.' },
+    ]);
+
+    // System messages should produce no nodes.
+    expect(nodes).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Edge cases
+// ---------------------------------------------------------------------------
+
+describe('Edge cases', () => {
+  it('handles empty messages array', () => {
+    expect(normalize([])).toEqual([]);
+  });
+
+  it('skips null/undefined/non-object entries', () => {
+    const nodes = normalize([
+      null,
+      undefined,
+      42,
+      'string',
+      { role: 'user', content: 'valid' },
+    ]);
+
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({ kind: 'user-message' });
+  });
+
+  it('handles messages with no role (defaults to "unknown")', () => {
+    // Messages with no role should be silently skipped (no known role match).
+    const nodes = normalize([{ content: 'orphan' }]);
+
+    expect(nodes).toHaveLength(0);
+  });
+
+  it('handles content as object (JSON stringified)', () => {
+    const nodes = normalize([
+      { role: 'user', content: { nested: { value: 42 } } },
+    ]);
+
+    expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({
+      kind: 'user-message',
+      parts: [{ type: 'text', text: '{\n  "nested": {\n    "value": 42\n  }\n}' }],
+    });
+  });
+
+  it('produces user-message after non-tool-use assistant text', () => {
+    // When the last assistant block was text (not tool_use), the next user
+    // message should be a user-message, not a tool-result.
+    const nodes = normalize([
+      { role: 'assistant', content: [{ type: 'text', text: 'Hello!' }] },
+      { role: 'user', content: 'Follow-up question' },
+    ]);
+
+    expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
+    expect(nodesOfKind(nodes, 'tool-result')).toHaveLength(0);
+  });
+
+  it('handles empty/whitespace-only assistant text (suppressed)', () => {
+    const nodes = normalize([
+      { role: 'assistant', content: [{ type: 'text', text: '   ' }] },
+    ]);
+
+    // Whitespace-only text should be filtered out.
+    expect(nodesOfKind(nodes, 'assistant-text')).toHaveLength(0);
+  });
+
+  it('handles images in user content blocks', () => {
+    const nodes = normalize([
+      {
+        role: 'user',
+        content: [{ type: 'image', source: { type: 'base64', data: '...' } }],
+      },
+    ]);
+
+    expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({
+      kind: 'user-message',
+      parts: [{ type: 'attachment', attachmentType: 'image' }],
+    });
+  });
+
+  it('handles code_execution_tool_result blocks', () => {
+    const nodes = normalize([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'code_execution_tool_result',
+            content: 'execution output',
+          },
+        ],
+      },
+    ]);
+
+    const results = nodesOfKind(nodes, 'tool-result');
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      kind: 'tool-result',
+      text: 'execution output',
+    });
+  });
+});
