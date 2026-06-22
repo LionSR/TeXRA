@@ -1,10 +1,8 @@
-// Third-party imports
-import { MODEL_CONFIGS } from 'llm-zoo';
-
 // Local imports - model surfaces
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 
+import { resolveKnownCliModelId } from './cliConfig';
 import { getCliAuthProvider } from './supabaseAuth';
 import type { CliApiMode } from './apiAccessMode';
 
@@ -385,7 +383,14 @@ export function findCliModelAccessEntry(
   if (exact) return exact;
 
   const lower = model.toLowerCase();
-  return models.find((entry) => entry.model.value.toLowerCase() === lower);
+  const lowerMatch = models.find(
+    (entry) => entry.model.value.toLowerCase() === lower,
+  );
+  if (lowerMatch) return lowerMatch;
+
+  const canonical = resolveKnownCliModelId(model);
+  if (!canonical) return undefined;
+  return models.find((entry) => entry.model.value === canonical);
 }
 
 /**
@@ -455,13 +460,6 @@ function withModelAccess(
   return [...models, entry];
 }
 
-function getCanonicalModelConfigId(model: string): string | undefined {
-  if (Object.hasOwn(MODEL_CONFIGS, model)) return model;
-
-  const lower = model.toLowerCase();
-  return Object.keys(MODEL_CONFIGS).find((id) => id.toLowerCase() === lower);
-}
-
 export async function resolveCliModelAccessEntry(
   model: string,
   options: CliModelAccessEntryOptions = {},
@@ -473,7 +471,7 @@ export async function resolveCliModelAccessEntry(
   const listedEntry = findCliModelAccessEntry(models, trimmed);
   if (listedEntry || trimmed.length === 0) return listedEntry;
 
-  const hiddenModelId = getCanonicalModelConfigId(trimmed);
+  const hiddenModelId = resolveKnownCliModelId(trimmed);
   if (hiddenModelId == null) return undefined;
 
   const hiddenModelOption = (await computeModelOptionsData([hiddenModelId]))[0];
