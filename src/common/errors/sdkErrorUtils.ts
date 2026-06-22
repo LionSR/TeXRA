@@ -16,6 +16,7 @@ export {
   attachSdkErrorMetadata,
   attachStreamDiagnostics,
   attachPartialText,
+  attachProviderError,
 } from './sdkError/errorMetadata';
 
 export { detectStatusCode } from './sdkError/errorInspection';

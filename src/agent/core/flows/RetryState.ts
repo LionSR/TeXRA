@@ -17,7 +17,11 @@ import {
   toErrorMessage,
 } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
-import { STREAM_STATUS, type RetryErrorInfo } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  toRetryErrorInfo,
+  type RetryErrorInfo,
+} from '@shared/schemas';
 import { getConfig } from '@utils/config/configUtils';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
@@ -45,7 +49,7 @@ interface ManualRetryPromptResult {
 /** success: model response | failed: retries exhausted | cancelled: user cancelled | skipped: shouldStop was true */
 export type InvocationResult<TSuccess> =
   | ({ kind: 'success' } & TSuccess)
-  | { kind: 'failed'; message: string; userRetryable?: boolean }
+  | ({ kind: 'failed' } & RetryErrorInfo)
   | { kind: 'cancelled' }
   | { kind: 'skipped' };
 
@@ -310,9 +314,7 @@ export abstract class RetryableInvocationNode<
 
   protected getFallbackResult(
     error: Error,
-  ):
-    | { kind: 'cancelled' }
-    | { kind: 'failed'; message: string; userRetryable?: boolean } {
+  ): { kind: 'cancelled' } | ({ kind: 'failed' } & RetryErrorInfo) {
     if (this._userCancelled || isUserAbort(error)) {
       return { kind: 'cancelled' };
     }
@@ -327,8 +329,7 @@ export abstract class RetryableInvocationNode<
     }
     return {
       kind: 'failed',
-      message: formatted.message,
-      userRetryable: formatted.userRetryable,
+      ...toRetryErrorInfo(formatted),
     };
   }
 }
@@ -363,10 +364,8 @@ export function handleInvocationResult<T extends { response: unknown }>(
   }
 
   if (result.kind === 'failed') {
-    retryState.lastError = {
-      message: result.message,
-      userRetryable: result.userRetryable ?? false,
-    };
+    const { kind: _, ...errorInfo } = result;
+    retryState.lastError = errorInfo;
     state.shouldStop = true;
     state.endTurn = false;
     return null;
