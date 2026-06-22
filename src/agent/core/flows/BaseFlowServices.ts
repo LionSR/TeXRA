@@ -17,7 +17,11 @@ import type {
   RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
 import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
-import type { ActiveChildInfo, ExecutionId, StreamTabId } from '@shared/schemas';
+import type {
+  ActiveChildInfo,
+  ExecutionId,
+  StreamTabId,
+} from '@shared/schemas';
 
 /** Callback invoked when a round/cycle completes for usage tracking. */
 export type RoundFinalizedCallback = (
