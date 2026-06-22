@@ -136,6 +136,50 @@ describe('CLI workflow output resolution', () => {
     );
   });
 
+  it('uses a stable output name for materialized stdin input', async () => {
+    const cwd = await makeTempDir();
+    const runOutput = join(cwd, 'run', 'r1', 'stdin.tex');
+    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
+    await writeFile(runOutput, 'from stdin');
+
+    const expectedOutputFiles = expectedOutputFilesForOutputDir(undefined, [
+      'texra-stdin-123-abc123/stdin.tex',
+    ]);
+
+    expect(expectedOutputFiles).toEqual(['stdin.tex']);
+
+    const { displayResult } = await resolveWorkflowOutput(
+      undefined,
+      'out',
+      workflowResult([
+        {
+          absolutePath: runOutput,
+          relativePath: 'r1/stdin.tex',
+          originalPath: join(
+            cwd,
+            'run',
+            'original',
+            'texra-stdin-123-abc123',
+            'stdin.tex',
+          ),
+        },
+      ]),
+      testContext(cwd),
+      {
+        expectedOutputFiles,
+        runDirectory: join(cwd, 'run'),
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+      },
+    );
+
+    expect(displayResult).toMatchObject({
+      copiedOutputs: [join(cwd, 'out', 'stdin.tex')],
+    });
+    await expect(readFile(join(cwd, 'out', 'stdin.tex'), 'utf8')).resolves.toBe(
+      'from stdin',
+    );
+  });
+
   it('preserves expected nested input paths when copying flattened workflow outputs', async () => {
     const cwd = await makeTempDir();
     const runMain = join(cwd, 'run', 'r1', 'main.tex');
