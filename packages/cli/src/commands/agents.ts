@@ -30,7 +30,10 @@ export async function listAgents(
   const result = await loadCliAgentList(options);
 
   if (context.outputFormat === 'text' && !context.quietLogs) {
-    const hiddenNotice = formatCliHiddenAgentsNotice(result.hiddenCount);
+    const hiddenNotice = formatCliHiddenAgentsNotice(
+      result.hiddenCount,
+      options.category,
+    );
     if (hiddenNotice) writeTextStderr(hiddenNotice);
   }
 
