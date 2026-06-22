@@ -273,6 +273,10 @@ export class ProgressViewProvider
     this._mainViewProvider = mvp;
   }
 
+  public async refreshOnboardingFunnel(): Promise<void> {
+    await this._mainViewProvider?.refreshOnboardingFunnel();
+  }
+
   public getContentProvider(): BundledViewContentProvider {
     return this.contentProvider;
   }
