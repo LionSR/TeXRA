@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import * as codexAuth from '@auth/codex';
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
 import { type SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
@@ -14,6 +15,8 @@ import {
   patchStream,
   resetCliState,
 } from '@cli/chat/tui/state/cliState';
+import * as chatGptLogin from '@cli/runtime/chatgptLogin';
+import type { CliContext } from '@cli/runtime/cliContext';
 import type { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
@@ -27,6 +30,7 @@ afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
   resetCliState();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 function createSession(): TuiSession {
@@ -40,12 +44,28 @@ function createSession(): TuiSession {
   };
 }
 
+function createCliContext(overrides: Partial<CliContext> = {}): CliContext {
+  return {
+    cwd: '/tmp/workspace',
+    mode: 'interactive',
+    outputFormat: 'text',
+    approvalPolicy: 'ask',
+    stdoutIsTty: true,
+    termIsDumb: false,
+    colorEnabled: false,
+    version: '0.0.0-test',
+    resourcesPath: '/tmp/resources',
+    ...overrides,
+  };
+}
+
 function createContext(
   session: TuiSession,
   overrides: Partial<SlashCommandContext> = {},
 ): SlashCommandContext {
   let approvalPolicy: CliApprovalPolicy = 'ask';
   return {
+    cliContext: createCliContext(),
     session,
     cwd: '/tmp/workspace',
     processCwd: '/tmp/launcher',
@@ -87,6 +107,32 @@ describe('handleTuiSlashCommand', () => {
 
     expect(handled).toBe(true);
     expect(cliState.activeForm.get()?.commandName).toBe('login');
+  });
+
+  it('uses ChatGPT device-code login from a likely remote shell', async () => {
+    registerBuiltinSlashCommands();
+    vi.stubEnv('SSH_TTY', '/dev/pts/3');
+    vi.spyOn(chatGptLogin, 'signInCliChatGpt').mockResolvedValue({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAtMs: Date.now() + 60_000,
+      email: 'person@example.com',
+    });
+    vi.spyOn(codexAuth, 'setPreferCodexSubscription').mockResolvedValue({
+      effective: true,
+      target: 'global',
+    });
+
+    const handled = await handleTuiSlashCommand(
+      '/login chatgpt',
+      createContext(createSession()),
+    );
+
+    expect(handled).toBe(true);
+    expect(chatGptLogin.signInCliChatGpt).toHaveBeenCalledWith(
+      expect.objectContaining({ device: true, noBrowser: false }),
+      expect.any(Object),
+    );
   });
 
   it('treats /quit as the canonical exit command without echoing it', async () => {
