@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import ky from 'ky';
+
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { toErrorMessage } from '@common/errors';
@@ -169,32 +171,23 @@ class UsageLogServiceImpl {
     batch: UsageLogBatch,
     token: string,
   ): Promise<UsageLogResponse> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(USAGE_LOG_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(batch),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return UsageLogResponseSchema.catch({
-        success: true,
-        accepted: batch.entries.length,
-      }).parse(data);
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    // ky's `timeout` only guards until response headers arrive (it clears the
+    // timer once fetch settles), so a server that stalls mid-body would hang the
+    // subsequent `.json()` read indefinitely — wedging activeFlush and dispose().
+    // AbortSignal.timeout stays armed through the body read, like the previous
+    // manual AbortController did.
+    const data = await ky
+      .post(USAGE_LOG_ENDPOINT, {
+        json: batch,
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: false,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      })
+      .json<unknown>();
+    return UsageLogResponseSchema.catch({
+      success: true,
+      accepted: batch.entries.length,
+    }).parse(data);
   }
 
   private startFlushTimer(): void {

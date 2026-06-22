@@ -42,8 +42,9 @@ describe('UsageLogService', () => {
       releaseFirstFetch = resolve;
     });
     const batches: unknown[] = [];
-    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      batches.push(JSON.parse(String(init?.body)));
+    // ky passes a Request object; read the body from it
+    const fetchMock = vi.fn(async (request: Request) => {
+      batches.push(await request.json());
       if (fetchMock.mock.calls.length === 1) {
         await firstFetchReleased;
       }
@@ -77,8 +78,8 @@ describe('UsageLogService', () => {
       .mockResolvedValue('token');
 
     const batches: unknown[] = [];
-    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      batches.push(JSON.parse(String(init?.body)));
+    const fetchMock = vi.fn(async (request: Request) => {
+      batches.push(await request.json());
       return new Response(JSON.stringify({ success: true, accepted: 1 }), {
         status: 200,
       });
@@ -100,8 +101,8 @@ describe('UsageLogService', () => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
 
     const batches: unknown[] = [];
-    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      batches.push(JSON.parse(String(init?.body)));
+    const fetchMock = vi.fn(async (request: Request) => {
+      batches.push(await request.json());
       if (fetchMock.mock.calls.length === 1) {
         throw new Error('network unavailable');
       }
