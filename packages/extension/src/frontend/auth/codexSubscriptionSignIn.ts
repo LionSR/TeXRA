@@ -46,8 +46,9 @@ async function runChatGptSignIn(): Promise<CodexSession> {
 export async function signInWithChatGptSubscription(
   channel: string,
 ): Promise<boolean> {
+  let session: CodexSession;
   try {
-    const session = await vscode.window.withProgress(
+    session = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
         title: 'Signing in with ChatGPT...',
@@ -55,20 +56,32 @@ export async function signInWithChatGptSubscription(
       },
       () => runChatGptSignIn(),
     );
-    const update = await setPreferCodexSubscription(true);
-    const label = session.email ?? session.accountId ?? 'your account';
-    if (update.effective) {
-      void vscode.window.showInformationMessage(
-        `Signed in with ChatGPT as ${label}. ChatGPT subscription is enabled for Codex models.`,
-      );
-      return true;
-    }
-    void vscode.window.showWarningMessage(
-      `Signed in with ChatGPT as ${label}, but a more specific setting kept the subscription preference disabled.`,
-    );
-    return false;
   } catch (error) {
     await showLoggedErrorMessage(channel, 'ChatGPT sign-in failed', error);
     return false;
   }
+
+  const label = session.email ?? session.accountId ?? 'your account';
+  let update: Awaited<ReturnType<typeof setPreferCodexSubscription>>;
+  try {
+    update = await setPreferCodexSubscription(true);
+  } catch (error) {
+    await showLoggedErrorMessage(
+      channel,
+      'ChatGPT sign-in succeeded but subscription preference update failed',
+      error,
+    );
+    return false;
+  }
+
+  if (update.effective) {
+    void vscode.window.showInformationMessage(
+      `Signed in with ChatGPT as ${label}. ChatGPT subscription is enabled for Codex models.`,
+    );
+    return true;
+  }
+  void vscode.window.showWarningMessage(
+    `Signed in with ChatGPT as ${label}, but a more specific setting kept the subscription preference disabled.`,
+  );
+  return false;
 }
