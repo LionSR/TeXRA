@@ -61,7 +61,7 @@ describe('signInWithChatGptSubscription', () => {
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
   });
 
-  it('does not call a completed OAuth sign-in a sign-in failure when preference update fails', async () => {
+  it('does not treat a completed OAuth sign-in as a sign-in failure when preference update fails', async () => {
     mocks.withProgress.mockImplementation((_options, task) => task());
     mocks.loginWithLoopback.mockResolvedValue({
       accessToken: 'access-token',
@@ -85,6 +85,27 @@ describe('signInWithChatGptSubscription', () => {
       'TestChannel',
       'ChatGPT sign-in failed',
       expect.any(Error),
+    );
+  });
+
+  it('warns when a more specific setting keeps subscription preference disabled', async () => {
+    mocks.withProgress.mockImplementation((_options, task) => task());
+    mocks.loginWithLoopback.mockResolvedValue({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAtMs: Date.now() + 60_000,
+      email: 'person@example.com',
+    });
+    mocks.setPreferCodexSubscription.mockResolvedValue({
+      effective: false,
+      target: 'global',
+    });
+
+    const signedIn = await signInWithChatGptSubscription('TestChannel');
+
+    expect(signedIn).toBe(false);
+    expect(mocks.showWarningMessage).toHaveBeenCalledWith(
+      'Signed in with ChatGPT as person@example.com, but a more specific setting kept the subscription preference disabled.',
     );
   });
 
