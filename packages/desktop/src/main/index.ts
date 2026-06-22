@@ -687,9 +687,8 @@ function createWindow(options: {
       // onboarding IPC keeps this one-shot; on a resolution failure it throws so
       // that guard resets and a later credential change can retry.
       kickoffSetup: async () => {
-        const { buildDesktopSetupExecuteMessage } = await import(
-          '@controllers/onboarding/setupLaunch'
-        );
+        const { buildDesktopSetupExecuteMessage } =
+          await import('@controllers/onboarding/setupLaunch');
         const message = await buildDesktopSetupExecuteMessage();
         if (!message) {
           await showErrorMessage(

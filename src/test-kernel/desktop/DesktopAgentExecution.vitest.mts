@@ -73,7 +73,9 @@ type RunExecutionRequest = (
     // This window's SessionHandle. The onboarding run-completion test drives a
     // terminal `result` event through it via `attachRunTrace`.
     session: {
-      attachRunTrace(trace: { subscribe(fn: (event: unknown) => void): unknown }): () => void;
+      attachRunTrace(trace: {
+        subscribe(fn: (event: unknown) => void): unknown;
+      }): () => void;
     };
   },
 ) => Promise<void>;

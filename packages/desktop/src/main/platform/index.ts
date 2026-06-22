@@ -158,8 +158,9 @@ export async function initializeElectronPlatform(
   // Reading it afterwards would always be defined, so a fresh install with a
   // credential would be misread as a returning veteran. See ElectronPlatformInitResult.
   const hasPriorInstall =
-    globalStateStore.get<string | undefined>(GlobalStateKey.LAST_KNOWN_VERSION) !==
-    undefined;
+    globalStateStore.get<string | undefined>(
+      GlobalStateKey.LAST_KNOWN_VERSION,
+    ) !== undefined;
 
   const resourcesPath = resolveResourcesPath(mainDirname);
   initializeGoalPrompts(join(resourcesPath, 'goal', 'goal.yaml'));
