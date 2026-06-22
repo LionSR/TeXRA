@@ -348,6 +348,30 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.processToolUseFollowup(data, true),
       [PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER]: (data) =>
         this.handleRunCompileFixer(data.stream),
+
+      [PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (data) => {
+        switch (data.action) {
+          case 'runSetup':
+            await safeExecuteCommand('texra.runSetupAssistant', [], this.viewName);
+            break;
+          case 'createSampleProject':
+            await safeExecuteCommand('texra.createSampleProject', [], this.viewName);
+            break;
+          case 'cloneOverleaf':
+            await safeExecuteCommand('texra.cloneOverleafProject', [], this.viewName);
+            break;
+          case 'downloadArxiv':
+            await safeExecuteCommand('texra.downloadArXivSource', [], this.viewName);
+            break;
+          case 'openWalkthrough':
+            await safeExecuteCommand('texra.openGettingStarted', [], this.viewName);
+            break;
+          default: {
+            const exhaustive: never = data.action;
+            throw new Error(`Unhandled getting-started action: ${String(exhaustive)}`);
+          }
+        }
+      },
     };
   }
 

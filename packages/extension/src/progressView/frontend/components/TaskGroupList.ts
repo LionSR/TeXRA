@@ -6,13 +6,14 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared schemas
 import { STREAM_STATUS } from '@shared/schemas';
+import type { GettingStartedAction } from '@shared/schemas';
 
 // Local imports - shared utilities
 // Side-effect imports - register WA icon and spinner components
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
@@ -20,7 +21,7 @@ import { designTokens } from '@shared/styles';
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
-import { getGettingStartedHtml } from '@shared/utils/uiConstants';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { formatDuration } from '@utils/core';
 
 // Local imports - progress view constants
@@ -43,10 +44,7 @@ import { getTimeFormatter } from '../formatters/timestampUtils';
 // Local imports - sibling helpers
 import { MessageIndex, type GroupTree } from './messageIndex';
 import { TerminalBuffer, processTerminalText } from './terminalBuffer';
-
-const PLACEHOLDER_HTML = getGettingStartedHtml(
-  'No runs yet—use TeXRA commands to start. Try ',
-);
+import { ProgressEvents } from '../events';
 
 const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
 const TIMELINE_ITEM_WINDOW_STEP = 120;
@@ -544,6 +542,10 @@ export class TaskGroupList extends LitElement {
     return html`<div class="terminal-container">${[committed, tail]}</div>`;
   }
 
+  private handleGettingStartedAction(action: GettingStartedAction): void {
+    this.dispatchEvent(ProgressEvents.gettingStartedAction({ action }));
+  }
+
   override render(): TemplateResult {
     // Show placeholder only when there are no streams in the current filter
     if (!this.hasStreams) {
@@ -553,7 +555,36 @@ export class TaskGroupList extends LitElement {
           class="log-container"
           @scroll=${this.handleScroll}
         >
-          <div class="log-placeholder">${unsafeHTML(PLACEHOLDER_HTML)}</div>
+          <div class="log-placeholder">
+            No runs yet—use TeXRA commands to start.
+            <div class="log-placeholder-actions">
+              <wa-button
+                appearance="outlined"
+                size="small"
+                @click=${() => this.handleGettingStartedAction('runSetup')}
+              >${waIcon('rocket', { slot: 'start' })} Run setup</wa-button>
+              <wa-button
+                appearance="outlined"
+                size="small"
+                @click=${() => this.handleGettingStartedAction('createSampleProject')}
+              >${waIcon('file-circle-plus', { slot: 'start' })} Sample project</wa-button>
+              <wa-button
+                appearance="outlined"
+                size="small"
+                @click=${() => this.handleGettingStartedAction('cloneOverleaf')}
+              >${waIcon('cloud-arrow-down', { slot: 'start' })} Import Overleaf</wa-button>
+              <wa-button
+                appearance="outlined"
+                size="small"
+                @click=${() => this.handleGettingStartedAction('downloadArxiv')}
+              >${waIcon('download', { slot: 'start' })} Import arXiv</wa-button>
+              <wa-button
+                appearance="outlined"
+                size="small"
+                @click=${() => this.handleGettingStartedAction('openWalkthrough')}
+              >${waIcon('book', { slot: 'start' })} Walkthrough</wa-button>
+            </div>
+          </div>
         </div>
       `;
     }
