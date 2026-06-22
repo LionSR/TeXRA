@@ -40,6 +40,7 @@ import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { ExternalOpener } from '@hosts/externalOpener';
 import { createChannelTrace } from '@logger';
+import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   RUN_OUTCOME,
   STREAM_STATUS,
@@ -81,7 +82,6 @@ import {
   type DesktopProgressEventBridge,
 } from './desktopProgressEventBridge.js';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
-import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
@@ -607,7 +607,6 @@ export class DesktopProgressBridge {
           createSampleProject: 'Create sample project',
           cloneOverleaf: 'Import from Overleaf',
           downloadArxiv: 'Import from arXiv',
-          openWalkthrough: 'Open walkthrough',
         };
         await this.options.showInfoMessage?.(
           `"${labels[data.action]}" requires the VS Code extension.`,
