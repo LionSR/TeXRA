@@ -104,10 +104,7 @@ describe('planPackClean', () => {
   });
 
   it('returns invalid when primaryInput is missing', () => {
-    const plan = planPackClean(
-      { ...validState, primaryInput: '' },
-      'pack',
-    );
+    const plan = planPackClean({ ...validState, primaryInput: '' }, 'pack');
     expect(plan.valid).toBe(false);
     if (plan.valid) return;
     expect(plan.message).toBe(
@@ -143,9 +140,7 @@ describe('planMerge', () => {
       inputFile: 'main.tex',
       editedFile: 'main-edited.tex',
     });
-    expect(plan.infoText).toBe(
-      'Merging files: main.tex and main-edited.tex',
-    );
+    expect(plan.infoText).toBe('Merging files: main.tex and main-edited.tex');
   });
 
   it('returns invalid when primaryInput is missing', () => {

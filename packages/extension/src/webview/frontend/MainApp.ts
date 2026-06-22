@@ -1206,9 +1206,7 @@ export class MainApp extends MainAppBase {
         primaryInput: this.primaryInputFile,
         model: this.model.get(),
         inputFiles: this.multiFiles.get().inputFiles,
-        agent: isToolUse
-          ? this.toolUseAgent.get()
-          : this.workflowAgent.get(),
+        agent: isToolUse ? this.toolUseAgent.get() : this.workflowAgent.get(),
       },
       action,
     );
