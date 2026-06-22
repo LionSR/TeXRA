@@ -357,6 +357,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
               [],
               this.viewName,
             );
+            await this.provider.refreshOnboardingFunnel();
             break;
           case 'createSampleProject':
             await safeExecuteCommand(
