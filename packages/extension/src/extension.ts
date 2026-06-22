@@ -734,12 +734,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
-    // Land first-run users on the Multi-Agent tab so they see the
-    // team card grid (icons, descriptions, agent pills) as their first
-    // interaction, then open the walkthrough alongside for the rest of
-    // the onboarding tips.
+    // Land first-run users on the main welcome card so the credential choice
+    // (ChatGPT subscription first) is the first real action, then open the
+    // walkthrough alongside for the rest of the onboarding tips.
     void vscode.commands
-      .executeCommand('texra.showMultiAgent')
+      .executeCommand('texra.showMainView')
       .then(() => vscode.commands.executeCommand('texra.openGettingStarted'))
       .then(() => context.globalState.update(welcomeKey, true));
   }

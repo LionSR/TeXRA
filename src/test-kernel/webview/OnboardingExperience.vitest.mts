@@ -63,6 +63,24 @@ describe('extension onboarding experience', () => {
     }
   });
 
+  it('lands first-run extension users on the credential welcome card', () => {
+    const source = readRepoFile('packages/extension/src/extension.ts');
+    const firstRunBlock = source.slice(source.indexOf('const welcomeKey'));
+    const showMainView = firstRunBlock.indexOf(
+      "executeCommand('texra.showMainView')",
+    );
+    const openWalkthrough = firstRunBlock.indexOf(
+      "executeCommand('texra.openGettingStarted')",
+    );
+
+    expect(showMainView).toBeGreaterThanOrEqual(0);
+    expect(openWalkthrough).toBeGreaterThanOrEqual(0);
+    expect(showMainView).toBeLessThan(openWalkthrough);
+    expect(firstRunBlock).not.toContain(
+      "executeCommand('texra.showMultiAgent')",
+    );
+  });
+
   it('keeps empty-project onboarding action oriented', () => {
     const source = readWebviewComponent('GettingStartedBanner');
 
