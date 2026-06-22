@@ -130,7 +130,7 @@ export class OutputFileProcessor {
     await tryOperation(
       async () => {
         const rawContent = await flexibleFS.read(rawOutput);
-        const tagContents: Record<string, string | string[]> = {};
+        const tagContents: Record<string, string[]> = {};
         const documents: string[] = [];
         const documentTag = this.ctx.agentSetting.documentTag;
 
@@ -139,12 +139,9 @@ export class OutputFileProcessor {
           documentTag,
         );
         if (documentEntries.length > 0) {
-          const trimmedDocuments = documentEntries.map((e) => e.content.trim());
-          if (trimmedDocuments.length === 1) {
-            tagContents[documentTag] = trimmedDocuments[0];
-          } else {
-            tagContents[documentTag] = trimmedDocuments;
-          }
+          tagContents[documentTag] = documentEntries.map((e) =>
+            e.content.trim(),
+          );
 
           for (const entry of documentEntries) {
             const nameAttr = entry.name ? ` name="${entry.name}"` : '';
@@ -158,7 +155,7 @@ export class OutputFileProcessor {
             documentTag,
           ).trim();
           if (singleDocument) {
-            tagContents[documentTag] = singleDocument;
+            tagContents[documentTag] = [singleDocument];
             documents.push(
               `<${documentTag}>${singleDocument}</${documentTag}>`,
             );
@@ -170,7 +167,7 @@ export class OutputFileProcessor {
           'scratchpad',
         ).trim();
         if (scratchpadContent) {
-          tagContents.scratchpad = scratchpadContent;
+          tagContents.scratchpad = [scratchpadContent];
         }
 
         data.xmlSummary = {

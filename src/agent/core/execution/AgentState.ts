@@ -35,12 +35,11 @@ export type AgentRunStateSnapshot = z.output<
  */
 export function recordCycleMetrics(
   run: AgentRunStateSnapshot,
-  cycleIndex: number,
   responseTimeMs: number,
   normalizedUsage: NormalizedUsage | null,
 ): void {
   if (normalizedUsage) {
-    recordNormalizedUsage(run.usageAccumulator, cycleIndex, normalizedUsage);
+    recordNormalizedUsage(run.usageAccumulator, normalizedUsage);
   }
   run.totalResponseTimeMs += responseTimeMs;
 }
@@ -50,10 +49,5 @@ export function recordRound(
   run: AgentRunStateSnapshot,
   roundState: ConversationRoundStateSnapshot,
 ): void {
-  recordCycleMetrics(
-    run,
-    roundState.roundIndex,
-    roundState.responseTimeMs,
-    roundState.normalizedUsage,
-  );
+  recordCycleMetrics(run, roundState.responseTimeMs, roundState.normalizedUsage);
 }
