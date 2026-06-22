@@ -322,7 +322,7 @@ JSON** — trust the `.d.ts` where they differ.
 | --------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Send a turn                       | `chat.sendMessage(parts)`                                    | `interactions.create({ model, input })`                                                                                                          |
 | Streaming                         | `sendMessageStream()` → `chunk.candidates[0].content.parts`  | `Stream<InteractionSSEEvent>`; consume `event_type:"step.delta"` → `delta` (TextDelta etc.)                                                      |
-| Conversation state                | resend full `Content[]` each round                           | `previous_interaction_id` (server-side) or pass prior `Step[]` in `input`                                                                        |
+| Conversation state                | resend full `Content[]` each round                           | v0: pass prior `Step[]` in `input` with `store:false`; later: `previous_interaction_id` when using `store:true`                                  |
 | System prompt                     | `systemInstruction` on chat params                           | `system_instruction` on create                                                                                                                   |
 | Custom tools                      | `[{ functionDeclarations:[…] }]`                             | `tools:[{ type:"function", name, description, parameters }]`                                                                                     |
 | Built-in search                   | **disabled** (can't mix w/ functions)                        | `tools:[{ type:"google_search" }, …functions]` — now mixable                                                                                     |
@@ -336,11 +336,14 @@ JSON** — trust the `.d.ts` where they differ.
 | Background                        | n/a today                                                    | `background:true` (+ `store`, `webhook_config`)                                                                                                  |
 | Caching                           | `cachedContentTokenCount` rebate                             | `cached_content` + `Usage.total_cached_tokens`                                                                                                   |
 
-For v0, send `system_instruction` on every `interactions.create` request rather
-than assuming it persists across future `previous_interaction_id` continuations.
-This mirrors the OpenAI Responses implementation, which re-sends instructions
-with each request; a later `store:true` phase can loosen this only after a
-real-key fixture proves continuation semantics.
+For v0, `store:false` means the handler cannot rely on `previous_interaction_id`;
+conversation state must come from local `Step[]` resending. Send request-level
+fields (`system_instruction`, `tools`, `generation_config`, `response_format`)
+on every `interactions.create` request rather than assuming they persist across
+future `previous_interaction_id` continuations. This mirrors the OpenAI
+Responses implementation, which re-sends instructions with each request; a later
+`store:true` phase can loosen this only after a real-key fixture proves
+continuation semantics.
 
 ## Design (additive, feature-flagged)
 
