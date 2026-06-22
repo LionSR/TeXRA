@@ -1,12 +1,12 @@
 // Local imports - shared schemas
-import { MULTIPLE_DOCUMENT_FILE_TYPES } from '../fileTypes';
-import type { ToolConfigSchema } from '../toolConfig';
+import { MULTIPLE_DOCUMENT_FILE_TYPES } from '../schemas/fileTypes';
+import type { ToolConfigSchema } from '../schemas/toolConfig';
 import type {
   CheckboxValues,
   MultiFiles,
   SessionType,
   SingleFiles,
-} from './state';
+} from '../schemas/mainView/state';
 
 // Third-party imports
 import type { z } from 'zod';

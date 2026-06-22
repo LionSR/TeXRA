@@ -24,7 +24,7 @@ import {
   dispatchMainViewInbound,
   MainViewInboundHandlerRegistry,
 } from '@shared/schemas';
-import type { MainViewExecuteMessage } from '@shared/schemas/mainView';
+import type { MainViewExecuteMessage } from '@shared/mainView';
 import { PROVIDER_URLS } from '@shared/constants/providers';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
