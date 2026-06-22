@@ -124,8 +124,11 @@ export class GettingStartedBanner extends LitElement {
           <div class="getting-started-row">
             <div class="getting-started-body">
               <div class="getting-started-title">
-                <strong>Empty project</strong>
-                <span>Start with setup or bring in a LaTeX source.</span>
+                <strong>No LaTeX files yet</strong>
+                <span>
+                  Run setup to connect TeXRA, check this workspace, or import a
+                  source.
+                </span>
               </div>
               <div class="getting-started-actions">
                 <a
