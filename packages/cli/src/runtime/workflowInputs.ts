@@ -2,7 +2,6 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { glob, hasMagic } from 'glob';
-import { nanoid } from 'nanoid';
 
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { tryPlatform } from '@platform/platform';
@@ -15,6 +14,8 @@ const STDIN_INPUT_TOKEN = '-';
 // LaTeX derives auxiliary filenames from the input basename; leading-dot
 // job names can be rejected by TeX's file-open policy when it writes `.aux`.
 const STDIN_TEMP_PREFIX = 'texra-stdin-';
+const STDIN_TEMP_DIR_PATTERN = /^texra-stdin-\d+-[A-Za-z0-9]{6}$/;
+export const STDIN_WORKFLOW_INPUT_BASENAME = 'stdin.tex';
 
 function resolveAgainstCwd(candidate: string, cwd: string): string {
   return path.isAbsolute(candidate)
@@ -94,6 +95,17 @@ export function hasMixedStdinWorkflowInputSpecs(
   return distinctSpecs.has(STDIN_INPUT_TOKEN) && distinctSpecs.size > 1;
 }
 
+export function isMaterializedStdinWorkflowInputPath(
+  inputPath: string,
+): boolean {
+  const normalized = inputPath.replaceAll('\\', '/');
+  const parent = path.posix.basename(path.posix.dirname(normalized));
+  return (
+    path.posix.basename(normalized) === STDIN_WORKFLOW_INPUT_BASENAME &&
+    STDIN_TEMP_DIR_PATTERN.test(parent)
+  );
+}
+
 export function createStdinWorkflowInputMaterializer(options: {
   readonly readStdinText: () => Promise<string>;
   readonly tempDir: string;
@@ -108,7 +120,9 @@ export function createStdinWorkflowInputMaterializer(options: {
       (inputPath) => {
         materializedPath = inputPath;
         if (cleanupStarted) {
-          void fs.rm(inputPath, { force: true }).catch(() => undefined);
+          void fs
+            .rm(path.dirname(inputPath), { recursive: true, force: true })
+            .catch(() => undefined);
         }
         return inputPath;
       },
@@ -121,7 +135,10 @@ export function createStdinWorkflowInputMaterializer(options: {
       shutdownCleanup?.dispose();
       shutdownCleanup = undefined;
       if (materializedPath) {
-        await fs.rm(materializedPath, { force: true });
+        await fs.rm(path.dirname(materializedPath), {
+          recursive: true,
+          force: true,
+        });
       }
     })();
     await cleanupPromise;
@@ -143,11 +160,18 @@ async function materializeStdinWorkflowInput(options: {
       'stdin: no data on stdin. Pipe content in and pass `-` to one file-taking flag.',
     );
   }
-  const inputFile = path.join(
-    options.tempDir,
-    `${STDIN_TEMP_PREFIX}${process.pid}-${nanoid()}.tex`,
+  const inputDir = await fs.mkdtemp(
+    path.join(options.tempDir, `${STDIN_TEMP_PREFIX}${process.pid}-`),
   );
-  await fs.writeFile(inputFile, text, { encoding: 'utf8', flag: 'wx' });
+  const inputFile = path.join(inputDir, STDIN_WORKFLOW_INPUT_BASENAME);
+  try {
+    await fs.writeFile(inputFile, text, { encoding: 'utf8', flag: 'wx' });
+  } catch (error) {
+    await fs.rm(inputDir, { recursive: true, force: true }).catch(() => {
+      // Preserve the original write failure for the caller.
+    });
+    throw error;
+  }
   return inputFile;
 }
 

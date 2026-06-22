@@ -41,6 +41,7 @@ import {
   expandRunInputs,
   expandWorkflowInputSpecs,
   hasMixedStdinWorkflowInputSpecs,
+  isMaterializedStdinWorkflowInputPath,
 } from '@cli/runtime/workflowInputs';
 import {
   resolveWorkflowOutput,
@@ -533,12 +534,16 @@ describe('CLI root argument routing', () => {
 
       expect(expanded).toHaveLength(1);
       expect(readCount).toBe(1);
-      expect(path.basename(expanded[0])).toMatch(/^texra-stdin-.+\.tex$/);
+      expect(path.basename(expanded[0])).toBe('stdin.tex');
+      expect(isMaterializedStdinWorkflowInputPath(expanded[0])).toBe(true);
       await expect(
         fs.readFile(path.resolve(root, expanded[0]), 'utf8'),
       ).resolves.toContain('\\begin{document}Hi');
       await stdinInputFile.cleanup();
       await expect(fs.stat(path.resolve(root, expanded[0]))).rejects.toThrow();
+      await expect(
+        fs.stat(path.dirname(path.resolve(root, expanded[0]))),
+      ).rejects.toThrow();
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -563,7 +568,8 @@ describe('CLI root argument routing', () => {
         },
       );
 
-      expect(path.basename(expanded[0])).toMatch(/^texra-stdin-.+\.tex$/);
+      expect(path.basename(expanded[0])).toBe('stdin.tex');
+      expect(isMaterializedStdinWorkflowInputPath(expanded[0])).toBe(true);
       expect(expanded[1]).toBe('paper.tex');
     } finally {
       await fs.rm(root, { recursive: true, force: true });
@@ -591,6 +597,18 @@ describe('CLI root argument routing', () => {
     expect(hasMixedStdinWorkflowInputSpecs(['-', '-'])).toBe(false);
     expect(hasMixedStdinWorkflowInputSpecs(['-', 'paper.tex'])).toBe(true);
     expect(hasMixedStdinWorkflowInputSpecs(['  -  ', 'paper.tex'])).toBe(true);
+  });
+
+  it('does not classify ordinary stdin-named files as materialized stdin', () => {
+    expect(isMaterializedStdinWorkflowInputPath('stdin.tex')).toBe(false);
+    expect(
+      isMaterializedStdinWorkflowInputPath('texra-stdin-workflow/stdin.tex'),
+    ).toBe(false);
+    expect(
+      isMaterializedStdinWorkflowInputPath(
+        'texra-stdin-123-workflow/stdin.tex',
+      ),
+    ).toBe(false);
   });
 
   it('does not read stdin before later --input validation errors', async () => {
@@ -657,7 +675,8 @@ describe('CLI root argument routing', () => {
 
       expect(inputFiles).toEqual(['main.tex']);
       expect(contextFiles).toHaveLength(1);
-      expect(path.basename(contextFiles[0])).toMatch(/^texra-stdin-.+\.tex$/);
+      expect(path.basename(contextFiles[0])).toBe('stdin.tex');
+      expect(isMaterializedStdinWorkflowInputPath(contextFiles[0])).toBe(true);
       await expect(
         fs.readFile(path.resolve(root, contextFiles[0]), 'utf8'),
       ).resolves.toBe('context body');
