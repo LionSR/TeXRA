@@ -31,7 +31,6 @@ import type { ToolDefinition } from '@model';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
-import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import {
   extractMimeSubtype,
@@ -39,7 +38,7 @@ import {
   objectToLogString,
 } from '@utils/text/stringUtils';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
-import { prepareExistingOutputContent } from '../utils/fileContentUtils';
+import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
 import { tagOpenAISdkError } from './openAISdkError';
 
 // Local file imports
@@ -1010,73 +1009,32 @@ export class ModelHandlerOpenAI<
     outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, ChatCompletionMessageParam[]]> {
-    let endTurn = false;
-
-    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
-      if (prefill.length === 0) {
-        this.logger.debug(
-          'No prefill provided; skipping pseudo-prefill instruction',
-        );
-        return [endTurn, messages];
-      }
-      const pseudoPrefillMsg = `Organize your response with xml tags. Start your response with:\n${prefill}`;
-      const lastMessage = messages.at(-1);
-      if (lastMessage && Array.isArray(lastMessage.content)) {
-        lastMessage.content.push({ type: 'text', text: pseudoPrefillMsg });
-      } else if (lastMessage && typeof lastMessage.content === 'string') {
-        lastMessage.content = [
-          { type: 'text', text: lastMessage.content },
-          { type: 'text', text: pseudoPrefillMsg },
-        ];
-      }
-      this.logger.debug(`Added pseudo prefill: "${pseudoPrefillMsg}"`);
-      return [endTurn, messages];
-    }
-
-    // Prepare existing file content (read, clean, extract scratchpad, update state)
-    const { fileContent } = await prepareExistingOutputContent(
-      outputLocation,
-      workspaceState,
-      this.logger,
-    );
-
-    messages.push({
-      role: 'assistant',
-      content: [
-        {
-          type: 'text',
-          text: fileContent,
+    return initializeOpenAiCompatibleOutputAndPrefill(
+      {
+        logger: this.logger,
+        appendPseudoPrefill: (msgs, pseudoPrefillMsg) => {
+          const lastMessage = msgs.at(-1);
+          if (lastMessage && Array.isArray(lastMessage.content)) {
+            lastMessage.content.push({ type: 'text', text: pseudoPrefillMsg });
+          } else if (lastMessage && typeof lastMessage.content === 'string') {
+            lastMessage.content = [
+              { type: 'text', text: lastMessage.content },
+              { type: 'text', text: pseudoPrefillMsg },
+            ];
+          }
         },
-      ],
-    });
-
-    if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.debug(
-        'End tag detected - skipping model call (response already added above)',
-      );
-      endTurn = true;
-      return [endTurn, messages];
-    }
-
-    this.logger.warn(
-      'Output file exists but no end tag found - continuing from file',
-    );
-    // Only need to handle case where prefill needs to be prepended
-    // (workspace state was already updated above with file content)
-    if (!fileContent.includes(prefill)) {
-      workspaceState.assembly.accumulatedOutput = prefill + fileContent;
-      await flexibleFS.write(
-        outputLocation,
-        workspaceState.assembly.accumulatedOutput,
-      );
-    }
-    this.addContinueMessageWithoutPrefill(
+        pushAssistantText: (msgs, text) => {
+          msgs.push({ role: 'assistant', content: [{ type: 'text', text }] });
+        },
+        addContinue: (msgs, ws, setting) =>
+          this.addContinueMessageWithoutPrefill(msgs, ws, setting),
+      },
+      agentSetting,
       messages,
       workspaceState,
-      agentSetting,
+      outputLocation,
+      prefill,
     );
-
-    return [false, messages];
   }
 
   /** Computes cost based on token usage and model pricing. */
