@@ -86,13 +86,15 @@ export interface ChildRecord extends ChildRecordData {
   id: ExecutionId;
 }
 
-/** Result metadata for background bash processes. */
+/** Lightweight metadata captured after an execution finishes. */
 const ResultMetaSchema = z.object({
   exitCode: z.int().optional(),
   wallTimeMs: z.number().nonnegative().optional(),
   success: z.boolean().optional(),
   timedOut: z.boolean().optional(),
   command: z.string().optional(),
+  copiedOutput: z.string().optional(),
+  copiedOutputs: z.array(z.string()).optional(),
 });
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;
 
