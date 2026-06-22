@@ -56,10 +56,20 @@ export class GettingStartedBanner extends LitElement {
         color: var(--vscode-descriptionForeground);
       }
 
+      .getting-started-copy {
+        margin: 0;
+        color: var(--vscode-descriptionForeground);
+        line-height: var(--line-height-normal, 1.4);
+      }
+
       .getting-started-actions {
         display: flex;
         flex-wrap: wrap;
         gap: var(--wa-space-3xs);
+      }
+
+      .getting-started-actions wa-button::part(base) {
+        min-height: 26px;
       }
 
       .dismiss-button {
@@ -92,18 +102,20 @@ export class GettingStartedBanner extends LitElement {
             <div class="getting-started-body">
               <div class="getting-started-title">
                 <strong>No LaTeX files yet</strong>
-                <span>
-                  Run setup to connect TeXRA, check this workspace, or import a
-                  source.
-                </span>
+                <span>Start from a sample or import an existing paper.</span>
               </div>
+              <p class="getting-started-copy">
+                Then run setup to connect TeXRA, check LaTeX, and choose a
+                starter agent team.
+              </p>
               <div class="getting-started-actions">
                 <wa-button
+                  variant="brand"
                   appearance="filled"
                   size="small"
                   href=${COMMAND_LINKS.RUN_SETUP_ASSISTANT}
                 >
-                  ${waIcon('rocket', { slot: 'start' })} Run setup
+                  ${waIcon('rocket', { slot: 'start' })} Run setup assistant
                 </wa-button>
                 <wa-button
                   appearance="outlined"
@@ -118,14 +130,15 @@ export class GettingStartedBanner extends LitElement {
                   size="small"
                   href=${COMMAND_LINKS.CLONE_OVERLEAF}
                 >
-                  ${waIcon('cloud-arrow-down', { slot: 'start' })} Overleaf
+                  ${waIcon('cloud-arrow-down', { slot: 'start' })} Import
+                  Overleaf
                 </wa-button>
                 <wa-button
                   appearance="outlined"
                   size="small"
                   href=${COMMAND_LINKS.DOWNLOAD_ARXIV}
                 >
-                  ${waIcon('download', { slot: 'start' })} arXiv
+                  ${waIcon('download', { slot: 'start' })} Import arXiv
                 </wa-button>
                 <wa-button
                   appearance="outlined"
