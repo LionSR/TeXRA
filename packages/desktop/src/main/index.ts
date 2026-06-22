@@ -13,13 +13,21 @@ import {
 } from 'electron';
 
 import { platform } from '@platform/platform';
-import { hasAnyProviderApiKey } from '@controllers/onboarding/onboardingFunnel';
+import {
+  backfillFirstRunDone,
+  hasAnyProviderApiKey,
+} from '@controllers/onboarding/onboardingFunnel';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
+import { getAgent, createKey } from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
+import { isCodexSubscriptionActive } from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult } from '@hosts/terminalHost';
+import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { AgentCategory } from '@shared/schemas/agent';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { setDesktopAgentResumeHandler } from './desktopAgentResume.js';
 import {
@@ -605,6 +613,8 @@ function createWindow(options: {
     runInstallCommand: async (command) => {
       await runSetupCommand(command);
     },
+    onApiKeyChanged: () =>
+      onboardingIpcRef.current?.refreshOnboardingFunnel(),
     onError: reportAsyncError,
   });
   settingsIpcRef.current = settingsIpc;
@@ -617,6 +627,9 @@ function createWindow(options: {
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
     {
       hasCredential: async () => {
+        if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
+          return true;
+        }
         const isRelaySignedIn = await SupabaseClient.isAuthenticated();
         if (isRelaySignedIn) {
           const serverKeyService = getServerSideKeyService();
@@ -627,10 +640,70 @@ function createWindow(options: {
         }
         return hasAnyProviderApiKey(platform().secrets);
       },
+      selectSetupAgent: async () => {
+        const entry = getAgent('setup', AgentCategory.ToolUse);
+        ipcRef.current?.postToRenderer({
+          command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
+          agentId: entry ? createKey(entry.source, entry.name) : 'setup',
+          sessionType: 'toolUse' as const,
+        });
+      },
+      // Auto-kickoff is declared as a callback so the planner's output is not
+      // silently discarded (see MainViewProvider.refreshOnboardingFunnel for
+      // the extension-side equivalent). Desktop wires it as a no-op for now;
+      // a future PR can replace it with `handleExecute` once the setup launch
+      // path is host-neutral.
+      kickoffSetup: async () => {},
+      signInWithChatGpt: async () => {
+        await settingsIpc.signInChatGpt();
+      },
       onAsyncError: reportAsyncError,
     },
   );
   onboardingIpcRef.current = onboardingIpc;
+  // One-shot migration: existing desktop users with a credential or run
+  // history never see the welcome card (State 0) or setup auto-start (State
+  // 1). Mirrors the extension (`extension.ts:282`) and CLI
+  // (`runOnboarding.tsx:154`) backfill, which desktop formerly skipped by
+  // hardcoding `'done'`. The async backfill races the in-page webview mount,
+  // which is fine: the WB_READY handler reads the same global-state flags.
+  void (async () => {
+    try {
+      const hasCredential = await (async () => {
+        if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
+        const isRelaySignedIn = await SupabaseClient.isAuthenticated();
+        if (isRelaySignedIn) {
+          const serverKeyService = getServerSideKeyService();
+          if (
+            serverKeyService.getUseIncludedModelAccess() &&
+            (await serverKeyService.canUseServerSideKeys())
+          ) {
+            return true;
+          }
+        }
+        return hasAnyProviderApiKey(platform().secrets);
+      })().catch(() => false);
+      const globalState = platform().globalState;
+      const hasPriorInstall =
+        globalState.get<string | undefined>(
+          GlobalStateKey.LAST_KNOWN_VERSION,
+        ) !== undefined;
+      // Inline `listExecutions` + `clearStoreCache` import so the agent
+      // storage module tree-shakes from the desktop main bundle unless we
+      // actually reach the backfill path on the first launch.
+      const { listExecutions } = await import('@agent/storage');
+      const hasRunHistory = await listExecutions()
+        .then((entries) => entries.length > 0)
+        .catch(() => false);
+      await backfillFirstRunDone(globalState, {
+        hasCredential,
+        hasPriorInstall,
+        hasRunHistory,
+      });
+    } catch {
+      // Swallow — backfill failure must not block window creation.
+    }
+  })();
   // Real desktop git host — closes audit item A from
   // `docs/dev/standalone-trajectory-audit.md` (trajectory #16). Spawns
   // `git log` under the active workspace to populate the launcher banner's

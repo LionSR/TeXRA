@@ -485,6 +485,180 @@ describe('desktop IPC adapters', () => {
     });
   });
 
+  it('derives State 1 (setup) when hasCredential is true on fresh install', async () => {
+    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
+    const values = new Map<string, unknown>();
+    const update = vi.fn(async (key: string, value: unknown) => {
+      values.set(key, value);
+    });
+    const state = {
+      get<T>(key: string, defaultValue?: T): T {
+        return (values.has(key) ? values.get(key) : defaultValue) as T;
+      },
+      update,
+    };
+    const postToRenderer = vi.fn();
+    const selectSetupAgent = vi.fn(async () => {});
+    const onboarding = createDesktopOnboardingIpc(
+      { postToRenderer },
+      {
+        state,
+        hasCredential: () => true,
+        selectSetupAgent,
+      },
+    );
+
+    expect(
+      onboarding.handleMessage({
+        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'main',
+      }),
+    ).toBe(false);
+    await Promise.resolve();
+    // Credential present, firstRunDone not set → State 1 (setup card).
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      state: 'setup',
+    });
+    // selectSetupAgent callback fires on State 1 entry.
+    expect(selectSetupAgent).toHaveBeenCalled();
+  });
+
+  it('derives State 2 (done) for backfilled veterans with firstRunDone set', async () => {
+    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
+    const values = new Map<string, unknown>();
+    values.set(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
+    const update = vi.fn(async (key: string, value: unknown) => {
+      values.set(key, value);
+    });
+    const state = {
+      get<T>(key: string, defaultValue?: T): T {
+        return (values.has(key) ? values.get(key) : defaultValue) as T;
+      },
+      update,
+    };
+    const postToRenderer = vi.fn();
+    const onboarding = createDesktopOnboardingIpc(
+      { postToRenderer },
+      {
+        state,
+        hasCredential: () => true,
+      },
+    );
+
+    expect(
+      onboarding.handleMessage({
+        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'main',
+      }),
+    ).toBe(false);
+    await Promise.resolve();
+    // Backfilled veteran → State 2 (done), no onboarding UI shown.
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      state: 'done',
+    });
+  });
+
+  it('handles ONBOARDING_SKIP_SETUP by setting firstRunDone and pushing done', async () => {
+    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
+    const values = new Map<string, unknown>();
+    const update = vi.fn(async (key: string, value: unknown) => {
+      values.set(key, value);
+    });
+    const state = {
+      get<T>(key: string, defaultValue?: T): T {
+        return (values.has(key) ? values.get(key) : defaultValue) as T;
+      },
+      update,
+    };
+    const postToRenderer = vi.fn();
+    const onboarding = createDesktopOnboardingIpc(
+      { postToRenderer },
+      {
+        state,
+        hasCredential: () => true,
+      },
+    );
+
+    // Enter State 1 first.
+    onboarding.handleMessage({
+      command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'main',
+    });
+    await Promise.resolve();
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      state: 'setup',
+    });
+    postToRenderer.mockClear();
+    update.mockClear();
+
+    // Skip setup → firstRunDone=true, funnel → 'done'.
+    expect(
+      onboarding.handleMessage({
+        command: MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP,
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(update).toHaveBeenCalledWith(
+      GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+      true,
+    );
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      state: 'done',
+    });
+  });
+
+  it('calls onboarding run-setup / sign-in-chatgpt callbacks', async () => {
+    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
+    const values = new Map<string, unknown>();
+    const update = vi.fn(async (key: string, value: unknown) => {
+      values.set(key, value);
+    });
+    const state = {
+      get<T>(key: string, defaultValue?: T): T {
+        return (values.has(key) ? values.get(key) : defaultValue) as T;
+      },
+      update,
+    };
+    const postToRenderer = vi.fn();
+    const runSetupCalled = vi.fn(async () => {});
+    const signInCalled = vi.fn(async () => {});
+    const onboarding = createDesktopOnboardingIpc(
+      { postToRenderer },
+      {
+        state,
+        hasCredential: () => true,
+        selectSetupAgent: runSetupCalled, // reused for run_setup path
+        kickoffSetup: runSetupCalled,
+        signInWithChatGpt: signInCalled,
+      },
+    );
+
+    // ONBOARDING_RUN_SETUP calls selectSetupAgent + kickoffSetup + refresh.
+    expect(
+      onboarding.handleMessage({
+        command: MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP,
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(runSetupCalled).toHaveBeenCalledTimes(2); // selectSetupAgent + kickoffSetup
+
+    // ONBOARDING_SIGN_IN_CHATGPT calls signInCallback + refresh.
+    expect(
+      onboarding.handleMessage({
+        command: MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT,
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(signInCalled).toHaveBeenCalled();
+  });
+
   it('serves desktop log snapshots and copy/export actions', async () => {
     const { createDesktopLogIpc } = await loadDesktopLogIpc();
     const postToRenderer = vi.fn();

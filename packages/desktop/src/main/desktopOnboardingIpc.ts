@@ -2,6 +2,7 @@ import { platform } from '@platform/platform';
 import {
   planOnboardingFunnelTransition,
   readOnboardingFlags,
+  setFirstRunDone,
   setOnboardingDeclined,
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
@@ -26,6 +27,12 @@ export interface DesktopOnboardingIpcOptions {
    * and the secrets read can involve disk/network I/O.
    */
   hasCredential?: () => boolean | Promise<boolean>;
+  /** Post SET_SELECTED_AGENT to the renderer when entering State 1. */
+  selectSetupAgent?: () => Promise<void>;
+  /** Auto-start the setup conversation on the State 0→1 transition. */
+  kickoffSetup?: () => Promise<void>;
+  /** Run ChatGPT sign-in flow from the welcome card. */
+  signInWithChatGpt?: () => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -40,6 +47,7 @@ export function createDesktopOnboardingIpc(
 ): DesktopOnboardingIpc {
   const state = options.state ?? platform().globalState;
   let previousFunnelState: OnboardingFunnelState | undefined;
+  let setupKickoffStarted = false;
 
   function postCurrentState(): void {
     const dismissed = state.get<boolean>(
@@ -68,6 +76,17 @@ export function createDesktopOnboardingIpc(
     if (transition.clearDeclined) {
       await setOnboardingDeclined(state, false);
     }
+    if (transition.selectSetupAgent) {
+      await options.selectSetupAgent?.();
+    }
+    if (transition.kickoffSetup && !setupKickoffStarted) {
+      setupKickoffStarted = true;
+      try {
+        await options.kickoffSetup?.();
+      } catch {
+        setupKickoffStarted = false;
+      }
+    }
   }
 
   async function dismiss(): Promise<void> {
@@ -80,11 +99,28 @@ export function createDesktopOnboardingIpc(
     await refreshOnboardingFunnel();
   }
 
+  async function skipSetup(): Promise<void> {
+    await setFirstRunDone(state, true);
+    await refreshOnboardingFunnel();
+  }
+
+  async function runSetup(): Promise<void> {
+    await options.selectSetupAgent?.();
+    await options.kickoffSetup?.();
+    await refreshOnboardingFunnel();
+  }
+
+  async function signInWithChatGpt(): Promise<void> {
+    await options.signInWithChatGpt?.();
+    await refreshOnboardingFunnel();
+  }
+
   return {
     ...createCommandHandler(
       {
-        // Desktop does not run State 0/1 yet, so every main-view mount must
-        // clear MainApp's first-paint `pending` guard with a concrete state.
+        // Every main-view mount must clear MainApp's first-paint `pending`
+        // guard with a concrete state (State 0 welcome card, State 1 setup,
+        // or State 2 done).
         [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: {
           when: (message) => message.view === 'main',
           run: () => refreshOnboardingFunnel(),
@@ -97,6 +133,10 @@ export function createDesktopOnboardingIpc(
         // persisting the declined flag, recompute the funnel; the derivation
         // produces 'done' when no credential is present.
         [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP]: () => skipMainOnboarding(),
+        [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP]: () => skipSetup(),
+        [MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP]: () => runSetup(),
+        [MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT]: () =>
+          signInWithChatGpt(),
       },
       { onAsyncError: options.onAsyncError },
     ),

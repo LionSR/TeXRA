@@ -166,10 +166,13 @@ export interface DesktopSettingsIpcOptions {
   }) => Promise<void>;
   onError?: (error: unknown) => void;
   modelListRefresh?: PromiseLike<void>;
+  /** Called after a provider API key is saved or removed. */
+  onApiKeyChanged?: () => Promise<void>;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
   refreshAuthDependentData(): Promise<void>;
+  signInChatGpt(): Promise<void>;
 }
 
 export function createDesktopSettingsIpc(
@@ -601,6 +604,7 @@ export function createDesktopSettingsIpc(
     await postProfileData();
     await postModelSelectionData();
     await postMainModelOptionsData();
+    await options.onApiKeyChanged?.();
   }
 
   async function setProviderKey(
@@ -1165,6 +1169,7 @@ export function createDesktopSettingsIpc(
 
   return {
     refreshAuthDependentData,
+    signInChatGpt,
 
     handleMessage(message: DesktopCommandMessage) {
       // WEBVIEW_READY is a broadcast: act on it but return false so sibling
