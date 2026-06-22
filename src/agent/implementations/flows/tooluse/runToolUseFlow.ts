@@ -1,5 +1,7 @@
+// Third-party imports
 import { MODEL_CONFIGS } from 'llm-zoo';
 
+// Local imports - agent
 import { getExecutionStore } from '@agent/storage';
 import {
   activeModelHandlerCompatibilityKey,
@@ -23,6 +25,7 @@ import { deriveRunOutcome } from '@common/constants/streamStatus';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import type { SubagentProgressUpdate } from '@shared/schemas';
 
+// Local imports - tools and flow
 import { getDefaultToolRegistry } from '@tools/registry';
 import { TaskRunFileService } from '@utils/files';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
