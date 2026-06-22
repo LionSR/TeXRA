@@ -501,10 +501,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
         return stored !== undefined;
       },
-      // Historical adapter name; setup tools treat this as "any usable model
-      // credential" so ChatGPT subscription, Researcher Access, and non-blank
-      // direct keys stay in sync with setup launch and onboarding.
-      anyApiKeyExists: () => hasAnyUsableSetupCredential(),
+      anyUsableCredentialExists: () => hasAnyUsableSetupCredential(),
       gitHubTokenExists: () => SecretManager.gitHubTokenExists(),
     },
     commands: {

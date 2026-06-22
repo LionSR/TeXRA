@@ -71,7 +71,7 @@ function setupApiKeyToolPlatform(store: Map<string, string>): void {
       async storedApiKeyExists(provider) {
         return store.has(keyName(provider));
       },
-      async anyApiKeyExists() {
+      async anyUsableCredentialExists() {
         return store.size > 0;
       },
       async gitHubTokenExists() {
