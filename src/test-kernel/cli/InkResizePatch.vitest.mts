@@ -14,7 +14,7 @@ const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
 );
 
-// The CLI vendors a patch (patches/ink@7.0.5.patch) that rewrites Ink's resize
+// The CLI vendors a patch (patches/ink@7.1.0.patch) that rewrites Ink's resize
 // handling: instead of erasing the live region by logical line count — which is
 // wrong once the emulator reflows soft-wrapped lines at the new width (too few
 // rows leaves residue, too many eats the <Static> header) — it repaints from a
@@ -63,6 +63,36 @@ describe('CLI Ink resize patch', () => {
     expect(source).toContain('ansiEscapes.clearViewport');
     // Resets log-update's internal cursor/line bookkeeping before the repaint.
     expect(source).toContain('this.log.reset()');
+  });
+
+  it('wraps full repaint writes in synchronized output when supported', () => {
+    const repaint = source.indexOf('repaint(options = {})');
+    const logReset = source.indexOf('this.log.reset()', repaint);
+    const shouldSync = source.indexOf(
+      'const sync = this.shouldSync();',
+      logReset,
+    );
+    const beginSync = source.indexOf(
+      'this.options.stdout.write(bsu);',
+      shouldSync,
+    );
+    const writeFrame = source.indexOf(
+      'this.options.stdout.write(clearSequence + previousStaticOutput + nextStaticOutput + outputToRender);',
+      beginSync,
+    );
+    const endSync = source.indexOf(
+      'this.options.stdout.write(esu);',
+      writeFrame,
+    );
+    const logSync = source.indexOf('this.log.sync(outputToRender);', endSync);
+
+    expect(repaint).toBeGreaterThanOrEqual(0);
+    expect(logReset).toBeGreaterThanOrEqual(0);
+    expect(shouldSync).toBeGreaterThan(logReset);
+    expect(beginSync).toBeGreaterThan(shouldSync);
+    expect(writeFrame).toBeGreaterThan(beginSync);
+    expect(endSync).toBeGreaterThan(writeFrame);
+    expect(logSync).toBeGreaterThan(endSync);
   });
 
   it('calls a real log-update reset method for both renderer variants', async () => {
