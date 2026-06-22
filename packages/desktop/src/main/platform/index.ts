@@ -18,6 +18,7 @@ import { initializeGoalPrompts } from '@agent/goal';
 import { toErrorMessage } from '@common/errors';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
 import { configKeyVariants } from '@shared/config/configKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
@@ -37,6 +38,17 @@ export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;
   lifecycle: LifecycleHost;
   progressSnapshotStore: StreamSnapshotStore;
+  /**
+   * Whether TeXRA had run on this machine before this session, captured from
+   * `LAST_KNOWN_VERSION` BEFORE the bundled-agent directory sync writes that
+   * key during this same init. Threaded out so the onboarding backfill can
+   * tell a returning user (veteran) from a fresh install — reading the key
+   * after init would always see the just-written version and misclassify a
+   * brand-new credentialed user as a veteran (→ State 2 'done', so the setup
+   * card never shows). Mirrors the extension's read-before-write ordering
+   * (`extension.ts` LAST_KNOWN_VERSION comment).
+   */
+  hasPriorInstall: boolean;
 }
 
 const WORKSPACE_CONFIG_MIGRATED_KEY =
@@ -140,6 +152,16 @@ export async function initializeElectronPlatform(
     toolAvailability: NO_TOOL_AVAILABILITY_HOST,
   });
   registerAgentFeatures();
+
+  // Capture the prior-install signal BEFORE bootstrapElectronAgentDirectories
+  // (below) writes LAST_KNOWN_VERSION via the bundled-agent directory sync.
+  // Reading it afterwards would always be defined, so a fresh install with a
+  // credential would be misread as a returning veteran. See ElectronPlatformInitResult.
+  const hasPriorInstall =
+    globalStateStore.get<string | undefined>(
+      GlobalStateKey.LAST_KNOWN_VERSION,
+    ) !== undefined;
+
   const resourcesPath = resolveResourcesPath(mainDirname);
   initializeGoalPrompts(join(resourcesPath, 'goal', 'goal.yaml'));
 
@@ -155,5 +177,10 @@ export async function initializeElectronPlatform(
 
   await bootstrapElectronAgentDirectories(resourcesPath, app.getVersion());
 
-  return { workspacePath, lifecycle, progressSnapshotStore: snapshotStore };
+  return {
+    workspacePath,
+    lifecycle,
+    progressSnapshotStore: snapshotStore,
+    hasPriorInstall,
+  };
 }
