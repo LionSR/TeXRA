@@ -54,7 +54,9 @@ us flip the default per-model once the new path is proven.
   function declarations in a single request directly removes a limitation TeXRA
   documents today: the native `googleSearch` tool is currently disabled because
   the `generateContent` API cannot combine `googleSearch` with
-  `functionDeclarations` (see `modelHandlerGoogleGenAI.ts:355`).
+  `functionDeclarations` — the repo comment attributes mixing to the Live API
+  only (`toolConversion.ts:355-357`). The GA announcement says Interactions lifts
+  this on the regular surface (⚠️ verify it actually does before relying on it).
 - **Same SDK.** This rides on the already-installed `@google/genai` dependency —
   no new vendor SDK, consistent with the existing provider boundary.
 
@@ -249,7 +251,9 @@ verify the exact ids and pricing at implementation time.
 
 No new host coupling. `src/agent/modelHandlers/` is a VS Code-free zone and the
 new handler stays there, reaching host services only through `platform()`
-(secrets for the API key via `getApiKey(secrets, 'google')`, config, fs for media
+(secrets for the API key via the base handler's `getApiKey()` —
+`modelHandlerGoogleGenAI.ts:299`,`319` construct `new GoogleGenAI({ apiKey })` —
+config, fs for media
 upload) — identical to the existing Google handler. The settings toggle flows
 through the existing `coreSettings` schema; no new ports needed.
 
