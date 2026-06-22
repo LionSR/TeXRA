@@ -1,3 +1,6 @@
+// Local imports - platform
+import { tryPlatform } from '@platform/platform';
+
 // Local imports - auth
 import {
   DEFAULT_OAUTH_PROVIDER,
@@ -28,6 +31,9 @@ import {
   requestDeviceAuthorization,
   type DeviceAuthorization,
 } from './supabaseAuthDeviceCode';
+
+// Type imports - platform
+import type { PlatformSecrets } from '@platform/secrets';
 
 /**
  * Channel-logger contract used by the CLI auth coordinator and supporting
@@ -77,6 +83,7 @@ export function formatCliManualAuthUrlMessage(url: string): string {
 }
 
 let coordinator: SupabaseSessionCoordinator | undefined;
+let coordinatorSecrets: PlatformSecrets | undefined;
 let activeAuthLog: LogBackend | undefined;
 const deferredAuthLog: LogBackend = {
   initialize: (channel, isAgent) => activeAuthLog?.initialize(channel, isAgent),
@@ -96,12 +103,19 @@ function getCliSupabaseAuthCoordinator(): SupabaseSessionCoordinator {
   return coordinator!;
 }
 
-export function initializeCliSupabaseAuth(log?: LogBackend): void {
+export function initializeCliSupabaseAuth(
+  log?: LogBackend,
+  storageRoot?: string,
+): void {
   activeAuthLog = log ?? activeAuthLog;
-  coordinator ??= createHostAuthCoordinator({
-    secrets: getCliSecrets(),
-    log: deferredAuthLog,
-  });
+  const secrets = tryPlatform()?.secrets ?? getCliSecrets(storageRoot);
+  if (!coordinator || coordinatorSecrets !== secrets) {
+    coordinator = createHostAuthCoordinator({
+      secrets,
+      log: deferredAuthLog,
+    });
+    coordinatorSecrets = secrets;
+  }
 }
 
 export function getCliAuthProvider() {
