@@ -34,17 +34,6 @@ interface AgentGroups {
 type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
 type AgentDelegationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
 
-export function agentDescription(agent: AgentOptionData): string {
-  return [
-    isDelegatingAgent(agent) ? 'delegating' : undefined,
-    agent.isRemote ? 'remote' : undefined,
-    agent.isCustom ? 'custom' : undefined,
-    agent.description,
-  ]
-    .filter((part) => part != null && part.length > 0)
-    .join('; ');
-}
-
 function isDelegatingAgent(agent: AgentDelegationFlag): boolean {
   return agent.isOrchestrator === true;
 }
@@ -185,7 +174,6 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const items = agents.toolUse.map((agent) => ({
     value: agent.value,
     label: formatAgentOptionLabel(agent.label),
-    description: agentDescription(agent),
   }));
   // The current agent may be stored as a canonical key (`source:name`) or a
   // bare name; rows are keyed by canonical value, so match Select in that same
@@ -199,7 +187,6 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const workflowRows = agents.workflow.map((agent) => ({
     value: agent.value,
     name: formatAgentOptionLabel(agent.label),
-    description: agentDescription(agent),
   }));
   const selectWindow = agentSelectWindow({
     availableRows: props.availableRows,
@@ -277,9 +264,6 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
             <Text key={workflow.value} wrap="truncate-end">
               {'  '}
               {workflow.name}
-              {workflow.description ? (
-                <Text dimColor>{` — ${workflow.description}`}</Text>
-              ) : null}
             </Text>
           ))}
           {selectWindow.showWorkflowOverflow ? (
