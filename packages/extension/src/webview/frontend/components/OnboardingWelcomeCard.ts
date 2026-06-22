@@ -122,8 +122,8 @@ export class OnboardingWelcomeCard extends LitElement {
         ${waIcon('wand-magic-sparkles', { slot: 'icon' })}
         <span class="card-title">${ONBOARDING_CARD_TITLE}</span>
         <p class="card-copy">
-          Choose a credential first. TeXRA will start the setup assistant once
-          it can call a model.
+          Choose how TeXRA should call models. After sign-in, the setup
+          assistant checks this project and starts your first polish.
         </p>
         <div class="choices">
           <div class="choice">

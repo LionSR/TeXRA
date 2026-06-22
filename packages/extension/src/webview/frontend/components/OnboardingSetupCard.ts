@@ -71,7 +71,7 @@ export class OnboardingSetupCard extends LitElement {
     return html`
       <wa-callout id="onboardingSetupCard" variant="brand">
         ${waIcon('rocket', { slot: 'icon' })}
-        <span class="title">Ready for setup</span>
+        <span class="title">Credential ready</span>
         <p class="copy">${ONBOARDING_NARRATIVE}</p>
         <div class="actions">
           <wa-button
