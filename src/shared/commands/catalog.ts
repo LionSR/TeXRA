@@ -234,6 +234,12 @@ export const commandCatalog = [
     icon: '$(sign-in)',
   },
   {
+    id: 'texra.auth.chatgpt.signIn',
+    title: 'Sign In with ChatGPT Subscription',
+    category: 'TeXRA',
+    icon: '$(comment-discussion)',
+  },
+  {
     id: 'texra.auth.signOut',
     title: 'Sign Out',
     category: 'TeXRA',

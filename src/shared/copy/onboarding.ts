@@ -37,4 +37,4 @@ export const ONBOARDING_CHOICE_SKIP_LABEL = 'Skip for now';
  * docs lede; product surfaces express it through behavior, not this sentence.
  */
 export const ONBOARDING_NARRATIVE =
-  'Setup is the doorman, polish is the demo, the orchestrator is the habit.';
+  'Run setup once to check LaTeX, apply the right agent team, and start your first polish.';
