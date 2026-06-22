@@ -126,11 +126,18 @@ export function createDesktopOnboardingIpc(
     // completion, which must NOT block the serialized funnel-refresh chain —
     // otherwise a later "skip setup" / sign-out / credential-removal refresh
     // would queue behind the entire setup run, leaving the card stuck on 'setup'.
-    void Promise.resolve(options.kickoffSetup?.()).catch(() => {
-      // Reset the guard so a later credential change can re-trigger setup; the
-      // kickoff handler already surfaced the error to the user.
-      setupKickoffStarted = false;
-    });
+    void Promise.resolve(options.kickoffSetup?.())
+      .catch(() => {
+        // Swallow — the kickoff handler already surfaced the error to the user.
+      })
+      .finally(() => {
+        // Clear the guard once the run settles (success or failure), not only on
+        // error: while it's in flight the guard blocks a concurrent second run,
+        // but afterwards a manual "Run Setup" click or a later credential cycle
+        // must be able to launch setup again (otherwise the guard would stay
+        // stuck for the window's lifetime after the first kickoff).
+        setupKickoffStarted = false;
+      });
   }
 
   function refreshOnboardingFunnel(): Promise<void> {
