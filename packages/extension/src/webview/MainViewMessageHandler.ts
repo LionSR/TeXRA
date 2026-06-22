@@ -353,6 +353,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
               this.viewName,
             );
             break;
+          default: {
+            const exhaustive: never = m.action;
+            throw new Error(`Unhandled getting started action: ${exhaustive}`);
+          }
         }
       },
       [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP]: async () => {
