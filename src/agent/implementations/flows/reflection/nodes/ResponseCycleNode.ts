@@ -11,7 +11,8 @@ import type {
   ConversationRoundStateSnapshot,
 } from '@agent/core/execution/AgentState';
 import { ensureError, normalizeProviderError } from '@common/errors';
-import type { AgentFileLocation } from '@shared/schemas';
+import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
+import { toRetryErrorInfo } from '@shared/schemas';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
@@ -30,7 +31,12 @@ interface CyclePrepInput {
 type CycleOutcome =
   | { outcome: 'completed'; endTurn: boolean }
   | { outcome: 'cancelled' }
-  | { outcome: 'failed'; error: Error; userRetryable?: boolean };
+  | {
+      outcome: 'failed';
+      error: Error;
+      userRetryable: boolean;
+      lastError?: RetryErrorInfo;
+    };
 
 export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowShared,
@@ -112,6 +118,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
           outcome: 'failed',
           error: new Error(cycleShared.lastError.message),
           userRetryable: cycleShared.lastError.userRetryable,
+          lastError: cycleShared.lastError,
         };
       }
       if (cycleShared.shouldStop && !cycleShared.endTurn) {
@@ -126,6 +133,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
         outcome: 'failed',
         error: ensureError(error),
         userRetryable: formatted.userRetryable,
+        lastError: toRetryErrorInfo(formatted),
       };
     }
   }
@@ -135,7 +143,12 @@ export class ResponseCycleNode<C = unknown> extends Node<
     error: Error,
   ): Promise<CycleOutcome> {
     const formatted = normalizeProviderError(error);
-    return { outcome: 'failed', error, userRetryable: formatted.userRetryable };
+    return {
+      outcome: 'failed',
+      error,
+      userRetryable: formatted.userRetryable,
+      lastError: toRetryErrorInfo(formatted),
+    };
   }
 
   async post(
@@ -149,9 +162,9 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     if (execRes.outcome === 'failed') {
       logger.error(`Response cycle failed: ${execRes.error.message}`);
-      shared.lastError = {
+      shared.lastError = execRes.lastError ?? {
         message: execRes.error.message,
-        userRetryable: execRes.userRetryable ?? false,
+        userRetryable: execRes.userRetryable,
       };
       shared.continueRounds = false;
       shared.endTurn = false;
