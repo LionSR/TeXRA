@@ -1,34 +1,46 @@
-// Third-party imports
-
-// Local imports - agent
-import type { AgentConfigInput } from '@agent/core/definition/AgentConfig';
-
 // Local imports - shared schemas
-import {
-  MULTIPLE_DOCUMENT_FILE_TYPES,
-  type CheckboxValues,
-  type MultiFiles,
-  type SessionType,
-  type SingleFiles,
-} from '@shared/schemas';
-import type { ToolConfigSchema } from '@shared/schemas/toolConfig';
+import { MULTIPLE_DOCUMENT_FILE_TYPES } from '../fileTypes';
+import type { ToolConfigSchema } from '../toolConfig';
+import type {
+  CheckboxValues,
+  MultiFiles,
+  SessionType,
+  SingleFiles,
+} from './state';
+
+// Third-party imports
 import type { z } from 'zod';
 
 /**
  * Message shape from the main view for agent execution.
  * ToolConfig fields are sent flat from the UI form.
  */
-export type MainViewExecuteMessage = Omit<AgentConfigInput, 'mediaFiles'> & {
+type MainViewExecuteFiles = {
+  readonly inputFiles?: string[];
+  readonly contextFiles?: string[];
+  readonly mediaFiles?: (string | null)[];
+  readonly outputFiles?: string[];
+  readonly editedFile?: string;
+};
+
+export type MainViewExecuteMessage = MainViewExecuteFiles & {
+  readonly agent?: string;
+  readonly model?: string;
+  readonly instruction?: string;
+  readonly displayInstruction?: string | null;
   /** UI toggle indicating tool-use vs workflow agent. */
-  isToolUseAgent?: boolean;
+  readonly isToolUseAgent?: boolean;
   /** File used as the base/reference for diff-oriented flows. */
-  baseFile?: string;
-  /** Media files may contain nulls from UI and are filtered during processing. */
-  mediaFiles?: (string | null)[];
-  inputFilesActive?: boolean;
-  contextFilesActive?: boolean;
-  mediaFilesActive?: boolean;
-  outputFilesActive?: boolean;
+  readonly baseFile?: string;
+  readonly inputFilesActive?: boolean;
+  readonly contextFilesActive?: boolean;
+  readonly mediaFilesActive?: boolean;
+  readonly outputFilesActive?: boolean;
+  readonly editedFiles?: string[];
+  readonly memories?: string[];
+  readonly workingDirectory?: string | null;
+  readonly cliOutputFile?: string | null;
+  readonly cliMultiAgentPresetId?: string | null;
 } & z.input<typeof ToolConfigSchema>;
 
 export interface MainViewExecutionFormState {

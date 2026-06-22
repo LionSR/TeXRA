@@ -15,6 +15,7 @@ export {
   serializeError,
   type SerializedError,
 } from './stringCore';
+export { toErrorMessage, ensureError } from './errorCore';
 export {
   isObject,
   isFiniteNumber,
