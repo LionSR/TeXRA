@@ -1,6 +1,12 @@
 import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
+import {
+  ONBOARDING_CHOICE_CHATGPT,
+  ONBOARDING_CHOICE_SIGN_IN,
+  ONBOARDING_NARRATIVE,
+} from '@shared/copy/onboarding';
+
 /**
  * No-workspace provider for `texra.mainView`. Keeping the same view id across
  * workspace states is required for VS Code to persist the user's chosen
@@ -22,6 +28,7 @@ function renderWelcomeHtml(): string {
   const openFolder = 'command:workbench.action.files.openFolder';
   const cloneRepo = 'command:git.clone';
   const createSample = 'command:texra.createSampleProject';
+  const openWalkthrough = 'command:texra.openGettingStarted';
   const docs = 'https://texra.ai';
   // CSP nonces must be unpredictable — nanoid is crypto-random.
   const nonce = nanoid();
@@ -44,11 +51,21 @@ function renderWelcomeHtml(): string {
       padding: 16px;
       line-height: 1.5;
     }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.25rem;
+      line-height: 1.25;
+    }
     p { margin: 0 0 12px; }
     .muted { color: color-mix(in srgb, var(--vscode-foreground) 70%, transparent); }
-    ol { margin: 0 0 12px; padding-left: 22px; }
+    ol { margin: 0 0 14px; padding-left: 22px; }
     li { margin-bottom: 6px; }
-    .actions { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
+    .actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+      margin: 16px 0;
+    }
     a {
       color: var(--vscode-textLink-foreground);
       text-decoration: none;
@@ -57,27 +74,57 @@ function renderWelcomeHtml(): string {
       color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
       text-decoration: underline;
     }
+    .button {
+      display: block;
+      border: 1px solid var(--vscode-button-border, transparent);
+      border-radius: 4px;
+      padding: 7px 10px;
+      text-align: center;
+      color: var(--vscode-button-foreground);
+      background: var(--vscode-button-background);
+    }
+    .button:hover {
+      color: var(--vscode-button-foreground);
+      background: var(--vscode-button-hoverBackground);
+      text-decoration: none;
+    }
+    .secondary {
+      color: var(--vscode-button-secondaryForeground);
+      background: var(--vscode-button-secondaryBackground);
+    }
+    .secondary:hover {
+      color: var(--vscode-button-secondaryForeground);
+      background: var(--vscode-button-secondaryHoverBackground);
+    }
+    .link-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
+  <h1>Welcome to TeXRA</h1>
   <p>
-    <strong>Welcome to TeXRA</strong> — an AI theorist. It coordinates
+    TeXRA coordinates
     specialized agents to edit manuscripts, derive results, draw figures,
     and verify proofs.
   </p>
-  <p><strong>To get started:</strong></p>
+  <p>${ONBOARDING_NARRATIVE}</p>
   <ol>
-    <li>Open a folder containing your LaTeX project — or create the bundled
-        sample project if you just want to try TeXRA.</li>
-    <li>TeXRA will reload and walk you through a credential: Researcher
-        Access sign-in, ChatGPT subscription, or a provider API key.</li>
-    <li>Pick an input file, choose the orchestrator, and hit Execute.</li>
+    <li>Open a single-folder workspace containing your LaTeX project.</li>
+    <li>Choose ${ONBOARDING_CHOICE_SIGN_IN.label}, ${ONBOARDING_CHOICE_CHATGPT.label}, or a provider API key.</li>
+    <li>Let the setup assistant check the project and launch the first run.</li>
   </ol>
   <div class="actions">
-    <a href="${openFolder}">Open Folder</a>
-    <a href="${createSample}">Try the Sample Project</a>
-    <a href="${cloneRepo}">Clone Repository</a>
-    <a href="${docs}">Read the docs</a>
+    <a class="button" href="${openFolder}">Open Folder</a>
+    <a class="button secondary" href="${createSample}">Try the Sample Project</a>
+  </div>
+  <div class="link-list">
+    <a href="${openWalkthrough}">Open walkthrough</a>
+    <a href="${cloneRepo}">Clone repository</a>
+    <a href="${docs}">Read docs</a>
   </div>
   <p class="muted">
     TeXRA needs a single-folder workspace. Multi-root workspaces aren't
