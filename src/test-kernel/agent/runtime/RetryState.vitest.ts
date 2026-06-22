@@ -58,7 +58,7 @@ describe('RetryState', () => {
   it('updates the injected stream status owner during manual retry', async () => {
     const streamId = 'retry-state-owner' as StreamTabId;
     const streamStatus = new StreamStatusRegistry();
-    const waitForRetry = vi.fn<() => Promise<RetryResult>>();
+    const waitForRetry = vi.fn<TestRetryServices['waitForRetry']>();
     const node = new ExposedRetryNode().setServices({
       streamId,
       runtimeHost: noopAgentRuntimeHost,
@@ -97,7 +97,7 @@ describe('RetryState', () => {
     async (action) => {
       const streamId = `retry-state-${action}` as StreamTabId;
       const streamStatus = new StreamStatusRegistry();
-      const waitForRetry = vi.fn<() => Promise<RetryResult>>();
+      const waitForRetry = vi.fn<TestRetryServices['waitForRetry']>();
       const node = new ExposedRetryNode().setServices({
         streamId,
         runtimeHost: noopAgentRuntimeHost,
