@@ -7,14 +7,15 @@
 
 > **Verification status.** The schema below is **verified against the installed
 > `@google/genai@2.9.0` type definitions** (`node_modules/.../@google/genai/dist/genai.d.ts`)
-> — the exact version already pinned in `package.json:108` and
-> `packages/extension/package.json:1713`. The Interactions surface ships in that
-> version, so **no dependency bump is required to start.** Google's official
+> — the version currently resolved in `pnpm-lock.yaml`. The package manifests
+> already depend on `@google/genai` at `^2.9.0` (`package.json:108` and
+> `packages/extension/package.json:1713`), so **no dependency bump is required to
+> start.** Google's official
 > Interactions overview was reachable on 2026-06-22 and confirms GA status,
 > recommended use for new projects, supported model/agent IDs, and storage
-> retention. Pricing and Flex/Priority cost deltas remain `⚠️ confirm at impl
-time`. Everything about the **SDK request/response shape is byte-verified**
-> and cited to `genai.d.ts` line numbers.
+> retention. Pricing and Flex/Priority cost deltas still need implementation-time
+> confirmation. Everything about the **SDK request/response shape is
+> byte-verified** and cited to `genai.d.ts` line numbers.
 
 ## Summary
 
@@ -260,10 +261,11 @@ JSON** — trust the `.d.ts` where they differ.
   `store:true` + `previous_interaction_id` for the payload win. (Resolves the
   open question in risk #2 — both are first-class.)
 - **Convenience accessors exist** on the returned interaction: `output_text`
-  (`:7053`), `output_image?: ImageContent` (`:7057`), `output_audio?:
-AudioContent` (`:7061`). `output_text` joins only the _trailing_ `TextContent`
-  run, so anything interleaved with thoughts/tools/images still requires walking
-  `steps` — which TeXRA does anyway (thinking is separated, tools are handled).
+  (`:7053`), `output_image?: ImageContent` (`:7057`), and
+  `output_audio?: AudioContent` (`:7061`). `output_text` joins only the
+  _trailing_ `TextContent` run, so anything interleaved with
+  thoughts/tools/images still requires walking `steps` — which TeXRA does anyway
+  (thinking is separated, tools are handled).
 - **Function-result round-trip:** submit the result as a **new** `create` call
   with `previous_interaction_id` and `input` = a `function_result`
   `{ type:"function_result", call_id: <call.id>, name, result:[{type:"text",text}] }`.
@@ -386,13 +388,13 @@ schema; no new ports.
    a resend-able local transcript. The guide confirms `store` makes both modes
    first-class: `store:false` = stateless drop-in parity (send full `Step[]` each
    round; simplest, keeps compaction working unchanged) vs `store:true` (default)
-   - `previous_interaction_id` (payload win, but the server — not TeXRA — then
-     owns compaction, and behaviour must be defined when the stored interaction has
-     expired or a run is restored from old history). Official retention is 55 days
-     on paid tier / 1 day on free tier; note `store:false` is incompatible with
-     `background=true` and with later `previous_interaction_id` use. **Recommend
-     `store:false` for v0** to preserve the existing history/compaction contract,
-     treating server-side continuation (+ background) as a later optimisation.
+   with `previous_interaction_id` (payload win, but the server — not TeXRA — then
+   owns compaction, and behaviour must be defined when the stored interaction has
+   expired or a run is restored from old history). Official retention is 55 days
+   on paid tier / 1 day on free tier; note `store:false` is incompatible with
+   `background=true` and with later `previous_interaction_id` use. **Recommend
+   `store:false` for v0** to preserve the existing history/compaction contract,
+   treating server-side continuation (+ background) as a later optimisation.
 3. **GA service with active SDK churn.** The official overview marks the API GA,
    and the types ship in the pinned SDK version; `response_mime_type` is already
    deprecated in favour of `response_format`, signalling churn. Pin/snapshot the
