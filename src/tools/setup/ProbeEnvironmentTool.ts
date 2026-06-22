@@ -47,13 +47,13 @@ async function checkTool(name: string): Promise<ToolStatus> {
  * Read-only probe of the host environment.
  *
  * Returns a single structured JSON document covering OS, PATH, package
- * manager, core TeXRA dependencies, LaTeX Workshop extension, API-key
- * presence, and Researcher Access status. No approval gate — purely
- * read-only, akin to `ls` / `glob`.
+ * manager, core TeXRA dependencies, LaTeX Workshop extension, literal API-key
+ * presence, broader usable credential status, and Researcher Access status.
+ * No approval gate — purely read-only, akin to `ls` / `glob`.
  */
 export class ProbeEnvironmentTool extends defineTool({
   name: 'probe_environment',
-  description: `Probe the host environment and return a structured JSON summary covering OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, gm/magick, texcount, latexdiff), the LaTeX Workshop VS Code extension, per-provider API-key presence (names only — secrets are never read), and Researcher Access sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
+  description: `Probe the host environment and return a structured JSON summary covering OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, gm/magick, texcount, latexdiff), the LaTeX Workshop VS Code extension, per-provider API-key presence (names only — secrets are never read), broader usable credential status, and Researcher Access sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
   schema: ProbeEnvironmentInputSchema,
 }) {
   protected async execute(_input: ProbeInput): Promise<ToolResult> {
@@ -66,33 +66,39 @@ export class ProbeEnvironmentTool extends defineTool({
     const extendedPath = extendEnvPath();
     const pm = detectPackageManager();
 
-    const [coreTools, optionalTools, apiKeys, anyKeySet, auth, githubToken] =
-      await Promise.all([
-        Promise.all(PROBED_CORE_TOOLS.map(checkTool)),
-        Promise.all(OPTIONAL_TOOLS.map(checkTool)),
-        Promise.all(
-          // Use `hasUsableApiKey` so the per-provider report matches
-          // what the setup-launch path considers a working credential —
-          // a stale `PROVIDER_API_KEY=""` env var must not surface as
-          // `hasKey: true` and mislead the agent's credential planning.
-          platform.secrets.providers.map(async (provider) => ({
-            provider,
-            hasKey: await platform.secrets
-              .hasUsableApiKey(provider)
-              .catch(() => false),
-          })),
-        ),
-        platform.secrets.anyApiKeyExists().catch((err) => {
-          throw new ToolError(
-            `Failed to probe credential status: ${toErrorMessage(err)}`,
-            { cause: err },
-          );
-        }),
-        platform.auth.getStatus().catch(() => ({
-          authenticated: false as const,
+    const [
+      coreTools,
+      optionalTools,
+      apiKeys,
+      hasUsableCredential,
+      auth,
+      githubToken,
+    ] = await Promise.all([
+      Promise.all(PROBED_CORE_TOOLS.map(checkTool)),
+      Promise.all(OPTIONAL_TOOLS.map(checkTool)),
+      Promise.all(
+        // Use `hasUsableApiKey` so the per-provider report matches
+        // what the setup-launch path considers a working credential —
+        // a stale `PROVIDER_API_KEY=""` env var must not surface as
+        // `hasKey: true` and mislead the agent's credential planning.
+        platform.secrets.providers.map(async (provider) => ({
+          provider,
+          hasKey: await platform.secrets
+            .hasUsableApiKey(provider)
+            .catch(() => false),
         })),
-        platform.secrets.gitHubTokenExists().catch(() => 'none' as const),
-      ]);
+      ),
+      platform.secrets.anyUsableCredentialExists().catch((err) => {
+        throw new ToolError(
+          `Failed to probe credential status: ${toErrorMessage(err)}`,
+          { cause: err },
+        );
+      }),
+      platform.auth.getStatus().catch(() => ({
+        authenticated: false as const,
+      })),
+      platform.secrets.gitHubTokenExists().catch(() => 'none' as const),
+    ]);
 
     const missingCore = coreTools
       .filter((t) => !t.installed && t.name !== 'gm' && t.name !== 'magick')
@@ -135,7 +141,7 @@ export class ProbeEnvironmentTool extends defineTool({
         // model right now" signal — direct key, ChatGPT subscription,
         // or server-side Researcher Access. Kept as a separate field
         // so the agent can reason about API keys separately.
-        hasAnyUsableCredential: anyKeySet,
+        hasAnyUsableCredential: hasUsableCredential,
         apiKeys,
         researcherAccess: {
           authenticated: auth.authenticated,
