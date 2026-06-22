@@ -7,7 +7,7 @@ import {
   planLatexdiffVCPack,
   planMerge,
   planPackClean,
-} from '@shared/schemas/mainView';
+} from '@shared/mainView';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 
 // ============================================================

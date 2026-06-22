@@ -8,11 +8,11 @@ import {
 } from '@agent/core/execution/executionRequests';
 
 // Local imports - shared schemas
+import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
 } from '@shared/schemas/toolConfig';
-import type { MainViewExecuteMessage } from '@shared/schemas/mainView';
 
 // Local imports - utilities
 import { filterNotNull } from '@utils/core';
