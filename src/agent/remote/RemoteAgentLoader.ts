@@ -1,3 +1,4 @@
+import ky, { HTTPError } from 'ky';
 import yaml from 'yaml';
 import { z } from 'zod';
 
@@ -20,6 +21,7 @@ import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
 
 import { filterNotNull, filterNotNullish } from '@utils/core';
+import { errorDataToString } from './errorData';
 import {
   RemoteAgentListItemSchema,
   type RemoteAgentListItem,
@@ -29,6 +31,8 @@ import { fetchRemoteAgentConfigYaml } from './remoteAgentConfigClient';
 
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
+
+const FETCH_TIMEOUT_MS = 30_000;
 
 const REMOTE_AGENT_LIST_COLUMNS =
   'id, name, description, visibility, tools, agent_category';
@@ -207,31 +211,46 @@ async function fetchRemoteAgentListRows(
   url.searchParams.set('select', columns);
   url.searchParams.set('order', 'name.asc');
 
-  const response = await fetch(url, {
-    headers: {
-      apikey: SUPABASE_CONFIG.publicKey,
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-    },
-  });
-
-  if (response.ok) {
-    return {
-      data: (await response.json()) as RemoteAgentListRow[],
-      error: null,
-    };
+  try {
+    // retry: 0 preserves the old fetch's fail-fast contract — listRemoteAgents
+    // is awaited by registry/settings refreshes and treats failure as an empty
+    // list, so ky's default GET retries (which honor Retry-After on 429/503)
+    // would block the UI rather than surfacing immediately. AbortSignal.timeout
+    // (vs ky's header-only `timeout`) also guards the .json() body read.
+    const data = await ky
+      .get(url, {
+        headers: {
+          apikey: SUPABASE_CONFIG.publicKey,
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+        retry: 0,
+        timeout: false,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      })
+      .json<RemoteAgentListRow[]>();
+    return { data, error: null };
+  } catch (error) {
+    if (error instanceof HTTPError) {
+      // ky v2 auto-consumes the response body into error.data;
+      // error.response body methods are not usable after that.
+      const fallbackMessage =
+        `${error.response.status} ${error.response.statusText}`.trim();
+      const rawBody = errorDataToString(error.data);
+      const parsedError = parseRemoteAgentListErrorBody(rawBody ?? '');
+      return {
+        data: null,
+        error: {
+          ...parsedError,
+          message:
+            parsedError.message ||
+            fallbackMessage ||
+            'remote list request failed',
+        },
+      };
+    }
+    throw error;
   }
-
-  const fallbackMessage = `${response.status} ${response.statusText}`.trim();
-  const rawBody = await response.text().catch(() => '');
-  const error = parseRemoteAgentListErrorBody(rawBody);
-  return {
-    data: null,
-    error: {
-      ...error,
-      message: error.message || fallbackMessage || 'remote list request failed',
-    },
-  };
 }
 
 function parseRemoteAgentListErrorBody(
