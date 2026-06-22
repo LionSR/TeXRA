@@ -22,7 +22,6 @@ import {
 import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
-import { flexibleFS } from '@utils/files';
 import { extractMimeSubtype, joinNonEmpty } from '@utils/text/stringUtils';
 import {
   computeOpenRouterPrice,
@@ -30,7 +29,7 @@ import {
   type OpenRouterPricingConfig,
 } from './openRouterUsage';
 import { tagOpenRouterSdkError } from './openRouterSdkError';
-import { prepareExistingOutputContent } from '../utils/fileContentUtils';
+import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
 
 // Local file imports
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
@@ -778,68 +777,38 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, ChatMessages[]]> {
-    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
-      if (prefill.length === 0) {
-        this.logger.debug(
-          'No prefill provided; skipping pseudo-prefill instruction',
-        );
-        return [false, messages];
-      }
-      const pseudoPrefillMsg = `Organize your response with xml tags. Start your response with:\n${prefill}`;
-      const lastMessage = messages.at(-1);
-      if (lastMessage && Array.isArray(lastMessage.content)) {
-        (lastMessage.content as ChatContentItems[]).push({
-          type: 'text',
-          text: pseudoPrefillMsg,
-        });
-      } else if (lastMessage && typeof lastMessage.content === 'string') {
-        (lastMessage as ChatUserMessage).content = [
-          { type: 'text', text: lastMessage.content },
-          { type: 'text', text: pseudoPrefillMsg },
-        ];
-      }
-      this.logger.debug(`Added pseudo prefill: "${pseudoPrefillMsg}"`);
-      return [false, messages];
-    }
-
-    const { fileContent } = await prepareExistingOutputContent(
-      outputLocation,
-      workspaceState,
-      this.logger,
-    );
-
-    // Push assistant message with file content
-    messages.push({
-      role: 'assistant',
-      content: [{ type: 'text', text: fileContent }],
-    } as ChatMessages);
-
-    // If the file already contains the end tag, the prior run finished — no model call needed
-    if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.debug(
-        'End tag detected - skipping model call (response already added above)',
-      );
-      return [true, messages];
-    }
-
-    this.logger.warn(
-      'Output file exists but no end tag found - continuing from file',
-    );
-
-    if (!fileContent.includes(prefill)) {
-      workspaceState.assembly.accumulatedOutput = prefill + fileContent;
-      await flexibleFS.write(
-        outputLocation,
-        workspaceState.assembly.accumulatedOutput,
-      );
-    }
-    this.addContinueMessageWithoutPrefill(
+    return initializeOpenAiCompatibleOutputAndPrefill(
+      {
+        logger: this.logger,
+        appendPseudoPrefill: (msgs, pseudoPrefillMsg) => {
+          const lastMessage = msgs.at(-1);
+          if (lastMessage && Array.isArray(lastMessage.content)) {
+            (lastMessage.content as ChatContentItems[]).push({
+              type: 'text',
+              text: pseudoPrefillMsg,
+            });
+          } else if (lastMessage && typeof lastMessage.content === 'string') {
+            (lastMessage as ChatUserMessage).content = [
+              { type: 'text', text: lastMessage.content },
+              { type: 'text', text: pseudoPrefillMsg },
+            ];
+          }
+        },
+        pushAssistantText: (msgs, text) => {
+          msgs.push({
+            role: 'assistant',
+            content: [{ type: 'text', text }],
+          } as ChatMessages);
+        },
+        addContinue: (msgs, ws, setting) =>
+          this.addContinueMessageWithoutPrefill(msgs, ws, setting),
+      },
+      agentSetting,
       messages,
       workspaceState,
-      agentSetting,
+      outputLocation,
+      prefill,
     );
-
-    return [false, messages];
   }
 
   updateMessageContentWithPrefill(
