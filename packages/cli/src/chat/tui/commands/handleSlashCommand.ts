@@ -125,7 +125,7 @@ export async function handleTuiSlashCommand(
         openCanonicalSlashForm('login', registered, rest);
         return true;
       }
-      await loginFromChat(rest);
+      await loginFromChat(rest, context.cliContext);
       return true;
     case 'logout':
       await logoutFromChat();

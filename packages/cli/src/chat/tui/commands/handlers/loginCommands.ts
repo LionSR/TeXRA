@@ -4,8 +4,10 @@ import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import {
   chatGptAccountLabel,
+  shouldUseChatGptDeviceCode,
   signInCliChatGpt,
 } from '@cli/runtime/chatgptLogin';
+import { type CliContext } from '@cli/runtime/cliContext';
 import {
   githubSelectAccountWarning,
   parseChatLoginSlashArgs,
@@ -96,21 +98,28 @@ async function loginToTexraIncludedAccess(
   );
 }
 
-export async function loginFromChat(input: string): Promise<void> {
+export async function loginFromChat(
+  input: string,
+  context?: CliContext,
+): Promise<void> {
   const args = parseChatLoginSlashArgs(input);
   if (!args) {
     appendLocalAssistantTranscript(CHAT_LOGIN_USAGE);
     return;
   }
 
-  appendLocalAssistantTranscript(loginStartMessage(args));
+  const loginArgs =
+    args.target === 'chatgpt' && context
+      ? { ...args, device: shouldUseChatGptDeviceCode(context, args) }
+      : args;
+  appendLocalAssistantTranscript(loginStartMessage(loginArgs));
 
   try {
-    if (args.target === 'chatgpt') {
-      await loginToChatGptSubscription(args);
+    if (loginArgs.target === 'chatgpt') {
+      await loginToChatGptSubscription(loginArgs);
       return;
     }
-    await loginToTexraIncludedAccess(args);
+    await loginToTexraIncludedAccess(loginArgs);
   } catch (error: unknown) {
     appendLocalAssistantTranscript(toErrorMessage(error));
   }

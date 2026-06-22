@@ -89,6 +89,7 @@ import {
 } from './commands/handlers/agentModelCommands';
 import { applyCliApiModeSelection } from './commands/handlers/apiModeCommands';
 import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
+import { loginFromChat } from './commands/handlers/loginCommands';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
@@ -401,6 +402,7 @@ export async function runChat(
   // lazily so the closures it captures (interruptActive, resetSessionForClear,
   // resumeAgentRun) are all defined before the first use.
   const slashCommandContext = (): SlashCommandContext => ({
+    cliContext: context,
     session,
     commandName: context.commandName,
     cwd: context.cwd,
@@ -820,6 +822,7 @@ export async function runChat(
       applyCliModelSelection(nextModel, slashCommandContext()),
     onApiModeSelect: (nextMode) =>
       applyCliApiModeSelection(nextMode, slashCommandContext()),
+    onLoginSelect: (value) => loginFromChat(value, context),
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: activateSkillForNextMessage,
     onResumeSelect: resumeAgentRun,

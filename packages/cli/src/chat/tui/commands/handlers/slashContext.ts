@@ -12,6 +12,7 @@ import { type SlashCommand } from '../slashRegistry';
 
 /** Shared context every slash-command handler receives from the chat TUI. */
 export interface SlashCommandContext {
+  readonly cliContext: CliContext;
   readonly session: TuiSession;
   readonly commandName?: string;
   readonly cwd: CliContext['cwd'];
