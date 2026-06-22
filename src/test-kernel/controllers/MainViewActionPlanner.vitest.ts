@@ -189,7 +189,7 @@ describe('planCompare', () => {
       baseFile: 'old.tex',
       editedFile: 'new.tex',
     });
-    expect(plan.infoText).toBe('');
+    expect(plan).not.toHaveProperty('infoText');
   });
 
   it('uses ACCEPT_EDITED command when provided', () => {

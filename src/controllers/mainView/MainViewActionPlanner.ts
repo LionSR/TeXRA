@@ -13,12 +13,17 @@ export interface ActionValidationError {
   readonly message: string;
 }
 
-export interface ActionSuccess<
+interface CommandSuccess<
   T extends Record<string, unknown> = Record<string, unknown>,
 > {
   readonly valid: true;
   readonly command: string;
   readonly payload: T;
+}
+
+export interface ActionSuccess<
+  T extends Record<string, unknown> = Record<string, unknown>,
+> extends CommandSuccess<T> {
   readonly infoText: string;
 }
 
@@ -133,10 +138,14 @@ export type ComparePayload = {
   editedFile: string;
 };
 
+export type CompareActionResult =
+  | CommandSuccess<ComparePayload>
+  | ActionValidationError;
+
 export function planCompare(
   state: CompareState,
   command: string,
-): ActionResult<ComparePayload> {
+): CompareActionResult {
   if (!state.baseFile || !state.editedFile) {
     return {
       valid: false,
@@ -151,7 +160,6 @@ export function planCompare(
       baseFile: state.baseFile,
       editedFile: state.editedFile,
     },
-    infoText: '',
   };
 }
 
