@@ -31,6 +31,8 @@ const HANDLERS = {
     awaitTrue(actions.indentTeX()),
   'texra.auth.signIn': (actions: ExtensionCommandActions) =>
     awaitTrue(actions.signIn()),
+  'texra.auth.chatgpt.signIn': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.signInChatGpt()),
   'texra.auth.signOut': (actions: ExtensionCommandActions) =>
     awaitTrue(actions.signOut()),
   'texra.auth.viewProfile': (actions: ExtensionCommandActions) =>
@@ -163,6 +165,7 @@ function makeActions(): ExtensionCommandActions {
     cleanOutput: vi.fn().mockResolvedValue(undefined),
     indentTeX: vi.fn().mockResolvedValue(undefined),
     signIn: vi.fn().mockResolvedValue(false),
+    signInChatGpt: vi.fn().mockResolvedValue(false),
     signOut: vi.fn().mockResolvedValue(undefined),
     viewProfile: vi.fn().mockResolvedValue(undefined),
     runSetupAssistant: vi.fn().mockResolvedValue(undefined),
@@ -209,6 +212,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     ['texra.cleanBuild', 'cleanBuild'],
     ['texra.indentTeX', 'indentTeX'],
     ['texra.auth.signIn', 'signIn'],
+    ['texra.auth.chatgpt.signIn', 'signInChatGpt'],
     ['texra.auth.signOut', 'signOut'],
     ['texra.auth.viewProfile', 'viewProfile'],
     ['texra.runSetupAssistant', 'runSetupAssistant'],

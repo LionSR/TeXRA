@@ -1,11 +1,12 @@
 // First-run authentication onboarding for the interactive `texra` CLI.
 //
 // Replaces today's dead-end (a launcher full of "login required" models that
-// errors out when the user picks chat) with a 2-choice picker, modeled on
+// errors out when the user picks chat) with a credential picker, modeled on
 // Claude Code / Gemini CLI / aider: the no-key included-relay login is the
-// recommended default when both modes are viable, bring-your-own provider key is
-// second, and skip is explicit. After credentials are set the caller re-reads
-// availability in the SAME process (the relay/key paths invalidate the relevant
+// recommended default when both modes are viable, ChatGPT subscription and
+// bring-your-own provider key are first-class alternatives, and skip is
+// explicit. After credentials are set the caller re-reads availability in the
+// SAME process (the relay/subscription/key paths invalidate the relevant
 // caches), so the launcher/chat continues with real models — no restart.
 //
 // TTY-only: the gate returns immediately in headless / non-TTY / dumb-terminal
@@ -24,10 +25,12 @@ import {
   setOnboardingDeclined,
 } from '@controllers/onboarding/onboardingFunnel';
 import { listExecutions } from '@agent/storage';
+import { setPreferCodexSubscription, type CodexSession } from '@auth/codex';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { type OAuthProvider } from '@auth/sharedConfig';
 import { type SupabaseSession } from '@auth/SupabaseSession';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -35,6 +38,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   ONBOARDING_CARD_TITLE,
   ONBOARDING_CHOICE_API_KEY,
+  ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_CHOICE_SIGN_IN,
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
@@ -45,6 +49,7 @@ import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { Select, type SelectItem } from '../chat/tui/ui/Select';
 import { type CliApiMode } from '../runtime/apiAccessMode';
+import { chatGptAccountLabel, signInCliChatGpt } from '../runtime/chatgptLogin';
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
@@ -257,6 +262,7 @@ type Screen =
   | 'relay-provider'
   | 'relay-progress'
   | 'relay-device-progress'
+  | 'chatgpt-progress'
   | 'key-provider'
   | 'key-entry';
 
@@ -289,9 +295,14 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
       <PickerStep
         subtitle={props.pickerSubtitle}
         items={props.pickerItems}
+        error={error}
         onRelay={() => {
           setError(undefined);
           setScreen('relay-provider');
+        }}
+        onChatGpt={() => {
+          setError(undefined);
+          setScreen('chatgpt-progress');
         }}
         onKey={() => {
           setError(undefined);
@@ -340,6 +351,28 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
       <RelayProgressStep
         provider={relayProvider}
         noBrowser={noBrowser}
+        onSuccess={onSuccess}
+        onError={onError}
+      />
+    );
+  }
+
+  if (screen === 'chatgpt-progress') {
+    const onSuccess = (session: CodexSession): void => {
+      const label = chatGptAccountLabel(session);
+      finish({
+        configured: true,
+        declined: false,
+        summary: `Signed in with ChatGPT as ${label}. ChatGPT subscription enabled for Codex models.`,
+      });
+    };
+    const onError = (message: string): void => {
+      setError(message);
+      setScreen('picker');
+    };
+    return (
+      <ChatGptProgressStep
+        device={isLikelyRemoteSession()}
         onSuccess={onSuccess}
         onError={onError}
       />
@@ -429,18 +462,18 @@ function onboardingPickerSubtitle(props: {
   readonly apiMode?: CliApiMode;
 }): string {
   if (!props.firstRun) {
-    return 'Choose how to power model calls — sign in, or add a provider API key:';
+    return 'Choose how to power model calls — sign in, use ChatGPT, or add a provider API key:';
   }
   if (props.apiMode === 'included') {
-    return 'Included relay access needs sign-in for this run:';
+    return 'Included relay or subscription access needs sign-in for this run:';
   }
   if (props.apiMode === 'personal') {
-    return 'Personal API-key mode needs a provider key for this run:';
+    return 'Personal mode needs ChatGPT sign-in or a provider key for this run:';
   }
   return 'Not signed in, and no provider API key is configured. Choose how to power model calls:';
 }
 
-type OnboardingChoice = 'relay' | 'key' | 'skip';
+type OnboardingChoice = 'relay' | 'chatgpt' | 'key' | 'skip';
 type OnboardingSetupPath = Exclude<OnboardingChoice, 'skip'>;
 type OnboardingPickerItem = SelectItem<OnboardingChoice>;
 
@@ -456,6 +489,12 @@ const KEY_PICKER_ITEM: OnboardingPickerItem = {
   description: ONBOARDING_CHOICE_API_KEY.description,
 };
 
+const CHATGPT_PICKER_ITEM: OnboardingPickerItem = {
+  value: 'chatgpt',
+  label: ONBOARDING_CHOICE_CHATGPT.label,
+  description: ONBOARDING_CHOICE_CHATGPT.description,
+};
+
 const SKIP_PICKER_ITEM: OnboardingPickerItem = {
   value: 'skip',
   label: ONBOARDING_CHOICE_SKIP_LABEL,
@@ -466,27 +505,36 @@ function onboardingSetupPaths(props: {
   readonly firstRun: boolean;
   readonly apiMode?: CliApiMode;
 }): readonly OnboardingSetupPath[] {
-  if (!props.firstRun) return ['relay', 'key'];
-  if (props.apiMode === 'included') return ['relay'];
-  if (props.apiMode === 'personal') return ['key'];
-  return ['relay', 'key'];
+  if (!props.firstRun) return ['relay', 'chatgpt', 'key'];
+  if (props.apiMode === 'included') return ['relay', 'chatgpt'];
+  if (props.apiMode === 'personal') return ['chatgpt', 'key'];
+  return ['relay', 'chatgpt', 'key'];
 }
 
 function onboardingPickerItems(
   setupPaths: readonly OnboardingSetupPath[],
 ): readonly OnboardingPickerItem[] {
-  return [
-    ...setupPaths.map((path) =>
-      path === 'relay' ? RELAY_PICKER_ITEM : KEY_PICKER_ITEM,
-    ),
-    SKIP_PICKER_ITEM,
-  ];
+  return [...setupPaths.map(onboardingPickerItem), SKIP_PICKER_ITEM];
+}
+
+function onboardingPickerItem(path: OnboardingSetupPath): OnboardingPickerItem {
+  switch (path) {
+    case 'relay':
+      return RELAY_PICKER_ITEM;
+    case 'chatgpt':
+      return CHATGPT_PICKER_ITEM;
+    case 'key':
+      return KEY_PICKER_ITEM;
+  }
+  return assertNever(path, 'Unhandled onboarding setup path');
 }
 
 function PickerStep(props: {
   readonly subtitle: string;
   readonly items: readonly OnboardingPickerItem[];
+  readonly error?: string;
   readonly onRelay: () => void;
+  readonly onChatGpt: () => void;
   readonly onKey: () => void;
   readonly onSkip: () => void;
 }): React.JSX.Element {
@@ -494,6 +542,7 @@ function PickerStep(props: {
     <OnboardingFrame
       title={ONBOARDING_CARD_TITLE}
       subtitle={props.subtitle}
+      error={props.error}
       hints={[
         { key: '↑/↓', action: 'navigate' },
         { key: `1-${props.items.length}/Enter`, action: 'select' },
@@ -505,6 +554,7 @@ function PickerStep(props: {
         labelMaxCols={ONBOARDING_SELECT_LABEL_MAX_COLS}
         onSelect={(value) => {
           if (value === 'relay') props.onRelay();
+          else if (value === 'chatgpt') props.onChatGpt();
           else if (value === 'key') props.onKey();
           else props.onSkip();
         }}
@@ -596,6 +646,7 @@ function useSignInOnMount(
 }
 
 function RelayProgressFrame(props: {
+  readonly title?: string;
   readonly spinnerLabel: string;
   readonly children: React.ReactNode;
 }): React.JSX.Element {
@@ -607,7 +658,7 @@ function RelayProgressFrame(props: {
       paddingX={1}
     >
       <Text bold color="cyan">
-        Sign in · included relay
+        {props.title ?? 'Sign in · included relay'}
       </Text>
       <Box marginTop={1} flexDirection="column">
         {props.children}
@@ -695,6 +746,67 @@ function RelayDeviceProgressStep(
       ) : (
         <Text dimColor>Requesting a sign-in code…</Text>
       )}
+    </RelayProgressFrame>
+  );
+}
+
+interface ChatGptProgressCallbacks {
+  readonly onSuccess: (session: CodexSession) => void;
+  readonly onError: (message: string) => void;
+}
+
+function ChatGptProgressStep(
+  props: ChatGptProgressCallbacks & {
+    readonly device: boolean;
+  },
+): React.JSX.Element {
+  const { device } = props;
+  const [message, setMessage] = useState(
+    device
+      ? 'Requesting a ChatGPT device code...'
+      : 'Preparing ChatGPT sign-in...',
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const session = await signInCliChatGpt(
+          { device, noBrowser: false },
+          {
+            writeProgress: (next) => {
+              if (!cancelled) setMessage(next);
+            },
+          },
+        );
+        const update = await setPreferCodexSubscription(true);
+        if (!update.effective) {
+          if (!cancelled) {
+            props.onError(
+              'Signed in with ChatGPT, but a more specific setting keeps the subscription disabled. Choose Researcher Access or a provider API key instead.',
+            );
+          }
+          return;
+        }
+        invalidateModelOptionsCache();
+        if (!cancelled) props.onSuccess(session);
+      } catch (loginError: unknown) {
+        if (!cancelled) props.onError(toErrorMessage(loginError));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <RelayProgressFrame
+      title="Use ChatGPT subscription"
+      spinnerLabel="Waiting for ChatGPT sign-in… (Ctrl-C cancels)"
+    >
+      {message.split('\n').map((line, index) => (
+        <Text key={`${index}:${line}`}>{line}</Text>
+      ))}
     </RelayProgressFrame>
   );
 }
