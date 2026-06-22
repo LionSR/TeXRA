@@ -63,6 +63,16 @@ type MessageFor<C extends ProgressViewInboundMessage['command']> = Extract<
   { command: C }
 >;
 
+export interface ProgressViewMessageHost {
+  showInfo(message: string): PromiseLike<unknown>;
+  showWarning(
+    message: string,
+    options?: { modal?: boolean },
+    ...items: string[]
+  ): PromiseLike<string | undefined>;
+  showError(message: string): PromiseLike<unknown>;
+}
+
 /**
  * Schema-driven message handler for ProgressView.
  *
@@ -89,6 +99,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   constructor(
     private readonly provider: ProgressViewProvider,
     context: vscode.ExtensionContext,
+    private readonly host: ProgressViewMessageHost,
   ) {
     super('ProgressView', { trackActiveView: true });
 
@@ -202,7 +213,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
         bypass: {
           runtimeHost: extensionAgentRuntimeHost,
-          showInfo: (message) => vscode.window.showInformationMessage(message),
+          showInfo: (message) => this.host.showInfo(message),
         },
         file: {
           openFile: async (file, line) =>
@@ -279,7 +290,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         if (view) await this.recordingManager.stop(view);
       },
       [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: async (data) => {
-        await vscode.window.showInformationMessage(data.text);
+        await this.host.showInfo(data.text);
       },
       [PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG]: async (data) => {
         const restored =
@@ -541,10 +552,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
         readFile: (file) => flexibleFS.read(createExternalLocation(file)),
         showInfo: async (message) => {
-          await vscode.window.showInformationMessage(message);
+          await this.host.showInfo(message);
         },
         showError: async (message) => {
-          await vscode.window.showErrorMessage(message);
+          await this.host.showError(message);
         },
         logError: (message, error) => {
           this.logger.error(this.channel, message, {
@@ -634,7 +645,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   private async handleDeleteAll(): Promise<void> {
-    const confirmation = await vscode.window.showWarningMessage(
+    const confirmation = await this.host.showWarning(
       'Are you sure you want to delete all streams? This action cannot be undone.',
       { modal: true },
       'Delete All',
@@ -657,7 +668,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       data.feedback,
     );
     if (!success) {
-      await vscode.window.showInformationMessage(
+      await this.host.showInfo(
         'No retryable request is available for this stream yet.',
       );
     }
@@ -678,7 +689,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       viaRelay: data.viaRelay,
     });
     if (result.proceeded && !result.retried) {
-      await vscode.window.showInformationMessage(
+      await this.host.showInfo(
         'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
       );
     }
@@ -721,9 +732,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             text: null,
             error: errorMsg,
           });
-          await vscode.window.showErrorMessage(
-            `Error polishing follow-up: ${errorMsg}`,
-          );
+          await this.host.showError(`Error polishing follow-up: ${errorMsg}`);
           this.logger.error(
             this.channel,
             `Error polishing follow-up: ${errorMsg}`,
@@ -747,11 +756,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         return;
       case 'failed':
         this.postToActiveView(result.update);
-        await vscode.window.showErrorMessage(result.userMessage);
+        await this.host.showError(result.userMessage);
         return;
       case 'exception':
         this.postToActiveView(result.update);
-        await vscode.window.showErrorMessage(result.userMessage);
+        await this.host.showError(result.userMessage);
         this.logger.error(this.channel, result.logMessage, {
           data: result.logData,
         });
@@ -860,10 +869,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async applyFollowUpPlan(plan: ProgressFollowUpPlan): Promise<void> {
     switch (plan.kind) {
       case 'warning':
-        await vscode.window.showWarningMessage(plan.message);
+        await this.host.showWarning(plan.message);
         return;
       case 'info':
-        await vscode.window.showInformationMessage(plan.message);
+        await this.host.showInfo(plan.message);
         return;
       case 'restoreState':
         await vscode.commands.executeCommand(
