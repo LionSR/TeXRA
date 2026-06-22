@@ -69,15 +69,16 @@ export class VerifySetupTool extends defineTool({
       };
     }
 
-    const [coreResults, hasMagick, hasGm, anyKey, auth] = await Promise.all([
-      Promise.all(CORE_LATEX_TOOLS.map(isToolPresent)),
-      isToolPresent('magick'),
-      isToolPresent('gm'),
-      platform.secrets.anyApiKeyExists(),
-      platform.auth.getStatus().catch(() => ({
-        authenticated: false as const,
-      })),
-    ]);
+    const [coreResults, hasMagick, hasGm, hasUsableCredential, auth] =
+      await Promise.all([
+        Promise.all(CORE_LATEX_TOOLS.map(isToolPresent)),
+        isToolPresent('magick'),
+        isToolPresent('gm'),
+        platform.secrets.anyUsableCredentialExists(),
+        platform.auth.getStatus().catch(() => ({
+          authenticated: false as const,
+        })),
+      ]);
 
     const missingCore: string[] = CORE_LATEX_TOOLS.filter(
       (_, i) => !coreResults[i],
@@ -97,19 +98,19 @@ export class VerifySetupTool extends defineTool({
     lines.push(
       `LaTeX Workshop extension: ${latexWorkshopInstalled ? 'installed' : 'NOT installed'}.`,
     );
-    // The setup adapter's historical `anyApiKeyExists` name means "any usable
-    // model credential": direct provider key, ChatGPT subscription, or
-    // Researcher Access with Included Access on. A bare auth.authenticated
-    // without usable server-side keys is NOT a working credential, so we don't
-    // let it count toward "ready".
-    const credSummary = anyKey
+    // A usable model credential can be a direct provider key, ChatGPT
+    // subscription, or Researcher Access with Included Access on. A bare
+    // auth.authenticated without usable server-side keys is NOT a working
+    // credential, so we don't let it count toward "ready".
+    const credSummary = hasUsableCredential
       ? 'usable model credential available'
       : auth.authenticated
         ? 'signed in but Included Access is OFF — need an API key or re-enable it'
         : 'NONE — need an API key or sign-in';
     lines.push(`Credentials: ${credSummary}.`);
 
-    const ready = missingCore.length === 0 && latexWorkshopInstalled && anyKey;
+    const ready =
+      missingCore.length === 0 && latexWorkshopInstalled && hasUsableCredential;
 
     return {
       summary: ready
