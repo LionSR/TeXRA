@@ -1,364 +1,328 @@
 # Proposal: Google Gemini via the Interactions API
 
-**Status:** Proposal (research + migration plan; no handler code yet)
+**Status:** Proposal (research verified against the installed SDK; no handler code yet)
 **Owner:** _unassigned_
 **Tracking branch:** `claude/interactions-api-ga-28j8yu`
 **Companion proposal:** [`openai-responses-api.md`](./openai-responses-api.md) — the directly analogous "provider ships a new stateful, server-side-state API" precedent that this design mirrors.
 
-> **Verification note.** The Interactions API reached general availability after
-> this author's training cutoff. The schema below is reconstructed from Google's
-> public announcement, the GA docs index, and the `@google/genai` JS SDK surface
-> as surfaced through web search — Google's `ai.google.dev` doc pages returned
-> HTTP 403 to automated fetches, so **exact field casing and step-type names were
-> not byte-verified against the live reference.** Every place where the precise
-> identifier matters is flagged `⚠️ verify`. Before writing handler code, walk
-> the [Verification checklist](#verification-checklist) against the installed SDK
-> `.d.ts` and the live docs (the way `openai-responses-api.md` and the Copilot
-> PRD were verified against pinned types).
+> **Verification status.** The schema below is **verified against the installed
+> `@google/genai@2.9.0` type definitions** (`node_modules/.../@google/genai/dist/genai.d.ts`)
+> — the exact version already pinned in `package.json:108` and
+> `packages/extension/package.json:1713`. The Interactions surface ships in that
+> version, so **no dependency bump is required to start.** Google's `ai.google.dev`
+> doc pages returned HTTP 403 to automated fetch, so the few facts that live only
+> on the service (GA model/agent ids, $/token pricing, retention window, Flex/
+> Priority cost deltas) remain marked `⚠️ confirm at impl time`. Everything about
+> the **SDK request/response shape is byte-verified** and cited to `genai.d.ts`
+> line numbers.
 
 ## Summary
 
-Google has made the **Interactions API** (`client.interactions.create(...)`) the
-**primary, recommended interface** for Gemini models *and* agents, GA as of the
-2026 announcement. It is a single stateful endpoint that replaces the
-`generateContent` / chat surface for new work: server-side conversation state
-(continue by referencing a prior interaction id instead of resending history),
-background/async execution, a unified **steps**-based response model, mixing
-built-in tools (Google Search, Maps) with custom functions in one request, tool
-results that can return images, and new media-generation and managed-agent
-capabilities. `generateContent` remains supported, but Google states frontier
-long-running/agentic capabilities will increasingly land **only** on Interactions.
+Google has made the **Interactions API** the primary, recommended interface for
+Gemini models *and* agents. In the SDK it is `client.interactions` →
+`GeminiNextGenInteractions` (`genai.d.ts:5677`, `:4598`), with
+`create` / `get` / `delete` / `cancel` methods. It is a single **stateful**
+endpoint that supersedes the chat / `generateContent` surface for new work:
+server-side conversation state (continue via `previous_interaction_id` instead of
+resending history), background/async execution (`background`, `store`,
+`webhook_config`), a unified **steps**-based response (`Interaction.steps:
+Step[]`), mixing built-in tools (Google Search, Maps, code execution, URL
+context, file search, MCP) with custom functions in **one** `tools` array, and
+tool results that can return images.
 
-TeXRA today drives Gemini exclusively through the **chat / `generateContent`**
-surface of the same SDK (`@google/genai`). This proposal recommends an
-**additive, feature-flagged** Interactions handler that lives beside the existing
-one — exactly the shape TeXRA already uses for OpenAI's Responses API — rather
-than an in-place rewrite. That keeps the battle-tested `generateContent` path as
-the default/fallback while we gain access to Interactions-only features, and lets
-us flip the default per-model once the new path is proven.
+TeXRA today drives Gemini exclusively through the chat / `generateContent`
+surface of the **same** SDK (`client.chats.create()` →
+`chat.sendMessageStream()`). This proposal recommends an **additive,
+feature-flagged** Interactions handler beside the existing one — the exact shape
+TeXRA already uses for OpenAI's Responses API — keeping the battle-tested
+`generateContent` path as the default/fallback while we gain Interactions-only
+features, and flipping the default per-model once proven.
 
 ## Motivation
 
 - **Future-proofing.** Google has declared Interactions the default across AI
-  Studio, the Gemini API, and all docs; new frontier agentic/long-running
-  features are expected to be Interactions-only. Staying on `generateContent`
-  means those features become unreachable from TexRA over time.
-- **Server-side state.** Continuing via a prior-interaction id (instead of
-  resending the full `Content[]` history every round) shrinks request payloads
-  and simplifies multi-turn management — the same win TeXRA already realised for
-  OpenAI via `previous_response_id` (see `openai-responses-api.md`).
-- **Background execution.** `background: true` for long-running runs maps
-  naturally onto TeXRA's existing background-response machinery
-  (`texra.model.useBackgroundResponses`, already wired for OpenAI).
-- **Unified tool model.** Mixing built-in tools (Google Search) with custom
-  function declarations in a single request directly removes a limitation TeXRA
-  documents today: the native `googleSearch` tool is currently disabled because
-  the `generateContent` API cannot combine `googleSearch` with
-  `functionDeclarations` — the repo comment attributes mixing to the Live API
-  only (`toolConversion.ts:355-357`). The GA announcement says Interactions lifts
-  this on the regular surface (⚠️ verify it actually does before relying on it).
-- **Same SDK.** This rides on the already-installed `@google/genai` dependency —
-  no new vendor SDK, consistent with the existing provider boundary.
+  Studio, the Gemini API, and docs; frontier agentic/long-running features are
+  expected to be Interactions-only. Staying on `generateContent` strands those.
+- **Server-side state.** `previous_interaction_id` (`genai.d.ts:2411`) continues
+  a conversation without resending the full `Content[]` each round — the same
+  payload win TeXRA already realised for OpenAI via `previous_response_id`.
+- **Background execution.** `background?: boolean` (`:2389`) + `store?`
+  (`:2385`) + `webhook_config?` (`:2416`) map onto TeXRA's existing
+  background-response machinery (`texra.model.useBackgroundResponses`).
+- **Unified tool model.** `tools?: Array<Tool>` where `Tool = FunctionT |
+  CodeExecution | URLContext | ComputerUse | MCPServer | GoogleSearch |
+  FileSearch | GoogleMaps | Retrieval` (`:12272`) — built-in **and** custom
+  functions in one request. This removes the limitation TeXRA documents today:
+  native `googleSearch` is disabled because the `generateContent` API cannot
+  combine `googleSearch` with `functionDeclarations` (`toolConversion.ts:355-357`,
+  attributed there to the Live API). Interactions lifts it on the regular surface.
+- **Tool results with images.** A `function_result` step's `result` can be
+  `string | {} | Array<FunctionResultSubcontent>` where `FunctionResultSubcontent
+  = TextContent | ImageContent` (`:4543`,`:4553`).
+- **Same SDK, same client, no new dependency.** `client.interactions` already
+  exists on the `new GoogleGenAI({ apiKey })` instance TeXRA builds
+  (`modelHandlerGoogleGenAI.ts:304`,`:323`).
 
 ## Current state (verified in repo)
 
-TeXRA's Gemini integration is a single, mature handler on the chat surface:
-
 | File | Detail |
 | ---- | ------ |
-| `src/agent/modelHandlers/google/modelHandlerGoogleGenAI.ts` (~1366 lines) | `ModelHandlerGoogleGenAI`; calls `client.chats.create()` → `chat.sendMessageStream()` / `chat.sendMessage()`; `client.models.countTokens()`; `client.files.upload()` |
-| `src/agent/modelHandlers/google/googleMessageHelpers.ts` | Strict user/model alternation, `systemInstruction`, parts-based `Content[]` construction |
-| `src/agent/modelHandlers/google/googleUsage.ts` | Token/price/usage normalization from `GenerateContentResponseUsageMetadata` |
-| `src/agent/modelHandlers/google/googleSdkError.ts` | Maps `GoogleApiError` → TeXRA SDK error kinds |
-| `src/agent/modelHandlers/toolConversion.ts:360` | `toGoogleTools()` → `{ functionDeclarations }` |
-| `src/agent/runtime/ModelFactory.ts:73` | `PROVIDER_HANDLER_ROUTES[ModelProvider.GOOGLE]` → loads `ModelHandlerGoogleGenAI`, compatibility key `'ModelHandlerGoogleGenAI'` |
-| `package.json:108`, `packages/extension/package.json:1713` | `@google/genai` `^2.9.0` |
+| `src/agent/modelHandlers/google/modelHandlerGoogleGenAI.ts` (~1366 lines) | `ModelHandlerGoogleGenAI`; `client.chats.create()` (`:496`) → `chat.sendMessageStream()` (`:507`) / `chat.sendMessage()` (`:617`); `client.models.countTokens()` (`:383`); `client.files.upload()` (`:245`); client built `new GoogleGenAI({ apiKey })` (`:304`,`:323`) via base `getApiKey()` (`:299`,`:319`) |
+| `src/agent/modelHandlers/google/googleMessageHelpers.ts` | Strict user/model alternation, `systemInstruction`, parts-based `Content[]` |
+| `src/agent/modelHandlers/google/googleUsage.ts` | Token/price/usage from `GenerateContentResponseUsageMetadata` |
+| `src/agent/modelHandlers/google/googleSdkError.ts` | `GoogleApiError` → TeXRA SDK error kinds (reusable as-is) |
+| `src/agent/modelHandlers/toolConversion.ts:360` | `toGoogleTools()` → `[{ functionDeclarations }]` (chat shape) |
+| `src/agent/runtime/ModelFactory.ts:73` | `PROVIDER_HANDLER_ROUTES[GOOGLE]` → `ModelHandlerGoogleGenAI`, key `'ModelHandlerGoogleGenAI'` |
+| `package.json:108`, `packages/extension/package.json:1713` | `@google/genai` `^2.9.0` (resolved `2.9.0`, exposes `interactions`) |
 
-Notable capabilities the new handler must preserve (all currently in
-`modelHandlerGoogleGenAI.ts`):
-
-- **Streaming** with thinking/output separation and end-of-stream usage capture.
-- **Parallel tool calls batched into one model message**, preserving Gemini 3
-  **thought signatures** (`requiresBatchedParallelToolResults = true`, line 346;
-  thought-signature plumbing on `GoogleToolCall`). This is the highest-risk area
-  to reproduce on a new wire format.
-- **Multimodal**: inline base64 (≤20 MB) vs File API upload (>20 MB), Gemini 3
-  media-resolution levels.
-- **Thinking levels** (`LOW`/`MEDIUM`/`HIGH`) via `thinkingConfig`.
-- **Native token counting** (`countTokens`) feeding context-window guards.
-- **Usage/pricing**: input/output/reasoning/cached/tool-use token breakdown and
-  cache rebate.
+Capabilities the new handler must preserve (all in `modelHandlerGoogleGenAI.ts`):
+streaming with thinking/output separation; **parallel tool calls with Gemini 3
+thought signatures** (`requiresBatchedParallelToolResults`, `:346`); multimodal
+(inline ≤20 MB vs File API >20 MB, media-resolution); thinking levels
+(`thinkingConfig`); native token counting (`:383`); usage/pricing breakdown.
 
 There are **no** existing references to the Interactions API in the repo.
 
 ## The precedent this mirrors: OpenAI Responses API
 
-TeXRA already solved the "provider introduced a newer, stateful, server-side-state
-API alongside the legacy one" problem for OpenAI. The wiring we should copy:
+TeXRA already solved "provider introduced a newer, stateful, server-side-state API
+alongside the legacy one" for OpenAI. Copy this wiring:
 
-- A **separate handler** `ModelHandlerOpenAIResponse`
+- Separate handler `ModelHandlerOpenAIResponse`
   (`src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts`) coexists with
   the chat-completions handler.
-- A **compatibility key** `'ModelHandlerOpenAIResponse'` in
-  `ModelHandlerCompatibilityKey` (`ModelFactory.ts:29`) marks the distinct
-  conversation-history format, so history restoration/compaction know which
-  shape a saved run used.
-- A **routing predicate** `shouldUseResponsesAPI(config, useOpenRouter)`
-  (`ModelFactory.ts:175`) decides per-model whether to use the new path, gated by
-  the setting `texra.model.useOpenAIResponsesAPI` (plus per-model `required` and
-  `gpt-oss` forcing).
-- A **settings flag** `model.useOpenAIResponsesAPI` in
-  `src/shared/schemas/coreSettings.ts` (default `true`; lines 81, 325, 564) with
-  a companion `model.useBackgroundResponses`.
-- `createModelHandler()` branches to the Responses handler **before** the
-  default provider route (`ModelFactory.ts:361`).
+- Compatibility key `'ModelHandlerOpenAIResponse'` in `ModelHandlerCompatibilityKey`
+  (`ModelFactory.ts:29`) marks the distinct conversation-history format so
+  history restore/compaction know which shape a saved run used.
+- Routing predicate `shouldUseResponsesAPI(config, useOpenRouter)`
+  (`ModelFactory.ts:175`) decides per-model, gated by
+  `texra.model.useOpenAIResponsesAPI` (plus per-model `required` / `gpt-oss`).
+- Settings flag `model.useOpenAIResponsesAPI` in `coreSettings.ts`
+  (default `true`; lines 81, 325, 564) with companion `model.useBackgroundResponses`.
+- `createModelHandler()` branches to the Responses handler **before** the default
+  provider route (`ModelFactory.ts:361`).
 
-This proposal reuses that exact pattern for Google.
+## API surface (verified against `@google/genai@2.9.0` `genai.d.ts`)
 
-## API surface (reconstructed — see verification note)
+**Client:** `client.interactions` (`:5677`) → `GeminiNextGenInteractions` (`:4598`):
 
-Authoritative source for code will be the **installed `@google/genai` `.d.ts`**;
-the following is the working model.
+```ts
+create(params: CreateModelInteractionParams… | CreateAgentInteractionParams…)
+  : Promise<GoogleGenAIInteraction>                          // stream:false
+  | Promise<Stream<GoogleGenAIInteractionSSEEvent>>          // stream:true   (:4602-4608)
+get(id, params?)   // (:4609-4611)   delete(id, params?)   // (:4612)   cancel(id, params?)   // (:4615)
+```
 
-**Request — `client.interactions.create(params)`** (and a streaming variant):
+**Request — `CreateModelInteraction` (`:2373`)** — note **snake_case**:
 
-- `model` *or* `agent` — exactly one. `model` for inference (e.g.
-  `gemini-3.5-flash` ⚠️ verify ids), `agent` for managed agents
-  (`antigravity-preview-*`, `deep-research-*`).
-- `input` — text string, or multimodal/array input (parts: text + inline data +
-  file refs). ⚠️ verify the part object shape vs the chat API's `Part`.
-- `previous_interaction_id` — continue a prior interaction (server-side state).
-  ⚠️ verify exact key (`previousInteractionId` in camelCase SDK vs
-  `previous_interaction_id` in REST).
-- `background: boolean` — async/server-side execution.
-- `stream: boolean` (or a dedicated `createStream`/SSE iterator) ⚠️ verify which.
-- `tools` — array mixing custom functions
-  (`{ type: 'function', name, description, parameters }`) and built-ins
-  (`{ type: 'google_search' }`, `{ type: 'code_execution' }`, Maps). ⚠️ verify
-  exact tool object discriminator and whether function shape is `parameters`
-  (JSON Schema) like the reconstructed form, or nested `functionDeclarations` as
-  in the chat API.
-- `environment` — `'remote'` for managed-agent sandboxes.
-- generation knobs / `system_instruction` / structured-output `response_format`
-  (a polymorphic format that replaced `response_mime_type`) ⚠️ verify, plus
-  `thinking`/reasoning config and `response_modalities` for media generation.
-- service tier: **Flex** (≈50% cost) vs **Priority** (latency). ⚠️ verify key.
+| field | type | line |
+| ----- | ---- | ---- |
+| `model` | `Model` (string id) | 2377 |
+| `input` | `InteractionsInput` (required) | 2442 |
+| `stream?` | `boolean` (discriminates streaming vs not) | 2381 |
+| `store?` | `boolean` (persist for later retrieval) | 2385 |
+| `background?` | `boolean` | 2389 |
+| `system_instruction?` | `string` | 2393 |
+| `tools?` | `Array<Tool>` | 2397 |
+| `previous_interaction_id?` | `string` (server-side continuation) | 2411 |
+| `response_format?` | `ResponseFormat \| ResponseFormat[]` (structured output) | 2420 |
+| `response_modalities?` | `Array<ResponseModality>` (TEXT/IMAGE/AUDIO) | 2401 |
+| `generation_config?` | `GenerationConfig` (temp, tokens, thinking, …) | 2428 |
+| `service_tier?` | `ServiceTier` (Flex/Priority) | 2412 |
+| `cached_content?` | `string` (explicit cache handle) | 2438 |
+| `webhook_config?` | `WebhookConfig` | 2416 |
+| `environment?` | `Environment \| string` | 2424 |
+| `response_mime_type?` | `string` — **deprecated**, use `response_format` | 2407 |
 
-**Response — the `Interaction` resource:**
+`CreateAgentInteraction` (`:1987`) swaps `model` for `agent` (`AgentOption`) +
+`agent_config` (`DynamicAgentConfig | DeepResearchAgentConfig`) + `environment`.
 
-- A chronological **`steps`** array; each step is a typed object —
-  `user_input`, `thought`, `function_call`, function result/`model_output`, text
-  output, etc. ⚠️ verify the exact set and names. This is the schema's headline
-  change ("From Roles to Steps"): every action is its own typed step rather than
-  a role-tagged message with parts.
-- Convenience accessors on the `Interaction` for the common cases (e.g. final
-  text) without walking `steps`. ⚠️ verify accessor names.
-- An interaction `id` (for `previous_interaction_id` continuation), and usage /
-  token metadata. ⚠️ verify usage field names — likely differ from
-  `GenerateContentResponseUsageMetadata` (`promptTokenCount`, `candidatesTokenCount`,
-  `thoughtsTokenCount`, `cachedContentTokenCount`, `toolUsePromptTokenCount`).
-- **Streaming** emits SSE-style events with types such as `step.start` /
-  `step.delta` (text chunks under `delta`) / step completion. ⚠️ verify event
-  and field names.
-- **Retention:** past interactions retrievable, ~55-day retention on paid tier.
+**Input — `InteractionsInput` (`:7555`):**
+`string | Array<Step> | Array<Content> | Array<Turn> | Content`, where
+`Content = TextContent | ImageContent | AudioContent | DocumentContent |
+VideoContent` (`:1841`). Multimodal uses **typed content objects**, not the chat
+API's `Part`. Resuming a conversation client-side means passing prior `Step[]`.
 
-**Schema volatility (important).** Search surfaced that the Interactions schema
-churned during beta: the **steps** array replaced an earlier `outputs` shape, and
-a polymorphic `response_format` replaced `response_mime_type`, with the legacy
-shape removed mid-2026. GA means the schema is now stable, but it strongly argues
-for (a) pinning a known-good `@google/genai` version and (b) keeping the legacy
-`generateContent` handler as fallback.
+**Tools — `Tool` (`:12272`):** custom = `FunctionT` (`:4565`)
+`{ type:"function", name?, description?, parameters?: <JSON Schema> }`; built-ins
+= `CodeExecution | URLContext | ComputerUse | MCPServer | GoogleSearch |
+FileSearch | GoogleMaps | Retrieval`. (Contrast chat's `[{ functionDeclarations }]`.)
+
+**Response — `Interaction` (`:6943`)** (the SDK wraps it as `GoogleGenAIInteraction`
+with `steps: Step[]`, `:5683`): `id`, `status: InteractionStatus`, `created`,
+`updated`, `model`/`agent`, `system_instruction`, `tools`, `usage?: Usage`,
+`steps?: Step[]`, `previous_interaction_id`, `environment_id`, `response_format`,
+`generation_config`, `agent_config`.
+
+**Steps — `Step` (`:11664`)** (discriminated by `type`):
+
+| step | shape | line |
+| ---- | ----- | ---- |
+| `UserInputStep` | `{ type:"user_input", content?: Content[] }` | 14035 |
+| `ModelOutputStep` | `{ type:"model_output", content?: Content[] }` | 9235 |
+| `ThoughtStep` | `{ type:"thought", signature?: string, summary?: ThoughtSummaryContent[] }` | 12112 |
+| `FunctionCallStep` | `{ type:"function_call", name: string, arguments: {}, id: string }` | 4403 |
+| `FunctionResultStep` | `{ type:"function_result", name?, is_error?, call_id: string, result: string \| {} \| FunctionResultSubcontent[] }` | 4526 |
+| built-in call/result | `CodeExecution*`, `GoogleSearch*`, `GoogleMaps*`, `FileSearch*`, `URLContext*`, `MCPServerTool*` Step variants | — |
+
+`FunctionResultSubcontent = TextContent | ImageContent` (`:4553`) → tool results
+can include images.
+
+**Streaming — `InteractionSSEEvent` (`:7559`):**
+`InteractionCreatedEvent | InteractionCompletedEvent | InteractionStatusUpdate |
+ErrorEvent | StepStart | StepDelta | StepStop`. Events discriminate on
+**`event_type`** (`"step.start"` `:11699`, `"step.delta"` `:11668`,
+`"step.stop"`). `StepDelta = { event_type:"step.delta", index, delta:
+StepDeltaData, event_id?, metadata? }`; `StepDeltaData` (`:11685`) includes
+`TextDelta`, `ArgumentsDelta` (streamed tool args), `ThoughtSummaryDelta`,
+`ThoughtSignatureDelta`, `FunctionResultDelta`, image/audio/doc deltas, …;
+`StepDeltaMetadata.total_usage?: Usage` (`:11690`) carries running usage.
+
+**Usage — `Usage` (`:13952`)** (snake_case, differs from
+`GenerateContentResponseUsageMetadata`): `total_input_tokens`,
+`total_cached_tokens`, `total_output_tokens`, `total_tool_use_tokens`,
+`total_thought_tokens`, plus `*_by_modality: ModalityTokens[]` and a grand total.
 
 ## Mapping: `generateContent`/chat → Interactions
 
-| TeXRA concern | Today (`generateContent`/chat) | Interactions API |
-| ------------- | ------------------------------ | ---------------- |
+| TeXRA concern | Today (chat/`generateContent`) | Interactions (verified) |
+| ------------- | ------------------------------ | ----------------------- |
 | Send a turn | `chat.sendMessage(parts)` | `interactions.create({ model, input })` |
-| Streaming | `chat.sendMessageStream()` → `chunk.candidates[0].content.parts` | stream events → `step.delta` text ⚠️ |
-| Conversation state | resend full `Content[]` each round | `previous_interaction_id` (server-side) ⚠️ |
-| System prompt | `systemInstruction` on chat params | `system_instruction` on create ⚠️ |
-| Custom tools | `{ functionDeclarations: [...] }` | `tools: [{ type:'function', name, description, parameters }]` ⚠️ |
-| Built-in search | **disabled** (can't mix with functions) | `tools: [{ type:'google_search' }, ...functions]` — now mixable |
-| Tool call out | `functionCall` part on candidate | `function_call` step (`name`, args, id) ⚠️ |
-| Tool result in | `functionResponse` part (user msg) | function-result step ⚠️ |
-| **Parallel tool calls** | batched into one model `Content` + thought signatures | must map onto steps **without losing thought signatures** ⚠️ **highest risk** |
-| Thinking | `thinkingConfig` + `thought` parts | reasoning/thinking config + `thought` steps ⚠️ |
-| Multimodal in | inline base64 / File API `uri` parts | inline data / file refs in `input` ⚠️ |
-| Token counting | `client.models.countTokens()` | unchanged `countTokens` (still on `models`)? ⚠️ verify |
-| Usage/pricing | `GenerateContentResponseUsageMetadata` | new usage metadata shape ⚠️ remap `googleUsage.ts` |
-| Background | n/a for Google today | `background: true` (reuse `useBackgroundResponses` machinery) |
-| Caching | `cachedContentTokenCount` rebate | verify cache reporting on the new usage shape ⚠️ |
+| Streaming | `sendMessageStream()` → `chunk.candidates[0].content.parts` | `Stream<InteractionSSEEvent>`; consume `event_type:"step.delta"` → `delta` (TextDelta etc.) |
+| Conversation state | resend full `Content[]` each round | `previous_interaction_id` (server-side) or pass prior `Step[]` in `input` |
+| System prompt | `systemInstruction` on chat params | `system_instruction` on create |
+| Custom tools | `[{ functionDeclarations:[…] }]` | `tools:[{ type:"function", name, description, parameters }]` |
+| Built-in search | **disabled** (can't mix w/ functions) | `tools:[{ type:"google_search" }, …functions]` — now mixable |
+| Tool call out | `functionCall` part | `FunctionCallStep` `{ name, arguments, id }` (+ streamed `ArgumentsDelta`) |
+| Tool result in | `functionResponse` part (user msg) | a `function_result` step/input `{ call_id, result }`; `result` may include images |
+| **Parallel tools + thought sigs** | batched into one model `Content`, signature on the call part | sigs live on **`ThoughtStep.signature`** + `ThoughtSignatureDelta`, separate from `function_call` steps; server holds them when continuing by id |
+| Thinking | `thinkingConfig` + `thought` parts | `generation_config` thinking + `ThoughtStep`/`ThoughtSummaryDelta` |
+| Multimodal in | inline base64 / File API `uri` parts | typed `Content` (`ImageContent`/`DocumentContent`/…) in `input` |
+| Token counting | `client.models.countTokens()` | unchanged — still on `client.models` |
+| Usage/pricing | `GenerateContentResponseUsageMetadata` | `Usage` (`total_*_tokens`) → remap `googleUsage.ts` |
+| Background | n/a today | `background:true` (+ `store`, `webhook_config`) |
+| Caching | `cachedContentTokenCount` rebate | `cached_content` + `Usage.total_cached_tokens` |
 
 ## Design (additive, feature-flagged)
 
 Mirror the OpenAI Responses precedent end to end.
 
 ### 1. New handler
-
 `ModelHandlerGoogleInteractions` in
-`src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts`, extending the
-shared `ModelHandler` base like the existing Google handler. Reuse what is
-provider-shaped rather than wire-shaped:
-
-- **Reuse** `googleSdkError.ts` (same SDK error type), tool **schema conversion**
-  helpers in `toolConversion.ts` (JSON-Schema flattening/`$schema` stripping is
-  wire-agnostic), and the media upload size/threshold logic.
-- **Rewrite** message construction (`googleMessageHelpers.ts` equivalent) for the
-  steps model + `previous_interaction_id`, the streaming loop (step events), tool
-  call extraction/round-trip, and `googleUsage.ts` for the new usage metadata.
-- Keep **thought-signature preservation** for parallel tool calls as a
-  first-class requirement and cover it with a dedicated test (it is the single
-  most likely regression).
+`src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts`, extending
+`ModelHandler` like the existing Google handler.
+- **Reuse:** `googleSdkError.ts` (same `GoogleApiError`); the JSON-Schema
+  flattening/`$schema`-stripping in `toolConversion.ts` (wire-agnostic) — feed it
+  into `FunctionT.parameters` instead of `functionDeclarations`; the media
+  upload size/threshold logic.
+- **Rewrite:** input construction (typed `Content` + optional prior `Step[]` /
+  `previous_interaction_id`), the streaming loop (SSE `event_type` events, route
+  `TextDelta` → output, `ThoughtSummaryDelta`/`ThoughtSignatureDelta` → thinking,
+  `ArgumentsDelta`/`FunctionCallStep` → tool calls), tool-result steps, and
+  `googleUsage.ts` for the `Usage` shape.
 
 ### 2. Compatibility key
-
-Add `'ModelHandlerGoogleInteractions'` to the `ModelHandlerCompatibilityKey`
-union (`ModelFactory.ts:29`). Because Interactions stores conversation state
-**server-side** and continues via `previous_interaction_id`, its persisted
-history shape differs from the chat handler's `Content[]` — history
-restoration/compaction must not mix the two. A distinct key is mandatory.
+Add `'ModelHandlerGoogleInteractions'` to `ModelHandlerCompatibilityKey`
+(`ModelFactory.ts:29`). Interactions persists state server-side and continues via
+`previous_interaction_id`; its history shape differs from the chat handler's
+`Content[]`, so a distinct key is mandatory for history restore/compaction.
 
 ### 3. Routing predicate + factory branch
-
 Add `shouldUseGoogleInteractionsAPI(config, useOpenRouter)` next to
-`shouldUseResponsesAPI` (`ModelFactory.ts`). Gate on a new setting plus a
-per-model `requiresInteractionsAPI`/agent flag (agents like `antigravity-*` /
-`deep-research-*` are Interactions-only and would force it). Branch to the new
-handler in `createModelHandler()` **before** the default Google provider route
-(`PROVIDER_HANDLER_ROUTES[GOOGLE]`), exactly as the Responses branch precedes the
-default OpenAI route. Respect `useOpenRouter` (OpenRouter cannot proxy
-Interactions — fall back to the existing path), the same guard
-`requiresOpenAIResponsesAPI` applies.
+`shouldUseResponsesAPI`. Gate on a new setting plus per-model
+`requiresInteractionsAPI` (agents like Deep Research are Interactions-only and
+force it). Branch in `createModelHandler()` **before** the default Google route,
+and exclude `useOpenRouter` (OpenRouter can't proxy Interactions).
 
 ### 4. Settings
-
-Add `model.useGoogleInteractionsAPI` to `src/shared/schemas/coreSettings.ts`
-(default, key list, and Zod schema — the three sites at lines ~81/325/564),
-mirroring `useOpenAIResponsesAPI`. Reuse `model.useBackgroundResponses` for the
-`background: true` behaviour, or add a Google-specific companion if semantics
-diverge. Surface the toggle in Settings → Models and document in
-`docs/guide/configuration.md`.
+Add `model.useGoogleInteractionsAPI` to `coreSettings.ts` (the three sites at
+~81/325/564), mirroring `useOpenAIResponsesAPI`; reuse
+`model.useBackgroundResponses` for `background:true`. Surface in Settings →
+Models; document in `docs/guide/configuration.md`.
 
 ### 5. Model registry
-
-Register the new Gemini model ids / agent ids surfaced at GA (e.g.
-`gemini-3.5-flash`, Antigravity / Deep Research agents) in the model
-configuration source (`llm-zoo` `MODEL_CONFIGS` + `src/model/` capability/pricing
-mapping), marking agent-only entries with the Interactions-required flag. ⚠️
-verify the exact ids and pricing at implementation time.
+Register GA Gemini model ids / agent ids (`llm-zoo` `MODEL_CONFIGS` + `src/model/`
+capability/pricing), marking agent-only entries Interactions-required.
+⚠️ confirm exact ids + pricing at impl time.
 
 ## Platform / VS Code separation
 
-No new host coupling. `src/agent/modelHandlers/` is a VS Code-free zone and the
-new handler stays there, reaching host services only through `platform()`
-(secrets for the API key via the base handler's `getApiKey()` —
-`modelHandlerGoogleGenAI.ts:299`,`319` construct `new GoogleGenAI({ apiKey })` —
-config, fs for media
-upload) — identical to the existing Google handler. The settings toggle flows
-through the existing `coreSettings` schema; no new ports needed.
+No new host coupling. The handler stays in the VS Code-free `modelHandlers/`
+zone, reaching host services only through `platform()` (secrets for the API key
+via the base `getApiKey()`, config, fs for media) — identical to the existing
+Google handler. The settings toggle flows through the existing `coreSettings`
+schema; no new ports.
 
 ## Risks & open questions
 
-1. **Unverified schema (post-cutoff).** Everything marked ⚠️ must be confirmed
-   against the installed `.d.ts` and live docs before coding. Treat the table
-   above as a hypothesis, not a contract.
-2. **Thought-signature preservation across the steps model.** Gemini 3 parallel
-   tool calling depends on round-tripping thought signatures; the steps schema
-   reorganises how calls/results are represented. This is the most likely place
-   to silently break parallel tool use. Needs an explicit fixture test.
-3. **Schema churn / version pinning.** The beta schema changed materially
-   (`outputs`→`steps`, `response_mime_type`→`response_format`). Pin a known-good
-   `@google/genai` (current dep is `^2.9.0` — confirm it actually exposes
-   `interactions`; the search-surfaced "introduced in 1.33.0" is unverified).
-4. **Server-side state + history/compaction.** TeXRA's history restore and
-   context compaction assume a resend-able local transcript. With
-   `previous_interaction_id` the canonical state lives on Google's servers with a
-   ~55-day retention. Decide whether to (a) keep sending full local history
-   (stateless mode, simplest, loses the payload win) or (b) adopt
-   `previous_interaction_id` and define behaviour when the server-side
-   interaction has expired / when a run is restored from old history. The OpenAI
-   Responses handler already faced this — reuse its resolution.
-5. **OpenRouter interaction.** Interactions is Google-direct only; ensure the
-   `useOpenRouter` path is excluded (as Responses excludes it).
-6. **Usage/pricing remap.** New usage metadata field names → `googleUsage.ts`
-   must be re-derived; cache-token rebate and reasoning-token accounting need
-   re-validation against the new shape.
-7. **Managed agents are a different product surface.** `agent=` + `environment:
-   'remote'` provisions a remote sandbox that browses/executes code. That is a
-   much larger feature than "call a model" and should be **out of scope for v0**
+1. **Thought-signature model changed (re-scope, not eliminate).** In chat,
+   Gemini 3 signatures ride on the function-call part and TeXRA batches parallel
+   results into one message. In Interactions signatures are their own
+   `ThoughtStep.signature` (+ `ThoughtSignatureDelta`), and when continuing by
+   `previous_interaction_id` the server retains them — likely **simpler**. But if
+   we send history client-side (`input: Step[]`), we must round-trip the
+   `thought` steps verbatim. Needs a fixture test either way; this is still the
+   place most likely to silently break parallel tool use.
+2. **Server-side state vs history/compaction.** TeXRA's restore/compaction assume
+   a resend-able local transcript. Decide per the OpenAI Responses resolution:
+   stateless (send full `Step[]` each round; simplest, loses payload win) vs
+   `previous_interaction_id` (define behaviour when the stored interaction has
+   expired or a run is restored from old history). `store?`/retention interact.
+3. **Preview vs GA stability in 2.9.0.** The types ship in the pinned version;
+   `response_mime_type` is already deprecated in favour of `response_format`,
+   signalling churn. Pin/snapshot the working version and keep `generateContent`
+   as fallback. ⚠️ confirm the endpoint is GA (not preview) for our key.
+4. **Usage/pricing remap.** `Usage.total_*` field names → `googleUsage.ts`
+   re-derivation; re-validate cache-rebate and reasoning-token accounting.
+5. **Managed agents are a different product.** `agent=` + `environment:'remote'`
+   provisions a remote sandbox (browse/exec). **Out of scope for v0**
    (model-mode only); track separately.
-8. **Built-in tools + custom functions mixing** removes the current
-   `googleSearch` limitation — but verify tool-result image return interacts
-   correctly with TeXRA's tool-result attachment plumbing.
+6. **Service ids / pricing / retention** (`⚠️ confirm`): GA model ids
+   (`gemini-3.5-flash`, Deep Research / Antigravity agents), `ServiceTier`
+   Flex/Priority cost deltas, and the retention window are service facts not in
+   the SDK types.
 
 ## Scope
 
-**In (v0):** research verification; `ModelHandlerGoogleInteractions` in **model
-mode** (text + multimodal in, streaming, custom function calling incl. parallel
-calls with thought signatures, thinking, token counting, usage/pricing);
-compatibility key; routing predicate + factory branch; `useGoogleInteractionsAPI`
-setting + Settings UI + docs; tests (streaming, parallel-tool thought
-signatures, usage mapping, routing); keep `generateContent` handler as default
-fallback.
+**In (v0):** `ModelHandlerGoogleInteractions` in **model mode** (text +
+multimodal in, SSE streaming, custom function calling incl. parallel calls +
+thought-signature round-trip, thinking, token counting, `Usage`-based
+pricing); compatibility key; routing predicate + factory branch;
+`useGoogleInteractionsAPI` setting + Settings UI + docs; tests (streaming SSE,
+parallel-tool/thought-signature, usage mapping, routing); keep `generateContent`
+as default fallback.
 
-**Out (v0):** managed agents (`agent=`, `environment:'remote'`); media
-generation (`response_modalities`, Nano Banana / Lyria / TTS); Deep Research
-agent integration; making Interactions the **default** for Gemini (ship behind
-the flag first, flip later); OpenRouter support for Interactions.
+**Out (v0):** managed agents (`agent=`, `environment:'remote'`); media generation
+(`response_modalities`/image/audio out); Deep Research agent; making Interactions
+the **default** for Gemini (ship behind the flag, flip later); OpenRouter support.
 
 ## Milestones
 
-1. **Verify** the schema against the installed SDK `.d.ts` + live docs; fill in
-   every ⚠️; confirm `@google/genai` version exposing `interactions` and pin it.
-   Update this proposal's tables to the verified shapes.
-2. `ModelHandlerGoogleInteractions` (model mode) with streaming + custom tools;
+1. ~~Verify the SDK schema~~ ✅ done (this proposal; `@google/genai@2.9.0`).
+   Remaining: confirm GA model/agent ids + pricing + retention (`⚠️` items).
+2. `ModelHandlerGoogleInteractions` (model mode): SSE streaming + custom tools;
    compatibility key; factory routing behind `useGoogleInteractionsAPI` (default
-   **off**). Unit tests on message/tool/usage translation (host-neutral, mocked
-   SDK), explicitly including parallel-tool thought-signature round-trip.
-3. Multimodal input, thinking levels, token counting, cache/usage parity; mixed
-   built-in `google_search` + functions; settings UI + `configuration.md`.
-4. Real-key smoke test; CHANGELOG entry; decide default flip per-model;
-   register GA Gemini model ids/pricing.
-
-## Verification checklist
-
-Before writing handler code, confirm against the **installed** `@google/genai`
-types and the live docs (resolve every ⚠️ above):
-
-- [ ] `@google/genai` version that exposes `client.interactions` (and pin it).
-- [ ] `interactions.create` param names & casing: `model`/`agent`, `input`,
-      `previous_interaction_id`, `background`, `stream`/`createStream`, `tools`,
-      `system_instruction`, `response_format`, thinking/reasoning config,
-      `response_modalities`, service tier.
-- [ ] `input` part object shape (text / inline data / file ref) — same as chat
-      `Part` or new?
-- [ ] `tools` entry shape: custom `{ type:'function', name, description,
-      parameters }` vs `functionDeclarations`; built-in discriminators
-      (`google_search`, `code_execution`, maps).
-- [ ] `Interaction.steps` exact step types & fields (`function_call` name/args/id;
-      function-result step; `thought`; text/`model_output`); convenience accessors.
-- [ ] **Thought-signature** field on call/result steps for Gemini 3 parallel
-      tool calling, and how to echo it back.
-- [ ] Streaming event types/fields (`step.start`, `step.delta`, completion).
-- [ ] Usage/token metadata field names (input/output/reasoning/cached/tool-use).
-- [ ] `countTokens` availability/shape under the new surface.
-- [ ] `previous_interaction_id` continuation semantics + retention/expiry
-      behaviour for restored runs.
+   **off**). Unit tests on input/tool/usage translation (mocked SDK), explicitly
+   the parallel-tool/thought-signature round-trip.
+3. Multimodal `Content` input, thinking, token counting, cache/usage parity;
+   mixed built-in `google_search` + functions; settings UI + `configuration.md`.
+4. Real-key smoke test; CHANGELOG; decide per-model default flip; register GA ids.
 
 ## References
 
-- Interactions API overview: https://ai.google.dev/gemini-api/docs/interactions/interactions-overview
+- SDK types (authoritative, verified): `@google/genai@2.9.0`
+  `dist/genai.d.ts` — `GeminiNextGenInteractions` (`:4598`), `CreateModelInteraction`
+  (`:2373`), `Interaction` (`:6943`), `Step` (`:11664`), `Usage` (`:13952`),
+  `interactions` namespace (`:7367`).
+- Interactions overview: https://ai.google.dev/gemini-api/docs/interactions/interactions-overview
 - API reference: https://ai.google.dev/api/interactions-api
-- Quickstart: https://ai.google.dev/gemini-api/docs/interactions/quickstart
 - Function calling: https://ai.google.dev/gemini-api/docs/interactions/function-calling
 - Streaming: https://ai.google.dev/gemini-api/docs/interactions/streaming
-- Migration (generateContent → Interactions): https://ai.google.dev/gemini-api/docs/interactions
-- Google announcement: https://blog.google/innovation-and-ai/technology/developers-tools/interactions-api/
-- JS SDK: https://github.com/googleapis/js-genai · https://www.npmjs.com/package/@google/genai
-- Community quickstart (Phil Schmid): https://www.philschmid.de/interactions-api-quickstart
+- Announcement: https://blog.google/innovation-and-ai/technology/developers-tools/interactions-api/
+- JS SDK: https://github.com/googleapis/js-genai
 - TeXRA precedent: [`openai-responses-api.md`](./openai-responses-api.md);
-  routing in `src/agent/runtime/ModelFactory.ts:175`; settings in
-  `src/shared/schemas/coreSettings.ts`.
+  routing `src/agent/runtime/ModelFactory.ts:175`; settings `src/shared/schemas/coreSettings.ts`.
 
-> _All `ai.google.dev` pages returned HTTP 403 to automated fetch during
-> research; the links are for human verification of the ⚠️ items._
+> _`ai.google.dev` pages returned HTTP 403 to automated fetch; the SDK `.d.ts`
+> (verified above) is the source of truth for every shape, with `⚠️` reserved
+> for service-only facts (ids/pricing/retention)._
