@@ -38,11 +38,11 @@ reporting, no image input in stable, hard abuse-detection rate limits).
 
 `ModelProvider.COPILOT` already exists as an inert, pre-reserved slot:
 
-| File | Line | Current state |
-| ---- | ---- | ------------- |
-| `src/agent/runtime/ModelFactory.ts` | 122 | `[ModelProvider.COPILOT]: { load: null, compatibilityKey: null }` |
-| `src/shared/constants/providers.ts` | 88 | display name `'Copilot'` (in `EXTRA_DISPLAY_NAMES`) |
-| `src/agent/modelHandlers/support/ProxyConfigResolver.ts` | 48 | `[ModelProvider.COPILOT]: null` |
+| File                                                     | Line | Current state                                                     |
+| -------------------------------------------------------- | ---- | ----------------------------------------------------------------- |
+| `src/agent/runtime/ModelFactory.ts`                      | 122  | `[ModelProvider.COPILOT]: { load: null, compatibilityKey: null }` |
+| `src/shared/constants/providers.ts`                      | 88   | display name `'Copilot'` (in `EXTRA_DISPLAY_NAMES`)               |
+| `src/agent/modelHandlers/support/ProxyConfigResolver.ts` | 48   | `[ModelProvider.COPILOT]: null`                                   |
 
 The `PROVIDER_HANDLER_ROUTES` record is `Record<ModelProvider, ...>`, so the
 TypeScript compiler already forces every provider (including `COPILOT`) to have
@@ -151,7 +151,7 @@ inside the extension implementation.
   "no real usage data" explicit in telemetry rather than faking precision.
 - **Capabilities:** `supportsToolUse: true`, `supportsImages: false` (stable),
   `supportsThinking: false`, `supportsCaching: false`, `supportsTokenCounting:
-  true`. No Responses/compaction/web-search.
+true`. No Responses/compaction/web-search.
 
 ### 3. Factory wiring
 
@@ -216,7 +216,7 @@ OAuth proposal for cross-host); caching/Responses/web-search features.
 ## Alternative / companion idea worth noting
 
 `lm.registerLanguageModelChatProvider(vendor, provider)` is **stable** in 1.105.
-This is the *inverse* direction: TeXRA could **contribute its own models into VS
+This is the _inverse_ direction: TeXRA could **contribute its own models into VS
 Code's Copilot model picker** (the BYOK provider API — `LanguageModelChatProvider`
 with `provideLanguageModelChatInformation` / `provideLanguageModelChatResponse` /
 `provideTokenCount`, and a `capabilities` field that does support `imageInput` and

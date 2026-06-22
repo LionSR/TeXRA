@@ -42,11 +42,11 @@ sanctioned integration** — exactly the framing already used for the Codex
 
 Same pre-reserved, inert slot the official route would also use:
 
-| File | Line | State |
-| ---- | ---- | ----- |
-| `src/agent/runtime/ModelFactory.ts` | 122 | `[ModelProvider.COPILOT]: { load: null, compatibilityKey: null }` |
-| `src/shared/constants/providers.ts` | 88 | display name `'Copilot'` |
-| `src/agent/modelHandlers/support/ProxyConfigResolver.ts` | 48 | `null` |
+| File                                                     | Line | State                                                             |
+| -------------------------------------------------------- | ---- | ----------------------------------------------------------------- |
+| `src/agent/runtime/ModelFactory.ts`                      | 122  | `[ModelProvider.COPILOT]: { load: null, compatibilityKey: null }` |
+| `src/shared/constants/providers.ts`                      | 88   | display name `'Copilot'`                                          |
+| `src/agent/modelHandlers/support/ProxyConfigResolver.ts` | 48   | `null`                                                            |
 
 > Note: only **one** of the two Copilot routes can own the `COPILOT` provider id
 > at a time. If both ship, they need distinct ids (e.g. `copilot` for OAuth vs
@@ -54,19 +54,19 @@ Same pre-reserved, inert slot the official route would also use:
 
 ## Prior art (verified against source, not blog posts)
 
-| | ericc-ch/copilot-api | LiteLLM `github_copilot` | CopilotChat.nvim | Zed |
-| --- | --- | --- | --- | --- |
-| OAuth client id | `Iv1.b507a08c87ecfe98` | `Iv1.b507a08c87ecfe98` (identical) | (LSP-delegated) | (LSP-delegated) |
-| Device-code URL | `github.com/login/device/code` | same | via official LSP | via official LSP |
-| Token exchange | `GET api.github.com/copilot_internal/v2/token` | same | same | same |
-| Chat endpoint | `api.githubcopilot.com/chat/completions` | same | same | `api.githubcopilot.com/chat/completions` |
-| Models endpoint | `…/models` | `…/models` | `…/models` | `api.individual.githubcopilot.com/models` |
-| Scope | `read:user` | `read:user` | — | — |
+|                 | ericc-ch/copilot-api                           | LiteLLM `github_copilot`           | CopilotChat.nvim | Zed                                       |
+| --------------- | ---------------------------------------------- | ---------------------------------- | ---------------- | ----------------------------------------- |
+| OAuth client id | `Iv1.b507a08c87ecfe98`                         | `Iv1.b507a08c87ecfe98` (identical) | (LSP-delegated)  | (LSP-delegated)                           |
+| Device-code URL | `github.com/login/device/code`                 | same                               | via official LSP | via official LSP                          |
+| Token exchange  | `GET api.github.com/copilot_internal/v2/token` | same                               | same             | same                                      |
+| Chat endpoint   | `api.githubcopilot.com/chat/completions`       | same                               | same             | `api.githubcopilot.com/chat/completions`  |
+| Models endpoint | `…/models`                                     | `…/models`                         | `…/models`       | `api.individual.githubcopilot.com/models` |
+| Scope           | `read:user`                                    | `read:user`                        | —                | —                                         |
 
 **The two-step token flow:** device flow → GitHub OAuth token (`gho_`/`ghu_`) →
 `GET copilot_internal/v2/token` → short-lived Copilot session token
 (`{ token, expires_at, refresh_in }`, auto-refreshed). Business/Enterprise use
-`api.business.` / `api.enterprise.` hosts and *require* the exchange step.
+`api.business.` / `api.enterprise.` hosts and _require_ the exchange step.
 
 **Required impersonation headers** (the backend gates on these — missing
 `Editor-Version` → hard `400 missing Editor-Version header for IDE auth`):
@@ -109,7 +109,7 @@ risk; aider's docs claim it's allowed. Neither is a GitHub guarantee. Treat as
 
 ## Design (if/when unparked)
 
-Mirrors the Codex proposal almost 1:1; the GitHub flow is actually *simpler*
+Mirrors the Codex proposal almost 1:1; the GitHub flow is actually _simpler_
 (standard device flow, no PKCE/loopback strictly needed).
 
 ### 1. Provider id
@@ -143,7 +143,7 @@ Port the Codex coordinator shape:
 `ModelHandlerCopilot` subclassing the OpenAI handler (like `ModelHandlerDeepSeek`):
 
 - `getClient()` → `new OpenAI({ apiKey: copilotToken, baseURL:
-  https://api.githubcopilot.com })`; recreate / use a token-getter on refresh.
+https://api.githubcopilot.com })`; recreate / use a token-getter on refresh.
 - Inject the impersonation headers via `defaultHeaders` (or a `fetch` wrapper for
   per-request freshness): `Copilot-Integration-Id: vscode-chat`,
   `Editor-Version`, `Editor-Plugin-Version`, `User-Agent`, `X-GitHub-Api-Version`.
