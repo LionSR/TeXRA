@@ -16,26 +16,32 @@ import { FlowTransition } from '../FlowTransitions';
 import type { CycleParams, ToolUseRoundServices } from '../CycleServices';
 import type { ToolUseRoundShared } from './roundShared';
 
-/** Prep result for ToolUsePrepNode - drained queued follow-up plus interrupt flag. */
-interface ToolUsePrepResult {
+/** Prep result for ToolUseRoundPrepNode - drained queued follow-up plus interrupt flag. */
+interface ToolUseRoundPrepResult {
   interrupted: boolean;
   queuedFollowUps: readonly FollowUpQueueBatchItem[] | null;
   synthetic: boolean;
 }
 
 /**
- * Prepares a tool-use round by checking interruptions and injecting queued follow-ups.
+ * Prepares one tool-use **round** (a single LLM invocation) by checking for
+ * interruptions and injecting any queued user follow-ups BEFORE the model call.
+ *
+ * "Round" = one invocation of the model inside `ToolUseRoundFlow`. This is the
+ * inner-loop prep node. Compare `ToolUsePrepareNode` in
+ * `implementations/flows/tooluse/nodes/`, which is the outer session-init node
+ * that runs once per tool-use session (builds initial messages, loads snapshots).
  *
  * If there are queued user messages (typed during previous tool execution),
  * they are injected here BEFORE calling the model. This ensures the model's
  * thinking/response considers the user's feedback.
  */
-export class ToolUsePrepNode<C> extends BaseNode<
+export class ToolUseRoundPrepNode<C> extends BaseNode<
   ToolUseRoundShared,
   CycleParams,
   ToolUseRoundServices<C>
 > {
-  async prep(_shared: ToolUseRoundShared): Promise<ToolUsePrepResult> {
+  async prep(_shared: ToolUseRoundShared): Promise<ToolUseRoundPrepResult> {
     const interrupted = this.services.checkInterruption();
 
     if (!this.services.session?.hasQueuedFollowUp()) {
@@ -57,7 +63,7 @@ export class ToolUsePrepNode<C> extends BaseNode<
 
   async post(
     shared: ToolUseRoundShared,
-    prepRes: ToolUsePrepResult,
+    prepRes: ToolUseRoundPrepResult,
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
       shared.shouldStop = true;
