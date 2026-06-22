@@ -56,6 +56,41 @@ export class OnboardingWelcomeCard extends LitElement {
         line-height: var(--line-height-normal, 1.4);
       }
 
+      .path {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--wa-space-xs);
+        margin: 0 0 var(--wa-space-s);
+      }
+
+      .path-step {
+        min-width: 0;
+        padding: var(--wa-space-xs);
+        border: 1px solid var(--vscode-input-border, transparent);
+        border-radius: var(--wa-border-radius-s, 4px);
+        background: color-mix(
+          in srgb,
+          var(--vscode-editor-background) 76%,
+          transparent
+        );
+      }
+
+      .path-step__label {
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-3xs);
+        margin-bottom: var(--wa-space-3xs);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold, 600);
+      }
+
+      .path-step__copy {
+        margin: 0;
+        color: var(--vscode-descriptionForeground);
+        font-size: var(--font-size-sm);
+        line-height: var(--line-height-normal, 1.4);
+      }
+
       .choices {
         display: flex;
         flex-direction: column;
@@ -93,6 +128,12 @@ export class OnboardingWelcomeCard extends LitElement {
         font-size: var(--font-size-sm);
         opacity: var(--opacity-subtle);
       }
+
+      @media (max-width: 520px) {
+        .path {
+          grid-template-columns: 1fr;
+        }
+      }
     `,
   ];
 
@@ -122,9 +163,33 @@ export class OnboardingWelcomeCard extends LitElement {
         ${waIcon('wand-magic-sparkles', { slot: 'icon' })}
         <span class="card-title">${ONBOARDING_CARD_TITLE}</span>
         <p class="card-copy">
-          Choose how TeXRA should call models. After sign-in, the setup
-          assistant checks this project and starts your first polish.
+          Start with one credential. TeXRA then checks this project, picks the
+          right agent team, and starts your first useful edit.
         </p>
+        <div class="path" aria-label="Getting started path">
+          <div class="path-step">
+            <span class="path-step__label">
+              ${waIcon('right-to-bracket')} 1. Connect
+            </span>
+            <p class="path-step__copy">
+              Researcher Access, ChatGPT subscription, or a provider API key.
+            </p>
+          </div>
+          <div class="path-step">
+            <span class="path-step__label"> ${waIcon('rocket')} 2. Setup </span>
+            <p class="path-step__copy">
+              The setup assistant checks LaTeX and applies a starter team.
+            </p>
+          </div>
+          <div class="path-step">
+            <span class="path-step__label">
+              ${waIcon('code-compare')} 3. Review
+            </span>
+            <p class="path-step__copy">
+              Run a polish pass and inspect the diff before accepting changes.
+            </p>
+          </div>
+        </div>
         <div class="choices">
           <div class="choice">
             <wa-button
