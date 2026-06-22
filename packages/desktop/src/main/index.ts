@@ -613,8 +613,9 @@ function createWindow(options: {
     runInstallCommand: async (command) => {
       await runSetupCommand(command);
     },
-    onApiKeyChanged: () =>
-      onboardingIpcRef.current?.refreshOnboardingFunnel(),
+    onApiKeyChanged: async () => {
+      await onboardingIpcRef.current?.refreshOnboardingFunnel();
+    },
     onError: reportAsyncError,
   });
   settingsIpcRef.current = settingsIpc;
@@ -665,10 +666,20 @@ function createWindow(options: {
   // history never see the welcome card (State 0) or setup auto-start (State
   // 1). Mirrors the extension (`extension.ts:282`) and CLI
   // (`runOnboarding.tsx:154`) backfill, which desktop formerly skipped by
-  // hardcoding `'done'`. The async backfill races the in-page webview mount,
-  // which is fine: the WB_READY handler reads the same global-state flags.
+  // hardcoding `'done'`.
   void (async () => {
     try {
+      const globalState = platform().globalState;
+      // Gate the whole probe + backfill on the flag being unwritten, so the
+      // credential/relay/`listExecutions` I/O only runs once (first launch
+      // after upgrade) rather than on every window creation.
+      if (
+        globalState.get<boolean | undefined>(
+          GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+        ) !== undefined
+      ) {
+        return;
+      }
       const hasCredential = await (async () => {
         if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
         const isRelaySignedIn = await SupabaseClient.isAuthenticated();
@@ -683,14 +694,13 @@ function createWindow(options: {
         }
         return hasAnyProviderApiKey(platform().secrets);
       })().catch(() => false);
-      const globalState = platform().globalState;
       const hasPriorInstall =
         globalState.get<string | undefined>(
           GlobalStateKey.LAST_KNOWN_VERSION,
         ) !== undefined;
-      // Inline `listExecutions` + `clearStoreCache` import so the agent
-      // storage module tree-shakes from the desktop main bundle unless we
-      // actually reach the backfill path on the first launch.
+      // Inline `listExecutions` import so the agent storage module tree-shakes
+      // from the desktop main bundle unless we actually reach the backfill
+      // path on the first launch.
       const { listExecutions } = await import('@agent/storage');
       const hasRunHistory = await listExecutions()
         .then((entries) => entries.length > 0)
@@ -700,6 +710,10 @@ function createWindow(options: {
         hasPriorInstall,
         hasRunHistory,
       });
+      // The backfill can finish after the webview has already mounted and
+      // pushed an initial funnel state, so re-derive once it lands to avoid
+      // stranding an upgraded user on the welcome/setup card for the session.
+      await onboardingIpcRef.current?.refreshOnboardingFunnel();
     } catch {
       // Swallow — backfill failure must not block window creation.
     }

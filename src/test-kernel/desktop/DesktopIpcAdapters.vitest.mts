@@ -72,6 +72,9 @@ interface DesktopOnboardingIpcModule {
         update(key: string, value: unknown): PromiseLike<void>;
       };
       hasCredential?: () => boolean | Promise<boolean>;
+      selectSetupAgent?: () => Promise<void>;
+      kickoffSetup?: () => Promise<void>;
+      signInWithChatGpt?: () => Promise<void>;
       onAsyncError?: (error: unknown) => void;
     },
   ): {
@@ -93,6 +96,14 @@ interface DesktopViewStateIpcModule {
     handleMessage(message: { command: string }): boolean;
     dispose(): void;
   };
+}
+
+// The WEBVIEW_READY handler triggers refreshOnboardingFunnel as a
+// fire-and-forget task. When `hasCredential` is supplied it adds an extra
+// awaited `Promise.resolve(...).catch(...)` hop before the funnel state is
+// posted, so a single microtask flush isn't enough — drain a few.
+async function flushAsync(): Promise<void> {
+  for (let i = 0; i < 5; i++) await Promise.resolve();
 }
 
 async function loadDesktopShellIpc(): Promise<DesktopShellIpcModule> {
@@ -514,7 +525,7 @@ describe('desktop IPC adapters', () => {
         view: 'main',
       }),
     ).toBe(false);
-    await Promise.resolve();
+    await flushAsync();
     // Credential present, firstRunDone not set → State 1 (setup card).
     expect(postToRenderer).toHaveBeenLastCalledWith({
       command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
@@ -552,7 +563,7 @@ describe('desktop IPC adapters', () => {
         view: 'main',
       }),
     ).toBe(false);
-    await Promise.resolve();
+    await flushAsync();
     // Backfilled veteran → State 2 (done), no onboarding UI shown.
     expect(postToRenderer).toHaveBeenLastCalledWith({
       command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
@@ -586,7 +597,7 @@ describe('desktop IPC adapters', () => {
       command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
       view: 'main',
     });
-    await Promise.resolve();
+    await flushAsync();
     expect(postToRenderer).toHaveBeenLastCalledWith({
       command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
       state: 'setup',
@@ -600,8 +611,7 @@ describe('desktop IPC adapters', () => {
         command: MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP,
       }),
     ).toBe(true);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushAsync();
     expect(update).toHaveBeenCalledWith(
       GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
       true,

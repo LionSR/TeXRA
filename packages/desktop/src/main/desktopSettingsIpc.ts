@@ -709,6 +709,10 @@ export function createDesktopSettingsIpc(
       postModelSelectionData(),
       postMainModelOptionsData(),
     ]);
+    // ChatGPT sign-in/out is a credential change too: refresh the onboarding
+    // funnel so a user who signs in from Settings leaves `needs-credential`
+    // without needing a reload.
+    await options.onApiKeyChanged?.();
   }
 
   async function signInChatGpt(): Promise<void> {
