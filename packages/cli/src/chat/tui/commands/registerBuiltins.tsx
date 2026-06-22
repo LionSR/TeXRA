@@ -325,7 +325,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'login',
-    description: 'Sign in to TeXRA or ChatGPT subscription',
+    description: 'Sign in to ChatGPT or Researcher Access',
     category: 'account',
     formComponent: LoginFormAdapter,
   });
