@@ -46,7 +46,10 @@ features, and flipping the default per-model once proven.
   expected to be Interactions-only. Staying on `generateContent` strands those.
 - **Server-side state.** `previous_interaction_id` (`genai.d.ts:2411`) continues
   a conversation without resending the full `Content[]` each round — the same
-  payload win TeXRA already realised for OpenAI via `previous_response_id`.
+  payload win TeXRA already realised for OpenAI via `previous_response_id`. The
+  v0 plan deliberately starts with `store:false` to preserve TeXRA's current
+  history/compaction contract, then enables server-side continuation after
+  expiry/restore behaviour is specified and tested.
 - **Background execution.** `background?: boolean` (`:2389`) + `store?`
   (`:2385`) + `webhook_config?` (`:2416`) map onto TeXRA's existing
   background-response machinery (`texra.model.useBackgroundResponses`).
@@ -172,12 +175,17 @@ can include images.
 **Streaming — `InteractionSSEEvent` (`:7559`):**
 `InteractionCreatedEvent | InteractionCompletedEvent | InteractionStatusUpdate |
 ErrorEvent | StepStart | StepDelta | StepStop`. Events discriminate on
-**`event_type`** (`"step.start"` `:11699`, `"step.delta"` `:11668`,
-`"step.stop"`). `StepDelta = { event_type:"step.delta", index, delta:
-StepDeltaData, event_id?, metadata? }`; `StepDeltaData` (`:11685`) includes
-`TextDelta`, `ArgumentsDelta` (streamed tool args), `ThoughtSummaryDelta`,
-`ThoughtSignatureDelta`, `FunctionResultDelta`, image/audio/doc deltas, …;
-`StepDeltaMetadata.total_usage?: Usage` (`:11690`) carries running usage.
+**`event_type`**: interaction lifecycle events (`"interaction.created"`
+`:7100`, `"interaction.completed"` `:7078`, `"interaction.status_update"`
+`:7625`, `"error"` `:3556`) and step events (`"step.start"` `:11699`,
+`"step.delta"` `:11668`, `"step.stop"` `:11719`). Status changes such as
+`"in_progress"` and `"requires_action"` are the `status` field on
+`InteractionStatusUpdate`, not distinct `event_type` values. `StepDelta = {
+event_type:"step.delta", index, delta: StepDeltaData, event_id?, metadata? }`;
+`StepDeltaData` (`:11685`) includes `TextDelta`, `ArgumentsDelta` (streamed tool
+args), `ThoughtSummaryDelta`, `ThoughtSignatureDelta`, `FunctionResultDelta`,
+image/audio/doc deltas, …; `StepDeltaMetadata.total_usage?: Usage` (`:11690`)
+carries running usage.
 
 **Usage — `Usage` (`:13952`)** (snake_case, differs from
 `GenerateContentResponseUsageMetadata`): `total_input_tokens`,
@@ -285,9 +293,11 @@ JSON** — trust the `.d.ts` where they differ.
 - **Structured output** is a top-level `response_format` array of
   `{ type:"text", mime_type:"application/json", schema }` (`response_mime_type` is
   deprecated). **Streaming** discriminates events on `event_type`
-  (`interaction.created` / `interaction.in_progress` / `step.start` /
-  `step.delta` / `step.stop` / `interaction.requires_action` /
-  `interaction.completed`). `TextDelta` = `{ type:"text", text }` (`:11995`).
+  (`interaction.created` / `interaction.completed` /
+  `interaction.status_update` / `step.start` / `step.delta` / `step.stop` /
+  `error`). Interaction states such as `in_progress` and `requires_action` live
+  on `InteractionStatusUpdate.status`, not in `event_type`. `TextDelta` =
+  `{ type:"text", text }` (`:11995`).
 - **Built-in tools are transparent:** `google_search_call` + `google_search_result`
   steps, with **inline** citations as an `annotations` array on the
   `model_output` text content (vs the old separate `groundingMetadata`).
@@ -325,6 +335,12 @@ JSON** — trust the `.d.ts` where they differ.
 | Usage/pricing                     | `GenerateContentResponseUsageMetadata`                       | `Usage` (`total_*_tokens`) → remap `googleUsage.ts`                                                                                              |
 | Background                        | n/a today                                                    | `background:true` (+ `store`, `webhook_config`)                                                                                                  |
 | Caching                           | `cachedContentTokenCount` rebate                             | `cached_content` + `Usage.total_cached_tokens`                                                                                                   |
+
+For v0, send `system_instruction` on every `interactions.create` request rather
+than assuming it persists across future `previous_interaction_id` continuations.
+This mirrors the OpenAI Responses implementation, which re-sends instructions
+with each request; a later `store:true` phase can loosen this only after a
+real-key fixture proves continuation semantics.
 
 ## Design (additive, feature-flagged)
 
