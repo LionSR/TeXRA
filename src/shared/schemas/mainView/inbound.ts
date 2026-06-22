@@ -24,7 +24,7 @@ import {
   ExtendedDocumentFileTypeSchema,
   MultipleDocumentFileTypeSchema,
 } from '../fileTypes';
-import { SessionTypeSchema } from './state';
+import { GettingStartedActionSchema, SessionTypeSchema } from './state';
 
 const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.WEBVIEW_READY),
@@ -199,6 +199,10 @@ const BannerMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION),
+    action: GettingStartedActionSchema,
+  }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER),
     missingTools: z.array(z.string()).optional(),
