@@ -15,6 +15,18 @@ describe('assertExplicitModelKnown', () => {
     expect(assertExplicitModelKnown('  deepseekT  ')).toBe('deepseekT');
   });
 
+  it('normalizes user-facing model names to registry ids', () => {
+    expect(assertExplicitModelKnown('glm5.2')).toBe('glm52');
+    expect(assertExplicitModelKnown('GLM-5.2')).toBe('glm52');
+    expect(assertExplicitModelKnown('glm-5.2')).toBe('glm52');
+  });
+
+  it('rejects ambiguous provider model names', () => {
+    expect(() => assertExplicitModelKnown('claude-opus-4-7')).toThrow(
+      CliUsageError,
+    );
+  });
+
   it('throws a CliUsageError for an unknown model id', () => {
     expect(() => assertExplicitModelKnown('nonexistent-model-xyz')).toThrow(
       CliUsageError,
