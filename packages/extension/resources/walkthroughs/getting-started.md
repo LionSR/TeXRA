@@ -2,7 +2,7 @@
 
 TeXRA helps you write better papers. It uses AI to correct, polish, review, and restructure your LaTeX manuscripts -- right inside VS Code.
 
-One story, three beats: **Setup is the doorman, polish is the demo, the orchestrator is the habit.**
+The shortest path is: choose a credential, run setup once, then let the orchestrator handle the daily paper work.
 
 ## 1. Choose a credential
 
