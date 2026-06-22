@@ -84,7 +84,7 @@ export class ProbeEnvironmentTool extends defineTool({
         ),
         platform.secrets.anyApiKeyExists().catch((err) => {
           throw new ToolError(
-            `Failed to probe API key status: ${toErrorMessage(err)}`,
+            `Failed to probe credential status: ${toErrorMessage(err)}`,
             { cause: err },
           );
         }),
@@ -132,9 +132,9 @@ export class ProbeEnvironmentTool extends defineTool({
         // misled credential planning.
         anyApiKeySet: apiKeys.some((k) => k.hasKey),
         // `hasAnyUsableCredential` is the broader "can setup launch a
-        // model right now" signal — direct key OR server-side
-        // Researcher Access. Kept as a separate field so the agent
-        // can reason about the two independently.
+        // model right now" signal — direct key, ChatGPT subscription,
+        // or server-side Researcher Access. Kept as a separate field
+        // so the agent can reason about API keys separately.
         hasAnyUsableCredential: anyKeySet,
         apiKeys,
         researcherAccess: {
@@ -166,6 +166,7 @@ function buildHeadline(summary: {
   latexWorkshop: { installed: boolean };
   credentials: {
     anyApiKeySet: boolean;
+    hasAnyUsableCredential: boolean;
     researcherAccess: { authenticated: boolean };
   };
 }): string {
@@ -184,6 +185,13 @@ function buildHeadline(summary: {
   if (summary.credentials.anyApiKeySet) creds.push('API key set');
   if (summary.credentials.researcherAccess.authenticated)
     creds.push('signed in');
+  if (
+    summary.credentials.hasAnyUsableCredential &&
+    !summary.credentials.anyApiKeySet &&
+    !summary.credentials.researcherAccess.authenticated
+  ) {
+    creds.push('usable credential');
+  }
   parts.push(`credentials: ${creds.length > 0 ? creds.join(' + ') : 'none'}`);
   return parts.join('; ');
 }

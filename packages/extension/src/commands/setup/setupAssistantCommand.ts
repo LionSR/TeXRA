@@ -195,9 +195,9 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
  * report a blank `PROVIDER_API_KEY=""` env var as present, which then
  * fails in `resolveLaunchModel` with a confusing "No model is available"
  * modal. `hasAnyUsableSetupCredential()` mirrors the adapter-level check:
- * at least one provider with a non-blank key, or valid server-side
- * access. Keeps preflight and launch agreed on what "has a credential"
- * means.
+ * active ChatGPT subscription for Codex, at least one provider with a
+ * non-blank key, or valid server-side access. Keeps preflight and launch
+ * agreed on what "has a credential" means.
  */
 export async function hasAnyUsableSetupCredential(): Promise<boolean> {
   if (await isCodexSubscriptionActive(API_KEY_MODEL_BY_PROVIDER.openai)) {
