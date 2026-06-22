@@ -59,13 +59,15 @@ FileSearch | GoogleMaps | Retrieval` (`:12272`) — built-in **and** custom
   functions in one request. This removes the limitation TeXRA documents today:
   native `googleSearch` is disabled because the `generateContent` API cannot
   combine `googleSearch` with `functionDeclarations` (`toolConversion.ts:355-357`,
-  attributed there to the Live API). Interactions lifts it on the regular surface.
+  attributed there to the Live API). Interactions exposes built-ins and custom
+  functions in one `Tool` union; enable mixed requests after model-gated smoke
+  tests rather than assuming every id supports every combination.
 - **Tool results with images.** A `function_result` step's `result` can be
   `string | {} | Array<FunctionResultSubcontent>` where `FunctionResultSubcontent
 = TextContent | ImageContent` (`:4543`,`:4553`).
-- **Same SDK, same client, no new dependency.** `client.interactions` already
-  exists on the `new GoogleGenAI({ apiKey })` instance TeXRA builds
-  (`modelHandlerGoogleGenAI.ts:304`,`:323`).
+- **Same SDK, same dependency.** `client.interactions` already exists on
+  `GoogleGenAI`, so v0 should reuse TeXRA's credential/base URL/retry setup while
+  selecting and smoke-testing the Interactions API version explicitly.
 
 ## Current state (verified in repo)
 
@@ -146,6 +148,9 @@ get(id, params?)   // (:4609-4611)   delete(id, params?)   // (:4612)   cancel(i
 `Content = TextContent | ImageContent | AudioContent | DocumentContent |
 VideoContent` (`:1841`). Multimodal uses **typed content objects**, not the chat
 API's `Part`. Resuming a conversation client-side means passing prior `Step[]`.
+In stateless mode, TeXRA must keep the `user_input` steps it sends because the
+next request must include those local steps in addition to model-generated steps
+returned by `interactions.create`.
 
 **Tools — `Tool` (`:12272`):** custom = `FunctionT` (`:4565`)
 `{ type:"function", name?, description?, parameters?: <JSON Schema> }`; built-ins
@@ -298,6 +303,15 @@ JSON** — trust the `.d.ts` where they differ.
   `error`). Interaction states such as `in_progress` and `requires_action` live
   on `InteractionStatusUpdate.status`, not in `event_type`. `TextDelta` =
   `{ type:"text", text }` (`:11995`).
+- **Stateless function-calling history:** the official guide requires the next
+  `store:false` request to include the initial `user_input` step, all
+  model-generated steps exactly as received (including `thought` and
+  `function_call`), and the local `function_result` step. This matches v0's
+  local-history plan and is the contract the tests should encode.
+- **Explicit caching is not yet available in Interactions.** The SDK exposes
+  `cached_content`, but the overview lists explicit caching under
+  generateContent-only limitations and points Interactions users at implicit
+  caching through `previous_interaction_id`.
 - **Built-in tools are transparent:** `google_search_call` + `google_search_result`
   steps, with **inline** citations as an `annotations` array on the
   `model_output` text content (vs the old separate `groundingMetadata`).
@@ -313,28 +327,31 @@ JSON** — trust the `.d.ts` where they differ.
   **none** of those — it exposes `total_input_tokens` / `total_output_tokens` /
   `total_cached_tokens` / `total_tool_use_tokens` / `total_thought_tokens`
   (+ `*_by_modality`). `googleUsage.ts` must map the SDK names.
-- **REST path** is `v1beta2/interactions` (vs `v1beta/models/…:generateContent`)
-  — informational only; TeXRA calls the SDK, not REST.
+- **REST path / API version** examples currently use `/v1beta/interactions` while
+  the SDK README says default endpoints are beta unless `apiVersion` is set.
+  This is informational for the design because TeXRA calls the SDK, but v0
+  should add a real-key smoke test before hardcoding `apiVersion:'v1'` or reusing
+  any relay endpoint assumptions.
 
 ## Mapping: `generateContent`/chat → Interactions
 
-| TeXRA concern                     | Today (chat/`generateContent`)                               | Interactions (verified)                                                                                                                          |
-| --------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Send a turn                       | `chat.sendMessage(parts)`                                    | `interactions.create({ model, input })`                                                                                                          |
-| Streaming                         | `sendMessageStream()` → `chunk.candidates[0].content.parts`  | `Stream<InteractionSSEEvent>`; consume `event_type:"step.delta"` → `delta` (TextDelta etc.)                                                      |
-| Conversation state                | resend full `Content[]` each round                           | v0: pass prior `Step[]` in `input` with `store:false`; later: `previous_interaction_id` when using `store:true`                                  |
-| System prompt                     | `systemInstruction` on chat params                           | `system_instruction` on create                                                                                                                   |
-| Custom tools                      | `[{ functionDeclarations:[…] }]`                             | `tools:[{ type:"function", name, description, parameters }]`                                                                                     |
-| Built-in search                   | **disabled** (can't mix w/ functions)                        | `tools:[{ type:"google_search" }, …functions]` — now mixable                                                                                     |
-| Tool call out                     | `functionCall` part                                          | `FunctionCallStep` `{ name, arguments, id }` (+ streamed `ArgumentsDelta`)                                                                       |
-| Tool result in                    | `functionResponse` part (user msg)                           | a `function_result` step/input `{ call_id, result }`; `result` may include images                                                                |
-| **Parallel tools + thought sigs** | batched into one model `Content`, signature on the call part | sigs live on **`ThoughtStep.signature`** + `ThoughtSignatureDelta`, separate from `function_call` steps; server holds them when continuing by id |
-| Thinking                          | `thinkingConfig` + `thought` parts                           | `generation_config` thinking + `ThoughtStep`/`ThoughtSummaryDelta`                                                                               |
-| Multimodal in                     | inline base64 / File API `uri` parts                         | typed `Content` (`ImageContent`/`DocumentContent`/…) in `input`                                                                                  |
-| Token counting                    | `client.models.countTokens()`                                | unchanged — still on `client.models`                                                                                                             |
-| Usage/pricing                     | `GenerateContentResponseUsageMetadata`                       | `Usage` (`total_*_tokens`) → remap `googleUsage.ts`                                                                                              |
-| Background                        | n/a today                                                    | `background:true` (+ `store`, `webhook_config`)                                                                                                  |
-| Caching                           | `cachedContentTokenCount` rebate                             | `cached_content` + `Usage.total_cached_tokens`                                                                                                   |
+| TeXRA concern                     | Today (chat/`generateContent`)                               | Interactions (verified)                                                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Send a turn                       | `chat.sendMessage(parts)`                                    | `interactions.create({ model, input })`                                                                                                                       |
+| Streaming                         | `sendMessageStream()` → `chunk.candidates[0].content.parts`  | `Stream<InteractionSSEEvent>`; consume `event_type:"step.delta"` → `delta` (TextDelta etc.)                                                                   |
+| Conversation state                | resend full `Content[]` each round                           | v0: pass prior `Step[]` in `input` with `store:false`; later: `previous_interaction_id` when using `store:true`                                               |
+| System prompt                     | `systemInstruction` on chat params                           | `system_instruction` on create                                                                                                                                |
+| Custom tools                      | `[{ functionDeclarations:[…] }]`                             | `tools:[{ type:"function", name, description, parameters }]`                                                                                                  |
+| Built-in search                   | **disabled** (can't mix w/ functions)                        | same `tools` array type as custom functions; enable mixed requests after model-gated smoke tests                                                              |
+| Tool call out                     | `functionCall` part                                          | `FunctionCallStep` `{ name, arguments, id }` (+ streamed `ArgumentsDelta`)                                                                                    |
+| Tool result in                    | `functionResponse` part (user msg)                           | a `function_result` step/input `{ call_id, result }`; `result` may include images                                                                             |
+| **Parallel tools + thought sigs** | batched into one model `Content`, signature on the call part | custom function steps have no signature fields in 2.9.0; preserve `ThoughtStep.signature`/`ThoughtSignatureDelta` and any signed built-in tool steps verbatim |
+| Thinking                          | `thinkingConfig` + `thought` parts                           | `generation_config` thinking + `ThoughtStep`/`ThoughtSummaryDelta`                                                                                            |
+| Multimodal in                     | inline base64 / File API `uri` parts                         | typed `Content` (`ImageContent`/`DocumentContent`/…) in `input`                                                                                               |
+| Token counting                    | `client.models.countTokens()`                                | unchanged — still on `client.models`                                                                                                                          |
+| Usage/pricing                     | `GenerateContentResponseUsageMetadata`                       | `Usage` (`total_*_tokens`) → remap `googleUsage.ts`                                                                                                           |
+| Background                        | n/a today                                                    | `background:true` (+ `store`, `webhook_config`)                                                                                                               |
+| Caching                           | explicit cache rebate via `cachedContentTokenCount`          | v0: no explicit cache parity; later `store:true` can use implicit caching via `previous_interaction_id`; explicit caching is documented as unavailable        |
 
 For v0, `store:false` means the handler cannot rely on `previous_interaction_id`;
 conversation state must come from local `Step[]` resending. Send request-level
@@ -358,7 +375,9 @@ Mirror the OpenAI Responses precedent end to end.
 - **Reuse:** `googleSdkError.ts` (same `GoogleApiError`); the JSON-Schema
   flattening/`$schema`-stripping in `toolConversion.ts` (wire-agnostic) — feed it
   into `FunctionT.parameters` instead of `functionDeclarations`; the media
-  upload size/threshold logic.
+  upload size/threshold logic; the credential/base URL/retry setup from
+  `getClient`, with an explicit Interactions API-version smoke test before
+  choosing an `apiVersion` override.
 - **Rewrite:** input construction (typed `Content` + optional prior `Step[]` /
   `previous_interaction_id`), the streaming loop (SSE `event_type` events, route
   `TextDelta` → output, `ThoughtSummaryDelta`/`ThoughtSignatureDelta` → thinking,
@@ -376,9 +395,11 @@ Add `'ModelHandlerGoogleInteractions'` to `ModelHandlerCompatibilityKey`
 
 Add `shouldUseGoogleInteractionsAPI(config, useOpenRouter)` next to
 `shouldUseResponsesAPI`. Gate on a new setting plus per-model
-`requiresInteractionsAPI` (agents like Deep Research are Interactions-only and
-force it). Branch in `createModelHandler()` **before** the default Google route,
-and exclude `useOpenRouter` (OpenRouter can't proxy Interactions).
+`requiresInteractionsAPI` for model ids that cannot use `generateContent`.
+Branch in `createModelHandler()` **before** the default Google route, and exclude
+`useOpenRouter` (OpenRouter can't proxy Interactions). If an Interactions-only
+model is selected while `useOpenRouter` is active, surface a clear availability
+error instead of silently falling back to the chat handler.
 
 ### 4. Settings
 
@@ -389,11 +410,12 @@ Models; document in `docs/guide/configuration.md`.
 
 ### 5. Model registry
 
-Register the Interactions-supported model and agent ids (`llm-zoo`
-`MODEL_CONFIGS` + `src/model/` capability/pricing), marking agent-only entries
-Interactions-required. The official overview currently includes Gemini
-3.1/3/2.5 model ids, Lyria preview model ids, and Deep Research / Antigravity
-preview agent ids; confirm the exact set to expose and pricing at impl time.
+Register only model-mode Interactions-supported ids in v0 (`llm-zoo`
+`MODEL_CONFIGS` + `src/model/` capability/pricing). The official overview
+currently includes Gemini 3.1/3/2.5 model ids, Lyria preview model ids, and Deep
+Research / Antigravity preview agent ids; keep agent-only ids documented but do
+not expose them until an agent-mode branch exists. Confirm the exact model set
+and pricing at impl time.
 
 ## Platform / VS Code separation
 
@@ -405,20 +427,23 @@ schema; no new ports.
 
 ## Risks & open questions
 
-1. **Thought-signature model changed (re-scope, not eliminate).** In chat,
-   Gemini 3 signatures ride on the function-call part and TeXRA batches parallel
-   results into one message. In Interactions signatures are their own
-   `ThoughtStep.signature` (+ `ThoughtSignatureDelta`), and when continuing by
-   `previous_interaction_id` the server retains them — likely **simpler**. But if
-   we send history client-side (`input: Step[]`), we must round-trip the
-   `thought` steps verbatim. Needs a fixture test either way; this is still the
-   place most likely to silently break parallel tool use.
+1. **Thought/signature model changed (re-scope, not eliminate).** In chat,
+   Gemini 3 signatures ride on generated parts and TeXRA batches parallel
+   results into one message. In Interactions, custom `FunctionCallStep` and
+   `FunctionResultStep` have no `signature` field in `@google/genai@2.9.0`;
+   thought signatures are `ThoughtStep.signature` (+ `ThoughtSignatureDelta`).
+   Several built-in tool call/result step types also expose `signature`, so
+   stateless mode must round-trip all prior `Step[]` entries verbatim rather
+   than reconstructing only a thought/function subset. Needs a fixture test
+   either way; this is still the place most likely to silently break parallel
+   tool use.
 2. **Server-side state vs history/compaction.** TeXRA's restore/compaction assume
    a resend-able local transcript. The guide confirms `store` makes both modes
-   first-class: `store:false` = stateless drop-in parity (send full `Step[]` each
-   round; simplest, keeps compaction working unchanged) vs `store:true` (default)
-   with `previous_interaction_id` (payload win, but the server — not TeXRA — then
-   owns compaction, and behaviour must be defined when the stored interaction has
+   first-class: `store:false` = stateless drop-in parity (send local
+   `user_input` steps plus returned model steps each round; simplest, keeps
+   compaction working unchanged) vs `store:true` (default) with
+   `previous_interaction_id` (payload win, but the server — not TeXRA — then owns
+   compaction, and behaviour must be defined when the stored interaction has
    expired or a run is restored from old history). Official retention is 55 days
    on paid tier / 1 day on free tier; note `store:false` is incompatible with
    `background=true` and with later `previous_interaction_id` use. **Recommend
@@ -430,11 +455,18 @@ schema; no new ports.
    working version, verify key/model access in a real-key smoke test, and keep
    `generateContent` as fallback.
 4. **Usage/pricing remap.** `Usage.total_*` field names → `googleUsage.ts`
-   re-derivation; re-validate cache-rebate and reasoning-token accounting.
-5. **Managed agents are a different product.** `agent=` + `environment:'remote'`
+   re-derivation; re-validate implicit-cache and reasoning-token accounting. Do
+   not claim explicit `cached_content` parity until Google marks explicit caching
+   available for Interactions despite the field existing in SDK types.
+5. **API version and relay compatibility.** The existing Google handler does not
+   set `apiVersion`; the SDK defaults to beta endpoints, and official REST
+   examples currently use `/v1beta/interactions`. Before enabling included relay
+   keys or hardcoding `apiVersion:'v1'`, smoke-test personal-key and relay-key
+   calls for endpoint support, snake_case request fields, and error mapping.
+6. **Managed agents are a different product.** `agent=` + `environment:'remote'`
    provisions a remote sandbox (browse/exec). **Out of scope for v0**
    (model-mode only); track separately.
-6. **Service ids / pricing** (`⚠️ confirm`): supported model and agent ids are
+7. **Service ids / pricing** (`⚠️ confirm`): supported model and agent ids are
    listed in the official overview, but TeXRA still needs an implementation-time
    decision about which ids to register plus current $/token pricing and
    `ServiceTier` Flex/Priority cost deltas.
@@ -443,15 +475,16 @@ schema; no new ports.
 
 **In (v0):** `ModelHandlerGoogleInteractions` in **model mode** (text +
 multimodal in, SSE streaming, custom function calling incl. parallel calls +
-thought-signature round-trip, thinking, token counting, `Usage`-based
+verbatim `Step[]` signature round-trip, thinking, token counting, `Usage`-based
 pricing); compatibility key; routing predicate + factory branch;
 `useGoogleInteractionsAPI` setting + Settings UI + docs; tests (streaming SSE,
 parallel-tool/thought-signature, usage mapping, routing); keep `generateContent`
 as default fallback.
 
 **Out (v0):** managed agents (`agent=`, `environment:'remote'`); media generation
-(`response_modalities`/image/audio out); Deep Research agent; making Interactions
-the **default** for Gemini (ship behind the flag, flip later); OpenRouter support.
+(`response_modalities`/image/audio out); explicit `cached_content` parity; Deep
+Research agent; making Interactions the **default** for Gemini (ship behind the
+flag, flip later); OpenRouter support.
 
 ## Milestones
 
@@ -461,10 +494,12 @@ the **default** for Gemini (ship behind the flag, flip later); OpenRouter suppor
 2. `ModelHandlerGoogleInteractions` (model mode): SSE streaming + custom tools;
    compatibility key; factory routing behind `useGoogleInteractionsAPI` (default
    **off**). Unit tests on input/tool/usage translation (mocked SDK), explicitly
-   the parallel-tool/thought-signature round-trip.
-3. Multimodal `Content` input, thinking, token counting, cache/usage parity;
-   mixed built-in `google_search` + functions; settings UI + `configuration.md`.
-4. Real-key smoke test; CHANGELOG; decide per-model default flip; register GA ids.
+   the parallel-tool/verbatim-steps signature round-trip.
+3. Multimodal `Content` input, thinking, token counting, implicit-cache usage
+   accounting; settings UI + `configuration.md`.
+4. Mixed built-in `google_search` + functions after model-gated smoke tests
+   confirm support for the selected model ids.
+5. Real-key smoke test; CHANGELOG; decide per-model default flip; register GA ids.
 
 ## References
 
