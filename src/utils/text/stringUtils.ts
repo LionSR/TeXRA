@@ -1,6 +1,8 @@
 import pluralizeWord from 'pluralize';
 
-const graphemeSegmenter = new Intl.Segmenter();
+const graphemeSegmenter = new Intl.Segmenter(undefined, {
+  granularity: 'grapheme',
+});
 
 /** Normalize CRLF line endings to LF. */
 export function normalizeLineEndings(text: string): string {
@@ -97,6 +99,7 @@ export function countLines(text: string): number {
 export function truncateWithEllipsis(text: string, maxLen: number): string {
   const graphemes = [...graphemeSegmenter.segment(text)];
   if (graphemes.length <= maxLen) return text;
+  if (maxLen <= 1) return '…';
   return `${graphemes
     .slice(0, maxLen - 1)
     .map((s) => s.segment)
@@ -132,6 +135,9 @@ export function truncateSummary(text: string, maxLength: number): string {
 export function tailWithEllipsis(text: string, maxLen: number): string {
   const graphemes = [...graphemeSegmenter.segment(text)];
   if (graphemes.length <= maxLen) return text;
+  // Guard maxLen <= 1: slice(-(1-1)) === slice(-0) === slice(0) would return
+  // the whole array, so the ellipsis budget collapses to just "…".
+  if (maxLen <= 1) return '…';
   return `…${graphemes
     .slice(-(maxLen - 1))
     .map((s) => s.segment)
