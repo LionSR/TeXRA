@@ -14,6 +14,10 @@ function readWebviewComponent(name: string): string {
   );
 }
 
+function readRepoFile(path: string): string {
+  return readFileSync(repoPath(path), 'utf8');
+}
+
 describe('extension onboarding experience', () => {
   it('shows the State 0 path from credential to first review', () => {
     const source = readWebviewComponent('OnboardingWelcomeCard');
@@ -39,6 +43,24 @@ describe('extension onboarding experience', () => {
     );
     expect(chatGptButton).toContain('variant="brand"');
     expect(chatGptButton).toContain('appearance="filled"');
+  });
+
+  it('keeps walkthrough credential copy aligned with ChatGPT-first onboarding', () => {
+    for (const source of [
+      readRepoFile('packages/extension/package.json'),
+      readRepoFile(
+        'packages/extension/resources/walkthroughs/getting-started.md',
+      ),
+    ]) {
+      const chatGptStart = source.indexOf('**Use ChatGPT subscription**');
+      const researcherStart = source.indexOf(
+        '**Sign in with Researcher Access**',
+      );
+
+      expect(chatGptStart).toBeGreaterThanOrEqual(0);
+      expect(researcherStart).toBeGreaterThanOrEqual(0);
+      expect(chatGptStart).toBeLessThan(researcherStart);
+    }
   });
 
   it('keeps empty-project onboarding action oriented', () => {
