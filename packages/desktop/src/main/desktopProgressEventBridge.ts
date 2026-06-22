@@ -189,7 +189,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
         }
         if (data.suppressViewSwitch !== true) {
           this.opts.routeToProgress();
-          this.restoreDisplayForStream(data.streamId);
+          this.sendRestoredDisplay(data.streamId);
         }
         return;
       }
@@ -224,97 +224,13 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
 
   // ── Restored display ─────────────────────────────────────────────────────
 
-  sendRestoredDisplay(streamId: StreamTabId): void {
-    this.restoreDisplayForStream(streamId);
-  }
-
-  // ── Stream lifecycle ──────────────────────────────────────────────────────
-
-  onStreamDeleted(streamId: StreamTabId): void {
-    this.removePersistedStream(streamId);
-    this.restoredDisplaySent.delete(streamId);
-    this.restoredDisplayInFlight.delete(streamId);
-  }
-
-  async onAllStreamsDeleted(): Promise<void> {
-    this.restoredStreams.clear();
-    this.restoredDisplaySent.clear();
-    this.restoredDisplayInFlight.clear();
-    if (this.opts.streamSnapshotStore) {
-      try {
-        await this.opts.streamSnapshotStore.replaceAll([]);
-      } catch (error: unknown) {
-        this.opts.logger.warn('Failed to clear stream snapshot store', {
-          data: error instanceof Error ? error : { error },
-        });
-      }
-    }
-  }
-
-  // ── Dispose ──────────────────────────────────────────────────────────────
-
-  dispose(): void {
-    this.unsubscribe();
-  }
-
-  // ── Private helpers ──────────────────────────────────────────────────────
-
-  private persistStreamSnapshot(streamId: StreamTabId): void {
-    const store = this.opts.streamSnapshotStore;
-    if (!store) return;
-
-    const taskState = this.opts.state.snapshots.getTaskState(streamId);
-    const info = buildStreamInfo(this.opts.state, streamId, 'all');
-    const restored = this.restoredStreams.get(streamId);
-    const snapshot: RestoredStreamSnapshot = {
-      streamId,
-      label: info?.label ?? restored?.label ?? streamId,
-      agent: info?.agent ?? restored?.agent,
-      agentCategory:
-        info?.agentCategory ??
-        restored?.agentCategory ??
-        AgentCategory.Workflow,
-      inputFile: info?.inputFile || restored?.inputFile,
-      instruction: taskState?.agentConfig.instruction || restored?.instruction,
-      lastKnownStatus:
-        StreamStatusService.get(streamId) ??
-        restored?.lastKnownStatus ??
-        STREAM_STATUS.STOPPED,
-      description: info?.description ?? restored?.description,
-      executionId: info?.executionId ?? restored?.executionId,
-      parentStreamId: info?.parentStreamId ?? restored?.parentStreamId,
-      creationTimestamp:
-        info?.creationTimestamp ?? restored?.creationTimestamp ?? Date.now(),
-      lastTimestamp:
-        this.opts.state.streamLogs.getLastTimestamp(streamId) ??
-        restored?.lastTimestamp,
-      persistedAt: Date.now(),
-    };
-    void store.upsert(snapshot).catch((error: unknown) => {
-      this.opts.logger.warn('Failed to persist stream snapshot', {
-        data: error instanceof Error ? error : { error },
-      });
-    });
-  }
-
-  private removePersistedStream(streamId: StreamTabId): void {
-    this.restoredStreams.delete(streamId);
-    const store = this.opts.streamSnapshotStore;
-    if (!store) return;
-    void store.remove(streamId).catch((error: unknown) => {
-      this.opts.logger.warn('Failed to remove persisted stream snapshot', {
-        data: error instanceof Error ? error : { error },
-      });
-    });
-  }
-
   /**
    * Restore a ghost (prior-session) stream's persisted sidecar display from
    * `streamData/` the first time it becomes active — todos / plan / per-run
    * usage / output files — matching what the CLI and extension show on resume.
    * Sent once per stream; only durable data is restored (no liveness).
    */
-  private restoreDisplayForStream(streamId: StreamTabId): void {
+  sendRestoredDisplay(streamId: StreamTabId): void {
     if (
       !this.restoredStreams.has(streamId) ||
       this.restoredDisplaySent.has(streamId) ||
@@ -388,6 +304,90 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
         this.restoredDisplayInFlight.delete(streamId);
       });
   }
+
+  // ── Stream lifecycle ──────────────────────────────────────────────────────
+
+  onStreamDeleted(streamId: StreamTabId): void {
+    this.removePersistedStream(streamId);
+    this.restoredDisplaySent.delete(streamId);
+    this.restoredDisplayInFlight.delete(streamId);
+  }
+
+  async onAllStreamsDeleted(): Promise<void> {
+    this.restoredStreams.clear();
+    this.restoredDisplaySent.clear();
+    this.restoredDisplayInFlight.clear();
+    if (this.opts.streamSnapshotStore) {
+      try {
+        await this.opts.streamSnapshotStore.replaceAll([]);
+      } catch (error: unknown) {
+        this.opts.logger.warn('Failed to clear stream snapshot store', {
+          data: error instanceof Error ? error : { error },
+        });
+      }
+    }
+  }
+
+  // ── Dispose ──────────────────────────────────────────────────────────────
+
+  dispose(): void {
+    this.unsubscribe();
+    this.restoredStreams.clear();
+    this.restoredDisplaySent.clear();
+    this.restoredDisplayInFlight.clear();
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────────
+
+  private persistStreamSnapshot(streamId: StreamTabId): void {
+    const store = this.opts.streamSnapshotStore;
+    if (!store) return;
+
+    const taskState = this.opts.state.snapshots.getTaskState(streamId);
+    const info = buildStreamInfo(this.opts.state, streamId, 'all');
+    const restored = this.restoredStreams.get(streamId);
+    const snapshot: RestoredStreamSnapshot = {
+      streamId,
+      label: info?.label ?? restored?.label ?? streamId,
+      agent: info?.agent ?? restored?.agent,
+      agentCategory:
+        info?.agentCategory ??
+        restored?.agentCategory ??
+        AgentCategory.Workflow,
+      inputFile: info?.inputFile || restored?.inputFile,
+      instruction: taskState?.agentConfig.instruction || restored?.instruction,
+      lastKnownStatus:
+        StreamStatusService.get(streamId) ??
+        restored?.lastKnownStatus ??
+        STREAM_STATUS.STOPPED,
+      description: info?.description ?? restored?.description,
+      executionId: info?.executionId ?? restored?.executionId,
+      parentStreamId: info?.parentStreamId ?? restored?.parentStreamId,
+      creationTimestamp:
+        info?.creationTimestamp ?? restored?.creationTimestamp ?? Date.now(),
+      lastTimestamp:
+        this.opts.state.streamLogs.getLastTimestamp(streamId) ??
+        restored?.lastTimestamp,
+      persistedAt: Date.now(),
+    };
+    void store.upsert(snapshot).catch((error: unknown) => {
+      this.opts.logger.warn('Failed to persist stream snapshot', {
+        data: error instanceof Error ? error : { error },
+      });
+    });
+  }
+
+  private removePersistedStream(streamId: StreamTabId): void {
+    this.restoredStreams.delete(streamId);
+    const store = this.opts.streamSnapshotStore;
+    if (!store) return;
+    void store.remove(streamId).catch((error: unknown) => {
+      this.opts.logger.warn('Failed to remove persisted stream snapshot', {
+        data: error instanceof Error ? error : { error },
+      });
+    });
+  }
+
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
