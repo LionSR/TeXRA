@@ -22,7 +22,10 @@ function normalize(messages: unknown[]): ExportNode[] {
   return normalizeConversationForExport(messages);
 }
 
-function nodesOfKind(nodes: ExportNode[], kind: ExportNode['kind']): ExportNode[] {
+function nodesOfKind(
+  nodes: ExportNode[],
+  kind: ExportNode['kind'],
+): ExportNode[] {
   return nodes.filter((n) => n.kind === kind);
 }
 
@@ -113,7 +116,11 @@ describe('OpenAI Responses API', () => {
 
   it('handles function_call_output with string output', () => {
     const nodes = normalize([
-      { type: 'function_call_output', call_id: 'call_1', output: 'plain string' },
+      {
+        type: 'function_call_output',
+        call_id: 'call_1',
+        output: 'plain string',
+      },
     ]);
 
     const results = nodesOfKind(nodes, 'tool-result');
@@ -352,7 +359,11 @@ describe('Anthropic-style messages', () => {
       {
         role: 'user',
         content: [
-          { type: 'tool_result', tool_use_id: 'call_1', content: 'file contents' },
+          {
+            type: 'tool_result',
+            tool_use_id: 'call_1',
+            content: 'file contents',
+          },
         ],
       },
     ]);
@@ -551,7 +562,9 @@ describe('Edge cases', () => {
     expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
     expect(nodes[0]).toMatchObject({
       kind: 'user-message',
-      parts: [{ type: 'text', text: '{\n  "nested": {\n    "value": 42\n  }\n}' }],
+      parts: [
+        { type: 'text', text: '{\n  "nested": {\n    "value": 42\n  }\n}' },
+      ],
     });
   });
 
