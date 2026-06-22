@@ -10,6 +10,7 @@ import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/execution/AgentState';
+import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import { ensureError, normalizeProviderError } from '@common/errors';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { toRetryErrorInfo } from '@shared/schemas';
@@ -101,6 +102,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       let client = await modelHandler.getClient();
       flow.setServices({
         ...this.services,
+        bestConnectionMethod,
         get client() {
           return client;
         },
