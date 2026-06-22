@@ -110,7 +110,8 @@ export class GettingStartedBanner extends LitElement {
                   size="small"
                   href=${COMMAND_LINKS.CREATE_SAMPLE_PROJECT}
                 >
-                  ${waIcon('file-circle-plus', { slot: 'start' })} Sample project
+                  ${waIcon('file-circle-plus', { slot: 'start' })} Sample
+                  project
                 </wa-button>
                 <wa-button
                   appearance="outlined"
