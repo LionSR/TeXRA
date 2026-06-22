@@ -5,7 +5,7 @@ import {
   buildInitialChatAgentConfig,
   markRegisteredChatExecutionError,
   registerFreshChatExecution,
-} from '@cli/chat/tui/runChatTui';
+} from '@cli/chat/chatSessionController';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
