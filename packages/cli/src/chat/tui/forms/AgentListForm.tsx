@@ -238,8 +238,8 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     <FormFrame color="cyan" title="/agent" showCloseHint={false}>
       <Text dimColor wrap="truncate-end">
         {props.selectable
-          ? 'Choose the root agent for the first message.'
-          : 'Available agents. Start a new chat with texra chat --agent=<name> to choose the root agent.'}
+          ? 'Choose the root agent for this chat.'
+          : 'Viewing agents. Use texra chat --agent <name> to switch in a new chat.'}
       </Text>
       {currentAgentHint ? (
         <Text dimColor wrap="truncate-end">
