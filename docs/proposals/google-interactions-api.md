@@ -307,7 +307,9 @@ JSON** — trust the `.d.ts` where they differ.
   `store:false` request to include the initial `user_input` step, all
   model-generated steps exactly as received (including `thought` and
   `function_call`), and the local `function_result` step. This matches v0's
-  local-history plan and is the contract the tests should encode.
+  local-history plan and is the contract the tests should encode. In code shape,
+  this means `input: [initialUserInputStep, ...turn1.steps, functionResultStep]`
+  with no `previous_interaction_id`.
 - **Explicit caching is not yet available in Interactions.** The SDK exposes
   `cached_content`, but the overview lists explicit caching under
   generateContent-only limitations and points Interactions users at implicit
@@ -320,8 +322,9 @@ JSON** — trust the `.d.ts` where they differ.
 
 - **Streamed tool args.** Guide prose: `delta.type === "arguments"` /
   `delta.partial_arguments`. SDK: `ArgumentsDelta` (`:527`) is
-  `{ type:"arguments_delta", arguments?: string }`. Use `"arguments_delta"` and
-  the `arguments` field.
+  `{ type:"arguments_delta", arguments?: string }`. The low line number is
+  anomalous but real in the `@google/genai@2.9.0` tarball; use
+  `"arguments_delta"` and the `arguments` field.
 - **Usage field names.** Guide REST JSON shows `prompt_tokens` /
   `completion_tokens` / `total_tokens`; the SDK `Usage` type (`:13952`) has
   **none** of those — it exposes `total_input_tokens` / `total_output_tokens` /
@@ -405,8 +408,9 @@ error instead of silently falling back to the chat handler.
 
 Add `model.useGoogleInteractionsAPI` to `coreSettings.ts` (the three sites at
 ~81/325/564), mirroring `useOpenAIResponsesAPI`; reuse
-`model.useBackgroundResponses` for `background:true`. Surface in Settings →
-Models; document in `docs/guide/configuration.md`.
+`model.useBackgroundResponses` only for the later `store:true`/background phase
+(v0 ignores it because v0 uses `store:false`). Surface in Settings → Models;
+document in `docs/guide/configuration.md`.
 
 ### 5. Model registry
 
@@ -444,8 +448,9 @@ schema; no new ports.
    compaction working unchanged) vs `store:true` (default) with
    `previous_interaction_id` (payload win, but the server — not TeXRA — then owns
    compaction, and behaviour must be defined when the stored interaction has
-   expired or a run is restored from old history). Official retention is 55 days
-   on paid tier / 1 day on free tier; note `store:false` is incompatible with
+   expired or a run is restored from old history). Official retention is
+   currently 55 days on paid tier / 1 day on free tier (`⚠️` confirm at
+   implementation time); note `store:false` is incompatible with
    `background=true` and with later `previous_interaction_id` use. **Recommend
    `store:false` for v0** to preserve the existing history/compaction contract,
    treating server-side continuation (+ background) as a later optimisation.
