@@ -45,9 +45,7 @@ import {
 import { generateExecutionId } from '@utils/core/executionId';
 import { getDefaultStreamLogStore, StreamSnapshotStore } from '@transcript';
 
-import {
-  chatAgentSupportsDelegation,
-} from './tui/commands/handlers/agentModelCommands';
+import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
 import { clearApprovals } from './tui/state/approvalQueue';
 import { cliState, patchStream } from './tui/state/cliState';
 import {

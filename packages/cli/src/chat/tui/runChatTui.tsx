@@ -198,7 +198,11 @@ export function restorePendingSkillActivations(
 
 // Re-export utilities that moved to chatSessionController for backward
 // compatibility with existing test imports (RunChatRegistration, RunChatConfig).
-export { buildInitialChatAgentConfig, registerFreshChatExecution, markRegisteredChatExecutionError } from '../chatSessionController';
+export {
+  buildInitialChatAgentConfig,
+  registerFreshChatExecution,
+  markRegisteredChatExecutionError,
+} from '../chatSessionController';
 export type { BuildInitialChatAgentConfigInput } from '../chatSessionController';
 
 export type ChatTuiFocusedChildFollowUpRoute = FocusedChildFollowUpRoute;
@@ -933,11 +937,11 @@ export async function runChat(
     // Guard the void: resumeAgentRun awaits snapshot resolution / ensureLoaded
     // before installing its own .then/.catch, so an early throw there would
     // otherwise surface as an unhandled rejection.
-    void chatController.resume(initialResume.id, initialResume.resolution).catch(
-      (error: unknown) => {
+    void chatController
+      .resume(initialResume.id, initialResume.resolution)
+      .catch((error: unknown) => {
         appendLocalErrorTranscript(toErrorMessage(error));
-      },
-    );
+      });
   }
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly
