@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { NonIterableObject } from '@agent/node';
 import { RetryableInvocationNode } from '@agent/core/flows/RetryState';
+import type { RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import {
   StreamStatusRegistry,
   StreamStatusService,
@@ -15,22 +16,16 @@ import {
 } from '@agent/runtime/AgentRuntimeHost';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
-const coordinatorMocks = vi.hoisted(() => ({
-  waitForRetry: vi.fn(),
-}));
-
-vi.mock('@agent/runtime/runCoordinators', () => ({
-  runCoordinatorBridge: {
-    waitForRetry: coordinatorMocks.waitForRetry,
-  },
-}));
-
 interface TestRetryServices {
   streamId: StreamTabId;
   runtimeHost: AgentRuntimeHost;
   streamStatus: StreamStatusRegistry;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
+  waitForRetry: (
+    streamId: string,
+    options: { operation: string; errorMessage?: string; logger: AgentTrace },
+  ) => Promise<RetryResult>;
 }
 
 class ExposedRetryNode extends RetryableInvocationNode<
@@ -63,15 +58,17 @@ describe('RetryState', () => {
   it('updates the injected stream status owner during manual retry', async () => {
     const streamId = 'retry-state-owner' as StreamTabId;
     const streamStatus = new StreamStatusRegistry();
+    const waitForRetry = vi.fn<() => Promise<RetryResult>>();
     const node = new ExposedRetryNode().setServices({
       streamId,
       runtimeHost: noopAgentRuntimeHost,
       streamStatus,
       logger: noopTrace,
       setAbortController: vi.fn(),
+      waitForRetry,
     });
 
-    coordinatorMocks.waitForRetry.mockResolvedValueOnce({ action: 'retry' });
+    waitForRetry.mockResolvedValueOnce({ action: 'retry' });
 
     try {
       streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
@@ -83,7 +80,7 @@ describe('RetryState', () => {
 
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
       expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
-      expect(coordinatorMocks.waitForRetry).toHaveBeenCalledWith(
+      expect(waitForRetry).toHaveBeenCalledWith(
         streamId,
         expect.objectContaining({
           operation: 'Tool-use call',
@@ -92,7 +89,6 @@ describe('RetryState', () => {
     } finally {
       streamStatus.clear(streamId, { emit: false });
       StreamStatusService.clear(streamId, { emit: false });
-      coordinatorMocks.waitForRetry.mockReset();
     }
   });
 
@@ -101,15 +97,17 @@ describe('RetryState', () => {
     async (action) => {
       const streamId = `retry-state-${action}` as StreamTabId;
       const streamStatus = new StreamStatusRegistry();
+      const waitForRetry = vi.fn<() => Promise<RetryResult>>();
       const node = new ExposedRetryNode().setServices({
         streamId,
         runtimeHost: noopAgentRuntimeHost,
         streamStatus,
         logger: noopTrace,
         setAbortController: vi.fn(),
+        waitForRetry,
       });
 
-      coordinatorMocks.waitForRetry.mockResolvedValueOnce({ action });
+      waitForRetry.mockResolvedValueOnce({ action });
 
       try {
         streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
@@ -119,7 +117,6 @@ describe('RetryState', () => {
         expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
       } finally {
         streamStatus.clear(streamId, { emit: false });
-        coordinatorMocks.waitForRetry.mockReset();
       }
     },
   );
