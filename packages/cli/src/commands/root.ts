@@ -166,6 +166,12 @@ export async function runCli(
   );
   setUsageColorOverrideFromRawArgs(rawArgs);
 
+  const unknownCommand = await detectUnknownCliCommand(rawArgs);
+  if (unknownCommand) {
+    writeTextStderr(formatUnknownCliCommand(unknownCommand));
+    return { exitCode: CliExitCode.Usage };
+  }
+
   // `--help` / `-h` anywhere prints usage for the deepest matched subcommand
   // (e.g. `texra agents list --help` → list-level usage), mirroring citty's
   // own `runMain` behavior without inheriting its `exit(1)` for usage errors.
@@ -173,12 +179,6 @@ export async function runCli(
     const resolved = await resolveDeepestSubCommand(rootCommand, rawArgs);
     await showUsage(resolved.command, resolved.parent, resolved);
     return { exitCode: CliExitCode.Success };
-  }
-
-  const unknownCommand = await detectUnknownCliCommand(rawArgs);
-  if (unknownCommand) {
-    writeTextStderr(formatUnknownCliCommand(unknownCommand));
-    return { exitCode: CliExitCode.Usage };
   }
 
   const unknownFlag = await detectUnknownCliFlag(rawArgs);
