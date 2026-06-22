@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   getCliAuthProfile: vi.fn(),
   initCliPlatform: vi.fn(),
+  signOutCliChatGpt: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
@@ -15,6 +16,15 @@ vi.mock('@cli/runtime/supabaseAuth', async (importOriginal) => {
   return {
     ...actual,
     getCliAuthProfile: mocks.getCliAuthProfile,
+  };
+});
+
+vi.mock('@cli/runtime/chatgptLogin', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@cli/runtime/chatgptLogin')>();
+  return {
+    ...actual,
+    signOutCliChatGpt: mocks.signOutCliChatGpt,
   };
 });
 
@@ -33,6 +43,9 @@ describe('CLI auth command', () => {
       authenticated: false,
     });
     mocks.initCliPlatform.mockReset().mockResolvedValue(undefined);
+    mocks.signOutCliChatGpt.mockReset().mockResolvedValue({
+      preferenceUpdate: { effective: false, target: 'global' },
+    });
     stdoutSpy = vi
       .spyOn(process.stdout, 'write')
       .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
@@ -109,6 +122,40 @@ describe('CLI auth command', () => {
       accountLabel: 'user@example.edu',
       tier: 'Max',
     });
+    expect(stderr).toBe('');
+  });
+
+  it('clears ChatGPT subscription preference on chatgpt logout', async () => {
+    const result = await runCli([
+      'auth',
+      'chatgpt',
+      'logout',
+      '--output-format',
+      'json',
+      '--no-input',
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(mocks.signOutCliChatGpt).toHaveBeenCalledOnce();
+    expect(JSON.parse(stdout)).toEqual({
+      authenticated: false,
+      preferSubscription: false,
+    });
+    expect(stderr).toBe('');
+  });
+
+  it('reports ChatGPT logout success when preference cleanup fails', async () => {
+    mocks.signOutCliChatGpt.mockResolvedValueOnce({
+      preferenceError: 'Config write failed',
+    });
+
+    const result = await runCli(['auth', 'chatgpt', 'logout']);
+
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('Signed out of ChatGPT.');
+    expect(stdout).toContain(
+      'ChatGPT subscription preference could not be disabled: Config write failed',
+    );
     expect(stderr).toBe('');
   });
 });
