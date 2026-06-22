@@ -13,6 +13,7 @@ import {
 } from 'electron';
 
 import { platform } from '@platform/platform';
+import { hasAnyProviderApiKey } from '@controllers/onboarding/onboardingFunnel';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -36,7 +37,10 @@ import {
 } from './desktopAppLog.js';
 import { installDesktopMenu } from './desktopMenu.js';
 import { installDesktopNavigationPolicy } from './desktopNavigationPolicy.js';
-import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
+import {
+  createDesktopOnboardingIpc,
+  type DesktopOnboardingIpc,
+} from './desktopOnboardingIpc.js';
 import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
 import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
@@ -289,6 +293,9 @@ function createWindow(options: {
   const settingsIpcRef: {
     current?: ReturnType<typeof createDesktopSettingsIpc>;
   } = {};
+  const onboardingIpcRef: {
+    current?: DesktopOnboardingIpc;
+  } = {};
   const showErrorMessage = async (message: string) => {
     await dialog.showMessageBox(window, { message, type: 'error' });
   };
@@ -356,6 +363,7 @@ function createWindow(options: {
         : MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
     });
     await settingsIpcRef.current?.refreshAuthDependentData();
+    await onboardingIpcRef.current?.refreshOnboardingFunnel();
   };
   const desktopAuth = createDesktopSupabaseAuth({
     router: protocolLifecycle.router,
@@ -607,8 +615,22 @@ function createWindow(options: {
   });
   const onboardingIpc = createDesktopOnboardingIpc(
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
-    { onAsyncError: reportAsyncError },
+    {
+      hasCredential: async () => {
+        const isRelaySignedIn = await SupabaseClient.isAuthenticated();
+        if (isRelaySignedIn) {
+          const serverKeyService = getServerSideKeyService();
+          if (serverKeyService.getUseIncludedModelAccess()) {
+            const canUseServer = await serverKeyService.canUseServerSideKeys();
+            if (canUseServer) return true;
+          }
+        }
+        return hasAnyProviderApiKey(platform().secrets);
+      },
+      onAsyncError: reportAsyncError,
+    },
   );
+  onboardingIpcRef.current = onboardingIpc;
   // Real desktop git host — closes audit item A from
   // `docs/dev/standalone-trajectory-audit.md` (trajectory #16). Spawns
   // `git log` under the active workspace to populate the launcher banner's

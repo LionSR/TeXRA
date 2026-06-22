@@ -71,12 +71,14 @@ interface DesktopOnboardingIpcModule {
         get<T>(key: string, defaultValue?: T): T;
         update(key: string, value: unknown): PromiseLike<void>;
       };
+      hasCredential?: () => boolean | Promise<boolean>;
       onAsyncError?: (error: unknown) => void;
     },
   ): {
     handleMessage(
       message: { command: string } & Record<string, unknown>,
     ): boolean;
+    refreshOnboardingFunnel(): Promise<void>;
   };
 }
 
@@ -427,9 +429,10 @@ describe('desktop IPC adapters', () => {
         view: 'main',
       }),
     ).toBe(false);
+    // Fresh install with no credential → State 0 (welcome card).
     expect(postToRenderer).toHaveBeenLastCalledWith({
       command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: 'done',
+      state: 'needs-credential',
     });
     postToRenderer.mockClear();
 
