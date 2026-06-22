@@ -1,5 +1,7 @@
+// Standard library imports
 import * as path from 'node:path';
 
+// Local imports
 import { platform } from '@platform/platform';
 import { getExecutionStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
@@ -43,6 +45,7 @@ import {
 } from '@utils/files';
 import { PromptBuilder } from '@utils/prompt';
 
+// Local imports - flow nodes and state
 import { TeXCountNode } from './nodes/TeXCountNode';
 import { MediaExtractionNode } from './nodes/MediaExtractionNode';
 import { PrepareContextNode } from './nodes/PrepareContextNode';

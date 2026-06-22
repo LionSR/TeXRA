@@ -5,9 +5,12 @@
  * Handles agent enable/disable, create/customize/delete, YAML editing,
  * custom agent directories, and agent teams.
  */
+
+// Standard library and third-party imports
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
+// Local imports
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
@@ -31,6 +34,7 @@ import type { SettingsAgentVisibilityController } from '@controllers/settingsVie
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 
+// Local imports - handler context
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
 /**
