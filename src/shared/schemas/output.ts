@@ -90,13 +90,27 @@ export type CompileResult = z.infer<typeof CompileResultSchema>;
 
 export const OutputXmlSummarySchema = z.strictObject({
   tagContents: z
-    .record(z.string(), z.union([z.string(), z.array(z.string())]))
+    .record(
+      z.string(),
+      z
+        .union([z.array(z.string()), z.string().transform((s) => [s])])
+        .catch([]),
+    )
     .prefault(() => ({})),
   documents: z.array(z.string()).prefault(() => []),
   singleOutputFile: z.string().nullable().prefault(null),
   sourceLocation: FileLocationSchema.nullable().prefault(null),
 });
 export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
+
+/**
+ * Schema factory for round-indexed records: `{ "1": T[], "2": T[], … }`.
+ * Used by both the live stream state and the persisted snapshot so the
+ * shape is defined once and shared.
+ */
+export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
+  return z.record(z.string(), z.array(valueSchema)).prefault({});
+}
 
 export const RoundOutputSchema = z.strictObject({
   round: z.number(),

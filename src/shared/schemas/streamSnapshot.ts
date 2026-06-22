@@ -25,13 +25,17 @@
 import { z } from 'zod';
 
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
-import { OutputFileInfoSchema, CompileFailureSchema } from './output';
+import {
+  OutputFileInfoSchema,
+  CompileFailureSchema,
+  roundIndexedRecord,
+} from './output';
 import { StreamStatusSchema } from './stream';
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
 } from './streamState';
-import { TokenUsageStatsSchema } from './usage';
+import { RunUsageMapSchema } from './usage';
 import { WorkPlanSnapshotShape } from './workPlan';
 
 /**
@@ -46,16 +50,10 @@ export const STREAM_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 // Round / run keyed records (match the on-disk JSON: string keys → arrays)
 // ============================================================================
 
-const OutputFilesByRoundSchema = z
-  .record(z.string(), z.array(OutputFileInfoSchema))
-  .prefault({});
-const MissingOutputsByRoundSchema = z
-  .record(z.string(), z.array(z.string()))
-  .prefault({});
-const CompileFailuresByRoundSchema = z
-  .record(z.string(), z.array(CompileFailureSchema))
-  .prefault({});
-const RunUsageSchema = z.record(z.string(), TokenUsageStatsSchema).prefault({});
+const OutputFilesByRoundSchema = roundIndexedRecord(OutputFileInfoSchema);
+const MissingOutputsByRoundSchema = roundIndexedRecord(z.string());
+const CompileFailuresByRoundSchema = roundIndexedRecord(CompileFailureSchema);
+const RunUsageSchema = RunUsageMapSchema.prefault({});
 
 // ============================================================================
 // Persisted workPlan.json — the one NEW durable file
