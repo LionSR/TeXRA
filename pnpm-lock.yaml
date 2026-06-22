@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  ink@7.0.5: b41fb48a0ebb5005f770353111ec6b9c777f975899420a7e0e6098d5ef2a6f81
+  ink@7.1.0: db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6
 
 importers:
 
@@ -383,7 +383,7 @@ importers:
         version: 7.29.7(@babel/core@7.29.7)
       '@inkjs/ui':
         specifier: ^2.0.0
-        version: 2.0.0(ink@7.0.5(patch_hash=b41fb48a0ebb5005f770353111ec6b9c777f975899420a7e0e6098d5ef2a6f81)(@types/react@19.2.17)(react@19.2.7))
+        version: 2.0.0(ink@7.1.0(patch_hash=db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6)(@types/react@19.2.17)(react@19.2.7))
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
@@ -421,8 +421,8 @@ importers:
         specifier: ^0.28.1
         version: 0.28.1
       ink:
-        specifier: ^7.0.5
-        version: 7.0.5(patch_hash=b41fb48a0ebb5005f770353111ec6b9c777f975899420a7e0e6098d5ef2a6f81)(@types/react@19.2.17)(react@19.2.7)
+        specifier: ^7.1.0
+        version: 7.1.0(patch_hash=db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6)(@types/react@19.2.17)(react@19.2.7)
       markdown-it:
         specifier: ^14.2.0
         version: 14.2.0
@@ -4226,8 +4226,8 @@ packages:
   ini@1.3.8:
     resolution: {integrity: sha512-JV/yugV2uzW5iMRSiZAyDtQd+nxtUnjeLt0acNdw98kKLrvuRVyB80tsREOE7yvGVgalhZ6RNXCmEHkUKBKxew==}
 
-  ink@7.0.5:
-    resolution: {integrity: sha512-zWNjGHQPxSeiSAmDUOq+QPQ6CfmMhmNi85vrJIuy4prafKKUSoZlXEy4wbM7LuLuF1pDURk7qvF4fxrQlLxv3w==}
+  ink@7.1.0:
+    resolution: {integrity: sha512-VWE6/yeLtFCJBNLflyI2OSylyXK1Rc24LuXup8Qt+icwkmmycFNdbn8IkSp6Frc0h1iA0NOvvi1ajW44U/w3Qg==}
     engines: {node: '>=22'}
     peerDependencies:
       '@types/react': '>=19.2.0'
@@ -6996,13 +6996,13 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@inkjs/ui@2.0.0(ink@7.0.5(patch_hash=b41fb48a0ebb5005f770353111ec6b9c777f975899420a7e0e6098d5ef2a6f81)(@types/react@19.2.17)(react@19.2.7))':
+  '@inkjs/ui@2.0.0(ink@7.1.0(patch_hash=db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6)(@types/react@19.2.17)(react@19.2.7))':
     dependencies:
       chalk: 5.6.2
       cli-spinners: 3.4.0
       deepmerge: 4.3.1
       figures: 6.1.0
-      ink: 7.0.5(patch_hash=b41fb48a0ebb5005f770353111ec6b9c777f975899420a7e0e6098d5ef2a6f81)(@types/react@19.2.17)(react@19.2.7)
+      ink: 7.1.0(patch_hash=db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6)(@types/react@19.2.17)(react@19.2.7)
 
   '@isaacs/fs-minipass@4.0.1':
     dependencies:
@@ -10016,7 +10016,7 @@ snapshots:
   ini@1.3.8:
     optional: true
 
-  ink@7.0.5(patch_hash=b41fb48a0ebb5005f770353111ec6b9c777f975899420a7e0e6098d5ef2a6f81)(@types/react@19.2.17)(react@19.2.7):
+  ink@7.1.0(patch_hash=db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6)(@types/react@19.2.17)(react@19.2.7):
     dependencies:
       '@alcalzone/ansi-tokenize': 0.3.0
       ansi-escapes: 7.3.0
