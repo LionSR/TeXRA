@@ -38,6 +38,7 @@ import { getAuthStatus } from '@commands/auth';
 import { hasAnyUsableSetupCredential } from '@commands/setup';
 import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
+import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
@@ -157,6 +158,9 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
       vscode.commands.registerCommand('texra.createSampleProject', () =>
         createSampleProjectWithoutWorkspace(context.extensionPath),
+      ),
+      vscode.commands.registerCommand('texra.openGettingStarted', () =>
+        openGettingStarted(context.extension.id),
       ),
     );
     return;
