@@ -2,7 +2,7 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
-  isKnownCliModel,
+  resolveKnownCliModelId,
   resolveConfiguredModel,
 } from './cliConfig';
 import { CliUsageError, type CliContext } from './cliContext';
@@ -29,12 +29,13 @@ export function assertExplicitModelKnown(
 ): string | undefined {
   const trimmed = model?.trim();
   if (!trimmed) return undefined;
-  if (!isKnownCliModel(trimmed)) {
+  const resolved = resolveKnownCliModelId(trimmed);
+  if (!resolved) {
     throw new CliUsageError(
       `Model not found: ${trimmed}. Use \`texra models list\` to see available models.`,
     );
   }
-  return trimmed;
+  return resolved;
 }
 
 /**
