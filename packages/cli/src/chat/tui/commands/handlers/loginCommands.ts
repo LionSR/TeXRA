@@ -4,8 +4,10 @@ import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import {
   chatGptAccountLabel,
+  chatGptSignOutPreferenceMessage,
   shouldUseChatGptDeviceCode,
   signInCliChatGpt,
+  signOutCliChatGpt,
 } from '@cli/runtime/chatgptLogin';
 import { type CliContext } from '@cli/runtime/cliContext';
 import {
@@ -126,22 +128,40 @@ export async function loginFromChat(
 }
 
 export async function logoutFromChat(): Promise<void> {
+  const lines: string[] = [];
+  let texraSignedOut = false;
+
   try {
     await signOutCliSupabase();
+    texraSignedOut = true;
+  } catch (error: unknown) {
+    lines.push(`TeXRA sign-out failed: ${toErrorMessage(error)}`);
+  }
+
+  try {
+    const chatGptUpdate = await signOutCliChatGpt();
+    invalidateModelOptionsCache();
+    bumpCodexPreferenceVersion();
+    lines.push(chatGptSignOutPreferenceMessage(chatGptUpdate));
+  } catch (error: unknown) {
+    lines.push(`ChatGPT sign-out failed: ${toErrorMessage(error)}`);
+  }
+
+  if (texraSignedOut) {
     // Sign-out only clears the stored session; a configured TEXRA_RELAY_TOKEN
     // keeps authenticating relay calls, so report it — and keep the session
     // in included mode so the notice matches what actually happens.
     const relayNotice = relayTokenStillActiveNotice();
     const apiMode = relayNotice ? 'included' : 'personal';
     setCliSessionApiMode(apiMode);
-    appendLocalAssistantTranscript(
-      [
-        'Signed out.',
-        ...(relayNotice ? [relayNotice] : []),
-        ...(await loadCliApiStatusLines({ apiMode })),
-      ].join('\n'),
-    );
-  } catch (error: unknown) {
-    appendLocalAssistantTranscript(toErrorMessage(error));
+    lines.unshift('Signed out.');
+    if (relayNotice) lines.push(relayNotice);
+    try {
+      lines.push(...(await loadCliApiStatusLines({ apiMode })));
+    } catch (error: unknown) {
+      lines.push(toErrorMessage(error));
+    }
   }
+
+  appendLocalAssistantTranscript(lines.join('\n'));
 }

@@ -9,8 +9,10 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 import {
   chatGptAccountLabel,
+  chatGptSignOutPreferenceMessage,
   shouldUseChatGptDeviceCode,
   signInCliChatGpt,
+  signOutCliChatGpt,
 } from '../runtime/chatgptLogin';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -114,17 +116,31 @@ const chatgptLogoutCommand = defineCliCommand({
   args: { ...GLOBAL_ARGS },
   async run(context) {
     await initCliPlatform({ ...context, quietLogs: true });
+    let update: Awaited<ReturnType<typeof signOutCliChatGpt>>;
     try {
-      await codexCoordinator().signOut();
+      update = await signOutCliChatGpt();
     } catch (error) {
       writeErrorStderr(error);
       return CliExitCode.ModelOrNetworkError;
     }
     invalidateModelOptionsCache();
     emitCliResult(context, {
-      json: { authenticated: false },
-      ndjson: { kind: 'chatgpt-auth', authenticated: false },
-      text: 'Signed out of ChatGPT.',
+      json: {
+        authenticated: false,
+        preferSubscription: update.preferenceUpdate?.effective ?? null,
+        ...(update.preferenceError
+          ? { preferenceError: update.preferenceError }
+          : {}),
+      },
+      ndjson: {
+        kind: 'chatgpt-auth',
+        authenticated: false,
+        preferSubscription: update.preferenceUpdate?.effective ?? null,
+        ...(update.preferenceError
+          ? { preferenceError: update.preferenceError }
+          : {}),
+      },
+      text: `Signed out of ChatGPT.\n${chatGptSignOutPreferenceMessage(update)}`,
     });
     return CliExitCode.Success;
   },
