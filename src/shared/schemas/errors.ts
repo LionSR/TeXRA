@@ -139,13 +139,14 @@ export function toRetryErrorInfo(err: ProviderError): RetryErrorInfo {
   };
 }
 
-/** Reconstruct a ProviderError from retry-state info. Defaults `isRelayError`
- *  to `false` when absent (it was optional in earlier persisted records). */
+/** Reconstruct a ProviderError from retry-state info. Leaves `isRelayError`
+ *  `undefined` when absent so `normalizeProviderError` does not read a
+ *  wrong relay verdict from the cached shape. */
 export function toProviderErrorFromRetry(info: RetryErrorInfo): ProviderError {
   return {
     message: info.message,
     userRetryable: info.userRetryable,
-    isRelayError: info.isRelayError ?? false,
+    isRelayError: info.isRelayError as boolean,
     statusCode: info.statusCode,
     statusText: info.statusText,
     provider: info.provider,
