@@ -9,6 +9,11 @@ import {
   planMainViewDroppedFileAttachments,
   type MainViewAllowedDropExtensions,
 } from '@controllers/mainView/MainViewDroppedFilesController';
+import {
+  planCurrentFileAsBase,
+  planCurrentFileAsEdited,
+  type MainViewBaseFileSelectionPlan,
+} from '@controllers/mainView/MainViewBaseFileController';
 import { ExtensionCategory, getIncludedExtensions } from '@common/files';
 import {
   FILE_SELECTION_COMMAND_IDS,
@@ -193,73 +198,64 @@ export class FileManager extends BaseWebviewManager {
     }
 
     if (fileType === 'edited') {
-      await this.handleGetCurrentEditedFile(currentOpenFile, message.baseFile);
+      const plan = planCurrentFileAsEdited(currentOpenFile, message.baseFile);
+      await this.applyBaseFileSelectionPlan(plan, fileType, currentOpenFile);
       return;
     }
 
-    let filePathToSelect = currentOpenFile;
     if (fileType === 'base') {
       const derivedBaseFile = deriveBaseFileFromLatexDiff(currentOpenFile);
-      if (derivedBaseFile) {
-        const baseExists = await WorkspaceFS.exists(derivedBaseFile);
-        if (baseExists) {
-          await this.handleRequestBaseFile({
-            command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
-            preserveBaseFile: true,
-          });
-          filePathToSelect = derivedBaseFile;
-        } else {
-          logger.info(
-            CHANNEL,
-            `Derived base file ${derivedBaseFile} from ${currentOpenFile} does not exist on disk`,
-          );
-          vscode.window.showInformationMessage(
-            `The base file ${derivedBaseFile} could not be found. Keeping ${currentOpenFile} selected.`,
-          );
-        }
-      }
-    }
-
-    this.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
-      filePath: filePathToSelect,
-      fileType,
-    });
-
-    await this.maybeSelectCommitFromDiffFile(currentOpenFile);
-  }
-
-  private async handleGetCurrentEditedFile(
-    currentOpenFile: string,
-    baseFile?: string,
-  ): Promise<void> {
-    if (!baseFile) {
-      vscode.window.showInformationMessage('Please select a base file first.');
-      return;
-    }
-
-    const baseFileName = path.basename(baseFile, path.extname(baseFile));
-    const currentFileName = path.basename(
-      currentOpenFile,
-      path.extname(currentOpenFile),
-    );
-
-    const isValidEditedFile =
-      currentFileName.startsWith(baseFileName) &&
-      currentFileName !== baseFileName;
-
-    if (!isValidEditedFile) {
-      vscode.window.showInformationMessage(
-        'The current file is not a valid edited version of the base file.',
+      const derivedBaseFileExists = derivedBaseFile
+        ? await WorkspaceFS.exists(derivedBaseFile)
+        : false;
+      const plan = planCurrentFileAsBase(
+        currentOpenFile,
+        derivedBaseFile,
+        derivedBaseFileExists,
       );
+      await this.applyBaseFileSelectionPlan(plan, fileType, currentOpenFile);
       return;
     }
 
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
       filePath: currentOpenFile,
-      fileType: 'edited',
+      fileType,
     });
+
+    await this.maybeSelectCommitFromDiffFile(currentOpenFile);
+  }
+
+  /** Apply a host-neutral base-file selection plan to the VS Code host. */
+  private async applyBaseFileSelectionPlan(
+    plan: MainViewBaseFileSelectionPlan,
+    fileType: string,
+    currentOpenFile: string,
+  ): Promise<void> {
+    if (plan.log) {
+      const logFn =
+        plan.log.level === 'info' ? logger.info : logger.warn;
+      logFn(CHANNEL, plan.log.message);
+    }
+
+    if (plan.notification) {
+      vscode.window.showInformationMessage(plan.notification.message);
+    }
+
+    if (plan.shouldRequestBaseFile) {
+      await this.handleRequestBaseFile({
+        command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
+        preserveBaseFile: true,
+      });
+    }
+
+    if (plan.shouldPostSetCurrentFile) {
+      this.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
+        filePath: plan.filePathToSelect,
+        fileType,
+      });
+    }
 
     await this.maybeSelectCommitFromDiffFile(currentOpenFile);
   }
