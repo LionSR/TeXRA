@@ -14,6 +14,9 @@ import type { z } from 'zod';
 /**
  * Message shape from the main view for agent execution.
  * ToolConfig fields are sent flat from the UI form.
+ *
+ * Keep this aligned with prepareMainViewExecutionRequest. Agent-owned fields
+ * such as agentCategory are derived there, not sent by the UI.
  */
 type MainViewExecuteFiles = {
   readonly inputFiles?: string[];
