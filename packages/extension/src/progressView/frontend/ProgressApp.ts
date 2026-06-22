@@ -488,8 +488,9 @@ export class ProgressApp extends ProgressAppBase {
   private onCompileFixerRun = (): void =>
     runCompileFixer(this.getEventHandlerContext());
 
-  private onGettingStartedAction = (e: CustomEvent<GettingStartedActionDetail>): void =>
-    handleGettingStartedAction(e.detail.action);
+  private onGettingStartedAction = (
+    e: CustomEvent<GettingStartedActionDetail>,
+  ): void => handleGettingStartedAction(e.detail.action);
 
   private onFollowupRequestOptions = (): void =>
     handleFollowupRequestOptions(this.getEventHandlerContext());

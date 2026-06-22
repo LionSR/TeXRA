@@ -562,27 +562,37 @@ export class TaskGroupList extends LitElement {
                 appearance="outlined"
                 size="small"
                 @click=${() => this.handleGettingStartedAction('runSetup')}
-              >${waIcon('rocket', { slot: 'start' })} Run setup</wa-button>
+                >${waIcon('rocket', { slot: 'start' })} Run setup</wa-button
+              >
               <wa-button
                 appearance="outlined"
                 size="small"
-                @click=${() => this.handleGettingStartedAction('createSampleProject')}
-              >${waIcon('file-circle-plus', { slot: 'start' })} Sample project</wa-button>
+                @click=${() =>
+                  this.handleGettingStartedAction('createSampleProject')}
+                >${waIcon('file-circle-plus', { slot: 'start' })} Sample
+                project</wa-button
+              >
               <wa-button
                 appearance="outlined"
                 size="small"
                 @click=${() => this.handleGettingStartedAction('cloneOverleaf')}
-              >${waIcon('cloud-arrow-down', { slot: 'start' })} Import Overleaf</wa-button>
+                >${waIcon('cloud-arrow-down', { slot: 'start' })} Import
+                Overleaf</wa-button
+              >
               <wa-button
                 appearance="outlined"
                 size="small"
                 @click=${() => this.handleGettingStartedAction('downloadArxiv')}
-              >${waIcon('download', { slot: 'start' })} Import arXiv</wa-button>
+                >${waIcon('download', { slot: 'start' })} Import
+                arXiv</wa-button
+              >
               <wa-button
                 appearance="outlined"
                 size="small"
-                @click=${() => this.handleGettingStartedAction('openWalkthrough')}
-              >${waIcon('book', { slot: 'start' })} Walkthrough</wa-button>
+                @click=${() =>
+                  this.handleGettingStartedAction('openWalkthrough')}
+                >${waIcon('book', { slot: 'start' })} Walkthrough</wa-button
+              >
             </div>
           </div>
         </div>

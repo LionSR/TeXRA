@@ -821,8 +821,12 @@ function wireConversation(): void {
   conversationView.addEventListener('compile-fixer-run', () =>
     runCompileFixer(ctx()),
   );
-  conversationView.addEventListener('getting-started-action', ((e: CustomEvent) =>
-    handleGettingStartedAction(e.detail.action as GettingStartedAction)) as EventListener);
+  conversationView.addEventListener('getting-started-action', ((
+    e: CustomEvent,
+  ) =>
+    handleGettingStartedAction(
+      e.detail.action as GettingStartedAction,
+    )) as EventListener);
   conversationView.addEventListener('followup-request-options', () =>
     handleFollowupRequestOptions(ctx()),
   );

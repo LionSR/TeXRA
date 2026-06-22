@@ -1,4 +1,3 @@
-
 export const PERMISSION_KIND = {
   TOOL_EDIT: 'toolEdit',
   BASH: 'bash',
@@ -21,4 +20,3 @@ export const FEEDBACK_ELIGIBLE_KINDS = new Set<PermissionKind>([
   PERMISSION_KIND.EXTERNAL_INQUIRY,
   PERMISSION_KIND.USER_QUESTION,
 ]);
-
