@@ -67,7 +67,7 @@ export const chatCommand = withUsageSections(
         ['/help', 'show slash commands inside chat'],
         ['/status', 'show session state'],
         ['/goal', 'explain autonomous goal mode and approved-plan startup'],
-        ['/login, /logout', 'sign in or out of included access'],
+        ['/login, /logout', 'sign in or out of ChatGPT or Researcher Access'],
         ['Ctrl-T', 'open the transcript viewer'],
         ['Tab', 'cycle visible streams when subagents are active'],
         [

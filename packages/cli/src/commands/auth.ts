@@ -37,6 +37,7 @@ import { formatCliDeviceAuthMessage } from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
+import { withUsageSections } from './_helpers/dispatch/usage';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { chatgptAuthCommand } from './chatgptAuth';
@@ -174,44 +175,59 @@ async function runLogin(
   return CliExitCode.Success;
 }
 
-export const loginCommand = defineCliCommand({
-  meta: { name: 'login', description: 'Sign in to TeXRA for included access' },
-  args: {
-    ...GLOBAL_ARGS,
-    provider: {
-      type: 'string',
-      description: `OAuth provider: ${CLI_OAUTH_PROVIDER_INPUTS} (alternative to positional)`,
+export const loginCommand = withUsageSections(
+  defineCliCommand({
+    meta: {
+      name: 'login',
+      description: 'Sign in with Researcher Access for included relay models',
     },
-    providerArg: {
-      type: 'positional',
-      required: false,
-      description: `OAuth provider: ${CLI_OAUTH_PROVIDER_INPUTS}`,
+    args: {
+      ...GLOBAL_ARGS,
+      provider: {
+        type: 'string',
+        description: `OAuth provider: ${CLI_OAUTH_PROVIDER_INPUTS} (alternative to positional)`,
+      },
+      providerArg: {
+        type: 'positional',
+        required: false,
+        description: `OAuth provider: ${CLI_OAUTH_PROVIDER_INPUTS}`,
+      },
+      'no-browser': {
+        type: 'boolean',
+        description:
+          'Print the loopback sign-in URL instead of opening a browser',
+      },
+      device: {
+        type: 'boolean',
+        description:
+          'Sign in with a device code from a browser on any device (for SSH, WSL2, and containers)',
+      },
+      'select-account': {
+        type: 'boolean',
+        description:
+          'Ask the OAuth provider to show account selection when supported',
+      },
+      'login-hint': {
+        type: 'string',
+        description:
+          'Suggest a specific provider account, such as a GitHub username or Google email',
+      },
     },
-    'no-browser': {
-      type: 'boolean',
-      description:
-        'Print the loopback sign-in URL instead of opening a browser',
+    run: (context, ctx) => {
+      return runLoginCommand(context, loginInitFromArgs(ctx.args));
     },
-    device: {
-      type: 'boolean',
-      description:
-        'Sign in with a device code from a browser on any device (for SSH, WSL2, and containers)',
+  }),
+  [
+    {
+      title: 'EXAMPLES',
+      rows: [
+        ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
+        ['texra login', 'sign in with Researcher Access'],
+        ['texra login --device', 'sign in to Researcher Access over SSH'],
+      ],
     },
-    'select-account': {
-      type: 'boolean',
-      description:
-        'Ask the OAuth provider to show account selection when supported',
-    },
-    'login-hint': {
-      type: 'string',
-      description:
-        'Suggest a specific provider account, such as a GitHub username or Google email',
-    },
-  },
-  run: (context, ctx) => {
-    return runLoginCommand(context, loginInitFromArgs(ctx.args));
-  },
-});
+  ],
+);
 
 async function runLoginCommand(
   context: CliContext,
@@ -378,7 +394,8 @@ export const AUTH_SUBCOMMAND_NAMES = Object.keys(AUTH_SUBCOMMANDS);
 export const authCommand = defineCommand({
   meta: {
     name: 'auth',
-    description: 'Sign in, sign out, and check TeXRA account status and usage',
+    description:
+      'Sign in with ChatGPT or Researcher Access, check status, and view usage',
   },
   args: {
     ...GLOBAL_ARGS,

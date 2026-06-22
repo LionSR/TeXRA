@@ -1323,6 +1323,7 @@ describe('runCli usage output stream routing', () => {
       'explain autonomous goal mode and approved-plan startup',
     );
     expect(stdout).toContain('/login, /logout');
+    expect(stdout).toContain('ChatGPT or Researcher Access');
     expect(stdout).toContain('Ctrl-T');
     expect(stdout).toContain('Tab');
     expect(stdout).toContain('cycle visible streams');
@@ -1370,10 +1371,31 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
+  it('shows ChatGPT and Researcher examples in login help', async () => {
+    let result = await runCli(['login', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('EXAMPLES');
+    expect(stdout).toContain('texra auth chatgpt login');
+    expect(stdout).toContain('texra login');
+    expect(stdout).toContain('Researcher Access');
+    expect(stderr).toBe('');
+
+    stdout = '';
+    stderr = '';
+    result = await runCli(['auth', 'login', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('USAGE texra auth login');
+    expect(stdout).toContain('texra auth chatgpt login');
+    expect(stdout).toContain('texra login --device');
+    expect(stderr).toBe('');
+  });
+
   it('shows EXAMPLES and a docs link in root --help', async () => {
     const result = await runCli(['--help']);
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('EXAMPLES');
+    expect(stdout).toContain('texra auth chatgpt login');
+    expect(stdout).toContain('texra login');
     expect(stdout).toContain('texra chat');
     expect(stdout).toContain('texra run <agent> --input file.tex');
     expect(stdout).toContain('texra agents list');
