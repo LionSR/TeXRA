@@ -25,6 +25,7 @@ import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import {
   attachProviderError,
   attachSdkErrorMetadata,
+  attachStreamDiagnostics,
   buildErrorLogData,
   formatProviderHttpError,
   getSdkErrorMessage,
@@ -473,21 +474,44 @@ describe('formatProviderHttpError', () => {
     expect(sdkErrorKindFromStatusCode(undefined)).toBe('api_error');
   });
 
-  it('caches normalized provider errors for downstream retry handling', () => {
-    const error = new Error('provider quota');
+  it('does not cache a fresh normalization, so metadata attached afterward is still surfaced', () => {
+    const error = new Error('stream failed');
     attachSdkErrorMetadata(error, {
       provider: 'fixture',
-      kind: 'rate_limit',
-      statusCode: 429,
+      kind: 'api_error',
+      statusCode: 500,
     });
 
-    const first = normalizeProviderError(error);
-    const second = normalizeProviderError(error);
+    // Mirrors the Anthropic stream path: an early debug-log call formats the
+    // error before stream diagnostics are attached to it.
+    const before = normalizeProviderError(error);
+    expect(before.provider).toBe('fixture');
+    expect(before.statusCode).toBe(500);
+    expect(before.streamDiagnostics).toBeUndefined();
 
-    expect(second).toBe(first);
-    expect(second.provider).toBe('fixture');
-    expect(second.statusCode).toBe(429);
-    expect(second.userRetryable).toBe(true);
+    const diagnostics = {
+      thinkingChars: 0,
+      textChars: 12,
+      toolInputChars: 0,
+      blockTypesSeen: ['text'],
+      eventsProcessed: 7,
+      lastEventType: 'content_block_delta',
+      elapsedSecs: 1.2,
+      secsSinceLastEvent: 0.3,
+      finalized: false,
+      messageStartReceived: true,
+      messageStopReceived: false,
+      stopReason: null,
+      anthropicMessageId: null,
+    };
+    attachStreamDiagnostics(error, diagnostics);
+
+    // A fresh normalize must reflect the newly-attached diagnostics — i.e. the
+    // earlier call must NOT have cached a diagnostics-less ProviderError on the
+    // error (which would otherwise be returned here and lose the diagnostics).
+    const after = normalizeProviderError(error);
+    expect(after.streamDiagnostics).toEqual(diagnostics);
+    expect(after.statusCode).toBe(500);
   });
 });
 

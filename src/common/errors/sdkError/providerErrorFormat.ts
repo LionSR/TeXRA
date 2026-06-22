@@ -236,20 +236,28 @@ function detectCachedProviderError(err: unknown): ProviderError | undefined {
 }
 
 /**
- * Normalize an upstream or SDK error once and attach the structured result to
- * the thrown value. Retry code should consume this helper so provider-boundary
- * code can own classification while downstream layers only read the shape.
+ * Normalize an upstream or SDK error. If a structured `ProviderError` was
+ * explicitly attached at a provider/flow boundary (possibly on a deeper
+ * `cause`), recover it; otherwise format the error fresh. Retry code consumes
+ * this helper so provider-boundary code owns classification while downstream
+ * layers only read the shape.
  */
 export function normalizeProviderError(err: unknown): ProviderError {
   const cached = detectCachedProviderError(err);
   if (cached) {
+    // Migrate an explicitly-attached ProviderError from a deeper cause onto the
+    // wrapper so later reads skip the chain walk.
     providerErrorMetadata.attach(err, cached);
     return cached;
   }
 
-  const formatted = formatProviderHttpError(err);
-  providerErrorMetadata.attach(err, formatted);
-  return formatted;
+  // Compute fresh but DO NOT cache the result: a caller may format an error for
+  // logging before later metadata (streamDiagnostics / partialText) is attached
+  // to it, and a deliberately status-stripped wrapper (e.g. background-polling
+  // 404) must not inherit a status cached by an incidental normalize on its
+  // cause. Only explicit `attachProviderError` at provider/flow boundaries seeds
+  // the cache the lookup above recovers.
+  return formatProviderHttpError(err);
 }
 
 export function getSdkErrorMessage(err: unknown): string {
