@@ -8,6 +8,7 @@ import {
 } from '@agent/core/execution/executionRequests';
 
 // Local imports - shared schemas
+import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
@@ -19,8 +20,6 @@ import {
   getPastedImageFullPath,
   isPastedImage,
 } from '@utils/files/pastedImageUtils';
-
-import type { MainViewExecuteMessage } from './MainViewExecutionMessageController';
 
 export type MainViewExecutionPreparationResult =
   | { valid: true; request: ValidatedExecutionRequest }

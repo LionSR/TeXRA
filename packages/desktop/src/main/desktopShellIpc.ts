@@ -273,7 +273,6 @@ function dispatchMainViewInboundOnShell(
           createSampleProject: 'Create sample project',
           cloneOverleaf: 'Import from Overleaf',
           downloadArxiv: 'Import from arXiv',
-          openWalkthrough: 'Open walkthrough',
         };
         actions.showInfoMessage?.(
           `"${labels[message.action]}" requires the VS Code extension.`,
