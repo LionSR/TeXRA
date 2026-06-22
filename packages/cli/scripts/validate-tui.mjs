@@ -669,7 +669,7 @@ const SCENARIOS = [
     expect: [
       '/agent',
       'Tool-use and delegating agents',
-      'Creator — delegating',
+      'Creator',
       'Current: chat (hidden from picker)',
       'texra chat --agent=<name>',
       'Esc close',
@@ -678,6 +678,7 @@ const SCENARIOS = [
       'Platform not initialized',
       '/agent - error',
       'texra --agent=<name>',
+      'Creator —',
       'tool-use; built-in',
       'delegating; built-in',
       'orchestrator; built-in',
@@ -695,7 +696,7 @@ const SCENARIOS = [
     expect: [
       '/agent',
       'Tool-use and delegating agents',
-      'Creator — delegating',
+      'Creator',
       'Current: chat (hidden from picker)',
       'texra chat --agent=<name>',
       'Esc close',
@@ -704,6 +705,7 @@ const SCENARIOS = [
       'Platform not initialized',
       '/agent - error',
       'texra --agent=<name>',
+      'Creator —',
       'tool-use; built-in',
       'delegating; built-in',
       'orchestrator; built-in',
