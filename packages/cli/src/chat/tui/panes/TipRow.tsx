@@ -29,14 +29,16 @@ export function tipRowText({
   readonly hour: number;
   readonly responseRunning?: boolean;
 }): string {
+  if (responseRunning) {
+    return QUEUE_FOLLOW_UP_TIP;
+  }
+
   const tips = agentSelectionAvailable
     ? [BASE_TIPS[0], BASE_TIPS[1], AGENT_SELECTION_TIP, ...BASE_TIPS.slice(2)]
     : BASE_TIPS;
   const index = ((hour % tips.length) + tips.length) % tips.length;
   const tip = tips[index]!;
-  return !responseRunning && tip === QUEUE_FOLLOW_UP_TIP
-    ? IDLE_QUEUE_FOLLOW_UP_FALLBACK_TIP
-    : tip;
+  return tip === QUEUE_FOLLOW_UP_TIP ? IDLE_QUEUE_FOLLOW_UP_FALLBACK_TIP : tip;
 }
 
 export function TipRow(props: {
