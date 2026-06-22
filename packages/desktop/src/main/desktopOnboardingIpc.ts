@@ -1,5 +1,11 @@
 import { platform } from '@platform/platform';
-import { setOnboardingDeclined } from '@controllers/onboarding/onboardingFunnel';
+import {
+  planOnboardingFunnelTransition,
+  readOnboardingFlags,
+  setFirstRunDone,
+  setOnboardingDeclined,
+  type OnboardingFunnelState,
+} from '@controllers/onboarding/onboardingFunnel';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 import {
   buildDesktopOnboardingSetStateMessage,
@@ -15,14 +21,56 @@ import type { StateStore } from '@platform/interfaces/state';
 
 export interface DesktopOnboardingIpcOptions {
   state?: StateStore;
+  /**
+   * Host-provided check for a usable credential (relay sign-in + server-side
+   * keys, or any provider API key). Async because both the relay auth check
+   * and the secrets read can involve disk/network I/O.
+   */
+  hasCredential?: () => boolean | Promise<boolean>;
+  /**
+   * Resolves once the host's one-shot first-run backfill has settled. The first
+   * funnel derivation waits for it so a returning veteran isn't transiently
+   * pushed into State 1 (firing `selectSetupAgent`) before the backfill marks
+   * them `done`. Optional: when absent, refreshes derive immediately.
+   */
+  readyGate?: Promise<void>;
+  /** Post SET_SELECTED_AGENT to the renderer when entering State 1. */
+  selectSetupAgent?: () => Promise<void>;
+  /** Auto-start the setup conversation on the State 0→1 transition. */
+  kickoffSetup?: () => Promise<void>;
+  /** Run ChatGPT sign-in flow from the welcome card. */
+  signInWithChatGpt?: () => Promise<void>;
+  /**
+   * Open the getting-started walkthrough from the State 0 welcome card. The
+   * desktop shell can't host the VS Code walkthrough, so the host wires this to
+   * the closest analog: opening the desktop getting-started docs externally.
+   */
+  openGettingStarted?: () => Promise<void>;
   onAsyncError?: (error: unknown) => void;
+}
+
+export interface DesktopOnboardingIpc extends DesktopMessageHandler {
+  /** Recompute the funnel from credentials + flags and push it to the webview. */
+  refreshOnboardingFunnel(): Promise<void>;
 }
 
 export function createDesktopOnboardingIpc(
   renderer: DesktopRenderer,
   options: DesktopOnboardingIpcOptions = {},
-): DesktopMessageHandler {
+): DesktopOnboardingIpc {
   const state = options.state ?? platform().globalState;
+  let previousFunnelState: OnboardingFunnelState | undefined;
+  let setupKickoffStarted = false;
+  // Serialize refreshes so concurrent callers (WEBVIEW_READY, post-backfill,
+  // auth refresh, api-key hooks, run completion) never interleave. The funnel
+  // derivation has an internal `await` (the credential probe) and mutates the
+  // shared `previousFunnelState`; without serialization the last caller to
+  // finish could push a `SET_ONBOARDING_FUNNEL` derived from a stale previous
+  // state. A latch coalesces overlapping requests: while one refresh is in
+  // flight, a single re-run is queued and run once the current one settles, so
+  // callers always observe a consistent terminal state.
+  let refreshChain: Promise<void> = Promise.resolve();
+  let rerunRequested = false;
 
   function postCurrentState(): void {
     const dismissed = state.get<boolean>(
@@ -32,11 +80,82 @@ export function createDesktopOnboardingIpc(
     renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(!dismissed));
   }
 
-  function postMainViewFunnelState(): void {
+  async function runOnboardingFunnelRefresh(): Promise<void> {
+    // Wait for the host's first-run backfill to settle before the first
+    // derivation; resolves instantly on every subsequent refresh.
+    if (options.readyGate) {
+      await options.readyGate.catch(() => undefined);
+    }
+    const hasCredential = options.hasCredential
+      ? await Promise.resolve(options.hasCredential()).catch(() => false)
+      : false;
+    const flags = readOnboardingFlags(state);
+    const transition = planOnboardingFunnelTransition(previousFunnelState, {
+      hasCredential,
+      ...flags,
+    });
+    previousFunnelState = transition.state;
+
     renderer.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: 'done',
+      state: transition.state,
     });
+
+    if (transition.clearDeclined) {
+      await setOnboardingDeclined(state, false);
+    }
+    if (transition.selectSetupAgent) {
+      await options.selectSetupAgent?.();
+    }
+    // The funnel state was already pushed above so the renderer can paint the
+    // setup card immediately; the kickoff runs fire-and-forget (see
+    // startSetupKickoff) so a later refresh isn't blocked behind it.
+    if (transition.kickoffSetup) {
+      startSetupKickoff();
+    }
+  }
+
+  // Single guarded entry point for launching setup. Both the auto-kickoff on the
+  // needs-credential→setup transition and the explicit "Run Setup" card action
+  // route through here, so a setup run can't be started twice concurrently —
+  // the host's `handleExecute`/`runAgent` has no in-flight dedup of its own.
+  function startSetupKickoff(): void {
+    if (setupKickoffStarted) return;
+    setupKickoffStarted = true;
+    // Fire-and-forget: the host kickoff runs the setup conversation to
+    // completion, which must NOT block the serialized funnel-refresh chain —
+    // otherwise a later "skip setup" / sign-out / credential-removal refresh
+    // would queue behind the entire setup run, leaving the card stuck on 'setup'.
+    void Promise.resolve(options.kickoffSetup?.())
+      .catch(() => {
+        // Swallow — the kickoff handler already surfaced the error to the user.
+      })
+      .finally(() => {
+        // Clear the guard once the run settles (success or failure), not only on
+        // error: while it's in flight the guard blocks a concurrent second run,
+        // but afterwards a manual "Run Setup" click or a later credential cycle
+        // must be able to launch setup again (otherwise the guard would stay
+        // stuck for the window's lifetime after the first kickoff).
+        setupKickoffStarted = false;
+      });
+  }
+
+  function refreshOnboardingFunnel(): Promise<void> {
+    // If a refresh is already running, mark that another full pass is needed
+    // and return the chain tail — every caller resolves only once the queued
+    // pass has settled, so they all observe the same terminal funnel state.
+    rerunRequested = true;
+    refreshChain = refreshChain
+      .catch(() => undefined)
+      .then(async () => {
+        // Collapse multiple overlapping requests that arrived while a pass was
+        // running into a single re-run.
+        while (rerunRequested) {
+          rerunRequested = false;
+          await runOnboardingFunnelRefresh();
+        }
+      });
+    return refreshChain;
   }
 
   async function dismiss(): Promise<void> {
@@ -46,25 +165,61 @@ export function createDesktopOnboardingIpc(
 
   async function skipMainOnboarding(): Promise<void> {
     await setOnboardingDeclined(state, true);
-    postMainViewFunnelState();
+    await refreshOnboardingFunnel();
   }
 
-  return createCommandHandler(
-    {
-      // Desktop does not run State 0/1 yet, so every main-view mount must
-      // clear MainApp's first-paint `pending` guard with a concrete state.
-      [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: {
-        when: (message) => message.view === 'main',
-        run: () => postMainViewFunnelState(),
-        claim: false,
+  async function skipSetup(): Promise<void> {
+    await setFirstRunDone(state, true);
+    await refreshOnboardingFunnel();
+  }
+
+  async function runSetup(): Promise<void> {
+    await options.selectSetupAgent?.();
+    // Route through the shared guard so a manual "Run Setup" click after an
+    // auto-kickoff (or a double-click) can't launch a second concurrent run.
+    startSetupKickoff();
+    await refreshOnboardingFunnel();
+  }
+
+  async function signInWithChatGpt(): Promise<void> {
+    await options.signInWithChatGpt?.();
+    await refreshOnboardingFunnel();
+  }
+
+  async function openGettingStarted(): Promise<void> {
+    await options.openGettingStarted?.();
+  }
+
+  return {
+    ...createCommandHandler(
+      {
+        // Every main-view mount must clear MainApp's first-paint `pending`
+        // guard with a concrete state (State 0 welcome card, State 1 setup,
+        // or State 2 done).
+        [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: {
+          when: (message) => message.view === 'main',
+          run: () => refreshOnboardingFunnel(),
+          claim: false,
+        },
+        [DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE]: () => postCurrentState(),
+        [DESKTOP_ONBOARDING_COMMANDS.DISMISS]: () => dismiss(),
+        // Welcome-card skip (PRD: agent-native onboarding). Host-neutral
+        // declined flag — the same one the CLI picker persists. After
+        // persisting the declined flag, recompute the funnel; the derivation
+        // produces 'done' when no credential is present.
+        [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP]: () => skipMainOnboarding(),
+        [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP]: () => skipSetup(),
+        [MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP]: () => runSetup(),
+        [MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT]: () =>
+          signInWithChatGpt(),
+        // State 0 walkthrough button. The desktop shell can't host the VS Code
+        // getting-started walkthrough, so this opens the desktop docs externally
+        // (the host wires `openGettingStarted`).
+        [MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED]: () =>
+          openGettingStarted(),
       },
-      [DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE]: () => postCurrentState(),
-      [DESKTOP_ONBOARDING_COMMANDS.DISMISS]: () => dismiss(),
-      // Welcome-card skip (PRD: agent-native onboarding). Host-neutral
-      // declined flag — the same one the CLI picker persists. Keep the
-      // renderer on desktop's current `done` funnel state afterward.
-      [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP]: () => skipMainOnboarding(),
-    },
-    { onAsyncError: options.onAsyncError },
-  );
+      { onAsyncError: options.onAsyncError },
+    ),
+    refreshOnboardingFunnel,
+  };
 }
