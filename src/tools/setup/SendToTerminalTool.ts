@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { type ToolResult } from '@tools/result';
+import { type ToolResult } from '@shared/schemas/toolResult';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,

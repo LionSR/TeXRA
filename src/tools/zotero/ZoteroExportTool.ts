@@ -9,7 +9,7 @@
 import { z } from 'zod';
 
 // Local imports - core
-import { ToolError } from '@tools/result';
+import { ToolError } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
 import { pluralize } from '@utils/text/stringUtils';
 

@@ -25,7 +25,7 @@ import { z } from 'zod';
 // Local imports - core
 import pTimeout from 'p-timeout';
 import { toErrorMessage } from '@common/errors';
-import { ToolError } from '@tools/result';
+import { ToolError } from '@shared/schemas/toolResult';
 import { isTimeoutErrorCode } from '@tools/timeouts';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { CROSSREF_CONSTANTS, crossrefClient } from '@tools/citation/constants';

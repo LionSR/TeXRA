@@ -63,7 +63,7 @@ import {
   getExecutionStatusInfo,
   resolveExecutionDisplayCategory,
 } from './executionFormatters';
-import { ToolError, type ToolResult } from './result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from './core/define';
 import {
   formatFileView,

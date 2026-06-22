@@ -19,7 +19,7 @@ import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
 import type { FileLocation } from '@shared/schemas';
-import type { ToolResult } from '@tools/result';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 

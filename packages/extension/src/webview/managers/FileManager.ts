@@ -204,7 +204,7 @@ export class FileManager extends BaseWebviewManager {
         const baseExists = await WorkspaceFS.exists(derivedBaseFile);
         if (baseExists) {
           await this.handleRequestBaseFile({
-            command: 'requestBaseFile',
+            command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
             preserveBaseFile: true,
           });
           filePathToSelect = derivedBaseFile;

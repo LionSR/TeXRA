@@ -56,7 +56,7 @@ import {
 import { formatBytes } from '@shared/utils/string';
 
 // Local imports - tools
-import type { ToolResult } from '@tools/result';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import {
   isApprovalBypassedForStream,
   proposalApprovalState,

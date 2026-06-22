@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Local imports - tools
-import { ToolResult, ToolError } from '@tools/result';
+import { ToolResult, ToolError } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
 import {
   buildBashApprovalRejectedResult,

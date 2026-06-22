@@ -13,7 +13,7 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { ToolError } from '@tools/result';
+import { ToolError } from '@shared/schemas/toolResult';
 
 import type { SetupPlatform } from './platform';
 
