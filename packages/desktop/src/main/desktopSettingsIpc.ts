@@ -166,10 +166,13 @@ export interface DesktopSettingsIpcOptions {
   }) => Promise<void>;
   onError?: (error: unknown) => void;
   modelListRefresh?: PromiseLike<void>;
+  /** Called after a provider API key is saved or removed. */
+  onApiKeyChanged?: () => Promise<void>;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
   refreshAuthDependentData(): Promise<void>;
+  signInChatGpt(options?: { enableSubscription?: boolean }): Promise<void>;
 }
 
 export function createDesktopSettingsIpc(
@@ -601,6 +604,7 @@ export function createDesktopSettingsIpc(
     await postProfileData();
     await postModelSelectionData();
     await postMainModelOptionsData();
+    await options.onApiKeyChanged?.();
   }
 
   async function setProviderKey(
@@ -696,6 +700,11 @@ export function createDesktopSettingsIpc(
     }
     invalidateModelOptionsCache();
     await Promise.all([postProfileData(), postModelSelectionData()]);
+    // Switching included ↔ personal access mode changes the credential
+    // predicate (`getUseIncludedModelAccess()`), so refresh the onboarding
+    // funnel — otherwise a user enabling included access stays on
+    // `needs-credential` until a reload.
+    await options.onApiKeyChanged?.();
   }
 
   async function refreshAfterChatGptAuthChange(): Promise<void> {
@@ -705,9 +714,15 @@ export function createDesktopSettingsIpc(
       postModelSelectionData(),
       postMainModelOptionsData(),
     ]);
+    // ChatGPT sign-in/out is a credential change too: refresh the onboarding
+    // funnel so a user who signs in from Settings leaves `needs-credential`
+    // without needing a reload.
+    await options.onApiKeyChanged?.();
   }
 
-  async function signInChatGpt(): Promise<void> {
+  async function signInChatGpt(signInOptions?: {
+    enableSubscription?: boolean;
+  }): Promise<void> {
     try {
       if (!options.openExternalUrl) {
         await options.showErrorMessage?.(
@@ -719,6 +734,15 @@ export function createDesktopSettingsIpc(
         coordinator: codexCoordinator(),
         openBrowser: options.openExternalUrl,
       });
+      // The onboarding welcome card's "Sign in with ChatGPT" implies the user
+      // wants subscription routing, so enable the preference after a successful
+      // login (mirrors the extension's `codexSubscriptionSignIn`). Without this
+      // `isCodexSubscriptionActive` stays false (the preference defaults off)
+      // and the funnel bounces the user straight back to `needs-credential`.
+      // The Settings sign-in command leaves the preference to its own toggle.
+      if (signInOptions?.enableSubscription) {
+        await setPreferCodexSubscription(true);
+      }
       await options.showInfoMessage?.(
         `Signed in with ChatGPT as ${session.email ?? session.accountId ?? 'your account'}.`,
       );
@@ -1165,6 +1189,7 @@ export function createDesktopSettingsIpc(
 
   return {
     refreshAuthDependentData,
+    signInChatGpt,
 
     handleMessage(message: DesktopCommandMessage) {
       // WEBVIEW_READY is a broadcast: act on it but return false so sibling
