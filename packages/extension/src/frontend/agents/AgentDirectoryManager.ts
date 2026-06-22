@@ -5,6 +5,7 @@ import * as path from 'node:path';
 // Third-party imports
 import * as vscode from 'vscode';
 import { minimatch } from 'minimatch';
+import pDefer from 'p-defer';
 
 // Local imports
 import {
@@ -197,10 +198,8 @@ export class AgentDirectoryManager {
       return;
     }
 
-    let resolveSetup: () => void;
-    this.watcherSetupPromise = new Promise((resolve) => {
-      resolveSetup = resolve;
-    });
+    const setupDeferred = pDefer<void>();
+    this.watcherSetupPromise = setupDeferred.promise;
     this.watcherRebuildRequested = false;
 
     try {
@@ -214,7 +213,7 @@ export class AgentDirectoryManager {
 
       await this.buildAgentWatchers(directories);
     } finally {
-      resolveSetup!();
+      setupDeferred.resolve();
       this.watcherSetupPromise = null;
     }
 

@@ -6,6 +6,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 
+import pDefer from 'p-defer';
 import { z } from 'zod';
 
 // Local imports - auth
@@ -45,12 +46,11 @@ export async function startLoopbackCallbackServer(
   authCoordinator: SupabaseSessionCoordinator,
 ): Promise<LoopbackCallbackServer> {
   const nonce = randomBytes(CALLBACK_NONCE_BYTES).toString('base64url');
-  let resolveSession: (session: SupabaseSession) => void = () => {};
-  let rejectSession: (error: Error) => void = () => {};
-  const sessionPromise = new Promise<SupabaseSession>((resolve, reject) => {
-    resolveSession = resolve;
-    rejectSession = reject;
-  });
+  const {
+    promise: sessionPromise,
+    resolve: resolveSession,
+    reject: rejectSession,
+  } = pDefer<SupabaseSession>();
 
   const server = createServer((request, response) => {
     void handleCallbackRequest(request, response, authCoordinator, nonce)

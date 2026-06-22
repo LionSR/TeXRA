@@ -4,6 +4,9 @@
 // path: the Ink TUI runs for every interactive `texra chat` invocation, and
 // non-TTY callers are pointed at `texra run` (which is what they actually
 // want for piping/scripting).
+//
+// Run start/resume/stop orchestration lives in ../chatSessionController;
+// this module keeps only composition, rendering glue, and the Ink lifecycle.
 
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -18,57 +21,32 @@ import {
 import { platform, tryPlatform } from '@platform/platform';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { loadAgents } from '@agent/index';
-import { registerExecution, writeTerminalStatus } from '@agent/storage';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-  type AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
-import {
-  executeAgent,
-  resumeToolUseFromSnapshot,
-} from '@agent/runtime/executeAgent';
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
-import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
+import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
+import { initCliPlatform } from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   type CliNoAvailableModelsRecoveryOptions,
   type CliRunnableModelResolution,
 } from '@cli/runtime/modelAccess';
 import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
-import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
 } from '@cli/runtime/terminalRequirements';
-import {
-  cliTerminalStatus,
-  terminalStatusExitCode,
-} from '@cli/runtime/terminalStatus';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
-import {
-  explainNonResumable,
-  resolveCliResumeSnapshot,
-  type CliToolUseResumeResolution,
-} from '@cli/runtime/sessionResume';
 import { isLiveElapsedStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { bus } from '@eventBus/ProgressEventBus';
-import { sumUsageStats } from '@shared/schemas';
 import {
-  EXECUTION_STATUS,
   STREAM_STATUS,
   type StreamStatus,
   type ExecutionId,
@@ -76,8 +54,12 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeText } from '@shared/utils/xmlEscape';
-import { generateExecutionId } from '@utils/core/executionId';
 
+import {
+  buildInitialChatAgentConfig,
+  createChatSessionController,
+  type ChatSessionController,
+} from '../chatSessionController';
 import { App } from './App';
 import { assertNever } from './assertNever';
 import { handleTuiSlashCommand } from './commands/handleSlashCommand';
@@ -103,7 +85,7 @@ import {
 } from './render/noColorOutput';
 import { createTuiViewportController } from './render/tuiViewportController';
 import { clearApprovals } from './state/approvalQueue';
-import { cliState, patchStream, resetCliState } from './state/cliState';
+import { cliState, resetCliState } from './state/cliState';
 import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,
@@ -114,8 +96,6 @@ import {
   collectResumeUsage,
   formatResumeHint,
 } from './state/resumeHint';
-import { installTuiApprovals } from './state/subscribeApprovals';
-import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { onStreamStatusChange } from './state/streamStatus';
@@ -124,10 +104,7 @@ import {
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
-  clearLocalTranscript,
-  moveLocalTranscriptToStream,
 } from './state/transcript';
-import { projectStreamTranscript } from './state/transcriptProjection';
 import {
   cleanupTerminalModes,
   clearTerminalScrollback,
@@ -167,37 +144,6 @@ export interface RunChatInit {
   readonly initialResume?: {
     readonly id: ExecutionId;
     readonly resolution: CliToolUseResumeResolution;
-  };
-}
-
-export interface BuildInitialChatAgentConfigInput {
-  readonly agent: string;
-  readonly model: string;
-  readonly instruction: string;
-  readonly displayInstruction?: string;
-  readonly workingDirectory: string;
-  readonly mediaFiles?: readonly string[];
-  readonly cliMultiAgentPresetId?: string;
-}
-
-export function buildInitialChatAgentConfig({
-  agent,
-  model,
-  instruction,
-  displayInstruction,
-  workingDirectory,
-  mediaFiles,
-  cliMultiAgentPresetId,
-}: BuildInitialChatAgentConfigInput): AgentConfigPayload {
-  return {
-    agent,
-    model,
-    instruction,
-    ...(displayInstruction !== undefined ? { displayInstruction } : {}),
-    agentCategory: AgentCategory.ToolUse,
-    workingDirectory,
-    ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-    ...(cliMultiAgentPresetId ? { cliMultiAgentPresetId } : {}),
   };
 }
 
@@ -246,26 +192,6 @@ export function restorePendingSkillActivations(
       pendingSkillActivations.set(name, activationPrompt);
     }
   }
-}
-
-export async function registerFreshChatExecution(
-  executionId: ExecutionId,
-  configPayload: AgentConfigPayload,
-): Promise<AgentConfig> {
-  const config = AgentConfigSchema.parse(configPayload);
-  await registerExecution(executionId, config, config.agent);
-  return config;
-}
-
-export async function markRegisteredChatExecutionError(
-  executionId: ExecutionId,
-  options: {
-    readonly executionRegistered: boolean;
-    readonly agentSettled: boolean;
-  },
-): Promise<void> {
-  if (!options.executionRegistered || options.agentSettled) return;
-  await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
 }
 
 export type ChatTuiFocusedChildFollowUpRoute = FocusedChildFollowUpRoute;
@@ -400,7 +326,7 @@ export async function runChat(
   };
   // The slash-command context is identical at every call site; build it once
   // lazily so the closures it captures (interruptActive, resetSessionForClear,
-  // resumeAgentRun) are all defined before the first use.
+  // chatController.resume) are all defined before the first use.
   const slashCommandContext = (): SlashCommandContext => ({
     cliContext: context,
     session,
@@ -415,7 +341,7 @@ export async function runChat(
     setApprovalPolicy,
     canSelectModel: canSelectCurrentModel,
     resetSession: resetSessionForClear,
-    resumeExecution: resumeAgentRun,
+    resumeExecution: (id: ExecutionId) => chatController.resume(id),
   });
   cliState.sessionMeta.set({
     agent,
@@ -531,18 +457,19 @@ export async function runChat(
     chatTuiCanStopVisibleRun(session, rootStreamStatus());
   const canStopPendingRunWithoutStream = (): boolean =>
     Boolean(session.runPromise && !session.runCompleted && !session.streamId);
-  const shouldDetachSubagentsOnStop = (): boolean =>
-    tryPlatform()?.workspaceState.get<boolean>(
-      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-      false,
-    ) === true;
+  // Chat-session controller: owns run start/resume/stop orchestration.
+  // The Ink layer never directly mutates session run-state fields — every
+  // state transition flows through one of the controller's narrow commands.
+  const chatController: ChatSessionController = createChatSessionController({
+    session,
+    getSessionContext: currentSessionContext,
+    disposers,
+    followUpQueue,
+    snapshotStore,
+  });
+
   const interruptActive = (): void => {
-    clearApprovals();
-    if (!session.streamId) return;
-    executionRegistry.stopAgentStream(session.streamId, {
-      detachActiveChildren: shouldDetachSubagentsOnStop(),
-      runtimeHost: session.runtimeHost,
-    });
+    chatController.stop();
   };
 
   const resetSessionForClear = (): void => {
@@ -563,7 +490,7 @@ export async function runChat(
     }
 
     const meta = cliState.sessionMeta.get();
-    if (isRunPending) interruptActive();
+    if (isRunPending) chatController.stop();
     clearApprovals();
     followUpQueue.clear();
     pendingSkillActivationClearEpoch += 1;
@@ -581,227 +508,6 @@ export async function runChat(
     }
     resetCliState(meta);
     clearTerminalScrollback();
-  };
-
-  const startAgentRun = (config: AgentConfigPayload): void => {
-    const currentModel = config.model;
-    const sessionContext = currentSessionContext(currentModel);
-    cliState.sessionMeta.set({
-      ...cliState.sessionMeta.get(),
-      agent: config.agent,
-      model: config.model,
-      canDelegate: chatAgentSupportsDelegation(config.agent),
-    });
-    const runtimeHost = createCliRuntimeHost(sessionContext);
-    const wrapped = wrapRuntimeHost(runtimeHost);
-    const detachResultToast = attachTerminalResultToast(
-      defaultSession(),
-      wrapped,
-    );
-    const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
-    disposers.push(unbindApprovals);
-    const executionId = generateExecutionId();
-    let waitingTurn = 0;
-    let executionRegistered = false;
-    let agentSettled = false;
-    session.executionId = executionId;
-    const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
-
-    const runPromise = registerFreshChatExecution(executionId, config)
-      .then((registeredConfig) => {
-        executionRegistered = true;
-        return executeAgent(registeredConfig, executionId, {
-          runtimeHost: wrapped,
-          enforceCategory: true,
-          approvalPromptsUnavailable: approvalsUnavailable,
-          onStreamResolved: (resolvedStreamId) => {
-            session.streamId = resolvedStreamId;
-            cliState.rootStreamId.set(resolvedStreamId);
-            moveLocalTranscriptToStream(resolvedStreamId);
-            cliState.activeStreamId.set(resolvedStreamId);
-            if (session.stopRequested) interruptActive();
-          },
-          onBeforeWaiting: (lastResponse) => {
-            if (!session.streamId) return;
-            projectStreamTranscript(session.streamId, {
-              fallbackAssistant: {
-                text: lastResponse,
-                idPrefix: `waiting:${executionId}:${waitingTurn++}`,
-              },
-              finalize: true,
-            });
-          },
-        });
-      })
-      .then((result) => {
-        agentSettled = true;
-        session.runExitCode = terminalStatusExitCode(
-          cliTerminalStatus(result),
-          sessionContext,
-        );
-        // Pull any final MODEL_RESPONSE chunks out of the AgentTrace
-        // buffer before falling back to `result.lastResponse`. Without
-        // this, a reply that finalized between sync ticks would never
-        // hit the transcript.
-        if (result.streamId) {
-          // The run is definitively done. Pull any final log chunks into
-          // cliState, add the result text only if the log did not render it,
-          // and promote deferred assistant/tool rows into `<Static>`.
-          projectStreamTranscript(result.streamId, {
-            finalize: true,
-            ...(result.category === AgentCategory.ToolUse
-              ? {
-                  fallbackAssistant: {
-                    text: result.lastResponse,
-                    idPrefix: `final:${result.executionId}`,
-                  },
-                }
-              : {}),
-          });
-        }
-        notify({ kind: 'agentFinished' });
-      })
-      .catch(async (error: unknown) => {
-        await markRegisteredChatExecutionError(executionId, {
-          executionRegistered,
-          agentSettled,
-        });
-        if (!session.stopRequested) {
-          // Ink owns stdout while the TUI is mounted; surface the failure
-          // inline so the user sees why the agent stopped.
-          appendLocalErrorTranscript(toErrorMessage(error));
-        }
-        session.runExitCode = session.stopRequested
-          ? CliExitCode.Success
-          : CliExitCode.AgentError;
-      })
-      .finally(() => {
-        detachResultToast();
-        if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
-        markChatTuiRunCompleted(session);
-        void runtimeHost.close();
-      });
-    markChatTuiRunPending(session, runPromise, wrapped);
-  };
-
-  // Interactive resume: continue a suspended tool-use session by execution id.
-  // Mirrors startAgentRun's runtimeHost/approvals/runPromise lifecycle, but
-  // (a) resolves a persisted snapshot instead of building a fresh config, and
-  // (b) the streamId is already known (re-derived from the prior run), so we
-  // set session.streamId up front and rehydrate that stream's transcript so
-  // the user sees the prior conversation before the continued turn streams in.
-  const resumeAgentRun = async (
-    id: ExecutionId,
-    preResolved?: CliToolUseResumeResolution,
-  ): Promise<void> => {
-    if (!chatTuiCanStartRootRun(session)) {
-      appendLocalAssistantTranscript(
-        'Finish the active chat before resuming a previous session.',
-      );
-      return;
-    }
-
-    const resolution = preResolved ?? (await resolveCliResumeSnapshot(id));
-    if (resolution.kind !== 'toolUse') {
-      // Workflows / missing / already-completed sessions can't continue here —
-      // surface why and leave the session idle so the user can still chat.
-      appendLocalErrorTranscript(explainNonResumable(resolution, id));
-      return;
-    }
-
-    clearLocalTranscript();
-    followUpQueue.clear();
-    session.runCompleted = false;
-    publishChatTuiRootRunStartAvailability(session);
-    session.stopRequested = false;
-    session.runExitCode = CliExitCode.Success;
-    session.streamId = resolution.streamId;
-    session.executionId = resolution.snapshot.executionId;
-    cliState.rootStreamId.set(resolution.streamId);
-
-    const currentModel = resolution.config.model;
-    const sessionContext = currentSessionContext(currentModel);
-    cliState.sessionMeta.set({
-      ...cliState.sessionMeta.get(),
-      agent: resolution.config.agent,
-      model: resolution.config.model,
-      modelSource: 'history',
-      canDelegate: chatAgentSupportsDelegation(resolution.config.agent),
-    });
-
-    // Rehydrate the prior transcript so the user sees the conversation they're
-    // continuing. ensureLoaded pulls the persisted entries off disk into the
-    // store; projection promotes already-final rows into `<Static>` scrollback.
-    // An older run with no persisted entries simply shows whatever exists
-    // (possibly nothing) — the continued turn streams in regardless.
-    await getDefaultStreamLogStore().ensureLoaded(resolution.streamId);
-    // Restore durable per-stream display state plus cumulative usage for exit
-    // summaries. Latest context-window usage is live-only and should not be
-    // rehydrated from the per-run total.
-    await snapshotStore.load([resolution.streamId]);
-    const restored = await snapshotStore.read(resolution.streamId);
-    patchStream(resolution.streamId, (slice) => {
-      const runUsages = Object.values(restored.runUsage);
-      // The persisted snapshot is authoritative for this resumed stream — use
-      // its todos/plan verbatim (an intentionally-empty list must not fall back
-      // to stale slice state) rather than treating empty as "no data".
-      return {
-        ...slice,
-        cumulativeUsage: runUsages.length
-          ? sumUsageStats(runUsages)
-          : slice.cumulativeUsage,
-        todos: restored.todos,
-        plan: restored.plan,
-      };
-    });
-    projectStreamTranscript(resolution.streamId);
-    cliState.activeStreamId.set(resolution.streamId);
-
-    const runtimeHost = createCliRuntimeHost(sessionContext);
-    const wrapped = wrapRuntimeHost(runtimeHost);
-    session.runtimeHost = wrapped;
-    const detachResultToast = attachTerminalResultToast(
-      defaultSession(),
-      wrapped,
-    );
-    const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
-    disposers.push(unbindApprovals);
-    const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
-
-    session.runPromise = setCliHelperModel(currentModel)
-      .then(() =>
-        resumeToolUseFromSnapshot(resolution.snapshot, wrapped, {
-          approvalPromptsUnavailable: approvalsUnavailable,
-        }),
-      )
-      .then(() => {
-        // resumeToolUseFromSnapshot resolves void (no result object), so the
-        // streamId we already know is the only handle: flush the tail and
-        // promote any deferred assistant/tool rows into `<Static>`.
-        if (session.streamId) {
-          projectStreamTranscript(session.streamId, { finalize: true });
-        }
-        session.runExitCode = CliExitCode.Success;
-        notify({ kind: 'agentFinished' });
-      })
-      .catch((error: unknown) => {
-        if (!session.stopRequested) {
-          appendLocalErrorTranscript(toErrorMessage(error));
-        }
-        session.runExitCode = session.stopRequested
-          ? CliExitCode.Success
-          : CliExitCode.AgentError;
-      })
-      .finally(() => {
-        detachResultToast();
-        if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
-        markChatTuiRunCompleted(session);
-        void runtimeHost.close();
-      });
-    publishChatTuiRootRunStartAvailability(session);
-    // Don't await session.runPromise here: a resumed session that suspends at
-    // the WAIT node leaves runPromise unresolved (mirrors startAgentRun's
-    // fire-and-forget). The exit `finally` handles the dangling-promise case.
   };
 
   // Pre-register the slash commands the input palette uses.
@@ -825,7 +531,7 @@ export async function runChat(
     onLoginSelect: (value) => loginFromChat(value, context),
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: activateSkillForNextMessage,
-    onResumeSelect: resumeAgentRun,
+    onResumeSelect: (id: ExecutionId) => chatController.resume(id),
     onError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
     },
@@ -860,7 +566,7 @@ export async function runChat(
           return;
         }
 
-        startAgentRun(
+        chatController.startRootRun(
           buildInitialChatAgentConfig({
             agent: currentAgent,
             model: selection.model,
@@ -1003,7 +709,11 @@ export async function runChat(
       onKillExecution={(executionId) => {
         clearApprovals();
         executionRegistry.kill(executionId, {
-          detachActiveChildren: shouldDetachSubagentsOnStop(),
+          detachActiveChildren:
+            tryPlatform()?.workspaceState.get<boolean>(
+              WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+              false,
+            ) === true,
         });
       }}
       history={inputHistory}
@@ -1214,11 +924,11 @@ export async function runChat(
     // Guard the void: resumeAgentRun awaits snapshot resolution / ensureLoaded
     // before installing its own .then/.catch, so an early throw there would
     // otherwise surface as an unhandled rejection.
-    void resumeAgentRun(initialResume.id, initialResume.resolution).catch(
-      (error: unknown) => {
+    void chatController
+      .resume(initialResume.id, initialResume.resolution)
+      .catch((error: unknown) => {
         appendLocalErrorTranscript(toErrorMessage(error));
-      },
-    );
+      });
   }
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly
