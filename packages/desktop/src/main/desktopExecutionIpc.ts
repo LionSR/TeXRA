@@ -1,9 +1,9 @@
+import type { MainViewExecuteMessage } from '@shared/mainView';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 import {
   createCommandHandler,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
-import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 
 export interface DesktopExecutionIpcOptions {
   executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;

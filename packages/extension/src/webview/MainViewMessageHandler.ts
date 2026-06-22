@@ -24,6 +24,7 @@ import {
   dispatchMainViewInbound,
   MainViewInboundHandlerRegistry,
 } from '@shared/schemas';
+import type { MainViewExecuteMessage } from '@shared/mainView';
 import { PROVIDER_URLS } from '@shared/constants/providers';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
@@ -33,7 +34,6 @@ import * as executionHandlers from './managers/executionHandlers';
 import { FileManager } from './managers/FileManager';
 import { InstructionManager } from './managers/InstructionManager';
 import type { CommandMessage } from './managers/executionHandlers';
-import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 
 export interface MainViewOnboardingHooks {
   /**

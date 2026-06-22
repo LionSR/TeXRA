@@ -17,12 +17,11 @@ import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
+import type { MainViewExecuteMessage } from '@shared/mainView';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { isNonEmptyString } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-
-import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 
 /** Instruction handed to the setup agent on auto-kickoff (mirrors the extension). */
 export const SETUP_INSTRUCTION =

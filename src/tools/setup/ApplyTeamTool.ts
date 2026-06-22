@@ -21,7 +21,7 @@ import {
 import { setDefaultTeamId } from '@controllers/onboarding/onboardingFunnel';
 import { applyPresetRoster } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { platform } from '@platform/platform';
-import { REMOTE_ORCHESTRATOR_AGENT_NAMES } from '@agent/index/agentRegistryConstants';
+import { REMOTE_ORCHESTRATOR_AGENT_NAMES } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS,
