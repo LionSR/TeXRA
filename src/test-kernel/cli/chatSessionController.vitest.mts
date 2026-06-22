@@ -8,13 +8,30 @@
 import PQueue from 'p-queue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const mocks = vi.hoisted(() => ({
+  stopAgentStream: vi.fn(),
+  workspaceGet: vi.fn(),
+}));
+
+vi.mock('@agent/runtime/executionRegistry', () => ({
+  executionRegistry: {
+    stopAgentStream: mocks.stopAgentStream,
+  },
+}));
+
+vi.mock('@platform/platform', () => ({
+  tryPlatform: () => ({
+    workspaceState: {
+      get: mocks.workspaceGet,
+    },
+  }),
+}));
+
 import { StreamSnapshotStore } from '@transcript';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type {
-  ChatSessionController,
-  ChatSessionControllerInit,
-} from '@cli/chat/chatSessionController';
+import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import {
   buildInitialChatAgentConfig,
   createChatSessionController,
@@ -23,7 +40,7 @@ import {
   chatTuiCanStartRootRun,
   type TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,7 +83,6 @@ function makeInit(
     session: makeSession(),
     getSessionContext: () => makeSessionContext(),
     disposers: [],
-    cwd: '/tmp/test',
     followUpQueue: new PQueue({ concurrency: 1 }),
     snapshotStore: new StreamSnapshotStore(),
     ...overrides,
@@ -110,6 +126,12 @@ describe('chatTuiCanStartRootRun', () => {
 // ---------------------------------------------------------------------------
 
 describe('createChatSessionController', () => {
+  beforeEach(() => {
+    mocks.stopAgentStream.mockReset();
+    mocks.workspaceGet.mockReset();
+    mocks.workspaceGet.mockReturnValue(false);
+  });
+
   it('returns an object satisfying the ChatSessionController interface', () => {
     const ctrl = createChatSessionController(makeInit());
     expect(ctrl).toBeDefined();
@@ -162,6 +184,27 @@ describe('createChatSessionController', () => {
     expect(ctrl.canStartRootRun()).toBe(false);
     ctrl.stop();
     expect(ctrl.canStartRootRun()).toBe(false); // runPromise still pending
+  });
+
+  it('reads the shared detach-subagents setting key when stopping an active stream', () => {
+    const runtimeHost = { emit: vi.fn() };
+    const session = makeSession({
+      streamId: 'stream-1',
+      runtimeHost,
+    });
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    mocks.workspaceGet.mockReturnValue(true);
+    ctrl.stop();
+
+    expect(mocks.workspaceGet).toHaveBeenCalledWith(
+      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+      false,
+    );
+    expect(mocks.stopAgentStream).toHaveBeenCalledWith('stream-1', {
+      detachActiveChildren: true,
+      runtimeHost,
+    });
   });
 });
 

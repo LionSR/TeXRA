@@ -52,14 +52,12 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeText } from '@shared/utils/xmlEscape';
 
 import {
   buildInitialChatAgentConfig,
-  type BuildInitialChatAgentConfigInput,
   createChatSessionController,
-  markRegisteredChatExecutionError,
-  registerFreshChatExecution,
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
@@ -195,15 +193,6 @@ export function restorePendingSkillActivations(
     }
   }
 }
-
-// Re-export utilities that moved to chatSessionController for backward
-// compatibility with existing test imports (RunChatRegistration, RunChatConfig).
-export {
-  buildInitialChatAgentConfig,
-  registerFreshChatExecution,
-  markRegisteredChatExecutionError,
-} from '../chatSessionController';
-export type { BuildInitialChatAgentConfigInput } from '../chatSessionController';
 
 export type ChatTuiFocusedChildFollowUpRoute = FocusedChildFollowUpRoute;
 
@@ -475,8 +464,6 @@ export async function runChat(
     session,
     getSessionContext: currentSessionContext,
     disposers,
-    cwd: context.cwd,
-    cliMultiAgentPresetId: init.cliMultiAgentPresetId,
     followUpQueue,
     snapshotStore,
   });
@@ -724,7 +711,7 @@ export async function runChat(
         executionRegistry.kill(executionId, {
           detachActiveChildren:
             tryPlatform()?.workspaceState.get<boolean>(
-              'detachSubagentsOnStop',
+              WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
               false,
             ) === true,
         });

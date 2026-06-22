@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getAgent, type AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { buildInitialChatAgentConfig } from '@cli/chat/chatSessionController';
 import { chatToolUseAgentUsageError } from '@cli/chat/tui/commands/handlers/agentModelCommands';
 import {
-  buildInitialChatAgentConfig,
   restorePendingSkillActivations,
   takePendingSkillActivations,
 } from '@cli/chat/tui/runChatTui';

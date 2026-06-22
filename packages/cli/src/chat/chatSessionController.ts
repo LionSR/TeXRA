@@ -8,6 +8,8 @@
 import PQueue from 'p-queue';
 
 import { tryPlatform } from '@platform/platform';
+import { getDefaultStreamLogStore, StreamSnapshotStore } from '@transcript';
+import { registerExecution, writeTerminalStatus } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -21,7 +23,6 @@ import {
 } from '@agent/runtime/executeAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import { registerExecution, writeTerminalStatus } from '@agent/storage';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -42,8 +43,8 @@ import {
   type ExecutionId,
   sumUsageStats,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { generateExecutionId } from '@utils/core/executionId';
-import { getDefaultStreamLogStore, StreamSnapshotStore } from '@transcript';
 
 import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
 import { clearApprovals } from './tui/state/approvalQueue';
@@ -164,12 +165,6 @@ export interface ChatSessionControllerInit {
   /** Disposer list shared with the TUI lifecycle. */
   readonly disposers: Array<() => void>;
 
-  /** Working directory for agent runs. */
-  readonly cwd: string;
-
-  /** Optional multi-agent preset id for team launches. */
-  readonly cliMultiAgentPresetId?: string;
-
   /** Serial queue for follow-up message delivery (cleared on resume). */
   readonly followUpQueue: PQueue;
 
@@ -184,8 +179,6 @@ export function createChatSessionController(
     session,
     getSessionContext,
     disposers,
-    cwd,
-    cliMultiAgentPresetId,
     followUpQueue,
     snapshotStore,
   } = init;
@@ -200,7 +193,7 @@ export function createChatSessionController(
     executionRegistry.stopAgentStream(session.streamId, {
       detachActiveChildren:
         tryPlatform()?.workspaceState.get<boolean>(
-          'detachSubagentsOnStop',
+          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
           false,
         ) === true,
       runtimeHost: session.runtimeHost,
