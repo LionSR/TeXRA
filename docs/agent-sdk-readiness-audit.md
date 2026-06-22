@@ -2272,3 +2272,169 @@ five small core-domain backlog candidates (vestigial `ToolSessionState`, the ref
 the `recordRound` passthrough) plus the constructive `createBatchedToolUseFollowUpMessages`-non-optional
 sequencing for the long-recurring `IModelHandler` question — all behavior-touching, all recorded for
 a future tidy pass rather than applied. No dead shim/barrel remains, so no refactor was applied.
+
+## 22. Re-verification addendum — 2026-06-22 (seventeenth pass — confirmation; the model-handler native-SDK-type / SSOT wave and a new Codex subscription handler land on main, all moving with the audit)
+
+A seventeenth pass — a fresh four-agent fan-out (independent, given only the source, not this
+document): an `agent/core` + `implementations/flows` abstraction audit, a `modelHandlers/` audit
+(17.2k LOC), a `runtime/` + `node/` + `output/` + `toolUse/` audit, and a logger + public-surface
+audit — plus a direct re-check of every open-ledger item and the guardrail greps, run against
+branch `claude/eager-noether-4b8khl` at HEAD `729255f`. **All 2026-05-28 → 06-20 findings hold
+without change. No new structural over-abstraction surfaced; the standing verdict is reaffirmed
+for the seventeenth time** — TeXRA is well-architected and SDK-aligned, the gaps are incremental
+not structural. Like §15/§17–§21 this is a **confirmation-only pass — no refactor applied**: the
+one genuinely-new "shim" candidate the agents surfaced is a mixed control-point file (below), not a
+dead shim, and no other zero-risk dead-shim/barrel item remains.
+
+### Drift baseline note (this branch forks main, not the §20/§21 sibling branches)
+
+The §20/§21 baselines (`df0ca92`, `5a5f6f8`) are on sibling `claude/eager-noether-*` branches and
+are **not reachable** from this branch (`git merge-base --is-ancestor` = false for both). This
+branch forks `main` at `729255f`. The computable drift baseline is therefore the last commit that
+touched this audit doc, **`67d83af`** ("move orchestrator catalog logic to controller"); the range
+`67d83af..729255f` is **27** non-merge commits touching the audited dirs (`src/agent`,
+`src/logger`, `packages/core`). As in §14/§19/§20 the enumeration below is the SDK-_structural_
+subset; the remainder is behavior fixes and DRY/SSOT adoption — none adding a wrapper, barrel, or
+abstraction (the guardrail greps are what back the conclusion, not the list).
+
+### Drift since `67d83af` — a model-handler native-SDK-type / SSOT wave + one new subscription handler; all moves _with_ the audit
+
+The dominant theme this period is **model-handler de-duplication and native-SDK-type adoption** —
+exactly the §18 "the model-handler de-duplication recommendations are landing on main" trend
+continuing, plus a new ChatGPT-subscription (Codex) handler that follows the established subclass
+pattern. None adds an abstraction layer:
+
+- **`modelHandlerCodex.ts` — new, but follows the established subclass pattern (no new abstraction).**
+  The one file added to the audited dirs this period (`modelHandlers/openai/modelHandlerCodex.ts`,
+  236 LOC) **`extends ModelHandlerOpenAIResponse`** (`:147`) — the same subclass-an-existing-base
+  shape as every other OpenAI-compatible handler. It is wired into `createModelHandler` as a fourth
+  routing arm (ChatGPT-subscription / Codex backend, gated by `shouldUseCodexSubscription` +
+  `isCodexSignedIn`, `ModelFactory.ts:336-345`) ahead of the existing Responses-API / OpenRouter /
+  direct paths — a new _route_, not a new _layer_. Consistent with the §9 #2 / §3.4 / §21 verdict
+  that the OpenAI-compatible handler family maps 1:1 to a real provider/route and stays a class.
+- **`60217e8` "native Codex streaming, drop hand-rolled SSE parser."** Replaced a bespoke SSE
+  parser with the native SDK stream — a **de-duplication win of exactly the kind the audit
+  endorses** (lean on SDK natives, retire hand-rolled equivalents), not new indirection.
+- **`a7dd34b` "use native SDK types in model handlers"** (Anthropic usage/handler, validation,
+  OpenRouter streaming, `AnthropicStreamHandler`; net −20 LOC) and **`bc85845` "adopt more native
+  SDK types in handler bodies"** (Google/OpenAI-Response/`AnthropicStreamHandler`/`ServerToolTypes`;
+  net −4 LOC). These tighten handler bodies onto provider SDK types — SDK alignment moving _with_
+  the audit, removing hand-maintained shapes.
+- **`154bc2f` "derive duplicated types from their zod schemas (SSOT)"** (tooluse node `types.ts`,
+  `SessionResumeRetrieval`, `StreamLogStore`) and **`ad46d48` "validate Kimi token-count response
+  with a zod schema."** The repo's own "Zod schema as single source of truth" guidance applied —
+  DRY, not abstraction.
+- **`9ca6137`/`67d0c7f` Codex routing/auth-status single-sourcing + command/helper simplification.**
+  Clarity/DRY refactors of the new Codex paths; `git show --stat` shows no new `index.ts` and no new
+  abstraction in the audited dirs.
+
+**Guardrails intact:** `find src/agent -name index.ts` shows the **same seven** pre-existing barrels
+(no new one; `src/agent/runtime/index.ts` still absent, §3.1); `grep` for `vscode` imports over
+`src/agent`/`src/model`/`src/latex`/`src/tools`/`src/controllers`/`src/shared`/`src/eventBus`/
+`src/hosts` is **clean**; `@texra/core` is still **16** `export` statements (unchanged — no surface
+added or removed this period).
+
+### The four independent agents re-reached the standing verdict and re-surfaced the recurring traps
+
+Consistent with §14/§16/§17/§20/§21, the fresh-eyes agents — given only the source — re-converged
+on "well-layered, incremental not structural" and re-surfaced the documented traps, all re-rebutted:
+
+- The model-handler agent re-flagged **`IModelHandler` (470 LOC) as partially redundant with the
+  `ModelHandler` abstract base** — the **tenth** re-surfacing of the `IModelHandler`-is-redundant
+  family — but this time _itself concluded "no collapse safe; interface is essential for SDK seams
+  and type narrowing,"_ matching §9–§21. Re-confirmed: the optional
+  `createBatchedToolUseFollowUpMessages?` (the load-bearing divergence) and the typing into
+  `AgentCore.modelHandler` keep it non-redundant. The §21 constructive sequencing
+  (make `createBatchedToolUseFollowUpMessages` non-optional with a base default first) remains the
+  correct path to eventually retiring the parallel interface — still not applied (behavior-sensitive).
+- The model-handler agent re-proposed **collapsing the config-only OpenAI-compatible subclasses**
+  (`DashScope` 14 LOC, `XAI` 38, `GLM` 43, `Kimi` 157, `MiniMax` 128) into a data-driven config.
+  **Re-rebutted / already-tracked** (§9 #2 "leans keep", §3.4, §21): each maps 1:1 to a
+  `ModelProvider` route in the exhaustive `PROVIDER_HANDLER_ROUTES` record, several carry genuine
+  deltas (Kimi token-count API, MiniMax reasoning extraction, GLM thinking/effort), and the
+  registry still needs a class per provider — the collapse trades small LOC for a less-obvious
+  dispatch table. Not a fresh win. (The agent independently re-noted `ReasoningModelHandlerOpenAI`,
+  37 LOC, as a _justified_ intermediate base shared by 4 reasoning handlers — recorded, not flagged.)
+- The model-handler agent re-recommended **replacing `isDeepSeek`/`isKimi`/`isMiniMax` provider
+  checks with capability flags** — this is **§7, already resolved**: the _behavioral_ gates were
+  converted to `requiresBatchedParallelToolResults` / `supportsReasoningLevelOverride` (§8); the
+  surviving identity getters are the endorsed display allow-list + the internal `OpenRouterNative`
+  capability mapping. No behavioral dispatch on identity remains. Not net-new.
+- The core/runtime agents re-flagged the `ResponseCycleNode`/`ToolUseCycleNode` "exec marshals
+  state → runs inner flow → interprets outcome" shape as a removable wrapper. **Re-rebutted**
+  (consistent with §20 and the proposal's "PocketFlow flow layer — do NOT refactor"): the nodes own
+  real per-round orchestration (model prefill, todo/plan wiring, outcome→shared mapping), the
+  legitimate node-runs-subflow composition, not a layer to inline.
+
+**One genuinely-new "shim" candidate — verified as a mixed control-point file, KEEP.** The
+runtime/output agent flagged a re-export block in `output/workflowOutputLayout.ts:26-32`
+(re-exporting `WORKFLOW_OUTPUT_BASENAME`/`workflowOutputPath`/… from
+`@shared/constants/workflowOutput`) as a possible barrel/shim. **Verified first-hand:** the file is
+**90 LOC and mixed** — alongside the re-export it defines real legacy-migration logic
+(`normalizeLegacyModel` `:39`, `getAgentFirstNameChunk` `:44`, `legacyWorkflowOutputStem` `:56`,
+`midEraWorkflowOutputStem` `:73`, `legacyWorkflowOutputRoundRegex` `:82`). The re-export co-locates
+the current-format constants next to the legacy helpers so agent-layer callers have one import for
+output-path semantics across both eras. Removing it would scatter the migration logic and force
+two-source imports. **Not a dead shim — KEEP** (the agent reached the same verdict). No zero-risk
+tidy here, so no refactor applied — consistent with the pass discipline.
+
+### §21 net-new candidates — all still present, unaddressed (re-verified at HEAD `729255f`)
+
+None of the five §21 backlog candidates were touched this period (no audited-dir drift addressed
+them); all re-confirmed present, none applied (each behavior-touching, per §21):
+
+- **Vestigial `ToolSessionState`** — `ToolSessionStateSchema = z.object({})` (`TaskState.ts:11`),
+  field at `:33`/`:55`, type export at `:63`. Unchanged.
+- **`TaskState` refine-vs-discriminated split** (`TaskState.ts:18-75`) — unchanged.
+- **Empty `FlowParams`/`CycleParams` bags** (`CycleServices.ts:59`, `BaseFlowServices.ts:62`,
+  re-aliased as `ToolUseFlowParams`/`ReflectionFlowParams`) — unchanged; never populated.
+- **`platform().agentResume` near-single-use required port** (two call sites:
+  `ToolUseFollowUp.ts`, `inquiry/inquiryContinuation.ts`; every host implements it) — unchanged.
+- **`AgentState.recordRound` 3-field forwarding wrapper** over `recordCycleMetrics`
+  (`AgentState.ts:49/53`, two callers) — unchanged; trivial inline-or-merge candidate.
+
+### Open ledger at HEAD `729255f` (line numbers refreshed; all still present unless noted)
+
+- **§2.6** — `modelHandlers/modelHandlerValidation.ts` still in the production handler dir; the
+  `ModelFactory.ts` gate is now wrapped in env-var indirection
+  (`TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_*`, `:205-213`) but the handler still ships in the
+  dispatch tree. Relocate-with-injection still low priority.
+- **§4** — `UsageMonitor` two-sink fan-out **unchanged**: `runtimeHost.emit('updateStreamUsage', …)`
+  (`UsageMonitor.ts:167`) + `logger.usage(…)` gated to `AgentCategory.Workflow` (`:176`). Two
+  audiences, not a duplicate; producer-side de-dup (criterion (b)) still deferred as
+  behavior-touching.
+- **§5 / Step 7** — still no `delegateTo(...)` primitive (`grep` over `src/**` + `packages/**`
+  empty); delegation remains a tool call inside the LLM loop — the one structurally-open item,
+  multi-day by design.
+- **§3.1** — still no `@agent/runtime/index.ts`; still optional polish (the `@texra/core` barrel is
+  the shielded surface), re-rejected this pass.
+- **§13 finding #1** (`AgentRuntimeHost.emit` mixes UI + essential events) — unchanged.
+- **§16 #1** (`agentRegistry` UI-altitude) — unchanged from §20: only the thin
+  `computeAgentOptionsData` orchestrator (`agentRegistry.ts:474`) still sits beside the SDK-exported
+  core. Close to closed.
+- **§16 #4** (`@logger`↔`@agent/trace` value coupling) — **cite drifted, finding survives.**
+  `src/logger/runTrace.ts` (the file §20 cited) **no longer exists** (relocated under Step 2). The
+  underlying `@logger → @agent/trace` value import persists at **`src/logger/channelTrace.ts:10`**
+  (`import { TraceEmitter } from '@agent/trace'`); `logUtils.ts` only takes type-only imports. Still
+  latent, low; for the eventual package-extraction step.
+- **SDK-008** — CLOSED and deepened (§19); unchanged.
+
+**Subagent split points — unchanged and accurate** (§5 + proposal): config-driven YAML agents over
+the two flows (reflection / `ToolUseRoundFlow`) + the `delegate_*` tools remain the existing
+subagent mechanism; the `agentCategory` dispatch in `executeAgent` is the cleanest internal seam;
+helper-model tasks and node-level candidates stay the lowest-risk extractions, gated behind the
+still-open multi-day §5 `delegateTo(...)` primitive. The F-2 per-run handle remains the
+consumer-facing surface a future `delegateTo(...)` would return. The new Codex subscription handler
+does not change this picture — it is a new model route, orthogonal to subagent boundaries.
+
+**Net for 2026-06-22:** thesis reaffirmed for the seventeenth pass — incremental, not structural.
+The intervening drift is a model-handler **native-SDK-type / SSOT de-duplication wave** plus a new
+ChatGPT-subscription (Codex) handler that subclasses `ModelHandlerOpenAIResponse` and adds a routing
+arm, not a layer — all moving _with_ the audit (continuing the §18 trend; one commit even retired a
+hand-rolled SSE parser for the native SDK stream). Four independent fresh-eyes agents re-reached the
+standing verdict and re-surfaced the recurring traps (`IModelHandler` redundant for the tenth time —
+this time the agent itself concluded "keep"; config-only OpenAI subclasses; `isX` → capability
+flags, already §7-resolved; node-runs-subflow "wrapper") — all re-rebutted or already-tracked. The
+one new shim candidate was verified as a mixed control-point file (KEEP), and the five §21
+candidates remain present and unapplied. Guardrails intact; no dead shim/barrel remains, so no
+refactor was applied.
