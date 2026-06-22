@@ -2,8 +2,11 @@ import {
   codexCoordinator,
   loginWithDeviceCode,
   loginWithLoopback,
+  setPreferCodexSubscription,
   type CodexSession,
+  type CodexSubscriptionPreferenceUpdate,
 } from '@auth/codex';
+import { toErrorMessage } from '@common/errors/errorMessage';
 
 import { tryOpenBrowser } from './browser';
 import { isLikelyRemoteSession } from './remoteSession';
@@ -18,6 +21,16 @@ export interface CliChatGptLoginInit {
 export interface CliChatGptLoginOptions {
   readonly writeProgress: (message: string) => void;
 }
+
+export type CliChatGptSignOutResult =
+  | {
+      readonly preferenceUpdate: CodexSubscriptionPreferenceUpdate;
+      readonly preferenceError?: undefined;
+    }
+  | {
+      readonly preferenceUpdate?: undefined;
+      readonly preferenceError: string;
+    };
 
 /**
  * Device-code is the right default when the browser callback is likely
@@ -72,4 +85,25 @@ export async function signInCliChatGpt(
       options.writeProgress(`Open this URL to sign in with ChatGPT:\n${url}`);
     },
   });
+}
+
+export function chatGptSignOutPreferenceMessage(
+  result: CliChatGptSignOutResult,
+): string {
+  const update = result.preferenceUpdate;
+  if (!update) {
+    return `ChatGPT subscription preference could not be disabled: ${result.preferenceError}`;
+  }
+  return update.effective
+    ? `ChatGPT subscription preference is still enabled because a more specific setting overrides ${update.target} config.`
+    : 'ChatGPT subscription disabled for Codex models.';
+}
+
+export async function signOutCliChatGpt(): Promise<CliChatGptSignOutResult> {
+  await codexCoordinator().signOut();
+  try {
+    return { preferenceUpdate: await setPreferCodexSubscription(false) };
+  } catch (error: unknown) {
+    return { preferenceError: toErrorMessage(error) };
+  }
 }
