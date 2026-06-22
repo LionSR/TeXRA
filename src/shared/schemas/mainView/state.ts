@@ -272,6 +272,22 @@ export const BannerActionDetailSchema = z.object({
 });
 export type BannerActionDetail = z.infer<typeof BannerActionDetailSchema>;
 
+export const GettingStartedActionSchema = z.enum([
+  'runSetup',
+  'createSampleProject',
+  'cloneOverleaf',
+  'downloadArxiv',
+  'openWalkthrough',
+]);
+export type GettingStartedAction = z.infer<typeof GettingStartedActionSchema>;
+
+export const GettingStartedActionDetailSchema = z.object({
+  action: GettingStartedActionSchema,
+});
+export type GettingStartedActionDetail = z.infer<
+  typeof GettingStartedActionDetailSchema
+>;
+
 export const InstallGuideDetailSchema = z.object({
   tool: z.string(),
 });
