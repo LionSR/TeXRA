@@ -309,9 +309,7 @@ export abstract class RetryableInvocationNode<
 
   protected getFallbackResult(
     error: Error,
-  ):
-    | { kind: 'cancelled' }
-    | ({ kind: 'failed' } & RetryErrorInfo) {
+  ): { kind: 'cancelled' } | ({ kind: 'failed' } & RetryErrorInfo) {
     if (this._userCancelled || isUserAbort(error)) {
       return { kind: 'cancelled' };
     }

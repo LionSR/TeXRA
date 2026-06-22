@@ -376,10 +376,7 @@ export async function runToolUseFlow<C = unknown>(
         touchedFiles,
         totalCostUsd,
       });
-      attachProviderError(
-        err,
-        toProviderErrorFromRetry(shared.lastError),
-      );
+      attachProviderError(err, toProviderErrorFromRetry(shared.lastError));
       markErrorLogged(err);
       throw err;
     }

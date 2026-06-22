@@ -316,10 +316,7 @@ export async function runReflectionFlow<C = unknown>(
       // formatters can surface statusCode, provider, etc. without
       // sniffing the message string.
       const err = new Error(shared.lastError.message);
-      attachProviderError(
-        err,
-        toProviderErrorFromRetry(shared.lastError),
-      );
+      attachProviderError(err, toProviderErrorFromRetry(shared.lastError));
       markErrorLogged(err);
       throw err;
     } else {
