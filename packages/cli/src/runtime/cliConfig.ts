@@ -42,6 +42,46 @@ export function isKnownCliModel(model: string): boolean {
   return MODEL_CONFIGS[model] != null;
 }
 
+function normalizeCliModelLookupKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]/g, '');
+}
+
+function modelLookupKeys(id: string): string[] {
+  const config = MODEL_CONFIGS[id];
+  return [id, config?.name, config?.fullName, config?.label].filter(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+}
+
+export function resolveKnownCliModelId(model: string): string | undefined {
+  const trimmed = model.trim();
+  if (!trimmed) return undefined;
+  if (Object.hasOwn(MODEL_CONFIGS, trimmed)) return trimmed;
+
+  const lower = trimmed.toLowerCase();
+  const ids = Object.keys(MODEL_CONFIGS);
+  const exactIdMatch = ids.find((id) => id.toLowerCase() === lower);
+  if (exactIdMatch) return exactIdMatch;
+
+  const exactTextMatches = ids.filter((id) =>
+    modelLookupKeys(id).some((key) => key.toLowerCase() === lower),
+  );
+  if (exactTextMatches.length === 1) return exactTextMatches[0];
+  if (exactTextMatches.length > 1) return undefined;
+
+  const normalized = normalizeCliModelLookupKey(trimmed);
+  if (!normalized) return undefined;
+  const normalizedMatches = ids.filter((id) =>
+    modelLookupKeys(id).some(
+      (key) => normalizeCliModelLookupKey(key) === normalized,
+    ),
+  );
+  return normalizedMatches.length === 1 ? normalizedMatches[0] : undefined;
+}
+
 const NonEmptyStringSchema = z.string().trim().min(1);
 const ModelSchema = NonEmptyStringSchema.refine(isKnownCliModel, {
   message: 'unknown model',
