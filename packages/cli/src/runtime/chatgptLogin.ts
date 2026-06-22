@@ -6,6 +6,7 @@ import {
 } from '@auth/codex';
 
 import { tryOpenBrowser } from './browser';
+import { isLikelyRemoteSession } from './remoteSession';
 import { interactiveTerminalFailure } from './terminalRequirements';
 import type { CliContext } from './cliContext';
 
@@ -19,9 +20,10 @@ export interface CliChatGptLoginOptions {
 }
 
 /**
- * Device-code is the right default when there's no interactive browser to reach:
- * non-text output, a non-TTY/headless/dumb terminal, or `--no-input`. An
- * explicit `--no-browser` keeps the loopback flow but prints the URL to paste.
+ * Device-code is the right default when the browser callback is likely
+ * unreachable: remote shells, non-text output, non-TTY/headless/dumb terminals,
+ * or `--no-input`. An explicit `--no-browser` keeps the loopback flow but
+ * prints the URL to paste.
  */
 export function shouldUseChatGptDeviceCode(
   context: CliContext,
@@ -31,7 +33,8 @@ export function shouldUseChatGptDeviceCode(
   if (init.noBrowser) return false;
   return (
     context.outputFormat !== 'text' ||
-    interactiveTerminalFailure(context) !== undefined
+    interactiveTerminalFailure(context) !== undefined ||
+    isLikelyRemoteSession()
   );
 }
 
