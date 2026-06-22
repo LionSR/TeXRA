@@ -16,6 +16,10 @@ import {
   type CliRunResult,
   type ExecuteAgentResult,
 } from './terminalStatus';
+import {
+  isMaterializedStdinWorkflowInputPath,
+  STDIN_WORKFLOW_INPUT_BASENAME,
+} from './workflowInputs';
 
 /** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
 function joinCwdRelative(target: string, cwd: string): string {
@@ -156,6 +160,9 @@ function expectedInputOutputFiles(
   const absoluteRoot = commonDirectory(absoluteInputs.map(path.dirname));
 
   return inputFiles.map((input) => {
+    if (isMaterializedStdinWorkflowInputPath(input)) {
+      return STDIN_WORKFLOW_INPUT_BASENAME;
+    }
     if (!path.isAbsolute(input)) return getSafeDocumentRelativePath(input);
     return getSafeDocumentRelativePath(path.relative(absoluteRoot, input));
   });
