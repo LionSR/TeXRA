@@ -92,10 +92,10 @@ describe('extension onboarding experience', () => {
     expect(normalizedSource).toContain('Sample project');
     expect(normalizedSource).toContain('Import Overleaf');
     expect(source).toContain('Import arXiv');
-    expect(source).toContain('COMMAND_LINKS.RUN_SETUP_ASSISTANT');
+    expect(source).toContain('MainViewEvents.gettingStartedAction');
     expect(source).toContain('variant="brand"');
     expect(source).toContain('appearance="filled"');
-    expect(source).toContain('COMMAND_LINKS.GETTING_STARTED');
+    expect(source).not.toContain('COMMAND_LINKS');
     expect(source).not.toContain('Empty project');
     expect(source).not.toContain('action-link');
   });

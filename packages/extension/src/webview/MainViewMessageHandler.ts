@@ -315,6 +315,46 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.applyConfigUpdate(
           this.interactionController.getDismissConfigUpdate(m),
         ),
+      [MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (m) => {
+        switch (m.action) {
+          case 'runSetup':
+            await safeExecuteCommand(
+              'texra.runSetupAssistant',
+              [],
+              this.viewName,
+            );
+            await this.onboarding?.refreshOnboardingFunnel();
+            break;
+          case 'createSampleProject':
+            await safeExecuteCommand(
+              'texra.createSampleProject',
+              [],
+              this.viewName,
+            );
+            break;
+          case 'cloneOverleaf':
+            await safeExecuteCommand(
+              'texra.cloneOverleafProject',
+              [],
+              this.viewName,
+            );
+            break;
+          case 'downloadArxiv':
+            await safeExecuteCommand(
+              'texra.downloadArXivSource',
+              [],
+              this.viewName,
+            );
+            break;
+          case 'openWalkthrough':
+            await safeExecuteCommand(
+              'texra.openGettingStarted',
+              [],
+              this.viewName,
+            );
+            break;
+        }
+      },
       [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP]: async () => {
         // Persist the user-scoped declined flag (same flag the CLI picker
         // writes), then re-derive so the card disappears and the normal

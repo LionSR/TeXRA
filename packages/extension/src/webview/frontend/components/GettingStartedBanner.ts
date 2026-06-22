@@ -12,7 +12,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { COMMAND_LINKS } from '@shared/utils/uiConstants';
+import type { GettingStartedAction } from '@shared/schemas';
 
 import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
@@ -90,6 +90,10 @@ export class GettingStartedBanner extends LitElement {
     this.dispatchEvent(MainViewEvents.dismissGettingStarted());
   }
 
+  private handleAction(action: GettingStartedAction): void {
+    this.dispatchEvent(MainViewEvents.gettingStartedAction({ action }));
+  }
+
   override render(): TemplateResult {
     return html`
       <div class="banner-frame">
@@ -113,14 +117,14 @@ export class GettingStartedBanner extends LitElement {
                   variant="brand"
                   appearance="filled"
                   size="small"
-                  href=${COMMAND_LINKS.RUN_SETUP_ASSISTANT}
+                  @click=${() => this.handleAction('runSetup')}
                 >
                   ${waIcon('rocket', { slot: 'start' })} Run setup assistant
                 </wa-button>
                 <wa-button
                   appearance="outlined"
                   size="small"
-                  href=${COMMAND_LINKS.CREATE_SAMPLE_PROJECT}
+                  @click=${() => this.handleAction('createSampleProject')}
                 >
                   ${waIcon('file-circle-plus', { slot: 'start' })} Sample
                   project
@@ -128,7 +132,7 @@ export class GettingStartedBanner extends LitElement {
                 <wa-button
                   appearance="outlined"
                   size="small"
-                  href=${COMMAND_LINKS.CLONE_OVERLEAF}
+                  @click=${() => this.handleAction('cloneOverleaf')}
                 >
                   ${waIcon('cloud-arrow-down', { slot: 'start' })} Import
                   Overleaf
@@ -136,14 +140,14 @@ export class GettingStartedBanner extends LitElement {
                 <wa-button
                   appearance="outlined"
                   size="small"
-                  href=${COMMAND_LINKS.DOWNLOAD_ARXIV}
+                  @click=${() => this.handleAction('downloadArxiv')}
                 >
                   ${waIcon('download', { slot: 'start' })} Import arXiv
                 </wa-button>
                 <wa-button
                   appearance="outlined"
                   size="small"
-                  href=${COMMAND_LINKS.GETTING_STARTED}
+                  @click=${() => this.handleAction('openWalkthrough')}
                 >
                   ${waIcon('book', { slot: 'start' })} Walkthrough
                 </wa-button>
