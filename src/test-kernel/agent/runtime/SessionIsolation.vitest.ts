@@ -121,6 +121,8 @@ function createLifecycleContext(
       retry: new RetryRequestCoordinatorImpl(explicit.host),
     },
     session,
+    getActiveChildren: () => ({ subagents: [], processes: [] }),
+    waitForRetry: vi.fn(),
   };
 }
 

@@ -13,15 +13,15 @@
 import type { AgentTrace } from '@agent/trace';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { AgentCategory } from '@shared/schemas/agent';
-import { isGoalInFlight, type GoalStatus } from '@shared/schemas/goal';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import {
   STREAM_STATUS,
   type ProgressViewOutboundMessage,
   type RestoredStreamSnapshot,
   type StreamTabId,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
+import { isGoalInFlight, type GoalStatus } from '@shared/schemas/goal';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import type { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import { GoalStore } from '@tools/goal';
@@ -74,15 +74,6 @@ export interface DesktopProgressEventBridge {
   onProgressEvent<K extends keyof ProgressEventPayloads>(
     event: K,
     payload: ProgressEventPayloads[K],
-  ): void;
-
-  /**
-   * Called when the active stream changes.  Triggers restored-display
-   * sending and optional view routing.
-   */
-  onActiveStreamChange(
-    streamId: StreamTabId,
-    opts?: { suppressViewSwitch?: boolean },
   ): void;
 
   /**
@@ -228,18 +219,6 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       }
       default:
         return;
-    }
-  }
-
-  // ── Active stream ────────────────────────────────────────────────────────
-
-  onActiveStreamChange(
-    streamId: StreamTabId,
-    opts?: { suppressViewSwitch?: boolean },
-  ): void {
-    if (opts?.suppressViewSwitch !== true) {
-      this.opts.routeToProgress();
-      this.restoreDisplayForStream(streamId);
     }
   }
 

@@ -62,14 +62,12 @@ export const layoutStyles = css`
     padding: var(--wa-space-s) var(--wa-space-xs);
   }
 
-  .log-placeholder a {
-    color: var(--color-text-link);
-    cursor: pointer;
-    text-decoration: none;
-  }
-
-  .log-placeholder a:hover {
-    text-decoration: underline;
+  .log-placeholder-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--wa-space-3xs);
+    margin-top: var(--wa-space-xs);
   }
 `;
 

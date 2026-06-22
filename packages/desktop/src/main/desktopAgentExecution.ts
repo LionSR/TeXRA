@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
-import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
@@ -70,17 +69,19 @@ import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { getConfig } from '@utils/config/configUtils';
 
+import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 import {
   createDesktopToolEditApprovalController,
   type DesktopToolEditApprovalController,
 } from './desktopToolEditApproval.js';
 import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
-import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 import {
   createDesktopProgressEventBridge,
   type DesktopProgressEventBridge,
 } from './desktopProgressEventBridge.js';
+import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
+import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
@@ -99,6 +100,14 @@ export interface DesktopAgentExecutionOptions {
    */
   streamSnapshotStore?: DesktopStreamSnapshotStore;
   progressSnapshotStore?: StreamSnapshotStore;
+  /**
+   * Fired once a run in this window's session reaches a completed terminal
+   * result. Used to recompute the onboarding funnel after a user's first run
+   * (the lifecycle has already persisted `firstRunDone` by the time the
+   * terminal `result` event reaches `session.onResult`), so the renderer leaves
+   * the setup card without waiting for a restart.
+   */
+  onRunCompleted?: () => void;
 }
 
 export interface DesktopAgentExecution {
@@ -128,6 +137,8 @@ export interface DesktopProgressBridgeOptions {
   showErrorMessage?: (message: string) => Promise<void> | void;
   streamSnapshotStore?: DesktopStreamSnapshotStore;
   progressSnapshotStore?: StreamSnapshotStore;
+  /** See DesktopAgentExecutionOptions.onRunCompleted. */
+  onRunCompleted?: () => void;
 }
 
 class MemoryProgressStorage implements MementoStorage {
@@ -375,9 +386,21 @@ export class DesktopProgressBridge {
         void this.options.showErrorMessage?.(message);
       },
     });
+    // Onboarding funnel (PRD: agent-native onboarding): a completed run ends
+    // State 1. `AgentRunLifecycle` persists `firstRunDone` BEFORE it emits the
+    // terminal `result` event, so by the time this listener fires the funnel
+    // derivation will read the up-to-date flag. The setup agent's own run does
+    // not flip `firstRunDone` (the lifecycle skips it), but recomputing here is
+    // still safe — the derivation is idempotent.
+    const unsubscribeResult = this.session.onResult((event) => {
+      if (event.outcome === 'completed') {
+        this.options.onRunCompleted?.();
+      }
+    });
     this.unsubscribe = () => {
       backendSubscription.dispose();
       this.progressEvents.dispose();
+      unsubscribeResult();
     };
     this.runtimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),
@@ -572,6 +595,24 @@ export class DesktopProgressBridge {
     });
     return {
       ...sharedHandlers,
+      // Getting-started actions from the progress empty-state. openWalkthrough
+      // has a desktop equivalent; the remaining four actions are VS Code-only.
+      [PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (data) => {
+        if (data.action === 'openWalkthrough') {
+          this.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
+          return;
+        }
+        const labels: Record<typeof data.action, string> = {
+          runSetup: 'Run setup assistant',
+          createSampleProject: 'Create sample project',
+          cloneOverleaf: 'Import from Overleaf',
+          downloadArxiv: 'Import from arXiv',
+          openWalkthrough: 'Open walkthrough',
+        };
+        await this.options.showInfoMessage?.(
+          `"${labels[data.action]}" requires the VS Code extension.`,
+        );
+      },
       // External inquiry rides outside the shared registry (as in the
       // extension's ProgressViewMessageHandler): draft persists the open
       // turn, submit/drop settle the durable thread.
@@ -1087,6 +1128,7 @@ export function createDesktopAgentExecution(
     showErrorMessage: options.showErrorMessage,
     streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore: options.progressSnapshotStore,
+    onRunCompleted: options.onRunCompleted,
   });
 
   return {
