@@ -728,7 +728,6 @@ function createWindow(options: {
   // (`runOnboarding.tsx:154`) backfill, which desktop formerly skipped by
   // hardcoding `'done'`.
   void (async () => {
-    let didBackfill = false;
     try {
       const globalState = platform().globalState;
       // Gate the whole probe + backfill on the flag being unwritten, so the
@@ -760,20 +759,17 @@ function createWindow(options: {
         hasPriorInstall,
         hasRunHistory,
       });
-      didBackfill = true;
     } catch {
       // Swallow — backfill failure must not block window creation.
     } finally {
-      // Open the gate whether we backfilled or early-returned, so the
-      // onboarding IPC's first refresh can proceed. Opening it here (before the
-      // post-backfill refresh below) also avoids a self-deadlock, since that
-      // refresh awaits this same gate.
+      // Open the gate (whether we backfilled or early-returned) so the
+      // onboarding IPC's gated first refresh — driven by WEBVIEW_READY — derives
+      // the settled post-backfill state. That gated refresh covers both mount
+      // orders (webview before or after backfill), so no separate post-backfill
+      // refresh is issued here: a premature one could run before the renderer is
+      // listening and consume the one-time selectSetupAgent transition, leaving
+      // the launcher on the default agent while the setup card is shown.
       openOnboardingReadyGate();
-    }
-    // Only when we actually wrote the flag does the renderer need a re-derive:
-    // the webview may have mounted mid-backfill, so push the settled state.
-    if (didBackfill) {
-      await onboardingIpcRef.current?.refreshOnboardingFunnel().catch(() => {});
     }
   })();
   // Real desktop git host — closes audit item A from

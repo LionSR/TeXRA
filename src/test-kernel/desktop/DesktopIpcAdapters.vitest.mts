@@ -100,12 +100,17 @@ interface DesktopViewStateIpcModule {
   };
 }
 
-// The WEBVIEW_READY handler triggers refreshOnboardingFunnel as a
-// fire-and-forget task. When `hasCredential` is supplied it adds an extra
-// awaited `Promise.resolve(...).catch(...)` hop before the funnel state is
-// posted, so a single microtask flush isn't enough — drain a few.
+// The WEBVIEW_READY / run-setup handlers trigger refreshOnboardingFunnel as a
+// fire-and-forget task whose chain (readyGate → credential probe →
+// selectSetupAgent → guarded kickoffSetup → re-derive) is several awaits deep.
+// Drain via macrotask boundaries rather than counting microtask hops: each
+// setTimeout(0) lets the entire pending microtask queue — and any
+// setTimeout(0)-scheduled credential probe — settle, so this stays correct if
+// the chain depth changes.
 async function flushAsync(): Promise<void> {
-  for (let i = 0; i < 5; i++) await Promise.resolve();
+  for (let i = 0; i < 3; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
 }
 
 async function loadDesktopShellIpc(): Promise<DesktopShellIpcModule> {
@@ -654,15 +659,18 @@ describe('desktop IPC adapters', () => {
       },
     );
 
-    // ONBOARDING_RUN_SETUP calls selectSetupAgent + kickoffSetup + refresh.
+    // ONBOARDING_RUN_SETUP: runSetup selects the setup agent (1) and kicks off
+    // the conversation through the guarded path (1), then the follow-up refresh
+    // re-enters State 1 and selects the setup agent again (1). The shared mock
+    // therefore lands at 3 once the chain fully drains; the guard keeps kickoff
+    // to exactly one call.
     expect(
       onboarding.handleMessage({
         command: MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP,
       }),
     ).toBe(true);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(runSetupCalled).toHaveBeenCalledTimes(2); // selectSetupAgent + kickoffSetup
+    await flushAsync();
+    expect(runSetupCalled).toHaveBeenCalledTimes(3);
 
     // ONBOARDING_SIGN_IN_CHATGPT calls signInCallback + refresh.
     expect(
@@ -670,8 +678,7 @@ describe('desktop IPC adapters', () => {
         command: MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT,
       }),
     ).toBe(true);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushAsync();
     expect(signInCalled).toHaveBeenCalled();
   });
 

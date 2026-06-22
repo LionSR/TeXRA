@@ -33,16 +33,24 @@ export const SETUP_INSTRUCTION =
  * credentials and the global `useOpenRouter` routing flag. Returns `null` when
  * no credential resolves to a runnable model (the caller refuses launch rather
  * than starting a run that fails at runtime). Mirrors the extension's
- * `resolveLaunchModel`, minus the OpenRouter-flag flip (desktop has no
- * interactive routing prompt, so it only uses OpenRouter when the flag is
- * already on or an OpenRouter key is the only credential).
+ * `resolveLaunchModel`, minus the interactive OpenRouter-flag flip: desktop has
+ * no routing prompt, so OpenRouter is chosen only when the flag is already on
+ * AND an OpenRouter key exists. A bare OpenRouter key with the flag off yields
+ * `null` rather than an unrouted (and doomed) run.
  */
 export async function resolveDesktopSetupModel(): Promise<string | null> {
+  const secrets = platform().secrets;
+
   // Global OR routing re-routes every call through OpenRouter regardless of
   // provider, so a direct/server pick would be misrouted — short-circuit to the
-  // OR-routed default.
+  // OR-routed default. But only when an OpenRouter key is actually configured:
+  // otherwise the run would fail at inference time, so refuse launch (the caller
+  // surfaces "no runnable model"). Mirrors the extension's `ensureRoutingConfigured`.
   if (getUseOpenRouter()) {
-    return SETUP_MODEL_BY_PROVIDER.openRouter;
+    if (isNonEmptyString(await lookupApiKey(secrets, 'openRouter'))) {
+      return SETUP_MODEL_BY_PROVIDER.openRouter;
+    }
+    return null;
   }
 
   if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
@@ -60,7 +68,6 @@ export async function resolveDesktopSetupModel(): Promise<string | null> {
     }
   }
 
-  const secrets = platform().secrets;
   for (const provider of API_PROVIDERS) {
     if (provider === 'openRouter') continue;
     const model = SETUP_MODEL_BY_PROVIDER[provider];
@@ -70,10 +77,12 @@ export async function resolveDesktopSetupModel(): Promise<string | null> {
     }
   }
 
-  if (isNonEmptyString(await lookupApiKey(secrets, 'openRouter'))) {
-    return SETUP_MODEL_BY_PROVIDER.openRouter;
-  }
-
+  // OpenRouter is only a valid pick when `useOpenRouter` routing is on (handled
+  // at the top). A bare OpenRouter key with the flag off can't be used: the
+  // desktop launch passes only a model string to `handleExecute` and never flips
+  // the routing flag, so an OR model would run unrouted and fail at inference.
+  // Refuse instead (the caller surfaces "no runnable model"); the user enables
+  // OpenRouter routing or adds a directly-usable key.
   return null;
 }
 

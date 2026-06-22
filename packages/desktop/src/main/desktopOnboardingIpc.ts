@@ -107,14 +107,30 @@ export function createDesktopOnboardingIpc(
     if (transition.selectSetupAgent) {
       await options.selectSetupAgent?.();
     }
-    if (transition.kickoffSetup && !setupKickoffStarted) {
-      setupKickoffStarted = true;
-      try {
-        await options.kickoffSetup?.();
-      } catch {
-        setupKickoffStarted = false;
-      }
+    // The funnel state was already pushed above so the renderer can paint the
+    // setup card immediately; the kickoff runs fire-and-forget (see
+    // startSetupKickoff) so a later refresh isn't blocked behind it.
+    if (transition.kickoffSetup) {
+      startSetupKickoff();
     }
+  }
+
+  // Single guarded entry point for launching setup. Both the auto-kickoff on the
+  // needs-credential→setup transition and the explicit "Run Setup" card action
+  // route through here, so a setup run can't be started twice concurrently —
+  // the host's `handleExecute`/`runAgent` has no in-flight dedup of its own.
+  function startSetupKickoff(): void {
+    if (setupKickoffStarted) return;
+    setupKickoffStarted = true;
+    // Fire-and-forget: the host kickoff runs the setup conversation to
+    // completion, which must NOT block the serialized funnel-refresh chain —
+    // otherwise a later "skip setup" / sign-out / credential-removal refresh
+    // would queue behind the entire setup run, leaving the card stuck on 'setup'.
+    void Promise.resolve(options.kickoffSetup?.()).catch(() => {
+      // Reset the guard so a later credential change can re-trigger setup; the
+      // kickoff handler already surfaced the error to the user.
+      setupKickoffStarted = false;
+    });
   }
 
   function refreshOnboardingFunnel(): Promise<void> {
@@ -152,7 +168,9 @@ export function createDesktopOnboardingIpc(
 
   async function runSetup(): Promise<void> {
     await options.selectSetupAgent?.();
-    await options.kickoffSetup?.();
+    // Route through the shared guard so a manual "Run Setup" click after an
+    // auto-kickoff (or a double-click) can't launch a second concurrent run.
+    startSetupKickoff();
     await refreshOnboardingFunnel();
   }
 
