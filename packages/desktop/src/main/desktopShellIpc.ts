@@ -255,6 +255,13 @@ function dispatchMainViewInboundOnShell(
     case MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS:
       actions.sendRecentCommits();
       return true;
+    case MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION:
+      // openWalkthrough has a desktop equivalent; the remaining actions
+      // require VS Code and are silently consumed on desktop.
+      if (message.action === 'openWalkthrough') {
+        actions.showFirstRunWalkthrough?.();
+      }
+      return true;
     default:
       return false;
   }
