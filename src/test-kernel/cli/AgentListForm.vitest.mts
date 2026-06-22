@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  agentDescription,
   agentPickerPrimarySectionTitle,
   agentSelectWindow,
   currentVisibleAgent,
@@ -70,6 +71,43 @@ describe('CLI AgentListForm row budget', () => {
         { isOrchestrator: true },
       ]),
     ).toBe('Tool-use and delegating agents');
+  });
+
+  it('omits default role/source noise from agent descriptions', () => {
+    expect(
+      agentDescription({
+        value: 'builtInToolUse:research',
+        label: 'Research',
+        isToolUse: true,
+        description: 'derivations and numerics',
+      }),
+    ).toBe('derivations and numerics');
+    expect(
+      agentDescription({
+        value: 'builtInWorkflow:correct',
+        label: 'correct',
+        description: 'revise the manuscript',
+      }),
+    ).toBe('revise the manuscript');
+  });
+
+  it('keeps only distinguishing agent metadata in descriptions', () => {
+    expect(
+      agentDescription({
+        value: 'remote:orchestrator',
+        label: 'orchestrator',
+        isRemote: true,
+        isOrchestrator: true,
+        description: 'plan and delegate tasks',
+      }),
+    ).toBe('delegating; remote; plan and delegate tasks');
+    expect(
+      agentDescription({
+        value: 'custom:reviewer',
+        label: 'reviewer',
+        isCustom: true,
+      }),
+    ).toBe('custom');
   });
 
   it('windows long agent lists inside the available foreground rows', () => {
