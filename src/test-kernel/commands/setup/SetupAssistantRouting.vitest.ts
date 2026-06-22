@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * warning instead of a confusing "no credential" picker.
  */
 
-const agentHandles = vi.fn<() => { agentName: { agentName: string } }[]>();
+const agentHandles = vi.fn<() => { agentName: string }[]>();
 
 const mocks = vi.hoisted(() => ({
   getUseOpenRouter: vi.fn<() => boolean>(),
@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
   showWarningMessage: vi.fn<() => Promise<string | undefined>>(),
   showQuickPick: vi.fn<() => Promise<unknown>>(),
   showInformationMessage: vi.fn<() => Promise<unknown>>(),
+  showErrorMessage: vi.fn<() => Promise<unknown>>(),
   executeCommand: vi.fn<() => Promise<unknown>>(),
+  logError: vi.fn(),
 }));
 
 vi.mock('@utils/config/providerConfig', () => ({
@@ -50,6 +52,9 @@ vi.mock('@auth/serverKeys', () => ({
 }));
 
 vi.mock('@common/state', () => ({
+  GlobalStateKey: {
+    USE_OPENROUTER: 'useOpenRouter',
+  },
   globalSM: {
     get: () => undefined,
     update: () => Promise.resolve(),
@@ -73,7 +78,7 @@ vi.mock('vscode', () => ({
     showWarningMessage: mocks.showWarningMessage,
     showQuickPick: mocks.showQuickPick,
     showInformationMessage: mocks.showInformationMessage,
-    showErrorMessage: async () => undefined,
+    showErrorMessage: mocks.showErrorMessage,
     createOutputChannel: () => ({
       appendLine: () => {},
       append: () => {},
@@ -114,7 +119,7 @@ vi.mock('@frontend/agentRuntime/extensionAgentRuntimeHost', () => ({
 
 vi.mock('@logger/logUtils', () => ({
   initialize: () => {},
-  error: () => {},
+  error: mocks.logError,
   warn: () => {},
   info: () => {},
 }));
@@ -143,13 +148,16 @@ describe('setup assistant routing check ordering', () => {
     mocks.showWarningMessage.mockReset();
     mocks.showQuickPick.mockReset();
     mocks.showInformationMessage.mockReset();
+    mocks.showErrorMessage.mockReset();
     mocks.executeCommand.mockReset();
+    mocks.logError.mockReset();
     // Default: no OpenRouter, no keys — safe baseline.
     mocks.getUseOpenRouter.mockReturnValue(false);
     mocks.hasUsableApiKey.mockResolvedValue(false);
     mocks.showWarningMessage.mockResolvedValue(undefined);
     mocks.showQuickPick.mockResolvedValue(undefined);
     mocks.showInformationMessage.mockResolvedValue(undefined);
+    mocks.showErrorMessage.mockResolvedValue(undefined);
     mocks.executeCommand.mockResolvedValue(undefined);
   });
 
@@ -202,6 +210,7 @@ describe('setup assistant routing check ordering', () => {
 
     expect(mocks.showWarningMessage).not.toHaveBeenCalled();
     expect(mocks.showQuickPick).not.toHaveBeenCalled();
-    expect(['launched', 'not-started']).toContain(result);
+    expect(mocks.showErrorMessage).not.toHaveBeenCalled();
+    expect(result).toBe('launched');
   });
 });

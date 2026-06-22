@@ -316,9 +316,8 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     // Check routing configuration before credentials: a ChatGPT-
     // subscription user whose "Use OpenRouter" flag is on without an OR
     // key would otherwise fall into the credential prompt first because
-    // isCodexSubscriptionActive returns false under OpenRouter routing
-    // (shouldUseCodexSubscription short-circuits when useOpenRouter is
-    // true — see codexRouting.ts:28).
+    // isCodexSubscriptionActive returns false because
+    // shouldUseCodexSubscription short-circuits when useOpenRouter is true.
     if (!(await ensureRoutingConfigured())) {
       void vscode.window.showInformationMessage(
         'Setup assistant cancelled. Resolve the "Use OpenRouter" configuration (add an OpenRouter key or disable the setting in Dashboard → Models), then run `TeXRA: Run Setup Assistant` again.',
