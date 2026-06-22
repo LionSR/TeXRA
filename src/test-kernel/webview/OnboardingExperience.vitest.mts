@@ -84,10 +84,28 @@ describe('extension onboarding experience', () => {
   it('keeps empty-project onboarding action oriented', () => {
     const source = readWebviewComponent('GettingStartedBanner');
 
-    expect(source).toContain('Empty project');
+    expect(source).toContain('No LaTeX files yet');
+    expect(source).toContain('Run setup to connect TeXRA');
     expect(source).toContain('COMMAND_LINKS.RUN_SETUP_ASSISTANT');
     expect(source).toContain('action-link--primary');
     expect(source).toContain('COMMAND_LINKS.GETTING_STARTED');
-    expect(source).not.toContain('Empty folder');
+    expect(source).not.toContain('Empty project');
+  });
+
+  it('keeps the no-workspace welcome view project-first', () => {
+    const source = readRepoFile(
+      'packages/extension/src/frontend/ui/welcomeView.ts',
+    );
+    const openWorkspace = source.indexOf(
+      'Open a single-folder workspace containing your LaTeX project',
+    );
+    const credentialPicker = source.indexOf(
+      'The main view will show the credential picker',
+    );
+
+    expect(openWorkspace).toBeGreaterThanOrEqual(0);
+    expect(credentialPicker).toBeGreaterThanOrEqual(0);
+    expect(openWorkspace).toBeLessThan(credentialPicker);
+    expect(source).toContain('Run setup once to check LaTeX');
   });
 });
