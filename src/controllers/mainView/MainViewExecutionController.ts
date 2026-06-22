@@ -12,6 +12,7 @@ import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
 } from '@shared/schemas/toolConfig';
+import type { MainViewExecuteMessage } from '@shared/schemas/mainView';
 
 // Local imports - utilities
 import { filterNotNull } from '@utils/core';
@@ -19,8 +20,6 @@ import {
   getPastedImageFullPath,
   isPastedImage,
 } from '@utils/files/pastedImageUtils';
-
-import type { MainViewExecuteMessage } from './MainViewExecutionMessageController';
 
 export type MainViewExecutionPreparationResult =
   | { valid: true; request: ValidatedExecutionRequest }

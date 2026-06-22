@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import * as logger from '@logger/logUtils';
-import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
+import type { MainViewExecuteMessage } from '@shared/schemas/mainView';
 
 const CHANNEL = 'ExecutionHandlers';
 logger.initialize(CHANNEL);
