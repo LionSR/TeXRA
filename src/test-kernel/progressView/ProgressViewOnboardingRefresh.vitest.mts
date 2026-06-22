@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - progress view
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -29,7 +30,11 @@ function createWebviewView(): vscode.WebviewView {
   } as unknown as vscode.WebviewView;
 }
 
-function createProgressViewProvider(): unknown {
+type ProgressViewProviderFake = ProgressViewProvider & {
+  refreshOnboardingFunnel: ReturnType<typeof vi.fn>;
+};
+
+function createProgressViewProvider(): ProgressViewProviderFake {
   const snapshots = {
     getTaskState: vi.fn(),
     getExecutionId: vi.fn(),
@@ -61,7 +66,24 @@ function createProgressViewProvider(): unknown {
     refreshOnboardingFunnel: vi.fn(),
     setActiveStream: vi.fn(),
     syncFullView: vi.fn(),
-  };
+  } as unknown as ProgressViewProviderFake;
+}
+
+function createProviderShell(
+  mainViewProvider?: Pick<ProgressViewProvider, 'refreshOnboardingFunnel'>,
+): ProgressViewProvider {
+  const provider = Object.create(
+    ProgressViewProvider.prototype,
+  ) as ProgressViewProvider;
+  (
+    provider as unknown as {
+      _mainViewProvider?: Pick<
+        ProgressViewProvider,
+        'refreshOnboardingFunnel'
+      >;
+    }
+  )._mainViewProvider = mainViewProvider;
+  return provider;
 }
 
 describe('progress-view onboarding refresh wiring', () => {
@@ -70,15 +92,13 @@ describe('progress-view onboarding refresh wiring', () => {
     mocks.safeExecuteCommand.mockResolvedValue(undefined);
   });
 
-  it('refreshes the onboarding funnel after progress setup actions', () => {
+  it('refreshes the onboarding funnel after progress setup actions', async () => {
     const context = createExtensionContext();
-    const provider = createProgressViewProvider() as {
-      refreshOnboardingFunnel: ReturnType<typeof vi.fn>;
-    };
+    const provider = createProgressViewProvider();
     provider.refreshOnboardingFunnel.mockResolvedValue(undefined);
-    const handler = new ProgressViewMessageHandler(provider as never, context);
+    const handler = new ProgressViewMessageHandler(provider, context);
 
-    void handler.handleMessage(
+    await handler.handleMessage(
       {
         command: PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION,
         action: 'runSetup',
@@ -93,6 +113,55 @@ describe('progress-view onboarding refresh wiring', () => {
         'ProgressView',
       );
       expect(provider.refreshOnboardingFunnel).toHaveBeenCalledOnce();
+      const setupCallOrder =
+        mocks.safeExecuteCommand.mock.invocationCallOrder[0];
+      const refreshCallOrder =
+        provider.refreshOnboardingFunnel.mock.invocationCallOrder[0];
+      expect(setupCallOrder).toBeDefined();
+      expect(refreshCallOrder).toBeDefined();
+      expect(setupCallOrder!).toBeLessThan(refreshCallOrder!);
     });
+  });
+
+  it.each([
+    'createSampleProject',
+    'cloneOverleaf',
+    'downloadArxiv',
+    'openWalkthrough',
+  ] as const)(
+    'does not refresh the onboarding funnel for %s',
+    async (action) => {
+      const context = createExtensionContext();
+      const provider = createProgressViewProvider();
+      const handler = new ProgressViewMessageHandler(provider, context);
+
+      await handler.handleMessage(
+        {
+          command: PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION,
+          action,
+        },
+        createWebviewView(),
+      );
+
+      await vi.waitFor(() => {
+        expect(mocks.safeExecuteCommand).toHaveBeenCalledOnce();
+      });
+      expect(provider.refreshOnboardingFunnel).not.toHaveBeenCalled();
+    },
+  );
+
+  it('delegates onboarding refresh through the main view provider', async () => {
+    const refreshOnboardingFunnel = vi.fn().mockResolvedValue(undefined);
+    const provider = createProviderShell({ refreshOnboardingFunnel });
+
+    await provider.refreshOnboardingFunnel();
+
+    expect(refreshOnboardingFunnel).toHaveBeenCalledOnce();
+  });
+
+  it('ignores onboarding refresh when no main view provider is wired', async () => {
+    const provider = createProviderShell();
+
+    await expect(provider.refreshOnboardingFunnel()).resolves.toBeUndefined();
   });
 });
