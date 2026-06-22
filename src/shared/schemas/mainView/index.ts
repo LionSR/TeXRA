@@ -13,6 +13,9 @@
  * - `./outbound` - backend → frontend messages (SET_*, banners) + dispatcher
  * - `./inbound`  - frontend → backend messages (SELECT_*, EXECUTE, git diff,
  *                  housekeeping) + dispatcher
+ *
+ * Browser-safe main-view behavior helpers live in `@shared/mainView`; keep this
+ * barrel focused on schemas and message contracts.
  */
 export {
   DocumentFileTypeSchema,
@@ -24,7 +27,5 @@ export {
   type MultipleDocumentFileType,
 } from '../fileTypes';
 export * from './state';
-export * from './actionPlanner';
-export * from './executeMessage';
 export * from './outbound';
 export * from './inbound';

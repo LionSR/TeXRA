@@ -1,3 +1,4 @@
+import type { MainViewExecuteMessage } from '@shared/mainView';
 import { filterNotNullish } from '@utils/core';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
@@ -18,13 +19,12 @@ import {
   createDesktopViewStateIpc,
   type DesktopTheme,
 } from './desktopViewStateIpc.js';
+import type { BrowserWindow } from 'electron';
 import type { DesktopProgressIpc } from './desktopProgressIpc.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
-import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionMessageController';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
-import type { BrowserWindow } from 'electron';
 
 export interface DesktopMainViewIpcOptions {
   debugMode?: boolean;

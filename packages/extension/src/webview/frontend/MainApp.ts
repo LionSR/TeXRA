@@ -8,6 +8,16 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  buildMainViewExecuteMessage,
+  planCompare,
+  planLatexdiff,
+  planLatexdiffVC,
+  planLatexdiffVCPack,
+  planMerge,
+  planPackClean,
+  type MainViewExecuteMessage,
+} from '@shared/mainView';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { hostBridge, postMessage } from '@shared/hostBridge';
@@ -17,14 +27,6 @@ import {
   mainViewMessages,
   MainViewPersistedStateSchema,
   type MainViewMessage,
-  buildMainViewExecuteMessage,
-  planCompare,
-  planLatexdiff,
-  planLatexdiffVC,
-  planLatexdiffVCPack,
-  planMerge,
-  planPackClean,
-  type MainViewExecuteMessage,
   type MainViewPersistedState,
   type ApiKeyBannerState,
   type AgentConfigBannerState,
