@@ -114,9 +114,10 @@ Mirrors the Codex proposal almost 1:1; the GitHub flow is actually _simpler_
 
 ### 1. Provider id
 
-A distinct OAuth-credentialed provider. **Do not** add it to
-`API_KEY_PROVIDER_IDS` in `src/model/apiProviders.ts` (that wires an api-key
-field + `<PROVIDER>_API_KEY` env fallback). Model the credential as an OAuth
+A distinct OAuth-credentialed provider. **Do not** add it to `API_PROVIDERS` in
+`src/model/apiProviders.ts` (which aliases `API_KEY_PROVIDER_IDS` from
+`@shared/constants/apiKeyProviders`) — membership there wires an api-key field +
+`<PROVIDER>_API_KEY` env fallback. Model the credential as an OAuth
 token bundle with its own lookup + "Signed in as <login>" status, exactly as the
 Codex proposal specifies for its non-api-key origin.
 
