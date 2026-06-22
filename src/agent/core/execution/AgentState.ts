@@ -49,5 +49,9 @@ export function recordRound(
   run: AgentRunStateSnapshot,
   roundState: ConversationRoundStateSnapshot,
 ): void {
-  recordCycleMetrics(run, roundState.responseTimeMs, roundState.normalizedUsage);
+  recordCycleMetrics(
+    run,
+    roundState.responseTimeMs,
+    roundState.normalizedUsage,
+  );
 }

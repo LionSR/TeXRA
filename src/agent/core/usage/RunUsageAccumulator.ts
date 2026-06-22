@@ -59,7 +59,10 @@ export const RunUsageAccumulatorJSONSchema = z.preprocess(
         'usage' in (last as Record<string, unknown>)
           ? (last as Record<string, unknown>).usage
           : null;
-      return { ...(raw as Record<string, unknown>), latestUsage: usage ?? null };
+      return {
+        ...(raw as Record<string, unknown>),
+        latestUsage: usage ?? null,
+      };
     }
     return raw;
   },
