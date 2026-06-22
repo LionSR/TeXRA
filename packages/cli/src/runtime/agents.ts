@@ -217,9 +217,14 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
 
 export function formatCliHiddenAgentsNotice(
   hiddenCount: number,
+  category?: AgentCategory,
 ): string | undefined {
   if (hiddenCount <= 0) return undefined;
-  return `Showing visible agents only; ${hiddenCount} hidden agent${hiddenCount === 1 ? '' : 's'} omitted. Use \`texra agents list --all\` to show the full catalog.`;
+  const categoryArg = category ? ` --category ${category}` : '';
+  const catalog = category
+    ? `${category === AgentCategory.ToolUse ? 'tool-use' : category} catalog`
+    : 'full catalog';
+  return `Showing visible agents only; ${hiddenCount} hidden agent${hiddenCount === 1 ? '' : 's'} omitted. Use \`texra agents list${categoryArg} --all\` to show the ${catalog}.`;
 }
 
 function collectCliAgents(
