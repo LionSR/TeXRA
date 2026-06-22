@@ -24,17 +24,22 @@ export function mergeChildStreams(
   return [...byStream.values()];
 }
 
-/** Active subagents followed by any retained child streams that are no longer
- *  active — so completed/waiting subagent pages stay listed and addressable. */
+/** Retained child streams own display order; active rows overlay live status. */
 export function visibleSubagentRows(slice: {
   readonly activeSubagents: readonly ActiveChildInfo[];
   readonly childStreams: readonly ActiveChildInfo[];
 }): readonly ActiveChildInfo[] {
-  const activeKeys = new Set(slice.activeSubagents.map(childExecutionKey));
+  const activeByKey = new Map(
+    slice.activeSubagents.map((child) => [childExecutionKey(child), child]),
+  );
+  const retainedKeys = new Set(slice.childStreams.map(childExecutionKey));
   return [
-    ...slice.activeSubagents,
-    ...slice.childStreams.filter(
-      (child) => !activeKeys.has(childExecutionKey(child)),
+    ...slice.childStreams.map(
+      (child) => activeByKey.get(childExecutionKey(child)) ?? child,
+    ),
+    // Defensive fallback for partial slices where live rows arrive first.
+    ...slice.activeSubagents.filter(
+      (child) => !retainedKeys.has(childExecutionKey(child)),
     ),
   ];
 }
