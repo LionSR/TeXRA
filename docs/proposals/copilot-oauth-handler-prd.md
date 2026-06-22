@@ -52,16 +52,27 @@ Same pre-reserved, inert slot the official route would also use:
 > at a time. If both ship, they need distinct ids (e.g. `copilot` for OAuth vs
 > `copilot-vscode` for the host route), decided at design time.
 
+## Capability comparison against `vscode.lm`
+
+| Capability      | OAuth backend route                                      | `vscode.lm` route                                      |
+| --------------- | -------------------------------------------------------- | ------------------------------------------------------ |
+| Hosts           | Extension, CLI, desktop                                  | VS Code extension host only                            |
+| API shape       | OpenAI Chat Completions-compatible backend               | VS Code Language Model API                             |
+| System guidance | Native OpenAI-style system/developer messages expected   | Folded into user messages; no stable system role       |
+| Image/PDF input | Potentially available later via Copilot vision headers   | Not available in stable `vscode.lm@1.105`              |
+| Usage reporting | Backend may expose OpenAI-style token usage              | No returned usage; only `countTokens()` estimates      |
+| Policy posture  | Reverse-engineered and parked behind maintainer go/no-go | Official API, still rate-limited for agentic workloads |
+
 ## Prior art (verified against source, not blog posts)
 
-|                 | ericc-ch/copilot-api                           | LiteLLM `github_copilot`           | CopilotChat.nvim | Zed                                       |
-| --------------- | ---------------------------------------------- | ---------------------------------- | ---------------- | ----------------------------------------- |
-| OAuth client id | `Iv1.b507a08c87ecfe98`                         | `Iv1.b507a08c87ecfe98` (identical) | (LSP-delegated)  | (LSP-delegated)                           |
-| Device-code URL | `github.com/login/device/code`                 | same                               | via official LSP | via official LSP                          |
-| Token exchange  | `GET api.github.com/copilot_internal/v2/token` | same                               | same             | same                                      |
-| Chat endpoint   | `api.githubcopilot.com/chat/completions`       | same                               | same             | `api.githubcopilot.com/chat/completions`  |
-| Models endpoint | `…/models`                                     | `…/models`                         | `…/models`       | `api.individual.githubcopilot.com/models` |
-| Scope           | `read:user`                                    | `read:user`                        | —                | —                                         |
+|                 | ericc-ch/copilot-api                                   | LiteLLM `github_copilot`           | CopilotChat.nvim | Zed                                               |
+| --------------- | ------------------------------------------------------ | ---------------------------------- | ---------------- | ------------------------------------------------- |
+| OAuth client id | `Iv1.b507a08c87ecfe98`                                 | `Iv1.b507a08c87ecfe98` (identical) | (LSP-delegated)  | (LSP-delegated)                                   |
+| Device-code URL | `https://github.com/login/device/code`                 | same                               | via official LSP | via official LSP                                  |
+| Token exchange  | `GET https://api.github.com/copilot_internal/v2/token` | same                               | same             | same                                              |
+| Chat endpoint   | `https://api.githubcopilot.com/chat/completions`       | same                               | same             | `https://api.githubcopilot.com/chat/completions`  |
+| Models endpoint | `…/models`                                             | `…/models`                         | `…/models`       | `https://api.individual.githubcopilot.com/models` |
+| Scope           | `read:user`                                            | `read:user`                        | —                | —                                                 |
 
 **The two-step token flow:** device flow → GitHub OAuth token (`gho_`/`ghu_`) →
 `GET copilot_internal/v2/token` → short-lived Copilot session token
@@ -75,7 +86,7 @@ Same pre-reserved, inert slot the official route would also use:
 GitHubCopilotChat/<ver>`, `X-GitHub-Api-Version: <date>`, `X-Request-Id`, and
 conditionally `Copilot-Vision-Request: true`.
 
-`api.githubcopilot.com/chat/completions` is OpenAI-compatible: `POST
+`https://api.githubcopilot.com/chat/completions` is OpenAI-compatible: `POST
 /chat/completions`, `GET /models`, SSE streaming, and `tools` / `tool_calls`.
 
 Evidence: ericc-ch `src/lib/api-config.ts` (client id, headers, base),
@@ -125,10 +136,12 @@ Codex proposal specifies for its non-api-key origin.
 
 Port the Codex coordinator shape:
 
-- **Device flow:** `POST github.com/login/device/code` (client id
+- **Device flow:** `POST https://github.com/login/device/code` (client id
   `Iv1.b507a08c87ecfe98`, scope `read:user`) → display user code → poll
-  `github.com/login/oauth/access_token` → GitHub OAuth token.
-- **Copilot token exchange:** `GET api.github.com/copilot_internal/v2/token` →
+  `https://github.com/login/oauth/access_token` with
+  `grant_type=urn:ietf:params:oauth:grant-type:device_code` → GitHub OAuth
+  token.
+- **Copilot token exchange:** `GET https://api.github.com/copilot_internal/v2/token` →
   short-lived Copilot token; refresh within the `refresh_in`/expiry window.
 - **Account type:** detect individual vs business/enterprise to pick the right
   `api.*.githubcopilot.com` host.
@@ -143,8 +156,8 @@ Port the Codex coordinator shape:
 
 `ModelHandlerCopilot` subclassing the OpenAI handler (like `ModelHandlerDeepSeek`):
 
-- `getClient()` → `new OpenAI({ apiKey: copilotToken, baseURL:
-https://api.githubcopilot.com })`; recreate / use a token-getter on refresh.
+- `getClient()` → `new OpenAI({ apiKey: copilotToken, baseURL: 'https://api.githubcopilot.com' })`;
+  recreate / use a token-getter on refresh.
 - Inject the impersonation headers via `defaultHeaders` (or a `fetch` wrapper for
   per-request freshness): `Copilot-Integration-Id: vscode-chat`,
   `Editor-Version`, `Editor-Plugin-Version`, `User-Agent`, `X-GitHub-Api-Version`.

@@ -93,6 +93,17 @@ the installed `.d.ts`:
 - **Aggressive abuse-detection rate limiting** for agentic third-party use (see
   ToS section).
 
+## Capability comparison against OAuth
+
+| Capability      | `vscode.lm` route                                      | OAuth backend route                                      |
+| --------------- | ------------------------------------------------------ | -------------------------------------------------------- |
+| Hosts           | VS Code extension host only                            | Extension, CLI, desktop                                  |
+| API shape       | VS Code Language Model API                             | OpenAI Chat Completions-compatible backend               |
+| System guidance | Folded into user messages; no stable system role       | Native OpenAI-style system/developer messages expected   |
+| Image/PDF input | Not available in stable `vscode.lm@1.105`              | Potentially available later via Copilot vision headers   |
+| Usage reporting | No returned usage; only `countTokens()` estimates      | Backend may expose OpenAI-style token usage              |
+| Policy posture  | Official API, still rate-limited for agentic workloads | Reverse-engineered and parked behind maintainer go/no-go |
+
 ## The architectural constraint (decisive)
 
 Per `CLAUDE.md`, `src/agent/` and `src/model/` are **VS Code-free zones** — a
