@@ -11,6 +11,14 @@ import {
   buildMainViewExecuteMessage,
   type MainViewExecuteMessage,
 } from '@controllers/mainView/MainViewExecutionMessageController';
+import {
+  planCompare,
+  planLatexdiff,
+  planLatexdiffVC,
+  planLatexdiffVCPack,
+  planMerge,
+  planPackClean,
+} from '@controllers/mainView/MainViewActionPlanner';
 import { PREFERRED_TOOL_USE_AGENTS } from '@agent/index/agentRegistryConstants';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
@@ -64,7 +72,6 @@ import {
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { agentName } from '@shared/schemas/agent';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
-import { capitalize } from '@utils/text/stringUtils';
 import '@shared/wa/tabs';
 
 import './components/FileSelectGroup';
@@ -1174,132 +1181,109 @@ export class MainApp extends MainAppBase {
   }
 
   private handleMerge(): void {
-    const sf = this.singleFiles.get();
-    const primaryInput = this.primaryInputFile;
-    if (!primaryInput || !sf.editedFile) {
+    const plan = planMerge({
+      primaryInput: this.primaryInputFile,
+      editedFile: this.singleFiles.get().editedFile,
+    });
+
+    if (!plan.valid) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-        text: 'Please select both input and edited files to merge',
+        text: plan.message,
       });
       return;
     }
 
-    postMessage(MAIN_VIEW_COMMANDS.MERGE, {
-      inputFile: primaryInput,
-      editedFile: sf.editedFile,
-    });
+    postMessage(plan.command, plan.payload);
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: `Merging files: ${primaryInput} and ${sf.editedFile}`,
+      text: plan.infoText,
     });
   }
 
   private handlePackClean(action: 'pack' | 'clean'): void {
-    const primaryInput = this.primaryInputFile;
-    if (!primaryInput || !this.model.get()) {
+    const isToolUse = this.sessionType.get() === SESSION_TYPES.TOOL_USE;
+    const plan = planPackClean(
+      {
+        primaryInput: this.primaryInputFile,
+        model: this.model.get(),
+        inputFiles: this.multiFiles.get().inputFiles,
+        agent: isToolUse ? this.toolUseAgent.get() : this.workflowAgent.get(),
+      },
+      action,
+    );
+
+    if (!plan.valid) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-        text: 'Please select all required fields (input file, agent, and model)',
+        text: plan.message,
       });
       return;
     }
 
-    const inputFiles = this.multiFiles.get().inputFiles.filter(Boolean);
-    const additionalInputFiles = inputFiles.slice(1);
-    const useMultiple = additionalInputFiles.length > 0;
-    const command = this.getPackCleanCommand(action, useMultiple);
-
-    // Post-W4 there is no separate output-files picker. Pack/Clean operate on
-    // the selected input files and derived generated artifacts.
-    postMessage(command, {
-      inputFile: primaryInput,
-      agent:
-        this.sessionType.get() === SESSION_TYPES.TOOL_USE
-          ? this.toolUseAgent.get()
-          : this.workflowAgent.get(),
-      model: this.model.get(),
-      inputFiles: useMultiple ? additionalInputFiles : undefined,
+    postMessage(plan.command, plan.payload);
+    postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
+      text: plan.infoText,
     });
-
-    const actionLabel = capitalize(action);
-    const summary = useMultiple
-      ? `${actionLabel}ing multiple files: ${inputFiles.join(', ')}`
-      : `${actionLabel}ing single file: ${primaryInput}`;
-    postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, { text: summary });
-  }
-
-  private getPackCleanCommand(
-    action: 'pack' | 'clean',
-    useMultiple: boolean,
-  ): string {
-    if (action === 'pack') {
-      return useMultiple
-        ? MAIN_VIEW_COMMANDS.PACK_MULTIPLE
-        : MAIN_VIEW_COMMANDS.PACK_SINGLE;
-    }
-    return useMultiple
-      ? MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE
-      : MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
   }
 
   private handleLatexdiff(): void {
     const sf = this.singleFiles.get();
-    const primaryInput = this.primaryInputFile;
-    postMessage(MAIN_VIEW_COMMANDS.LATEXDIFF, {
-      inputFile: primaryInput,
+    const plan = planLatexdiff({
+      inputFile: this.primaryInputFile,
       baseFile: sf.baseFile,
       editedFile: sf.editedFile,
     });
+
+    postMessage(plan.command, plan.payload);
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: `Running LaTeX diff between ${sf.baseFile} and ${sf.editedFile}`,
+      text: plan.infoText,
     });
   }
 
   private handleLatexdiffVC(): void {
     const sf = this.singleFiles.get();
-    const primaryInput = this.primaryInputFile;
-    const commitVal = this.commit.get();
-    postMessage(MAIN_VIEW_COMMANDS.LATEXDIFFVC, {
-      inputFile: primaryInput,
+    const plan = planLatexdiffVC({
+      inputFile: this.primaryInputFile,
       baseFile: sf.baseFile,
-      commitHash: commitVal,
+      commitHash: this.commit.get(),
     });
+
+    postMessage(plan.command, plan.payload);
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: `Running LaTeX diff with version control: ${sf.baseFile} at commit ${commitVal}`,
+      text: plan.infoText,
     });
   }
 
   private handleLatexdiffVCPack(action: 'pack' | 'clean'): void {
     const sf = this.singleFiles.get();
-    const primaryInput = this.primaryInputFile;
-    const commitVal = this.commit.get();
-    postMessage(
-      action === 'pack'
-        ? MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC
-        : MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC,
+    const plan = planLatexdiffVCPack(
       {
-        inputFile: primaryInput,
+        inputFile: this.primaryInputFile,
         baseFile: sf.baseFile,
-        commitHash: commitVal,
-        clean: action === 'clean',
+        commitHash: this.commit.get(),
       },
+      action,
     );
-    const actionLabel = action === 'pack' ? 'Pack' : 'Clean';
+
+    postMessage(plan.command, plan.payload);
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: `${actionLabel}ing LaTeX diff with version control: ${sf.baseFile} at commit ${commitVal}`,
+      text: plan.infoText,
     });
   }
 
   private handleCompare(command: string): void {
     const sf = this.singleFiles.get();
-    if (!sf.baseFile || !sf.editedFile) {
+    const plan = planCompare(
+      { baseFile: sf.baseFile, editedFile: sf.editedFile },
+      command,
+    );
+
+    if (!plan.valid) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-        text: 'Please select both base and edited files to compare',
+        text: plan.message,
       });
       return;
     }
 
-    postMessage(command, {
-      baseFile: sf.baseFile,
-      editedFile: sf.editedFile,
-    });
+    postMessage(plan.command, plan.payload);
   }
 
   private handleRecordingToggle(): void {
