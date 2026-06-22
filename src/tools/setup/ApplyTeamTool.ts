@@ -27,7 +27,7 @@ import {
   AGENT_MODE_PRESETS,
   STARTER_AGENT_MODE_PRESET,
 } from '@shared/schemas/agentPresets';
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 import { defineTool } from '../core/define';
 

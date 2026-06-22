@@ -7,7 +7,7 @@ import { describe, it, afterEach } from 'vitest';
 // Local imports - tools
 import * as arxivModule from '@latex/arxivProcessor';
 import { LsTool } from '@tools/ls';
-import type { ToolResult } from '@tools/result';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import { ArxivDownloadTool } from '@tools/arxiv/ArxivDownloadTool';
 import { WorkspaceFS } from '@utils/files';
 

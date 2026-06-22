@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports - latex utilities
 import { getTeXCount } from '@latex/texcount';
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
 import { ensureArray } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';

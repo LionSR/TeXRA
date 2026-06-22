@@ -14,7 +14,7 @@ import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local imports - tool core
 import { defineTool } from '../core/define';
-import { ToolError, type ToolResult } from '../result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
   recordToolFileRead,
   requireFileReadForEdit,

@@ -9,7 +9,7 @@ import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
   type ToolResult,
-} from '@tools/result';
+} from '@shared/schemas/toolResult';
 
 /**
  * Abstract base class for tool implementations.

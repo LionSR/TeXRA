@@ -10,7 +10,7 @@ import {
   type FileLocation,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
-import { FlattenedEditRecordSchema } from '@tools/result';
+import { FlattenedEditRecordSchema } from '@shared/schemas/toolResult';
 import { isObject } from '@utils/core';
 import { pathToLocation } from '@utils/files';
 

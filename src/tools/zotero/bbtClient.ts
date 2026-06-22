@@ -14,7 +14,7 @@ import { z } from 'zod';
 
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
-import { ToolError } from '@tools/result';
+import { ToolError } from '@shared/schemas/toolResult';
 import { isTimeoutErrorCode } from '@tools/timeouts';
 import { getConfig } from '@utils/config/configUtils';
 

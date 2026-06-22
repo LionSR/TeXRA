@@ -29,7 +29,7 @@ import {
 // Local imports - tools
 import { type StreamTabId, type ExecutionId } from '@shared/schemas';
 import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/constants/toolDefaults';
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
 import {
   buildBashApprovalRejectedResult,

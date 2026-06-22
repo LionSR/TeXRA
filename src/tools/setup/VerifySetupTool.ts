@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
-import { ToolError, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
 import { defineTool } from '../core/define';

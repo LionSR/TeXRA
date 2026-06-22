@@ -9,7 +9,7 @@ import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { type ToolResult, ToolError } from './result';
+import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 
 const CHANNEL = 'AddCriticismTool';
 logger.initialize(CHANNEL);

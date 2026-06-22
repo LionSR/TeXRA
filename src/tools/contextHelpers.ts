@@ -9,7 +9,7 @@
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
-import { ToolError } from '@tools/result';
+import { ToolError } from '@shared/schemas/toolResult';
 
 /**
  * Return the active RunContext's runtime host, throwing a ToolError if no

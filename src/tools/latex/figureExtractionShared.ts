@@ -1,4 +1,4 @@
-import { ToolError, type ToolFileAttachment } from '@tools/result';
+import { ToolError, type ToolFileAttachment } from '@shared/schemas/toolResult';
 import { buildFileAttachment } from '@tools/attachments';
 import {
   resolveAndFormat,
