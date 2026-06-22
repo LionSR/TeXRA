@@ -629,6 +629,9 @@ function createWindow(options: {
       openWorkspaceFolder,
       signIn: () => desktopAuth.signIn(),
       getRecentCommits: () => gitHost.getRecentCommits(),
+      showInfoMessage: async (message) => {
+        await dialog.showMessageBox(window, { type: 'info', message });
+      },
       onAsyncError: reportAsyncError,
     },
   );

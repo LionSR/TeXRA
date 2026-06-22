@@ -29,6 +29,7 @@ import type {
   StreamEventDetail,
   ToolbarCommandDetail,
 } from './events';
+import type { GettingStartedAction } from '@shared/schemas';
 import type {
   FrontendEventHandlerContext,
   MessageHandlerContext,
@@ -88,6 +89,10 @@ export function handleFilterChange(
 
 export function handleDeleteAll(): void {
   postMessage(PROGRESS_VIEW_COMMANDS.DELETE_ALL, {});
+}
+
+export function handleGettingStartedAction(action: GettingStartedAction): void {
+  postMessage(PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION, { action });
 }
 
 export function handleToolbarCommand(
