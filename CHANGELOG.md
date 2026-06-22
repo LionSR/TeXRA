@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 ### CLI
 
+#### Improvements
+
+- **Smoother terminal redraws** — the chat TUI now repaints atomically (synchronized output) when you resize the window or switch between the main transcript and a focused sub-agent, so resizing and view switches no longer flicker or leave stray fragments on terminals that support it.
+
 #### Features
 
 - **Experimental: use your own ChatGPT subscription for Codex models** — sign in with your ChatGPT Plus/Pro/Team account from the terminal with `texra auth chatgpt login`, then turn on "chatgptCodex.preferSubscription" in your CLI config to route Codex models through your subscription instead of a separate API key. The command opens your browser or, on a headless shell, shows a one-time device code; check or end the session with `texra auth chatgpt status` and `logout`. Off by default and clearly marked experimental and personal-use: it relies on an unofficial OpenAI endpoint that can change or stop working without notice, and it only ever uses your own signed-in session.
