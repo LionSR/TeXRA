@@ -7,10 +7,10 @@
  * RESEARCHER ACCESS PROGRAM:
  * All server-side API key access is provided as a convenience for researchers.
  *
- * TIER HIERARCHY (cumulative access):
- * - free: Included non-premium models (up to $3/M input)
- * - Max: Free-tier models plus any future Max-only additions
- * - Ultra: All models above $3/M input
+ * TIER HIERARCHY (model access):
+ * - free: input <= $1.5/M AND output <= $9/M
+ * - Max: every model
+ * - Ultra: every model
  */
 
 import { LRUCache } from 'lru-cache';

@@ -36,10 +36,9 @@
  * which the relay enforces below (immediate, even for a still-valid token).
  * ============================================================================
  *
- * TIER HIERARCHY (cumulative access):
- * - Max: Free-tier models plus any future Max-only additions
  * - free: input <= $1.5/M AND output <= $9/M
- * - Ultra: everything else
+ * - Max: every model
+ * - Ultra: every model
  *
  * Authentication: JWT tokens are extracted from SDK auth headers:
  * - OpenAI: Authorization: Bearer {jwt}
