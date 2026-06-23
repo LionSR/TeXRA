@@ -90,7 +90,7 @@
     "eslint-plugin-unicorn": "^68.0.0",
     "globals": "^17.5.0",
     "jsdom": "^29.1.1",
-    "knip": "^6.17.1",
+    "knip": "^6.17.2",
     "nunjucks": "^3.2.4",
     "prettier": "^3.8.4",
     "typescript": "^6.0.3",
