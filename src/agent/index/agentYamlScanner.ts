@@ -191,7 +191,6 @@ function scanYaml(
 
     return {
       name: entry.name,
-      displayName: validated.displayName,
       source,
       path: entry.path,
       category,
