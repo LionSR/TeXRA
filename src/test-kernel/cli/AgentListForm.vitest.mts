@@ -46,25 +46,23 @@ describe('CLI AgentListForm row budget', () => {
     expect(hiddenCurrentAgentHint(canonicalAgents, 'review')).toBeUndefined();
   });
 
-  it('does not match display-only labels when canonical names differ', () => {
-    const decoratedAgents = [
+  it('does not match arbitrary labels when canonical names differ', () => {
+    const agentsWithReadableLabel = [
       {
-        value: 'remote:Review \u2014 verify math',
-        label: 'Review',
-      },
-      {
-        value: 'remote:Review \u2014 check style',
-        label: 'Review',
+        value: 'remote:review',
+        label: 'Readable review label',
       },
     ];
 
-    expect(currentVisibleAgent(decoratedAgents, 'Review')).toBeUndefined();
     expect(
-      currentVisibleAgent(decoratedAgents, 'Review \u2014 check style')?.value,
-    ).toBe('remote:Review \u2014 check style');
-    expect(hiddenCurrentAgentHint(decoratedAgents, 'Review')).toBe(
-      'Current: Review (hidden from picker)',
+      currentVisibleAgent(agentsWithReadableLabel, 'Readable review label'),
+    ).toBeUndefined();
+    expect(currentVisibleAgent(agentsWithReadableLabel, 'review')?.value).toBe(
+      'remote:review',
     );
+    expect(
+      hiddenCurrentAgentHint(agentsWithReadableLabel, 'Readable review label'),
+    ).toBe('Current: Readable review label (hidden from picker)');
   });
 
   it('labels the current agent when it is hidden from the picker', () => {

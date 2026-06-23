@@ -1,6 +1,5 @@
 /** Stateless YAML scanning for the agent registry. */
 
-import * as path from 'node:path';
 import { glob } from 'glob';
 import * as yaml from 'yaml';
 
@@ -49,18 +48,21 @@ export async function scanDirectory(
   if (!dir) return [];
 
   try {
-    const files = await glob('**/*.yaml', {
-      cwd: dir,
-      absolute: true,
-      nodir: true,
-    });
+    const files = (
+      await glob('**/*.yaml', {
+        cwd: dir,
+        absolute: true,
+        nodir: true,
+      })
+    ).toSorted();
     const parsed = (
       await Promise.all(files.map((file) => readYamlDefinition(file)))
     ).filter(filterNotNull);
+    const unique = entriesWithUniqueNames(parsed);
     const definitions = new Map(
-      parsed.map((entry) => [entry.name, entry] as const),
+      unique.map((entry) => [entry.name, entry] as const),
     );
-    const entries = parsed
+    const entries = unique
       .map((entry) => scanYaml(entry, source, definitions))
       .filter(filterNotNull);
 
@@ -72,6 +74,36 @@ export async function scanDirectory(
   }
 }
 
+function entriesWithUniqueNames(
+  entries: readonly ParsedAgentYaml[],
+): ParsedAgentYaml[] {
+  const byName = new Map<string, ParsedAgentYaml[]>();
+  for (const entry of entries) {
+    const matches = byName.get(entry.name);
+    if (matches) {
+      matches.push(entry);
+    } else {
+      byName.set(entry.name, [entry]);
+    }
+  }
+
+  const unique: ParsedAgentYaml[] = [];
+  for (const [name, matches] of byName) {
+    const only = matches.at(0);
+    if (matches.length === 1 && only) {
+      unique.push(only);
+      continue;
+    }
+
+    const paths = matches.map((entry) => entry.path).join(', ');
+    logger.warn(
+      CHANNEL,
+      `Duplicate agent name "${name}" in ${paths}; skipping all duplicates.`,
+    );
+  }
+  return unique;
+}
+
 async function readYamlDefinition(
   yamlPath: string,
 ): Promise<ParsedAgentYaml | null> {
@@ -80,7 +112,7 @@ async function readYamlDefinition(
     const parsed = yaml.parse(content);
     const definition = AgentDefinitionSchema.parse(parsed);
     return {
-      name: path.basename(yamlPath, '.yaml'),
+      name: definition.name,
       path: yamlPath,
       definition,
     };
