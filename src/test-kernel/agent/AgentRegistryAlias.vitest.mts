@@ -17,6 +17,8 @@ import {
   getAgent,
   getVisibleAgent,
   getVisibleAgents,
+  isAgentRegistryReady,
+  loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -83,6 +85,62 @@ describe('agent registry legacy aliases', () => {
     const workflow = getAgent('builtInWorkflow:polish', AgentCategory.ToolUse);
     expect(workflow?.name).toBe('polish');
     expect(workflow?.category).toBe(AgentCategory.Workflow);
+  });
+
+  it('keeps the current cache visible while a refresh is pending', async () => {
+    expect(getAgent('assistant')?.name).toBe('assistant');
+
+    let releaseBuiltInToolUseDir: (() => void) | undefined;
+    const waitForBuiltInToolUseDir = new Promise<void>((resolveWait) => {
+      releaseBuiltInToolUseDir = resolveWait;
+    });
+    setAgentDirectories({
+      custom: async () => '',
+      builtIn: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+      builtInToolUse: async () => {
+        await waitForBuiltInToolUseDir;
+        return resolve(
+          REPO_ROOT,
+          'packages/extension/resources/tool_use_agents',
+        );
+      },
+    });
+
+    const pendingRefresh = refresh({ includeRemote: false });
+    await new Promise((resolveNextTick) => setTimeout(resolveNextTick, 0));
+
+    expect(getAgent('assistant')?.name).toBe('assistant');
+
+    releaseBuiltInToolUseDir?.();
+    await pendingRefresh;
+  });
+
+  it('keeps the registry marked ready when a later refresh fails', async () => {
+    expect(isAgentRegistryReady()).toBe(true);
+    expect(getAgent('assistant')?.name).toBe('assistant');
+
+    setAgentDirectories({
+      custom: async () => '',
+      builtIn: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+      builtInToolUse: async () => {
+        throw new Error('refresh failed');
+      },
+    });
+
+    await expect(loadAgents()).rejects.toThrow('refresh failed');
+
+    expect(isAgentRegistryReady()).toBe(true);
+    expect(getAgent('assistant')?.name).toBe('assistant');
+
+    setAgentDirectories({
+      custom: async () => '',
+      builtIn: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+      builtInToolUse: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    });
   });
 
   it('migrates persisted legacy keys at load time', () => {
