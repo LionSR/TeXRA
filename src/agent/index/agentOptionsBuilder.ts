@@ -21,7 +21,6 @@ function entryToOptionData(entry: AgentEntry): AgentOptionData {
     isOrchestrator: hasDelegationTool(entry.tools),
     isRemote: entry.source === 'remote',
     isCustom: entry.source === 'custom',
-    description: entry.description,
   };
 }
 

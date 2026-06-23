@@ -32,14 +32,14 @@ describe('agent option labels', () => {
     expect(option?.label).toBe('Code Reviewer');
   });
 
-  it('uses the same authored name for resolution values and labels', () => {
+  it('does not carry descriptions into picker options', () => {
     const [option] = entriesToOptionData([
       toolUseAgent('review', 'remote', 'Verifies mathematical correctness.'),
     ]);
 
     expect(option?.value).toBe('remote:review');
     expect(option?.label).toBe('review');
-    expect(option?.description).toBe('Verifies mathematical correctness.');
+    expect(option).not.toHaveProperty('description');
   });
 
   it('does not invent labels to distinguish different authored names', () => {
