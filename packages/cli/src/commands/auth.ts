@@ -42,7 +42,7 @@ import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { chatgptAuthCommand } from './chatgptAuth';
 import { authTokenCommand } from './relayTokens';
-import type { CliContext } from '../runtime/cliContext';
+import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 interface LoginCommandArgs {
   readonly provider?: string;
@@ -225,7 +225,17 @@ export const loginCommand = withUsageSections(
       },
     },
     run: (context, ctx) => {
-      return runLoginCommand(context, loginInitFromArgs(ctx.args));
+      const init = loginInitFromArgs(ctx.args);
+      // `--device` and `--no-browser` are distinct sign-in transports, not
+      // refinements of each other (device-code shows no loopback URL), and the
+      // device branch silently wins when both are set. Reject the combination
+      // so the choice is explicit instead of quietly ignored.
+      if (init.device && init.noBrowser) {
+        throw new CliUsageError(
+          'Use either --device or --no-browser, not both: --device signs in with a one-time code (no loopback URL), while --no-browser prints the loopback sign-in URL.',
+        );
+      }
+      return runLoginCommand(context, init);
     },
   }),
   [
