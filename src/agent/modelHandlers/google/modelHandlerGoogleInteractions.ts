@@ -153,14 +153,18 @@ function joinTextContent(content: readonly Content[]): string {
  * InteractionStatus has no `expired` member). Tune to the observed shape after a
  * real-key run (spec §6 S2). The full-resend retry is idempotent regardless.
  */
+/** Best-effort extraction of an SDK error's human-readable message. */
+function errorMessageOf(error: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : typeof (error as { message?: unknown })?.message === 'string'
+      ? (error as { message: string }).message
+      : '';
+}
+
 function isStaleInteractionChainError(error: unknown): boolean {
   const status = detectStatusCode(error);
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof (error as { message?: unknown })?.message === 'string'
-        ? (error as { message: string }).message
-        : '';
+  const message = errorMessageOf(error);
   const code =
     typeof (error as { code?: unknown })?.code === 'string'
       ? (error as { code: string }).code
@@ -196,13 +200,7 @@ function isStaleInteractionChainError(error: unknown): boolean {
  * "background" + "support" wording so it never misclassifies an unrelated 400.
  */
 function isBackgroundUnsupportedError(error: unknown): boolean {
-  const raw =
-    error instanceof Error
-      ? error.message
-      : typeof (error as { message?: unknown })?.message === 'string'
-        ? (error as { message: string }).message
-        : '';
-  const message = raw.toLowerCase();
+  const message = errorMessageOf(error).toLowerCase();
   return (
     message.includes('background') &&
     (message.includes('not support') ||
@@ -285,6 +283,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 5000;
   private static readonly BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
+
+  /** Immutable params for every background poll get() — id is the positional arg. */
+  private static readonly BACKGROUND_GET_PARAMS: InteractionGetParamsNonStreaming =
+    { stream: false };
 
   /**
    * Non-terminal Interaction statuses — polling continues while the status is in
@@ -1535,7 +1537,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // false and the streaming/non-streaming branches stay byte-identical when
     // background is off.
     const useBackground = this.useBackgroundMode(stateful);
-    const useStreaming = !useBackground && this.getStreamingConfig();
+    // super.getStreamingConfig() (not this.) — the override would recompute
+    // background mode (extra config reads) when we already know useBackground.
+    const useStreaming = !useBackground && super.getStreamingConfig();
     let aggregatedText = '';
 
     const updatedMessages = this.compactionResult?.compactedMessages;
@@ -1769,19 +1773,18 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         // get(id, params, options): params is Omit<GetInteractionByIdRequest,
         // 'id'> & { stream?: false } — the id is the positional arg, NOT repeated
         // in params. Returns Promise<GoogleGenAIInteraction>.
-        const getParams: InteractionGetParamsNonStreaming = { stream: false };
         try {
           current = (await client.interactions.get(
             interactionId,
-            getParams,
+            ModelHandlerGoogleInteractions.BACKGROUND_GET_PARAMS,
             requestOptions,
           )) as unknown as GoogleGenAIInteraction;
         } catch (err) {
+          // Tag and rethrow — a user-abort surfaces as-is; a transient poll
+          // error (5xx/429/network) re-enters createResponse via PocketFlow's
+          // retry layer with a fresh submit (orphaned job ages out; no resume
+          // path in v0).
           this.sdkErrorTagger(err, this.config.provider);
-          if (isUserAbort(err)) throw err;
-          // Transient poll error (5xx/429/network): rethrow so PocketFlow's retry
-          // layer re-enters createResponse with a fresh submit; the orphaned
-          // background job ages out server-side (no resume path in v0).
           throw err;
         }
         this.logger.debug(
