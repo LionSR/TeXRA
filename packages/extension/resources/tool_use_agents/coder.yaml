@@ -1,5 +1,4 @@
 name: coder
-displayName: Coder — implement & fix code
 description: Implements features, makes surgical edits, and fixes bugs, then verifies the change builds and passes the project's checks.
 
 settings:

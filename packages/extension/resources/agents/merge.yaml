@@ -1,5 +1,4 @@
 name: merge
-displayName: Merge — fold edits into original
 description: Merges partial edits back into the full original document.
 
 settings:

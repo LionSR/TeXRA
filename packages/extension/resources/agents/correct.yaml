@@ -1,5 +1,4 @@
 name: correct
-displayName: Correct — typos, grammar & LaTeX
 description: Fixes typos, grammar, and LaTeX formatting without changing your writing style or content.
 
 settings:
