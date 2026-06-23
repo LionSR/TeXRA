@@ -23,6 +23,7 @@ import type {
 } from '@agent/core/execution/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
+import type { StandardPricingConfig } from '@agent/utils/priceUtils';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -174,6 +175,15 @@ export abstract class ModelHandler<
 
   public getAgentCategory(): AgentCategory | undefined {
     return this.agentCategory;
+  }
+
+  /** Common pricing fields used by providers with standard cache-read rebates. */
+  protected standardPricingConfig(): StandardPricingConfig {
+    return {
+      inputPrice: this.config.inputPrice,
+      outputPrice: this.config.outputPrice,
+      cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
+    };
   }
 
   /**

@@ -26,7 +26,6 @@ import { extractMimeSubtype, joinNonEmpty } from '@utils/text/stringUtils';
 import {
   computeOpenRouterPrice,
   normalizeOpenRouterUsage,
-  type OpenRouterPricingConfig,
 } from './openRouterUsage';
 import { tagOpenRouterSdkError } from './openRouterSdkError';
 import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
@@ -572,16 +571,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // ---------------------------------------------------------------------------
 
   computePrice(responseUsage: ChatUsage | null): number {
-    return computeOpenRouterPrice(responseUsage, this.pricingConfig());
-  }
-
-  /** Pricing/caching inputs for the extracted usage helpers. */
-  private pricingConfig(): OpenRouterPricingConfig {
-    return {
-      inputPrice: this.config.inputPrice,
-      outputPrice: this.config.outputPrice,
-      cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
-    };
+    return computeOpenRouterPrice(responseUsage, this.standardPricingConfig());
   }
 
   normalizeUsage(
@@ -592,7 +582,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       rawUsage,
       responseTimeMs,
       this.usageProvider,
-      this.pricingConfig(),
+      this.standardPricingConfig(),
     );
   }
 
