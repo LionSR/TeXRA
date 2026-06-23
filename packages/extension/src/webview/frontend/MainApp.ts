@@ -620,9 +620,8 @@ export class MainApp extends MainAppBase {
     if (options.some((opt) => opt.value === currentValue)) {
       return currentValue;
     }
-    // Match by name: handles source changes and plain-name defaults. Option
-    // values are "source:name" keys; labels may be display names, so match
-    // the value-derived name as well as the label.
+    // Match by name: handles source changes, plain-name defaults, and remote
+    // rows whose value still carries legacy decorated storage names.
     const name = agentName(currentValue);
     const byName = options.find(
       (opt) => agentName(opt.value) === name || opt.label === name,
