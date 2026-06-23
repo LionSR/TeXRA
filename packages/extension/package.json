@@ -118,6 +118,12 @@
             "description": "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
             "scope": "resource"
           },
+          "texra.model.useGoogleInteractionsAPI": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use Google's Interactions API instead of Generate Content when available. Experimental; disabled by default. OpenRouter-proxied Google models always use Generate Content.",
+            "scope": "resource"
+          },
           "texra.model.useBackgroundResponses": {
             "type": "boolean",
             "default": true,

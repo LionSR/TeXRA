@@ -145,7 +145,7 @@ function stripDollarSchema(schema: JSONSchemaObject): JSONSchemaObject {
  * converters: top-level discriminated unions are flattened and `$schema` is
  * stripped so the output passes their schema validators.
  */
-function convertToolSchema(def: ToolDefinition): JSONSchemaObject | null {
+export function convertToolSchema(def: ToolDefinition): JSONSchemaObject | null {
   let schema: JSONSchemaObject | null;
   if (def.zodSchema) {
     schema = toJSONSchema(def.zodSchema, {
