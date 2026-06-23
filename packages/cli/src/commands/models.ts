@@ -102,7 +102,7 @@ async function showModel(context: CliContext, id: string): Promise<number> {
   emitCliResult(context, {
     json: cliModelRecord(entry.model),
     ndjson: { kind: 'model', model: cliModelRecord(entry.model) },
-    text: formatCliModelDetails(entry),
+    text: formatCliModelDetails(entry, result.apiMode),
   });
   return CliExitCode.Success;
 }
