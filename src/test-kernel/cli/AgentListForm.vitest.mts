@@ -62,9 +62,7 @@ describe('CLI AgentListForm row budget', () => {
     );
     expect(
       hiddenCurrentAgentHint(agentsWithReadableLabel, 'Readable review label'),
-    ).toBe(
-      'Current: Readable review label (hidden from picker)',
-    );
+    ).toBe('Current: Readable review label (hidden from picker)');
   });
 
   it('labels the current agent when it is hidden from the picker', () => {
