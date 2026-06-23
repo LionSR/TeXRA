@@ -133,17 +133,6 @@ export class ModelHandlerOpenAI<
   // ── Compaction internals ──────────────────────────────────────────────
 
   /**
-   * Check if the conversation should be compacted based on token usage.
-   * Compaction is only triggered when:
-   * - In tool-use mode (only mode with multi-turn message accumulation)
-   * - Manual request via requestCompaction(), OR
-   * - Last known input tokens exceed the configured threshold
-   */
-  private shouldCompact(): boolean {
-    return this.shouldCompactByInputTokens(this.lastKnownInputTokens);
-  }
-
-  /**
    * Compact the conversation using client-side summarization via system-prompt-swap.
    * Sends conversation messages as-is to the model with a summarization system prompt,
    * then replaces all messages with the summary.
@@ -556,7 +545,7 @@ export class ModelHandlerOpenAI<
     let updatedMessages: ChatCompletionMessageParam[] | undefined;
     let messagesToUse = rawMessages;
 
-    if (this.shouldCompact()) {
+    if (this.shouldCompactByInputTokens(this.lastKnownInputTokens)) {
       const isManual = this.compactionRequested;
       // Clear manual flag immediately when attempted — matches Anthropic and
       // OpenAI Responses handlers. Prevents infinite retry on graceful failure.
