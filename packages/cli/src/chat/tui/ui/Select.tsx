@@ -203,21 +203,21 @@ export function selectIndexForHotkeyInput(input: string): number | undefined {
   return first == null ? undefined : selectIndexForHotkey(first);
 }
 
-export function isRawSelectCsiInput(input: string): boolean {
-  return input.startsWith('\u001B[');
+export function isRawSelectNavigationInput(input: string): boolean {
+  return input.startsWith('\u001B[') || input.startsWith('\u001BO');
 }
 
 export function isRawSelectEscChordInput(input: string): boolean {
   return (
     input.startsWith('\u001B') &&
     input.length === 2 &&
-    !isRawSelectCsiInput(input)
+    !isRawSelectNavigationInput(input)
   );
 }
 
 export function rawSelectArrowDirection(input: string): -1 | 1 | undefined {
-  if (input === '\u001B[A') return -1;
-  if (input === '\u001B[B') return 1;
+  if (input === '\u001B[A' || input === '\u001BOA') return -1;
+  if (input === '\u001B[B' || input === '\u001BOB') return 1;
   return undefined;
 }
 
@@ -253,7 +253,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
 
   useInput((input, key) => {
     if (cancelledRef.current) return;
-    const rawCsiInput = isRawSelectCsiInput(input);
+    const rawNavigationInput = isRawSelectNavigationInput(input);
     const rawArrowDirection = rawSelectArrowDirection(input);
     if (key.upArrow || rawArrowDirection === -1) {
       setHighlight((h) =>
@@ -277,10 +277,10 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
     }
     // A fast Esc followed by another key can arrive as an Alt/meta chord or
     // as raw ESC + one printable key. Select forms have no meta shortcuts, so
-    // treat that as cancel-and-drop without swallowing raw CSI navigation.
+    // treat that as cancel-and-drop without swallowing raw terminal navigation.
     if (
       isEscapeInput(input, key) ||
-      (key.meta && !rawCsiInput) ||
+      (key.meta && !rawNavigationInput) ||
       isRawSelectEscChordInput(input)
     ) {
       cancelledRef.current = true;
@@ -293,7 +293,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       return;
     }
     if (!key.ctrl && input.length > 2) {
-      if (rawCsiInput) return;
+      if (rawNavigationInput) return;
       cancelledRef.current = true;
       props.onCancel();
       return;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  isRawSelectCsiInput,
   isRawSelectEscChordInput,
+  isRawSelectNavigationInput,
   rawSelectArrowDirection,
   selectHotkeyForIndex,
   selectIndexForHotkey,
@@ -52,16 +52,21 @@ describe('Select hotkeys', () => {
     expect(selectIndexForHotkeyInput('\u001Bm')).toBeUndefined();
   });
 
-  it('separates raw escape chords from CSI navigation prefixes', () => {
+  it('separates raw escape chords from terminal navigation prefixes', () => {
     expect(isRawSelectEscChordInput('\u001Bm')).toBe(true);
     expect(isRawSelectEscChordInput('\u001B[')).toBe(false);
-    expect(isRawSelectCsiInput('\u001B[')).toBe(true);
-    expect(isRawSelectCsiInput('\u001B[A')).toBe(true);
+    expect(isRawSelectEscChordInput('\u001BO')).toBe(false);
+    expect(isRawSelectNavigationInput('\u001B[')).toBe(true);
+    expect(isRawSelectNavigationInput('\u001B[A')).toBe(true);
+    expect(isRawSelectNavigationInput('\u001BO')).toBe(true);
+    expect(isRawSelectNavigationInput('\u001BOA')).toBe(true);
   });
 
-  it('recognizes raw CSI arrow inputs when Ink misses key flags', () => {
+  it('recognizes raw arrow inputs when Ink misses key flags', () => {
     expect(rawSelectArrowDirection('\u001B[A')).toBe(-1);
     expect(rawSelectArrowDirection('\u001B[B')).toBe(1);
+    expect(rawSelectArrowDirection('\u001BOA')).toBe(-1);
+    expect(rawSelectArrowDirection('\u001BOB')).toBe(1);
     expect(rawSelectArrowDirection('\u001B[6~')).toBeUndefined();
   });
 });
