@@ -447,19 +447,32 @@ describe('CLI root argument routing', () => {
 
   it('rejects headless-only flags on interactive command bodies', () => {
     expect(() => rejectHeadlessOnlyFlags(['--print'], 'chat')).toThrow(
-      'texra chat is interactive',
+      'texra chat is interactive and does not support --print.',
+    );
+    expect(() => rejectHeadlessOnlyFlags(['-p'], 'chat')).toThrow(
+      'texra chat is interactive and does not support --print.',
     );
     expect(() =>
       rejectHeadlessOnlyFlags(['--output-format=json'], 'orchestrate'),
-    ).toThrow('texra orchestrate is interactive');
+    ).toThrow(
+      'texra orchestrate is interactive and does not support --output-format.',
+    );
     expect(() => rejectHeadlessOnlyFlags(['--no-input'], 'chat')).toThrow(
-      'texra chat is interactive',
+      'texra chat is interactive and does not support --no-input.',
     );
     expect(() => rejectHeadlessOnlyFlags(['--no-input=true'], 'chat')).toThrow(
-      'texra chat is interactive',
+      'texra chat is interactive and does not support --no-input.',
     );
     expect(() => rejectHeadlessOnlyFlags(['--print=true'], 'chat')).toThrow(
-      'texra chat is interactive',
+      'texra chat is interactive and does not support --print.',
+    );
+    expect(() =>
+      rejectHeadlessOnlyFlags(
+        ['--print', '--output-format', 'json', '--no-input'],
+        'chat',
+      ),
+    ).toThrow(
+      'texra chat is interactive and does not support --print, --output-format, and --no-input.',
     );
     expect(() =>
       rejectHeadlessOnlyFlags(['--approval-policy', 'ask'], 'chat'),
@@ -1265,14 +1278,22 @@ describe('runCli usage output stream routing', () => {
   it('preserves the interactive-command error for headless-only flags', async () => {
     const result = await runCli(['chat', '--print']);
     expect(result.exitCode).toBe(2);
-    expect(stderr).toContain('texra chat is interactive');
+    expect(stderr).toContain(
+      'texra chat is interactive and does not support --print.',
+    );
+    expect(stderr).not.toContain('--output-format');
+    expect(stderr).not.toContain('--no-input');
     expect(stderr).not.toContain('Unknown option');
     expect(stdout).toBe('');
 
     stderr = '';
     const resumeResult = await runCli(['resume', 'abc123', '--print']);
     expect(resumeResult.exitCode).toBe(2);
-    expect(stderr).toContain('texra resume is interactive');
+    expect(stderr).toContain(
+      'texra resume is interactive and does not support --print.',
+    );
+    expect(stderr).not.toContain('--output-format');
+    expect(stderr).not.toContain('--no-input');
     expect(stderr).not.toContain('Unknown option');
     expect(stdout).toBe('');
 
@@ -1284,21 +1305,33 @@ describe('runCli usage output stream routing', () => {
       'abc123',
     ]);
     expect(resumeShortcutResult.exitCode).toBe(2);
-    expect(stderr).toContain('texra resume is interactive');
+    expect(stderr).toContain(
+      'texra resume is interactive and does not support --output-format.',
+    );
+    expect(stderr).not.toContain('--print');
+    expect(stderr).not.toContain('--no-input');
     expect(stderr).not.toContain('Unknown option');
     expect(stdout).toBe('');
 
     stderr = '';
     const setupResult = await runCli(['setup', '--no-input']);
     expect(setupResult.exitCode).toBe(2);
-    expect(stderr).toContain('texra setup is interactive');
+    expect(stderr).toContain(
+      'texra setup is interactive and does not support --no-input.',
+    );
+    expect(stderr).not.toContain('--print');
+    expect(stderr).not.toContain('--output-format');
     expect(stderr).not.toContain('Unknown option');
     expect(stdout).toBe('');
 
     stderr = '';
     const inlineSetupResult = await runCli(['setup', '--no-input=true']);
     expect(inlineSetupResult.exitCode).toBe(2);
-    expect(stderr).toContain('texra setup is interactive');
+    expect(stderr).toContain(
+      'texra setup is interactive and does not support --no-input.',
+    );
+    expect(stderr).not.toContain('--print');
+    expect(stderr).not.toContain('--output-format');
     expect(stderr).not.toContain('Unknown option');
     expect(stdout).toBe('');
   });
