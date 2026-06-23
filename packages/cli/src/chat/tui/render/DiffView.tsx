@@ -7,7 +7,7 @@
 import { Box, Text } from 'ink';
 import { structuredPatch, type StructuredPatchHunk } from 'diff';
 
-import { filterNotNullish, isObject } from '@utils/core';
+import { clamp, filterNotNullish, isObject } from '@utils/core';
 
 import { wrapAnsiToWidth } from './ansiWrap';
 import { maxScrollableRowOffset, scrollBoundedRows } from './scrollBounds';
@@ -227,7 +227,7 @@ function compactBoundedDiffDisplayLines(
   const visibleBudget = Math.max(1, maxDisplayLines);
   const visibleCount = visibleBudget === 1 ? 1 : visibleBudget - 1;
   const anchor = representativeDiffLineIndex(lines);
-  const start = Math.max(0, Math.min(anchor, lines.length - visibleCount));
+  const start = clamp(anchor, 0, lines.length - visibleCount);
   const visibleLines = lines.slice(start, start + visibleCount);
   if (visibleBudget === 1) return visibleLines;
 

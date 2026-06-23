@@ -691,7 +691,7 @@ export function computePickerListLayout({
   const rowBudget = Math.max(1, rows - fixedRows);
   const windowStart = (count: number): number => {
     const lastStart = Math.max(0, itemCount - count);
-    return Math.min(lastStart, Math.max(0, highlight - Math.floor(count / 2)));
+    return clamp(highlight - Math.floor(count / 2), 0, lastStart);
   };
   let visibleCount = Math.min(itemCount, rowBudget);
   for (let i = 0; i < 2; i += 1) {
@@ -699,7 +699,8 @@ export function computePickerListLayout({
     const end = start + visibleCount;
     const markerRows =
       rowBudget >= 3 ? (start > 0 ? 1 : 0) + (end < itemCount ? 1 : 0) : 0;
-    visibleCount = Math.min(itemCount, Math.max(1, rowBudget - markerRows));
+    visibleCount =
+      itemCount === 0 ? 0 : clamp(rowBudget - markerRows, 1, itemCount);
   }
   const start = windowStart(visibleCount);
   const end = start + visibleCount;
