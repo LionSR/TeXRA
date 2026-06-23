@@ -26,10 +26,10 @@ describe('agent option labels', () => {
     expect(options.map((option) => option.label)).toEqual(['review']);
   });
 
-  it('keeps title-case names exactly as authored', () => {
-    const [option] = entriesToOptionData([toolUseAgent('Code Reviewer')]);
+  it('keeps camelCase names exactly as authored', () => {
+    const [option] = entriesToOptionData([toolUseAgent('codeReviewer')]);
 
-    expect(option?.label).toBe('Code Reviewer');
+    expect(option?.label).toBe('codeReviewer');
   });
 
   it('preserves ordinary hyphenated agent labels', () => {
@@ -60,18 +60,18 @@ describe('agent option labels', () => {
     ]);
   });
 
-  it('leaves custom agent labels exactly as authored', () => {
+  it('leaves custom agent identifiers exactly as authored', () => {
     const [option] = entriesToOptionData([
       {
-        name: 'My Paper Helper',
+        name: 'myPaperHelper',
         source: 'custom',
-        path: '/agents/My Paper Helper.yaml',
+        path: '/agents/myPaperHelper.yaml',
         category: AgentCategory.ToolUse,
         tools: [],
       },
     ]);
 
-    expect(option?.value).toBe('custom:My Paper Helper');
-    expect(option?.label).toBe('My Paper Helper');
+    expect(option?.value).toBe('custom:myPaperHelper');
+    expect(option?.label).toBe('myPaperHelper');
   });
 });

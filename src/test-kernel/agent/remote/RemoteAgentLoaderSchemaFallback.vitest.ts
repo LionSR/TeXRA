@@ -145,13 +145,13 @@ describe('remote agent schema compatibility', () => {
     ]);
   });
 
-  it('drops remote rows with decorative agent names', async () => {
+  it('drops remote rows with non-identifier agent names', async () => {
     installRemoteAgentListClient({
       data: [
         {
           id: 'agent-1',
-          name: 'Review \u2014 verify math & consistency',
-          description: 'Decorated legacy row',
+          name: 'review team',
+          description: 'Legacy row',
           visibility: ['public'],
           tools: [],
           agent_category: 'toolUse',
