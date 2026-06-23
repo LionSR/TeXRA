@@ -105,7 +105,7 @@ describe('CLI workflow output resolution', () => {
     await writeFile(runA2, 'A2');
     await writeFile(runB, 'B');
 
-    const { displayResult } = await resolveWorkflowOutput(
+    const displayResult = await resolveWorkflowOutput(
       undefined,
       'out',
       workflowResult([
@@ -148,7 +148,7 @@ describe('CLI workflow output resolution', () => {
 
     expect(expectedOutputFiles).toEqual(['stdin.tex']);
 
-    const { displayResult } = await resolveWorkflowOutput(
+    const displayResult = await resolveWorkflowOutput(
       undefined,
       'out',
       workflowResult([
@@ -188,7 +188,7 @@ describe('CLI workflow output resolution', () => {
     await writeFile(runMain, 'main');
     await writeFile(runSeries, 'series');
 
-    const { displayResult } = await resolveWorkflowOutput(
+    const displayResult = await resolveWorkflowOutput(
       undefined,
       'out',
       workflowResult([
@@ -241,7 +241,7 @@ describe('CLI workflow output resolution', () => {
     await writeFile(runRoot, 'root');
     await writeFile(runNested, 'nested');
 
-    const { displayResult } = await resolveWorkflowOutput(
+    const displayResult = await resolveWorkflowOutput(
       undefined,
       'out',
       workflowResult([
@@ -400,7 +400,7 @@ describe('CLI workflow output resolution', () => {
     await writeFile(runA1, 'A1');
     await writeFile(runA2, 'A2');
 
-    const { displayResult } = await resolveWorkflowOutput(
+    const displayResult = await resolveWorkflowOutput(
       'out/a.tex',
       undefined,
       workflowResult([
