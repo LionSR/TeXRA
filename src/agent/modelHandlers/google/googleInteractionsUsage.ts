@@ -53,12 +53,11 @@ function computeInteractionsTokenCounts(
     return { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
   }
 
-  // SMOKE-TEST (cannot verify offline): under previous_interaction_id chaining
-  // it is UNCONFIRMED whether total_input_tokens reports only the NEW turn's
-  // input or the CUMULATIVE server-side context. If cumulative, per-round input
-  // costs will look unexpectedly large (but remain correct). genai.d.ts Usage is
-  // silent on chaining; verify with a real-key two-round run and adjust here only
-  // if the server double-counts (spec §6 S1). No functional change for now.
+  // Verified live (spec §6 S1, gemini-3.5-flash 2-round run): under
+  // previous_interaction_id chaining, total_input_tokens reports the CUMULATIVE
+  // server-side context, not just the new turn's delta (turn 2 reported 79 input
+  // tokens for a 1-step delta send). That is correct for billing — the server
+  // reprocesses the retained context — so we report it as-is; no double-count.
   const promptTokens = usage.total_input_tokens ?? 0;
   const toolUseTokens = usage.total_tool_use_tokens ?? 0;
   const visibleOutputTokens = usage.total_output_tokens ?? 0;
