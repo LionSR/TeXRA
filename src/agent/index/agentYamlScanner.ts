@@ -1,6 +1,5 @@
 /** Stateless YAML scanning for the agent registry. */
 
-import * as path from 'node:path';
 import { glob } from 'glob';
 import * as yaml from 'yaml';
 
@@ -80,7 +79,7 @@ async function readYamlDefinition(
     const parsed = yaml.parse(content);
     const definition = AgentDefinitionSchema.parse(parsed);
     return {
-      name: path.basename(yamlPath, '.yaml'),
+      name: definition.name,
       path: yamlPath,
       definition,
     };

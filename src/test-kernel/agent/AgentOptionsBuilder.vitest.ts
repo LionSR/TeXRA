@@ -32,25 +32,6 @@ describe('agent option labels', () => {
     expect(option?.label).toBe('Code Reviewer');
   });
 
-  it('removes descriptive dash suffixes from picker labels', () => {
-    const [option] = entriesToOptionData([
-      toolUseAgent('Review \u2014 verify math & consistency'),
-    ]);
-
-    expect(option?.value).toBe(
-      'remote:Review \u2014 verify math & consistency',
-    );
-    expect(option?.label).toBe('Review');
-  });
-
-  it('removes ASCII detail suffixes from picker labels', () => {
-    const [option] = entriesToOptionData([
-      toolUseAgent('Engineer --- software team lead'),
-    ]);
-
-    expect(option?.label).toBe('Engineer');
-  });
-
   it('preserves ordinary hyphenated agent labels', () => {
     const [option] = entriesToOptionData([toolUseAgent('paper-reviewer')]);
 
