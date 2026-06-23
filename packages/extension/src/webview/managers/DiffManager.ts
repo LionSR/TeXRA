@@ -1,93 +1,51 @@
 import * as vscode from 'vscode';
 
 import { fetchRecentCommits } from '@frontend/git/recentCommits';
-import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { mainViewMessages } from '@shared/schemas';
+import type {
+  LatexdiffMessage,
+  LatexdiffvcMessage,
+  LatexdiffvcOperationMessage,
+  RequestRecentCommitsMessage,
+} from '@shared/schemas';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
 
-const CHANNEL = 'DiffManager';
-logger.initialize(CHANNEL);
-
 export class DiffManager extends BaseWebviewManager {
-  protected readonly channel = CHANNEL;
+  protected readonly channel = 'DiffManager';
 
-  handleLatexdiff(message: unknown): void {
-    const data = this.parseMessage(
-      mainViewMessages.LatexdiffMessageSchema,
-      message,
-      'latexdiff',
-    );
-    if (!data) return;
+  handleLatexdiff(message: LatexdiffMessage): void {
     void vscode.commands.executeCommand(
-      `texra.${data.command}`,
-      data.inputFile,
-      data.baseFile,
-      data.editedFile,
+      `texra.${message.command}`,
+      message.inputFile,
+      message.baseFile,
+      message.editedFile,
     );
   }
 
-  handleLatexdiffvc(message: unknown): void {
-    const data = this.parseMessage(
-      mainViewMessages.LatexdiffvcMessageSchema,
-      message,
-      'latexdiffvc',
-    );
-    if (!data) return;
+  handleLatexdiffvc(message: LatexdiffvcMessage): void {
     void vscode.commands.executeCommand(
-      `texra.${data.command}`,
-      data.inputFile,
-      data.baseFile,
-      data.commitHash,
+      `texra.${message.command}`,
+      message.inputFile,
+      message.baseFile,
+      message.commitHash,
     );
   }
 
-  handleLatexdiffvcOperation(message: unknown): void {
-    const data = this.parseMessage(
-      mainViewMessages.LatexdiffvcOperationMessageSchema,
-      message,
-      'latexdiffvc operation',
-    );
-    if (!data) return;
+  handleLatexdiffvcOperation(message: LatexdiffvcOperationMessage): void {
     void vscode.commands.executeCommand(
-      `texra.${data.command}`,
-      data.inputFile,
-      data.baseFile,
-      data.commitHash,
-      data.clean,
+      `texra.${message.command}`,
+      message.inputFile,
+      message.baseFile,
+      message.commitHash,
+      message.clean,
     );
   }
 
-  /** Parse message with schema, logging warning on failure */
-  private parseMessage<T>(
-    schema: {
-      safeParse: (
-        data: unknown,
-      ) => { success: true; data: T } | { success: false; error: unknown };
-    },
-    message: unknown,
-    context: string,
-  ): T | null {
-    const result = schema.safeParse(message);
-    if (!result.success) {
-      logger.warn(CHANNEL, `Invalid ${context} message`, {
-        data: result.error,
-      });
-      return null;
-    }
-    return result.data;
-  }
-
-  async handleRequestRecentCommits(message: unknown): Promise<void> {
-    const data = this.parseMessage(
-      mainViewMessages.RequestRecentCommitsMessageSchema,
-      message,
-      'request recent commits',
-    );
-    if (!data) return;
-
-    await this.postRecentCommits(data.notifyWhenEmpty ?? undefined);
+  async handleRequestRecentCommits(
+    message: RequestRecentCommitsMessage,
+  ): Promise<void> {
+    await this.postRecentCommits(message.notifyWhenEmpty ?? undefined);
   }
 
   async handleRefreshCommits(): Promise<void> {
