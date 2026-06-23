@@ -161,6 +161,68 @@ describe('CLI agents command', () => {
     );
   });
 
+  it('shows a text empty state when no workflow agents are visible', async () => {
+    const hiddenWorkflowAgent = {
+      name: 'correct',
+      source: 'builtInWorkflow',
+      path: '/tmp/resources/agents/correct.yaml',
+      category: AgentCategory.Workflow,
+      description: 'Corrects LaTeX.',
+    };
+    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
+      category === AgentCategory.Workflow ? [hiddenWorkflowAgent] : [],
+    );
+    const { listAgents } = await import('@cli/commands/agents');
+
+    const exitCode = await listAgents(cliContext(), {
+      category: AgentCategory.Workflow,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.emitCliResult).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        json: [],
+        ndjson: [],
+        text: 'No visible workflow agents are enabled for this workspace. Use `texra agents list --category workflow --all` to show the workflow catalog.',
+      },
+      { paged: true },
+    );
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show the workflow catalog.',
+    );
+  });
+
+  it('keeps quiet empty agent lists byte-empty for shell completion', async () => {
+    const hiddenWorkflowAgent = {
+      name: 'correct',
+      source: 'builtInWorkflow',
+      path: '/tmp/resources/agents/correct.yaml',
+      category: AgentCategory.Workflow,
+      description: 'Corrects LaTeX.',
+    };
+    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
+      category === AgentCategory.Workflow ? [hiddenWorkflowAgent] : [],
+    );
+    const { listAgents } = await import('@cli/commands/agents');
+
+    const exitCode = await listAgents(cliContext({ quietLogs: true }), {
+      category: AgentCategory.Workflow,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.emitCliResult).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        json: [],
+        ndjson: [],
+        text: '',
+      },
+      { paged: true },
+    );
+    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
+  });
+
   it('suppresses hidden-agent notices in quiet text mode', async () => {
     const visibleAgent = {
       name: 'polish',
