@@ -298,19 +298,31 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
     ];
     const results: ToolResultPayload[] = [{ output: 'a' }, { output: 'b' }];
 
+    // Seed a signed thought + assistant text for this turn so the full
+    // model-emitted ordering is exercised (thought -> text -> calls -> results).
+    const workspace = fakeWorkspace();
+    workspace.reasoning.thinkingBlocks = [
+      { type: 'thinking', thinking: 'plan', signature: 'sig_b' },
+    ];
+
     const followUp = await handler.createBatchedToolUseFollowUpMessages!(
       calls,
       results,
       [[], []],
-      fakeWorkspace(),
+      workspace,
+      'thinking done',
     );
 
     expect(followUp.map((s) => s.type)).toEqual([
+      'thought',
+      'model_output',
       'function_call',
       'function_call',
       'function_result',
       'function_result',
     ]);
+    const thought = followUp[0] as Extract<Step, { type: 'thought' }>;
+    expect(thought.signature).toBe('sig_b');
     const callIds = followUp
       .filter(
         (s): s is Extract<Step, { type: 'function_call' }> =>
@@ -318,6 +330,8 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       )
       .map((s) => s.id);
     expect(callIds).toEqual(['call_1', 'call_2']);
+    // Reasoning is consumed (reset) so it is not re-emitted next round.
+    expect(workspace.reasoning.thinkingBlocks).toHaveLength(0);
   });
 
   it('returns empty arguments when streamed tool args are malformed JSON', async () => {

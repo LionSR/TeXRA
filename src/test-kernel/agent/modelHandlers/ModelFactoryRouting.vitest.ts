@@ -303,6 +303,7 @@ describe('Google Interactions API routing', () => {
   // statically-imported factory from a freshly-imported @platform copy.
   async function initWithFlag(
     useInteractions: boolean,
+    useOpenRouter = false,
   ): Promise<typeof import('@agent/runtime/ModelFactory')> {
     const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
       import('@platform/platform'),
@@ -311,6 +312,8 @@ describe('Google Interactions API routing', () => {
     initPlatform(
       createFakePlatform({
         config: { 'texra.model.useGoogleInteractionsAPI': useInteractions },
+        // getUseOpenRouter() reads USE_OPENROUTER from global state first.
+        globalState: { 'texra.useOpenRouter': useOpenRouter },
       }),
     );
     return import('@agent/runtime/ModelFactory');
@@ -344,17 +347,31 @@ describe('Google Interactions API routing', () => {
     );
   });
 
-  it('surfaces an error for an Interactions-only model selected with OpenRouter active', async () => {
+  it('keeps the routing predicate + key derivation pure (no throw) for Interactions-only under OpenRouter', async () => {
     const factory = await initWithFlag(true);
     const forced = {
       ...googleConfig(),
       requiresInteractionsAPI: true,
     } as ModelConfig;
-    // Unsupported combination: fail loudly rather than silently falling back to
-    // the OpenRouter handler (spec §6.3).
-    expect(() =>
-      factory.shouldUseGoogleInteractionsAPI(forced, true),
-    ).toThrowError(/OpenRouter/);
+    // The predicate must not throw — key-derivation callers (history restore,
+    // modelSwitchDisabledReason) rely on string|undefined, never an exception.
+    expect(factory.shouldUseGoogleInteractionsAPI(forced, true)).toBe(false);
+    expect(factory.modelHandlerCompatibilityKey(forced, true, false)).toBe(
+      'ModelHandlerOpenRouterNative',
+    );
+  });
+
+  it('createModelHandler fails loudly for an Interactions-only model under active OpenRouter', async () => {
+    // OpenRouter cannot proxy Interactions — the live-routing path must error
+    // rather than silently route to OpenRouter (spec §6.3).
+    const factory = await initWithFlag(true, /* useOpenRouter */ true);
+    const forced = {
+      ...googleConfig(),
+      requiresInteractionsAPI: true,
+    } as ModelConfig;
+    await expect(factory.createModelHandler(forced)).rejects.toThrow(
+      /OpenRouter/,
+    );
   });
 
   it('exposes the Interactions compatibility key for history-restore parity', async () => {
