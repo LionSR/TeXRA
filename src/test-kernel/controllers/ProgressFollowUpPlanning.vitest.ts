@@ -2,10 +2,14 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
-// Standard library imports
+// Local imports - controllers
+import {
+  ProgressFollowUpController,
+  type ProgressFollowUpModelOption,
+  type ProgressFollowUpState,
+} from '@controllers/progressView/ProgressFollowUpController';
 
 // Local imports - agent
-import { ProgressFollowUpController } from '@controllers/progressView/ProgressFollowUpController';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
@@ -18,8 +22,6 @@ import {
   type OutputFileHarnessOptions,
   createWorkflowTaskState,
 } from '../support/ProgressControllerHarnesses';
-
-// Local imports - controllers
 
 const followUpWorkflowDefaults: Partial<AgentConfig> = {
   inputFiles: ['main.tex'],
@@ -84,12 +86,27 @@ function createCompileFailure(
   };
 }
 
-function createController(
+const emptyFollowUpState: ProgressFollowUpState = {
+  getTaskState: () => undefined,
+  getOutputFiles: () => new Map(),
+  getCompileFailures: () => new Map(),
+  getExecutionId: () => undefined,
+};
+
+function createController({
   existingFiles = new Set(['main.tex']),
-): ProgressFollowUpController {
+  modelOptions = [],
+  state = emptyFollowUpState,
+}: {
+  existingFiles?: Set<string>;
+  modelOptions?: readonly ProgressFollowUpModelOption[];
+  state?: ProgressFollowUpState;
+} = {}): ProgressFollowUpController {
   return new ProgressFollowUpController({
     getAgentCategory: (agent) =>
       agent === 'tool-agent' ? AgentCategory.ToolUse : AgentCategory.Workflow,
+    loadModelOptions: async () => modelOptions,
+    state,
     workspace: {
       locatePath: (candidate) =>
         candidate.startsWith('/external/')
@@ -142,6 +159,41 @@ describe('ProgressFollowUpController', () => {
     );
   });
 
+  it('builds a stream-scoped tool-use plan from snapshot state', async () => {
+    const taskState = createFollowUpWorkflowTaskState();
+    const outputFile = createRunStorageOutputFile();
+    const controller = createController({
+      modelOptions: [{ value: 'gemini31p' }],
+      state: {
+        getTaskState: () => taskState,
+        getOutputFiles: () => new Map([[2, [outputFile]]]),
+        getCompileFailures: () => new Map(),
+        getExecutionId: () => 'exec-123',
+      },
+    });
+
+    const plan = await controller.planToolUseFollowUpForStream({
+      streamId: 'stream-a',
+      agent: 'tool-agent',
+      model: 'gemini31p',
+      initialQuestion: 'Check the final paragraph.',
+      executeImmediately: false,
+    });
+
+    assert.equal(plan.kind, 'restoreState');
+    if (plan.kind !== 'restoreState') return;
+    assert.equal(plan.executeImmediately, false);
+    assert.equal(plan.taskState.agentConfig.agent, 'tool-agent');
+    assert.match(
+      plan.taskState.agentConfig.instruction,
+      /\/executions\/exec-123\/files\/answer\.tex/,
+    );
+    assert.match(
+      plan.taskState.agentConfig.instruction,
+      /User follow-up request: Check the final paragraph\./,
+    );
+  });
+
   it('rejects follow-up setup when the selected model is disabled', () => {
     const plan = createController().planToolUseFollowUp({
       streamId: 'stream-a',
@@ -160,7 +212,9 @@ describe('ProgressFollowUpController', () => {
   });
 
   it('plans latexFixer with generated output sources before input recovery', async () => {
-    const controller = createController(new Set(['source.tex', 'main.tex']));
+    const controller = createController({
+      existingFiles: new Set(['source.tex', 'main.tex']),
+    });
     const output = createRunStorageOutputFile({ source: 'source.tex' });
     const plan = await controller.planCompileFixer({
       streamId: 'stream-a',
@@ -190,7 +244,9 @@ describe('ProgressFollowUpController', () => {
   });
 
   it('uses original workflow inputs as recovery when source metadata is absent', async () => {
-    const controller = createController(new Set(['main.tex', 'chapter.tex']));
+    const controller = createController({
+      existingFiles: new Set(['main.tex', 'chapter.tex']),
+    });
     const plan = await controller.planCompileFixer({
       streamId: 'stream-a',
       taskState: createFollowUpWorkflowTaskState({
@@ -213,7 +269,9 @@ describe('ProgressFollowUpController', () => {
   });
 
   it('warns when compile failures have no editable workspace source', async () => {
-    const plan = await createController(new Set()).planCompileFixer({
+    const plan = await createController({
+      existingFiles: new Set(),
+    }).planCompileFixer({
       streamId: 'stream-a',
       taskState: createFollowUpWorkflowTaskState({
         inputFiles: ['/external/main.tex'],
