@@ -20,6 +20,9 @@ export const IS_WINDOWS = process.platform === 'win32';
 /** Whether the current platform is macOS (cached at module load). */
 export const IS_MACOS = process.platform === 'darwin';
 
+/** Whether the current platform is Linux (cached at module load). */
+export const IS_LINUX = process.platform === 'linux';
+
 // Common LaTeX tool names used across the system
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 

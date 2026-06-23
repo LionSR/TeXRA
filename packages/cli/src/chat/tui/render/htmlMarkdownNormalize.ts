@@ -1,3 +1,4 @@
+import { clamp } from '@utils/core';
 import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
 
 const KNOWN_HTML_TAG_RE =
@@ -14,7 +15,7 @@ function quoteHtmlBlock(body: string): string {
 
 function headingMarker(level: string): string {
   const parsed = Number.parseInt(level, 10);
-  const depth = Number.isFinite(parsed) ? Math.min(6, Math.max(1, parsed)) : 3;
+  const depth = Number.isFinite(parsed) ? clamp(parsed, 1, 6) : 3;
   return '#'.repeat(depth);
 }
 
