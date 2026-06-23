@@ -40,14 +40,15 @@ export type AgentSourceType = z.infer<typeof AgentSourceSchema>;
 export const AgentSource = AgentSourceSchema;
 export type AgentSource = AgentSourceType;
 
-const AGENT_NAME_DETAIL_SEPARATOR = /\s+(?:[\u2013\u2014]|-{2,})\s+/u;
+const AGENT_NAME_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
 
 export const AgentNameSchema = z
   .string()
   .trim()
   .min(1)
-  .refine((name) => !AGENT_NAME_DETAIL_SEPARATOR.test(name), {
-    message: 'Agent names must be canonical; put details in description.',
+  .refine((name) => AGENT_NAME_IDENTIFIER.test(name), {
+    message:
+      'Agent names must be identifiers: letters, numbers, underscores, or hyphens.',
   });
 
 /**
