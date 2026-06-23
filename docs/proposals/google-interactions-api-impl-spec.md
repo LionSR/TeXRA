@@ -414,15 +414,8 @@ Asserts `initializeMessages` builds a `UserInputStep` with typed `TextContent` +
 
 10. **Generics drift.** The new handler's `ModelHandler` type parameters change from the chat handler: `M = Step`, `Resp = GoogleGenAIInteraction`, `U = Usage` (snake_case), `Resp`-usage no longer `GenerateContentResponseUsageMetadata`. Ensure `computePrice`/`normalizeUsage`/`extractResponse` signatures match the new `U`/`Resp`, and that `googleInteractionsUsage.ts` types `rawUsage: Usage | null`.
 
-**Files referenced (absolute):**
+**Files referenced:**
 
-- Handler base: `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api/src/agent/modelHandlers/ModelHandler.ts`
-- Chat handler (copy source): `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api/src/agent/modelHandlers/google/modelHandlerGoogleGenAI.ts`
-- Usage helper: `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api/src/agent/modelHandlers/google/googleUsage.ts`
-- Factory: `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api/src/agent/runtime/ModelFactory.ts`
-- Settings: `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api/src/shared/schemas/coreSettings.ts`
-- Provider settings UI: `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api/src/shared/constants/providers.ts`
-- Tool conversion: `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api/src/agent/modelHandlers/toolConversion.ts`
-- SDK types: `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api/node_modules/@google/genai/dist/genai.d.ts`
-- Tests dir: `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api/src/test-kernel/agent/modelHandlers/`
-- Docs: `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api/docs/guide/configuration.md`
+- SDK types: `node_modules/@google/genai/dist/genai.d.ts`
+- Tests dir: `src/test-kernel/agent/modelHandlers/`
+- Docs: `docs/guide/configuration.md`
