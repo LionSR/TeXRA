@@ -304,27 +304,36 @@ export async function activate(context: vscode.ExtensionContext) {
     (async () => {
       await copyDefaultAgents(context);
       await registerAgentDirectoryRoots(context);
-      loadAgents()
-        .then(() =>
-          // Seed a never-configured workspace's roster from the user-level
-          // default team, falling back to the built-in Physicist team. Needs
-          // the registry, hence sequenced after the agent scan.
-          seedRosterFromDefaultTeam({
+      try {
+        await loadAgents({ includeRemote: false });
+        // Seed a never-configured workspace's roster from the user-level
+        // default team, falling back to the built-in Physicist team. Needs
+        // the local registry, hence sequenced after the bundled-agent scan
+        // and before activation completes so the first launcher render is
+        // already scoped without waiting on remote agent fetches.
+        try {
+          await seedRosterFromDefaultTeam({
             globalState: context.globalState,
             workspaceState: workspaceSM,
-          }).catch((err) => {
-            logger.warn(
-              'extension',
-              `Default-team roster seeding failed: ${toErrorMessage(err)}`,
-            );
-          }),
-        )
-        .catch((err) => {
-          logger.error(
+          });
+        } catch (err) {
+          logger.warn(
             'extension',
-            `Failed to initialize agent index: ${toErrorMessage(err)}`,
+            `Default-team roster seeding failed: ${toErrorMessage(err)}`,
+          );
+        }
+        void loadAgents().catch((err) => {
+          logger.warn(
+            'extension',
+            `Remote agent refresh failed: ${toErrorMessage(err)}`,
           );
         });
+      } catch (err) {
+        logger.error(
+          'extension',
+          `Failed to initialize agent index: ${toErrorMessage(err)}`,
+        );
+      }
     })(),
     (async () => {
       try {

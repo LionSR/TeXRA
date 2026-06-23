@@ -56,11 +56,11 @@ describe('AgentDefinitionSchema', () => {
     ]);
   });
 
-  it('rejects names that include descriptive dash details', () => {
+  it('rejects names that are not identifiers', () => {
     expect(() =>
       AgentDefinitionSchema.parse({
-        name: 'Review \u2014 verify math & consistency',
+        name: 'review team',
       }),
-    ).toThrow('Agent names must be canonical');
+    ).toThrow('Agent names must be identifiers');
   });
 });
