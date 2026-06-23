@@ -38,11 +38,11 @@ describe('AgentSettingSchema', () => {
 });
 
 describe('AgentDefinitionSchema', () => {
-  it('rejects displayName metadata', () => {
+  it('rejects unknown top-level metadata', () => {
     expect(() =>
       AgentDefinitionSchema.parse({
         name: 'assistant',
-        displayName: 'Assistant',
+        label: 'Assistant',
       }),
     ).toThrow();
   });
