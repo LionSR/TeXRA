@@ -431,6 +431,25 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'orchestrate-model-pick-esc-back-reselect',
+    env: {
+      HARNESS_ORCHESTRATION: '1',
+      HARNESS_API_MODE: 'personal',
+      HARNESS_ORCHESTRATION_STATUS_LINES: '0',
+    },
+    bootExpect: 'Choose how to start this CLI session.',
+    keys: ['\r', ESC, '\r'],
+    exitKeys: [ESC, ESC],
+    expectExit: true,
+    expect: [
+      'Model · personal API keys',
+      'Model for the first message.',
+      'DeepSeek V4 Flash — api: api key set',
+      'Esc back',
+    ],
+    unexpect: ['Choose how to start this CLI session.', 'Esc exit'],
+  },
+  {
     name: 'orchestrate-no-runnable-models',
     env: {
       HARNESS_ORCHESTRATION: '1',
