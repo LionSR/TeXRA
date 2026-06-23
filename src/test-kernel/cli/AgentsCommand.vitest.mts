@@ -82,7 +82,7 @@ describe('CLI agents command', () => {
     expect(parseCliAgentCategoryFilter('unknown')).toBeUndefined();
   });
 
-  it('lists visible agents by default and reports hidden agents in text mode', async () => {
+  it('lists visible agents by default and reports hidden agents', async () => {
     const visibleAgent = {
       name: 'lean',
       source: 'builtInToolUse',
@@ -120,6 +120,38 @@ describe('CLI agents command', () => {
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --all` to show the full catalog.',
+    );
+  });
+
+  it('reports hidden agents in json mode without changing stdout payload', async () => {
+    const hiddenWorkflowAgent = {
+      name: 'correct',
+      source: 'builtInWorkflow',
+      path: '/tmp/resources/agents/correct.yaml',
+      category: AgentCategory.Workflow,
+      description: 'Corrects LaTeX.',
+    };
+    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
+      category === AgentCategory.Workflow ? [hiddenWorkflowAgent] : [],
+    );
+    const { listAgents } = await import('@cli/commands/agents');
+
+    const exitCode = await listAgents(cliContext({ outputFormat: 'json' }), {
+      category: AgentCategory.Workflow,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.emitCliResult).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        json: [],
+        ndjson: [],
+        text: '',
+      },
+      { paged: true },
+    );
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show the workflow catalog.',
     );
   });
 
