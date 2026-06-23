@@ -83,6 +83,10 @@ export type CliWorkflowRunResult = Extract<
   CliRunResult,
   { category: 'workflow' }
 >;
+type WorkflowAgentResult = Extract<
+  ExecuteAgentResult,
+  { category: 'workflow' }
+>;
 
 export interface WorkflowOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];
@@ -200,16 +204,12 @@ function latestWorkflowOutput(
 export async function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
-  result: ExecuteAgentResult,
+  result: WorkflowAgentResult,
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
-): Promise<CliRunResult> {
+): Promise<CliWorkflowRunResult> {
   const { terminalStatus } = options;
-  if (
-    result.category === AgentCategory.Workflow &&
-    result.outputs.length === 0 &&
-    (outputFile || outputDir)
-  ) {
+  if (result.outputs.length === 0 && (outputFile || outputDir)) {
     if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
       return createCliRunResult(result, terminalStatus, {
         workingDirectory: context.cwd,
@@ -227,11 +227,8 @@ export async function resolveWorkflowOutput(
     }
   }
 
-  const runDirectory =
-    result.category === AgentCategory.Workflow
-      ? (options.runDirectory ?? getRunDir(result.executionId))
-      : undefined;
-  if (outputDir && result.category === AgentCategory.Workflow) {
+  const runDirectory = options.runDirectory ?? getRunDir(result.executionId);
+  if (outputDir) {
     const targetRoot = joinCwdRelative(outputDir, context.cwd);
     const expectedOutputFiles = options.expectedOutputFiles ?? [];
     const outputsByRelativePath = new Map<string, OutputFileSummary>();
@@ -271,7 +268,7 @@ export async function resolveWorkflowOutput(
     });
   }
 
-  if (!outputFile || result.category !== AgentCategory.Workflow) {
+  if (!outputFile) {
     return createCliRunResult(result, terminalStatus, {
       workingDirectory: context.cwd,
       runDirectory,
