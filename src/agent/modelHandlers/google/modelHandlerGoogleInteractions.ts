@@ -14,7 +14,7 @@ import {
 
 // Local imports - agent
 import { ReasoningEffort } from 'llm-zoo';
-import { logSdkError } from '@agent/trace';
+import { logProgressStatus, logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
@@ -26,6 +26,7 @@ import { K_SLICE } from '@agent/core/constants';
 import {
   detectStatusCode,
   getSdkErrorMessage,
+  isUserAbort,
   attachPartialText,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -38,7 +39,7 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Local imports - utils
-import { isNonEmptyString } from '@utils/core';
+import { delay, isNonEmptyString } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
@@ -101,6 +102,17 @@ type CreateModelInteractionParamsStreaming =
   Interactions.CreateModelInteractionParamsStreaming;
 type CreateModelInteractionParamsNonStreaming =
   Interactions.CreateModelInteractionParamsNonStreaming;
+// `InteractionStatus` is internal (not re-exported under the `Interactions`
+// namespace), so derive it from the public `Interaction.status` field instead of
+// referencing the unexported alias. Union (genai.d.ts): 'in_progress' |
+// 'requires_action' | 'completed' | 'failed' | 'cancelled' | 'incomplete' |
+// 'budget_exceeded' | (string & {}).
+type InteractionStatus = Interactions.Interaction['status'];
+// The non-streaming get param type is `Omit<GetInteractionByIdRequest,'id'> &
+// { stream?: false }` — the `id` is the positional first arg, so it is NOT
+// repeated in the params object (verified against genai.d.ts get() overload).
+type InteractionGetParamsNonStreaming =
+  Interactions.InteractionGetParamsNonStreaming;
 // The SDK's own `GoogleGenAIInteraction` (the wrapped non-streaming response)
 // is an internal `declare type` and is NOT re-exported, so we reconstruct its
 // public shape: the `Interaction` body with `steps` made non-optional (the SDK
@@ -177,6 +189,28 @@ function isStaleInteractionChainError(error: unknown): boolean {
   );
 }
 
+/**
+ * True when the model rejected `background:true` because it does not support
+ * background interactions (verified live: gemini-2.5-flash → HTTP 400
+ * "Model '…' does not support background interactions."). Anchored on the
+ * "background" + "support" wording so it never misclassifies an unrelated 400.
+ */
+function isBackgroundUnsupportedError(error: unknown): boolean {
+  const raw =
+    error instanceof Error
+      ? error.message
+      : typeof (error as { message?: unknown })?.message === 'string'
+        ? (error as { message: string }).message
+        : '';
+  const message = raw.toLowerCase();
+  return (
+    message.includes('background') &&
+    (message.includes('not support') ||
+      message.includes('unsupported') ||
+      message.includes("doesn't support"))
+  );
+}
+
 /** Mutable accumulator for a single in-flight step during streaming. */
 interface PendingStep {
   type: Step['type'] | string;
@@ -234,6 +268,61 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 > {
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
+  // ===========================================================================
+  // BACKGROUND mode (background:true + store:true, poll interactions.get)
+  // ===========================================================================
+  //
+  // Background submits a long-running interaction asynchronously and polls
+  // interactions.get(id) until a terminal status, surfacing the completed
+  // interaction through the same CreateResponseResult the streaming /
+  // non-streaming paths return. Background REQUIRES server-side state
+  // (store:true) — the only way to retrieve a long-running result is get(id),
+  // which needs the interaction persisted — so it never activates in stateless
+  // mode (see useBackgroundMode / executeBackgroundPath). Mirrors
+  // ModelHandlerOpenAIResponse.
+
+  protected override backgroundModeSupported = true;
+
+  private static readonly BACKGROUND_POLL_INTERVAL_MS = 5000;
+  private static readonly BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
+
+  /**
+   * Non-terminal Interaction statuses — polling continues while the status is in
+   * this set, and every other status is treated as terminal. Interactions has no
+   * `queued` member (unlike OpenAI's `['queued','in_progress']`). `requires_action`
+   * is deliberately EXCLUDED: in workflow (non-tool) background mode it is
+   * unexpected and treated as terminal so the loop never hangs.
+   *
+   * SMOKE-TEST: the initial status returned by a `background:true` create is
+   * undocumented in genai.d.ts; if a real-key run shows it is something other
+   * than `in_progress` (e.g. a `(string & {})` value not in the union), add it
+   * here so polling does not exit immediately.
+   */
+  private static readonly BACKGROUND_PENDING_STATUSES: readonly InteractionStatus[] =
+    ['in_progress'];
+
+  /**
+   * Id of the background interaction currently being polled, so an abort handler
+   * can cancel it. Cleared in the poll loop's `finally` and in invalidateChain.
+   * Mirrors ModelHandlerOpenAIResponse.pendingBackgroundResponseId.
+   */
+  private pendingBackgroundInteractionId: string | null = null;
+
+  /**
+   * Set true after the model rejects `background:true` (HTTP 400 "does not
+   * support background interactions"). Sticky for the instance: once a model
+   * proves it cannot run background, the handler falls back to the streaming /
+   * non-streaming path for the rest of the run. Not all Interactions-capable
+   * Gemini models support background (verified live: gemini-2.5-flash 400s,
+   * gemini-3.5-flash works), and there is no registry capability flag for it, so
+   * this runtime fallback is the model gate.
+   */
+  private backgroundUnsupported = false;
+
+  private clearPendingBackgroundInteraction(): void {
+    this.pendingBackgroundInteractionId = null;
+  }
+
   private googleClient: GoogleGenAI | null = null;
 
   // ===========================================================================
@@ -279,6 +368,50 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   private invalidateChain(): void {
     this.chainedInteractionId = null;
     this.sentStepCount = 0;
+    this.clearPendingBackgroundInteraction();
+  }
+
+  // ===========================================================================
+  // BACKGROUND mode gate
+  // ===========================================================================
+
+  /**
+   * Background mode is active when this handler supports it, server-side state is
+   * enabled (store:true — required to retrieve the result via get(id)), the agent
+   * is in workflow mode, and the user toggle is on. Background is categorically
+   * impossible in stateless mode, so `stateful` is load-bearing (unlike OpenAI,
+   * which always sends store:true). Workflow-only mirrors OpenAI's exclusion of
+   * tool-use loops (which rely on per-step streaming). There is no Gemini
+   * analogue of isGptFamilyModelName, and not every Interactions-capable model
+   * supports background (gemini-2.5-flash 400s), so the per-model gate is the
+   * runtime `backgroundUnsupported` fallback rather than a model-name check.
+   */
+  private useBackgroundMode(stateful: boolean): boolean {
+    return (
+      this.backgroundModeSupported &&
+      !this.backgroundUnsupported &&
+      stateful &&
+      this.isBackgroundModeEligible() &&
+      getConfig<boolean>('texra.model.useBackgroundResponses', true)
+    );
+  }
+
+  private isBackgroundModeEligible(): boolean {
+    return this.isWorkflowMode();
+  }
+
+  public override isBackgroundModeActive(): boolean {
+    return this.useBackgroundMode(this.serverStateEnabled());
+  }
+
+  /**
+   * Background replaces streaming (polling completed results is incompatible with
+   * incremental SSE). When background is active, streaming is forced off so the
+   * createResponseImpl dispatch resolves to the background branch. Mirrors
+   * ModelHandlerOpenAIResponse.getStreamingConfig.
+   */
+  public override getStreamingConfig(): boolean {
+    return !this.isBackgroundModeActive() && super.getStreamingConfig();
   }
 
   /**
@@ -1397,7 +1530,12 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         ? (this.chainedInteractionId ?? undefined)
         : undefined;
 
-    const useStreaming = this.getStreamingConfig();
+    // Dispatch order: background > streaming > non-streaming. When background is
+    // active, getStreamingConfig() already returns false, so useStreaming is
+    // false and the streaming/non-streaming branches stay byte-identical when
+    // background is off.
+    const useBackground = this.useBackgroundMode(stateful);
+    const useStreaming = !useBackground && this.getStreamingConfig();
     let aggregatedText = '';
 
     const updatedMessages = this.compactionResult?.compactedMessages;
@@ -1421,6 +1559,18 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const requestOptions = signal ? { fetchOptions: { signal } } : undefined;
 
     try {
+      if (useBackground) {
+        const result = await this.executeBackgroundPath(
+          client,
+          commonParams,
+          base.length,
+          stateful,
+          requestOptions,
+          signal,
+        );
+        return withUpdated(result);
+      }
+
       if (useStreaming) {
         const params: CreateModelInteractionParamsStreaming = {
           ...commonParams,
@@ -1448,6 +1598,18 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       this.finalizeChain(response, base.length, stateful);
       return withUpdated({ response });
     } catch (error) {
+      // Model doesn't support background interactions (e.g. gemini-2.5-flash ⇒
+      // HTTP 400) ⇒ disable background for this instance and retry on the
+      // streaming / non-streaming path. Bounded: backgroundUnsupported makes
+      // useBackgroundMode() false on the retry, so it cannot re-hit this error.
+      if (useBackground && isBackgroundUnsupportedError(error)) {
+        this.logger.warn(
+          `Model ${this.config.fullName} does not support background interactions; ` +
+            `falling back to foreground for this run.`,
+        );
+        this.backgroundUnsupported = true;
+        return this.createResponseImpl(options);
+      }
       // Expired/unknown previous_interaction_id ⇒ drop the chain and full-resend
       // exactly once. Bounded: invalidateChain() nulls chainedInteractionId, so
       // the retry takes the shouldSendAll path with no previous_interaction_id
@@ -1470,6 +1632,199 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         );
       }
       throw error;
+    }
+  }
+
+  // ===========================================================================
+  // BACKGROUND path (submit background:true, poll get(id), cancel on abort)
+  // ===========================================================================
+
+  /**
+   * BACKGROUND path: submit with background:true + store:true, capture the id,
+   * poll interactions.get(id) until a terminal status, finalize the chain off the
+   * COMPLETED polled interaction (not the submit response), and surface the same
+   * CreateResponseResult shape the streaming / non-streaming paths return. The
+   * submit still carries the delta `input` + previous_interaction_id from
+   * commonParams, so chaining composes with background unchanged. Cancels the
+   * in-flight interaction on abort. Mirrors ModelHandlerOpenAIResponse.
+   */
+  private async executeBackgroundPath(
+    client: GoogleGenAI,
+    commonParams: Omit<CreateModelInteractionParamsNonStreaming, 'stream'>,
+    totalStepCount: number,
+    stateful: boolean,
+    requestOptions: { fetchOptions: { signal: AbortSignal } } | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
+    // Background REQUIRES server-side state — defense-in-depth assertion of the
+    // gate invariant (the gate already returns false when !stateful).
+    if (!stateful) {
+      throw new Error(
+        'Background mode requires server-side state (store:true); refusing to ' +
+          'submit a background interaction in stateless mode.',
+      );
+    }
+
+    // background:true forces store:true (already true under `stateful`).
+    const submitParams: CreateModelInteractionParamsNonStreaming = {
+      ...commonParams,
+      stream: false,
+      store: true,
+      background: true,
+    };
+    logProgressStatus(
+      this.logger,
+      'Running Google Interactions in background mode; polling for completion ' +
+        '(this may take longer than usual).',
+    );
+    // SMOKE-TEST: the initial status of a background:true create, and whether
+    // background:true is accepted with store:true (and rejected/ignored with
+    // store:false), are unconfirmed offline; verify on a real-key run.
+    const submitted = (await client.interactions.create(
+      submitParams,
+      requestOptions,
+    )) as unknown as GoogleGenAIInteraction;
+
+    const completed = await this.pollBackgroundInteraction(
+      client,
+      submitted,
+      requestOptions,
+      signal,
+    );
+
+    // Capture the chain anchor from the COMPLETED polled interaction (NOT the
+    // submit), so the next turn chains onto a server-retained, completed id.
+    this.finalizeChain(completed, totalStepCount, stateful);
+    return { response: completed };
+  }
+
+  private isBackgroundPending(interaction: GoogleGenAIInteraction): boolean {
+    return ModelHandlerGoogleInteractions.BACKGROUND_PENDING_STATUSES.includes(
+      interaction.status as InteractionStatus,
+    );
+  }
+
+  /**
+   * Poll interactions.get(id) until a terminal status. Throws on a non-completed
+   * terminal status, on the max-duration timeout, and on abort (after requesting
+   * a best-effort cancel of the interaction).
+   */
+  private async pollBackgroundInteraction(
+    client: GoogleGenAI,
+    initial: GoogleGenAIInteraction,
+    requestOptions: { fetchOptions: { signal: AbortSignal } } | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<GoogleGenAIInteraction> {
+    const interactionId = initial.id;
+    if (typeof interactionId !== 'string') {
+      // No id ⇒ cannot poll. Trust the submit response (its status drives
+      // finalizeChain, which invalidates the chain if not 'completed').
+      this.logger.warn(
+        'Background submit returned no interaction id; skipping polling.',
+      );
+      return initial;
+    }
+
+    this.pendingBackgroundInteractionId = interactionId;
+    const onAbort = () => {
+      // Fire-and-forget cancel; do NOT await inside the listener. The in-flight
+      // delay()/get() reject with AbortError, which the loop translates into the
+      // user-abort throw.
+      void this.cancelBackgroundInteraction(client, interactionId);
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+
+    const pollInterval =
+      ModelHandlerGoogleInteractions.BACKGROUND_POLL_INTERVAL_MS;
+    const maxDuration =
+      ModelHandlerGoogleInteractions.BACKGROUND_MAX_DURATION_MS;
+    const startTime = Date.now();
+    let current = initial;
+    let pollCount = 0;
+
+    try {
+      while (this.isBackgroundPending(current)) {
+        pollCount += 1;
+        try {
+          await delay(pollInterval, { signal });
+        } catch (err) {
+          if (isUserAbort(err)) {
+            this.logger.debug(
+              `Background polling aborted for interaction ${interactionId} ` +
+                `while waiting (poll ${pollCount}).`,
+            );
+          }
+          throw err; // cancel already requested via onAbort
+        }
+
+        if (Date.now() - startTime > maxDuration) {
+          throw new Error(
+            `Background interaction ${interactionId} exceeded maximum polling ` +
+              `duration of ${maxDuration} ms. Cancel it with ` +
+              `client.interactions.cancel("${interactionId}").`,
+          );
+        }
+
+        // get(id, params, options): params is Omit<GetInteractionByIdRequest,
+        // 'id'> & { stream?: false } — the id is the positional arg, NOT repeated
+        // in params. Returns Promise<GoogleGenAIInteraction>.
+        const getParams: InteractionGetParamsNonStreaming = { stream: false };
+        try {
+          current = (await client.interactions.get(
+            interactionId,
+            getParams,
+            requestOptions,
+          )) as unknown as GoogleGenAIInteraction;
+        } catch (err) {
+          this.sdkErrorTagger(err, this.config.provider);
+          if (isUserAbort(err)) throw err;
+          // Transient poll error (5xx/429/network): rethrow so PocketFlow's retry
+          // layer re-enters createResponse with a fresh submit; the orphaned
+          // background job ages out server-side (no resume path in v0).
+          throw err;
+        }
+        this.logger.debug(
+          `Background poll ${pollCount} for ${interactionId}: ` +
+            `status=${current.status ?? 'unknown'}`,
+        );
+      }
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+      this.clearPendingBackgroundInteraction();
+    }
+
+    if (current.status === 'completed') return current;
+
+    // Terminal non-completed: failed / cancelled / incomplete / budget_exceeded /
+    // requires_action — all treated uniformly as a thrown, tagged error.
+    const status = current.status ?? 'unknown';
+    this.logger.error(
+      `Background interaction ${interactionId} ended with status "${status}".`,
+    );
+    const err = new Error(
+      `Google Interactions background interaction ${interactionId} ended with ` +
+        `status "${status}".`,
+    );
+    this.sdkErrorTagger(err, this.config.provider);
+    throw err;
+  }
+
+  /** Cancel the in-flight background interaction (best-effort; swallow errors). */
+  private async cancelBackgroundInteraction(
+    client: GoogleGenAI,
+    interactionId: string,
+  ): Promise<void> {
+    try {
+      // SMOKE-TEST: confirm cancel(id) transitions an in_progress interaction to
+      // `cancelled` and a subsequent get reflects it (verify on a real-key run).
+      await client.interactions.cancel(interactionId);
+      this.logger.debug(`Cancelled background interaction ${interactionId}.`);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to cancel background interaction ${interactionId}: ` +
+          getSdkErrorMessage(err),
+      );
     }
   }
 
