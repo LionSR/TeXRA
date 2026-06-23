@@ -17,6 +17,8 @@ describe('TexraSettingsSchema (composed from Core + VS Code extension)', () => {
     expect(parsed.apiKeys.set).toBeNull();
     expect(parsed.apiKeys.remove).toBeNull();
     expect(parsed.files.included.editedExtensions).toEqual(['.txt', '.tex']);
+    // T10: Google Interactions server-side state defaults ON.
+    expect(parsed.model.useGoogleInteractionsServerState).toBe(true);
   });
 
   it('exposes every TEXRA_SETTING_PATH on the parsed tree', () => {
