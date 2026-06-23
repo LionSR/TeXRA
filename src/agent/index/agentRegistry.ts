@@ -113,14 +113,16 @@ export async function loadAgents(
     return;
   }
 
+  const previousInitialized = initialized;
+  const previousCacheIncludesRemote = cacheIncludesRemote;
   initPromise = doLoad({ includeRemote })
     .then(() => {
       initialized = true;
       cacheIncludesRemote = includeRemote;
     })
     .catch((error: unknown) => {
-      initialized = false;
-      cacheIncludesRemote = false;
+      initialized = previousInitialized;
+      cacheIncludesRemote = previousCacheIncludesRemote;
       throw error;
     })
     .finally(() => {
@@ -132,7 +134,6 @@ export async function loadAgents(
 
 async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
   const startTime = Date.now();
-  cache.clear();
 
   // Migrate legacy builtIn:* → builtInWorkflow:* in persisted state
   migrateLegacySourceKeys();
@@ -172,12 +173,18 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
     ),
   );
 
+  const nextCache = new Map<string, AgentEntry>();
   for (const entry of allEntries) {
     if (toolUseOverrides.has(entry.name)) {
       entry.category = AgentCategory.ToolUse;
       entry.rounds = undefined;
     }
     const key = `${entry.source}:${entry.name}`;
+    nextCache.set(key, entry);
+  }
+
+  cache.clear();
+  for (const [key, entry] of nextCache) {
     cache.set(key, entry);
   }
 

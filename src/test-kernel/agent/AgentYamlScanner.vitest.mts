@@ -120,12 +120,12 @@ describe('agent YAML scanner', () => {
     expect(entries.map((entry) => entry.name)).toEqual(['helper']);
   });
 
-  it('skips agent names that include descriptive dash details', async () => {
+  it('skips agent names that are not identifiers', async () => {
     const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
     await writeFile(
       resolve(agentDir, 'review.yaml'),
       [
-        'name: Review \u2014 verify math & consistency',
+        'name: review team',
         'description: Verifies manuscripts.',
         'settings:',
         '  agentCategory: toolUse',
