@@ -321,6 +321,12 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     await rejection;
 
     expect(calls.cancel).toContain('int_1');
+    // The pending-id (cancel target) is reset on abort so a later abort can't
+    // cancel the wrong interaction.
+    expect(
+      (handler as unknown as { pendingBackgroundInteractionId: string | null })
+        .pendingBackgroundInteractionId,
+    ).toBeNull();
 
     // No leak: a fresh serial call on the same handler succeeds.
     const { client: client2 } = bgClient({
@@ -455,8 +461,10 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       messages: [userStep('a')],
       temperature: 0,
     });
+    // Assert the cap value too, so a regression in BACKGROUND_MAX_DURATION_MS
+    // (3h) is caught, not just the presence of a timeout message.
     const rejection = expect(promise).rejects.toThrow(
-      /maximum polling duration/,
+      new RegExp(`maximum polling duration of ${MAX_DURATION_MS} ms`),
     );
 
     // Drive well past the 3h cap (one get() recomputes elapsed time).
