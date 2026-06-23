@@ -14,6 +14,7 @@ import {
   setActiveSidebarView,
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
+import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createChannelTrace } from '@logger';
 import {
   buildVisibleBasicModelOptionsData,
@@ -45,10 +46,7 @@ import {
   readExternalInquiryThread,
 } from '@tools/inquiry/externalInquiryStorage';
 
-import {
-  ProgressViewMessageHandler,
-  type ProgressViewMessageHost,
-} from './ProgressViewMessageHandler';
+import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 
 import type { MainViewProvider } from '../MainViewProvider';
 
@@ -240,18 +238,10 @@ export class ProgressViewProvider
         styleKey: 'progressStyleUri',
       },
     );
-    const messageHost: ProgressViewMessageHost = {
-      showInfo: (message) => vscode.window.showInformationMessage(message),
-      showWarning: (message, options, ...items) =>
-        options
-          ? vscode.window.showWarningMessage(message, options, ...items)
-          : vscode.window.showWarningMessage(message, ...items),
-      showError: (message) => vscode.window.showErrorMessage(message),
-    };
     this.messageHandler = new ProgressViewMessageHandler(
       this,
       context,
-      messageHost,
+      new VscodePromptHost(),
     );
 
     ProgressViewProvider._instance = this;
