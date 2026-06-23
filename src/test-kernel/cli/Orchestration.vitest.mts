@@ -350,6 +350,44 @@ describe('CLI orchestration items', () => {
     );
   });
 
+  it('shows only the preferred team preset when it is available', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [
+        readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),
+        readyPresetPlan({ id: 'physicist', name: 'Physicist' }),
+        readyPresetPlan({ id: 'mathematician', name: 'Mathematician' }),
+      ],
+      history: [],
+      toolUseAgents: [],
+      preferredPresetId: 'physicist',
+    });
+
+    expect(items.map((item) => item.label)).toEqual([
+      'New chat',
+      'Team Physicist',
+      'Help',
+    ]);
+  });
+
+  it('falls back to the capped team preset list when the preferred team is missing', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [
+        readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),
+        readyPresetPlan({ id: 'physicist', name: 'Physicist' }),
+      ],
+      history: [],
+      toolUseAgents: [],
+      preferredPresetId: 'obsolete-team',
+    });
+
+    expect(items.map((item) => item.label)).toEqual([
+      'New chat',
+      'Team Lean Project',
+      'Team Physicist',
+      'Help',
+    ]);
+  });
+
   it('does not promote built-in team members to fallback roots', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [

@@ -26,7 +26,7 @@ import { getDefaultTeamId } from './onboardingFunnel';
 
 import type { StateStore } from '@platform/interfaces/state';
 
-const FALLBACK_STARTUP_TEAM_ID = 'physicist';
+export const DEFAULT_STARTUP_TEAM_ID = 'physicist';
 
 /** Resolve a team id to its built-in preset (the hidden 'starter' included). */
 export function resolveTeamPreset(teamId: string): AgentModePreset | undefined {
@@ -72,9 +72,9 @@ export async function seedRosterFromDefaultTeam(stores: {
   ) {
     return false;
   }
-  const teamId = getDefaultTeamId(globalState) ?? FALLBACK_STARTUP_TEAM_ID;
+  const teamId = getDefaultTeamId(globalState) ?? DEFAULT_STARTUP_TEAM_ID;
   const preset =
-    resolveTeamPreset(teamId) ?? resolveTeamPreset(FALLBACK_STARTUP_TEAM_ID);
+    resolveTeamPreset(teamId) ?? resolveTeamPreset(DEFAULT_STARTUP_TEAM_ID);
   if (!preset) return false;
   await applyPresetRoster(registryPresetRosterState(workspaceState), preset);
   return true;
