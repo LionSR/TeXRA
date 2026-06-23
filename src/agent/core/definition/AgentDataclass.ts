@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { ToolDefinitionSchema } from '@model';
-import { AgentCategory } from '@shared/schemas/agent';
+import { AgentCategory, AgentNameSchema } from '@shared/schemas/agent';
 import { isNonEmptyString } from '@utils/core';
 
 export { AgentCategory };
@@ -101,7 +101,7 @@ export const AgentPromptSchema = z.strictObject({
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
 
 export const AgentDefinitionSchema = z.strictObject({
-  name: z.string().trim().min(1),
+  name: AgentNameSchema,
   description: z.string().optional(),
   inherits: z.string().optional(),
   settings: z.record(z.string(), z.unknown()).prefault({}),
