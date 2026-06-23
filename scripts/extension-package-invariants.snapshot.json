@@ -516,6 +516,12 @@
               "scope": "resource",
               "type": "boolean"
             },
+            "texra.model.useGoogleInteractionsAPI": {
+              "default": false,
+              "description": "Use Google's Interactions API instead of Generate Content when available. Experimental; disabled by default. OpenRouter-proxied Google models always use Generate Content.",
+              "scope": "resource",
+              "type": "boolean"
+            },
             "texra.model.useImprovedConnection": {
               "default": false,
               "description": "Use improved connection for API requests",

@@ -378,6 +378,85 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
     });
   });
 
+  it('prefers streamed steps when completed steps omit delta-only fields', async () => {
+    const handler = createHandler();
+    const events: Interactions.InteractionSSEEvent[] = [
+      { event_type: 'step.start', index: 0, step: { type: 'thought' } },
+      {
+        event_type: 'step.delta',
+        index: 0,
+        delta: {
+          type: 'thought_summary',
+          content: { type: 'text', text: 'plan' },
+        },
+      },
+      {
+        event_type: 'step.delta',
+        index: 0,
+        delta: { type: 'thought_signature', signature: 'sig_streamed' },
+      },
+      { event_type: 'step.stop', index: 0 },
+      {
+        event_type: 'step.start',
+        index: 1,
+        step: {
+          type: 'function_call',
+          id: 'call_1',
+          name: 'search',
+          arguments: {},
+        },
+      },
+      {
+        event_type: 'step.delta',
+        index: 1,
+        delta: { type: 'arguments_delta', arguments: '{"q":"streamed"}' },
+      },
+      { event_type: 'step.stop', index: 1 },
+      {
+        event_type: 'interaction.completed',
+        interaction: {
+          id: 'int_1',
+          status: 'requires_action',
+          steps: [
+            {
+              type: 'thought',
+              summary: [{ type: 'text', text: 'plan' }],
+            },
+            {
+              type: 'function_call',
+              id: 'call_1',
+              name: 'search',
+              arguments: {},
+            },
+          ],
+        },
+      },
+    ];
+
+    const response = (
+      await handler.createResponse({
+        client: fakeClient(events) as never,
+        messages: [
+          { type: 'user_input', content: [{ type: 'text', text: 'go' }] },
+        ],
+        temperature: 0,
+        tools: [],
+      })
+    ).response;
+
+    const workspace = fakeWorkspace();
+    handler.processThinkingBlock(response, workspace);
+    expect(workspace.reasoning.thinkingBlocks[0]?.signature).toBe(
+      'sig_streamed',
+    );
+
+    expect(handler.extractToolUse(response)[0]).toMatchObject({
+      callId: 'call_1',
+      name: 'search',
+      input: { q: 'streamed' },
+    });
+  });
+
   it('resends the full prior step history verbatim on the next request (store:false, no previous_interaction_id)', async () => {
     const handler = createHandler();
     const workspace = fakeWorkspace();
