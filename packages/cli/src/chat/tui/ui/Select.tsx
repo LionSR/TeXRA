@@ -203,6 +203,24 @@ export function selectIndexForHotkeyInput(input: string): number | undefined {
   return first == null ? undefined : selectIndexForHotkey(first);
 }
 
+export function isRawSelectCsiInput(input: string): boolean {
+  return input.startsWith('\u001B[');
+}
+
+export function isRawSelectEscChordInput(input: string): boolean {
+  return (
+    input.startsWith('\u001B') &&
+    input.length === 2 &&
+    !isRawSelectCsiInput(input)
+  );
+}
+
+export function rawSelectArrowDirection(input: string): -1 | 1 | undefined {
+  if (input === '\u001B[A') return -1;
+  if (input === '\u001B[B') return 1;
+  return undefined;
+}
+
 export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   const initial = selectInitialHighlightIndex({
     activeValue: props.activeValue,
@@ -235,16 +253,9 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
 
   useInput((input, key) => {
     if (cancelledRef.current) return;
-    const rawEscChord = input.startsWith('\u001B') && input.length === 2;
-    // A fast Esc followed by another key can arrive as an Alt/meta chord or
-    // as raw ESC + one printable key. Select forms have no meta shortcuts, so
-    // treat that as cancel-and-drop without swallowing raw CSI navigation.
-    if (isEscapeInput(input, key) || key.meta || rawEscChord) {
-      cancelledRef.current = true;
-      props.onCancel();
-      return;
-    }
-    if (key.upArrow) {
+    const rawCsiInput = isRawSelectCsiInput(input);
+    const rawArrowDirection = rawSelectArrowDirection(input);
+    if (key.upArrow || rawArrowDirection === -1) {
       setHighlight((h) =>
         nextSelectHighlightIndex({
           direction: -1,
@@ -254,7 +265,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       );
       return;
     }
-    if (key.downArrow) {
+    if (key.downArrow || rawArrowDirection === 1) {
       setHighlight((h) =>
         nextSelectHighlightIndex({
           direction: 1,
@@ -264,12 +275,25 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       );
       return;
     }
+    // A fast Esc followed by another key can arrive as an Alt/meta chord or
+    // as raw ESC + one printable key. Select forms have no meta shortcuts, so
+    // treat that as cancel-and-drop without swallowing raw CSI navigation.
+    if (
+      isEscapeInput(input, key) ||
+      (key.meta && !rawCsiInput) ||
+      isRawSelectEscChordInput(input)
+    ) {
+      cancelledRef.current = true;
+      props.onCancel();
+      return;
+    }
     if (isPlainReturnInput(input, key)) {
       const choice = props.items[highlight];
       if (choice && !choice.disabled) props.onSelect(choice.value);
       return;
     }
     if (!key.ctrl && input.length > 2) {
+      if (rawCsiInput) return;
       cancelledRef.current = true;
       props.onCancel();
       return;

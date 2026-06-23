@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  isRawSelectCsiInput,
+  isRawSelectEscChordInput,
+  rawSelectArrowDirection,
   selectHotkeyForIndex,
   selectIndexForHotkey,
   selectIndexForHotkeyInput,
@@ -47,5 +50,18 @@ describe('Select hotkeys', () => {
     expect(selectIndexForHotkeyInput('model')).toBeUndefined();
     expect(selectIndexForHotkeyInput('/model')).toBeUndefined();
     expect(selectIndexForHotkeyInput('\u001Bm')).toBeUndefined();
+  });
+
+  it('separates raw escape chords from CSI navigation prefixes', () => {
+    expect(isRawSelectEscChordInput('\u001Bm')).toBe(true);
+    expect(isRawSelectEscChordInput('\u001B[')).toBe(false);
+    expect(isRawSelectCsiInput('\u001B[')).toBe(true);
+    expect(isRawSelectCsiInput('\u001B[A')).toBe(true);
+  });
+
+  it('recognizes raw CSI arrow inputs when Ink misses key flags', () => {
+    expect(rawSelectArrowDirection('\u001B[A')).toBe(-1);
+    expect(rawSelectArrowDirection('\u001B[B')).toBe(1);
+    expect(rawSelectArrowDirection('\u001B[6~')).toBeUndefined();
   });
 });
