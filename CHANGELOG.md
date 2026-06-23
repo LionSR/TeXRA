@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 
 - **More reliable Lean theorem search** — Loogle queries now retry automatically when the server times out, drops the connection, or returns a transient server error, so a brief hiccup no longer surfaces as a failed search; genuine bad requests still fail fast.
 
+#### Features
+
+- **Use Google's Interactions API for Gemini** — TeXRA can now talk to Gemini models through Google's newer Interactions API instead of Generate Content. Turn it on with the `model.useGoogleInteractionsAPI` setting (off by default; Generate Content stays the default and fallback). When enabled, conversation state is kept on Google's servers by default so each turn sends only the new message (smaller, faster requests) — Google retains the conversation for a limited period to make this work. To keep conversations off Google's servers and resend the full transcript each turn instead, turn off `model.useGoogleInteractionsServerState`.
+
 ### CLI
 
 #### Improvements
