@@ -2,7 +2,10 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - controllers
-import { ProgressFollowUpController } from '@controllers/progressView/ProgressFollowUpController';
+import {
+  ProgressFollowUpController,
+  type ProgressFollowUpState,
+} from '@controllers/progressView/ProgressFollowUpController';
 
 // Local imports - agent
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -71,11 +74,20 @@ function createCompileFailure(): CompileFailure {
   };
 }
 
+const emptyFollowUpState: ProgressFollowUpState = {
+  getTaskState: () => undefined,
+  getOutputFiles: () => new Map(),
+  getCompileFailures: () => new Map(),
+  getExecutionId: () => undefined,
+};
+
 function createController(
   existingFiles: Set<string>,
 ): ProgressFollowUpController {
   return new ProgressFollowUpController({
     getAgentCategory: () => AgentCategory.ToolUse,
+    loadModelOptions: async () => [],
+    state: emptyFollowUpState,
     workspace: {
       locatePath: (candidate) =>
         candidate.startsWith('/external/')
