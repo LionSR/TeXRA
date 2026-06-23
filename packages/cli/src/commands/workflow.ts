@@ -35,10 +35,7 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { executeCliConfig } from '../runtime/runExecution';
-import {
-  terminalStatusExitCode,
-  type CliRunResult,
-} from '../runtime/terminalStatus';
+import { terminalStatusExitCode } from '../runtime/terminalStatus';
 import {
   hasMixedStdinWorkflowInputSpecs,
   withExpandedRunInputs,
@@ -46,6 +43,7 @@ import {
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
+  type CliWorkflowRunResult,
   expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
   resolveWorkflowOutput,
@@ -118,13 +116,15 @@ export async function runWorkflowAgent(
         enforceCategory: true,
         registerExecution: true,
         markErrorOnThrow: true,
+        expectedCategory: AgentCategory.Workflow,
+        categoryMismatchMessage: `Agent "${init.agent}" resolved to a non workflow run.`,
       });
       if (!execution.ok) return execution.exitCode;
 
       const { executionId, result, terminalStatus } = execution;
-      let displayResult: CliRunResult;
+      let workflowResult: CliWorkflowRunResult;
       try {
-        displayResult = await resolveWorkflowOutput(
+        workflowResult = await resolveWorkflowOutput(
           init.output,
           init.outputDir,
           result,
@@ -136,7 +136,7 @@ export async function runWorkflowAgent(
             terminalStatus,
           },
         );
-        await persistWorkflowResultMeta(executionId, displayResult);
+        await persistWorkflowResultMeta(executionId, workflowResult);
       } catch (error) {
         if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
           writeErrorStderr(error);
@@ -149,12 +149,9 @@ export async function runWorkflowAgent(
       }
 
       emitCliResult(runContext, {
-        json: displayResult,
-        ndjson: { kind: 'result', result: displayResult },
-        text:
-          displayResult.category === AgentCategory.Workflow
-            ? formatWorkflowTextResult(displayResult)
-            : terminalStatus,
+        json: workflowResult,
+        ndjson: { kind: 'result', result: workflowResult },
+        text: formatWorkflowTextResult(workflowResult),
       });
 
       return terminalStatusExitCode(terminalStatus, runContext);
@@ -164,9 +161,8 @@ export async function runWorkflowAgent(
 
 async function persistWorkflowResultMeta(
   executionId: string,
-  result: CliRunResult,
+  result: CliWorkflowRunResult,
 ): Promise<void> {
-  if (result.category !== AgentCategory.Workflow) return;
   try {
     const resultMeta: ResultMeta = {
       outputs: [...result.outputs],
