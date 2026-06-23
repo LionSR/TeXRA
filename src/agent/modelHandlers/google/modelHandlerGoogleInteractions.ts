@@ -148,8 +148,16 @@ interface PendingStep {
  * v0 is STATELESS (`store: false`): the local transcript is kept as a verbatim
  * `Step[]` and resent in full each round (no `previous_interaction_id`), with
  * request-level `system_instruction` / `tools` / `generation_config` resent on
- * every `create`. Thought-step signatures are round-tripped verbatim so the
- * backend can validate reasoning across tool turns (spec §6.1-§6.2).
+ * every `create`. Thought-step signatures are round-tripped verbatim across
+ * TOOL turns (the function-calling chain that requires them — see
+ * {@link buildAssistantTurnSteps}, spec §6.1-§6.2).
+ *
+ * Known v0 limitation (parity with {@link ModelHandlerGoogleGenAI}): a TERMINAL
+ * turn (model emits text with no tool call) is recorded via the base
+ * `createAssistantMessageFromResponse`, which yields a text-only `model_output`
+ * step — the trailing thought signature is not preserved. Gemini only requires
+ * signatures within an in-flight function-calling sequence, so this is safe; a
+ * fuller fix would need the base contract to return `Step[]` (out of scope).
  */
 export class ModelHandlerGoogleInteractions extends ModelHandler<
   Step,
