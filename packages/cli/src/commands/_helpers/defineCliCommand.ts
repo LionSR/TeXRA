@@ -44,7 +44,7 @@ export interface DefineCliCommandOptions<A extends ArgsDef> {
  * command repeats into one declaration. Behavior is identical to the manual
  * form; only the scaffolding moves here.
  */
-export function defineCliCommand<A extends ArgsDef>(
+export function defineCliCommand<const A extends ArgsDef>(
   options: DefineCliCommandOptions<A>,
 ): CommandDef<A> {
   return defineCommand<A>({

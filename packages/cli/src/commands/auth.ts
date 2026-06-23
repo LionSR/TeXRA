@@ -44,20 +44,31 @@ import { chatgptAuthCommand } from './chatgptAuth';
 import { authTokenCommand } from './relayTokens';
 import type { CliContext } from '../runtime/cliContext';
 
-type LoginCommandArgs = Record<string, unknown>;
+interface LoginCommandArgs {
+  readonly provider?: string;
+  readonly providerArg?: string;
+  readonly 'no-browser'?: boolean;
+  readonly noBrowser?: boolean;
+  readonly browser?: boolean;
+  readonly device?: boolean;
+  readonly 'select-account'?: boolean;
+  readonly selectAccount?: boolean;
+  readonly 'login-hint'?: string;
+  readonly loginHint?: string;
+}
 
 function readBooleanArg(
   args: LoginCommandArgs,
-  hyphenKey: string,
-  camelKey: string,
+  hyphenKey: keyof LoginCommandArgs,
+  camelKey: keyof LoginCommandArgs,
 ): boolean {
   return args[hyphenKey] === true || args[camelKey] === true;
 }
 
 function readStringArg(
   args: LoginCommandArgs,
-  hyphenKey: string,
-  camelKey: string,
+  hyphenKey: keyof LoginCommandArgs,
+  camelKey: keyof LoginCommandArgs,
 ): string | undefined {
   return optString(args[hyphenKey]) ?? optString(args[camelKey]);
 }
