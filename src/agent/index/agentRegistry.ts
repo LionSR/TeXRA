@@ -234,7 +234,7 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
     entries.map((entry) => createKey(entry.source, entry.name)),
   );
   const currentNames = new Set(entries.map((entry) => entry.name));
-  const qualified = new Map<string, string>();
+  const qualifiedCandidates = new Map<string, Set<string>>();
   const bareCandidates = new Map<string, Set<string>>();
 
   for (const entry of entries) {
@@ -244,7 +244,9 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
 
     const oldKey = createKey(entry.source, oldName);
     if (!currentKeys.has(oldKey)) {
-      qualified.set(oldKey, createKey(entry.source, entry.name));
+      const targets = qualifiedCandidates.get(oldKey) ?? new Set<string>();
+      targets.add(createKey(entry.source, entry.name));
+      qualifiedCandidates.set(oldKey, targets);
     }
     if (!currentNames.has(oldName)) {
       const targets = bareCandidates.get(oldName) ?? new Set<string>();
@@ -253,13 +255,8 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
     }
   }
 
-  const bare = new Map<string, string>();
-  for (const [oldName, targets] of bareCandidates) {
-    if (targets.size === 1) {
-      const target = targets.values().next().value;
-      if (target) bare.set(oldName, target);
-    }
-  }
+  const qualified = singleTargetMappings(qualifiedCandidates);
+  const bare = singleTargetMappings(bareCandidates);
 
   if (qualified.size === 0 && bare.size === 0) return;
 
@@ -281,6 +278,19 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
     void platform().workspaceState.update(stateKey, unique(migrated));
     logger.info(CHANNEL, `Migrated filename-based agent names in ${stateKey}`);
   }
+}
+
+function singleTargetMappings(
+  candidates: ReadonlyMap<string, ReadonlySet<string>>,
+): Map<string, string> {
+  const mappings = new Map<string, string>();
+  for (const [oldName, targets] of candidates) {
+    if (targets.size === 1) {
+      const target = targets.values().next().value;
+      if (target) mappings.set(oldName, target);
+    }
+  }
+  return mappings;
 }
 
 /**
