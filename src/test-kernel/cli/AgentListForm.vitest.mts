@@ -30,25 +30,20 @@ describe('CLI AgentListForm row budget', () => {
     ).toBe('lean');
   });
 
-  it('resolves current agents by canonical labels when values are decorated', () => {
-    const decoratedAgents = [
-      { value: 'remote:Review — verify math & consistency', label: 'review' },
-      {
-        value: 'remote:Lean Orchestrator — coordinates',
-        label: 'leanOrchestrator',
-      },
+  it('resolves current agents by canonical labels and values', () => {
+    const canonicalAgents = [
+      { value: 'remote:review', label: 'review' },
+      { value: 'remote:leanOrchestrator', label: 'leanOrchestrator' },
     ];
 
-    const reviewAgent = currentVisibleAgent(decoratedAgents, 'review');
+    const reviewAgent = currentVisibleAgent(canonicalAgents, 'review');
 
     expect(reviewAgent?.label).toBe('review');
-    expect(reviewAgent?.value).toBe(
-      'remote:Review — verify math & consistency',
-    );
+    expect(reviewAgent?.value).toBe('remote:review');
     expect(
-      currentVisibleAgent(decoratedAgents, 'leanOrchestrator')?.label,
+      currentVisibleAgent(canonicalAgents, 'leanOrchestrator')?.label,
     ).toBe('leanOrchestrator');
-    expect(hiddenCurrentAgentHint(decoratedAgents, 'review')).toBeUndefined();
+    expect(hiddenCurrentAgentHint(canonicalAgents, 'review')).toBeUndefined();
   });
 
   it('labels the current agent when it is hidden from the picker', () => {

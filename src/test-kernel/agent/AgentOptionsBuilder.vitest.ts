@@ -5,10 +5,14 @@ import { entriesToOptionData } from '@agent/index/agentOptionsBuilder';
 import type { AgentEntry } from '@agent/index/agentEntry';
 
 describe('agent option labels', () => {
-  function remoteToolUseAgent(name: string, description?: string): AgentEntry {
+  function toolUseAgent(
+    name: string,
+    source: AgentEntry['source'] = 'remote',
+    description?: string,
+  ): AgentEntry {
     return {
       name,
-      source: 'remote',
+      source,
       path: '',
       category: AgentCategory.ToolUse,
       description,
@@ -16,66 +20,37 @@ describe('agent option labels', () => {
     };
   }
 
-  it('uses canonical agent ids instead of decorated remote names', () => {
-    const options = entriesToOptionData([
-      remoteToolUseAgent('Review — verify math & consistency'),
-      remoteToolUseAgent('Engineer --- software team lead'),
-      remoteToolUseAgent('Lean Orchestrator — coordinates'),
-    ]);
+  it('uses authored agent names for option labels', () => {
+    const options = entriesToOptionData([toolUseAgent('review')]);
 
-    expect(options.map((option) => option.label)).toEqual([
-      'review',
-      'engineer',
-      'leanOrchestrator',
-    ]);
+    expect(options.map((option) => option.label)).toEqual(['review']);
   });
 
-  it('does not rewrite plain title-case remote names', () => {
-    const [option] = entriesToOptionData([remoteToolUseAgent('Code Reviewer')]);
+  it('keeps title-case names exactly as authored', () => {
+    const [option] = entriesToOptionData([toolUseAgent('Code Reviewer')]);
 
     expect(option?.label).toBe('Code Reviewer');
   });
 
-  it('keeps resolution values stable while canonicalizing labels', () => {
+  it('uses the same authored name for resolution values and labels', () => {
     const [option] = entriesToOptionData([
-      remoteToolUseAgent(
-        'Review — verify math & consistency',
-        'Verifies mathematical correctness.',
-      ),
+      toolUseAgent('review', 'remote', 'Verifies mathematical correctness.'),
     ]);
 
-    expect(option?.value).toBe('remote:Review — verify math & consistency');
+    expect(option?.value).toBe('remote:review');
     expect(option?.label).toBe('review');
     expect(option?.description).toBe('Verifies mathematical correctness.');
   });
 
-  it('keeps duplicate canonical labels unique without showing decorated names', () => {
+  it('does not invent labels to distinguish different authored names', () => {
     const options = entriesToOptionData([
-      remoteToolUseAgent('Review — verify math'),
-      remoteToolUseAgent('Review — verify consistency'),
+      toolUseAgent('review'),
+      toolUseAgent('reviewer'),
     ]);
 
     expect(options.map((option) => option.label)).toEqual([
-      'review1',
-      'review2',
-    ]);
-    expect(options.map((option) => option.value)).toEqual([
-      'remote:Review — verify math',
-      'remote:Review — verify consistency',
-    ]);
-  });
-
-  it('does not collide with existing labels when numbering duplicates', () => {
-    const options = entriesToOptionData([
-      remoteToolUseAgent('Review — verify math'),
-      remoteToolUseAgent('Review — verify consistency'),
-      remoteToolUseAgent('review1'),
-    ]);
-
-    expect(options.map((option) => option.label)).toEqual([
-      'review2',
-      'review3',
-      'review1',
+      'review',
+      'reviewer',
     ]);
   });
 

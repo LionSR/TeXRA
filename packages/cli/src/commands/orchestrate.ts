@@ -1,20 +1,17 @@
 import { defineCommand, showUsage } from 'citty';
 
 import { platform } from '@platform/platform';
-import {
-  DEFAULT_STARTUP_TEAM_ID,
-  seedRosterFromDefaultTeam,
-} from '@controllers/onboarding/defaultTeamSeeding';
+import { DEFAULT_STARTUP_TEAM_ID } from '@controllers/onboarding/defaultTeamSeeding';
 import {
   getDefaultTeamId,
   getFirstRunDone,
 } from '@controllers/onboarding/onboardingFunnel';
 import { getVisibleAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { toErrorMessage } from '@common/errors/errorMessage';
 
 import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';
+import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
 import { listCliHistoryEntries } from '../runtime/history';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -138,14 +135,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     ? defaultTeamId
     : DEFAULT_STARTUP_TEAM_ID;
   const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
-  await seedRosterFromDefaultTeam({
-    globalState: platform().globalState,
-    workspaceState: platform().workspaceState,
-  }).catch((error: unknown) => {
-    writeTextStderr(
-      `Note: couldn't seed the agent roster from your default team (${toErrorMessage(error)}). Pick agents in Settings or re-run the setup agent.`,
-    );
-  });
+  await seedCliRosterFromDefaultTeam();
   const items = buildCliOrchestrationItems({
     presetPlans: presetPlanSet.plans,
     history,
