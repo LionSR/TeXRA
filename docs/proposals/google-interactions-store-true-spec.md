@@ -19,10 +19,10 @@ This is the single source of truth. It is grounded on verified facts from the li
 
 Verified evidence:
 
-- **The handler instance is created once per run and reused across every round.** From the flow-contract report: `runToolUseFlow.ts` builds the `services` object once with `modelHandler` from `input.modelHandler`; `ToolUseCycleNode` spreads that same `services` into every `ToolUseRoundFlow.run()`. The handler is only ever *replaced* on an explicit model switch (`services.modelHandler = nextHandler`), and on resume-from-snapshot a *new* handler instance is constructed. It is never recreated between normal rounds.
+- **The handler instance is created once per run and reused across every round.** From the flow-contract report: `runToolUseFlow.ts` builds the `services` object once with `modelHandler` from `input.modelHandler`; `ToolUseCycleNode` spreads that same `services` into every `ToolUseRoundFlow.run()`. The handler is only ever _replaced_ on an explicit model switch (`services.modelHandler = nextHandler`), and on resume-from-snapshot a _new_ handler instance is constructed. It is never recreated between normal rounds.
 - **The OpenAI precedent does exactly this** and is the verified blueprint: `private previousResponseId: string | null = null` (line 271), plus a `conversationState` object (`sentMessages`, `cumulativeInputTokens`, `isCompacted`), `private inFlight = false`, all on the instance. Its class doc explicitly documents "THREAD SAFETY: This handler maintains internal state (previousResponseId, ...)".
 
-**Therefore:** mirror OpenAI exactly. Do NOT thread the chain id through `workspaceState`, `Step[]`, snapshots, or any persisted store. Instance fields are correct *because* a new instance is built on resume — which is precisely what gives us cross-session safety for free (a restored run gets a fresh handler with `chainedInteractionId === null`, so it naturally starts a full resend). See §4.
+**Therefore:** mirror OpenAI exactly. Do NOT thread the chain id through `workspaceState`, `Step[]`, snapshots, or any persisted store. Instance fields are correct _because_ a new instance is built on resume — which is precisely what gives us cross-session safety for free (a restored run gets a fresh handler with `chainedInteractionId === null`, so it naturally starts a full resend). See §4.
 
 The flow contract that makes this work (verified):
 
@@ -97,7 +97,7 @@ private serverStateEnabled(): boolean {
 }
 ```
 
-Note: the *parent* flag `texra.model.useGoogleInteractionsAPI` already selects this handler at all; this new flag only toggles store:true vs store:false *within* it.
+Note: the _parent_ flag `texra.model.useGoogleInteractionsAPI` already selects this handler at all; this new flag only toggles store:true vs store:false _within_ it.
 
 #### (c) `createResponse` override — single-turn guard
 
@@ -139,9 +139,7 @@ Current (verified) hardcodes `store: false`, `input: messages`, no chaining (lin
 const base = this.compactionResult?.compactedMessages ?? messages;
 
 const shouldSendAll =
-  !stateful ||
-  this.chainCompacted ||
-  this.chainedInteractionId === null;
+  !stateful || this.chainCompacted || this.chainedInteractionId === null;
 
 const inputSteps = shouldSendAll ? base : base.slice(this.sentStepCount);
 ```
@@ -156,7 +154,7 @@ const previousId =
 const params = {
   model: this.config.fullName,
   input: inputSteps,
-  stream: useStreaming,                       // true/false branch as today
+  stream: useStreaming, // true/false branch as today
   store,
   ...(previousId && { previous_interaction_id: previousId }),
   ...(systemPrompt && { system_instruction: systemPrompt }),
@@ -210,7 +208,7 @@ Guard against infinite recursion: because `invalidateChain()` sets `chainedInter
 
 Verified override at line 303. When `stateful && chainedInteractionId && !shouldSendAll`, the local `messages` over-counts (server holds most of it). Two options — choose the conservative one:
 
-- **Conservative (recommended for v1):** keep estimating on the FULL local `messages`. This over-estimates input under chaining, which only makes `applyTokenCountLimit` *more* cautious (it shrinks max_output_tokens). It never under-budgets. Add a code comment that exact server-side token accounting under chaining is a `// SMOKE-TEST` unknown (see §7).
+- **Conservative (recommended for v1):** keep estimating on the FULL local `messages`. This over-estimates input under chaining, which only makes `applyTokenCountLimit` _more_ cautious (it shrinks max_output_tokens). It never under-budgets. Add a code comment that exact server-side token accounting under chaining is a `// SMOKE-TEST` unknown (see §7).
 
 Do NOT pass `previous_interaction_id` into a token-count call — the SDK `.d.ts` exposes no token-count endpoint analogous to OpenAI's `inputTokens.count`; estimation stays local.
 
@@ -219,14 +217,14 @@ Do NOT pass `previous_interaction_id` into a token-count call — the SDK `.d.ts
 Token semantics under chaining (verified mapping lines 49–74):
 
 ```ts
-const promptTokens = usage.total_input_tokens ?? 0;       // line 56
-const toolUseTokens = usage.total_tool_use_tokens ?? 0;   // line 57
+const promptTokens = usage.total_input_tokens ?? 0; // line 56
+const toolUseTokens = usage.total_tool_use_tokens ?? 0; // line 57
 const visibleOutputTokens = usage.total_output_tokens ?? 0;
 const reasoningTokens = usage.total_thought_tokens ?? 0;
 const inputTokens = promptTokens + toolUseTokens;
 ```
 
-**No functional change required.** The function reads whatever the server reports. Under chaining the server is expected to report the *delta* input (smaller numbers → lower cost automatically). Add ONE doc comment flagging the open question:
+**No functional change required.** The function reads whatever the server reports. Under chaining the server is expected to report the _delta_ input (smaller numbers → lower cost automatically). Add ONE doc comment flagging the open question:
 
 ```ts
 // SMOKE-TEST (cannot verify offline): under previous_interaction_id chaining,
@@ -273,7 +271,7 @@ Mirror the package.json property in the snapshot's `manifest.contributes.configu
 }
 ```
 
-(If a separate settings *provider/registry* file surfaces this flag to the settings webview — grep `useGoogleInteractionsAPI` across `packages/extension/src/settingsView` and `src/shared` — add the same one-line entry there. Verify by grep before writing; do not invent a file.)
+(If a separate settings _provider/registry_ file surfaces this flag to the settings webview — grep `useGoogleInteractionsAPI` across `packages/extension/src/settingsView` and `src/shared` — add the same one-line entry there. Verify by grep before writing; do not invent a file.)
 
 ### 2.6 Tests
 
@@ -347,7 +345,7 @@ createResponseImpl(options):
 
 **Guarantee: a restored run never sends a dead `previous_interaction_id`. It is structurally impossible given instance-field state.**
 
-Mechanism (verified): on resume-from-snapshot, `runToolUseFlow` constructs a **new** `ModelHandlerGoogleInteractions` from `input.modelHandler`. A fresh instance has `chainedInteractionId === null`, `sentStepCount === 0`, `chainCompacted === false`. The first `createResponseImpl` after restore therefore takes `shouldSendAll = true` ⇒ full resend of the restored transcript with `store: true` and NO `previous_interaction_id`, and only *then* establishes a brand-new chain from the new response id. The old (possibly expired, ~weeks-TTL) interaction id is never referenced because it was never persisted anywhere — it only ever existed on the now-discarded instance.
+Mechanism (verified): on resume-from-snapshot, `runToolUseFlow` constructs a **new** `ModelHandlerGoogleInteractions` from `input.modelHandler`. A fresh instance has `chainedInteractionId === null`, `sentStepCount === 0`, `chainCompacted === false`. The first `createResponseImpl` after restore therefore takes `shouldSendAll = true` ⇒ full resend of the restored transcript with `store: true` and NO `previous_interaction_id`, and only _then_ establishes a brand-new chain from the new response id. The old (possibly expired, ~weeks-TTL) interaction id is never referenced because it was never persisted anywhere — it only ever existed on the now-discarded instance.
 
 Belt-and-suspenders: even in the unlikely event a stale id were somehow present, the §3 catch path (`isStaleInteractionChainError` → `invalidateChain` → retry full) recovers transparently.
 
@@ -369,18 +367,18 @@ Belt-and-suspenders: even in the unlikely event a stale id were somehow present,
 
 New/changed suite alongside the existing Google Interactions handler tests (`src/test-kernel/...` — mirror the existing `modelHandlerGoogleInteractions` spec location; reuse its fake `client.interactions.create` + fake SSE stream).
 
-| # | Test | Asserts |
-|---|------|---------|
-| T1 | **First request shape (stateful on)** | First `createResponse` with setting=on sends `store: true`, `input.length === messages.length` (full), and NO `previous_interaction_id`. |
-| T2 | **Continuation sends delta** | After T1 captures an id, append N new Steps; second call sends `previous_interaction_id === <captured id>`, `store: true`, and `input` equals exactly the appended slice (`base.slice(sentStepCount)`), length === N. |
-| T3 | **Id capture + reuse** | After a completed response with `id: 'int_abc'`, `chainedInteractionId === 'int_abc'` and `sentStepCount === base.length`; next call reuses `int_abc`. |
-| T4 | **Incomplete/failed response does not chain** | Response with `status !== 'completed'` ⇒ chain invalidated; next call is a full resend with no `previous_interaction_id`. |
-| T5 | **Expired/invalid id fallback + retry** | Fake create rejects first call with a stale-chain error (404 / `code: NOT_FOUND`) when `previous_interaction_id` is present, succeeds on retry. Assert: handler retried exactly once, retry sent full `input` with NO `previous_interaction_id`, returned the successful response, chain re-established from the retry's id. |
-| T6 | **Compaction clears chain + returns updatedMessages** | Force `requestCompaction()` (sets `compactionRequested`); assert `runClientCompaction` ran, `updatedMessages === compactedMessages`, `chainedInteractionId === null` at the moment of the create call (full resend), and a fresh chain is established afterward. |
-| T7 | **Setting off ⇒ stateless (regression)** | With setting=off every call sends `store: false`, full `input`, no `previous_interaction_id`; no chain state mutates. (This is the existing stateless test — keep it green.) |
-| T8 | **Restore safety** | Construct a fresh handler instance (simulating resume) with the same transcript; assert the first call is a full resend with no `previous_interaction_id` even though a prior instance had captured an id. |
-| T9 | **Single-turn guard** | Calling `createResponse` while a prior call is in flight throws the single-turn error; the guard resets in `finally` so a subsequent serial call succeeds. |
-| T10 | **Default is on** | `coreSettings` default for `useGoogleInteractionsServerState` is `true`; schema `prefault` round-trips; `CORE_SETTING_PATHS` includes it. (Pure schema test.) |
+| #   | Test                                                  | Asserts                                                                                                                                                                                                                                                                                                                      |
+| --- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T1  | **First request shape (stateful on)**                 | First `createResponse` with setting=on sends `store: true`, `input.length === messages.length` (full), and NO `previous_interaction_id`.                                                                                                                                                                                     |
+| T2  | **Continuation sends delta**                          | After T1 captures an id, append N new Steps; second call sends `previous_interaction_id === <captured id>`, `store: true`, and `input` equals exactly the appended slice (`base.slice(sentStepCount)`), length === N.                                                                                                        |
+| T3  | **Id capture + reuse**                                | After a completed response with `id: 'int_abc'`, `chainedInteractionId === 'int_abc'` and `sentStepCount === base.length`; next call reuses `int_abc`.                                                                                                                                                                       |
+| T4  | **Incomplete/failed response does not chain**         | Response with `status !== 'completed'` ⇒ chain invalidated; next call is a full resend with no `previous_interaction_id`.                                                                                                                                                                                                    |
+| T5  | **Expired/invalid id fallback + retry**               | Fake create rejects first call with a stale-chain error (404 / `code: NOT_FOUND`) when `previous_interaction_id` is present, succeeds on retry. Assert: handler retried exactly once, retry sent full `input` with NO `previous_interaction_id`, returned the successful response, chain re-established from the retry's id. |
+| T6  | **Compaction clears chain + returns updatedMessages** | Force `requestCompaction()` (sets `compactionRequested`); assert `runClientCompaction` ran, `updatedMessages === compactedMessages`, `chainedInteractionId === null` at the moment of the create call (full resend), and a fresh chain is established afterward.                                                             |
+| T7  | **Setting off ⇒ stateless (regression)**              | With setting=off every call sends `store: false`, full `input`, no `previous_interaction_id`; no chain state mutates. (This is the existing stateless test — keep it green.)                                                                                                                                                 |
+| T8  | **Restore safety**                                    | Construct a fresh handler instance (simulating resume) with the same transcript; assert the first call is a full resend with no `previous_interaction_id` even though a prior instance had captured an id.                                                                                                                   |
+| T9  | **Single-turn guard**                                 | Calling `createResponse` while a prior call is in flight throws the single-turn error; the guard resets in `finally` so a subsequent serial call succeeds.                                                                                                                                                                   |
+| T10 | **Default is on**                                     | `coreSettings` default for `useGoogleInteractionsServerState` is `true`; schema `prefault` round-trips; `CORE_SETTING_PATHS` includes it. (Pure schema test.)                                                                                                                                                                |
 
 **REQUIRES a real-key smoke test (cannot verify offline — flag in code with `// SMOKE-TEST` and call out in the PR body):**
 
@@ -392,11 +390,11 @@ New/changed suite alongside the existing Google Interactions handler tests (`src
 
 ## 7. Risks / gotchas
 
-1. **Stale-id error shape is unconfirmed (S2).** The SDK `.d.ts` exposes `ErrorT { code?, message? }` (lines 3585/3589) and `InteractionStatus` has no `expired` member (line 7620). The predicate is best-effort until the smoke test. *Mitigation:* keep the matcher anchored to `previous_interaction_id`/interaction wording so it never misclassifies unrelated 404s, and rely on the full-resend retry being idempotent.
+1. **Stale-id error shape is unconfirmed (S2).** The SDK `.d.ts` exposes `ErrorT { code?, message? }` (lines 3585/3589) and `InteractionStatus` has no `expired` member (line 7620). The predicate is best-effort until the smoke test. _Mitigation:_ keep the matcher anchored to `previous_interaction_id`/interaction wording so it never misclassifies unrelated 404s, and rely on the full-resend retry being idempotent.
 2. **Token semantics under chaining unconfirmed (S1).** If the server reports cumulative input under chaining, per-round costs will look large but correct; if it reports the delta, costs drop. The conservative local estimate (§2.1e) never under-budgets either way, so correctness (not just cost) is safe.
 3. **Infinite-retry safety.** The expired-id retry is bounded because `invalidateChain()` sets `chainedInteractionId = null` ⇒ retry path is `shouldSendAll` ⇒ no `previous_interaction_id` ⇒ cannot re-trigger a stale-id error. Do not add a second internal retry.
-4. **Compaction + chaining interaction.** Compaction MUST `invalidateChain()` (server still holds the *pre*-compaction history under the old id; chaining onto it would double the context). Verified analog: OpenAI clears `previousResponseId` immediately after compaction (line 817).
-5. **Reasoning/thought signatures round-trip.** Today the handler resends thought steps with signatures verbatim each round (`buildAssistantTurnSteps`). Under delta-only sends, the *server* now holds prior thought steps; the delta slice must NOT re-send already-sent assistant/thought steps (it won't — the slice starts at `sentStepCount`, past them). The new user/tool-result turn is all that's sent. This is correct but is exactly what S3 must confirm end-to-end.
+4. **Compaction + chaining interaction.** Compaction MUST `invalidateChain()` (server still holds the _pre_-compaction history under the old id; chaining onto it would double the context). Verified analog: OpenAI clears `previousResponseId` immediately after compaction (line 817).
+5. **Reasoning/thought signatures round-trip.** Today the handler resends thought steps with signatures verbatim each round (`buildAssistantTurnSteps`). Under delta-only sends, the _server_ now holds prior thought steps; the delta slice must NOT re-send already-sent assistant/thought steps (it won't — the slice starts at `sentStepCount`, past them). The new user/tool-result turn is all that's sent. This is correct but is exactly what S3 must confirm end-to-end.
 6. **Single-turn guard is mandatory.** Concurrent calls would corrupt `chainedInteractionId`/`sentStepCount`. The override + `inFlight` flag (mirroring OpenAI lines 1153–1158) makes the race fail loudly instead of silently corrupting the chain.
 7. **`background` / `webhook_config` (SDK lines 2389 / 14495) are out of scope** for this change; `store: true` unlocks them but they are deferred. Do not wire them now.
 8. **Compat key unchanged.** Mode is a per-turn runtime decision; the same handler key serves both modes (verified settings-plan report). No history-format migration needed.
