@@ -1060,6 +1060,37 @@ describe('CLI model access resolution', () => {
     ]);
   });
 
+  it('loads explicit model ids for diagnostic lists', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('hiddenFixtureModel', {
+        availability: 'not-included',
+        availabilityLabel: 'Not included',
+        disabled: true,
+        requiresKey: false,
+      }),
+    ]);
+
+    await expect(
+      getCliModelAccessList({
+        apiMode: 'included',
+        models: ['hiddenFixtureModel'],
+      }),
+    ).resolves.toMatchObject([
+      {
+        available: false,
+        status: 'not included',
+        model: {
+          value: 'hiddenFixtureModel',
+          availability: 'not-included',
+          availabilityLabel: 'Not included',
+        },
+      },
+    ]);
+    expect(computeModelOptionsDataMock).toHaveBeenCalledWith([
+      'hiddenFixtureModel',
+    ]);
+  });
+
   it('uses the loaded access list as the availability source of truth', async () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('sonnet46T', {
