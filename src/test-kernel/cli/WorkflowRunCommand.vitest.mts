@@ -303,6 +303,24 @@ describe('CLI workflow run command', () => {
     }
   });
 
+  it('enforces workflow results at the shared execution boundary', async () => {
+    const { runWorkflowAgent } = await import('@cli/commands/workflow');
+
+    const exitCode = await runWorkflowAgent(cliContext(), {
+      agent: 'polish',
+      inputFiles: ['paper.tex'],
+      contextFiles: [],
+      instruction: '',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.executeCliConfig.mock.calls[0]?.[2]).toMatchObject({
+      enforceCategory: true,
+      expectedCategory: AgentCategory.Workflow,
+      categoryMismatchMessage: 'Agent "polish" resolved to a non workflow run.',
+    });
+  });
+
   it('keeps the single-output copy target separate from workflow output names', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
     try {
