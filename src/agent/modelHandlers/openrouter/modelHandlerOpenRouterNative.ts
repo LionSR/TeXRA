@@ -156,7 +156,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     let updatedMessages: ChatMessages[] | undefined;
     let messagesToUse = rawMessages;
 
-    if (this.shouldCompact()) {
+    if (this.shouldCompactByInputTokens(this.lastKnownInputTokens)) {
       this.compactionRequested = false;
       const { compactedMessages, didCompact } = await this.compactConversation(
         client,
@@ -282,10 +282,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // ---------------------------------------------------------------------------
   // Compaction
   // ---------------------------------------------------------------------------
-
-  private shouldCompact(): boolean {
-    return this.shouldCompactByInputTokens(this.lastKnownInputTokens);
-  }
 
   private async compactConversation(
     client: OpenRouter,
