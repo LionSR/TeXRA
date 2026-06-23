@@ -87,17 +87,14 @@ const LONG_EXTERNAL_INQUIRY_ANSWER_FOR_TRUNCATION = Array.from(
 ).join(' ');
 const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
 const ASYNC_FORM_SETTLE_MS = 12000;
-const VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT = [
+const PHYSICIST_LOCAL_TOOL_USE_AGENTS = [
   'research',
   'review',
-  'creator',
-  'latexDiff',
   'latexFixer',
-  'lean',
   'numerics',
   'presenter',
-  'setup',
 ].join('||');
+const PHYSICIST_WORKFLOW_AGENTS = ['correct', 'polish'].join('||');
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
@@ -645,16 +642,25 @@ const SCENARIOS = [
     name: 'slash-palette-esc-retypes-command',
     env: {
       HARNESS_ENTRIES: '4',
-      HARNESS_VISIBLE_TOOL_USE_AGENTS: VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT,
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
+      HARNESS_VISIBLE_WORKFLOW_AGENTS: PHYSICIST_WORKFLOW_AGENTS,
     },
     keys: ['/', `${ESC}/agent\r`],
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use and delegating agents',
+      'Tool-use agents',
+      'Workflows',
+      'correct',
+      'polish',
       'texra chat --agent <name>',
     ],
-    unexpect: ['//agent', 'Harness received: //agent', '/agent - error'],
+    unexpect: [
+      '//agent',
+      'Harness received: //agent',
+      '/agent - error',
+      'more workflows',
+    ],
   },
   {
     name: 'slash-palette-csi-escape-ignored',
@@ -694,14 +700,20 @@ const SCENARIOS = [
     name: 'agent-form',
     env: {
       HARNESS_ENTRIES: '4',
-      HARNESS_VISIBLE_TOOL_USE_AGENTS: VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT,
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
+      HARNESS_VISIBLE_WORKFLOW_AGENTS: PHYSICIST_WORKFLOW_AGENTS,
     },
     keys: ['/agent', '\r'],
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use and delegating agents',
-      'creator',
+      'Tool-use agents',
+      'research',
+      'review',
+      'latexFixer',
+      'Workflows',
+      'correct',
+      'polish',
       'Current: chat (hidden from picker)',
       'texra chat --agent <name>',
       'Esc close',
@@ -710,7 +722,11 @@ const SCENARIOS = [
       'Platform not initialized',
       '/agent - error',
       'texra --agent=<name>',
-      'creator —',
+      'creator',
+      'latexDiff',
+      'lean',
+      'setup',
+      'more workflows',
       'tool-use; built-in',
       'delegating; built-in',
       'orchestrator; built-in',
@@ -721,14 +737,20 @@ const SCENARIOS = [
     cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
-      HARNESS_VISIBLE_TOOL_USE_AGENTS: VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT,
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
+      HARNESS_VISIBLE_WORKFLOW_AGENTS: PHYSICIST_WORKFLOW_AGENTS,
     },
     keys: ['/agent', '\r'],
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use and delegating agents',
-      'creator',
+      'Tool-use agents',
+      'research',
+      'review',
+      'latexFixer',
+      'Workflows',
+      'correct',
+      'polish',
       'Current: chat (hidden from picker)',
       'texra chat --agent <name>',
       'Esc close',
@@ -737,7 +759,11 @@ const SCENARIOS = [
       'Platform not initialized',
       '/agent - error',
       'texra --agent=<name>',
-      'creator —',
+      'creator',
+      'latexDiff',
+      'lean',
+      'setup',
+      'more workflows',
       'tool-use; built-in',
       'delegating; built-in',
       'orchestrator; built-in',
@@ -973,7 +999,8 @@ const SCENARIOS = [
     cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
-      HARNESS_VISIBLE_TOOL_USE_AGENTS: VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT,
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
+      HARNESS_VISIBLE_WORKFLOW_AGENTS: PHYSICIST_WORKFLOW_AGENTS,
     },
     keys: ['/agent', '\r'],
     frame: 'tail',
@@ -981,8 +1008,8 @@ const SCENARIOS = [
     expect: [
       '/agent',
       'Current: chat (hidden from picker)',
-      'Tool-use and delegating agents',
-      '+8 more',
+      'Tool-use agents',
+      '+4 more',
       '↑/↓ navigate',
       'Enter close',
       'Esc close',

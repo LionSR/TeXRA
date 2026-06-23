@@ -12,11 +12,15 @@ export interface AgentOptionsDataPayload {
   toolUse: AgentOptionData[];
 }
 
+function optionLabel(name: string): string {
+  return name.split(/\s+(?:---|—)\s+/u)[0]?.trim() || name;
+}
+
 function entryToOptionData(entry: AgentEntry): AgentOptionData {
   const key = createKey(entry.source, entry.name);
   return {
     value: key,
-    label: entry.name,
+    label: optionLabel(entry.name),
     isToolUse: entry.category === AgentCategory.ToolUse,
     isOrchestrator: hasDelegationTool(entry.tools),
     isRemote: entry.source === 'remote',
