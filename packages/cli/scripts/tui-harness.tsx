@@ -148,6 +148,8 @@ const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
 const SHOW_WIDE_FIRST_CHILD_LINE =
   process.env.HARNESS_WIDE_FIRST_CHILD_LINE === '1';
 const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
+const SHOW_ORCHESTRATION_STATUS_LINES =
+  process.env.HARNESS_ORCHESTRATION_STATUS_LINES !== '0';
 const SHOW_DELEGATED_ORCHESTRATION_HISTORY =
   process.env.HARNESS_DELEGATED_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
@@ -424,7 +426,11 @@ if (SHOW_ORCHESTRATION) {
           : []
       }
       apiMode={HARNESS_API_MODE}
-      statusLines={harnessOrchestrationStatusLines()}
+      statusLines={
+        SHOW_ORCHESTRATION_STATUS_LINES
+          ? harnessOrchestrationStatusLines()
+          : undefined
+      }
       allowDefaultModelLaunch={false}
       onResolve={() => undefined}
     />,
