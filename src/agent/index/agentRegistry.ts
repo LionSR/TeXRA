@@ -1,5 +1,7 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
+import * as path from 'node:path';
+
 import { platform } from '@platform/platform';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as logger from '@logger/logUtils';
@@ -160,6 +162,8 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
     ...remoteEntries,
   ];
 
+  migrateFilenameAgentNameKeys(allEntries);
+
   // Apply category overrides from config
   const toolUseOverrides = new Set(
     platform().workspaceState.get<string[]>(
@@ -218,6 +222,64 @@ function migrateLegacyAgentNameKeys(): void {
 
     void platform().workspaceState.update(stateKey, unique(migrated));
     logger.info(CHANNEL, `Migrated legacy agent names in ${stateKey}`);
+  }
+}
+
+/**
+ * Before canonical YAML names, local agents were keyed by their filename. Keep
+ * persisted visibility selections alive after switching identity to `name:`.
+ */
+function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
+  const currentKeys = new Set(
+    entries.map((entry) => createKey(entry.source, entry.name)),
+  );
+  const currentNames = new Set(entries.map((entry) => entry.name));
+  const qualified = new Map<string, string>();
+  const bareCandidates = new Map<string, Set<string>>();
+
+  for (const entry of entries) {
+    if (!entry.path) continue;
+    const oldName = path.basename(entry.path, '.yaml');
+    if (!oldName || oldName === entry.name) continue;
+
+    const oldKey = createKey(entry.source, oldName);
+    if (!currentKeys.has(oldKey)) {
+      qualified.set(oldKey, createKey(entry.source, entry.name));
+    }
+    if (!currentNames.has(oldName)) {
+      const targets = bareCandidates.get(oldName) ?? new Set<string>();
+      targets.add(entry.name);
+      bareCandidates.set(oldName, targets);
+    }
+  }
+
+  const bare = new Map<string, string>();
+  for (const [oldName, targets] of bareCandidates) {
+    if (targets.size === 1) {
+      const target = targets.values().next().value;
+      if (target) bare.set(oldName, target);
+    }
+  }
+
+  if (qualified.size === 0 && bare.size === 0) return;
+
+  for (const stateKey of [
+    WorkspaceStateKey.ENABLED_AGENTS,
+    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+  ] as const) {
+    const stored = platform().workspaceState.get<string[]>(stateKey, []);
+    if (!stored?.length) continue;
+
+    const migrated = stored.map((key) => {
+      const name = agentName(key);
+      const prefix = key.slice(0, key.length - name.length);
+      if (prefix) return qualified.get(key) ?? key;
+      return bare.get(name) ?? key;
+    });
+    if (migrated.every((key, i) => key === stored[i])) continue;
+
+    void platform().workspaceState.update(stateKey, unique(migrated));
+    logger.info(CHANNEL, `Migrated filename-based agent names in ${stateKey}`);
   }
 }
 
