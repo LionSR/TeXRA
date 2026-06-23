@@ -152,7 +152,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
       temperature: 0,
     });
     const t1 = handler.extractResponse(r1.response, '');
-     
+
     console.log(
       '[live] turn1 text:',
       JSON.stringify(t1.text),
@@ -172,14 +172,14 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
       temperature: 0,
     });
     const t2 = handler.extractResponse(r2.response, '');
-     
+
     console.log(
       '[live] turn2 text:',
       JSON.stringify(t2.text),
       'usage:',
       JSON.stringify(r2.response.usage),
     );
-     
+
     console.log('[live] create calls:', JSON.stringify(calls.create));
 
     expect(calls.create).toHaveLength(2);
@@ -204,7 +204,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
       temperature: 0,
     });
     const t = handler.extractResponse(r.response, '');
-     
+
     console.log(
       '[live] background text:',
       JSON.stringify(t.text),
