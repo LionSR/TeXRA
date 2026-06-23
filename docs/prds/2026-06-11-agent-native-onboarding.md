@@ -209,20 +209,19 @@ starting over:
    `polish`; tool-use `chat`, `research`, `review`, `latexFixer`,
    `setup`, plus the orchestrator entry once signed in). When a
    workspace has no `ENABLED_AGENTS`/`ENABLED_TOOL_USE_AGENTS` keys,
-   activation seeds them from the default team; **absent a default
-   team, behavior is unchanged** (`undefined → show all`).
+   activation seeds them from the default team; absent a recorded user
+   default, the built-in Physicist team is used so new startup menus do
+   not expose the full catalog.
 
    This replaces install-detection heuristics entirely: pre-existing
-   users have no default team, so no workspace ever shows them a
-   shrunken dropdown; post-setup users get their chosen roster in
-   every fresh folder. `filterVisible` semantics are untouched, and
-   Settings → Agents already shows non-roster agents as unchecked —
-   discoverable and reversible with shipped UI.
+   users get the built-in Physicist roster in fresh folders unless they
+   already configured a workspace roster; post-setup users get their
+   chosen roster in every fresh folder. `filterVisible` semantics are
+   untouched, and Settings → Agents already shows non-roster agents as
+   unchecked — discoverable and reversible with shipped UI.
 
-2. **Human display names.** Optional `displayName:` on agent YAMLs
-   (parsed in `agentYamlScanner.ts`, fallback to `name`), e.g.
-   `correct` → "Correct — typos, grammar & LaTeX". Canonical `name`
-   stays the identifier everywhere.
+2. **Canonical agent labels.** Agent dropdowns use the YAML `name` as
+   the only picker label; the description field carries explanatory text.
 3. **"Browse all agents…" tail item** in the agent dropdown → opens
    Settings → Agents (handler exists). The docs counterpart of this
    destination is `docs/guide/built-in-agents.md`, the full catalog.
@@ -292,11 +291,10 @@ mirrors it; this PRD's State 0 wording is the canonical text.
 
 ## Edge cases and migration
 
-- **Existing users:** upgraders keep `undefined → show all` visibility
-  and never see the welcome card (they have credentials and/or run
-  history; `firstRunDone` is backfilled at migration when either
-  exists). Nobody's dropdown shrinks: roster seeding requires a
-  default team, which only setup writes.
+- **Existing users:** upgraders never see the welcome card (they have
+  credentials and/or run history; `firstRunDone` is backfilled at
+  migration when either exists). Fresh workspaces get the built-in
+  Physicist roster until the user records a different default team.
 - **Finished setup, fresh folder:** State 2 (funnel state is
   user-scoped); slim bootstrap row + default-team roster seeding (see
   "State 2 in a fresh folder"). Never the welcome card or setup
@@ -330,7 +328,6 @@ mirrors it; this PRD's State 0 wording is the canonical text.
 | `apply_team` tool (writes workspace roster + user-level default team) | new tool in `src/tools/`; preset application path exists in `SettingsAgentCatalogController.ts`                                                                                      |
 | Default-team seeding of fresh workspaces                              | user-scoped `defaultTeamId` key (shared with launcher PRD), starter team in `agentRegistryConstants.ts`, seeding at activation in `packages/extension/src/extension.ts` and CLI init |
 | Project-bootstrap row (empty folder, State 2)                         | `GettingStartedBanner.ts` slimmed; trigger condition unchanged                                                                                                                       |
-| `displayName`                                                         | `agentYamlScanner.ts`, `agentOptionsBuilder.ts`, `selectTemplates.ts`, agent YAMLs                                                                                                   |
 | "Browse all agents…" tail item                                        | `selectTemplates.ts`, `InstructionPanel.ts`                                                                                                                                          |
 | State 2 defaults                                                      | `agentRegistryConstants.ts` preferred lists (orchestrator/chat already first); default-selection logic in launcher controller                                                        |
 | Vocabulary (`texra setup`)                                            | `packages/cli/src/commands/setup.ts`                                                                                                                                                 |
@@ -339,8 +336,8 @@ mirrors it; this PRD's State 0 wording is the canonical text.
 
 ### Suggested shipping order
 
-1. **Hygiene** (independent, zero-risk): `displayName`, "Browse all
-   agents…", slimmed bootstrap row.
+1. **Hygiene** (independent, zero-risk): canonical agent labels,
+   "Browse all agents…", slimmed bootstrap row.
 2. **State 0 on the extension**: shared copy module + welcome card
    replacing three banners; CLI unchanged.
 3. **State 1**: auto-start setup on credential arrival (both hosts),

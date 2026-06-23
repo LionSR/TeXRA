@@ -1,5 +1,4 @@
 name: transcribe_audio
-displayName: Transcribe Audio — speech to LaTeX
 description: Transcribes audio with speaker identification and LaTeX math formatting.
 
 settings:

@@ -307,11 +307,8 @@ export async function activate(context: vscode.ExtensionContext) {
       loadAgents()
         .then(() =>
           // Seed a never-configured workspace's roster from the user-level
-          // default team (written by the setup agent's apply_team). This
-          // replaces install-detection heuristics per the agent-native
-          // onboarding PRD: absent a default team, visibility stays
-          // `undefined → show all`, unchanged. Needs the registry, hence
-          // sequenced after the agent scan.
+          // default team, falling back to the built-in Physicist team. Needs
+          // the registry, hence sequenced after the agent scan.
           seedRosterFromDefaultTeam({
             globalState: context.globalState,
             workspaceState: workspaceSM,

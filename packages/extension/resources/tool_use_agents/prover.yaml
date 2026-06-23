@@ -1,5 +1,4 @@
 name: prover
-displayName: Prover — attack open problems
 description: Open-problem solving specialist — literature reconnaissance, small-case experiments, counterexample search, conjecture, and rigorous proof.
 
 settings:

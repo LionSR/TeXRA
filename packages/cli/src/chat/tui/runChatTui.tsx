@@ -19,6 +19,7 @@ import {
   StreamSnapshotStore,
 } from '@transcript';
 import { platform, tryPlatform } from '@platform/platform';
+import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { loadAgents } from '@agent/index';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
@@ -270,6 +271,15 @@ export async function runChat(
     firstRunDone: getFirstRunDone(platform().globalState),
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
+  await loadAgents();
+  await seedRosterFromDefaultTeam({
+    globalState: platform().globalState,
+    workspaceState: platform().workspaceState,
+  }).catch((error: unknown) => {
+    writeTextStderr(
+      `Note: couldn't seed the agent roster from your default team (${toErrorMessage(error)}). Pick agents in Settings or re-run the setup agent.`,
+    );
+  });
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
     agentOverride: explicitAgent ?? setupAgentOverride,
@@ -277,7 +287,6 @@ export async function runChat(
     envAgent: context.envAgent,
     envModel: context.envModel,
   });
-  await loadAgents();
   const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
   if (agentUsageError) {
     writeTextStderr(agentUsageError);

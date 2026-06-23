@@ -1,5 +1,4 @@
 name: research
-displayName: Research — derivations & numerics
 description: Research assistant for analytical derivations and numerical programming with Wolfram Language support.
 
 settings:

@@ -1,5 +1,4 @@
 name: presenter
-displayName: Presenter — papers to Beamer slides
 description: Creates professional LaTeX Beamer presentations from research papers using tools to analyze content and extract figures.
 
 settings:

@@ -9,8 +9,6 @@ import type { AgentSource } from '@shared/schemas/agent';
  */
 export interface AgentEntry {
   name: string;
-  /** Human label for dropdowns; canonical `name` stays the identifier. */
-  displayName?: string;
   source: AgentSource;
   path: string; // absolute path to YAML (empty for remote)
   category: AgentCategory;
