@@ -124,20 +124,18 @@ export async function runWorkflowAgent(
       const { executionId, result, terminalStatus } = execution;
       let displayResult: CliRunResult;
       try {
-        displayResult = (
-          await resolveWorkflowOutput(
-            init.output,
-            init.outputDir,
-            result,
-            runContext,
-            {
-              expectedOutputFiles: init.outputDir
-                ? expectedOutputFilesForOutputDir(agent, inputFiles)
-                : undefined,
-              terminalStatus,
-            },
-          )
-        ).displayResult;
+        displayResult = await resolveWorkflowOutput(
+          init.output,
+          init.outputDir,
+          result,
+          runContext,
+          {
+            expectedOutputFiles: init.outputDir
+              ? expectedOutputFilesForOutputDir(agent, inputFiles)
+              : undefined,
+            terminalStatus,
+          },
+        );
         await persistWorkflowResultMeta(executionId, displayResult);
       } catch (error) {
         if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
