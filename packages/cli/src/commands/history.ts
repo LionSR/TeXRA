@@ -222,11 +222,21 @@ const historyDeleteCommand = defineCliCommand({
   },
 });
 
+const HISTORY_SUBCOMMANDS = {
+  list: historyListCommand,
+  show: historyShowCommand,
+  delete: historyDeleteCommand,
+} as const;
+
+export const HISTORY_SUBCOMMAND_NAMES = Object.keys(HISTORY_SUBCOMMANDS);
+
 export const historyCommand = defineCommand({
   meta: { name: 'history', description: 'Inspect stored executions' },
-  subCommands: {
-    list: historyListCommand,
-    show: historyShowCommand,
-    delete: historyDeleteCommand,
+  args: {
+    ...GLOBAL_ARGS,
   },
+  // Bare `texra history` is the obvious history listing command. Keep it as
+  // an alias of `history list` so global flags continue to work at the parent.
+  default: 'list',
+  subCommands: HISTORY_SUBCOMMANDS,
 });
