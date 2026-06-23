@@ -139,4 +139,45 @@ describe('agent YAML scanner', () => {
 
     expect(entries).toEqual([]);
   });
+
+  it('skips duplicate YAML names instead of returning colliding entries', async () => {
+    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
+    await writeFile(
+      resolve(agentDir, 'first.yaml'),
+      [
+        'name: shared',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: first',
+        '',
+      ].join('\n'),
+    );
+    await writeFile(
+      resolve(agentDir, 'second.yaml'),
+      [
+        'name: shared',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: second',
+        '',
+      ].join('\n'),
+    );
+    await writeFile(
+      resolve(agentDir, 'unique.yaml'),
+      [
+        'name: unique',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: unique',
+        '',
+      ].join('\n'),
+    );
+
+    const entries = await scanDirectory(agentDir, 'custom');
+
+    expect(entries.map((entry) => entry.name)).toEqual(['unique']);
+  });
 });
