@@ -19,6 +19,14 @@ import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
  */
 export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
   /**
+   * GLM keeps reasoning continuity without batching parallel tool results into
+   * one follow-up message.
+   */
+  override get requiresBatchedParallelToolResults(): boolean {
+    return false;
+  }
+
+  /**
    * GLM effort-capable models accept only high/max on the OpenAI-compatible
    * surface. Keep lower user selections valid by mapping them to high.
    */

@@ -16,6 +16,7 @@ import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandle
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerMiniMax } from '@agent/modelHandlers/openai/modelHandlerMiniMax';
+import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
 import {
   activeModelHandlerCompatibilityKey,
   createModelHandler,
@@ -348,9 +349,9 @@ describe('OpenRouter-proxied provider capabilities', () => {
 });
 
 describe('direct handler capability overrides', () => {
-  // Formal coverage of the per-handler `requiresBatchedParallelToolResults`
-  // overrides that replaced the inline isGoogle/isDeepSeek/isKimi/isMiniMax gate.
-  it('flags batching on the four reasoning-carrying providers and not on plain OpenAI', () => {
+  // Formal coverage of `requiresBatchedParallelToolResults` behavior that
+  // replaced the inline isGoogle/isDeepSeek/isKimi/isMiniMax gate.
+  it('flags batching on reasoning-carrying providers except GLM', () => {
     expect(
       new ModelHandlerGoogleGenAI(modelConfig(ModelProvider.GOOGLE))
         .requiresBatchedParallelToolResults,
@@ -367,6 +368,10 @@ describe('direct handler capability overrides', () => {
       new ModelHandlerMiniMax(modelConfig(ModelProvider.MINIMAX))
         .requiresBatchedParallelToolResults,
     ).toBe(true);
+    expect(
+      new ModelHandlerGLM(modelConfig(ModelProvider.GLM))
+        .requiresBatchedParallelToolResults,
+    ).toBe(false);
     expect(
       new ModelHandlerOpenAI(modelConfig(ModelProvider.OPENAI))
         .requiresBatchedParallelToolResults,
