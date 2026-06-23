@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   ModelProvider,
@@ -10,7 +10,22 @@ import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceSt
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import type { GoogleToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ToolResultPayload } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import * as configModule from '@utils/config/configUtils';
 import type { Interactions } from '@google/genai';
+
+const originalGetConfig = configModule.getConfig;
+
+/** Pin the server-state setting OFF so the stateless wire shape is exercised. */
+function disableServerState(): void {
+  vi.spyOn(configModule, 'getConfig').mockImplementation(
+    <T>(key: string, defaultValue?: T): T => {
+      if (key === 'texra.model.useGoogleInteractionsServerState') {
+        return false as T;
+      }
+      return originalGetConfig(key, defaultValue);
+    },
+  );
+}
 
 type Step = Interactions.Step;
 
@@ -91,6 +106,10 @@ function fakeClient(events: Interactions.InteractionSSEEvent[]): unknown {
 }
 
 describe('ModelHandlerGoogleInteractions tool use', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('accumulates parallel arguments_delta chunks and extracts tool calls', async () => {
     const handler = createHandler();
 
@@ -458,6 +477,8 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
   });
 
   it('resends the full prior step history verbatim on the next request (store:false, no previous_interaction_id)', async () => {
+    // The stateless wire shape is now opt-in (server-side state defaults ON).
+    disableServerState();
     const handler = createHandler();
     const workspace = fakeWorkspace();
 

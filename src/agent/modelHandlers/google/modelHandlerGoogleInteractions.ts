@@ -24,6 +24,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
+  detectStatusCode,
   getSdkErrorMessage,
   attachPartialText,
   takeTail,
@@ -39,6 +40,7 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 // Local imports - utils
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -46,6 +48,11 @@ import {
   computeGoogleInteractionsPrice,
   normalizeGoogleInteractionsUsage,
 } from './googleInteractionsUsage';
+import {
+  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+  COMPACTION_SYSTEM_PROMPT,
+} from '../contextManagementConstants';
+import { withSdkErrorTag } from '../support/sdkErrorTagging';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagGoogleSdkError } from './googleSdkError';
 import {
@@ -113,6 +120,55 @@ function isTextContent(content: Content): content is TextContent {
   return content.type === 'text';
 }
 
+/**
+ * Best-effort predicate for "the `previous_interaction_id` we chained onto is
+ * gone (expired / unknown / rejected)". On a match the handler drops the chain
+ * and full-resends once. Kept permissive-but-anchored so it never swallows an
+ * unrelated 404 — a generic status match must be corroborated by interaction /
+ * previous_interaction_id wording in the message.
+ *
+ * SMOKE-TEST: the exact HTTP status / error.code / message string the Google
+ * Interactions backend returns for an expired or unknown previous_interaction_id
+ * is UNCONFIRMED from genai.d.ts (ErrorT exposes only `code?`/`message?`, and
+ * InteractionStatus has no `expired` member). Tune to the observed shape after a
+ * real-key run (spec §6 S2). The full-resend retry is idempotent regardless.
+ */
+function isStaleInteractionChainError(error: unknown): boolean {
+  const status = detectStatusCode(error);
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof (error as { message?: unknown })?.message === 'string'
+        ? (error as { message: string }).message
+        : '';
+  const code =
+    typeof (error as { code?: unknown })?.code === 'string'
+      ? (error as { code: string }).code
+      : '';
+
+  // Anchor: the error must mention the interaction chain to qualify.
+  const mentionsInteractionChain =
+    /previous_interaction_id/i.test(message) ||
+    /\binteraction\b[\s\S]*\b(not\s*found|expired|invalid|unknown|does not exist)\b/i.test(
+      message,
+    );
+
+  const staleStatus = status === 404 || status === 410;
+  const staleCode = [
+    'NOT_FOUND',
+    'INVALID_ARGUMENT',
+    'FAILED_PRECONDITION',
+  ].includes(code);
+
+  // A bare status/code match is only treated as stale when the message also
+  // points at the interaction chain (avoid eating unrelated 404s); explicit
+  // previous_interaction_id wording alone is sufficient.
+  return (
+    /previous_interaction_id/i.test(message) ||
+    ((staleStatus || staleCode) && mentionsInteractionChain)
+  );
+}
+
 /** Mutable accumulator for a single in-flight step during streaming. */
 interface PendingStep {
   type: Step['type'] | string;
@@ -137,14 +193,23 @@ interface PendingStep {
  * Additive sibling to {@link ModelHandlerGoogleGenAI} (chat / generateContent),
  * shipped behind the `texra.model.useGoogleInteractionsAPI` flag (default off).
  *
- * v0 is STATELESS (`store: false`): the local transcript is kept as a verbatim
- * `Step[]` and resent in full each round (no `previous_interaction_id`), with
- * request-level `system_instruction` / `tools` / `generation_config` resent on
- * every `create`. Thought-step signatures are round-tripped verbatim across
- * TOOL turns (the function-calling chain that requires them — see
- * {@link buildAssistantTurnSteps}, spec §6.1-§6.2).
+ * STATEFUL by default (`store: true`): server-side conversation state via
+ * `previous_interaction_id` chaining — each round sends only the Steps appended
+ * since the last completed turn and chains onto the prior interaction, so Google
+ * holds the history. Controlled by `texra.model.useGoogleInteractionsServerState`
+ * (default true). When that flag is OFF the handler falls back to STATELESS mode
+ * (`store: false`): the full `Step[]` transcript is resent every round with no
+ * `previous_interaction_id`. Either way, request-level `system_instruction` /
+ * `tools` / `generation_config` are sent on every `create`, and the model's
+ * generated Steps (thought signatures + function calls) are appended to the
+ * local transcript verbatim — in stateless mode they are resent; in chained mode
+ * the server retains them and only the new turn is sent (see
+ * {@link buildAssistantTurnSteps}, spec §6.1-§6.2). Chaining state lives on the
+ * instance ({@link finalizeChain} / {@link invalidateChain}); a restored run or
+ * model switch gets a fresh instance and safely full-resends, never reusing a
+ * stale interaction id.
  *
- * Known v0 limitation (parity with {@link ModelHandlerGoogleGenAI}): a TERMINAL
+ * Known limitation (parity with {@link ModelHandlerGoogleGenAI}): a TERMINAL
  * turn (model emits text with no tool call) is recorded via the base
  * `createAssistantMessageFromResponse`, which yields a text-only `model_output`
  * step — the trailing thought signature is not preserved. Gemini only requires
@@ -162,6 +227,78 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
   private googleClient: GoogleGenAI | null = null;
+
+  // ===========================================================================
+  // STATEFUL chaining state (store:true + previous_interaction_id)
+  // ===========================================================================
+  //
+  // These fields live on the handler INSTANCE — not on workspaceState, Step[],
+  // or any snapshot — because the handler is created once per run and reused
+  // across rounds. A restored run (resume / model-switch) constructs a FRESH
+  // instance with chainedInteractionId === null, which naturally starts a full
+  // resend, so a dead (possibly expired) interaction id is never referenced
+  // cross-session. Mirrors ModelHandlerOpenAIResponse (previousResponseId +
+  // conversationState), see {@link finalizeChain} / {@link invalidateChain}.
+
+  /** Server-side interaction id to chain the next turn onto (null = full resend). */
+  private chainedInteractionId: string | null = null;
+
+  /** Number of Steps already sent to the server (anchors the delta slice). */
+  private sentStepCount = 0;
+
+  /**
+   * Single-turn guard: concurrent createResponse() calls would race the chain
+   * state (chainedInteractionId / sentStepCount) and corrupt the chain. See the
+   * {@link createResponse} override.
+   */
+  private inFlight = false;
+
+  /** Result of an in-call compaction, surfaced as {@link CreateResponseResult.updatedMessages}. */
+  private compactionResult?: { compactedMessages: Step[] };
+
+  /** Last-known input token count, used for the compaction trigger (tool-use mode). */
+  private lastKnownInputTokens = 0;
+
+  /** Whether server-side conversation state (store:true chaining) is enabled. */
+  private serverStateEnabled(): boolean {
+    return getConfig<boolean>(
+      'texra.model.useGoogleInteractionsServerState',
+      true,
+    );
+  }
+
+  /** Drop the chain so the next request rebuilds from full local history. */
+  private invalidateChain(): void {
+    this.chainedInteractionId = null;
+    this.sentStepCount = 0;
+  }
+
+  /**
+   * Capture (or reject) the chain anchor after a response. Only chain from a
+   * `completed` interaction that carries a string id; otherwise invalidate so
+   * the next round full-resends rather than chaining onto an interaction the
+   * server may not have retained.
+   */
+  private finalizeChain(
+    response: GoogleGenAIInteraction,
+    totalStepCount: number,
+  ): void {
+    if (!this.serverStateEnabled()) return;
+    const safeToChain =
+      response.status === 'completed' && typeof response.id === 'string';
+    if (safeToChain) {
+      this.chainedInteractionId = response.id;
+      // The server now holds the full transcript up to this point; the next
+      // round chains onto this id and sends only Steps appended after it
+      // (whether this turn was a full resend or a delta).
+      this.sentStepCount = totalStepCount;
+    } else {
+      this.logger.debug(
+        `Interaction ${response.id} not safe for chaining (status="${response.status}"); resending full history next round`,
+      );
+      this.invalidateChain();
+    }
+  }
 
   // ===========================================================================
   // Capability getters / auth (REUSE / PORT from the chat handler)
@@ -279,14 +416,16 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   }
 
   /**
-   * Group parallel tool calls into one follow-up so the stateless round-trip
-   * resends the model-generated steps (thought steps with their signatures +
-   * all function-call steps) verbatim ahead of the function_result steps, in
-   * the order the model emitted them. The tool-use flow only records the
-   * assistant turn through the follow-up methods (see `ToolUseDispatchNode`),
-   * so — exactly like the chat handler — they must rebuild it; otherwise the
-   * function_result's `call_id` would reference a call absent from `input`
-   * and the thought signature would be lost (spec §6.1).
+   * Group parallel tool calls into one follow-up so the handler rebuilds the
+   * model-generated steps (thought steps with their signatures + all
+   * function-call steps) verbatim ahead of the function_result steps, in the
+   * order the model emitted them. The tool-use flow only records the assistant
+   * turn through the follow-up methods (see `ToolUseDispatchNode`), so — exactly
+   * like the chat handler — they must rebuild it; otherwise the function_result's
+   * `call_id` would reference a call absent from the local transcript and the
+   * thought signature would be lost (spec §6.1). These steps are appended to the
+   * transcript in both modes; stateless resends them, chained mode leaves them
+   * server-side once sent.
    */
   override get requiresBatchedParallelToolResults(): boolean {
     return true;
@@ -329,6 +468,14 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
     const totalTokens = responseTokenCount.totalTokens ?? 0;
     this.logger.debug(`Token count of message: ${totalTokens}`);
+    // SMOKE-TEST: under previous_interaction_id chaining the local `messages`
+    // over-counts (the server holds most of the transcript). We deliberately
+    // keep estimating on the FULL local transcript — over-estimating input only
+    // makes applyTokenCountLimit MORE cautious (shrinks max_output_tokens) and
+    // never under-budgets. Exact server-side token accounting under chaining is
+    // unconfirmed offline (spec §6 S1); revisit only if a real-key run shows
+    // the conservative estimate harms output budget materially.
+    this.lastKnownInputTokens = totalTokens;
     return totalTokens;
   }
 
@@ -344,6 +491,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         chunks.push(`${step.name}(${JSON.stringify(step.arguments)})`);
       } else if (step.type === 'function_result') {
         chunks.push(this.functionResultToText(step.result));
+      } else if (step.type === 'thought') {
+        for (const content of step.summary ?? []) {
+          if (isTextContent(content)) chunks.push(content.text);
+        }
       }
     }
     return joinNonEmpty(chunks, '\n') ?? '';
@@ -925,10 +1076,11 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       throw new Error('Function call id is required for follow-up messages');
     }
 
-    // Rebuild the model-generated turn (thoughts + the function-call step) so the
-    // stateless round-trip resends it verbatim before the local result step —
-    // the flow records the assistant turn only through this return value. Read
-    // reasoning BEFORE resetting it.
+    // Rebuild the model-generated turn (thoughts + the function-call step) ahead
+    // of the local result step — the flow records the assistant turn only through
+    // this return value, so the transcript must carry it (stateless resends it;
+    // chained mode keeps it server-side once sent). Read reasoning BEFORE
+    // resetting it.
     const assistantSteps = this.buildAssistantTurnSteps(
       [call],
       workspaceState,
@@ -1004,8 +1156,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * Reconstruct the model-generated steps of the just-finished turn: the
    * thought steps (carrying their signatures, sourced from the reasoning cache
    * populated by `processThinkingBlock`), optional assistant text, then the
-   * function-call steps. Resent verbatim so the backend can validate reasoning
-   * across tool turns under `store: false`.
+   * function-call steps. Carried verbatim in the transcript so the backend can
+   * validate reasoning across tool turns (resent each round in stateless mode;
+   * retained server-side once sent in chained mode).
    */
   private buildAssistantTurnSteps(
     calls: GoogleToolCall[],
@@ -1160,6 +1313,34 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // The streaming loop — createResponseImpl (REWRITE, the core)
   // ===========================================================================
 
+  /**
+   * Single-turn override. The base {@link ModelHandler.createResponse} already
+   * wraps {@link createResponseImpl} in {@link withSdkErrorTag}; we override only
+   * to add the in-flight guard (mirrors {@link ModelHandlerOpenAIResponse}).
+   * Concurrent callers would race chainedInteractionId / sentStepCount and
+   * corrupt the chain, so fail loudly instead of silently corrupting state.
+   */
+  override async createResponse(
+    options: CreateResponseOptions<Step, GoogleGenAI>,
+  ): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
+    if (this.inFlight) {
+      throw new Error(
+        'modelHandlerGoogleInteractions.createResponse invoked while a prior ' +
+          'call is still in flight; this handler is single-turn per instance.',
+      );
+    }
+    this.inFlight = true;
+    try {
+      return await withSdkErrorTag(
+        this.sdkErrorTagger,
+        this.config.provider,
+        () => this.createResponseImpl(options),
+      );
+    } finally {
+      this.inFlight = false;
+    }
+  }
+
   protected override async createResponseImpl(
     options: CreateResponseOptions<Step, GoogleGenAI>,
   ): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
@@ -1177,12 +1358,19 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       throw new Error('Messages array cannot be empty.');
     }
 
+    // Clear any stale compaction result from a previous attempt (clean retry).
+    this.compactionResult = undefined;
+
+    const stateful = this.serverStateEnabled();
     const generationConfig = this.buildGenerationConfig(temperature, endTag);
     const interactionsTools = tools?.length
       ? this.toInteractionsTools(tools)
       : undefined;
 
-    // Phase: COUNT + VALIDATE — adjust max_output_tokens to fit the context window.
+    // Phase: COUNT + VALIDATE — adjust max_output_tokens to fit the context
+    // window. Estimate on the FULL local transcript (conservative — see
+    // estimateTokenCount's SMOKE-TEST note); this also refreshes
+    // lastKnownInputTokens, which drives the compaction trigger below.
     await this.applyTokenCountLimit({
       countTokens: () =>
         this.estimateTokenCount(messages, { client, systemPrompt, signal }),
@@ -1195,17 +1383,66 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       },
     });
 
-    // v0 is stateless: resend the whole Step[] verbatim, no previous_interaction_id.
+    // Phase: COMPACT (stateful only) — when input tokens exceed the threshold
+    // (or compaction was manually requested), summarize and replace history.
+    // Compaction invalidates the chain: the server still holds the
+    // pre-compaction interaction under the old id, so chaining onto it would
+    // double the context. After compaction the next round full-resends the
+    // compacted transcript and re-establishes a fresh chain.
+    if (
+      stateful &&
+      this.shouldCompactByInputTokens(this.lastKnownInputTokens)
+    ) {
+      const isManual = this.compactionRequested;
+      // Clear the manual flag immediately when attempted (matches OpenAI /
+      // Anthropic), so a graceful compaction failure can't loop.
+      this.compactionRequested = false;
+      this.logger.debug(
+        isManual
+          ? `Compacting conversation (manually requested, ${this.lastKnownInputTokens} input tokens)`
+          : `Compacting conversation (${this.lastKnownInputTokens} input tokens exceed threshold)`,
+      );
+      const { compactedMessages, didCompact } = await this.compactConversation(
+        client,
+        messages,
+        this.lastKnownInputTokens,
+        systemPrompt,
+        signal,
+      );
+      if (didCompact) {
+        this.compactionResult = { compactedMessages };
+        this.invalidateChain();
+      }
+    }
+
+    const base = this.compactionResult?.compactedMessages ?? messages;
+
+    // First request OR post-compaction OR stateless ⇒ full resend with no chain.
+    // Continuation ⇒ send only the Steps appended since the last completed send.
+    const shouldSendAll = !stateful || this.chainedInteractionId === null;
+    const inputSteps = shouldSendAll ? base : base.slice(this.sentStepCount);
+    const previousId =
+      stateful && !shouldSendAll
+        ? (this.chainedInteractionId ?? undefined)
+        : undefined;
+
     const useStreaming = this.getStreamingConfig();
     let aggregatedText = '';
+
+    const updatedMessages = this.compactionResult?.compactedMessages;
+    const withUpdated = (
+      result: CreateResponseResult<GoogleGenAIInteraction, Step>,
+    ): CreateResponseResult<GoogleGenAIInteraction, Step> =>
+      updatedMessages ? { ...result, updatedMessages } : result;
 
     try {
       if (useStreaming) {
         const params: CreateModelInteractionParamsStreaming = {
           model: this.config.fullName,
-          input: messages,
+          input: inputSteps,
           stream: true,
-          store: false,
+          store: stateful,
+          ...(previousId && { previous_interaction_id: previousId }),
           ...(systemPrompt && { system_instruction: systemPrompt }),
           ...(interactionsTools && { tools: interactionsTools }),
           generation_config: generationConfig,
@@ -1216,16 +1453,19 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
           params,
           signal ? { fetchOptions: { signal } } : undefined,
         )) as Stream<InteractionSSEEvent>;
-        return await this.consumeStream(stream, endTag, (text) => {
+        const result = await this.consumeStream(stream, endTag, (text) => {
           aggregatedText += text;
         });
+        this.finalizeChain(result.response, base.length);
+        return withUpdated(result);
       }
 
       const params: CreateModelInteractionParamsNonStreaming = {
         model: this.config.fullName,
-        input: messages,
+        input: inputSteps,
         stream: false,
-        store: false,
+        store: stateful,
+        ...(previousId && { previous_interaction_id: previousId }),
         ...(systemPrompt && { system_instruction: systemPrompt }),
         ...(interactionsTools && { tools: interactionsTools }),
         generation_config: generationConfig,
@@ -1234,8 +1474,24 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         params,
         signal ? { fetchOptions: { signal } } : undefined,
       )) as unknown as GoogleGenAIInteraction;
-      return { response };
+      this.finalizeChain(response, base.length);
+      return withUpdated({ response });
     } catch (error) {
+      // Expired/unknown previous_interaction_id ⇒ drop the chain and full-resend
+      // exactly once. Bounded: invalidateChain() nulls chainedInteractionId, so
+      // the retry takes the shouldSendAll path with no previous_interaction_id
+      // and cannot re-trigger the same stale-id error.
+      if (
+        stateful &&
+        this.chainedInteractionId !== null &&
+        isStaleInteractionChainError(error)
+      ) {
+        this.logger.debug(
+          `Clearing chainedInteractionId=${this.chainedInteractionId} (stale/expired); retrying with a full resend`,
+        );
+        this.invalidateChain();
+        return this.createResponseImpl(options);
+      }
       if (aggregatedText) {
         attachPartialText(
           error,
@@ -1244,6 +1500,53 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       }
       throw error;
     }
+  }
+
+  /**
+   * Client-side conversation compaction (system-prompt-swap summarization) via
+   * the shared {@link ModelHandler.runClientCompaction} scaffold. Mirrors the
+   * chat handlers: summarize the conversation body through the chat
+   * `generateContent` endpoint and replace it with a single user summary step.
+   */
+  private async compactConversation(
+    client: GoogleGenAI,
+    messages: Step[],
+    tokensBefore: number,
+    systemPrompt?: string,
+    signal?: AbortSignal,
+  ): Promise<{ compactedMessages: Step[]; didCompact: boolean }> {
+    return this.runClientCompaction(
+      messages,
+      tokensBefore,
+      async (conversationMessages) => {
+        const transcript = this.stepsToCountableText(conversationMessages);
+        const contents = [
+          createUserContent(`${COMPACTION_SYSTEM_PROMPT}\n\n${transcript}`),
+        ];
+        const summary = await client.models.generateContent({
+          model: this.config.fullName,
+          contents,
+          config: {
+            ...(systemPrompt ? { systemInstruction: systemPrompt } : {}),
+            maxOutputTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+            temperature: 0,
+            abortSignal: signal,
+          },
+        });
+        return {
+          summaryText: summary.text?.trim() ?? '',
+          outputTokens:
+            summary.usageMetadata?.candidatesTokenCount ??
+            CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+        };
+      },
+      (summary): Step => ({
+        type: 'user_input',
+        content: [
+          this.textContent(`[Previous conversation summary]\n\n${summary}`),
+        ],
+      }),
+    );
   }
 
   /**
