@@ -34,4 +34,19 @@ describe('ProgressViewProvider pending permissions', () => {
       'this.userQuestionHandler.hasPendingForStream(streamId)',
     );
   });
+
+  it('keeps proposal agent dropdown identity separate from display labels', () => {
+    const source = readProgressViewProvider();
+    const methodStart = source.indexOf('sendProposalModelOptions');
+    const methodEnd = source.indexOf(
+      'public static getInstance',
+      methodStart,
+    );
+    expect(methodStart).toBeGreaterThanOrEqual(0);
+    expect(methodEnd).toBeGreaterThan(methodStart);
+    const method = source.slice(methodStart, methodEnd);
+
+    expect(method).toContain('value: agentName(opt.value)');
+    expect(method).not.toContain('value: opt.label');
+  });
 });
