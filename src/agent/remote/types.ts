@@ -5,6 +5,7 @@ import {
   AgentSettingSchema,
   AgentPromptSchema,
 } from '@agent/core/definition/AgentDataclass';
+import { AgentNameSchema } from '@shared/schemas/agent';
 
 /**
  * Remote agent list item from DB. Description is cached; YAML is source of truth.
@@ -15,7 +16,7 @@ import {
  */
 export const RemoteAgentListItemSchema = z.object({
   id: z.string(),
-  name: z.string(),
+  name: AgentNameSchema,
   description: z.string().nullish(),
   visibility: z.array(z.string()).nullish(),
   /** Cached tool names from YAML. Available when DB column is populated. */
