@@ -13,6 +13,7 @@ import {
   type CliAgentListOptions,
 } from '../runtime/agents';
 import { CliExitCode } from '../runtime/exitCodes';
+import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 
@@ -27,6 +28,9 @@ export async function listAgents(
   options: CliAgentListOptions = {},
 ): Promise<number> {
   await initLocalCliPlatform(context);
+  if (options.includeHidden !== true) {
+    await seedCliRosterFromDefaultTeam();
+  }
   const result = await loadCliAgentList(options);
 
   if (!context.quietLogs) {

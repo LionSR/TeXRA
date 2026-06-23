@@ -19,7 +19,6 @@ import {
   StreamSnapshotStore,
 } from '@transcript';
 import { platform, tryPlatform } from '@platform/platform';
-import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { loadAgents } from '@agent/index';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
@@ -29,6 +28,7 @@ import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
+import { seedCliRosterFromDefaultTeam } from '@cli/runtime/defaultTeamRoster';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import {
@@ -272,14 +272,7 @@ export async function runChat(
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
   await loadAgents();
-  await seedRosterFromDefaultTeam({
-    globalState: platform().globalState,
-    workspaceState: platform().workspaceState,
-  }).catch((error: unknown) => {
-    writeTextStderr(
-      `Note: couldn't seed the agent roster from your default team (${toErrorMessage(error)}). Pick agents in Settings or re-run the setup agent.`,
-    );
-  });
+  await seedCliRosterFromDefaultTeam();
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
     agentOverride: explicitAgent ?? setupAgentOverride,
