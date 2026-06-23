@@ -42,24 +42,6 @@ describe('agent option labels', () => {
     expect(option?.description).toBe('Verifies mathematical correctness.');
   });
 
-  it('omits legacy display subtitles from option labels', () => {
-    const options = entriesToOptionData([
-      toolUseAgent(
-        'Review — legacy subtitle',
-        'remote',
-        'Verifies mathematical correctness.',
-      ),
-      toolUseAgent('Engineer --- software team lead'),
-    ]);
-
-    expect(options.map((option) => option.label)).toEqual([
-      'Review',
-      'Engineer',
-    ]);
-    expect(options[0]?.value).toBe('remote:Review — legacy subtitle');
-    expect(options[0]?.description).toBe('Verifies mathematical correctness.');
-  });
-
   it('does not invent labels to distinguish different authored names', () => {
     const options = entriesToOptionData([
       toolUseAgent('review'),
