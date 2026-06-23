@@ -46,7 +46,7 @@ import { chatCommand } from './chat';
 import { completionCommand } from './completion';
 import { doctorCommand } from './doctor';
 import { helpCommand } from './help';
-import { historyCommand } from './history';
+import { HISTORY_SUBCOMMAND_NAMES, historyCommand } from './history';
 import { initCommand } from './init';
 import { installGithubActionCommand } from './installGithubAction';
 import { memoryCommand } from './memory';
@@ -160,12 +160,17 @@ export async function runCli(
   argv?: readonly string[],
 ): Promise<{ exitCode: number }> {
   resetExitCode();
-  const rawArgs = reorderNestedGlobalFlags(
-    reorderGlobalFlags(
-      normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
-    ),
-    { command: 'auth', subCommands: AUTH_SUBCOMMAND_NAMES },
+  let rawArgs = reorderGlobalFlags(
+    normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
   );
+  rawArgs = reorderNestedGlobalFlags(rawArgs, {
+    command: 'auth',
+    subCommands: AUTH_SUBCOMMAND_NAMES,
+  });
+  rawArgs = reorderNestedGlobalFlags(rawArgs, {
+    command: 'history',
+    subCommands: HISTORY_SUBCOMMAND_NAMES,
+  });
   setUsageColorOverrideFromRawArgs(rawArgs);
 
   const unknownCommand = await detectUnknownCliCommand(rawArgs);
