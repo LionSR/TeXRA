@@ -8,10 +8,7 @@
  * (just before injection into model context via FollowUpQueue).
  */
 
-import type {
-  AgentFlowResult,
-  OutputFileSummary,
-} from '@agent/runtime/AgentFlowResult';
+import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import type {
@@ -20,6 +17,7 @@ import type {
   TodoItem,
   WorkPlanSnapshot,
 } from '@shared/schemas';
+import type { OutputFileSummary } from '@shared/schemas/output';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
 import { planSummaryLine } from '@shared/schemas/workPlan';
