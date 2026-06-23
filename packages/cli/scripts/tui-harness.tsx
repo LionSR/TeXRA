@@ -268,6 +268,9 @@ function parseList(value: string | undefined): string[] {
 const HARNESS_VISIBLE_TOOL_USE_AGENTS = parseList(
   process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS,
 );
+const HARNESS_VISIBLE_WORKFLOW_AGENTS = parseList(
+  process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS,
+);
 
 if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
@@ -285,6 +288,12 @@ if (process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined) {
   await platform().workspaceState.update(
     WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
     HARNESS_VISIBLE_TOOL_USE_AGENTS,
+  );
+}
+if (process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined) {
+  await platform().workspaceState.update(
+    WorkspaceStateKey.ENABLED_AGENTS,
+    HARNESS_VISIBLE_WORKFLOW_AGENTS,
   );
 }
 await loadAgents({ includeRemote: false });

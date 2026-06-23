@@ -103,6 +103,22 @@ describe('CLI AgentListForm row budget', () => {
     });
   });
 
+  it('shows the full default workflow roster in the normal picker budget', () => {
+    expect(
+      agentSelectWindow({
+        availableRows: 18,
+        extraRows: 1,
+        itemCount: 5,
+        workflowCount: 2,
+      }),
+    ).toEqual({
+      maxVisibleItems: 5,
+      showOverflow: false,
+      maxVisibleWorkflows: 2,
+      showWorkflowOverflow: false,
+    });
+  });
+
   it('shows workflows only when the row budget has room for them', () => {
     expect(
       agentSelectWindow({
