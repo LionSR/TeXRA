@@ -22,6 +22,7 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import { clamp } from '@utils/core';
 
 import { assertNever } from './assertNever';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
@@ -193,10 +194,12 @@ export function allocateMiddleRows({
       : 0;
   const foregroundRows = availableRows - transcriptRows;
   return {
+    // The early returns above and transcript reservation keep this at least 1,
+    // so the lower clamp bound cannot inflate an empty foreground.
     foregroundRows:
       foregroundMaxRows === undefined
         ? foregroundRows
-        : Math.min(foregroundRows, Math.max(1, foregroundMaxRows)),
+        : clamp(foregroundMaxRows, 1, foregroundRows),
     transcriptRows,
   };
 }
@@ -662,7 +665,7 @@ export function App(props: AppProps): React.JSX.Element {
     ? queuedFollowUpPanelRowCount(queuedFollowUpMessages)
     : 0;
   const queuedFollowUpPanelRows = queuedFollowUpPanelWanted
-    ? Math.min(requestedQueuedFollowUpPanelRows, Math.max(0, rows - footerRows))
+    ? clamp(rows - footerRows, 0, requestedQueuedFollowUpPanelRows)
     : 0;
   const queuedFollowUpPanelVisible = queuedFollowUpPanelRows > 0;
   const tipRowVisible =
