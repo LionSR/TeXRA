@@ -28,7 +28,6 @@ function buildAgentTooltip(opt: AgentOptionData): string {
     );
   if (opt.isRemote) hints.push(properties.remote.hint);
   if (opt.isCustom) hints.push(properties.custom.hint);
-  if (opt.description) hints.push(opt.description);
   if (opt.isToolUse) hints.push('Can execute tools and code');
 
   return hints.join('\n');
@@ -46,7 +45,6 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
       data-tool-use=${opt.isToolUse ? 'true' : nothing}
       data-remote=${opt.isRemote ? 'true' : nothing}
       data-custom=${opt.isCustom ? 'true' : nothing}
-      data-description=${opt.description || nothing}
     >
       ${isOrch
         ? html`<span class="agent-icon">${waIcon('bullseye')} </span>`
