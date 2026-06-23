@@ -38,18 +38,11 @@ describe('AgentSettingSchema', () => {
 });
 
 describe('AgentDefinitionSchema', () => {
-  it('trims displayName and rejects blank labels', () => {
-    expect(
-      AgentDefinitionSchema.parse({
-        name: 'assistant',
-        displayName: '  Assistant  ',
-      }).displayName,
-    ).toBe('Assistant');
-
+  it('rejects displayName metadata', () => {
     expect(() =>
       AgentDefinitionSchema.parse({
         name: 'assistant',
-        displayName: '   ',
+        displayName: 'Assistant',
       }),
     ).toThrow();
   });

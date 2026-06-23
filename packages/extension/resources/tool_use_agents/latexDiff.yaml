@@ -1,5 +1,4 @@
 name: latexDiff
-displayName: LaTeX Diff — visual diff PDF
 description: Generates a visual diff PDF between two LaTeX versions using latexdiff.
 
 settings:

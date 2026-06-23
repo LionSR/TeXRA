@@ -142,16 +142,18 @@ describe('seedRosterFromDefaultTeam', () => {
     expect(roster.toolUse).toContain('builtInToolUse:setup');
   });
 
-  it('does nothing without a default team (undefined → show all)', async () => {
+  it('falls back to the Physicist team without a recorded default team', async () => {
     const seeded = await seedRosterFromDefaultTeam({
       globalState: platform().globalState,
       workspaceState: platform().workspaceState,
     });
 
-    expect(seeded).toBe(false);
+    expect(seeded).toBe(true);
     const roster = workspaceRoster();
-    expect(roster.workflow).toBeUndefined();
-    expect(roster.toolUse).toBeUndefined();
+    expect(roster.workflow).toContain('criticize');
+    expect(roster.toolUse).toContain('builtInToolUse:review');
+    expect(roster.toolUse).toContain('builtInToolUse:research');
+    expect(roster.toolUse).toContain('orchestrator');
   });
 
   it('never overwrites an already-configured roster', async () => {

@@ -33,8 +33,6 @@ function buildAgentTooltip(opt: AgentOptionData, displayLabel: string): string {
   if (opt.label !== displayLabel) hints.push(opt.label);
   if (opt.description) hints.push(opt.description);
   if (opt.isToolUse) hints.push('Can execute tools and code');
-  // When a displayName label hides the canonical identifier, surface it
-  // so power users can still see the name used in configs and commands.
   const rawName = agentName(opt.value);
   if (opt.label !== rawName) hints.push(`Agent id: ${rawName}`);
 

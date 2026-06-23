@@ -1,5 +1,4 @@
 name: numerics
-displayName: Numerics — computational experiments
 description: Numerical-experiments agent — designs, implements, and validates computational experiments following the scientific method.
 
 settings:

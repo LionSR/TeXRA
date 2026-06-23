@@ -102,7 +102,6 @@ export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
 
 export const AgentDefinitionSchema = z.strictObject({
   name: z.string().trim().min(1),
-  displayName: z.string().trim().min(1).optional(),
   description: z.string().optional(),
   inherits: z.string().optional(),
   settings: z.record(z.string(), z.unknown()).prefault({}),

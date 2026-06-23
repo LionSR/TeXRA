@@ -1,5 +1,4 @@
 name: review
-displayName: Review — verify math & consistency
 description: Verifies mathematical correctness, derivation soundness, notation consistency, and goal achievement in a manuscript.
 
 settings:
