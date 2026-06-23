@@ -16,6 +16,10 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
+import {
+  CompileFailureSummarySchema,
+  OutputFileSummarySchema,
+} from '@shared/schemas/output';
 import { byString, filterNotNull } from '@utils/core';
 import { TASK_RUNS_DIR } from '@utils/files';
 
@@ -95,6 +99,8 @@ const ResultMetaSchema = z.object({
   command: z.string().optional(),
   copiedOutput: z.string().optional(),
   copiedOutputs: z.array(z.string()).optional(),
+  outputs: z.array(OutputFileSummarySchema).optional(),
+  compileFailures: z.array(CompileFailureSummarySchema).optional(),
 });
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;
 

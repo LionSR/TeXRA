@@ -307,6 +307,22 @@ describe('CLI workflow run command', () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
     try {
       const generated = path.join(root, 'run', 'r1', 'paper.tex');
+      const outputSummary = {
+        round: 1,
+        relativePath: 'r1/paper.tex',
+        absolutePath: generated,
+        location: 'runStorage',
+        originalPath: path.join(root, 'paper.tex'),
+        added: null,
+        removed: null,
+      };
+      const compileFailure = {
+        round: 1,
+        displayName: 'paper.tex',
+        outputPath: 'r1/paper.tex',
+        logPath: 'compile/r1_paper.tex.log',
+        logAbsolutePath: path.join(root, 'run', 'compile', 'r1_paper.tex.log'),
+      };
       await fs.mkdir(path.dirname(generated), { recursive: true });
       await fs.writeFile(generated, 'polished');
       mocks.executeCliConfig.mockResolvedValueOnce({
@@ -317,18 +333,8 @@ describe('CLI workflow run command', () => {
           executionId: 'exec-output',
           streamId: 'stream-output',
           outcome: RUN_OUTCOME.COMPLETED,
-          outputs: [
-            {
-              round: 1,
-              relativePath: 'r1/paper.tex',
-              absolutePath: generated,
-              location: 'runStorage',
-              originalPath: path.join(root, 'paper.tex'),
-              added: null,
-              removed: null,
-            },
-          ],
-          compileFailures: [],
+          outputs: [outputSummary],
+          compileFailures: [compileFailure],
         },
         terminalStatus: EXECUTION_STATUS.COMPLETED,
       });
@@ -355,6 +361,8 @@ describe('CLI workflow run command', () => {
       ).resolves.toBe('polished');
       expect(mocks.writeResultMeta).toHaveBeenCalledWith({
         copiedOutput: path.join(root, 'polished.tex'),
+        outputs: [outputSummary],
+        compileFailures: [compileFailure],
       });
     } finally {
       await fs.rm(root, { recursive: true, force: true });
@@ -365,6 +373,15 @@ describe('CLI workflow run command', () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
     try {
       const generated = path.join(root, 'run', 'r1', 'paper.tex');
+      const outputSummary = {
+        round: 1,
+        relativePath: 'r1/paper.tex',
+        absolutePath: generated,
+        location: 'runStorage',
+        originalPath: path.join(root, 'paper.tex'),
+        added: null,
+        removed: null,
+      };
       await fs.mkdir(path.dirname(generated), { recursive: true });
       await fs.writeFile(generated, 'polished');
       mocks.executeCliConfig.mockResolvedValueOnce({
@@ -375,17 +392,7 @@ describe('CLI workflow run command', () => {
           executionId: 'exec-output-dir',
           streamId: 'stream-output-dir',
           outcome: RUN_OUTCOME.COMPLETED,
-          outputs: [
-            {
-              round: 1,
-              relativePath: 'r1/paper.tex',
-              absolutePath: generated,
-              location: 'runStorage',
-              originalPath: path.join(root, 'paper.tex'),
-              added: null,
-              removed: null,
-            },
-          ],
+          outputs: [outputSummary],
           compileFailures: [],
         },
         terminalStatus: EXECUTION_STATUS.COMPLETED,
@@ -407,6 +414,8 @@ describe('CLI workflow run command', () => {
       ).resolves.toBe('polished');
       expect(mocks.writeResultMeta).toHaveBeenCalledWith({
         copiedOutputs: [path.join(root, 'out', 'paper.tex')],
+        outputs: [outputSummary],
+        compileFailures: [],
       });
     } finally {
       await fs.rm(root, { recursive: true, force: true });
