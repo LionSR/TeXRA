@@ -100,4 +100,43 @@ describe('agent YAML scanner', () => {
       entries.find((entry) => entry.name === 'missing-parent')?.rounds,
     ).toBeUndefined();
   });
+
+  it('uses the YAML name as the canonical registry name', async () => {
+    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
+    await writeFile(
+      resolve(agentDir, 'Readable Helper.yaml'),
+      [
+        'name: helper',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: help',
+        '',
+      ].join('\n'),
+    );
+
+    const entries = await scanDirectory(agentDir, 'custom');
+
+    expect(entries.map((entry) => entry.name)).toEqual(['helper']);
+  });
+
+  it('skips agent names that include descriptive dash details', async () => {
+    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
+    await writeFile(
+      resolve(agentDir, 'review.yaml'),
+      [
+        'name: Review \u2014 verify math & consistency',
+        'description: Verifies manuscripts.',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: review',
+        '',
+      ].join('\n'),
+    );
+
+    const entries = await scanDirectory(agentDir, 'custom');
+
+    expect(entries).toEqual([]);
+  });
 });
