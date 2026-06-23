@@ -172,4 +172,58 @@ describe('agent registry legacy aliases', () => {
       'assistant',
     );
   });
+
+  it('migrates persisted filename-based custom agent keys to YAML names', async () => {
+    const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
+    await writeFile(
+      resolve(customDir, 'Readable Helper.yaml'),
+      [
+        'name: helper',
+        'description: Custom helper agent',
+        'settings:',
+        '  agentCategory: toolUse',
+        '  tools: []',
+        'prompts:',
+        '  systemPrompt: Custom helper agent.',
+        '',
+      ].join('\n'),
+    );
+
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform(
+        {
+          workspaceState: {
+            [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
+              'custom:Readable Helper',
+              'Readable Helper',
+              'review',
+            ],
+          },
+        },
+        { fs: nodeFilesystem },
+      ),
+    );
+    setAgentDirectories({
+      custom: async () => customDir,
+      builtIn: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+      builtInToolUse: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    });
+
+    await refresh({ includeRemote: false });
+
+    expect(
+      platform().workspaceState.get<string[]>(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      ),
+    ).toEqual(['custom:helper', 'helper', 'review']);
+    expect(getAgent('custom:helper')?.path).toBe(
+      resolve(customDir, 'Readable Helper.yaml'),
+    );
+    expect(getVisibleAgents('toolUse').map((entry) => entry.name)).toContain(
+      'helper',
+    );
+  });
 });
