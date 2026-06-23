@@ -62,6 +62,7 @@ const CLI_MODEL_FALLBACK_MODE_BY_SOURCE = {
 
 export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
+  readonly models?: readonly string[];
 }
 
 export interface CliModelListOptions {
@@ -365,7 +366,7 @@ async function includedAccessRequiresLogin(
 export async function getCliModelAccessList(
   options: CliModelAccessListOptions = {},
 ): Promise<CliModelAccess[]> {
-  const models = await computeModelOptionsData();
+  const models = await computeModelOptionsData(options.models);
   const access = models.map((model) =>
     toCliModelAccess(model, options.apiMode),
   );

@@ -13,6 +13,7 @@ import {
   resolveCliModelAccessEntry,
   type CliModelListOptions,
 } from '../runtime/modelAccess';
+import { knownCliModelIds } from '../runtime/cliConfig';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
@@ -25,7 +26,10 @@ import type { CliContext } from '../runtime/cliContext';
 
 type ModelAccessList = Awaited<ReturnType<typeof getCliModelAccessList>>;
 
-async function loadModelAccessList(context: CliContext): Promise<
+async function loadModelAccessList(
+  context: CliContext,
+  options: CliModelListOptions = {},
+): Promise<
   | { models: ModelAccessList; apiMode: CliContext['apiMode'] }
   | {
       error: string;
@@ -35,7 +39,11 @@ async function loadModelAccessList(context: CliContext): Promise<
     return await suppressCliFetchStackLogs(async () => {
       await initCliPlatform({ ...context, quietLogs: true });
       const apiMode = effectiveCliApiMode(context);
-      const models = await getCliModelAccessList({ apiMode });
+      const models = await getCliModelAccessList({
+        apiMode,
+        models:
+          options.includeUnavailable === true ? knownCliModelIds() : undefined,
+      });
       return { models, apiMode };
     });
   } catch (error) {
@@ -47,7 +55,7 @@ async function listModels(
   context: CliContext,
   options: CliModelListOptions = {},
 ): Promise<number> {
-  const result = await loadModelAccessList(context);
+  const result = await loadModelAccessList(context, options);
   if ('error' in result) {
     writeTextStderr(result.error);
     return CliExitCode.ModelOrNetworkError;
