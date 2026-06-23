@@ -14,10 +14,14 @@ describe('CLI API access mode aliases', () => {
     );
   });
 
-  it('maps included-relay and personal-key aliases to their canonical modes', () => {
+  it('maps the relay and byok shorthands to their canonical modes', () => {
     expect(parseCliApiMode('relay')).toBe('included');
-    expect(parseCliApiMode('texra')).toBe('included');
     expect(parseCliApiMode('byok')).toBe('personal');
-    expect(parseCliApiMode('keys')).toBe('personal');
+  });
+
+  it('rejects the removed undocumented synonyms', () => {
+    for (const removed of ['texra', 'direct', 'api', 'key', 'keys']) {
+      expect(parseCliApiMode(removed)).toBeUndefined();
+    }
   });
 });
