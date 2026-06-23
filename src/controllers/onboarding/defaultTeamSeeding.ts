@@ -73,7 +73,8 @@ export async function seedRosterFromDefaultTeam(stores: {
     return false;
   }
   const teamId = getDefaultTeamId(globalState) ?? FALLBACK_STARTUP_TEAM_ID;
-  const preset = resolveTeamPreset(teamId);
+  const preset =
+    resolveTeamPreset(teamId) ?? resolveTeamPreset(FALLBACK_STARTUP_TEAM_ID);
   if (!preset) return false;
   await applyPresetRoster(registryPresetRosterState(workspaceState), preset);
   return true;
