@@ -29,7 +29,7 @@ private useBackgroundMode(stateful: boolean): boolean {
 ```
 
 - `this.backgroundModeSupported` — set to `true` on this handler (overriding the base default of `false` at `ModelHandler.ts:131`). This mirrors `ModelHandlerOpenAIResponse.backgroundModeSupported = true` (line 250).
-- `stateful` — the existing `this.serverStateEnabled()` result (handler line 271–276; reads `texra.model.useGoogleInteractionsServerState`, default `true`). **This is the load-bearing difference from OpenAI**: OpenAI always sends `store: true`, so its gate is only the toggle + GPT-family + workflow eligibility. Google's handler has a real stateless mode (`store: false`), and background is *categorically impossible* there — see §5.
+- `stateful` — the existing `this.serverStateEnabled()` result (handler line 271–276; reads `texra.model.useGoogleInteractionsServerState`, default `true`). **This is the load-bearing difference from OpenAI**: OpenAI always sends `store: true`, so its gate is only the toggle + GPT-family + workflow eligibility. Google's handler has a real stateless mode (`store: false`), and background is _categorically impossible_ there — see §5.
 - `texra.model.useBackgroundResponses` — the existing shared toggle (default `true`), reused as-is (see §2.3).
 
 **Eligibility note (deliberate divergence from OpenAI):** OpenAI adds `isBackgroundModeEligible()` = `isGptFamilyModelName(...) && isWorkflowMode()` (lines 262–264) to exclude tool-use agents (which rely on per-step streaming) and non-GPT models. For v0 of the Google handler, **do not** replicate the model-name family check (there is no `isGeminiBackgroundEligible` analogue and Interactions background applies to all Interactions-capable Gemini models). **Do** gate on workflow mode to match OpenAI's exclusion of tool-use loops, since background polling is a poor fit for the tool-use turn cadence:
@@ -70,7 +70,7 @@ public override isBackgroundModeActive(): boolean {
 Because `getStreamingConfig()` returns `false` when background is active, the existing `useStreaming` branch (handler line 1424) becomes unreachable while background is on. The dispatch in `createResponseImpl` resolves the three paths explicitly and definitively:
 
 ```typescript
-const stateful = this.serverStateEnabled();             // already computed at line 1335
+const stateful = this.serverStateEnabled(); // already computed at line 1335
 const useBackground = this.useBackgroundMode(stateful);
 const useStreaming = !useBackground && this.getStreamingConfig();
 ```
@@ -506,6 +506,7 @@ NON-TERMINAL set = { in_progress }   // requires_action treated as terminal in v
 ```
 
 **Chaining ⊗ background composition (definitive):**
+
 1. The **submit** sends the same `input` delta + `previous_interaction_id` the streaming/non-streaming paths send — chaining is entirely upstream of the background switch (built into `commonParams`).
 2. The id captured for the **next** turn is `completed.id` from the **polled completion**, not `submitted.id`. `finalizeChain` only chains when `completed.status === 'completed'`; otherwise it invalidates so the next round full-resends.
 3. **Compaction**: when this call compacted, `invalidateChain()` already ran (handler line 1385), so `shouldSendAll` is true and the background submit carries the compacted transcript with no `previous_interaction_id`; `withUpdated` attaches `updatedMessages = compactedMessages` to the returned result — unchanged from the streaming/non-streaming paths.
@@ -540,21 +541,34 @@ Fake client shape:
 
 ```typescript
 function bgClient(opts: {
-  submit: () => Interaction;                 // create() result
-  getSequence: Interaction[];                // statuses returned by successive get()
+  submit: () => Interaction; // create() result
+  getSequence: Interaction[]; // statuses returned by successive get()
   onCancel?: (id: string) => void;
 }): unknown {
   let getIdx = 0;
-  const calls = { create: [] as any[], get: [] as string[], cancel: [] as string[] };
+  const calls = {
+    create: [] as any[],
+    get: [] as string[],
+    cancel: [] as string[],
+  };
   return {
     client: {
       interactions: {
-        create: async (params: any) => { calls.create.push(params); return opts.submit(); },
+        create: async (params: any) => {
+          calls.create.push(params);
+          return opts.submit();
+        },
         get: async (id: string) => {
           calls.get.push(id);
-          return opts.getSequence[Math.min(getIdx++, opts.getSequence.length - 1)];
+          return opts.getSequence[
+            Math.min(getIdx++, opts.getSequence.length - 1)
+          ];
         },
-        cancel: async (id: string) => { calls.cancel.push(id); opts.onCancel?.(id); return {}; },
+        cancel: async (id: string) => {
+          calls.cancel.push(id);
+          opts.onCancel?.(id);
+          return {};
+        },
       },
       models: {},
     },
@@ -563,20 +577,21 @@ function bgClient(opts: {
 }
 ```
 
-| # | Test | Setup | Assertions |
-|---|------|-------|-----------|
-| **B1** | Background submit sets `background:true` + `store:true` | gate on; submit returns `{id:'int_1', status:'in_progress'}`, `get` returns `{id:'int_1', status:'completed', steps:[modelOutput('ok')]}` | `calls.create[0].background === true`; `calls.create[0].store === true`; `calls.create[0].stream === false` |
-| **B2** | Polls `get()` until `completed` | submit `in_progress`; `getSequence = [in_progress, in_progress, completed]` | run with fake timers, advance by `POLL_INTERVAL_MS` ×3; `calls.get` length ≥ 3; all entries `=== 'int_1'`; resolved result `.response.status === 'completed'` |
-| **B3** | Captures chain id from the **polled completion** | submit `{id:'int_submit', status:'in_progress'}`; `get` → `{id:'int_done', status:'completed', steps:[...]}`. Then a 2nd `createResponse` with one appended step | 2nd `create` call's `previous_interaction_id === 'int_done'` (NOT `'int_submit'`); 2nd call's `input` length === appended delta count |
-| **B4** | Cancel on abort calls `interactions.cancel` | submit `in_progress`; `get` stays `in_progress`; pass an `AbortController`; abort after first poll tick | `await expect(promise).rejects` (AbortError); `calls.cancel` contains `'int_1'`; handler `pendingBackgroundInteractionId` is null afterward (assert via a follow-up call succeeding, i.e. no leak) |
-| **B5** | Background + stateless is rejected/skipped | mock `useGoogleInteractionsServerState → false`, `useBackgroundResponses → true` | `calls.create[0].background` is `undefined`/falsy AND `calls.create[0].store === false` (took the non-background path); no `get` calls. (Confirms the gate, not the assert — the assert is unreachable here.) |
-| **B6** | Toggle off ⇒ no background | `useBackgroundResponses → false`, stateful true | `calls.create[0].background` falsy; non-streaming/streaming path taken; zero `get` calls |
-| **B7** | Terminal non-completed throws and does not chain | submit `in_progress`; `get` → `{status:'failed'}` | `await expect(...).rejects.toThrow(/status "failed"/)`; a subsequent `createResponse` does a full resend (`previous_interaction_id` undefined) — `finalizeChain` never ran, `chainedInteractionId` stayed null |
-| **B8** | `requires_action` is terminal in v0 | `get` → `{status:'requires_action'}` | rejects (treated as terminal non-completed); no infinite poll |
-| **B9** | Timeout guard | submit `in_progress`; `get` always `in_progress`; advance fake clock past `BACKGROUND_MAX_DURATION_MS` | rejects with `/maximum polling duration/`; `pendingBackgroundInteractionId` reset |
-| **B10** | Compaction composes with background | force compaction (mock `shouldCompactByInputTokens` / large `lastKnownInputTokens`), background on | returned result has `updatedMessages` set; background submit has no `previous_interaction_id` (chain invalidated by compaction); submit `input` = compacted transcript |
+| #       | Test                                                    | Setup                                                                                                                                                            | Assertions                                                                                                                                                                                                     |
+| ------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **B1**  | Background submit sets `background:true` + `store:true` | gate on; submit returns `{id:'int_1', status:'in_progress'}`, `get` returns `{id:'int_1', status:'completed', steps:[modelOutput('ok')]}`                        | `calls.create[0].background === true`; `calls.create[0].store === true`; `calls.create[0].stream === false`                                                                                                    |
+| **B2**  | Polls `get()` until `completed`                         | submit `in_progress`; `getSequence = [in_progress, in_progress, completed]`                                                                                      | run with fake timers, advance by `POLL_INTERVAL_MS` ×3; `calls.get` length ≥ 3; all entries `=== 'int_1'`; resolved result `.response.status === 'completed'`                                                  |
+| **B3**  | Captures chain id from the **polled completion**        | submit `{id:'int_submit', status:'in_progress'}`; `get` → `{id:'int_done', status:'completed', steps:[...]}`. Then a 2nd `createResponse` with one appended step | 2nd `create` call's `previous_interaction_id === 'int_done'` (NOT `'int_submit'`); 2nd call's `input` length === appended delta count                                                                          |
+| **B4**  | Cancel on abort calls `interactions.cancel`             | submit `in_progress`; `get` stays `in_progress`; pass an `AbortController`; abort after first poll tick                                                          | `await expect(promise).rejects` (AbortError); `calls.cancel` contains `'int_1'`; handler `pendingBackgroundInteractionId` is null afterward (assert via a follow-up call succeeding, i.e. no leak)             |
+| **B5**  | Background + stateless is rejected/skipped              | mock `useGoogleInteractionsServerState → false`, `useBackgroundResponses → true`                                                                                 | `calls.create[0].background` is `undefined`/falsy AND `calls.create[0].store === false` (took the non-background path); no `get` calls. (Confirms the gate, not the assert — the assert is unreachable here.)  |
+| **B6**  | Toggle off ⇒ no background                              | `useBackgroundResponses → false`, stateful true                                                                                                                  | `calls.create[0].background` falsy; non-streaming/streaming path taken; zero `get` calls                                                                                                                       |
+| **B7**  | Terminal non-completed throws and does not chain        | submit `in_progress`; `get` → `{status:'failed'}`                                                                                                                | `await expect(...).rejects.toThrow(/status "failed"/)`; a subsequent `createResponse` does a full resend (`previous_interaction_id` undefined) — `finalizeChain` never ran, `chainedInteractionId` stayed null |
+| **B8**  | `requires_action` is terminal in v0                     | `get` → `{status:'requires_action'}`                                                                                                                             | rejects (treated as terminal non-completed); no infinite poll                                                                                                                                                  |
+| **B9**  | Timeout guard                                           | submit `in_progress`; `get` always `in_progress`; advance fake clock past `BACKGROUND_MAX_DURATION_MS`                                                           | rejects with `/maximum polling duration/`; `pendingBackgroundInteractionId` reset                                                                                                                              |
+| **B10** | Compaction composes with background                     | force compaction (mock `shouldCompactByInputTokens` / large `lastKnownInputTokens`), background on                                                               | returned result has `updatedMessages` set; background submit has no `previous_interaction_id` (chain invalidated by compaction); submit `input` = compacted transcript                                         |
 
 **Real-key SMOKE-TEST items (cannot be unit-tested offline; flag in test file header comments):**
+
 - **S-BG1**: Confirm the **initial status** of a `background:true` create (expected `in_progress`; if it's a `(string & {})` value not in the union, extend `BACKGROUND_PENDING_STATUSES`). (report 2 §2/§4.)
 - **S-BG2**: Confirm `background:true` is accepted with `store:true` and rejected (or silently ignored) with `store:false`. (report 2 smoke-test #2.)
 - **S-BG3**: Confirm `interactions.get(id)` on a completed background interaction returns full `steps` + `usage` (report 2 §5 says yes from the `.d.ts`; verify on the wire).
@@ -593,11 +608,12 @@ function bgClient(opts: {
 
 **7.3 Background incompatible with `store:false`.** Enforced twice (gate + assert, §5). The assert is the safety net if a future refactor lets the gate drift.
 
-**7.4 No resume path in v0 (deliberate simplification vs OpenAI).** OpenAI keeps `pendingBackgroundResponseId` across retries and resumes via `tryResumeBackgroundResponse` (lines 366–464). The Google handler **does not** implement resume in v0: on a transient poll error it rethrows, PocketFlow retries `createResponse`, the chain bookkeeping resubmits a fresh background interaction, and the orphaned one ages out / can be cancelled. This is simpler and safe (the new submit chains onto the last *completed* id, never the orphan). `pendingBackgroundInteractionId` exists only as the cancel target + diagnostic, cleared in the poll loop's `finally`. If real-key runs show frequent mid-poll disconnects on long jobs, port the resume machinery in a follow-up.
+**7.4 No resume path in v0 (deliberate simplification vs OpenAI).** OpenAI keeps `pendingBackgroundResponseId` across retries and resumes via `tryResumeBackgroundResponse` (lines 366–464). The Google handler **does not** implement resume in v0: on a transient poll error it rethrows, PocketFlow retries `createResponse`, the chain bookkeeping resubmits a fresh background interaction, and the orphaned one ages out / can be cancelled. This is simpler and safe (the new submit chains onto the last _completed_ id, never the orphan). `pendingBackgroundInteractionId` exists only as the cancel target + diagnostic, cleared in the poll loop's `finally`. If real-key runs show frequent mid-poll disconnects on long jobs, port the resume machinery in a follow-up.
 
 **7.5 Progress UX.** A single `logProgressStatus` at submit announces background mode; per-poll status changes go to `this.logger.debug` (not user-facing) to avoid spamming the progress board every interval. Unlike streaming, **there is no incremental output** during a background job — the user sees one "polling" message then the final result. This is inherent to background mode and matches OpenAI's behavior (line 1668–1672). The TUI/progress view will show the run as "in progress" with no token stream until completion.
 
 **7.6 `.d.ts` could not confirm:**
+
 - The **initial status** after `background:true` create (S-BG1) — drives `BACKGROUND_PENDING_STATUSES`.
 - Whether `stream:true` + `background:true` is a valid combination (report 2 §2: type system allows it, behavior unspecified). The handler never sends both: background always sets `stream:false`.
 - Semantics of `incomplete` and `budget_exceeded` as background terminal states (report 2 §4 flags `incomplete` as unclear) — all non-`completed` terminal statuses are treated uniformly as a thrown error, which is correct regardless of the exact reason.
@@ -608,6 +624,7 @@ function bgClient(opts: {
 ---
 
 ### Verified
+
 - `src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts` (full, 1758 lines): `createResponseImpl` dispatch (lines 1335, 1389–1449), `commonParams`/`requestOptions` (1410–1421), `finalizeChain`/`invalidateChain` (279–310), `serverStateEnabled` (271–276), `inFlight` guard (1297–1313), stale-chain catch (1450–1465), `consumeStream` (1527–1615), SDK type aliases (99–111).
 - `src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts` (lines 1–2089): background gate (222–264), poll loop `waitForBackgroundCompletion` (1891–2068), `executeNonStreamingPath` (1647–1698), constants (266–270), `inFlight`/`pendingBackgroundResponseId` (281–298), abort handling (1939–2017).
 - `src/agent/modelHandlers/ModelHandler.ts`: `backgroundModeSupported=false` (131), `isWorkflowMode` (201–203), `isBackgroundModeActive` base (236–238), `getStreamingConfig` base (518–524).
