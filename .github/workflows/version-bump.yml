@@ -11,6 +11,11 @@ permissions:
 jobs:
   bump-version:
     runs-on: ubuntu-latest
+    # Releases are cut in pairs off the same commit: `vX.Y.Z` for the extension
+    # and `cli-vX.Y.Z` for the CLI (plus legacy `vX.Y.Z-frontend` tags). Bump
+    # only once, off the canonical extension tag — otherwise the `cli-` tag fires
+    # a second, redundant run and races the first on the same PR branch.
+    if: ${{ startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
