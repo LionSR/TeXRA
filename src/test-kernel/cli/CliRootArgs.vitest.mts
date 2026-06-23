@@ -980,27 +980,25 @@ describe('CLI root argument routing', () => {
   });
 
   it('keeps stopped workflows with missing requested outputs interrupted', async () => {
-    await expect(
-      resolveWorkflowOutput(
-        'corrected.tex',
-        undefined,
-        {
-          outcome: RUN_OUTCOME.CANCELLED,
-          category: AgentCategory.Workflow,
-          executionId: 'stopped-without-output',
-          streamId: 'stopped-stream-without-output',
-          outputs: [],
-          compileFailures: [],
-        },
-        cliContext(),
-        { terminalStatus: EXECUTION_STATUS.INTERRUPTED },
-      ),
-    ).resolves.toMatchObject({
-      copiedOutput: undefined,
-      displayResult: {
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+    const result = await resolveWorkflowOutput(
+      'corrected.tex',
+      undefined,
+      {
+        outcome: RUN_OUTCOME.CANCELLED,
+        category: AgentCategory.Workflow,
+        executionId: 'stopped-without-output',
+        streamId: 'stopped-stream-without-output',
+        outputs: [],
+        compileFailures: [],
       },
+      cliContext(),
+      { terminalStatus: EXECUTION_STATUS.INTERRUPTED },
+    );
+
+    expect(result).toMatchObject({
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
     });
+    expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
   });
 
   it('formats model list network failures without raw stack traces', () => {
