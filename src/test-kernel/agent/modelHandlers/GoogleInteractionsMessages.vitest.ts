@@ -196,12 +196,68 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     expect(inline.type).toBe('image');
     expect(inline.data).toBeTruthy();
     expect(inline.uri).toBeUndefined();
+    expect(inline.resolution).toBe('high');
 
     const uploaded = content[1] as Interactions.ImageContent;
     expect(uploaded.type).toBe('image');
     expect(uploaded.uri).toBe('files/abc');
     expect(uploaded.data).toBeUndefined();
+    expect(uploaded.resolution).toBe('high');
     expect(uploadCalls).toBe(1);
+  });
+
+  it('builds typed Interactions media content for audio, video, and documents', async () => {
+    const handler = createHandler();
+    (handler as unknown as { getClient: () => Promise<unknown> }).getClient =
+      async () => ({
+        files: {
+          upload: async () => {
+            throw new Error('expected inline media');
+          },
+        },
+      });
+
+    const entries = [
+      {
+        file_name: 'sound.mp3',
+        media_type: 'audio/mp3',
+        data: Buffer.from('audio').toString('base64'),
+      },
+      {
+        file_name: 'clip.mp4',
+        media_type: 'video/mp4',
+        data: Buffer.from('video').toString('base64'),
+      },
+      {
+        file_name: 'paper.pdf',
+        media_type: 'application/pdf',
+        data: Buffer.from('pdf').toString('base64'),
+      },
+    ];
+
+    const content = await (
+      handler as unknown as {
+        uploadMediaEntries: (e: unknown[]) => Promise<Interactions.Content[]>;
+      }
+    ).uploadMediaEntries(entries);
+
+    expect(content).toEqual([
+      {
+        type: 'audio',
+        data: Buffer.from('audio').toString('base64'),
+        mime_type: 'audio/mp3',
+      },
+      {
+        type: 'video',
+        data: Buffer.from('video').toString('base64'),
+        mime_type: 'video/mp4',
+      },
+      {
+        type: 'document',
+        data: Buffer.from('pdf').toString('base64'),
+        mime_type: 'application/pdf',
+      },
+    ]);
   });
 
   it('extractResponse walks model_output steps and appends endTag on completion', () => {
