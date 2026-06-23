@@ -11,7 +11,10 @@ const MANIFEST_PATHS = [
   'packages/extension/package.json',
 ];
 
-const VERSION_PATTERN = /^v?(\d+)\.(\d+)\.(\d+)$/;
+// Accept the canonical extension tag (`v0.38.9`), the CLI tag (`cli-v0.38.9`),
+// and a bare version (`0.38.9`). Release tags are cut in pairs off the same
+// commit, so either tag resolves to the same next version.
+const VERSION_PATTERN = /^(?:cli-)?v?(\d+)\.(\d+)\.(\d+)$/;
 
 // Release trains use patch values 0 through 10; after .10, development moves
 // to the next minor train.
