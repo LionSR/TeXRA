@@ -30,7 +30,6 @@ import type { CliContext } from '../runtime/cliContext';
 
 interface InitAgentOption {
   readonly name: string;
-  readonly description?: string;
 }
 
 export function defaultInitAgentOptions(
@@ -38,7 +37,6 @@ export function defaultInitAgentOptions(
 ): InitAgentOption[] {
   return implicitDefaultToolUseAgents(agents).map((agent) => ({
     name: agent.name,
-    description: agent.description,
   }));
 }
 
