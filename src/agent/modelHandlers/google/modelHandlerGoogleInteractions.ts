@@ -75,7 +75,9 @@ type Step = Interactions.Step;
 type Content = Interactions.Content;
 type TextContent = Interactions.TextContent;
 type ImageContent = Interactions.ImageContent;
+type AudioContent = Interactions.AudioContent;
 type DocumentContent = Interactions.DocumentContent;
+type VideoContent = Interactions.VideoContent;
 type UserInputStep = Interactions.UserInputStep;
 type ModelOutputStep = Interactions.ModelOutputStep;
 type ThoughtStep = Interactions.ThoughtStep;
@@ -86,6 +88,7 @@ type FunctionT = Interactions.Function;
 type Usage = Interactions.Usage;
 type GenerationConfig = Interactions.GenerationConfig;
 type ThinkingLevel = Interactions.ThinkingLevel;
+type MediaResolution = NonNullable<ImageContent['resolution']>;
 type InteractionSSEEvent = Interactions.InteractionSSEEvent;
 type CreateModelInteractionParamsStreaming =
   Interactions.CreateModelInteractionParamsStreaming;
@@ -172,6 +175,21 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   private isGemini3Model(): boolean {
     return /^gemini-3[\.\-]/.test(this.config.fullName);
+  }
+
+  private getMediaResolution(mimeType: string): MediaResolution | undefined {
+    if (!this.isGemini3Model()) return undefined;
+    if (mimeType.startsWith('image/')) return 'high';
+    // Interactions DocumentContent currently has no resolution field, so PDF
+    // resolution cannot mirror generateContent until the SDK exposes it.
+    return undefined;
+  }
+
+  private mediaResolutionFields(mimeType: string): {
+    resolution?: MediaResolution;
+  } {
+    const resolution = this.getMediaResolution(mimeType);
+    return resolution ? { resolution } : {};
   }
 
   /**
@@ -557,7 +575,22 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         type: 'image',
         data,
         mime_type: mimeType,
+        ...this.mediaResolutionFields(mimeType),
       } satisfies ImageContent;
+    }
+    if (mimeType.startsWith('audio/')) {
+      return {
+        type: 'audio',
+        data,
+        mime_type: mimeType,
+      } satisfies AudioContent;
+    }
+    if (mimeType.startsWith('video/')) {
+      return {
+        type: 'video',
+        data,
+        mime_type: mimeType,
+      } satisfies VideoContent;
     }
     return {
       type: 'document',
@@ -568,7 +601,26 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   private uriMediaContent(uri: string, mimeType: string): Content {
     if (mimeType.startsWith('image/')) {
-      return { type: 'image', uri, mime_type: mimeType } satisfies ImageContent;
+      return {
+        type: 'image',
+        uri,
+        mime_type: mimeType,
+        ...this.mediaResolutionFields(mimeType),
+      } satisfies ImageContent;
+    }
+    if (mimeType.startsWith('audio/')) {
+      return {
+        type: 'audio',
+        uri,
+        mime_type: mimeType,
+      } satisfies AudioContent;
+    }
+    if (mimeType.startsWith('video/')) {
+      return {
+        type: 'video',
+        uri,
+        mime_type: mimeType,
+      } satisfies VideoContent;
     }
     return {
       type: 'document',
