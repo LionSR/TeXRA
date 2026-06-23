@@ -36,6 +36,7 @@
  * which the relay enforces below (immediate, even for a still-valid token).
  * ============================================================================
  *
+ * TIER HIERARCHY (model access):
  * - free: input <= $1.5/M AND output <= $9/M
  * - Max: every model
  * - Ultra: every model
@@ -621,7 +622,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     }
   }
 
-  // 6. Validate model for non-Ultra tiers
+  // 6. Apply tier constraints for non-Ultra tiers.
   // Skip model validation for endpoints that don't require a model (e.g., file uploads)
   // - OpenAI: /v1/files
   // - Anthropic: /v1/files (same as OpenAI)

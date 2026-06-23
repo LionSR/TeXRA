@@ -262,18 +262,22 @@ function resolveAllModelsByApiName(modelName: string): RelayModel[] {
  * Check if a model is allowed for a given tier.
  * Free tier: models within the free price ceiling (input <= $1.5/M AND
  * output <= $9/M).
- * Max/Ultra tier: all models.
+ * Max tier: any explicit model name.
+ * Ultra tier: all model names and model-less provider endpoints.
  *
  * When multiple llm-zoo entries share the same API model name, a `some()`
  * check is used: access is granted if at least one interpretation falls
- * within the user's tier. Unknown model names are denied for the free tier.
+ * within the user's tier. Unknown model names are denied for the free tier and
+ * allowed for Max, where the relay only needs to distinguish explicit model
+ * requests from model-less provider endpoints.
  */
 export function isModelAllowedForTier(
   tier: string,
   modelName: string | null,
 ): boolean {
-  if (tier === ULTRA_TIER || tier === MAX_TIER) return true;
+  if (tier === ULTRA_TIER) return true;
   if (!modelName) return false;
+  if (tier === MAX_TIER) return true;
 
   const models = resolveAllModelsByApiName(modelName);
   if (models.length === 0) return false;

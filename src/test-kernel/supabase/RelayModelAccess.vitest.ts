@@ -14,12 +14,12 @@ import {
 } from '../../../supabase/functions/relay/models';
 
 describe('relay tier model access', () => {
-  it('gives Max and Ultra full model access', () => {
+  it('gives Max full explicit-model access and Ultra passthrough', () => {
     assert.equal(TIER_CONFIG.tiers.Max?.models, '*');
     assert.equal(TIER_CONFIG.tiers.Ultra?.models, '*');
 
     assert.equal(isModelAllowedForTier(MAX_TIER, 'unknown-model'), true);
-    assert.equal(isModelAllowedForTier(MAX_TIER, null), true);
+    assert.equal(isModelAllowedForTier(MAX_TIER, null), false);
     assert.equal(isModelAllowedForTier(ULTRA_TIER, 'unknown-model'), true);
     assert.equal(isModelAllowedForTier(ULTRA_TIER, null), true);
   });
