@@ -212,6 +212,14 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
     },
   ],
   anthropic: [],
+  google: [
+    {
+      key: 'texra.model.useGoogleInteractionsAPI',
+      label: 'Use Interactions API',
+      description:
+        'Use the Google Interactions API instead of Generate Content when available.',
+    },
+  ],
   dashscope: [
     {
       key: GlobalStateKey.DASHSCOPE_USE_CHINA,

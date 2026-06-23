@@ -33,6 +33,7 @@ export type ModelHandlerCompatibilityKey =
   | 'ModelHandlerAnthropic'
   | 'ModelHandlerOpenAI'
   | 'ModelHandlerGoogleGenAI'
+  | 'ModelHandlerGoogleInteractions'
   | 'ModelHandlerDeepSeek'
   | 'ModelHandlerXAI'
   | 'ModelHandlerKimi'
@@ -171,6 +172,40 @@ function requiresOpenAIResponsesAPI(
   );
 }
 
+/**
+ * Check if the Google Interactions API should be used for this config.
+ *
+ * Additive sibling to the chat/`generateContent` Google route, gated behind
+ * `texra.model.useGoogleInteractionsAPI` (default off). OpenRouter can NOT proxy
+ * Interactions, so an active OpenRouter proxy always returns false — the chat
+ * handler (or OpenRouter) remains the fallback.
+ */
+export function shouldUseGoogleInteractionsAPI(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+): boolean {
+  if (config.provider !== ModelProvider.GOOGLE || config.openRouterOnly) {
+    return false;
+  }
+  // `requiresInteractionsAPI` is a future per-model opt-in (parallel to
+  // `requiresResponsesAPI`); it is not yet on the external llm-zoo ModelConfig,
+  // so read it defensively. v0 registers no model with it set.
+  const requiresInteractions =
+    (config as { requiresInteractionsAPI?: boolean })
+      .requiresInteractionsAPI === true;
+  // OpenRouter cannot proxy Interactions. For an Interactions-only model this is
+  // an unsupported combination — surface it instead of silently routing through
+  // OpenRouter (spec §6.3).
+  if (requiresInteractions && useOpenRouter) {
+    throw new Error(
+      `Model ${config.name} requires the Google Interactions API, which cannot be used through OpenRouter. Disable OpenRouter or select a different model.`,
+    );
+  }
+  if (useOpenRouter) return false;
+  if (requiresInteractions) return true;
+  return getConfig<boolean>('texra.model.useGoogleInteractionsAPI', false);
+}
+
 /** Check if OpenAI Responses API should be used for this config. */
 export function shouldUseResponsesAPI(
   config: ModelConfig,
@@ -257,6 +292,9 @@ export function modelHandlerCompatibilityKey(
   );
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     return 'ModelHandlerOpenAIResponse';
+  }
+  if (shouldUseGoogleInteractionsAPI(config, useOpenRouter)) {
+    return 'ModelHandlerGoogleInteractions';
   }
   if (config.openRouterOnly || useOpenRouter) {
     return 'ModelHandlerOpenRouterNative';
@@ -365,6 +403,17 @@ export async function createModelHandler(
     return withModelHandlerCompatibilityKey(
       withReasoningOverride(new ModelHandlerOpenAIResponse(config)),
       'ModelHandlerOpenAIResponse',
+    );
+  }
+
+  // Google Interactions API (additive, flag-gated; never via OpenRouter)
+  if (shouldUseGoogleInteractionsAPI(config, useOpenRouter)) {
+    logger.debug(CHANNEL, 'Using Google Interactions API Handler');
+    const { ModelHandlerGoogleInteractions } =
+      await import('@agent/modelHandlers/google/modelHandlerGoogleInteractions');
+    return withModelHandlerCompatibilityKey(
+      withReasoningOverride(new ModelHandlerGoogleInteractions(config)),
+      'ModelHandlerGoogleInteractions',
     );
   }
 
