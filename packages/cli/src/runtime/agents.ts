@@ -178,7 +178,21 @@ export async function loadCliAgentList(
   return { agents, hiddenCount };
 }
 
-export function formatCliAgentList(agents: readonly AgentEntry[]): string {
+export function formatCliAgentList(
+  agents: readonly AgentEntry[],
+  options: {
+    readonly category?: AgentCategory;
+    readonly showEmptyState?: boolean;
+  } = {},
+): string {
+  if (agents.length === 0) {
+    if (options.showEmptyState !== true) return '';
+    const { categoryArg, catalog, qualifier } = cliAgentCatalogHint(
+      options.category,
+    );
+    return `No visible ${qualifier}agents are enabled for this workspace. Use \`texra agents list${categoryArg} --all\` to show the ${catalog}.`;
+  }
+
   return agents
     .map(
       (agent) => `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
@@ -220,11 +234,22 @@ export function formatCliHiddenAgentsNotice(
   category?: AgentCategory,
 ): string | undefined {
   if (hiddenCount <= 0) return undefined;
-  const categoryArg = category ? ` --category ${category}` : '';
-  const catalog = category
-    ? `${category === AgentCategory.ToolUse ? 'tool-use' : category} catalog`
-    : 'full catalog';
+  const { categoryArg, catalog } = cliAgentCatalogHint(category);
   return `Showing visible agents only; ${hiddenCount} hidden agent${hiddenCount === 1 ? '' : 's'} omitted. Use \`texra agents list${categoryArg} --all\` to show the ${catalog}.`;
+}
+
+function cliAgentCatalogHint(category?: AgentCategory): {
+  readonly categoryArg: string;
+  readonly catalog: string;
+  readonly qualifier: string;
+} {
+  const categoryLabel =
+    category === AgentCategory.ToolUse ? 'tool-use' : category;
+  return {
+    categoryArg: category ? ` --category ${category}` : '',
+    catalog: categoryLabel ? `${categoryLabel} catalog` : 'full catalog',
+    qualifier: categoryLabel ? `${categoryLabel} ` : '',
+  };
 }
 
 function collectCliAgents(

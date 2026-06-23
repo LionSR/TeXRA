@@ -46,7 +46,13 @@ export async function listAgents(
     {
       json: result.agents,
       ndjson: result.agents.map((agent) => ({ kind: 'agent', agent })),
-      text: formatCliAgentList(result.agents),
+      text: formatCliAgentList(result.agents, {
+        category: options.category,
+        showEmptyState:
+          options.includeHidden !== true &&
+          !context.quietLogs &&
+          context.outputFormat === 'text',
+      }),
     },
     { paged: true },
   );
