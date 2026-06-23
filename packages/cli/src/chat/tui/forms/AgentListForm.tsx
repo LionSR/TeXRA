@@ -62,9 +62,7 @@ export function currentVisibleAgent(
     return (
       agent.value === current ||
       valueName === current ||
-      valueName === currentName ||
-      agent.label === current ||
-      agent.label === currentName
+      valueName === currentName
     );
   });
 }

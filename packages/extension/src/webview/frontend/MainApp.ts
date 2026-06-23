@@ -623,9 +623,7 @@ export class MainApp extends MainAppBase {
     // Match by name: handles source changes, plain-name defaults, and remote
     // rows whose value still carries legacy decorated storage names.
     const name = agentName(currentValue);
-    const byName = options.find(
-      (opt) => agentName(opt.value) === name || opt.label === name,
-    );
+    const byName = options.find((opt) => agentName(opt.value) === name);
     if (byName) return byName.value;
     for (const preferred of preferredFallback) {
       const match = options.find((opt) => agentName(opt.value) === preferred);

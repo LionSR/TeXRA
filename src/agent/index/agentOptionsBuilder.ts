@@ -12,11 +12,19 @@ export interface AgentOptionsDataPayload {
   toolUse: AgentOptionData[];
 }
 
+const DETAIL_SEPARATOR = /\s+(?:[\u2013\u2014]|-{2,})\s+/u;
+
+function pickerLabel(name: string): string {
+  const detailStart = name.search(DETAIL_SEPARATOR);
+  if (detailStart === -1) return name;
+  return name.slice(0, detailStart).trim() || name;
+}
+
 function entryToOptionData(entry: AgentEntry): AgentOptionData {
   const key = createKey(entry.source, entry.name);
   return {
     value: key,
-    label: entry.name,
+    label: pickerLabel(entry.name),
     isToolUse: entry.category === AgentCategory.ToolUse,
     isOrchestrator: hasDelegationTool(entry.tools),
     isRemote: entry.source === 'remote',
