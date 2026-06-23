@@ -1,0 +1,478 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  DEFAULT_MODEL_CAPABILITIES,
+  ModelProvider,
+  type ModelConfig,
+} from 'llm-zoo';
+
+import type { AgentTrace } from '@agent/trace';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import * as configModule from '@utils/config/configUtils';
+import type { Interactions } from '@google/genai';
+
+type Step = Interactions.Step;
+type SSEEvent = Interactions.InteractionSSEEvent;
+
+/** One recorded `interactions.create` request. */
+interface RecordedCall {
+  store: boolean | undefined;
+  previousId: string | undefined;
+  input: Step[];
+}
+
+/**
+ * Capturing fake client. Each `interactions.create` records the request's
+ * store / previous_interaction_id / input, then yields the SSE events produced
+ * by the per-call `eventsFor(callIndex)` factory. A factory may throw to
+ * simulate an SDK rejection BEFORE the stream is consumed.
+ */
+function capturingClient(
+  calls: RecordedCall[],
+  eventsFor: (callIndex: number) => SSEEvent[],
+): unknown {
+  let callIndex = 0;
+  return {
+    interactions: {
+      create: async (params: {
+        store?: boolean;
+        previous_interaction_id?: string;
+        input: Step[];
+      }) => {
+        const index = callIndex++;
+        calls.push({
+          store: params.store,
+          previousId: params.previous_interaction_id,
+          // Snapshot: the handler may reuse the live `messages` array reference
+          // for a full resend, and the flow mutates it between rounds.
+          input: [...params.input],
+        });
+        const events = eventsFor(index);
+        return (async function* () {
+          for (const event of events) yield event;
+        })();
+      },
+    },
+    models: {},
+  };
+}
+
+/** Completed-interaction SSE tail with one text step and a given id/status. */
+function completedEvents(
+  id: string,
+  status: 'completed' | 'incomplete' | 'failed' = 'completed',
+  text = 'ok',
+): SSEEvent[] {
+  return [
+    {
+      event_type: 'interaction.created',
+      interaction: { id, status: 'in_progress' },
+    },
+    { event_type: 'step.start', index: 0, step: { type: 'model_output' } },
+    {
+      event_type: 'step.delta',
+      index: 0,
+      delta: { type: 'text', text },
+    },
+    { event_type: 'step.stop', index: 0 },
+    {
+      event_type: 'interaction.completed',
+      interaction: { id, status },
+    },
+  ];
+}
+
+function createConfig(): ModelConfig {
+  return {
+    name: 'test-google-interactions',
+    label: 'Test Google Interactions',
+    fullName: 'gemini-3-pro-test',
+    shortName: 'gemini-3-pro-test',
+    provider: ModelProvider.GOOGLE,
+    maxOutputTokens: 1024,
+    inputPrice: 0,
+    outputPrice: 0,
+    contextWindow: 4096,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsReasoning: true,
+      supportsTokenCounting: false,
+    },
+    openRouterOnly: false,
+  };
+}
+
+function silentLogger(): AgentTrace {
+  return {
+    debug: () => undefined,
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+    // Context-management cards (emitted during compaction) route through domain().
+    domain: () => undefined,
+    openStream: () => ({
+      id: 'stream',
+      append: () => undefined,
+      finalize: (text?: string) => text ?? '',
+    }),
+  } as unknown as AgentTrace;
+}
+
+class StreamingHandler extends ModelHandlerGoogleInteractions {
+  override getStreamingConfig(): boolean {
+    return true;
+  }
+}
+
+function createHandler(): ModelHandlerGoogleInteractions {
+  const handler = new StreamingHandler(createConfig());
+  handler.setLogger(silentLogger());
+  handler.setOutputStreaming(true);
+  return handler;
+}
+
+function userStep(text: string): Step {
+  return { type: 'user_input', content: [{ type: 'text', text }] };
+}
+
+/** Extract the first text of a user_input/model_output step (for slice asserts). */
+function stepText(step: Step): string | undefined {
+  return (step as { content?: { text?: string }[] }).content?.[0]?.text;
+}
+
+const originalGetConfig = configModule.getConfig;
+
+/** Force the server-state setting to a fixed value (default in code is true). */
+function mockServerState(enabled: boolean): void {
+  vi.spyOn(configModule, 'getConfig').mockImplementation(
+    <T>(key: string, defaultValue?: T): T => {
+      if (key === 'texra.model.useGoogleInteractionsServerState') {
+        return enabled as T;
+      }
+      return originalGetConfig(key, defaultValue);
+    },
+  );
+}
+
+describe('ModelHandlerGoogleInteractions store:true chaining', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('T1: first request is a full resend with store:true and no previous_interaction_id', async () => {
+    const handler = createHandler();
+    const calls: RecordedCall[] = [];
+    const client = capturingClient(calls, () => completedEvents('int_1'));
+
+    const messages = [userStep('a'), userStep('b')];
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].store).toBe(true);
+    expect(calls[0].previousId).toBeUndefined();
+    expect(calls[0].input).toHaveLength(messages.length);
+  });
+
+  it('T2/T3: continuation sends only the delta with previous_interaction_id, reusing the captured id', async () => {
+    const handler = createHandler();
+    const calls: RecordedCall[] = [];
+    const client = capturingClient(calls, (i) =>
+      completedEvents(i === 0 ? 'int_abc' : 'int_def'),
+    );
+
+    // Round 1: two steps sent in full, id captured.
+    const messages: Step[] = [userStep('a'), userStep('b')];
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    // Round 2: the flow appends two new steps to the same array.
+    messages.push(userStep('c'), userStep('d'));
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    expect(calls).toHaveLength(2);
+    // First call: full, no chain.
+    expect(calls[0].input).toHaveLength(2);
+    expect(calls[0].previousId).toBeUndefined();
+    // Second call: delta only (exactly the 2 appended steps in order), chained
+    // to round 1's id.
+    expect(calls[1].store).toBe(true);
+    expect(calls[1].previousId).toBe('int_abc');
+    expect(calls[1].input).toHaveLength(2);
+    expect(calls[1].input.map(stepText)).toEqual(['c', 'd']);
+  });
+
+  it('T4: an incomplete response does not chain; next round is a full resend', async () => {
+    const handler = createHandler();
+    const calls: RecordedCall[] = [];
+    const client = capturingClient(calls, (i) =>
+      i === 0
+        ? completedEvents('int_1', 'incomplete')
+        : completedEvents('int_2', 'completed'),
+    );
+
+    const messages: Step[] = [userStep('a')];
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    messages.push(userStep('b'));
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    // Second call full-resends both steps, no previous_interaction_id.
+    expect(calls[1].previousId).toBeUndefined();
+    expect(calls[1].input).toHaveLength(2);
+  });
+
+  it('T5: an expired previous_interaction_id triggers exactly one full-resend retry', async () => {
+    const handler = createHandler();
+    const calls: RecordedCall[] = [];
+    const client = capturingClient(calls, (i) => {
+      // Call 0: establish a chain. Call 1: chained request rejected as stale.
+      // Call 2: the retry (full resend) succeeds.
+      if (i === 1) {
+        const err = Object.assign(
+          new Error('previous_interaction_id not found'),
+          { status: 404 },
+        );
+        throw err;
+      }
+      return completedEvents(i === 0 ? 'int_1' : 'int_3');
+    });
+
+    const messages: Step[] = [userStep('a')];
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    messages.push(userStep('b'));
+    const result = await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    // 3 create calls total: initial + failed-chained + retried-full.
+    expect(calls).toHaveLength(3);
+    // The retry full-resends with no previous_interaction_id.
+    expect(calls[2].previousId).toBeUndefined();
+    expect(calls[2].input).toHaveLength(2);
+    // The successful retry re-established a fresh chain.
+    expect(result.response.id).toBe('int_3');
+  });
+
+  it('T5b: the stale-id retry is bounded — a second failure is not retried again', async () => {
+    const handler = createHandler();
+    const calls: RecordedCall[] = [];
+    const staleError = () =>
+      Object.assign(new Error('previous_interaction_id not found'), {
+        status: 404,
+      });
+    const client = capturingClient(calls, (i) => {
+      // Call 0: establish a chain. Call 1: chained request rejected as stale.
+      // Call 2 (the one full-resend retry): ALSO rejected — must NOT retry again.
+      if (i >= 1) throw staleError();
+      return completedEvents('int_1');
+    });
+
+    const messages: Step[] = [userStep('a')];
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    messages.push(userStep('b'));
+    await expect(
+      handler.createResponse({
+        client: client as never,
+        messages,
+        temperature: 0,
+      }),
+    ).rejects.toThrow(/previous_interaction_id/);
+
+    // Exactly 3 create calls: initial + failed-chained + failed-retry (no 4th).
+    // The retry sent a full resend (no previous_interaction_id), so it cannot
+    // re-enter the stale-id branch — the error propagates to the caller.
+    expect(calls).toHaveLength(3);
+    expect(calls[2].previousId).toBeUndefined();
+  });
+
+  it('T6: compaction clears the chain and returns updatedMessages', async () => {
+    const handler = createHandler();
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    handler.setLogger(silentLogger());
+    const calls: RecordedCall[] = [];
+    const client: any = capturingClient(calls, (i) =>
+      completedEvents(i === 0 ? 'int_1' : 'int_2'),
+    );
+    // Compaction summarizes via models.generateContent.
+    client.models.generateContent = async () => ({
+      text: 'SUMMARY',
+      usageMetadata: { candidatesTokenCount: 5 },
+    });
+
+    // Round 1 establishes a chain.
+    const messages: Step[] = [userStep('a'), userStep('b'), userStep('c')];
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+    expect(calls[0].previousId).toBeUndefined();
+
+    // Round 2: request manual compaction. The handler must clear the chain
+    // (full resend, no previous_interaction_id) and return updatedMessages.
+    handler.requestCompaction();
+    messages.push(userStep('d'), userStep('e'));
+    const result = await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    expect(result.updatedMessages).toBeDefined();
+    expect(result.updatedMessages!.length).toBeLessThan(messages.length);
+    // The compacted round full-resent (no chain) the compacted transcript.
+    expect(calls[1].previousId).toBeUndefined();
+    expect(calls[1].input).toEqual(result.updatedMessages);
+
+    // Round 3: the flow swaps in the compacted transcript (updatedMessages) and
+    // appends a new turn. Chaining must RE-ESTABLISH off the compaction's id —
+    // i.e. compaction must not permanently disable chaining.
+    const compacted = result.updatedMessages!;
+    const round3: Step[] = [...compacted, userStep('f')];
+    await handler.createResponse({
+      client: client as never,
+      messages: round3,
+      temperature: 0,
+    });
+    expect(calls[2].store).toBe(true);
+    expect(calls[2].previousId).toBe('int_2'); // chained onto the compaction response
+    expect(calls[2].input).toHaveLength(1); // only the newly appended step
+    expect(calls[2].input.map(stepText)).toEqual(['f']);
+  });
+
+  it('T7: with the setting OFF the handler stays stateless (store:false, full input, no chaining)', async () => {
+    mockServerState(false);
+    const handler = createHandler();
+    const calls: RecordedCall[] = [];
+    const client = capturingClient(calls, () => completedEvents('int_1'));
+
+    const messages: Step[] = [userStep('a')];
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    messages.push(userStep('b'));
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    for (const call of calls) {
+      expect(call.store).toBe(false);
+      expect(call.previousId).toBeUndefined();
+    }
+    // Both calls resend the full transcript (no delta slicing).
+    expect(calls[0].input).toHaveLength(1);
+    expect(calls[1].input).toHaveLength(2);
+  });
+
+  it('T8: a fresh handler instance (resume) starts with a full resend', async () => {
+    // First instance establishes a chain.
+    const first = createHandler();
+    const callsA: RecordedCall[] = [];
+    await first.createResponse({
+      client: capturingClient(callsA, () => completedEvents('int_1')) as never,
+      messages: [userStep('a')],
+      temperature: 0,
+    });
+    expect(callsA[0].previousId).toBeUndefined();
+
+    // A brand-new instance (simulating resume-from-snapshot) sees the same
+    // transcript but has no chain id, so it full-resends with no chaining.
+    const restored = createHandler();
+    const callsB: RecordedCall[] = [];
+    await restored.createResponse({
+      client: capturingClient(callsB, () => completedEvents('int_2')) as never,
+      messages: [userStep('a'), userStep('b')],
+      temperature: 0,
+    });
+    expect(callsB[0].previousId).toBeUndefined();
+    expect(callsB[0].input).toHaveLength(2);
+  });
+
+  it('T9: the single-turn guard rejects a concurrent call and resets afterward', async () => {
+    const handler = createHandler();
+    const calls: RecordedCall[] = [];
+    // A create that blocks until released, so we can overlap two calls.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const client: unknown = {
+      interactions: {
+        create: async (params: { store?: boolean; input: Step[] }) => {
+          calls.push({
+            store: params.store,
+            previousId: undefined,
+            input: params.input,
+          });
+          await gate;
+          return (async function* () {
+            for (const event of completedEvents('int_1')) yield event;
+          })();
+        },
+      },
+      models: {},
+    };
+
+    const inFlight = handler.createResponse({
+      client: client as never,
+      messages: [userStep('a')],
+      temperature: 0,
+    });
+
+    await expect(
+      handler.createResponse({
+        client: client as never,
+        messages: [userStep('b')],
+        temperature: 0,
+      }),
+    ).rejects.toThrow(/single-turn/);
+
+    release();
+    await inFlight;
+
+    // The guard reset in finally: a serial call now succeeds.
+    await expect(
+      handler.createResponse({
+        client: capturingClient([], () => completedEvents('int_2')) as never,
+        messages: [userStep('c')],
+        temperature: 0,
+      }),
+    ).resolves.toBeDefined();
+  });
+});

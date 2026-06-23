@@ -53,6 +53,12 @@ function computeInteractionsTokenCounts(
     return { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
   }
 
+  // SMOKE-TEST (cannot verify offline): under previous_interaction_id chaining
+  // it is UNCONFIRMED whether total_input_tokens reports only the NEW turn's
+  // input or the CUMULATIVE server-side context. If cumulative, per-round input
+  // costs will look unexpectedly large (but remain correct). genai.d.ts Usage is
+  // silent on chaining; verify with a real-key two-round run and adjust here only
+  // if the server double-counts (spec §6 S1). No functional change for now.
   const promptTokens = usage.total_input_tokens ?? 0;
   const toolUseTokens = usage.total_tool_use_tokens ?? 0;
   const visibleOutputTokens = usage.total_output_tokens ?? 0;
