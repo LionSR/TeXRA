@@ -116,7 +116,7 @@ export function agentSelectWindow({
   }
 
   const remainingRows = availableRows - chromeRows - itemCount;
-  if (workflowCount === 0 || remainingRows < 4) {
+  if (workflowCount === 0 || remainingRows < 3) {
     return {
       maxVisibleItems: itemCount,
       showOverflow: false,
@@ -125,7 +125,8 @@ export function agentSelectWindow({
     };
   }
 
-  const workflowRows = remainingRows - 3;
+  // Workflow heading and run hint are the fixed rows for the secondary list.
+  const workflowRows = remainingRows - 2;
   if (workflowCount <= workflowRows) {
     return {
       maxVisibleItems: itemCount,
@@ -257,7 +258,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         />
       </Box>
       {visibleWorkflowRows.length > 0 || selectWindow.showWorkflowOverflow ? (
-        <Box marginTop={1} flexDirection="column">
+        <Box flexDirection="column">
           <Text bold>Workflows</Text>
           {visibleWorkflowRows.map((workflow) => (
             <Text key={workflow.value} wrap="truncate-end">
