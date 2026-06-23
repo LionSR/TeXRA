@@ -38,10 +38,7 @@ describe('ProgressViewProvider pending permissions', () => {
   it('keeps proposal agent dropdown identity separate from display labels', () => {
     const source = readProgressViewProvider();
     const methodStart = source.indexOf('sendProposalModelOptions');
-    const methodEnd = source.indexOf(
-      'public static getInstance',
-      methodStart,
-    );
+    const methodEnd = source.indexOf('public static getInstance', methodStart);
     expect(methodStart).toBeGreaterThanOrEqual(0);
     expect(methodEnd).toBeGreaterThan(methodStart);
     const method = source.slice(methodStart, methodEnd);
