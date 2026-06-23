@@ -10,18 +10,15 @@ import which from 'which';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+import { unique } from '@utils/core';
 import { AbsoluteFS } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
-import { unique } from '@utils/core';
 
 /** Whether the current platform is Windows (cached at module load). */
 export const IS_WINDOWS = process.platform === 'win32';
 
 /** Whether the current platform is macOS (cached at module load). */
 export const IS_MACOS = process.platform === 'darwin';
-
-/** Whether the current platform is Linux (cached at module load). */
-export const IS_LINUX = process.platform === 'linux';
 
 // Common LaTeX tool names used across the system
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;

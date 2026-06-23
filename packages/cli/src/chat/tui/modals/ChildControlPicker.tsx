@@ -699,7 +699,8 @@ export function computePickerListLayout({
     const end = start + visibleCount;
     const markerRows =
       rowBudget >= 3 ? (start > 0 ? 1 : 0) + (end < itemCount ? 1 : 0) : 0;
-    visibleCount = clamp(rowBudget - markerRows, 1, itemCount);
+    visibleCount =
+      itemCount === 0 ? 0 : clamp(rowBudget - markerRows, 1, itemCount);
   }
   const start = windowStart(visibleCount);
   const end = start + visibleCount;

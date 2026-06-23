@@ -1,5 +1,5 @@
-import { clamp } from '@utils/core';
 import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
+import { clamp } from '@utils/core';
 
 const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])\b/i;
