@@ -1128,10 +1128,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Pricing/caching inputs for the extracted usage helpers. */
   private pricingConfig(): AnthropicPricingConfig {
     return {
-      inputPrice: this.config.inputPrice,
-      outputPrice: this.config.outputPrice,
+      ...this.standardPricingConfig(),
       supportsPromptCaching: this.capabilities.supportsPromptCaching,
-      cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
     };
   }
 

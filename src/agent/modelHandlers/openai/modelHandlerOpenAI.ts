@@ -42,11 +42,7 @@ import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCom
 import { tagOpenAISdkError } from './openAISdkError';
 
 // Local file imports
-import {
-  computeOpenAIPrice,
-  normalizeOpenAIUsage,
-  type OpenAIPricingConfig,
-} from './openAIUsage';
+import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { normalizeOpenAIMessageContent } from './openAIMessageUtils';
 import {
@@ -1039,16 +1035,7 @@ export class ModelHandlerOpenAI<
 
   /** Computes cost based on token usage and model pricing. */
   computePrice(responseUsage: ExtendedCompletionUsage | null): number {
-    return computeOpenAIPrice(responseUsage, this.pricingConfig());
-  }
-
-  /** Pricing/caching inputs for the extracted usage helpers. */
-  private pricingConfig(): OpenAIPricingConfig {
-    return {
-      inputPrice: this.config.inputPrice,
-      outputPrice: this.config.outputPrice,
-      cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
-    };
+    return computeOpenAIPrice(responseUsage, this.standardPricingConfig());
   }
 
   /**
@@ -1069,7 +1056,7 @@ export class ModelHandlerOpenAI<
       rawUsage,
       responseTimeMs,
       this.usageProvider,
-      this.pricingConfig(),
+      this.standardPricingConfig(),
     );
   }
 

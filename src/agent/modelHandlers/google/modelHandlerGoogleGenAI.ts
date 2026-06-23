@@ -49,11 +49,7 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
-import {
-  computeGooglePrice,
-  normalizeGoogleUsage,
-  type GooglePricingConfig,
-} from './googleUsage';
+import { computeGooglePrice, normalizeGoogleUsage } from './googleUsage';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagGoogleSdkError } from './googleSdkError';
 import {
@@ -831,16 +827,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   computePrice(
     responseUsage: GenerateContentResponseUsageMetadata | null,
   ): number {
-    return computeGooglePrice(responseUsage, this.pricingConfig());
-  }
-
-  /** Pricing inputs for the extracted usage helpers. */
-  private pricingConfig(): GooglePricingConfig {
-    return {
-      inputPrice: this.config.inputPrice,
-      outputPrice: this.config.outputPrice,
-      cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
-    };
+    return computeGooglePrice(responseUsage, this.standardPricingConfig());
   }
 
   /** Normalizes Google GenAI usage data into a unified format. */
@@ -848,7 +835,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     rawUsage: GenerateContentResponseUsageMetadata | null,
     responseTimeMs: number,
   ): NormalizedUsage {
-    return normalizeGoogleUsage(rawUsage, responseTimeMs, this.pricingConfig());
+    return normalizeGoogleUsage(
+      rawUsage,
+      responseTimeMs,
+      this.standardPricingConfig(),
+    );
   }
 
   addContinueMessageWithPrefill(
