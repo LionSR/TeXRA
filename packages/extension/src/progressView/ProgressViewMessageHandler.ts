@@ -624,6 +624,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return new ProgressFollowUpController({
       getAgentCategory: (agent) =>
         getAgent(agent, AgentCategory.ToolUse)?.category,
+      loadModelOptions: async () => {
+        const { modelOptions } = await loadOptions();
+        return modelOptions;
+      },
+      state: {
+        getTaskState: (stream) =>
+          this.provider.state.snapshots.getTaskState(stream),
+        getOutputFiles: (stream) =>
+          this.provider.state.snapshots.getOutputFiles(stream),
+        getCompileFailures: (stream) =>
+          this.provider.state.snapshots.getCompileFailures(stream),
+        getExecutionId: (stream) =>
+          this.provider.state.snapshots.getExecutionId(stream),
+      },
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
         exists: (relativePath) => WorkspaceFS.exists(relativePath),
@@ -818,43 +832,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       | MessageFor<typeof PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP>,
     executeImmediately: boolean,
   ): Promise<void> {
-    const taskState = this.provider.state.snapshots.getTaskState(data.stream);
-    const outputFiles = [
-      ...this.provider.state.snapshots.getOutputFiles(data.stream).values(),
-    ].flat();
-    const { modelOptions } = await loadOptions();
-
     await this.applyFollowUpPlan(
-      this.followUpController.planToolUseFollowUp({
+      await this.followUpController.planToolUseFollowUpForStream({
         streamId: data.stream,
-        taskState,
-        outputFiles,
         agent: data.agent,
         model: data.model,
         initialQuestion: data.initialQuestion,
         executeImmediately,
-        modelOptions,
-        executionId: this.provider.state.snapshots.getExecutionId(data.stream),
       }),
     );
   }
 
   private async handleRunCompileFixer(streamId: StreamTabId): Promise<void> {
-    const taskState = this.provider.state.snapshots.getTaskState(streamId);
-    const compileFailures = [
-      ...this.provider.state.snapshots.getCompileFailures(streamId).values(),
-    ].flat();
-    const { modelOptions } = await loadOptions();
-
     await this.applyFollowUpPlan(
-      await this.followUpController.planCompileFixer({
-        streamId,
-        taskState,
-        compileFailures,
-        runOutputs: this.provider.state.snapshots.getOutputFiles(streamId),
-        modelOptions,
-        executionId: this.provider.state.snapshots.getExecutionId(streamId),
-      }),
+      await this.followUpController.planCompileFixerForStream(streamId),
     );
   }
 
