@@ -295,10 +295,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * is deliberately EXCLUDED: in workflow (non-tool) background mode it is
    * unexpected and treated as terminal so the loop never hangs.
    *
-   * SMOKE-TEST: the initial status returned by a `background:true` create is
-   * undocumented in genai.d.ts; if a real-key run shows it is something other
-   * than `in_progress` (e.g. a `(string & {})` value not in the union), add it
-   * here so polling does not exit immediately.
+   * Verified live (gemini-3.5-flash): a `background:true` create returns
+   * `in_progress`, and the first `get()` poll returns `completed` with full
+   * steps + usage — so `['in_progress']` is the correct pending set.
    */
   private static readonly BACKGROUND_PENDING_STATUSES: readonly InteractionStatus[] =
     ['in_progress'];
