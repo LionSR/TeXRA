@@ -40,13 +40,23 @@ export type AgentSourceType = z.infer<typeof AgentSourceSchema>;
 export const AgentSource = AgentSourceSchema;
 export type AgentSource = AgentSourceType;
 
+const AGENT_NAME_DETAIL_SEPARATOR = /\s+(?:[\u2013\u2014]|-{2,})\s+/u;
+
+export const AgentNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((name) => !AGENT_NAME_DETAIL_SEPARATOR.test(name), {
+    message: 'Agent names must be canonical; put details in description.',
+  });
+
 /**
  * Base schema for agent identity metadata shared across all agent representations.
  * View-specific schemas (RemoteAgentSchema, AgentSelectionItemSchema, etc.)
  * should extend this via `.extend()` rather than redefining these fields.
  */
 export const AgentMetadataBaseSchema = z.object({
-  name: z.string(),
+  name: AgentNameSchema,
   category: AgentCategorySchema,
   description: z.string().optional(),
 });

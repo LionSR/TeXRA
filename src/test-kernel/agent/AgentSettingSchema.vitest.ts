@@ -38,21 +38,29 @@ describe('AgentSettingSchema', () => {
 });
 
 describe('AgentDefinitionSchema', () => {
-  it('rejects obsolete displayName metadata', () => {
+  it('rejects unknown top-level metadata', () => {
     const result = AgentDefinitionSchema.safeParse({
       name: 'assistant',
-      displayName: 'Assistant',
+      title: 'Assistant',
     });
 
     expect(result.success).toBe(false);
     if (result.success) {
-      throw new Error('displayName should not be valid agent metadata');
+      throw new Error('unknown metadata should not be valid');
     }
     expect(result.error.issues).toEqual([
       expect.objectContaining({
         code: 'unrecognized_keys',
-        keys: ['displayName'],
+        keys: ['title'],
       }),
     ]);
+  });
+
+  it('rejects names that include descriptive dash details', () => {
+    expect(() =>
+      AgentDefinitionSchema.parse({
+        name: 'Review \u2014 verify math & consistency',
+      }),
+    ).toThrow('Agent names must be canonical');
   });
 });
