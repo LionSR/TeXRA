@@ -9,7 +9,7 @@
 // `1`-`9` for the first nine rows, then `a`-`z` for rows 10-35.
 
 import { Box, Text, useInput } from 'ink';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { clamp, clampIndex } from '@utils/core';
 
@@ -193,9 +193,12 @@ export function selectIndexForHotkey(input: string): number | undefined {
 
 /**
  * Ink can deliver rapid key presses as one input chunk. Menus should still
- * honor the first shortcut instead of silently dropping the whole chunk.
+ * honor the first shortcut from a tiny burst instead of silently dropping it.
+ * Longer chunks are likely pasted text or a slash command racing a closing
+ * form, so treating their first letter as a row shortcut is surprising.
  */
 export function selectIndexForHotkeyInput(input: string): number | undefined {
+  if (input.length > 2) return undefined;
   const first = input.at(0);
   return first == null ? undefined : selectIndexForHotkey(first);
 }
@@ -207,6 +210,9 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
     items: props.items,
   });
   const [highlight, setHighlight] = useState(initial);
+  // Select cancel handlers close their foreground form, so the component
+  // unmounts after this flips. Future persistent Select users should reset it.
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
     setHighlight((h) => clampIndex(h, props.items.length));
@@ -228,7 +234,13 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   });
 
   useInput((input, key) => {
-    if (isEscapeInput(input, key)) {
+    if (cancelledRef.current) return;
+    const rawEscChord = input.startsWith('\u001B') && input.length === 2;
+    // A fast Esc followed by another key can arrive as an Alt/meta chord or
+    // as raw ESC + one printable key. Select forms have no meta shortcuts, so
+    // treat that as cancel-and-drop without swallowing raw CSI navigation.
+    if (isEscapeInput(input, key) || key.meta || rawEscChord) {
+      cancelledRef.current = true;
       props.onCancel();
       return;
     }
@@ -257,11 +269,15 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       if (choice && !choice.disabled) props.onSelect(choice.value);
       return;
     }
-    // Single-key jumps (1-9, then a-z) for direct selection. Ignore modified
-    // chords: Ctrl+C exits the app (the App's unified handler owns it now that
-    // we render with exitOnCtrlC: false, so Ink no longer mutes it), and
-    // Ctrl/Alt+<letter> were never meant as row hotkeys.
-    if (!key.ctrl && !key.meta) {
+    if (!key.ctrl && input.length > 2) {
+      cancelledRef.current = true;
+      props.onCancel();
+      return;
+    }
+    // Single-key jumps (1-9, then a-z) for direct selection. Ignore Ctrl
+    // chords: Ctrl+C exits the app through App's unified handler, and other
+    // Ctrl+<letter> chords were never meant as row hotkeys.
+    if (!key.ctrl) {
       const idx = selectIndexForHotkeyInput(input);
       if (idx != null && idx < props.items.length) {
         const choice = props.items[idx];
