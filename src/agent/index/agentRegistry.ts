@@ -21,7 +21,7 @@ import {
 import { scanDirectory } from './agentYamlScanner';
 import { loadRemoteAgents, persistRemoteAgentMeta } from './remoteAgentMeta';
 import {
-  entryToOptionData,
+  entriesToOptionData,
   sortAgentEntries,
   type AgentOptionsDataPayload,
 } from './agentOptionsBuilder';
@@ -477,12 +477,11 @@ export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload
   }
 
   return {
-    workflow: sortAgentEntries(getVisibleAgents('workflow'), [
-      DEFAULT_WORKFLOW_AGENT,
-    ]).map(entryToOptionData),
-    toolUse: sortAgentEntries(
-      getVisibleAgents('toolUse'),
-      PREFERRED_TOOL_USE_AGENTS,
-    ).map(entryToOptionData),
+    workflow: entriesToOptionData(
+      sortAgentEntries(getVisibleAgents('workflow'), [DEFAULT_WORKFLOW_AGENT]),
+    ),
+    toolUse: entriesToOptionData(
+      sortAgentEntries(getVisibleAgents('toolUse'), PREFERRED_TOOL_USE_AGENTS),
+    ),
   };
 }
