@@ -194,6 +194,8 @@ export function allocateMiddleRows({
       : 0;
   const foregroundRows = availableRows - transcriptRows;
   return {
+    // The early returns above and transcript reservation keep this at least 1,
+    // so the lower clamp bound cannot inflate an empty foreground.
     foregroundRows:
       foregroundMaxRows === undefined
         ? foregroundRows
