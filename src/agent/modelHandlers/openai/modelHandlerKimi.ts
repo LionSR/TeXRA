@@ -40,14 +40,6 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
     return 'moonshot';
   }
 
-  /**
-   * Kimi emits reasoning_content alongside parallel tool calls, which must be
-   * preserved by batching the results into a single follow-up message.
-   */
-  override get requiresBatchedParallelToolResults(): boolean {
-    return true;
-  }
-
   // Kimi K2.5 supports vision with standard OpenAI-style image_url format;
   // only stringify content for non-vision variants so image parts survive.
   protected override readonly convertContentToStringUnlessVision = true;

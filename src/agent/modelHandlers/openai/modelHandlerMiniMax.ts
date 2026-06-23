@@ -37,14 +37,6 @@ function extractTextFromReasoningDetails(details: unknown): string | undefined {
  */
 export class ModelHandlerMiniMax extends ReasoningModelHandlerOpenAI {
   /**
-   * MiniMax emits reasoning alongside parallel tool calls, which must be
-   * preserved by batching the results into a single follow-up message.
-   */
-  override get requiresBatchedParallelToolResults(): boolean {
-    return true;
-  }
-
-  /**
    * Adds `reasoning_split: true` for thinking models so MiniMax returns
    * reasoning separately instead of embedding `<think>` tags in content.
    */
