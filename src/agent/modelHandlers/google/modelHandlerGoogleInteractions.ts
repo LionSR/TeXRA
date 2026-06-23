@@ -120,6 +120,14 @@ function isTextContent(content: Content): content is TextContent {
   return content.type === 'text';
 }
 
+/** Concatenate the text of every TextContent block in a content list. */
+function joinTextContent(content: readonly Content[]): string {
+  return content
+    .filter(isTextContent)
+    .map((c) => c.text)
+    .join('');
+}
+
 /**
  * Best-effort predicate for "the `previous_interaction_id` we chained onto is
  * gone (expired / unknown / rejected)". On a match the handler drops the chain
@@ -282,8 +290,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   private finalizeChain(
     response: GoogleGenAIInteraction,
     totalStepCount: number,
+    stateful: boolean,
   ): void {
-    if (!this.serverStateEnabled()) return;
+    if (!stateful) return;
     const safeToChain =
       response.status === 'completed' && typeof response.id === 'string';
     if (safeToChain) {
@@ -659,7 +668,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
           this.logger.debug(
             `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
           );
-          out.push(this.inlineMediaContent(inlinePayload, mimeType));
+          out.push(this.buildMediaContent({ data: inlinePayload }, mimeType));
           summaries.push({ path: fileName, ok: true });
           continue;
         }
@@ -699,7 +708,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         }
         const resolvedMimeType =
           uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
-        out.push(this.uriMediaContent(fileUri, resolvedMimeType));
+        out.push(this.buildMediaContent({ uri: fileUri }, resolvedMimeType));
         summaries.push({ path: fileName, ok: true });
       } catch (error) {
         summaries.push({ path: fileName, ok: false });
@@ -720,11 +729,19 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return { type: 'text', text };
   }
 
-  private inlineMediaContent(data: string, mimeType: string): Content {
+  /**
+   * Build a typed media `Content` from either inline base64 (`data`) or an
+   * uploaded File API `uri`, dispatching on the mime type. (Single builder for
+   * both sources — the only difference is the data/uri field.)
+   */
+  private buildMediaContent(
+    source: { data: string } | { uri: string },
+    mimeType: string,
+  ): Content {
     if (mimeType.startsWith('image/')) {
       return {
         type: 'image',
-        data,
+        ...source,
         mime_type: mimeType,
         ...this.mediaResolutionFields(mimeType),
       } satisfies ImageContent;
@@ -732,50 +749,20 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     if (mimeType.startsWith('audio/')) {
       return {
         type: 'audio',
-        data,
+        ...source,
         mime_type: mimeType,
       } satisfies AudioContent;
     }
     if (mimeType.startsWith('video/')) {
       return {
         type: 'video',
-        data,
+        ...source,
         mime_type: mimeType,
       } satisfies VideoContent;
     }
     return {
       type: 'document',
-      data,
-      mime_type: mimeType,
-    } satisfies DocumentContent;
-  }
-
-  private uriMediaContent(uri: string, mimeType: string): Content {
-    if (mimeType.startsWith('image/')) {
-      return {
-        type: 'image',
-        uri,
-        mime_type: mimeType,
-        ...this.mediaResolutionFields(mimeType),
-      } satisfies ImageContent;
-    }
-    if (mimeType.startsWith('audio/')) {
-      return {
-        type: 'audio',
-        uri,
-        mime_type: mimeType,
-      } satisfies AudioContent;
-    }
-    if (mimeType.startsWith('video/')) {
-      return {
-        type: 'video',
-        uri,
-        mime_type: mimeType,
-      } satisfies VideoContent;
-    }
-    return {
-      type: 'document',
-      uri,
+      ...source,
       mime_type: mimeType,
     } satisfies DocumentContent;
   }
@@ -800,9 +787,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const steps = responseObject.steps ?? [];
     const rawText = steps
       .filter((s): s is ModelOutputStep => s.type === 'model_output')
-      .flatMap((s) =>
-        (s.content ?? []).filter(isTextContent).map((c) => c.text),
-      )
+      .map((s) => joinTextContent(s.content ?? []))
       .join('');
 
     let responseText = replacementEngine.applyAll(rawText);
@@ -836,23 +821,17 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     );
     if (thoughtSteps.length === 0) return null;
 
-    const thoughtContent = thoughtSteps
-      .map((s) =>
-        (s.summary ?? [])
-          .filter(isTextContent)
-          .map((c) => c.text)
-          .join(''),
-      )
-      .join('')
-      .trim();
+    // Flatten each thought step's summary once, then reuse for both the return
+    // value and the workspace reasoning cache.
+    const perStepText = thoughtSteps.map((s) =>
+      joinTextContent(s.summary ?? []),
+    );
+    const thoughtContent = perStepText.join('').trim();
 
     if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
-      workspaceState.reasoning.thinkingBlocks = thoughtSteps.map((s) => ({
+      workspaceState.reasoning.thinkingBlocks = thoughtSteps.map((s, i) => ({
         type: 'thinking',
-        thinking: (s.summary ?? [])
-          .filter(isTextContent)
-          .map((c) => c.text)
-          .join(''),
+        thinking: perStepText[i],
         signature: s.signature,
       }));
       workspaceState.reasoning.thinkingAdded = true;
@@ -957,12 +936,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const last = messages.at(-1);
     if (
       last?.type === 'user_input' &&
-      this.containCutOffMessage(
-        (last.content ?? [])
-          .filter(isTextContent)
-          .map((c) => c.text)
-          .join(''),
-      )
+      this.containCutOffMessage(joinTextContent(last.content ?? []))
     ) {
       messages.pop();
       this.logger.debug('Removed user continuation prompt.');
@@ -1208,13 +1182,13 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         attachments,
         'included-inline',
       );
-      const encoded = await Promise.all(
-        attachments.map((a) => this.buildFunctionResultImage(a)),
-      );
-      for (const image of encoded) {
-        if (image) subcontent.push(image);
-      }
-      if (subcontent.length === 0 && attachments.length > 0) {
+      const encoded = (
+        await Promise.all(
+          attachments.map((a) => this.buildFunctionResultImage(a)),
+        )
+      ).filter((image): image is ImageContent => image !== null);
+      subcontent.push(...encoded);
+      if (encoded.length === 0) {
         this.logger.warn(
           `All attachments for Interactions function result '${call.name}' failed to encode.`,
         );
@@ -1265,10 +1239,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   private functionResultToText(result: FunctionResultStep['result']): string {
     if (typeof result === 'string') return result;
     if (Array.isArray(result)) {
-      return result
-        .filter(isTextContent)
-        .map((c) => c.text)
-        .join('');
+      return joinTextContent(result);
     }
     return '';
   }
@@ -1435,46 +1406,46 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     ): CreateResponseResult<GoogleGenAIInteraction, Step> =>
       updatedMessages ? { ...result, updatedMessages } : result;
 
+    // Common request shape — only `stream` differs between the two branches.
+    const commonParams = {
+      model: this.config.fullName,
+      input: inputSteps,
+      store: stateful,
+      ...(previousId && { previous_interaction_id: previousId }),
+      ...(systemPrompt && { system_instruction: systemPrompt }),
+      ...(interactionsTools && { tools: interactionsTools }),
+      generation_config: generationConfig,
+    };
+    // Abort is wired via fetchOptions.signal (GoogleGenAIRequestOptions has no
+    // top-level abortSignal field).
+    const requestOptions = signal ? { fetchOptions: { signal } } : undefined;
+
     try {
       if (useStreaming) {
         const params: CreateModelInteractionParamsStreaming = {
-          model: this.config.fullName,
-          input: inputSteps,
+          ...commonParams,
           stream: true,
-          store: stateful,
-          ...(previousId && { previous_interaction_id: previousId }),
-          ...(systemPrompt && { system_instruction: systemPrompt }),
-          ...(interactionsTools && { tools: interactionsTools }),
-          generation_config: generationConfig,
         };
-        // Abort is wired via fetchOptions.signal (GoogleGenAIRequestOptions has
-        // no top-level abortSignal field).
         const stream = (await client.interactions.create(
           params,
-          signal ? { fetchOptions: { signal } } : undefined,
+          requestOptions,
         )) as Stream<InteractionSSEEvent>;
         const result = await this.consumeStream(stream, endTag, (text) => {
           aggregatedText += text;
         });
-        this.finalizeChain(result.response, base.length);
+        this.finalizeChain(result.response, base.length, stateful);
         return withUpdated(result);
       }
 
       const params: CreateModelInteractionParamsNonStreaming = {
-        model: this.config.fullName,
-        input: inputSteps,
+        ...commonParams,
         stream: false,
-        store: stateful,
-        ...(previousId && { previous_interaction_id: previousId }),
-        ...(systemPrompt && { system_instruction: systemPrompt }),
-        ...(interactionsTools && { tools: interactionsTools }),
-        generation_config: generationConfig,
       };
       const response = (await client.interactions.create(
         params,
-        signal ? { fetchOptions: { signal } } : undefined,
+        requestOptions,
       )) as unknown as GoogleGenAIInteraction;
-      this.finalizeChain(response, base.length);
+      this.finalizeChain(response, base.length, stateful);
       return withUpdated({ response });
     } catch (error) {
       // Expired/unknown previous_interaction_id ⇒ drop the chain and full-resend
