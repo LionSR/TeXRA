@@ -110,17 +110,6 @@ function isTextContent(content: Content): content is TextContent {
   return content.type === 'text';
 }
 
-/** Read the (external `llm-zoo`) per-model Interactions opt-in, if any. */
-function configRequiresInteractionsAPI(config: object): boolean {
-  // `requiresInteractionsAPI` is not yet on the external `llm-zoo` ModelConfig
-  // shape (parallel to `requiresResponsesAPI`). Read it defensively so a future
-  // registry that sets it forces the handler without breaking the build today.
-  return (
-    (config as { requiresInteractionsAPI?: boolean })
-      .requiresInteractionsAPI === true
-  );
-}
-
 /** Mutable accumulator for a single in-flight step during streaming. */
 interface PendingStep {
   type: Step['type'] | string;
@@ -1097,7 +1086,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     messages: Step[],
     mediaFiles: FileLocation[],
   ): Promise<void> {
-    if (!mediaFiles.length || !this.capabilities.supportsVision) return;
+    if (!mediaFiles.length || !this.supportsFileUploads()) return;
     const lastUser = [...messages]
       .reverse()
       .find((s): s is UserInputStep => s.type === 'user_input');
@@ -1285,9 +1274,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       status,
       usage,
       steps:
-        completedInteraction?.steps && completedInteraction.steps.length > 0
-          ? completedInteraction.steps
-          : finalizedSteps,
+        finalizedSteps.length > 0
+          ? finalizedSteps
+          : (completedInteraction?.steps ?? []),
     } as unknown as GoogleGenAIInteraction;
 
     const finalReasoning = this.processThinkingBlock(response);
@@ -1358,7 +1347,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   /** Turn the per-index accumulators into a verbatim model-generated Step[]. */
   private finalizeSteps(pending: Map<number, PendingStep>): Step[] {
-    const ordered = [...pending.entries()].sort((a, b) => a[0] - b[0]);
+    const ordered = [...pending.entries()].toSorted((a, b) => a[0] - b[0]);
     const steps: Step[] = [];
     for (const [, slot] of ordered) {
       if (slot.type === 'thought') {
