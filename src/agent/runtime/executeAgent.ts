@@ -30,6 +30,10 @@ import {
   type RoundOutput,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import type {
+  CompileFailureSummary,
+  OutputFileSummary,
+} from '@shared/schemas/output';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 
 import {
@@ -42,12 +46,7 @@ import { currentSession, type SessionHandle } from './SessionHandle';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
-import {
-  AgentFlowError,
-  type AgentFlowResult,
-  type CompileFailureSummary,
-  type OutputFileSummary,
-} from './AgentFlowResult';
+import { AgentFlowError, type AgentFlowResult } from './AgentFlowResult';
 import type { AgentRunHandle } from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 

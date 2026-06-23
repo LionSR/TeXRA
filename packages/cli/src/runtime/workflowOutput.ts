@@ -4,10 +4,10 @@ import * as path from 'node:path';
 import type { AgentEntry } from '@agent/index';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import type { OutputFileSummary } from '@shared/schemas/output';
 import { getRunDir } from '@utils/files';
 
 import { CliUsageError, type CliContext } from './cliContext';

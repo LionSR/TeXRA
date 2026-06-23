@@ -1,4 +1,8 @@
-import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
+import {
+  getExecutionStore,
+  writeTerminalStatus,
+  type ResultMeta,
+} from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { toErrorMessage } from '@common/errors/errorMessage';
@@ -166,17 +170,17 @@ async function persistWorkflowResultMeta(
 ): Promise<void> {
   if (result.category !== AgentCategory.Workflow) return;
   try {
+    const resultMeta: ResultMeta = {
+      outputs: [...result.outputs],
+      compileFailures: [...result.compileFailures],
+    };
     if (result.copiedOutput) {
-      await getExecutionStore(executionId).writeResultMeta({
-        copiedOutput: result.copiedOutput,
-      });
-      return;
+      resultMeta.copiedOutput = result.copiedOutput;
     }
     if (result.copiedOutputs?.length) {
-      await getExecutionStore(executionId).writeResultMeta({
-        copiedOutputs: result.copiedOutputs,
-      });
+      resultMeta.copiedOutputs = [...result.copiedOutputs];
     }
+    await getExecutionStore(executionId).writeResultMeta(resultMeta);
   } catch (error) {
     writeTextStderr(
       `Warning: could not persist workflow result metadata: ${toErrorMessage(error)}`,
