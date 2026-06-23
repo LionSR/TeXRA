@@ -320,17 +320,15 @@ describe('CLI orchestration items', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [],
       history: [
-        historyEntry('aaaaaaaaaaaa', { agent: 'assistant' }),
+        historyEntry('aaaaaaaaaaaa', { agent: 'research' }),
         historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
       ],
-      toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
+      toolUseAgents: [toolUseAgent('research'), toolUseAgent('review')],
     });
 
     expect(items.map((item) => item.label)).toContain('New chat');
     expect(items.map((item) => item.label)).toContain('Chat with review');
-    expect(items.map((item) => item.label)).not.toContain(
-      'Chat with assistant',
-    );
+    expect(items.map((item) => item.label)).not.toContain('Chat with research');
   });
 
   it('lists team presets as runnable orchestration actions', () => {

@@ -221,8 +221,7 @@ starting over:
    unchecked — discoverable and reversible with shipped UI.
 
 2. **Canonical agent labels.** Agent dropdowns use the YAML `name` as
-   the label. Do not add `displayName:` metadata to agent YAMLs; the
-   description field carries explanatory text.
+   the only picker label; the description field carries explanatory text.
 3. **"Browse all agents…" tail item** in the agent dropdown → opens
    Settings → Agents (handler exists). The docs counterpart of this
    destination is `docs/guide/built-in-agents.md`, the full catalog.
