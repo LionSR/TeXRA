@@ -7,7 +7,6 @@ import { Spinner } from '@inkjs/ui';
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
-import { formatAgentOptionLabel } from '@shared/utils/agentOptionLabels';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
@@ -173,7 +172,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const primarySectionTitle = agentPickerPrimarySectionTitle(agents.toolUse);
   const items = agents.toolUse.map((agent) => ({
     value: agent.value,
-    label: formatAgentOptionLabel(agent.label),
+    label: agent.label,
   }));
   // The current agent may be stored as a canonical key (`source:name`) or a
   // bare name; rows are keyed by canonical value, so match Select in that same
@@ -186,7 +185,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   );
   const workflowRows = agents.workflow.map((agent) => ({
     value: agent.value,
-    name: formatAgentOptionLabel(agent.label),
+    name: agent.label,
   }));
   const selectWindow = agentSelectWindow({
     availableRows: props.availableRows,

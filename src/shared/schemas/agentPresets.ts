@@ -121,17 +121,14 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For physics papers -- analytical derivations, numerical experiments, literature search, slides, and critical review.',
     icon: 'symbol-operator',
-    workflowAgents: ['criticize', 'generic', 'devise', 'apply'],
+    workflowAgents: ['correct', 'polish'],
     toolUseAgents: [
       'orchestrator',
       'research',
       'numerics',
       'review',
-      'search',
       'presenter',
-      'simplifier',
       'latexFixer',
-      'progressCheck',
     ],
   },
   {

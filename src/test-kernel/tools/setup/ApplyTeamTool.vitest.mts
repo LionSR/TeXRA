@@ -150,7 +150,10 @@ describe('seedRosterFromDefaultTeam', () => {
 
     expect(seeded).toBe(true);
     const roster = workspaceRoster();
-    expect(roster.workflow).toContain('criticize');
+    expect(roster.workflow?.toSorted()).toEqual([
+      'builtInWorkflow:correct',
+      'builtInWorkflow:polish',
+    ]);
     expect(roster.toolUse).toContain('builtInToolUse:review');
     expect(roster.toolUse).toContain('builtInToolUse:research');
     expect(roster.toolUse).toContain('orchestrator');
