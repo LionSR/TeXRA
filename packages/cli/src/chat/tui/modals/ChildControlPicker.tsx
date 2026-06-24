@@ -25,6 +25,7 @@ import { useLiveNowMs } from '../state/useLiveNowMs';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { textDisplayWidth } from '../render/terminalText';
 import { KEY_HINT_SEPARATOR, KeyHints, type KeyHint } from '../ui/KeyHints';
+import { POINTER } from '../ui/glyphs';
 import { SELECT_LABEL_MAX_COLS } from '../ui/Select';
 import type { StreamSlice } from '../state/cliState';
 
@@ -343,7 +344,7 @@ function renderItem(
         <Box minWidth={0}>
           <Box flexShrink={0}>
             <Text color={highlighted ? 'cyan' : undefined}>
-              {highlighted ? '›' : ' '} {index + 1}.{' '}
+              {highlighted ? POINTER : ' '} {index + 1}.{' '}
             </Text>
           </Box>
           <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>
@@ -371,7 +372,7 @@ function renderItem(
     <Box key={item.executionId} minWidth={0}>
       <Box flexShrink={0}>
         <Text color={highlighted ? 'cyan' : undefined}>
-          {highlighted ? '›' : ' '} {index + 1}.{' '}
+          {highlighted ? POINTER : ' '} {index + 1}.{' '}
         </Text>
       </Box>
       <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>
