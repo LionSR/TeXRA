@@ -570,9 +570,10 @@ export const CoreSettingsShape = {
         .prefault(DEFAULT_CORE_SETTINGS.latexdiff.pictureEnvironments),
       tempFileLocation: z
         .enum(LATEXDIFF_TEMP_FILE_LOCATIONS)
+        .describe(
+          'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
+        )
         .meta({
-          description:
-            'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
           enumDescriptions: [
             'Create temp files in the same directory as the original file. Best for resolving \\input{} and relative paths.',
             'Create temp files in .texra-temp directory at workspace root. Keeps source directories clean but may break relative paths.',
@@ -619,9 +620,10 @@ export const CoreSettingsShape = {
         .prefault(DEFAULT_CORE_SETTINGS.agentReview.includeUntrackedFiles),
       approach: z
         .enum(AGENT_REVIEW_APPROACHES)
+        .describe(
+          'Choose between quick or more thorough, higher-cost analysis.',
+        )
         .meta({
-          description:
-            'Choose between quick or more thorough, higher-cost analysis.',
           enumDescriptions: [
             'The reviewer verifies only its strongest suspicions with tools — fast and cheap.',
             'The reviewer reads every changed file in full, checks callers, and pulls diagnostics before reporting — deeper, higher-cost analysis.',
