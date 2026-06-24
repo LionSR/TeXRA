@@ -218,10 +218,10 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'workspaceState',
     hosts: ['vscode', 'desktop'],
     enumDescriptions: [
-      'Do not mark up changes inside math at all.',
-      'Mark a whole math environment as changed if anything inside it changed.',
-      'Mark up changes at a coarse granularity inside math (recommended).',
-      'Mark up changes at the finest granularity inside math.',
+      'suppress markup',
+      'equation-level',
+      'within equations',
+      'small changes inside equations',
     ],
   },
   {
@@ -256,6 +256,15 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 export const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
   (entry) => entry.key,
 );
+
+const STATE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
+  STATE_SETTINGS.map((entry) => [entry.key, entry]),
+);
+
+/** Look up a catalog entry by its canonical `texra.*` key. */
+export function stateSettingByKey(key: string): StateSettingEntry | undefined {
+  return STATE_SETTINGS_BY_KEY.get(key);
+}
 
 /**
  * The single canonical "CLI roster" — catalog entries the CLI consumes. Both
