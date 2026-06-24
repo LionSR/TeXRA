@@ -9,11 +9,12 @@ import {
   writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
+import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
 
 import { ApiModeForm } from '../forms/ApiModeForm';
 import { AgentListForm } from '../forms/AgentListForm';
 import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
-import { CLI_CONFIG_ROSTER, ConfigForm } from '../forms/ConfigForm';
+import { ConfigForm } from '../forms/ConfigForm';
 import { LoginForm, type LoginFormValue } from '../forms/LoginForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
@@ -288,24 +289,6 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
-  function ConfigFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const stores = options?.getConfigStores?.();
-    return (
-      <ConfigForm
-        availableRows={props.availableRows}
-        entries={CLI_CONFIG_ROSTER}
-        readValue={(entry) =>
-          stores ? readSetting(entry, stores, 'cli') : undefined
-        }
-        writeValue={(entry, value) =>
-          stores ? writeSetting(entry, value, stores, 'cli') : undefined
-        }
-        onClose={() => props.onDone(undefined)}
-        onError={options?.onError}
-      />
-    );
-  }
-
   registerSlashCommand({
     name: 'help',
     description: 'Show available slash commands',
@@ -407,14 +390,34 @@ export function registerBuiltinSlashCommands(options?: {
     category: 'configuration',
     formComponent: ToolsListFormAdapter,
   });
-  registerSlashCommand({
-    name: 'config',
-    description: 'View and toggle settings',
-    aliases: ['settings'],
-    category: 'configuration',
-    formComponent: ConfigFormAdapter,
-    formEscapeAction: 'close',
-  });
+  // Only offer /config when the host wired the stores it reads/writes — a
+  // command that can't reach a store would render an inert panel.
+  const getConfigStores = options?.getConfigStores;
+  if (getConfigStores) {
+    const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => {
+      const stores = getConfigStores();
+      return (
+        <ConfigForm
+          availableRows={props.availableRows}
+          entries={CLI_STATE_SETTINGS}
+          readValue={(entry) => readSetting(entry, stores, 'cli')}
+          writeValue={(entry, value) =>
+            writeSetting(entry, value, stores, 'cli')
+          }
+          onClose={() => props.onDone(undefined)}
+          onError={options?.onError}
+        />
+      );
+    };
+    registerSlashCommand({
+      name: 'config',
+      description: 'View and toggle settings',
+      aliases: ['settings'],
+      category: 'configuration',
+      formComponent: ConfigFormAdapter,
+      formEscapeAction: 'close',
+    });
+  }
   registerSlashCommand({
     name: 'compact',
     description: 'Request context compaction',

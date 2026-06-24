@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildConfigListItems,
   buildEnumItems,
-  CLI_CONFIG_ROSTER,
   ConfigForm,
   formatSettingValue,
   settingDisplayName,
@@ -18,6 +17,7 @@ import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBui
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
 import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
 import {
+  CLI_STATE_SETTINGS,
   STATE_SETTINGS,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
@@ -61,26 +61,26 @@ function renderConfigFormProps(): {
 
 describe('ConfigForm helpers', () => {
   it('rosters exactly the CLI-consumed catalog entries', () => {
-    expect([...CLI_CONFIG_ROSTER].map((entry) => entry.key)).toEqual(
+    expect([...CLI_STATE_SETTINGS].map((entry) => entry.key)).toEqual(
       STATE_SETTINGS.filter((entry) => entry.hosts.includes('cli')).map(
         (entry) => entry.key,
       ),
     );
-    expect(CLI_CONFIG_ROSTER.length).toBeGreaterThan(0);
+    expect(CLI_STATE_SETTINGS.length).toBeGreaterThan(0);
     // Every rostered entry must be reachable from the CLI's store set.
-    for (const entry of CLI_CONFIG_ROSTER) {
+    for (const entry of CLI_STATE_SETTINGS) {
       expect(entry.hosts).toContain('cli');
     }
   });
 
-  it('classifies edit kinds by value type and enum metadata', () => {
+  it('classifies edit kinds from the entry schema', () => {
     const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
     const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
     const formatter = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
 
-    expect(settingEditKind(markCommits, true)).toBe('boolean');
-    expect(settingEditKind(authorName, 'texra-ai')).toBe('readonly');
-    expect(settingEditKind(formatter, 'latexindent')).toBe('enum');
+    expect(settingEditKind(markCommits)).toBe('boolean');
+    expect(settingEditKind(authorName)).toBe('readonly');
+    expect(settingEditKind(formatter)).toBe('enum');
   });
 
   it('formats values for display', () => {
@@ -107,7 +107,7 @@ describe('ConfigForm helpers', () => {
   });
 
   it('builds list items with read-only rows disabled', () => {
-    const items = buildConfigListItems(CLI_CONFIG_ROSTER, (entry) =>
+    const items = buildConfigListItems(CLI_STATE_SETTINGS, (entry) =>
       entry.key === WorkspaceStateKey.GIT_MARK_COMMITS ? true : 'texra-ai',
     );
     const markCommits = items.find(
@@ -169,7 +169,7 @@ describe('/config slash command wiring', () => {
 
     const props = renderConfigFormProps();
     expect(props.entries?.map((entry) => entry.key)).toEqual(
-      CLI_CONFIG_ROSTER.map((entry) => entry.key),
+      CLI_STATE_SETTINGS.map((entry) => entry.key),
     );
 
     const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);

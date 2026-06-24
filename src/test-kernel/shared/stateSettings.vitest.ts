@@ -6,10 +6,11 @@ import { describe, it } from 'vitest';
 
 // Local imports - catalog + accessor
 import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
+import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
 import {
-  CLI_STATE_SETTING_KEYS,
   STATE_SETTINGS,
   STATE_SETTING_KEYS,
+  settingEnumOptions,
   type SettingStore,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
@@ -25,6 +26,7 @@ import {
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_MARK_COMMITS,
+  DEFAULT_GIT_WORKTREE_SUPPORT,
 } from '@shared/constants/git';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -48,7 +50,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [WorkspaceStateKey.GIT_MARK_COMMITS]: DEFAULT_GIT_MARK_COMMITS,
   [WorkspaceStateKey.GIT_AUTHOR_NAME]: DEFAULT_GIT_AUTHOR_NAME,
   [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: DEFAULT_GIT_AUTHOR_EMAIL,
-  [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: false,
+  [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: DEFAULT_GIT_WORKTREE_SUPPORT,
   [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]:
     LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
   [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]:
@@ -123,13 +125,14 @@ describe('state settings catalog', () => {
     }
   });
 
-  it('pairs enum entries with one description per value', () => {
+  it('pairs enum entries with one description per schema option', () => {
     for (const entry of STATE_SETTINGS) {
-      if (!entry.enumValues) {
+      const options = settingEnumOptions(entry);
+      if (!options) {
         assert.equal(
           entry.enumDescriptions,
           undefined,
-          `${entry.key} has enumDescriptions without enumValues`,
+          `${entry.key} has enumDescriptions without an enum schema`,
         );
         continue;
       }
@@ -137,10 +140,19 @@ describe('state settings catalog', () => {
         entry.enumDescriptions,
         `${entry.key} enum entry is missing enumDescriptions`,
       );
-      assert.equal(
-        entry.enumDescriptions?.length,
-        entry.enumValues.length,
-        entry.key,
+      assert.equal(entry.enumDescriptions?.length, options.length, entry.key);
+    }
+  });
+
+  it('shares no keys with the config-tree catalog', () => {
+    // The two catalogs must stay disjoint: a state-backed key must never reach
+    // the package.json generator via CoreSettingsShape, and a config key must
+    // never be double-registered through the catalog.
+    const coreKeys = new Set(CORE_SETTING_PATHS.map((path) => `texra.${path}`));
+    for (const key of STATE_SETTING_KEYS) {
+      assert.ok(
+        !coreKeys.has(key),
+        `${key} is in both CoreSettingsShape and STATE_SETTINGS`,
       );
     }
   });
@@ -167,12 +179,6 @@ describe('knownKeys derivation', () => {
         KNOWN_TEXRA_KEYS.has(key),
         `${key} missing from KNOWN_TEXRA_KEYS`,
       );
-    }
-  });
-
-  it('recognizes every CLI-consumed catalog key', () => {
-    for (const key of CLI_STATE_SETTING_KEYS) {
-      assert.ok(KNOWN_TEXRA_KEYS.has(key), key);
     }
   });
 });
