@@ -12,19 +12,25 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
 <section class="trust-row">
   <div class="trust-card">
-    <span class="trust-icon">🔬</span>
-    <h3>Grounded, not generated</h3>
-    <p>Every citation comes from a real database. Every figure is compiled. Every edit lands as a diff you can read line by line.</p>
+    <span class="trust-icon" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg>
+    </span>
+    <h3>Output you can check</h3>
+    <p>Citations resolve to real database entries. Figures compile from source. Edits arrive as diffs you read line by line before they touch your files.</p>
   </div>
   <div class="trust-card">
-    <span class="trust-icon">🧑‍🔬</span>
-    <h3>A team, not a chatbot</h3>
-    <p>One orchestrator decomposes the task and delegates to researchers, numericists, reviewers, and formalizers — each with its own tools and model.</p>
+    <span class="trust-icon" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="18.5" r="2.5"/><circle cx="19" cy="18.5" r="2.5"/><path d="M12 7.5v3.5M12 11h-7v5M12 11h7v5"/></svg>
+    </span>
+    <h3>A team of specialist agents</h3>
+    <p>An orchestrator splits the task and hands the pieces to researchers, numericists, reviewers, and formalizers — each with its own tools and model.</p>
   </div>
   <div class="trust-card">
-    <span class="trust-icon">🛡️</span>
-    <h3>Three levels of verification</h3>
-    <p>LLM prose, Wolfram algebra, and Lean 4 formal proof — connected in one environment for work where correctness is non-negotiable.</p>
+    <span class="trust-icon" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    </span>
+    <h3>Three independent checks</h3>
+    <p>Prose reviewed by an LLM, algebra checked in Wolfram, proofs verified in Lean 4 — three layers of verification in one environment.</p>
   </div>
 </section>
 
@@ -263,19 +269,31 @@ section p {
 .trust-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-  margin-top: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--vp-c-divider);
 }
 .trust-card {
-  background: var(--vp-c-bg-soft);
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 12px;
-  padding: 1.5rem;
+  padding: 0 1.75rem;
+  border-left: 1px solid var(--vp-c-divider);
+}
+.trust-card:first-child {
+  padding-left: 0;
+  border-left: none;
+}
+.trust-card:last-child {
+  padding-right: 0;
 }
 .trust-icon {
-  font-size: 1.6rem;
-  display: block;
-  margin-bottom: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9px;
+  margin-bottom: 0.8rem;
+  background: color-mix(in srgb, var(--vp-c-brand) 11%, transparent);
+  color: var(--vp-c-brand);
 }
 .trust-card h3 {
   margin: 0 0 0.4rem;
@@ -644,7 +662,18 @@ section p {
   }
   .trust-row {
     grid-template-columns: 1fr;
-    gap: 1rem;
+  }
+  .trust-card {
+    padding: 1.25rem 0;
+    border-left: none;
+    border-top: 1px solid var(--vp-c-divider);
+  }
+  .trust-card:first-child {
+    padding-top: 0;
+    border-top: none;
+  }
+  .trust-card:last-child {
+    padding-bottom: 0;
   }
   .lifecycle {
     flex-wrap: wrap;
