@@ -222,7 +222,7 @@ _texra() {
     return
   fi
 
-  if [[ "$path" == 'agents show' || "$path" == 'agents inspect' ]] && [[ "$cur" != -* ]]; then
+  if [[ "$path" == 'agents show' && "$cur" != -* ]]; then
     COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") )
     return
   fi

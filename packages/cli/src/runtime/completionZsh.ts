@@ -45,7 +45,6 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
         completion: `1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`,
         run: `1:agent:($(_texra_workflow_agents))`,
         'agents show': `1:agent:($(_texra_agents))`,
-        'agents inspect': `1:agent:($(_texra_agents))`,
         'agents run': `1:agent:($(_texra_tool_use_agents))`,
         'models show': `1:model:($(_texra_models))`,
       };
