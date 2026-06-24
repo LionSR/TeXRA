@@ -141,9 +141,10 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   },
 
   // --- Workflow auto-compile -------------------------------------------------
-  // Consumed only by the reflection/compile flow (OutputNode), which runs in
-  // the VS Code extension + desktop. The CLI runs tool-use agents only, never
-  // the reflection flow, so it does not read these — keep it off `hosts`.
+  // The CLI runs workflow (reflection) agents via `texra workflow` / `texra
+  // run`, so these take effect there as well as in the extension/desktop. The
+  // exception is auto-open-pdf: it emits `requestOpenFile`, which the headless
+  // CLI has no handler for, so it stays off the CLI roster.
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompile),
@@ -151,7 +152,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Compile the LaTeX project automatically after an agent writes its output.',
     category: 'workflow',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/agent/output/compileCheck.ts',
   },
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
@@ -163,7 +165,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Maximum time (in milliseconds) to wait for an automatic post-output compile before giving up.',
     category: 'workflow',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/agent/output/compileCheck.ts',
   },
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
@@ -172,6 +175,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Open the compiled PDF automatically after a successful auto-compile.',
     category: 'workflow',
     store: 'workspaceState',
+    // Read by OutputNode but the emitted `requestOpenFile` has no CLI handler
+    // (headless), so toggling it would be a no-op there — vscode/desktop only.
     hosts: ['vscode', 'desktop'],
   },
   {
@@ -183,11 +188,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Reject an agent edit when the automatic post-output compile fails, so broken LaTeX is not accepted.',
     category: 'workflow',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer:
+      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
   },
 
   // --- LaTeXdiff -------------------------------------------------------------
-  // Reflection-flow only (LatexDiffManager); not consumed by the CLI.
+  // Run by the reflection flow (so the CLI executes them), but deferred from the
+  // CLI roster for now per product decision — not surfaced in `/config`.
   {
     key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
@@ -237,8 +245,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   },
 
   // --- LaTeX formatter -------------------------------------------------------
-  // Read by the formatter via LatexDiffManager (reflection flow); the CLI's
-  // tool-use flow never formats output, so this stays vscode/desktop only.
+  // Invoked via LatexDiffManager during the reflection flow (which the CLI runs),
+  // i.e. coupled to the latexdiff path that's deferred from the CLI roster, so
+  // it stays vscode/desktop only for now.
   {
     key: WorkspaceStateKey.LATEX_FORMATTER,
     schema: z
