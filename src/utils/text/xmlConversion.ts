@@ -14,6 +14,7 @@ import { toErrorMessage } from '@common/errors';
 // Local imports - utils
 import * as logger from '@logger/logUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
+import { extendEnvPath } from '@utils/system/platformPaths';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Format Detection (inlined from xmlFormatDetection.ts - only used here)
@@ -177,6 +178,7 @@ async function convertWithPandoc(text: string): Promise<string | null> {
     const { stdout } = await execa('pandoc', ['-f', format, '-t', 'markdown'], {
       input: text,
       stripFinalNewline: false,
+      env: { ...process.env, PATH: extendEnvPath() },
     });
     return normalizePandocReferences(stdout);
   } catch (err) {
