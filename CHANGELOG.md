@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### CLI
 
+#### Features
+
+- **`texra latexdiff` command** — generate round-aware LaTeX diffs for an agent run's outputs straight from the terminal, the same capability the VS Code extension offers. Point it at a run with `texra latexdiff <agent> -m <model> -i <file>`; add `--between-rounds` to also diff consecutive rounds, `--run-id` to target a specific execution, and `--output-format json|ndjson` for scripting.
+
 #### Improvements
 
 - **Leaner, non-overlapping CLI options** — trimmed redundant choices so the same thing has one spelling: `--api-mode` now accepts just `included`/`personal` (plus the `relay`/`byok` shorthands) instead of seven near-synonyms, the duplicate `texra agents inspect` is gone in favor of `texra agents show`, and `texra login` now rejects `--device` together with `--no-browser` (they are different sign-in transports) instead of silently ignoring one.
