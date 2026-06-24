@@ -10,6 +10,9 @@
 // Standard library imports
 import * as path from 'node:path';
 
+// Third-party imports
+import pMap from 'p-map';
+
 // Local imports
 import { platform } from '@platform/platform';
 import type { FileLocation } from '@shared/schemas';
@@ -80,10 +83,14 @@ export async function extractLatexFileDependencies(
   const bibCandidates = collectBibliographyPaths(latexDir, uncommented);
 
   const [texResolved, bibResolved] = await Promise.all([
-    Promise.all(texInputPaths.map((raw) => resolveTexInputPath(raw, latexDir))),
-    Promise.all(
-      bibCandidates.map((absolute) => existingExternalPath(absolute)),
-    ),
+    pMap(texInputPaths, (raw) => resolveTexInputPath(raw, latexDir), {
+      concurrency: 8,
+      stopOnError: false,
+    }),
+    pMap(bibCandidates, (absolute) => existingExternalPath(absolute), {
+      concurrency: 8,
+      stopOnError: false,
+    }),
   ]);
 
   const results = new Set<string>();

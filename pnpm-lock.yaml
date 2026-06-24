@@ -176,9 +176,6 @@ importers:
       nanoid:
         specifier: ^5.1.15
         version: 5.1.15
-      node-pandoc:
-        specifier: ^0.3.0
-        version: 0.3.0
       openai:
         specifier: ^6.44.0
         version: 6.44.0(ws@8.21.0)(zod@4.4.3)
@@ -637,9 +634,6 @@ importers:
       nanoid:
         specifier: ^5.1.15
         version: 5.1.15
-      node-pandoc:
-        specifier: ^0.3.0
-        version: 0.3.0
       openai:
         specifier: ^6.44.0
         version: 6.44.0(ws@8.21.0)(zod@4.4.3)
@@ -4842,9 +4836,6 @@ packages:
 
   node-int64@0.4.0:
     resolution: {integrity: sha512-O5lz91xSOeoXP6DulyHfllpq+Eg00MWitZIbtPfoSEvqIHdl5gfcY6hYzDWnj0qD5tz52PI08u9qUvSVeUBeHw==}
-
-  node-pandoc@0.3.0:
-    resolution: {integrity: sha512-e+kANHQQFBlN7J8wEFf7sNc1sSCLltyPtPqNA/IEapiNsA1LjZ9mtV/B0lU6b2cAdvn7rrAVNBONw+Fo1YsY+A==}
 
   node-pty@1.1.0:
     resolution: {integrity: sha512-20JqtutY6JPXTUnL0ij1uad7Qe1baT46lyolh2sSENDd4sTzKZ4nmAFkeAARDKwmlLjPx6XKRlwRUxwjOy+lUg==}
@@ -10605,8 +10596,6 @@ snapshots:
       html-entities: 2.6.0
 
   node-int64@0.4.0: {}
-
-  node-pandoc@0.3.0: {}
 
   node-pty@1.1.0:
     dependencies:
