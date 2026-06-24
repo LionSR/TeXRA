@@ -132,6 +132,17 @@ function isTextContent(content: Content): content is TextContent {
   return content.type === 'text';
 }
 
+/**
+ * Steps the CLIENT contributes and must (re)send: the user's turns and tool
+ * results. Under `previous_interaction_id` chaining the model-generated steps
+ * (thought / function_call / model_output) are already held by the server, so
+ * only these are sent in the delta. (Verified live: echoing a server-held
+ * function_call on a chained tool round → HTTP 400; function_result-only → ok.)
+ */
+function isClientInputStep(step: Step): boolean {
+  return step.type === 'user_input' || step.type === 'function_result';
+}
+
 /** Concatenate the text of every TextContent block in a content list. */
 function joinTextContent(content: readonly Content[]): string {
   return content
@@ -429,14 +440,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * `requires_action`. Without this, tool-using agents would drop the chain
    * every round and never benefit from server-side state.
    *
-   * SMOKE-TEST (needs a real-key tool-use run): on a chained tool round the next
-   * request's delta (`base.slice(sentStepCount)`) re-sends the model-generated
-   * `thought`/`function_call` steps the server already holds (sentStepCount is
-   * pinned to the pre-append length — parity with ModelHandlerOpenAIResponse,
-   * which also sets sentMessages before the flow appends the assistant turn). If
-   * the server rejects or duplicates the echoed function_call instead of
-   * reconciling it, advance sentStepCount past the server-held generated steps
-   * so only the function_result is sent.
+   * The next round's delta is filtered to client-input steps
+   * ({@link isClientInputStep}) so the server-held model-generated steps are not
+   * re-sent — verified live: echoing the function_call on a chained tool round
+   * returns HTTP 400, while sending only the function_result completes.
    */
   private finalizeChain(
     response: GoogleGenAIInteraction,
@@ -1566,9 +1573,18 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const base = this.compactionResult?.compactedMessages ?? messages;
 
     // First request OR post-compaction OR stateless ⇒ full resend with no chain.
-    // Continuation ⇒ send only the Steps appended since the last completed send.
+    // Continuation ⇒ send only the CLIENT-INPUT Steps appended since the last
+    // send (user_input / function_result). The model-generated steps the flow
+    // also appends to the local transcript (thought / function_call /
+    // model_output) are already held by the chained interaction, and re-sending
+    // them is rejected — verified live: echoing the function_call on a chained
+    // tool round returns HTTP 400, while sending only the function_result
+    // completes. Filtering to client-input steps fixes both the tool-round 400
+    // and the text-round assistant-turn re-send.
     const shouldSendAll = !stateful || this.chainedInteractionId === null;
-    const inputSteps = shouldSendAll ? base : base.slice(this.sentStepCount);
+    const inputSteps = shouldSendAll
+      ? base
+      : base.slice(this.sentStepCount).filter(isClientInputStep);
     const previousId =
       stateful && !shouldSendAll
         ? (this.chainedInteractionId ?? undefined)
