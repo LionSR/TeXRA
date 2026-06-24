@@ -372,7 +372,7 @@ function renderItem(
     <Box key={item.executionId} minWidth={0}>
       <Box flexShrink={0}>
         <Text color={highlighted ? 'cyan' : undefined}>
-          {highlighted ? '›' : ' '} {index + 1}.{' '}
+          {highlighted ? POINTER : ' '} {index + 1}.{' '}
         </Text>
       </Box>
       <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>
