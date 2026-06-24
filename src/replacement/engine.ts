@@ -2,6 +2,9 @@
  * Utilities for managing text replacements in the codebase.
  */
 
+// Third-party imports
+import { LRUCache } from 'lru-cache';
+
 // Local imports - common
 
 // Local imports - log
@@ -207,21 +210,27 @@ function getAllReplacementsRegex(): ReplacementCategory[] {
  * engine runs several times per model response over mostly static rule sets, so
  * compiling each pattern once removes repeated RegExp construction from the
  * streaming hot path.
+ *
+ * Bounded by an LRU so overflow evicts only the least-recently-used entry
+ * rather than dropping every entry at once — a `Map.clear()` on overflow would
+ * cold-recompile every active pattern on the next streamed chunk. Caching is
+ * safe even for global (`g`) patterns: they are only ever consumed via
+ * `String.prototype.replace`, which resets `lastIndex` around each call, so a
+ * shared RegExp instance carries no per-call state between replacements.
  */
-const compiledRegexCache = new Map<string, RegExp>();
 const MAX_COMPILED_REGEX_CACHE = 1000;
+const compiledRegexCache = new LRUCache<string, RegExp>({
+  max: MAX_COMPILED_REGEX_CACHE,
+});
 
 function getCompiledRegex(pattern: string, flags?: string): RegExp {
   const key = `${flags ?? ''}\u0000${pattern}`;
-  let regex = compiledRegexCache.get(key);
-  if (regex) {
-    return regex;
+  const cached = compiledRegexCache.get(key);
+  if (cached) {
+    return cached;
   }
 
-  regex = new RegExp(pattern, flags);
-  if (compiledRegexCache.size >= MAX_COMPILED_REGEX_CACHE) {
-    compiledRegexCache.clear();
-  }
+  const regex = new RegExp(pattern, flags);
   compiledRegexCache.set(key, regex);
   return regex;
 }
