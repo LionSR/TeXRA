@@ -19,7 +19,6 @@ import { RoundKeySchema } from '@shared/schemas';
 import type { OutputFileInfo } from '@shared/schemas';
 import {
   WorkspaceFS,
-  TaskRunFileService,
   flexibleFS,
   getComparablePath,
   pathToLocation,
@@ -100,7 +99,6 @@ export async function runLatexdiffFromMetadata(params: {
   mathMarkup?: MathMarkupOption;
   generateBetweenRoundDiffs: boolean;
   progress: DiffProgressReporter;
-  fileService: TaskRunFileService;
 }): Promise<DiffRunOutcome> {
   const { rounds, mathMarkup, generateBetweenRoundDiffs, progress } = params;
 
