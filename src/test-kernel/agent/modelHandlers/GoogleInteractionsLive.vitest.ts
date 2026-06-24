@@ -130,6 +130,13 @@ function mockConfig(background: boolean): void {
   vi.spyOn(providerConfigModule, 'getGlobalStreaming').mockReturnValue(false);
 }
 
+/** Handler that forces the real streaming SSE path (the production default). */
+class StreamingLiveHandler extends ModelHandlerGoogleInteractions {
+  override getStreamingConfig(): boolean {
+    return true;
+  }
+}
+
 function userStep(text: string): Step {
   return { type: 'user_input', content: [{ type: 'text', text }] };
 }
@@ -316,5 +323,50 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
     ).toBe(true);
     expect(r2.response.status).toBe('completed');
     expect(t2.text.length).toBeGreaterThan(0);
+  }, 120_000);
+
+  it('streaming: the real SSE path assembles output and completes', async () => {
+    mockConfig(/* background */ false);
+    const real = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
+    const { client } = recordingClient(real);
+
+    // Capture streamed output appends to confirm the SSE path actually streamed.
+    const appends: string[] = [];
+    const streamLogger = {
+      ...logger(),
+      openStream: () => ({
+        id: 's',
+        append: (t: string) => appends.push(t),
+        finalize: (t?: string) => t ?? appends.join(''),
+      }),
+    } as unknown as AgentTrace;
+
+    const handler = new StreamingLiveHandler(liveConfig());
+    handler.setLogger(streamLogger);
+    handler.setOutputStreaming(true);
+    handler.setAgentCategory(AgentCategory.ToolUse);
+
+    const r = await handler.createResponse({
+      client: client as never,
+      messages: [userStep('Count from 1 to 5, separated by spaces.')],
+      temperature: 0,
+    });
+    const t = handler.extractResponse(r.response, '');
+     
+    console.log(
+      '[live] streaming status:',
+      r.response.status,
+      'appendChunks:',
+      appends.length,
+      'text:',
+      JSON.stringify(t.text.slice(0, 80)),
+    );
+
+    // The real streaming SSE path assembled the output and completed. (Append
+    // chunk count is logged for info but not asserted — short responses may
+    // arrive without incremental text deltas, which is model-dependent.)
+    expect(r.response.status).toBe('completed');
+    expect(t.text.length).toBeGreaterThan(0);
+    void appends;
   }, 120_000);
 });
