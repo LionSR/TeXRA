@@ -2,18 +2,20 @@
 import { isIP } from 'node:net';
 
 // Third-party imports
-import axios from 'axios';
-import { StatusCodes } from 'http-status-codes';
+import ky, { HTTPError } from 'ky';
+import pRetry, { AbortError } from 'p-retry';
 import TurndownService from 'turndown';
 import { z } from 'zod';
 
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
-import { isTimeoutErrorCode } from '@tools/timeouts';
+import { isTimeoutError, isTransientHttpError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
+const WEB_FETCH_RETRIES = 2;
+const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MB
 
 const WebFetchInputSchema = z.strictObject({
   url: z
@@ -80,46 +82,59 @@ export class WebFetchTool extends defineTool({
       );
     }
 
-    let response;
+    let rawBody: string;
+    let contentType: string;
+
     try {
-      response = await axios.get(url, {
-        responseType: 'text',
-        timeout: WEB_FETCH_TIMEOUT_MS,
-        maxRedirects: 5,
-        maxContentLength: 10 * 1024 * 1024,
-        maxBodyLength: 10 * 1024 * 1024,
-        validateStatus: (status) =>
-          status >= StatusCodes.OK && status < StatusCodes.BAD_REQUEST,
-      });
+      ({ rawBody, contentType } = await pRetry(
+        async (): Promise<{ rawBody: string; contentType: string }> => {
+          let response: Response;
+          try {
+            // AbortSignal.timeout covers both connection and body read;
+            // ky's own timeout only clears once headers arrive.
+            response = await ky.get(url, {
+              timeout: false,
+              signal: AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS),
+              retry: 0,
+            });
+          } catch (error: unknown) {
+            if (isTransientHttpError(error)) throw error;
+            throw new AbortError(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          }
+
+          const lengthHeader = response.headers.get('content-length');
+          if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
+            throw new AbortError(
+              `Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES / (1024 * 1024)} MB.`,
+            );
+          }
+
+          const ct = response.headers.get('content-type') ?? '';
+          const text = await response.text();
+          return { rawBody: text, contentType: ct };
+        },
+        { retries: WEB_FETCH_RETRIES, minTimeout: 500, randomize: true },
+      ));
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (isTimeoutErrorCode(error.code)) {
-          throw new ToolError(
-            `Request to ${url} timed out after ${WEB_FETCH_TIMEOUT_MS / 1000}s. ` +
-              `The remote server did not respond in time. Retry the request, or try a different URL.`,
-          );
-        }
-
-        if (error.response) {
-          throw new ToolError(
-            `HTTP ${error.response.status}: Failed to fetch ${url}`,
-          );
-        }
-
-        if (error.request) {
-          throw new ToolError(
-            `Network error fetching ${url}: ${error.message}`,
-          );
-        }
+      if (isTimeoutError(error)) {
+        throw new ToolError(
+          `Request to ${url} timed out after ${WEB_FETCH_TIMEOUT_MS / 1000}s. ` +
+            `The remote server did not respond in time. Retry the request, or try a different URL.`,
+        );
       }
-
+      if (error instanceof HTTPError) {
+        throw new ToolError(
+          `HTTP ${error.response.status}: Failed to fetch ${url}`,
+        );
+      }
+      if (error instanceof TypeError) {
+        throw new ToolError(`Network error fetching ${url}: ${error.message}`);
+      }
       throw new ToolError(`Failed to fetch ${url}: ${toErrorMessage(error)}`);
     }
 
-    const rawBody = response.data;
-    const contentType = String(
-      response.headers?.['content-type'] ?? '',
-    ).toLowerCase();
     const isMarkupContent =
       contentType.includes('html') ||
       contentType.includes('xml') ||

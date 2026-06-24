@@ -1,39 +1,45 @@
 /**
- * Shared timeout helpers for tool implementations.
+ * Shared timeout and HTTP-error helpers for tool implementations.
  *
  * Each tool defines its own timeout constant locally. This module only
- * provides the helpers that enforce a consistent error format across tools.
+ * provides the predicates that enforce a consistent error-classification
+ * policy across tools (built around the `ky` HTTP client).
  */
 
-import axios from 'axios';
+import { HTTPError, TimeoutError } from 'ky';
 
 /**
- * Check whether an axios error code indicates a timeout.
+ * Whether an error is a request timeout.
  *
- * axios uses ECONNABORTED by default and ETIMEDOUT when
- * `clarifyTimeoutError` is enabled or via the fetch adapter.
+ * Covers two sources:
+ * - ky's own `TimeoutError` (thrown when the `timeout:` option fires)
+ * - `DOMException`/`Error` with `name === 'TimeoutError'` (thrown when
+ *   `AbortSignal.timeout()` fires before the response or body arrives)
  */
-export function isTimeoutErrorCode(code: string | undefined): boolean {
-  return code === 'ECONNABORTED' || code === 'ETIMEDOUT';
+export function isTimeoutError(error: unknown): boolean {
+  if (error instanceof TimeoutError) return true;
+  if (error instanceof Error && error.name === 'TimeoutError') return true;
+  return false;
 }
 
 /**
- * Whether an error from an axios request is worth retrying.
+ * Whether an HTTP request error is transient (worth retrying).
  *
- * Transient = a retry could plausibly succeed: request timeouts, network-level
- * failures (no response received — DNS hiccup, connection reset), 429 rate
- * limits, and 5xx server errors. Permanent = the same request will keep
- * failing: other 4xx statuses (bad request, not found, auth), and non-axios /
- * application errors.
+ * Transient = timeout, network-level failure (no response received), 429
+ * rate limit, or 5xx server error.
+ * Permanent = other 4xx responses and non-network errors.
  *
- * Only safe to use for idempotent requests (GET / read-only RPC); retrying a
- * non-idempotent write risks duplicate side effects.
+ * Only safe to use for idempotent requests (GET / read-only RPC); retrying
+ * a non-idempotent write risks duplicate side effects.
  */
 export function isTransientHttpError(error: unknown): boolean {
-  if (!axios.isAxiosError(error)) return false;
-  if (isTimeoutErrorCode(error.code)) return true;
-  // No response means the request never completed (connection reset, DNS,
-  // socket hang up) — generally worth one more attempt for an external API.
-  if (!error.response) return true;
-  return error.response.status === 429 || error.response.status >= 500;
+  if (isTimeoutError(error)) return true;
+  if (error instanceof HTTPError) {
+    return error.response.status === 429 || error.response.status >= 500;
+  }
+  // Network-level TypeError from the underlying fetch — connection reset, DNS
+  // hiccup, socket hang-up. TypeErrors from ky/fetch calls are always network
+  // failures; programmer TypeErrors don't surface here.
+  if (error instanceof TypeError) return true;
+  return false;
 }

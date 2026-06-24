@@ -1,8 +1,9 @@
 import * as path from 'node:path';
+import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import { createGunzip } from 'node:zlib';
 
-import axios from 'axios';
 import { StatusCodes } from 'http-status-codes';
 import * as arxivIdentifiers from 'identifiers-arxiv';
 import pRetry, { AbortError } from 'p-retry';
@@ -173,11 +174,8 @@ class ArxivSourceProcessor {
     let destPath = destBasePath;
     let shouldCleanup = true;
     try {
-      const response = await axios.get(url, {
-        responseType: 'stream',
-        validateStatus: () => true,
-        timeout,
-      });
+      // AbortSignal.timeout covers both connection establishment and body streaming.
+      const response = await fetch(url, { signal: AbortSignal.timeout(timeout) });
 
       if (response.status === StatusCodes.NOT_FOUND) {
         throw new AbortError('Source not available for this arXiv ID');
@@ -192,7 +190,7 @@ class ArxivSourceProcessor {
       }
 
       // Extract filename from Content-Disposition header if available
-      const disposition = response.headers['content-disposition'];
+      const disposition = response.headers.get('content-disposition');
       if (disposition) {
         const match = /filename="?([^";]+)"?/i.exec(disposition);
         if (match) {
@@ -203,15 +201,18 @@ class ArxivSourceProcessor {
           );
         }
       } else {
-        const rawContentType = response.headers['content-type'];
-        const contentType =
-          typeof rawContentType === 'string' ? rawContentType : '';
+        const contentType = response.headers.get('content-type') ?? '';
         const extension = this.getExtensionFromContentType(contentType);
         destPath = destBasePath + extension;
       }
 
+      if (!response.body) {
+        throw new Error('Response has no body');
+      }
+
       await pipeline(
-        response.data as NodeJS.ReadableStream,
+        // response.body is a web ReadableStream; Readable.fromWeb bridges to Node streams.
+        Readable.fromWeb(response.body as NodeWebReadableStream),
         AbsoluteFS.createWriteStream(destPath),
       );
       shouldCleanup = false;
