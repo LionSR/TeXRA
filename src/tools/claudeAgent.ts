@@ -169,14 +169,6 @@ function formatClaudeDelivery(
   });
 }
 
-function formatClaudeError(
-  executionId: string,
-  prompt: string,
-  err: unknown,
-): string {
-  return formatAgentCliError('claude-agent-error', executionId, prompt, err);
-}
-
 // ============================================================================
 // Stream tab helpers
 // ============================================================================
@@ -470,7 +462,8 @@ function startClaudeAgentLoop(params: {
     formatDelivery: (turn, prompt, wallTimeMs) =>
       formatClaudeDelivery(executionId, prompt, wallTimeMs, turn),
     formatError: (turn, prompt, err) =>
-      formatClaudeError(
+      formatAgentCliError(
+        'claude-agent-error',
         executionId,
         prompt,
         err ?? turn?.errorMessage ?? turn?.finalResponse,

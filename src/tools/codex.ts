@@ -150,15 +150,6 @@ function formatCodexDelivery(
   });
 }
 
-/** Format a Codex error for delivery on the parent's follow-up queue. */
-function formatCodexError(
-  executionId: string,
-  prompt: string,
-  err: unknown,
-): string {
-  return formatAgentCliError('codex-error', executionId, prompt, err);
-}
-
 // ============================================================================
 // Stream tab helpers
 // ============================================================================
@@ -426,7 +417,7 @@ function startCodexLoop(params: {
     formatDelivery: (turn, prompt, wallTimeMs) =>
       formatCodexDelivery(executionId, prompt, wallTimeMs, turn, thread.id),
     formatError: (_turn, prompt, err) =>
-      formatCodexError(executionId, prompt, err),
+      formatAgentCliError('codex-error', executionId, prompt, err),
     onSessionCleanup: () => {
       const threadId = thread.id;
       if (threadId) codexThreads.release(threadId);
