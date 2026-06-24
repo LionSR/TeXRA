@@ -92,7 +92,9 @@ export class WebSearchTool extends defineTool({
         );
       }
       if (error instanceof TypeError) {
-        throw new ToolError(`Web search failed: network error — ${error.message}`);
+        throw new ToolError(
+          `Web search failed: network error — ${error.message}`,
+        );
       }
       throw new ToolError(`Web search failed: ${toErrorMessage(error)}`);
     }
