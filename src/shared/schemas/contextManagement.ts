@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { TokenCountSchema } from './usage';
+
 export const ContextManagementAction = z.enum([
   'compaction',
   'clear_tool_uses',
@@ -9,7 +11,6 @@ export const ContextManagementAction = z.enum([
 ]);
 export type ContextManagementAction = z.infer<typeof ContextManagementAction>;
 
-const TokenCountSchema = z.int().nonnegative();
 const PositiveTokenCountSchema = z.int().positive();
 
 export const ContextManagementDataSchema = z.object({

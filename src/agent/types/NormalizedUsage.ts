@@ -4,9 +4,7 @@
  */
 import { z } from 'zod';
 
-import { TokenUsageStatsSchema } from '@shared/schemas';
-
-const TokenCountSchema = z.int().nonnegative();
+import { TokenCountSchema, TokenUsageStatsSchema } from '@shared/schemas';
 
 /** Provider identifiers for usage tracking. */
 export const UsageProviderSchema = z.enum([
