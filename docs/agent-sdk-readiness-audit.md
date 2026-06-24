@@ -2439,7 +2439,7 @@ one new shim candidate was verified as a mixed control-point file (KEEP), and th
 candidates remain present and unapplied. Guardrails intact; no dead shim/barrel remains, so no
 refactor was applied.
 
-## 23. Re-verification addendum — 2026-06-24 (eighteenth pass — confirmation; the model-handler share-config de-duplication wave continues, all moving with the audit; three net-new core/handler backlog candidates recorded)
+## 23. Re-verification addendum — 2026-06-24 (eighteenth pass — confirmation; the model-handler share-config de-duplication wave continues, all moving with the audit; two net-new core backlog candidates recorded + one re-surfaced trap retracted)
 
 An eighteenth pass — a fresh three-agent fan-out (independent, given only the source, not this
 document): an `agent/core` abstraction audit (definition / execution / usage / tools / flows +
@@ -2450,8 +2450,9 @@ against branch `claude/eager-noether-ndrbio` at HEAD `5ad87cb`. **All 2026-05-28
 hold without change. No new structural over-abstraction surfaced; the standing verdict is reaffirmed
 for the eighteenth time** — TeXRA is well-architected and SDK-aligned, the gaps are incremental not
 structural. Like §15/§17–§22 this is a **confirmation-only pass — no refactor applied**: every
-net-new candidate below is behavior-touching (collaborator extraction, union-shape, interface merge,
-default-logger swap), and no zero-risk dead-shim/barrel item remains.
+net-new candidate below is behavior-touching (launch-entry unify, interface merge, default-logger
+swap), and no zero-risk dead-shim/barrel item remains. (One candidate the fan-out surfaced — extract
+the `ModelHandler` credential block — was **retracted** as a re-surfaced trap; see N1 below.)
 
 ### Drift baseline note (this branch forks at the ink-upgrade commit)
 
@@ -2528,20 +2529,34 @@ on "well-layered, incremental not structural" and re-surfaced the documented tra
 
 ### Genuinely-new candidates recorded for the backlog (verified first-hand; none are blockers, none applied)
 
-These do **not** appear in any prior section (grep'd both audit docs: zero prior hits for
-`shouldUseServerSideKeys`, `BaseFlowContextInit`-as-finding, the ctor `createChannelTrace('Agent')`
-default, or `resumeToolUseFromSnapshot`-as-finding). Each is behavior-touching, so each is recorded
-for a future tidy pass, not applied here:
+These were grep-checked against both audit docs (zero prior hits for `BaseFlowContextInit`-as-finding,
+the ctor `createChannelTrace('Agent')` default, or `resumeToolUseFromSnapshot`-as-finding) — but note
+the **proposals doc must be cross-checked by hand, not just grepped**: N1 below grep'd clean for
+`shouldUseServerSideKeys` yet was already rejected there under different wording
+(`auth/tiers/relay-quota`, `getServerSideKeyService()`), which is why it is retracted. Each surviving
+candidate is behavior-touching, so each is recorded for a future tidy pass, not applied here:
 
-- **N1 (MEDIUM) — extract the provider-agnostic credential block out of the `ModelHandler` base.**
-  `ModelHandler.ts:304-441` carries ~110 LOC of server-side-key / relay / tier-access credential logic
-  (`shouldUseServerSideKeys` `:321`, `getApiKey` `:361`, `getBaseUrl`, `fetchApiKeyOrThrow`). This is
-  the one **cohesive, fully provider-agnostic** sub-responsibility in the 1.3k-LOC base that is _not_
-  yet extracted — unrelated to the class's message-handling core, and the kind of policy a
-  `getApiKey()`-style injected collaborator would own (mirrors the already-extracted
-  `MediaAttachmentProcessor` / `ProxyConfigResolver`). _Not zero-risk:_ it reads `this.config` /
-  `this.logger` / `platform().secrets`, so extraction threads a collaborator, not a pure move. The
-  strongest net-new candidate this pass; complements the long-running "narrow the base class" theme.
+- **N1 (RETRACTED — re-surfaced a documented trap; do not pursue).** This pass's model-handler agent
+  proposed extracting the provider-agnostic credential block out of the `ModelHandler` base
+  (`ModelHandler.ts:304-441`, ~110 LOC of server-side-key / relay / tier-access logic —
+  `shouldUseServerSideKeys` `:321`, `getApiKey` `:361`, `getBaseUrl` `:430`, `fetchApiKeyOrThrow` `:337`)
+  into a `getApiKey()`-style injected collaborator, by analogy to the already-extracted
+  `MediaAttachmentProcessor` / `ProxyConfigResolver`. **This is the exact extraction the companion
+  proposals doc already evaluated, adversarially verified, and rejected as a trap** —
+  [`docs/proposals/agent-sdk-readiness.md`](./proposals/agent-sdk-readiness.md) "Rejected findings
+  (traps — do not pursue)", line 46: _"`ModelHandler` and `@auth/*` are **already vscode-free**; the
+  relay/tier logic is shared core consumed identically by CLI and extension (not host-specific);
+  `getServerSideKeyService()` is already a swappable, test-mocked singleton. The 'extract a port'
+  proposal would add indirection over a working, injectable seam."_ The `MediaAttachmentProcessor` /
+  `ProxyConfigResolver` analogy does **not** hold: those were extracted as genuine collaborators, not
+  to decouple the base from a host — whereas the credential seam is already injectable and host-neutral,
+  so a port adds indirection over a working seam. This pass surfaces **no new evidence** overturning
+  that adversarial verification (the credential code is unchanged this period), so N1 is **withdrawn**
+  and recorded here — in the audit's false-positive-ledger discipline (cf. §8) — so the same trap is
+  not re-flagged a future pass. _Methodology note:_ the fresh-eyes agents are given the source but
+  **not** the proposals doc, so its rejected-findings table must be cross-checked by hand each pass;
+  this one slipped through and is corrected here. (Credit: caught by the TeXRA `review` agent on
+  PR #6589.)
 - **N2 (MEDIUM, borderline) — a third top-level launch entry duplicates the lifecycle/result-build
   boilerplate.** `resumeToolUseFromSnapshot` (`runtime/executeAgent.ts:438`) repeats ~80% of
   `executeAgent`'s body (`buildAgentLaunchContext` → `withExecutionRunContext` → `runFlowWithLifecycle`
@@ -2628,9 +2643,12 @@ train — all moving _with_ the audit, none adding a layer. Three independent fr
 re-reached the standing verdict (two of them — the core flows agent and the model-handler
 `IModelHandler` agent — independently concluding "keep" themselves) and re-surfaced the recurring traps
 (`IModelHandler` width for the eleventh time, config-only OpenAI subclasses, usage-normalization
-"duplication") — all re-rebutted or already-tracked. The genuinely-new material is three small-to-medium
-candidates (extract the `ModelHandler` credential block, unify the `resumeToolUseFromSnapshot` launch
-entry, merge `BaseFlowContextInit` into `AgentCore`) plus three LOW tidies (noop default logger, stale
-batched JSDoc, the `core/` micro-tidies) — all behavior-touching, all recorded for a future tidy pass.
+"duplication") — all re-rebutted or already-tracked. The genuinely-new material is two small-to-medium
+candidates (N2: unify the `resumeToolUseFromSnapshot` launch entry; N3: merge `BaseFlowContextInit`
+into `AgentCore`) plus three LOW tidies (noop default logger, stale batched JSDoc, the `core/`
+micro-tidies) — all behavior-touching, all recorded for a future tidy pass. A third candidate (N1,
+extract the `ModelHandler` credential block) was **retracted** this pass: it re-surfaced an extraction
+the proposals doc already adversarially rejected as a trap (line 46), recorded in the false-positive
+ledger so it is not re-flagged.
 The five §21 candidates remain present and unapplied. Guardrails intact; no dead shim/barrel remains,
 so no refactor was applied.
