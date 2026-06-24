@@ -74,9 +74,6 @@ importers:
       async-mutex:
         specifier: ^0.5.0
         version: 0.5.0
-      axios:
-        specifier: ^1.18.0
-        version: 1.18.0
       bibtex:
         specifier: ^0.9.0
         version: 0.9.0

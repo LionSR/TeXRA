@@ -4,14 +4,14 @@
  * Uses the Loogle API at https://loogle.lean-lang.org/
  */
 
-import axios from 'axios';
+import ky from 'ky';
 import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { ToolResult } from '@shared/schemas/toolResult';
-import { isTimeoutErrorCode, isTransientHttpError } from '@tools/timeouts';
+import { isTimeoutError, isTransientHttpError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { ensureArray } from '@utils/core';
 
@@ -138,23 +138,26 @@ Useful for finding the right lemma when you know roughly what type it should hav
   private async fetchLoogle(query: string): Promise<LoogleResponse> {
     return pRetry(
       async () => {
-        const response = await axios
-          .get<unknown>(LOOGLE_API_URL, {
-            params: { q: query },
-            headers: {
-              'User-Agent': 'TeXRA-VSCode-Extension',
-            },
-            timeout: LOOGLE_TIMEOUT_MS,
-          })
-          .catch((error: unknown) => {
-            if (isTransientHttpError(error)) throw error;
-            throw new AbortError(
-              error instanceof Error ? error : new Error(String(error)),
-            );
-          });
+        let raw: unknown;
+        try {
+          raw = await ky
+            .get(LOOGLE_API_URL, {
+              searchParams: { q: query },
+              headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
+              timeout: false,
+              signal: AbortSignal.timeout(LOOGLE_TIMEOUT_MS),
+              retry: 0,
+            })
+            .json<unknown>();
+        } catch (error: unknown) {
+          if (isTransientHttpError(error)) throw error;
+          throw new AbortError(
+            error instanceof Error ? error : new Error(String(error)),
+          );
+        }
         // Validate the body at the boundary. A malformed shape is not transient,
         // so abort retries and let executeSingle surface it as a tool error.
-        const parsed = LoogleResponseSchema.safeParse(response.data);
+        const parsed = LoogleResponseSchema.safeParse(raw);
         if (!parsed.success) {
           throw new AbortError(
             new Error(
@@ -230,7 +233,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
         },
       };
     } catch (error) {
-      if (axios.isAxiosError(error) && isTimeoutErrorCode(error.code)) {
+      if (isTimeoutError(error)) {
         return {
           query,
           result: {
