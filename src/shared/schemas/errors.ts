@@ -107,11 +107,12 @@ export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
  * Minimal error info for retry state tracking.
  *
  * Structurally this is exactly a {@link ProviderError} without `rawErrorBody`
- * (large, not worth persisting in retry state). Every carried field is already
- * optional on the base schema, so the two shapes round-trip by narrowing /
- * widening rather than by re-listing the field set in three places. Deriving
- * the schema with `.omit()` keeps it from drifting out of sync with
- * `ProviderErrorObjectSchema` as new error fields are added.
+ * (large, not worth persisting in retry state) — that optional field is the
+ * sole difference between the two shapes, so they round-trip by narrowing
+ * (drop `rawErrorBody`) and widening (it stays absent) rather than by
+ * re-listing the field set in three places. Deriving the schema with `.omit()`
+ * keeps it from drifting out of sync with `ProviderErrorObjectSchema` as new
+ * error fields are added.
  */
 export const RetryErrorInfoSchema = z.preprocess(
   normalizeProviderErrorRetryFlag,
