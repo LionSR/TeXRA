@@ -3,14 +3,80 @@
 
 import { type AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { isAbortError } from '@common/errors';
+import { isAbortError, toErrorMessage } from '@common/errors';
 import type {
   ExecutionId,
   StorageKey,
   StreamTabId,
   TokenUsageStats,
 } from '@shared/schemas';
+import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';
+
+/** Maximum prompt length echoed back in a delivery/error XML element. */
+const DELIVERY_PROMPT_MAX = 200;
+
+export interface AgentCliDeliveryParams {
+  /** Root element name, e.g. `codex-result` or `claude-agent-result`. */
+  tag: string;
+  executionId: string;
+  prompt: string;
+  wallTimeMs: number;
+  /** Final assistant response; falls back to `(no response)` when empty. */
+  response: string;
+  /**
+   * Optional session/thread identifier rendered as an attribute on the root
+   * element (e.g. `thread-id` for codex, `session-id` for claude). Omitted when
+   * the value is falsy.
+   */
+  idAttr?: { name: string; value: string | null | undefined };
+  /** Token usage; omitted from output when null/undefined. */
+  usage?: { input: number; output: number } | null;
+  /** Extra child lines appended before the closing tag (e.g. cost). */
+  extraLines?: readonly string[];
+}
+
+/**
+ * Build the `<...-result>` XML delivered to the parent's follow-up queue when an
+ * agent-CLI turn completes. Shared by the codex and claudeAgent strategies;
+ * provider differences (tag, id attribute, extra lines) are parameters.
+ */
+export function formatAgentCliDelivery(params: AgentCliDeliveryParams): string {
+  const { tag, executionId, prompt, wallTimeMs, usage, extraLines } = params;
+  const durationSec = (wallTimeMs / 1000).toFixed(1);
+  const response = params.response || '(no response)';
+  const idAttr = params.idAttr?.value
+    ? ` ${params.idAttr.name}="${escapeAttr(params.idAttr.value)}"`
+    : '';
+  const lines = [
+    `<${tag} id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, DELIVERY_PROMPT_MAX))}"${idAttr}>`,
+    `<wall-time>${durationSec}s</wall-time>`,
+    `<response>${escapeText(response)}</response>`,
+  ];
+  if (usage) {
+    lines.push(`<usage input="${usage.input}" output="${usage.output}" />`);
+  }
+  if (extraLines) lines.push(...extraLines);
+  lines.push(`</${tag}>`);
+  return lines.join('\n');
+}
+
+/**
+ * Build the `<...-error>` XML delivered when an agent-CLI turn fails. Identical
+ * shape across providers apart from the element name.
+ */
+export function formatAgentCliError(
+  tag: string,
+  executionId: string,
+  prompt: string,
+  err: unknown,
+): string {
+  return [
+    `<${tag} id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, DELIVERY_PROMPT_MAX))}">`,
+    `<message>${escapeText(toErrorMessage(err))}</message>`,
+    `</${tag}>`,
+  ].join('\n');
+}
 
 /**
  * True when an error/abort represents a clean, caller-initiated interruption
