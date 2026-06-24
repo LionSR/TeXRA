@@ -50,7 +50,10 @@ function formatBlock(block: unknown): string {
       return `[tool_result: ${truncate(output, 100)}]`;
     }
     default:
-      return truncate(JSON.stringify(block), 100);
+      // `JSON.stringify` returns undefined for undefined/symbol/function
+      // blocks; fall back to '' so truncate never sees a non-string (matches
+      // the tool_result and message-content paths above).
+      return truncate(JSON.stringify(block) ?? '', 100);
   }
 }
 
