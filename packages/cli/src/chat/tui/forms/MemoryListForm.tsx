@@ -2,7 +2,6 @@
 // memory is selected.
 
 import { Box, Text } from 'ink';
-import { Spinner } from '@inkjs/ui';
 
 import {
   CLI_MEMORY_LIST_LIMIT,
@@ -13,7 +12,7 @@ import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
-import { FormFrame } from './_shared/FormFrame';
+import { FormFrame, renderAsyncListFormTransient } from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   type SelectWindowSize,
@@ -40,21 +39,13 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
     isEmpty: (entries) => entries.length === 0,
   });
 
-  if (loading) {
-    return (
-      <FormFrame color="cyan" title="/memory">
-        <Spinner label="Loading memories..." />
-      </FormFrame>
-    );
-  }
-
-  if (error) {
-    return (
-      <FormFrame color="red" title="/memory - error">
-        <Text>{error}</Text>
-      </FormFrame>
-    );
-  }
+  const transient = renderAsyncListFormTransient({
+    loading,
+    error,
+    title: '/memory',
+    loadingLabel: 'Loading memories...',
+  });
+  if (transient) return transient;
 
   const items = data ?? [];
   if (items.length === 0) {
