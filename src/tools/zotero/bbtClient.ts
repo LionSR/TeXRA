@@ -231,7 +231,10 @@ export async function callBetterBibTeX<T>(
           `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
       );
     }
-    if (error instanceof HTTPError && error.response.status === StatusCodes.NOT_FOUND) {
+    if (
+      error instanceof HTTPError &&
+      error.response.status === StatusCodes.NOT_FOUND
+    ) {
       throw new ToolError(
         'Better BibTeX plugin is not installed in Zotero. ' +
           'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',

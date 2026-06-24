@@ -16,7 +16,9 @@ function kyErrorWithStatus(status: number): HTTPError {
 describe('isTransientHttpError', () => {
   it('treats ky TimeoutError as transient', () => {
     expect(
-      isTransientHttpError(new TimeoutError(new Request('https://example.com'))),
+      isTransientHttpError(
+        new TimeoutError(new Request('https://example.com')),
+      ),
     ).toBe(true);
   });
 
