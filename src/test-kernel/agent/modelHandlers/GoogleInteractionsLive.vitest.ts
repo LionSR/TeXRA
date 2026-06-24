@@ -33,6 +33,7 @@ interface CreateRec {
   background: boolean | undefined;
   previousId: string | undefined;
   inputLen: number;
+  inputTypes: string[];
 }
 
 /** Wrap a real client so we can assert request shape without faking responses. */
@@ -53,13 +54,16 @@ function recordingClient(real: GoogleGenAI): {
           store?: boolean;
           background?: boolean;
           previous_interaction_id?: string;
-          input?: unknown[];
+          input?: Array<{ type?: string }>;
         };
         calls.create.push({
           store: p.store,
           background: p.background,
           previousId: p.previous_interaction_id,
           inputLen: Array.isArray(p.input) ? p.input.length : 0,
+          inputTypes: Array.isArray(p.input)
+            ? p.input.map((s) => s?.type ?? '?')
+            : [],
         });
         return ix.create(params, options);
       },
@@ -128,6 +132,19 @@ function mockConfig(background: boolean): void {
 
 function userStep(text: string): Step {
   return { type: 'user_input', content: [{ type: 'text', text }] };
+}
+
+/** Minimal workspace stub for the tool follow-up (empty reasoning + resets). */
+function fakeWorkspace(): import('@agent/core/execution/AgentWorkspaceState').AgentWorkspaceState {
+  const reasoning = { thinkingBlocks: [], thinkingAdded: false };
+  return {
+    reasoning,
+    resetServerToolContent: () => undefined,
+    resetReasoning: () => {
+      reasoning.thinkingBlocks = [];
+      reasoning.thinkingAdded = false;
+    },
+  } as never;
 }
 
 describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
@@ -220,4 +237,84 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
     expect(r.response.status).toBe('completed');
     expect(t.text.length).toBeGreaterThan(0);
   }, 180_000);
+
+  it('tool round-trip: chained round 2 sends function_result-only and completes', async () => {
+    mockConfig(/* background */ false);
+    const real = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
+    const { client, calls } = recordingClient(real);
+
+    const handler = new ModelHandlerGoogleInteractions(liveConfig());
+    handler.setLogger(logger());
+    handler.setAgentCategory(AgentCategory.ToolUse);
+
+    const tools = [
+      {
+        name: 'get_weather',
+        description: 'Get the current weather for a location',
+        parameters: {
+          type: 'object',
+          properties: { location: { type: 'string' } },
+          required: ['location'],
+        },
+      },
+    ];
+
+    // Round 1 — model should emit a function_call (status requires_action).
+    const messages: Step[] = [
+      userStep('What is the weather in Paris? Use the get_weather tool.'),
+    ];
+    const r1 = await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+      tools,
+    });
+    const toolCalls = handler.extractToolUse(r1.response);
+     
+    console.log(
+      '[live] tool round1 status:',
+      r1.response.status,
+      'calls:',
+      toolCalls.map((c) => `${c.name}(${JSON.stringify(c.input)})`).join(','),
+    );
+    expect(toolCalls.length).toBeGreaterThanOrEqual(1);
+
+    // Build the follow-up exactly as the flow does, then append it.
+    const followUp = await handler.createToolUseFollowUpMessages(
+      client as never,
+      toolCalls[0],
+      { output: 'Sunny, 22C' },
+      [],
+      fakeWorkspace(),
+    );
+    messages.push(...followUp);
+
+    const r2 = await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+      tools,
+    });
+    const t2 = handler.extractResponse(r2.response, '');
+     
+    console.log(
+      '[live] tool round2 status:',
+      r2.response.status,
+      'delta:',
+      JSON.stringify(calls.create[1].inputTypes),
+      'text:',
+      JSON.stringify(t2.text.slice(0, 80)),
+    );
+
+    // Chained round 2 — delta is client-input only (no echoed function_call),
+    // and it COMPLETES (the re-echo would 400).
+    expect(calls.create[1].previousId).toBeTruthy();
+    expect(
+      calls.create[1].inputTypes.every(
+        (t) => t === 'function_result' || t === 'user_input',
+      ),
+    ).toBe(true);
+    expect(r2.response.status).toBe('completed');
+    expect(t2.text.length).toBeGreaterThan(0);
+  }, 120_000);
 });
