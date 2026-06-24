@@ -29,20 +29,22 @@ describe('formatConversation', () => {
     expect(output).toContain('[tool_result: done]');
   });
 
-  it('falls back to JSON for unknown block shapes and missing fields', () => {
+  it('renders known blocks with missing fields and JSON-stringifies unknown shapes', () => {
     const output = formatConversation([
       {
         role: 'assistant',
         content: [
-          { type: 'text' },
-          { type: 'mystery', foo: 1 },
-          'raw string block',
+          { type: 'text' }, // known shape, missing text → empty, not JSON fallback
+          { type: 'mystery', foo: 1 }, // unknown shape → JSON fallback
+          'raw string block', // bare string passthrough
         ],
       },
     ]);
 
     expect(output).toContain('raw string block');
     expect(output).toContain('{"type":"mystery","foo":1}');
+    // A text block with no text contributes an empty line, never its JSON form.
+    expect(output).not.toContain('{"type":"text"}');
   });
 
   it('defaults a missing or non-string role to "unknown"', () => {

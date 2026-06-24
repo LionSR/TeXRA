@@ -74,6 +74,8 @@ function formatMessageContent(content: unknown): string {
 export function formatConversation(conversation: readonly unknown[]): string {
   const messages = conversation.map((msg, i) => {
     const m = (msg ?? {}) as ConversationMessage;
+    // Coerce a missing, non-string, or empty role to "unknown": stored roles
+    // are untrusted, and an empty label would render a meaningless role="".
     const role = asText(m.role) || 'unknown';
     const content = formatMessageContent(m.content);
     return `<message index="${i + 1}" role="${role}">\n${content}\n</message>`;
