@@ -6,7 +6,9 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
   githubSelectAccountWarning,
+  hasLoginTransportConflict,
   isCliLoginProvider,
+  LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   resolveLoginProvider,
   unsupportedLoginProviderMessage,
   type CliLoginInit,
@@ -86,6 +88,14 @@ export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
     selectAccount: readBooleanArg(args, 'select-account', 'selectAccount'),
     loginHint: readStringArg(args, 'login-hint', 'loginHint'),
   };
+}
+
+export function assertLoginTransportExclusive(
+  init: Pick<CliLoginInit, 'device' | 'noBrowser'>,
+): void {
+  if (hasLoginTransportConflict(init)) {
+    throw new CliUsageError(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
+  }
 }
 
 export function shouldPromptForLoginProvider(
@@ -226,15 +236,7 @@ export const loginCommand = withUsageSections(
     },
     run: (context, ctx) => {
       const init = loginInitFromArgs(ctx.args);
-      // `--device` and `--no-browser` are distinct sign-in transports, not
-      // refinements of each other (device-code shows no loopback URL), and the
-      // device branch silently wins when both are set. Reject the combination
-      // so the choice is explicit instead of quietly ignored.
-      if (init.device && init.noBrowser) {
-        throw new CliUsageError(
-          'Use either --device or --no-browser, not both: --device signs in with a one-time code (no loopback URL), while --no-browser prints the loopback sign-in URL.',
-        );
-      }
+      assertLoginTransportExclusive(init);
       return runLoginCommand(context, init);
     },
   }),
