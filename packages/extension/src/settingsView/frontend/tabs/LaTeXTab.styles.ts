@@ -162,7 +162,21 @@ export const latexTabStyles: CSSResult = css`
     margin-top: var(--wa-space-2xs);
   }
 
-  /* .section-header chrome lives in commonViewStyles. */
+  /* .section-header chrome lives in commonViewStyles; this view spaces the
+     subsequent sections from the cards above them. */
+  .section-header.spaced {
+    margin-top: var(--wa-space-s);
+  }
+
+  /* Number / enum controls inside a setting card sit below the description. */
+  .setting-number-input {
+    margin-top: var(--wa-space-2xs);
+    width: 140px;
+  }
+
+  .setting-enum-select {
+    margin-top: var(--wa-space-2xs);
+  }
 
   .setting-info {
     flex: 1;

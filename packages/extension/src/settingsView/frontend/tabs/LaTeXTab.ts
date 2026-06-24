@@ -459,7 +459,7 @@ export class LaTeXTab extends LitElement {
         ${this.desktopHost
           ? nothing
           : html`
-              <div class="section-header" style="margin-top:var(--wa-space-s)">
+              <div class="section-header spaced">
                 ${waIcon('settings-gear')} Recommended Settings
               </div>
 
@@ -481,7 +481,7 @@ export class LaTeXTab extends LitElement {
 
   private renderInlineCriticismSetting(): TemplateResult {
     return html`
-      <div class="section-header" style="margin-top:var(--wa-space-s)">
+      <div class="section-header spaced">
         ${waIcon('comment-discussion')} Inline Criticism
       </div>
       <div class="setting-card">
@@ -524,7 +524,7 @@ export class LaTeXTab extends LitElement {
   private renderCompileDiffSettings(): TemplateResult {
     const cv = this.configValues;
     return html`
-      <div class="section-header" style="margin-top:var(--wa-space-s)">
+      <div class="section-header spaced">
         ${waIcon('zap')} Compile &amp; Diff
       </div>
       <div class="latex-description">
@@ -724,7 +724,7 @@ export class LaTeXTab extends LitElement {
                   : Math.max(opts.min, integer);
               this.dispatchSetConfigValue(opts.field, clamped);
             }}
-            style="margin-top:var(--wa-space-2xs);width:140px;"
+            class="setting-number-input"
           ></wa-input>
         </div>
         ${isCustom
@@ -758,7 +758,7 @@ export class LaTeXTab extends LitElement {
               const v = (e.target as WaSelect).value as LatexConfigValueFor<F>;
               this.dispatchSetConfigValue(opts.field, v);
             }}
-            style="margin-top:var(--wa-space-2xs);"
+            class="setting-enum-select"
           >
             ${opts.options.map(
               (o) => html`
