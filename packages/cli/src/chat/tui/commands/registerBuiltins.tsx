@@ -1,6 +1,7 @@
 // Registers the slash commands the input palette surfaces.
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ExecutionId } from '@shared/schemas';
@@ -401,9 +402,15 @@ export function registerBuiltinSlashCommands(options?: {
           availableRows={props.availableRows}
           entries={CLI_STATE_SETTINGS}
           readValue={(entry) => readSetting(entry, stores, 'cli')}
-          writeValue={(entry, value) =>
-            writeSetting(entry, value, stores, 'cli')
-          }
+          writeValue={async (entry, value) => {
+            await writeSetting(entry, value, stores, 'cli');
+            // Git-author settings are applied to process env / worktree state
+            // at startup; re-apply so a /config toggle takes effect this session
+            // instead of only after a restart.
+            if (entry.category === 'git') {
+              applyCliGitAuthorConfig(stores.config);
+            }
+          }}
           onClose={() => props.onDone(undefined)}
           onError={options?.onError}
         />
