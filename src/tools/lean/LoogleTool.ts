@@ -133,7 +133,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
   /**
    * Fetch one Loogle query, retrying transient failures (timeouts, 5xx,
    * 429 rate limits, dropped connections) with jittered backoff. Non-429
-   * 4xx responses and non-axios errors abort immediately.
+   * 4xx responses and non-network errors abort immediately.
    */
   private async fetchLoogle(query: string): Promise<LoogleResponse> {
     return pRetry(

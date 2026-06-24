@@ -27,6 +27,11 @@ export interface ExtractOptions {
   channel?: string;
 }
 
+// AbortSignal.timeout() covers the entire request including body streaming,
+// unlike the old axios timeout which only covered header receipt. Use a
+// generous deadline so large tarballs (10s+ on a slow link) can complete.
+const DOWNLOAD_TIMEOUT_MS = 120_000; // 2 min
+
 export type ArxivDownloadDestination = 'root' | 'references';
 
 export interface DownloadSourceOptions {
@@ -369,6 +374,7 @@ class ArxivSourceProcessor {
     const downloadedPath = await this.downloadFile(
       downloadUrl,
       downloadBasePath,
+      DOWNLOAD_TIMEOUT_MS,
     );
 
     // Detect PDF-only submissions (no LaTeX source available)
