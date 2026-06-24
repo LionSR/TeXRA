@@ -216,6 +216,53 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     expect(calls[1].input.map(stepText)).toEqual(['c', 'd']);
   });
 
+  it('T2c: chained delta sends only client-input steps; server-held model steps are filtered out', async () => {
+    // Verified live: echoing a server-held function_call on a chained tool round
+    // returns HTTP 400; only the function_result must be sent.
+    const handler = createHandler();
+    const calls: RecordedCall[] = [];
+    const client = capturingClient(calls, (i) =>
+      completedEvents(i === 0 ? 'int_1' : 'int_2'),
+    );
+
+    const messages: Step[] = [userStep('a')];
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    // Mimic the flow appending the model-generated turn (server-held) + a tool
+    // result + a new user turn before the next round.
+    messages.push(
+      {
+        type: 'thought',
+        signature: 'sig',
+        summary: [{ type: 'text', text: 't' }],
+      } as Step,
+      { type: 'function_call', id: 'c1', name: 'tool', arguments: {} } as Step,
+      {
+        type: 'function_result',
+        call_id: 'c1',
+        name: 'tool',
+        result: [{ type: 'text', text: 'r' }],
+      } as Step,
+      userStep('b'),
+    );
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    expect(calls[1].previousId).toBe('int_1');
+    // thought + function_call (server-held) are dropped; only the result + new user remain.
+    expect(calls[1].input.map((s) => s.type)).toEqual([
+      'function_result',
+      'user_input',
+    ]);
+  });
+
   it('T4: an incomplete response does not chain; next round is a full resend', async () => {
     const handler = createHandler();
     const calls: RecordedCall[] = [];
