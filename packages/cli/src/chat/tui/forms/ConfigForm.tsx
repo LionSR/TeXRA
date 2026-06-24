@@ -11,7 +11,7 @@ import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 
 import { stripPrefix } from '@shared/config/configKeys';
-import { settingSlot } from '@shared/config/settingsAccess';
+import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 import {
   settingEnumOptions,
   settingIsBoolean,
@@ -116,6 +116,8 @@ export interface ConfigFormProps {
     entry: StateSettingEntry,
     value: unknown,
   ) => void | Promise<void>;
+  /** Reset a setting to its default (delete the key). */
+  readonly resetValue?: (entry: StateSettingEntry) => void | Promise<void>;
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
@@ -177,22 +179,54 @@ function ConfigTextEditor(props: {
 
 export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   const [mode, setMode] = useState<ConfigFormMode>({ kind: 'list' });
-  // Values are read live from `props.readValue`; bumping this after a write
-  // forces a re-render so the new value paints (the store itself is the SSOT).
-  const [, setRevision] = useState(0);
+  // Optimistic overrides: a write is async, so without these a rapid second
+  // toggle would recompute from a stale `readValue`. The override is set
+  // synchronously (so the next keypress sees it), reconciles with the store
+  // once the write lands, and rolls back if the write is rejected.
+  const [overrides, setOverrides] = useState<Record<string, unknown>>({});
 
-  const commit = (entry: StateSettingEntry, value: unknown): void => {
-    // Starting from a resolved promise routes both a synchronous throw (e.g. a
-    // schema-rejected value) and an async rejection through the single `.catch`.
+  const effective = (entry: StateSettingEntry): unknown =>
+    Object.hasOwn(overrides, entry.key)
+      ? overrides[entry.key]
+      : props.readValue(entry);
+
+  // Optimistically show `optimisticValue`, run the async `action`, and roll the
+  // override back to the prior value if it rejects. Starting from a resolved
+  // promise routes both a synchronous throw (e.g. a schema-rejected value) and
+  // an async rejection through the single `.catch`.
+  const runWrite = (
+    entry: StateSettingEntry,
+    optimisticValue: unknown,
+    action: () => void | Promise<void>,
+  ): void => {
+    const previous = effective(entry);
+    setOverrides((current) => ({ ...current, [entry.key]: optimisticValue }));
     void Promise.resolve()
-      .then(() => props.writeValue(entry, value))
-      .then(() => setRevision((revision) => revision + 1))
-      .catch((error: unknown) => props.onError?.(error));
+      .then(action)
+      .catch((error: unknown) => {
+        setOverrides((current) => ({ ...current, [entry.key]: previous }));
+        props.onError?.(error);
+      });
+  };
+
+  const commit = (entry: StateSettingEntry, value: unknown): void =>
+    runWrite(entry, value, () => props.writeValue(entry, value));
+
+  // Clearing a text field resets the setting (deletes the key) so its default
+  // reappears — otherwise a stored empty string can read back as "(empty)" while
+  // a consumer that coalesces empty→default (e.g. the git-author reader) quietly
+  // uses the default, leaving the panel and the effect out of sync.
+  const resetEntry = (entry: StateSettingEntry): void => {
+    if (!props.resetValue) {
+      commit(entry, '');
+      return;
+    }
+    runWrite(entry, settingDefault(entry), () => props.resetValue?.(entry));
   };
 
   if (mode.kind === 'enum') {
     const { entry } = mode;
-    const current = props.readValue(entry);
+    const current = effective(entry);
     const items = buildEnumItems(entry);
     const window = computeSelectWindowSize({
       availableRows: props.availableRows,
@@ -232,7 +266,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
 
   if (mode.kind === 'text') {
     const { entry, isNumber } = mode;
-    const current = props.readValue(entry);
+    const current = effective(entry);
     return (
       <ConfigTextEditor
         key={entry.key}
@@ -240,8 +274,12 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
         initialValue={current == null ? '' : String(current)}
         isNumber={isNumber}
         onSubmit={(raw) => {
-          const coerced = coerceSettingInput(raw, isNumber);
-          if (coerced) commit(entry, coerced.value);
+          if (!isNumber && raw.trim() === '') {
+            resetEntry(entry);
+          } else {
+            const coerced = coerceSettingInput(raw, isNumber);
+            if (coerced) commit(entry, coerced.value);
+          }
           setMode({ kind: 'list' });
         }}
         onCancel={() => setMode({ kind: 'list' })}
@@ -249,7 +287,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     );
   }
 
-  const items = buildConfigListItems(props.entries, props.readValue);
+  const items = buildConfigListItems(props.entries, effective);
 
   if (items.length === 0) {
     return (
@@ -270,7 +308,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     if (!entry) return;
     const kind = settingEditKind(entry);
     if (kind === 'boolean') {
-      commit(entry, !(props.readValue(entry) as boolean));
+      commit(entry, !(effective(entry) as boolean));
     } else if (kind === 'enum') {
       setMode({ kind: 'enum', entry });
     } else if (kind === 'string') {

@@ -49,6 +49,7 @@ function renderConfigFormProps(): {
     entry: StateSettingEntry,
     value: unknown,
   ) => void | Promise<void>;
+  resetValue?: (entry: StateSettingEntry) => void | Promise<void>;
 } {
   const node = cliState.activeForm.get()?.render(() => {}, 20) as {
     type?: (props: unknown) => unknown;
@@ -238,5 +239,22 @@ describe('/config slash command wiring', () => {
 
     await props.writeValue?.(markCommits, false);
     expect(getGitAuthorEnv()).toEqual({});
+  });
+
+  it('resets a git setting (delete) and re-applies the identity', async () => {
+    const { stores, config } = makeFakeSettingsStores();
+    registerBuiltinSlashCommands({ getConfigStores: () => stores });
+    openCliSlashCommandForm('config', '');
+
+    const props = renderConfigFormProps();
+    const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
+
+    await props.writeValue?.(authorName, 'someone-else');
+    expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(true);
+
+    await props.resetValue?.(authorName);
+    // The key is deleted, so reads fall back to the default identity.
+    expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(false);
+    expect(props.readValue?.(authorName)).toBe(DEFAULT_GIT_AUTHOR_NAME);
   });
 });

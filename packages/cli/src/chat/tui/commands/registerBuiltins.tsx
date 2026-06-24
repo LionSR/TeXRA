@@ -7,6 +7,7 @@ import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ExecutionId } from '@shared/schemas';
 import {
   readSetting,
+  resetSetting,
   writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
@@ -405,8 +406,14 @@ export function registerBuiltinSlashCommands(options?: {
           writeValue={async (entry, value) => {
             await writeSetting(entry, value, stores, 'cli');
             // Git-author settings are applied to process env / worktree state
-            // at startup; re-apply so a /config toggle takes effect this session
+            // at startup; re-apply so a /config change takes effect this session
             // instead of only after a restart.
+            if (entry.category === 'git') {
+              applyCliGitAuthorConfig(stores.config);
+            }
+          }}
+          resetValue={async (entry) => {
+            await resetSetting(entry, stores, 'cli');
             if (entry.category === 'git') {
               applyCliGitAuthorConfig(stores.config);
             }

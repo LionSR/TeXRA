@@ -236,13 +236,22 @@ describe('state settings catalog', () => {
 });
 
 describe('knownKeys derivation', () => {
-  it('recognizes every catalog key (no unknown-key warnings)', () => {
-    for (const key of STATE_SETTING_KEYS) {
-      assert.ok(
-        KNOWN_TEXRA_KEYS.has(key),
-        `${key} missing from KNOWN_TEXRA_KEYS`,
+  it('recognizes config-slot CLI keys, but warns on state.json keys in config.json', () => {
+    for (const entry of CLI_STATE_SETTINGS) {
+      const readFromConfig = (entry.cliStore ?? entry.store) === 'config';
+      assert.equal(
+        KNOWN_TEXRA_KEYS.has(entry.key),
+        readFromConfig,
+        `${entry.key}: config-recognition should match read-from-config=${readFromConfig}`,
       );
     }
+    // A workspaceState-backed setting is read from state.json, not config.json,
+    // so it must NOT be whitelisted there (a config.json entry is a no-op the
+    // unknown-key warning should catch).
+    assert.equal(
+      KNOWN_TEXRA_KEYS.has(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE),
+      false,
+    );
   });
 });
 
@@ -307,6 +316,16 @@ describe('settingsAccess', () => {
       readSetting(entry, stores, 'extension'),
       LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
     );
+  });
+
+  it('reset deletes a config-slot (ConfigProvider) key too', async () => {
+    const { stores, config } = makeFakeSettingsStores();
+    const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
+    await writeSetting(entry, false, stores, 'cli');
+    assert.equal(isStored(config, entry.key), true);
+    await resetSetting(entry, stores, 'cli');
+    assert.equal(isStored(config, entry.key), false);
+    assert.equal(readSetting(entry, stores, 'cli'), DEFAULT_GIT_MARK_COMMITS);
   });
 
   it('falls back to the default for a stored value that no longer validates', () => {
