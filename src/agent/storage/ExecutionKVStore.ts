@@ -16,6 +16,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
+import { normalizeFilePath } from '@shared/utils/path';
 import {
   CompileFailureSummarySchema,
   OutputFileSummarySchema,
@@ -268,7 +269,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 function normalizeWorkspaceFilePaths(paths: readonly string[]): string[] {
   const normalized = new Set<string>();
   for (const rawPath of paths) {
-    const pathValue = rawPath.trim().replaceAll('\\', '/');
+    const pathValue = normalizeFilePath(rawPath.trim());
     if (pathValue) normalized.add(pathValue);
   }
   return [...normalized].sort(byString);
