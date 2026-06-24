@@ -3,7 +3,6 @@
 // shared runtime formatter instead of duplicating skill wiring in the UI layer.
 
 import { Box, Text } from 'ink';
-import { Spinner } from '@inkjs/ui';
 
 import { formatRuntimeSkillActivation } from '@skills/runtimeSkills';
 import { readCliRuntimeSkills, skillListRecord } from '@cli/runtime/skills';
@@ -11,7 +10,11 @@ import { escapeText } from '@shared/utils/xmlEscape';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select, type SelectItem } from '../ui/Select';
-import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
+import {
+  CompactFormKeyHints,
+  FormFrame,
+  renderAsyncListFormTransient,
+} from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
@@ -100,21 +103,14 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
     },
   );
 
-  if (loading) {
-    return (
-      <FormFrame color="cyan" title="/skills" showCloseHint={false}>
-        <Spinner label="Loading skills..." />
-      </FormFrame>
-    );
-  }
-
-  if (error) {
-    return (
-      <FormFrame color="red" title="/skills - error" showCloseHint={false}>
-        <Text>{error}</Text>
-      </FormFrame>
-    );
-  }
+  const transient = renderAsyncListFormTransient({
+    loading,
+    error,
+    title: '/skills',
+    loadingLabel: 'Loading skills...',
+    showCloseHint: false,
+  });
+  if (transient) return transient;
 
   const skills = data?.skills ?? [];
   const issueSummary = skillImportIssueSummary(data?.errors.length ?? 0);
