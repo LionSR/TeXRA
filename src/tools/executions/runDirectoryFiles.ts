@@ -8,6 +8,7 @@ import * as path from 'node:path';
 
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
+import { normalizeFilePath } from '@shared/utils/path';
 
 export interface RunDirectoryEntry {
   readonly path: string;
@@ -52,7 +53,7 @@ async function walkDirectory(
     // Build raw path for filesystem access (preserves platform separators),
     // then normalize to forward slashes only for display output.
     const entryRaw = relativePath ? path.join(relativePath, name) : name;
-    const entryRelative = entryRaw.replaceAll('\\', '/');
+    const entryRelative = normalizeFilePath(entryRaw);
     const entryFull = path.join(basePath, entryRaw);
     const isDir = isDirectory(type);
 
