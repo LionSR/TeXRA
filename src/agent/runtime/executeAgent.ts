@@ -51,10 +51,7 @@ import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
 import { AgentFlowError, type AgentFlowResult } from './AgentFlowResult';
-import type {
-  AgentExecutionHandle,
-  AgentRunHandle,
-} from './executionRegistry';
+import type { AgentExecutionHandle, AgentRunHandle } from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const CHANNEL = 'executeAgent';
