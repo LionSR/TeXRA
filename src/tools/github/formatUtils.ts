@@ -122,32 +122,3 @@ export function trimSet<T>(set: Set<T>, maxSize: number): void {
   const iter = set.values();
   for (let i = 0; i < excess; i += 1) set.delete(iter.next().value as T);
 }
-
-/**
- * FIFO-trim a Map to `maxSize` entries by deleting the oldest keys (Map
- * iteration is insertion order, so deleting `keys().next().value` repeatedly
- * evicts oldest-first). Mirrors `trimSet` for the Map case.
- *
- * Pair with `setRecent` on the write side so "oldest" reflects "least
- * recently touched" rather than "earliest first inserted" — `Map.set` on
- * an existing key does NOT refresh insertion order, so a plain `set` would
- * let `trimMap` evict actively-touched entries.
- */
-export function trimMap<K, V>(map: Map<K, V>, maxSize: number): void {
-  while (map.size > maxSize) {
-    const oldest = map.keys().next().value;
-    if (oldest === undefined) break;
-    map.delete(oldest);
-  }
-}
-
-/**
- * Set `key` → `value` with LRU-style ordering: an existing entry is
- * deleted first so `set` re-inserts at the tail, keeping `trimMap`'s
- * eviction aligned with "least recently touched". Use this whenever a
- * Map is paired with `trimMap` and entries can be updated.
- */
-export function setRecent<K, V>(map: Map<K, V>, key: K, value: V): void {
-  map.delete(key);
-  map.set(key, value);
-}
