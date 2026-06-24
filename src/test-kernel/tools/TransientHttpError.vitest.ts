@@ -27,6 +27,15 @@ describe('isTransientHttpError', () => {
     expect(isTransientHttpError(err)).toBe(true);
   });
 
+  it('treats AbortError with TimeoutError cause as transient (undici wrapping)', () => {
+    const cause = Object.assign(new Error('signal timed out'), { name: 'TimeoutError' });
+    const err = Object.assign(new Error('The operation was aborted'), {
+      name: 'AbortError',
+      cause,
+    });
+    expect(isTransientHttpError(err)).toBe(true);
+  });
+
   it('treats network failures (no response) as transient', () => {
     // fetch throws TypeError for connection reset, DNS failure, socket hang-up
     expect(isTransientHttpError(new TypeError('Failed to fetch'))).toBe(true);
