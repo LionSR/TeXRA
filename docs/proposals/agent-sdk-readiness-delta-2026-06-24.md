@@ -20,6 +20,58 @@ so they are not re-litigated.
 
 ---
 
+## Update (2026-06-24, second pass) — deeper verification + refactor applied
+
+Each finding was re-traced to ground truth before any edit. Two of the first
+pass's claims changed materially:
+
+- **P1 is *latent*, not an active bug.** The only `onRoundFinalized`
+  implementation is `createUsageRecordingCallback` → `UsageMonitor.recordUsage`,
+  whose entire body is already wrapped in `try/catch` (`UsageMonitor.ts:111-197`,
+  no rethrow). So the callback cannot throw today, and the double-`recordRound`
+  window is currently unreachable — it is defended *by luck* (an external
+  callee's exception-safety), not by structure. The first pass's "drop the
+  catch-side `recordRound`" fix was also **wrong**: the catch is load-bearing for
+  the *other* path — a pre-finalize `BaseNode` (`ResponsePrepNode`/`ProcessNode`/
+  `ContinuationNode`) throwing before the finalize node runs (verified: `Flow._orchestrate`
+  → `BaseNode._run` has no try/catch, so those throws propagate straight to the
+  catch, which is the only finalization for that round).
+- **P2a (MiniMax dedup) is a TRAP — rejected.** The shared
+  `extractTextFromReasoningDetails` is **not** a superset: its `getReasoningItemText`
+  only reads text when `type === 'reasoning.text'`/`'reasoning.summary'`
+  (OpenRouter's tags), while MiniMax's `reasoning_details` items carry
+  `type: 'thinking'` and the local helper reads `.text` **unconditionally**
+  (`modelHandlerMiniMax.ts:15-22,105`). Swapping in the shared function would
+  silently return empty reasoning for MiniMax. Leave the local helper.
+
+**Applied this pass** (typecheck ×4 ✓, eslint ✓, 52 targeted tests ✓ —
+`FakePlatform`, `desktopWorkspacePath`, `ResponseCycleTools`, `ReflectionOutputLocation`):
+
+1. **P1 — structural hardening.** `ResponseCycleFinalizeNode.exec` now wraps
+   `onRoundFinalized?.(run)` in `try/catch` (warn-logs on failure), making it the
+   single finalization point that cannot throw *after* `recordRound` has mutated
+   run state. Behavior-identical today; closes the double-count footgun for any
+   future throwing callback. The outer `ResponseCycleNode` catch is unchanged
+   (still the safety net for genuine pre-finalize node throws).
+   (`ResponseCycleFlow.ts`)
+2. **P2b — dead-code removal.** Deleted the `WorkspaceProvider.watch` port method
+   (never called anywhere in repo history — `git log -S` over `workspace.watch(`
+   returns only the doc commit). Removed it from the interface, both host impls
+   (`vscodeWorkspace`, `nodeWorkspace`), and the test fake — including ~130 LOC of
+   now-unreachable recursive-watcher machinery in `nodeWorkspace.ts`.
+
+**Deferred (intentionally not applied):**
+
+- **P3b (`withModelClient` DRY):** the duplicated closure exposes `client` via a
+  **getter** with live rebinding for the relay-401 token-refresh path. Extracting
+  it to a helper and spreading the result would evaluate the getter eagerly and
+  **break liveness** (silent auth-refresh regression). Not worth the risk for a
+  ~15-line DRY; leave the two copies.
+- **P3a (empty-`FlowParams` aliases) / cross-provider message-builder
+  unification:** real but low-value/large-churn; tracked, not landed.
+
+---
+
 ## TL;DR — verdict unchanged, one latent bug worth eyes
 
 **The codebase remains well-aligned and is *not* drowning in abstraction.** The

@@ -654,11 +654,6 @@ export class FakeFileSystemProvider implements FileSystemProvider {
 }
 
 export class FakeWorkspaceProvider implements WorkspaceProvider {
-  private readonly watchers = new Set<{
-    globPattern: string;
-    listener: () => void;
-  }>();
-
   constructor(private readonly workspacePath: string | undefined) {}
 
   getWorkspacePath(): string | undefined {
@@ -676,16 +671,6 @@ export class FakeWorkspaceProvider implements WorkspaceProvider {
       return filePath;
     }
     return relative.replaceAll('\\', '/');
-  }
-
-  watch(globPattern: string, listener: () => void): Disposable {
-    const watcher = { globPattern, listener };
-    this.watchers.add(watcher);
-    return {
-      dispose: () => {
-        this.watchers.delete(watcher);
-      },
-    };
   }
 }
 
