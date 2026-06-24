@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 #### Features
 
-- **`/config` settings panel** — view and change settings from the chat TUI without leaving the terminal. `/config` (alias `/settings`) lists each setting with its current value and where it is stored; press Enter to toggle a switch, pick from a choice list, or edit a value inline. Covers the git commit-author identity settings the CLI applies to agent commits and worktrees. Settings come from the same shared catalog the VS Code extension uses, so the two surfaces stay in sync instead of drifting apart.
+- **`/config` settings panel** — view and change settings from the chat TUI without leaving the terminal. `/config` (alias `/settings`) lists each setting with its current value and where it is stored; press Enter to toggle a switch, pick from a choice list, or edit a value inline. Covers the git commit-author identity (applied to agent commits and worktrees) and the workflow auto-compile options the CLI uses for `texra workflow` / `texra run`. Settings come from the same shared catalog the VS Code extension uses, so the two surfaces stay in sync instead of drifting apart.
 - **`texra latexdiff` command** — generate round-aware LaTeX diffs for an agent run's outputs straight from the terminal, the same capability the VS Code extension offers. Point it at a run with `texra latexdiff <agent> -m <model> -i <file>`; add `--between-rounds` to also diff consecutive rounds, `--run-id` to target a specific execution, and `--output-format json|ndjson` for scripting.
 
 #### Improvements
