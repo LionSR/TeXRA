@@ -44,7 +44,7 @@ const CodexFileChangeItemSchema = z.object({
 
 export const CodexFileChangeToolInputSchema = z.object({
   changes: z.array(CodexFileChangeItemSchema),
-  patchStatus: z.string().optional(),
+  patchStatus: z.string().nullish(),
 });
 
 export type CodexFileChangeToolInput = z.infer<
@@ -83,7 +83,7 @@ type CodexTurnState = z.infer<typeof CodexTurnStateSchema>;
 
 export const CodexTurnToolInputSchema = z.object({
   state: CodexTurnStateSchema,
-  wallTimeMs: z.number().optional(),
+  wallTimeMs: z.number().nullish(),
 });
 
 export type CodexTurnToolInput = z.infer<typeof CodexTurnToolInputSchema>;

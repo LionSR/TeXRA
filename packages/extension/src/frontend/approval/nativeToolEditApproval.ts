@@ -208,7 +208,7 @@ async function nativeRequestApproval(
         originalContent,
         proposedContent,
         title,
-        streamId,
+        streamId: streamId ?? undefined,
         lineChanges,
         isSettled: () => settled,
         settle,
@@ -220,7 +220,7 @@ async function nativeRequestApproval(
       pendingApprovals.set(requestId, entry);
       // Register with the pure module for rejection tracking
       registerPendingApproval(requestId, {
-        streamId,
+        streamId: streamId ?? undefined,
         runtimeHost: getRuntimeHost(),
         isSettled: () => settled,
         settle,
