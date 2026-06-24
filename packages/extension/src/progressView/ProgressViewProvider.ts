@@ -14,6 +14,7 @@ import {
   setActiveSidebarView,
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
+import { bus } from '@eventBus/ProgressEventBus';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createChannelTrace } from '@logger';
 import {
@@ -263,7 +264,7 @@ export class ProgressViewProvider
 
   public async initialize(): Promise<void> {
     await this.backend.load();
-    this._disposables.push(this.backend.setupEventListeners());
+    this._disposables.push(this.backend.setupEventListeners(bus));
     this.logger.debug('ProgressViewProvider initialized');
   }
 
