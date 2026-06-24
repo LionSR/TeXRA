@@ -2536,7 +2536,7 @@ for a future tidy pass, not applied here:
 - **N1 (MEDIUM) — extract the provider-agnostic credential block out of the `ModelHandler` base.**
   `ModelHandler.ts:304-441` carries ~110 LOC of server-side-key / relay / tier-access credential logic
   (`shouldUseServerSideKeys` `:321`, `getApiKey` `:361`, `getBaseUrl`, `fetchApiKeyOrThrow`). This is
-  the one **cohesive, fully provider-agnostic** sub-responsibility in the 1.3k-LOC base that is *not*
+  the one **cohesive, fully provider-agnostic** sub-responsibility in the 1.3k-LOC base that is _not_
   yet extracted — unrelated to the class's message-handling core, and the kind of policy a
   `getApiKey()`-style injected collaborator would own (mirrors the already-extracted
   `MediaAttachmentProcessor` / `ProxyConfigResolver`). _Not zero-risk:_ it reads `this.config` /
@@ -2565,7 +2565,7 @@ for a future tidy pass, not applied here:
   `@logger` (`ModelHandler.ts:40`). Behavior-neutral but touches the import graph; trivial.
 - **N5 (LOW) — stale JSDoc.** `IModelHandler.ts:379` says `createBatchedToolUseFollowUpMessages` is
   "optional and primarily used by Google handlers"; it now has three implementers (Google, OpenAI,
-  OpenRouter) and GLM explicitly opts *out*. Fix the comment when next touching the file.
+  OpenRouter) and GLM explicitly opts _out_. Fix the comment when next touching the file.
 - **N6 (LOW) — `core/` micro-tidies the core agent surfaced:** inline the single-use `getDebugContext`
   (`CommonCycleTypes.ts`) into its one caller `saveCycleDebug`; factor the `run` / `workspace` /
   `fileService` trio that `ResponseCycleServices` and `ToolUseRoundServices` re-declare independently
