@@ -33,9 +33,10 @@ async function readBodyWithLimit(
   }
   const ct = response.headers.get('content-type') ?? '';
   const charsetMatch = /charset=([^\s;]+)/i.exec(ct);
+  const charset = charsetMatch?.[1]?.replace(/^["']|["']$/gu, '');
   let decoder: TextDecoder;
   try {
-    decoder = new TextDecoder(charsetMatch?.[1] ?? 'utf-8');
+    decoder = new TextDecoder(charset || 'utf-8');
   } catch {
     decoder = new TextDecoder();
   }
