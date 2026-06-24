@@ -2513,7 +2513,7 @@ on "well-layered, incremental not structural" and re-surfaced the documented tra
   redundant port** — the **eleventh** re-surfacing of the `IModelHandler`-is-redundant family — but,
   like §22, _itself concluded "no method is a true one-provider leak on the public port except the
   already-guarded `createBatchedToolUseFollowUpMessages?`,"_ matching §9–§22. The optional batched
-  member (`IModelHandler.ts:392`) that `ToolUseDispatchNode` feature-detects remains the load-bearing
+  member (`types/IModelHandler.ts:392`) that `ToolUseDispatchNode` feature-detects remains the load-bearing
   divergence; the §21 non-optional-with-base-default sequencing is still the correct (unapplied) path
   to eventually retiring the parallel interface. Re-confirmed essential, not re-flagged for deletion.
 - The model-handler agent re-flagged the **config-only OpenAI-compatible subclasses** (DashScope 14
@@ -2563,7 +2563,7 @@ for a future tidy pass, not applied here:
   real use (`AgentLaunchContext` injects the run trace). Default to the existing shared `noopTrace`
   (`@agent/trace`) instead — removes a per-handler allocation and the only reason the base imports
   `@logger` (`ModelHandler.ts:40`). Behavior-neutral but touches the import graph; trivial.
-- **N5 (LOW) — stale JSDoc.** `IModelHandler.ts:379` says `createBatchedToolUseFollowUpMessages` is
+- **N5 (LOW) — stale JSDoc.** `types/IModelHandler.ts:379` says `createBatchedToolUseFollowUpMessages` is
   "optional and primarily used by Google handlers"; it now has three implementers (Google, OpenAI,
   OpenRouter) and GLM explicitly opts _out_. Fix the comment when next touching the file.
 - **N6 (LOW) — `core/` micro-tidies the core agent surfaced:** inline the single-use `getDebugContext`
