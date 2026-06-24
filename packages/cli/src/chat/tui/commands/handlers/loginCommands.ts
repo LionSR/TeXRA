@@ -12,6 +12,8 @@ import {
 import { type CliContext } from '@cli/runtime/cliContext';
 import {
   githubSelectAccountWarning,
+  hasLoginTransportConflict,
+  LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   parseChatLoginSlashArgs,
   type CliLoginSlashArgs,
   type CliTexraLoginSlashArgs,
@@ -107,6 +109,13 @@ export async function loginFromChat(
   const args = parseChatLoginSlashArgs(input);
   if (!args) {
     appendLocalAssistantTranscript(CHAT_LOGIN_USAGE);
+    return;
+  }
+
+  // Match the CLI `login` guard: reject `--device` + `--no-browser` from the
+  // user's parsed flags before the ChatGPT path can auto-resolve `device`.
+  if (hasLoginTransportConflict(args)) {
+    appendLocalAssistantTranscript(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
     return;
   }
 
