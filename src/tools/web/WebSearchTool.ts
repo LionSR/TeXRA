@@ -70,7 +70,7 @@ export class WebSearchTool extends defineTool({
               signal: AbortSignal.timeout(DDG_TIMEOUT_MS),
               retry: 0,
             });
-            return response.json() as Promise<DuckDuckGoResponse>;
+            return (await response.json()) as DuckDuckGoResponse;
           } catch (error: unknown) {
             if (isTransientHttpError(error)) throw error;
             throw new AbortError(
