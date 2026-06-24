@@ -181,4 +181,43 @@ describe('ModelHandlerGoogleInteractions streaming', () => {
     expect(result.response.usage?.total_output_tokens).toBe(3);
     expect(result.response.status).toBe('completed');
   });
+
+  it('reports incomplete when the stream ends without an interaction.completed event', async () => {
+    const records: StreamRecord[] = [];
+    const handler = createHandler(records);
+
+    // A text turn that is cut off — no interaction.completed (or error) event.
+    const events: Interactions.InteractionSSEEvent[] = [
+      {
+        event_type: 'interaction.created',
+        interaction: { id: 'int_x', status: 'in_progress' },
+      },
+      { event_type: 'step.start', index: 0, step: { type: 'model_output' } },
+      {
+        event_type: 'step.delta',
+        index: 0,
+        delta: { type: 'text', text: 'partial' },
+      },
+      { event_type: 'step.stop', index: 0 },
+    ];
+
+    const result = await handler.createResponse({
+      client: fakeClient(events) as never,
+      messages: [
+        { type: 'user_input', content: [{ type: 'text', text: 'go' }] },
+      ],
+      temperature: 0,
+    });
+
+    // Truncation is surfaced as `incomplete`, not silently `completed`.
+    expect(result.response.status).toBe('incomplete');
+    expect(handler.extractResponse(result.response, '').stopReason).toBe(
+      'incomplete',
+    );
+  });
+
+  it('declares manual compaction support (client-side compaction is implemented)', () => {
+    const handler = createHandler([]);
+    expect(handler.supportsManualCompaction).toBe(true);
+  });
 });
