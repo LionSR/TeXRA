@@ -270,7 +270,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
       tools,
     });
     const toolCalls = handler.extractToolUse(r1.response);
-     
+
     console.log(
       '[live] tool round1 status:',
       r1.response.status,
@@ -296,7 +296,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
       tools,
     });
     const t2 = handler.extractResponse(r2.response, '');
-     
+
     console.log(
       '[live] tool round2 status:',
       r2.response.status,
