@@ -63,7 +63,7 @@ import {
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
-import { convertToolSchema } from '../toolConversion';
+import { convertToolSchema, toGoogleTools } from '../toolConversion';
 import type { GooglePricingConfig } from './googleUsage';
 
 // Type imports
@@ -420,6 +420,17 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * `completed` interaction that carries a string id; otherwise invalidate so
    * the next round full-resends rather than chaining onto an interaction the
    * server may not have retained.
+   *
+   * Deliberately NOT chaining on `requires_action` (tool-call rounds): the
+   * tool-use flow appends the model-generated steps (thought + function_call,
+   * via `buildAssistantTurnSteps`) plus the function_result to the local
+   * transcript before the next request, but the server already holds the
+   * model-generated steps it produced. Chaining here would require anchoring
+   * `sentStepCount` past those server-held steps so the delta carries only the
+   * function_result — an accounting that can't be computed safely offline. So
+   * tool rounds full-resend (correct, just not delta-optimised). Optimising this
+   * is a follow-up that needs a live tool-use run to confirm the server-side
+   * step accounting. Pure multi-turn text (no tools) chains normally.
    */
   private finalizeChain(
     response: GoogleGenAIInteraction,
@@ -559,6 +570,16 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   }
 
   /**
+   * The handler implements client-side compaction (see `compactConversation`),
+   * so manual (user-requested) compaction is supported. Always true: the
+   * Interactions handler is never reached through OpenRouter (the routing
+   * predicate excludes it), so the OpenAI-style OpenRouter guard is moot.
+   */
+  override get supportsManualCompaction(): boolean {
+    return true;
+  }
+
+  /**
    * Group parallel tool calls into one follow-up so the handler rebuilds the
    * model-generated steps (thought steps with their signatures + all
    * function-call steps) verbatim ahead of the function_result steps, in the
@@ -603,10 +624,19 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       countContents.push(createUserContent(transcriptText));
     }
 
+    // Include tool definitions in the count (parity with the chat handler) so
+    // the preflight doesn't under-count when tools are present. countTokens is
+    // the chat endpoint, so convert to the chat tool shape, not Interactions'.
+    const toolDefs = options?.tools as ToolDefinition[] | undefined;
+    const googleTools = toolDefs?.length ? toGoogleTools(toolDefs) : undefined;
+
     const responseTokenCount = await client.models.countTokens({
       model: this.config.fullName,
       contents: countContents,
-      config: { abortSignal: options?.signal },
+      config: {
+        abortSignal: options?.signal,
+        ...(googleTools?.length && { tools: googleTools }),
+      },
     });
 
     const totalTokens = responseTokenCount.totalTokens ?? 0;
@@ -1079,7 +1109,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const modelStep = messages.at(-1);
     if (modelStep?.type === 'model_output') {
       const content = (modelStep.content ??= []);
-      const lastText = [...content].reverse().find(isTextContent);
+      const lastText = content.findLast(isTextContent);
       if (lastText) {
         lastText.text = (lastText.text ?? '') + bestConnector + newResponse;
       } else {
@@ -1384,9 +1414,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   prependTextToUserMessage(messages: Step[], text: string): void {
     if (!text.trim()) return;
-    const lastUser = [...messages]
-      .reverse()
-      .find((s): s is UserInputStep => s.type === 'user_input');
+    const lastUser = messages.findLast(
+      (s): s is UserInputStep => s.type === 'user_input',
+    );
     if (lastUser) {
       (lastUser.content ??= []).unshift(this.textContent(text));
     }
@@ -1397,9 +1427,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     mediaFiles: FileLocation[],
   ): Promise<void> {
     if (!mediaFiles.length || !this.supportsFileUploads()) return;
-    const lastUser = [...messages]
-      .reverse()
-      .find((s): s is UserInputStep => s.type === 'user_input');
+    const lastUser = messages.findLast(
+      (s): s is UserInputStep => s.type === 'user_input',
+    );
     if (!lastUser) return;
     try {
       const media = await this.createMediaMessage(mediaFiles);
@@ -1478,7 +1508,12 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // lastKnownInputTokens, which drives the compaction trigger below.
     await this.applyTokenCountLimit({
       countTokens: () =>
-        this.estimateTokenCount(messages, { client, systemPrompt, signal }),
+        this.estimateTokenCount(messages, {
+          client,
+          systemPrompt,
+          signal,
+          tools,
+        }),
       currentMaxTokens: generationConfig.max_output_tokens ?? 8192,
       contextWindow: this.config.contextWindow,
       detailLabel:
@@ -1949,7 +1984,18 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const finalizedSteps = this.finalizeSteps(pending);
 
     const usage = completedInteraction?.usage ?? runningUsage ?? undefined;
-    const status = completedInteraction?.status ?? 'completed';
+    // If the stream ended without an interaction.completed (or error) event the
+    // turn was truncated/abnormally cut — report `incomplete` (not `completed`)
+    // so the cycle can continue rather than silently treating partial output as
+    // done. `finalizeSteps` preferred over the server steps so streamed thought
+    // signatures survive the round-trip.
+    let status = completedInteraction?.status;
+    if (!status) {
+      this.logger.warn(
+        'Google Interactions stream ended without an interaction.completed event; treating as incomplete.',
+      );
+      status = 'incomplete';
+    }
 
     const response: GoogleGenAIInteraction = {
       ...(completedInteraction ?? {}),
@@ -2034,12 +2080,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const steps: Step[] = [];
     for (const [, slot] of ordered) {
       if (slot.type === 'thought') {
+        // Skip an empty thought (no signature and no summary) — matches
+        // buildAssistantTurnSteps; an empty thought step is noise on the wire.
+        if (!slot.signature && !slot.thought) continue;
         steps.push({
           type: 'thought',
           ...(slot.signature ? { signature: slot.signature } : {}),
-          summary: slot.thought
-            ? [{ type: 'text', text: slot.thought }]
-            : undefined,
+          ...(slot.thought
+            ? { summary: [{ type: 'text', text: slot.thought }] }
+            : {}),
         } satisfies ThoughtStep);
       } else if (slot.type === 'function_call') {
         steps.push({
