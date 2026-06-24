@@ -12,8 +12,10 @@ import { Box, Text } from 'ink';
 import { useState } from 'react';
 
 import { stripPrefix } from '@shared/config/configKeys';
+import { settingSlot } from '@shared/config/settingsAccess';
 import {
-  STATE_SETTINGS,
+  settingEnumOptions,
+  settingIsBoolean,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
 
@@ -22,23 +24,16 @@ import { Select, type SelectItem } from '../ui/Select';
 import { FormFrame } from './_shared/FormFrame';
 import { computeSelectWindowSize } from './_shared/selectWindow';
 
-/** Catalog entries the CLI actually consumes — the `/config` roster. */
-export const CLI_CONFIG_ROSTER: readonly StateSettingEntry[] =
-  STATE_SETTINGS.filter((entry) => entry.hosts.includes('cli'));
-
 export type SettingEditKind = 'boolean' | 'enum' | 'readonly';
 
 /**
- * How a setting is edited in `/config`. Enum settings drill into a value
- * picker; booleans toggle inline; everything else (string/number) is read-only
- * for now (free-text editing is deferred).
+ * How a setting is edited in `/config`, derived from its schema: enum settings
+ * drill into a value picker; booleans toggle inline; everything else
+ * (string/number) is read-only for now (free-text editing is deferred).
  */
-export function settingEditKind(
-  entry: StateSettingEntry,
-  value: unknown,
-): SettingEditKind {
-  if (entry.enumValues && entry.enumValues.length > 0) return 'enum';
-  if (typeof value === 'boolean') return 'boolean';
+export function settingEditKind(entry: StateSettingEntry): SettingEditKind {
+  if (settingEnumOptions(entry)) return 'enum';
+  if (settingIsBoolean(entry)) return 'boolean';
   return 'readonly';
 }
 
@@ -50,7 +45,7 @@ export function formatSettingValue(value: unknown): string {
 
 /** The store the CLI reads/writes this setting from (cliStore override wins). */
 export function settingStoreLabel(entry: StateSettingEntry): string {
-  return entry.cliStore ?? entry.store;
+  return settingSlot(entry, 'cli');
 }
 
 export function settingDisplayName(entry: StateSettingEntry): string {
@@ -62,9 +57,8 @@ export function buildConfigListItems(
   readValue: (entry: StateSettingEntry) => unknown,
 ): Array<SelectItem<string>> {
   return entries.map((entry) => {
-    const value = readValue(entry);
-    const kind = settingEditKind(entry, value);
-    const valueText = formatSettingValue(value);
+    const kind = settingEditKind(entry);
+    const valueText = formatSettingValue(readValue(entry));
     const store = settingStoreLabel(entry);
     const suffix = kind === 'readonly' ? ' · read-only' : '';
     return {
@@ -79,7 +73,7 @@ export function buildConfigListItems(
 export function buildEnumItems(
   entry: StateSettingEntry,
 ): Array<SelectItem<string>> {
-  const values = entry.enumValues ?? [];
+  const values = settingEnumOptions(entry) ?? [];
   const descriptions = entry.enumDescriptions ?? [];
   return values.map((value, index) => ({
     value,
@@ -114,13 +108,12 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   const [, setRevision] = useState(0);
 
   const commit = (entry: StateSettingEntry, value: unknown): void => {
-    try {
-      Promise.resolve(props.writeValue(entry, value))
-        .then(() => setRevision((revision) => revision + 1))
-        .catch((error: unknown) => props.onError?.(error));
-    } catch (error: unknown) {
-      props.onError?.(error);
-    }
+    // Starting from a resolved promise routes both a synchronous throw (e.g. a
+    // schema-rejected value) and an async rejection through the single `.catch`.
+    void Promise.resolve()
+      .then(() => props.writeValue(entry, value))
+      .then(() => setRevision((revision) => revision + 1))
+      .catch((error: unknown) => props.onError?.(error));
   };
 
   if (mode.kind === 'enum') {
@@ -182,10 +175,9 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   const handleSelect = (key: string): void => {
     const entry = props.entries.find((candidate) => candidate.key === key);
     if (!entry) return;
-    const value = props.readValue(entry);
-    const kind = settingEditKind(entry, value);
+    const kind = settingEditKind(entry);
     if (kind === 'boolean') {
-      commit(entry, !(value as boolean));
+      commit(entry, !(props.readValue(entry) as boolean));
     } else if (kind === 'enum') {
       setMode({ kind: 'enum', entry });
     }

@@ -6,6 +6,7 @@ import {
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_MARK_COMMITS,
+  DEFAULT_GIT_WORKTREE_SUPPORT,
 } from '@shared/constants/git';
 import {
   LATEX_CONFIG_DEFAULTS,
@@ -75,9 +76,11 @@ export interface StateSettingEntry {
    * surfaced setting is never a silent no-op.
    */
   readonly cliConsumer?: string;
-  /** Allowed values for enum settings — drives the inner value picker. */
-  readonly enumValues?: readonly string[];
-  /** Per-value descriptions, aligned 1:1 with {@link enumValues}. */
+  /**
+   * Per-value descriptions for an enum setting, aligned 1:1 with the schema's
+   * enum options (see {@link settingEnumOptions}). The option *values* are
+   * derived from the schema, not restated here.
+   */
   readonly enumDescriptions?: readonly string[];
   /**
    * Delegate editing to an existing list form (e.g. `ModelListForm`) instead of
@@ -127,7 +130,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   },
   {
     key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-    schema: z.boolean().prefault(false),
+    schema: z.boolean().prefault(DEFAULT_GIT_WORKTREE_SUPPORT),
     description:
       'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
     category: 'git',
@@ -214,7 +217,6 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'latexdiff',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop'],
-    enumValues: LATEXDIFF_MATH_MARKUP_VALUES,
     enumDescriptions: [
       'Do not mark up changes inside math at all.',
       'Mark a whole math environment as changed if anything inside it changed.',
@@ -242,7 +244,6 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'latex',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop'],
-    enumValues: LATEX_FORMATTER_VALUES,
     enumDescriptions: [
       'Format with latexindent.',
       'Format with tex-fmt.',
@@ -256,7 +257,37 @@ export const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
   (entry) => entry.key,
 );
 
-/** Catalog keys whose consuming hosts include the CLI. */
-export const CLI_STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.filter(
-  (entry) => entry.hosts.includes('cli'),
-).map((entry) => entry.key);
+/**
+ * The single canonical "CLI roster" — catalog entries the CLI consumes. Both
+ * the `/config` panel and any key-list derivation come from this one filter so
+ * the `hosts.includes('cli')` predicate lives in exactly one place.
+ */
+export const CLI_STATE_SETTINGS: readonly StateSettingEntry[] =
+  STATE_SETTINGS.filter((entry) => entry.hosts.includes('cli'));
+
+/** The entry's schema with the outer `.prefault()` wrapper peeled off. */
+function innerSchema(entry: StateSettingEntry): unknown {
+  return entry.schema instanceof z.ZodPrefault
+    ? entry.schema.unwrap()
+    : entry.schema;
+}
+
+/**
+ * Enum option values for a setting, derived from its `z.enum(...)` schema (via
+ * the public `.unwrap().options`) rather than restated on the row, or
+ * `undefined` for non-enum settings. The schema stays the single source of the
+ * allowed values; only the per-value prose (`enumDescriptions`) is editorial.
+ */
+export function settingEnumOptions(
+  entry: StateSettingEntry,
+): readonly string[] | undefined {
+  const inner = innerSchema(entry);
+  return inner instanceof z.ZodEnum
+    ? (inner.options as readonly string[])
+    : undefined;
+}
+
+/** Whether a setting's schema is a boolean (used to classify edit affordance). */
+export function settingIsBoolean(entry: StateSettingEntry): boolean {
+  return innerSchema(entry) instanceof z.ZodBoolean;
+}
