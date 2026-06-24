@@ -8,14 +8,14 @@
  */
 
 // Third-party imports
-import axios from 'axios';
+import ky, { HTTPError } from 'ky';
 import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@shared/schemas/toolResult';
-import { isTimeoutErrorCode } from '@tools/timeouts';
+import { isTimeoutError } from '@tools/timeouts';
 import { getConfig } from '@utils/config/configUtils';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
@@ -214,37 +214,41 @@ export async function callBetterBibTeX<T>(
 ): Promise<T> {
   const url = `http://127.0.0.1:${port}/better-bibtex/json-rpc`;
 
-  const response = await axios
-    .post<unknown>(
-      url,
-      { jsonrpc: '2.0', method, params, id: 1 },
-      { timeout, headers: { 'Content-Type': 'application/json' } },
-    )
-    .catch((error: unknown) => {
-      if (axios.isAxiosError(error)) {
-        if (isTimeoutErrorCode(error.code)) {
-          throw new ToolError(
-            `Zotero API request timed out after ${timeout / 1000}s. ` +
-              `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
-          );
-        }
-        if (error.code === 'ECONNREFUSED') {
-          throw new ToolError(
-            `Zotero is not reachable on port ${port}. ` +
-              `Ask the user to start Zotero or verify the port (setting: texra.bib.zoteroPort).`,
-          );
-        }
-        if (error.response?.status === StatusCodes.NOT_FOUND) {
-          throw new ToolError(
-            'Better BibTeX plugin is not installed in Zotero. ' +
-              'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',
-          );
-        }
-      }
-      throw new ToolError(`Better BibTeX API error: ${toErrorMessage(error)}`);
-    });
+  let raw: unknown;
+  try {
+    raw = await ky
+      .post(url, {
+        json: { jsonrpc: '2.0', method, params, id: 1 },
+        timeout: false,
+        signal: AbortSignal.timeout(timeout),
+        retry: 0,
+      })
+      .json<unknown>();
+  } catch (error: unknown) {
+    if (isTimeoutError(error)) {
+      throw new ToolError(
+        `Zotero API request timed out after ${timeout / 1000}s. ` +
+          `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
+      );
+    }
+    if (error instanceof HTTPError && error.response.status === StatusCodes.NOT_FOUND) {
+      throw new ToolError(
+        'Better BibTeX plugin is not installed in Zotero. ' +
+          'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',
+      );
+    }
+    // TypeError from fetch: network-level failure — for a localhost endpoint
+    // this almost always means Zotero is not running.
+    if (error instanceof TypeError) {
+      throw new ToolError(
+        `Zotero is not reachable on port ${port}. ` +
+          `Ask the user to start Zotero or verify the port (setting: texra.bib.zoteroPort).`,
+      );
+    }
+    throw new ToolError(`Better BibTeX API error: ${toErrorMessage(error)}`);
+  }
 
-  const parsed = jsonRpcResponseSchema(resultSchema).safeParse(response.data);
+  const parsed = jsonRpcResponseSchema(resultSchema).safeParse(raw);
   if (!parsed.success) {
     throw new ToolError(
       `Better BibTeX returned an unexpected response for ${method}: ${parsed.error.message}`,
