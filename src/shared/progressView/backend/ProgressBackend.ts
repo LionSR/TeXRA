@@ -1,5 +1,6 @@
 // Local imports - shared progress backend
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
 import type { ProgressViewOutboundMessage } from '@shared/schemas';
 import {
   WebviewBridge,
@@ -98,8 +99,8 @@ export class ProgressBackend {
     await this.state.load();
   }
 
-  setupEventListeners(): ProgressEventSubscription {
-    return this.eventHandler.setupEventListeners();
+  setupEventListeners(bus: ProgressEventBusLike): ProgressEventSubscription {
+    return this.eventHandler.setupEventListeners(bus);
   }
 
   dispose(): void {
