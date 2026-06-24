@@ -14,6 +14,7 @@ import { ReverseSearch } from '../input/ReverseSearch';
 import { isCtrlInput } from '../input/inputKeys';
 import { openRegisteredCliSlashForm } from '../commands/slashForms';
 import { SlashPalette } from '../commands/SlashPalette';
+import { POINTER } from '../ui/glyphs';
 import {
   matchSlashCommands,
   parseSlashInput,
@@ -348,7 +349,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         aria-role="textbox"
       >
         <Text aria-hidden color="cyan">
-          {prompt ?? '›'}{' '}
+          {prompt ?? POINTER}{' '}
         </Text>
         {disabled && props.disabledMessage ? (
           <Text dimColor>{props.disabledMessage}</Text>
