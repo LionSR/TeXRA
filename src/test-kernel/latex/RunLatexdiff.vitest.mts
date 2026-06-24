@@ -21,12 +21,6 @@ vi.mock('@latex/latexdiff/diffOperations', () => ({
 
 vi.mock('@latex/latexdiff/service', () => ({ CHANNEL: 'LaTeXCommands' }));
 
-vi.mock('@utils/files', () => ({
-  TaskRunFileService: class {
-    public metadata = { executionId: undefined, runDirectory: undefined };
-  },
-}));
-
 const { runLatexdiffForExecution } =
   await import('@latex/latexdiff/runLatexdiff');
 

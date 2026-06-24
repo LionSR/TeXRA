@@ -12,7 +12,6 @@
 import * as logger from '@logger/logUtils';
 import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
-import { TaskRunFileService } from '@utils/files';
 
 import {
   runLatexdiffFromMetadata,
@@ -123,13 +122,11 @@ export async function runLatexdiffForExecution(
   }
 
   if (outputsByRound) {
-    const fileService = new TaskRunFileService(discoveredExecutionId);
     const outcome = await runLatexdiffFromMetadata({
       rounds: outputsByRound,
       mathMarkup,
       generateBetweenRoundDiffs,
       progress,
-      fileService,
     });
     return { outcome, executionId: discoveredExecutionId, source };
   }

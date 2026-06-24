@@ -70,10 +70,11 @@ async function runLatexdiffCli(
   }
 
   // Progress belongs on stderr so piped stdout (json/ndjson, `--print`) stays
-  // byte-identical; only surface it in interactive text mode.
+  // byte-identical; only surface it in interactive text mode, and honor
+  // `--quiet` like sibling commands.
   const progress: DiffProgressReporter = {
     report: ({ message }) => {
-      if (message && context.outputFormat === 'text') {
+      if (message && context.outputFormat === 'text' && !context.quietLogs) {
         writeTextStderr(message);
       }
     },
