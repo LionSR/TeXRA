@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import {
   buildConfigListItems,
   buildEnumItems,
+  coerceSettingInput,
   ConfigForm,
   formatSettingValue,
   settingDisplayName,
@@ -79,10 +81,26 @@ describe('ConfigForm helpers', () => {
     const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
     const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
     const formatter = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
+    const timeout = entryByKey(
+      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+    );
 
     expect(settingEditKind(markCommits)).toBe('boolean');
-    expect(settingEditKind(authorName)).toBe('readonly');
+    expect(settingEditKind(authorName)).toBe('string');
     expect(settingEditKind(formatter)).toBe('enum');
+    expect(settingEditKind(timeout)).toBe('number');
+  });
+
+  it('coerces text-editor input by kind', () => {
+    expect(coerceSettingInput('texra-ai', false)).toEqual({
+      value: 'texra-ai',
+    });
+    expect(coerceSettingInput('', false)).toEqual({ value: '' });
+    expect(coerceSettingInput('120000', true)).toEqual({ value: 120000 });
+    expect(coerceSettingInput('  90000 ', true)).toEqual({ value: 90000 });
+    // Blank / non-numeric input for a number field is ignored, not written.
+    expect(coerceSettingInput('', true)).toBeNull();
+    expect(coerceSettingInput('abc', true)).toBeNull();
   });
 
   it('formats values for display', () => {
@@ -108,7 +126,7 @@ describe('ConfigForm helpers', () => {
     ).toBe('git.markCommits');
   });
 
-  it('builds list items with read-only rows disabled', () => {
+  it('builds list items showing value + store, with editable rows enabled', () => {
     const items = buildConfigListItems(CLI_STATE_SETTINGS, (entry) =>
       entry.key === WorkspaceStateKey.GIT_MARK_COMMITS ? true : 'texra-ai',
     );
@@ -125,8 +143,24 @@ describe('ConfigForm helpers', () => {
     });
     expect(markCommits?.description).toContain('on');
     expect(markCommits?.description).toContain('config');
-    expect(authorName).toMatchObject({ disabled: true });
-    expect(authorName?.description).toContain('read-only');
+    // Strings/numbers are now editable, so no row is read-only in the roster.
+    expect(authorName).toMatchObject({ disabled: false });
+    expect(authorName?.description).not.toContain('read-only');
+  });
+
+  it('marks an unsupported schema kind read-only', () => {
+    const recordEntry: StateSettingEntry = {
+      key: 'texra.example.record',
+      schema: z.record(z.string(), z.string()).prefault({}),
+      description: 'A record setting with no inline editor.',
+      category: 'example',
+      store: 'workspaceState',
+      hosts: ['vscode'],
+    };
+    expect(settingEditKind(recordEntry)).toBe('readonly');
+    const [item] = buildConfigListItems([recordEntry], () => ({}));
+    expect(item).toMatchObject({ disabled: true });
+    expect(item?.description).toContain('read-only');
   });
 
   it('builds enum items from catalog enum metadata', () => {
