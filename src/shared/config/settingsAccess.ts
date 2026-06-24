@@ -26,20 +26,11 @@ export interface SettingsStores {
 
 export type SettingsHostKind = 'extension' | 'cli';
 
-interface KeyValueReader {
-  get<T>(key: string, defaultValue?: T): T;
-}
-
 function slotFor(
   entry: StateSettingEntry,
   host: SettingsHostKind,
 ): SettingStore {
   return host === 'cli' && entry.cliStore ? entry.cliStore : entry.store;
-}
-
-function readerFor(slot: SettingStore, stores: SettingsStores): KeyValueReader {
-  // ConfigProvider and StateStore both satisfy KeyValueReader.
-  return stores[slot] as unknown as KeyValueReader;
 }
 
 /** The default-when-absent value for an entry, from its `.prefault()`. */
@@ -50,20 +41,21 @@ export function settingDefault(entry: StateSettingEntry): unknown {
 /**
  * Read a state-backed setting, falling back to (and validating against) the
  * entry's schema. A stored value that no longer validates resolves to the
- * default rather than propagating a stale/invalid value.
+ * default rather than propagating a stale/invalid value. Both `ConfigProvider`
+ * and `StateStore` expose the same `get(key, default)`, so the read dispatches
+ * uniformly on the resolved slot.
  */
 export function readSetting(
   entry: StateSettingEntry,
   stores: SettingsStores,
   host: SettingsHostKind = 'extension',
 ): unknown {
-  const fallback = settingDefault(entry);
-  const raw = readerFor(slotFor(entry, host), stores).get<unknown>(entry.key);
+  const raw = stores[slotFor(entry, host)].get<unknown>(entry.key);
   if (raw === undefined) {
-    return fallback;
+    return settingDefault(entry);
   }
   const parsed = entry.schema.safeParse(raw);
-  return parsed.success ? parsed.data : fallback;
+  return parsed.success ? parsed.data : settingDefault(entry);
 }
 
 /**

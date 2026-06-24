@@ -21,8 +21,11 @@ import {
   STATE_SETTINGS,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  isStored,
+  makeFakeSettingsStores,
+} from '@test/support/settingsStoresFake';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -33,43 +36,6 @@ function entryByKey(key: string): StateSettingEntry {
   const entry = STATE_SETTINGS.find((candidate) => candidate.key === key);
   if (!entry) throw new Error(`missing catalog entry ${key}`);
   return entry;
-}
-
-class FakeStore {
-  private readonly data = new Map<string, unknown>();
-  get<T>(key: string, defaultValue?: T): T {
-    return this.data.has(key) ? (this.data.get(key) as T) : (defaultValue as T);
-  }
-  update(key: string, value: unknown): Promise<void> {
-    if (value === undefined) this.data.delete(key);
-    else this.data.set(key, value);
-    return Promise.resolve();
-  }
-  has(key: string): boolean {
-    return this.data.has(key);
-  }
-}
-
-class FakeConfig extends FakeStore {
-  update(key: string, value: unknown, _target?: string): Promise<void> {
-    return super.update(key, value);
-  }
-}
-
-function makeStores(): {
-  stores: SettingsStores;
-  config: FakeConfig;
-} {
-  const config = new FakeConfig();
-  return {
-    stores: {
-      config: config as unknown as SettingsStores['config'],
-      workspaceState:
-        new FakeStore() as unknown as SettingsStores['workspaceState'],
-      globalState: new FakeStore() as unknown as SettingsStores['globalState'],
-    },
-    config,
-  };
 }
 
 function renderConfigFormProps(): {
@@ -180,7 +146,7 @@ describe('ConfigForm helpers', () => {
 describe('/config slash command wiring', () => {
   it('registers /config with a form and settings alias', () => {
     registerBuiltinSlashCommands({
-      getConfigStores: () => makeStores().stores,
+      getConfigStores: () => makeFakeSettingsStores().stores,
     });
     const config = listSlashCommands().find((cmd) => cmd.name === 'config');
     expect(config).toEqual(
@@ -193,7 +159,7 @@ describe('/config slash command wiring', () => {
   });
 
   it('wires the roster and reads through the injected CLI stores', () => {
-    const { stores, config } = makeStores();
+    const { stores, config } = makeFakeSettingsStores();
     // Seed the git-author config slot the CLI reads from.
     void config.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
 
@@ -211,7 +177,7 @@ describe('/config slash command wiring', () => {
   });
 
   it('persists writes through the accessor to the CLI store', async () => {
-    const { stores, config } = makeStores();
+    const { stores, config } = makeFakeSettingsStores();
     registerBuiltinSlashCommands({ getConfigStores: () => stores });
     openCliSlashCommandForm('config', '');
 
@@ -219,7 +185,7 @@ describe('/config slash command wiring', () => {
     const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
     await props.writeValue?.(markCommits, false);
 
-    expect(config.has(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(true);
+    expect(isStored(config, WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(true);
     expect(props.readValue?.(markCommits)).toBe(false);
   });
 });
