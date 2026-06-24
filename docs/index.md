@@ -12,21 +12,21 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
 <section class="trust-row">
   <div class="trust-card">
-    <span class="trust-icon">
+    <span class="trust-icon" aria-hidden="true">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg>
     </span>
     <h3>Output you can check</h3>
     <p>Citations resolve to real database entries. Figures compile from source. Edits arrive as diffs you read line by line before they touch your files.</p>
   </div>
   <div class="trust-card">
-    <span class="trust-icon">
+    <span class="trust-icon" aria-hidden="true">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="18.5" r="2.5"/><circle cx="19" cy="18.5" r="2.5"/><path d="M12 7.5v3.5M12 11h-7v5M12 11h7v5"/></svg>
     </span>
     <h3>A team of specialist agents</h3>
     <p>An orchestrator splits the task and hands the pieces to researchers, numericists, reviewers, and formalizers — each with its own tools and model.</p>
   </div>
   <div class="trust-card">
-    <span class="trust-icon">
+    <span class="trust-icon" aria-hidden="true">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
     </span>
     <h3>Three independent checks</h3>
@@ -292,8 +292,8 @@ section p {
   height: 2.25rem;
   border-radius: 9px;
   margin-bottom: 0.8rem;
-  background: color-mix(in srgb, var(--vp-c-brand-1) 11%, transparent);
-  color: var(--vp-c-brand-1);
+  background: color-mix(in srgb, var(--vp-c-brand) 11%, transparent);
+  color: var(--vp-c-brand);
 }
 .trust-card h3 {
   margin: 0 0 0.4rem;
