@@ -156,13 +156,18 @@ describe('TexraSettingsSchema', () => {
 
   it('removes stale generated package schema fields during regeneration', () => {
     const sections = getPackageConfigurationSections();
+    // `order` and `editPresentation` are VS Code-presentation-only fields that
+    // stay hand-maintained in package.json (not in the generator allowlist), so
+    // they must survive regeneration. `enum` is generated, so a stale value not
+    // present in the schema must be removed (compactionThresholdPercent is a
+    // plain number with no enum).
     const sectionWithStaleField = {
       ...sections[0],
       properties: {
         ...sections[0].properties,
         'texra.model.compactionThresholdPercent': {
           ...sections[0].properties?.['texra.model.compactionThresholdPercent'],
-          description: 'Preserved description',
+          order: 999,
           enum: [75],
         },
       },
@@ -175,8 +180,29 @@ describe('TexraSettingsSchema', () => {
     const regeneratedProperty =
       regenerated.properties?.['texra.model.compactionThresholdPercent'];
 
-    assert.equal(regeneratedProperty?.description, 'Preserved description');
+    assert.equal(regeneratedProperty?.order, 999);
     assert.equal(Object.hasOwn(regeneratedProperty ?? {}, 'enum'), false);
+  });
+
+  it('pairs every enum setting with one description per enum value', () => {
+    const packageProperties = getPackageConfigurationProperties();
+
+    for (const [key, property] of Object.entries(packageProperties)) {
+      const enumValues = property.enum;
+      if (!Array.isArray(enumValues)) {
+        continue;
+      }
+      const enumDescriptions = property.enumDescriptions;
+      assert.ok(
+        Array.isArray(enumDescriptions),
+        `${key} declares enum but no enumDescriptions`,
+      );
+      assert.equal(
+        (enumDescriptions as unknown[]).length,
+        enumValues.length,
+        key,
+      );
+    }
   });
 
   it('rejects unknown texra package configuration keys', () => {
