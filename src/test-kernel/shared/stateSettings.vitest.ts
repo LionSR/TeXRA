@@ -18,7 +18,6 @@ import {
   resetSetting,
   settingDefault,
   writeSetting,
-  type SettingsStores,
 } from '@shared/config/settingsAccess';
 
 // Local imports - canonical defaults + keys the catalog must agree with
@@ -30,7 +29,11 @@ import {
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
-// Local imports - CLI whitelist derived from the catalog
+// Local imports - shared store fakes
+import {
+  isStored,
+  makeFakeSettingsStores,
+} from '@test/support/settingsStoresFake';
 
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'config',
@@ -176,52 +179,6 @@ describe('knownKeys derivation', () => {
 
 // --- accessor round-trip ----------------------------------------------------
 
-class FakeStore {
-  private readonly data = new Map<string, unknown>();
-  get<T>(key: string, defaultValue?: T): T {
-    return this.data.has(key) ? (this.data.get(key) as T) : (defaultValue as T);
-  }
-  update(key: string, value: unknown): Promise<void> {
-    if (value === undefined) {
-      this.data.delete(key);
-    } else {
-      this.data.set(key, value);
-    }
-    return Promise.resolve();
-  }
-  has(key: string): boolean {
-    return this.data.has(key);
-  }
-}
-
-class FakeConfig extends FakeStore {
-  lastTarget: string | undefined;
-  update(key: string, value: unknown, target?: string): Promise<void> {
-    this.lastTarget = target;
-    return super.update(key, value);
-  }
-}
-
-function makeStores(): {
-  stores: SettingsStores;
-  config: FakeConfig;
-  workspaceState: FakeStore;
-} {
-  const config = new FakeConfig();
-  const workspaceState = new FakeStore();
-  const globalState = new FakeStore();
-  return {
-    stores: {
-      config: config as unknown as SettingsStores['config'],
-      workspaceState:
-        workspaceState as unknown as SettingsStores['workspaceState'],
-      globalState: globalState as unknown as SettingsStores['globalState'],
-    },
-    config,
-    workspaceState,
-  };
-}
-
 function entryByKey(key: string): StateSettingEntry {
   const entry = STATE_SETTINGS.find((e) => e.key === key);
   assert.ok(entry, `missing catalog entry ${key}`);
@@ -230,7 +187,7 @@ function entryByKey(key: string): StateSettingEntry {
 
 describe('settingsAccess', () => {
   it('reads the default when the key is absent', () => {
-    const { stores } = makeStores();
+    const { stores } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
     assert.equal(
       readSetting(entry, stores, 'extension'),
@@ -239,26 +196,31 @@ describe('settingsAccess', () => {
   });
 
   it('routes extension writes to the canonical store', async () => {
-    const { stores, config, workspaceState } = makeStores();
+    const { stores, config, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
     await writeSetting(entry, false, stores, 'extension');
-    assert.equal(workspaceState.has(entry.key), true);
-    assert.equal(config.has(entry.key), false);
+    assert.equal(isStored(workspaceState, entry.key), true);
+    assert.equal(isStored(config, entry.key), false);
     assert.equal(readSetting(entry, stores, 'extension'), false);
   });
 
   it('routes CLI writes to the cliStore override (config)', async () => {
-    const { stores, config, workspaceState } = makeStores();
+    const { stores, config, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
     await writeSetting(entry, false, stores, 'cli');
-    assert.equal(config.has(entry.key), true);
-    assert.equal(workspaceState.has(entry.key), false);
-    assert.equal(config.lastTarget, 'workspace');
+    assert.equal(isStored(config, entry.key), true);
+    assert.equal(isStored(workspaceState, entry.key), false);
+    // The config write used the default 'workspace' target.
+    assert.deepEqual(config.inspect(entry.key), {
+      globalValue: undefined,
+      workspaceValue: false,
+      effectiveValue: false,
+    });
     assert.equal(readSetting(entry, stores, 'cli'), false);
   });
 
   it('rejects values that fail the entry schema', async () => {
-    const { stores } = makeStores();
+    const { stores } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
     await assert.rejects(() =>
       writeSetting(entry, 'not-a-formatter', stores, 'extension'),
@@ -266,12 +228,12 @@ describe('settingsAccess', () => {
   });
 
   it('reset deletes the key so the default reappears', async () => {
-    const { stores, workspaceState } = makeStores();
+    const { stores, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY);
     await writeSetting(entry, false, stores, 'extension');
-    assert.equal(workspaceState.has(entry.key), true);
+    assert.equal(isStored(workspaceState, entry.key), true);
     await resetSetting(entry, stores, 'extension');
-    assert.equal(workspaceState.has(entry.key), false);
+    assert.equal(isStored(workspaceState, entry.key), false);
     assert.equal(
       readSetting(entry, stores, 'extension'),
       LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
@@ -279,7 +241,7 @@ describe('settingsAccess', () => {
   });
 
   it('falls back to the default for a stored value that no longer validates', () => {
-    const { stores, workspaceState } = makeStores();
+    const { stores, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
     void workspaceState.update(entry.key, 'stale-bogus-value');
     assert.equal(
