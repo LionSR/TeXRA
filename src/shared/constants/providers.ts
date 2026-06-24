@@ -225,6 +225,12 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       description:
         "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
     },
+    {
+      key: 'texra.model.useBackgroundResponses',
+      label: 'Background Responses',
+      description:
+        'Run long-running workflow generations as background Interactions (submit + poll) to avoid timeouts. Requires server-side conversation state; models that do not support it fall back automatically.',
+    },
   ],
   dashscope: [
     {
