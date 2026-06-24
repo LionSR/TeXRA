@@ -47,9 +47,21 @@ describe('formatConversation', () => {
     expect(output).not.toContain('{"type":"text"}');
   });
 
-  it('defaults a missing or non-string role to "unknown"', () => {
-    const output = formatConversation([{ content: 'hi' }, { role: 7 }]);
+  it('does not throw on an undefined content block', () => {
+    expect(() =>
+      formatConversation([{ role: 'user', content: [undefined] }]),
+    ).not.toThrow();
+  });
 
-    expect(output).toContain('role="unknown"');
+  it('defaults a missing, empty, or non-string role to "unknown"', () => {
+    const output = formatConversation([
+      { content: 'hi' }, // missing role
+      { role: '' }, // empty role
+      { role: 7 }, // non-string role
+    ]);
+
+    expect(output.match(/role="unknown"/g)).toHaveLength(3);
+    expect(output).not.toContain('role=""');
+    expect(output).not.toContain('role="7"');
   });
 });
