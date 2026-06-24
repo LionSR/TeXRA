@@ -85,9 +85,11 @@ export async function extractLatexFileDependencies(
   const [texResolved, bibResolved] = await Promise.all([
     pMap(texInputPaths, (raw) => resolveTexInputPath(raw, latexDir), {
       concurrency: 8,
+      stopOnError: false,
     }),
     pMap(bibCandidates, (absolute) => existingExternalPath(absolute), {
       concurrency: 8,
+      stopOnError: false,
     }),
   ]);
 
