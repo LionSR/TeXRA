@@ -13,18 +13,18 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 <section class="trust-row">
   <div class="trust-card">
     <span class="trust-icon">🔬</span>
-    <h3>Grounded, not generated</h3>
-    <p>Every citation comes from a real database. Every figure is compiled. Every edit lands as a diff you can read line by line.</p>
+    <h3>Output you can check</h3>
+    <p>Citations resolve to real database entries. Figures compile from source. Edits arrive as diffs you read line by line before they touch your files.</p>
   </div>
   <div class="trust-card">
     <span class="trust-icon">🧑‍🔬</span>
-    <h3>A team, not a chatbot</h3>
-    <p>One orchestrator decomposes the task and delegates to researchers, numericists, reviewers, and formalizers — each with its own tools and model.</p>
+    <h3>A team of specialist agents</h3>
+    <p>An orchestrator splits the task and hands the pieces to researchers, numericists, reviewers, and formalizers — each with its own tools and model.</p>
   </div>
   <div class="trust-card">
     <span class="trust-icon">🛡️</span>
-    <h3>Three levels of verification</h3>
-    <p>LLM prose, Wolfram algebra, and Lean 4 formal proof — connected in one environment for work where correctness is non-negotiable.</p>
+    <h3>Three independent checks</h3>
+    <p>Prose reviewed by an LLM, algebra checked in Wolfram, proofs verified in Lean 4 — three layers of verification in one environment.</p>
   </div>
 </section>
 
