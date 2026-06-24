@@ -33,6 +33,10 @@ All notable changes to this project will be documented in this file.
 - **Cleaner history previews** — provider "thinking" / reasoning text no longer leaks into the previews shown when browsing past conversations.
 - **OpenRouter setup mismatch** — when a configured model isn't available on OpenRouter, setup now surfaces the mismatch before prompting for credentials instead of after.
 
+#### Features
+
+- **Use Google's Interactions API for Gemini** — TeXRA can now talk to Gemini models through Google's newer Interactions API instead of Generate Content. Turn it on with the `model.useGoogleInteractionsAPI` setting (off by default; Generate Content stays the default and fallback). When enabled, conversation state is kept on Google's servers by default so each turn sends only the new message (smaller, faster requests) — Google retains the conversation for a limited period to make this work. To keep conversations off Google's servers and resend the full transcript each turn instead, turn off `model.useGoogleInteractionsServerState`.
+
 ### CLI
 
 #### Improvements

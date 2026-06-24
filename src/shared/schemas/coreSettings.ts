@@ -79,6 +79,8 @@ export const DEFAULT_CORE_SETTINGS = {
     useImprovedConnection: false,
     improvedConnectionDomain: 'proxy.texra.ai',
     useOpenAIResponsesAPI: true,
+    useGoogleInteractionsAPI: false,
+    useGoogleInteractionsServerState: true,
     useBackgroundResponses: true,
     openaiParallelToolCalls: false,
     compactionThresholdPercent: 75,
@@ -325,6 +327,12 @@ export const CoreSettingsShape = {
       useOpenAIResponsesAPI: z
         .boolean()
         .prefault(DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI),
+      useGoogleInteractionsAPI: z
+        .boolean()
+        .prefault(DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsAPI),
+      useGoogleInteractionsServerState: z
+        .boolean()
+        .prefault(DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsServerState),
       useBackgroundResponses: z
         .boolean()
         .prefault(DEFAULT_CORE_SETTINGS.model.useBackgroundResponses),
@@ -562,6 +570,8 @@ export const CORE_SETTING_PATHS = [
   'model.useImprovedConnection',
   'model.improvedConnectionDomain',
   'model.useOpenAIResponsesAPI',
+  'model.useGoogleInteractionsAPI',
+  'model.useGoogleInteractionsServerState',
   'model.useBackgroundResponses',
   'model.openaiParallelToolCalls',
   'model.compactionThresholdPercent',
