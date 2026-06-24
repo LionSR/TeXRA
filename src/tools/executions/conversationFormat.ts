@@ -41,7 +41,7 @@ function formatBlock(block: unknown): string {
     case 'text':
       return asText(typed.text);
     case 'tool_use':
-      return `[tool_use: ${asText(typed.name)}(${truncate(JSON.stringify(typed.input ?? {}), 100)})]`;
+      return `[tool_use: ${asText(typed.name)}(${truncate(JSON.stringify(typed.input ?? {}) ?? '', 100)})]`;
     case 'tool_result': {
       const output =
         typeof typed.content === 'string'
