@@ -244,14 +244,25 @@ sequences for concurrent sessions).
 
 ## Recommendation
 
-Treat this as five tracked backlog items on top of the existing plan — **no
-autonomous refactor was applied**, consistent with the team's behavior-neutral,
-adversarially-verified PR discipline:
+> **Superseded in part by the second-pass _Update_ above** — that pass re-traced
+> each finding to ground truth and acted on two. This section is kept for the
+> first-pass record; read it through the Update. Net of this PR:
+>
+> - **Applied here:** the P1 finalize-guard (a `try/catch` around the catch-side
+>   `onRoundFinalized` — _not_ the first pass's "drop the catch-side record",
+>   which the Update shows was wrong) and the dead `WorkspaceProvider.watch`
+>   removal.
+> - **Rejected:** P2a MiniMax `extractTextFromReasoningDetails` dedup (a trap; see
+>   Update).
+> - **Still backlog:** P3, Track, and Subagents below.
 
-1. **P1 (decide first):** the `ResponseCycleNode` catch double-record — verify the
-   throw-reachability question, then drop the catch-side `recordRound`/`onRoundFinalized`.
-2. **P2:** MiniMax `extractTextFromReasoningDetails` dedup; remove dead
-   `WorkspaceProvider.watch` port method. Both isolated, behavior-neutral.
+The original first-pass framing follows (treat as backlog on top of the existing
+plan; behavior-neutral, adversarially-verified PR discipline):
+
+1. **P1:** the `ResponseCycleNode` catch double-record — _applied as a guard_ (see
+   Update; the first pass's "drop the catch-side `recordRound`" was wrong).
+2. **P2:** MiniMax `extractTextFromReasoningDetails` dedup _(rejected — trap)_;
+   remove dead `WorkspaceProvider.watch` port method _(applied)_.
 3. **P3:** the two empty-type param aliases and the `withModelClient` closure DRY —
    bundle opportunistically.
 4. **Track:** cross-provider user-message/media scaffold unification, alongside the
