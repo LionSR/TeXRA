@@ -25,6 +25,7 @@ import {
   visibleSelectRange,
 } from '../ui/Select';
 import { KeyHints, type KeyHint } from '../ui/KeyHints';
+import { POINTER, TICK } from '../ui/glyphs';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface UserQuestionProps {
@@ -411,8 +412,8 @@ function MultiSelectQuestion(
           <Box key={option.label} minWidth={0}>
             <Box flexShrink={0}>
               <Text color={focused ? 'cyan' : undefined}>
-                {focused ? '›' : ' '} {checked ? '✓' : ' '} {optionIndex + 1}
-                .{' '}
+                {focused ? POINTER : ' '} {checked ? TICK : ' '}{' '}
+                {optionIndex + 1}.{' '}
               </Text>
             </Box>
             <Box flexShrink={0} maxWidth={24}>

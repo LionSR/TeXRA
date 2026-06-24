@@ -1,7 +1,7 @@
 // Numbered select primitive for slash forms + future palettes.
 //
-// Renders each item with a `›` pointer on the focused row (Ink figures.pointer
-// equivalent in plain ASCII) and a `✓` on the currently-active value per
+// Renders each item with the shared POINTER glyph on the focused row and the
+// TICK glyph on the currently-active value (see ./glyphs) per
 // docs/prds/cli-tui-ink/10-architecture.md § Intuitiveness conventions.
 //
 // `↑/↓` walks the rows, Enter calls `onSelect`, Esc calls `onCancel`. Items
@@ -12,6 +12,7 @@ import { Box, Text, useInput } from 'ink';
 import { useEffect, useRef, useState } from 'react';
 
 import { clamp, clampIndex } from '@utils/core';
+import { POINTER, TICK } from './glyphs';
 
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 
@@ -321,8 +322,8 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         const i = visibleRange.start + offset;
         const focused = i === highlight;
         const active = item.value === props.activeValue;
-        const pointer = focused ? '›' : ' ';
-        const tick = active ? '✓' : ' ';
+        const pointer = focused ? POINTER : ' ';
+        const tick = active ? TICK : ' ';
         const hotkey = selectHotkeyForIndex(i);
         const shortcut = hotkey ? `${hotkey}.` : '  ';
         const showInlineOverflow = focused && inlineOverflowText;
