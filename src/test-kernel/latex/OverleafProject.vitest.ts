@@ -88,11 +88,10 @@ describe('overleafTokenSpec', () => {
 describe('credential helpers', () => {
   it('url-encodes the token and tracks both forms for redaction', () => {
     const cred = buildGitCredential('olp_a/b+c');
-    expect(cred.remote).toBe(`git:${encodeURIComponent('olp_a/b+c')}`);
-    expect(cred.sensitive).toEqual([
-      'olp_a/b+c',
-      encodeURIComponent('olp_a/b+c'),
-    ]);
+    // Hardcoded expectations so an encoding-strategy change fails the test
+    // instead of mirroring the implementation on both sides.
+    expect(cred.remote).toBe('git:olp_a%2Fb%2Bc');
+    expect(cred.sensitive).toEqual(['olp_a/b+c', 'olp_a%2Fb%2Bc']);
   });
 
   it('builds the authenticated clone URL from remote + credential', () => {
@@ -106,12 +105,16 @@ describe('credential helpers', () => {
     ).toBe(`https://git:olp_x@git.overleaf.com/${ID}`);
   });
 
-  it('redacts every sensitive form from a message', () => {
-    const cred = buildGitCredential('olp_secret');
-    const leaked = `fatal: auth failed for git:${cred.sensitive[1]} (olp_secret)`;
+  it('redacts both the raw and encoded token forms from a message', () => {
+    // A token with special chars makes the raw and encoded forms differ
+    // (`olp_a/b+c` vs `olp_a%2Fb%2Bc`), so this proves each is redacted
+    // independently rather than collapsing to one form.
+    const cred = buildGitCredential('olp_a/b+c');
+    expect(cred.sensitive[0]).not.toBe(cred.sensitive[1]);
+    const leaked = `fatal: auth failed for git:${cred.sensitive[1]} (olp_a/b+c)`;
     const redacted = redactSensitive(leaked, cred.sensitive);
-    expect(redacted).not.toContain('olp_secret');
-    expect(redacted).not.toContain(cred.sensitive[1]);
+    expect(redacted).not.toContain('olp_a/b+c');
+    expect(redacted).not.toContain('olp_a%2Fb%2Bc');
     expect(redacted).toContain('***');
   });
 });
