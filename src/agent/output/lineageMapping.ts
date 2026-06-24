@@ -8,6 +8,7 @@
 import * as path from 'node:path';
 
 import type { FileLocation } from '@shared/schemas';
+import { normalizeFilePath } from '@shared/utils/path';
 import { createFileMapping, getComparablePath } from '@utils/files';
 
 import type { OutputState } from './outputState';
@@ -43,7 +44,7 @@ function invertMapping(
 
 function buildBaseEntries(baseFiles: FileLocation[]): BaseEntry[] {
   return baseFiles.map((baseLoc) => {
-    const comparablePath = getComparablePath(baseLoc).replaceAll('\\', '/');
+    const comparablePath = normalizeFilePath(getComparablePath(baseLoc));
     const parsedPath = path.posix.parse(comparablePath);
     const relativePathNoExt = path.posix.join(parsedPath.dir, parsedPath.name);
     const baseName = path.posix.basename(comparablePath);
@@ -66,7 +67,7 @@ function findMatchingBaseFile(
   baseEntries: readonly BaseEntry[],
   source: string,
 ): FileLocation | undefined {
-  const normalizedSource = source.replaceAll('\\', '/');
+  const normalizedSource = normalizeFilePath(source);
   const parsedSource = path.posix.parse(normalizedSource);
   const sourcePathNoExt = path.posix.join(parsedSource.dir, parsedSource.name);
   const sourceBaseName = path.posix.basename(normalizedSource);
