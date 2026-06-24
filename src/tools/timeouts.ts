@@ -11,14 +11,23 @@ import { HTTPError, TimeoutError } from 'ky';
 /**
  * Whether an error is a request timeout.
  *
- * Covers two sources:
+ * Covers three sources:
  * - ky's own `TimeoutError` (thrown when the `timeout:` option fires)
  * - `DOMException`/`Error` with `name === 'TimeoutError'` (thrown when
- *   `AbortSignal.timeout()` fires before the response or body arrives)
+ *   `AbortSignal.timeout()` fires in Node.js 20+ / undici v6+)
+ * - `AbortError` whose `cause` is a `TimeoutError` — the shape some undici
+ *   versions produce when `AbortSignal.timeout()` fires mid-request
  */
 export function isTimeoutError(error: unknown): boolean {
   if (error instanceof TimeoutError) return true;
   if (error instanceof Error && error.name === 'TimeoutError') return true;
+  if (
+    error instanceof Error &&
+    error.name === 'AbortError' &&
+    isTimeoutError(error.cause)
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -38,8 +47,9 @@ export function isTransientHttpError(error: unknown): boolean {
     return error.response.status === 429 || error.response.status >= 500;
   }
   // Network-level TypeError from the underlying fetch — connection reset, DNS
-  // hiccup, socket hang-up. TypeErrors from ky/fetch calls are always network
-  // failures; programmer TypeErrors don't surface here.
+  // hiccup, socket hang-up. Only safe because callers must wrap only the
+  // ky/fetch call itself in the try block; programmer TypeErrors must not be
+  // caught by the same handler.
   if (error instanceof TypeError) return true;
   return false;
 }

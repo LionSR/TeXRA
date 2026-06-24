@@ -58,9 +58,8 @@ export class WebSearchTool extends defineTool({
     try {
       data = await pRetry(
         async () => {
-          let response: Response;
           try {
-            response = await ky.get('https://api.duckduckgo.com/', {
+            const response = await ky.get('https://api.duckduckgo.com/', {
               searchParams: {
                 q: query,
                 format: 'json',
@@ -71,13 +70,13 @@ export class WebSearchTool extends defineTool({
               signal: AbortSignal.timeout(DDG_TIMEOUT_MS),
               retry: 0,
             });
+            return response.json() as Promise<DuckDuckGoResponse>;
           } catch (error: unknown) {
             if (isTransientHttpError(error)) throw error;
             throw new AbortError(
               error instanceof Error ? error : new Error(String(error)),
             );
           }
-          return response.json() as Promise<DuckDuckGoResponse>;
         },
         { retries: DDG_RETRIES, minTimeout: 500, randomize: true },
       );
