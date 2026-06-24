@@ -4,7 +4,10 @@ import type {
   CacheCreation,
   ServerToolUsage,
 } from '@anthropic-ai/sdk/resources/messages';
-import type { GenerateContentResponseUsageMetadata } from '@google/genai';
+import type {
+  GenerateContentResponseUsageMetadata,
+  Interactions,
+} from '@google/genai';
 import type { CompletionUsage } from 'openai/resources/completions';
 import type { ResponseUsage as OpenAIResponseUsage } from 'openai/resources/responses/responses';
 import type { ChatUsage as OpenRouterChatUsage } from '@openrouter/sdk/models';
@@ -42,6 +45,7 @@ export type NativeUsagePayload =
   | OpenAIResponseUsage
   | AnthropicUsage
   | GenerateContentResponseUsageMetadata
+  | Interactions.Usage
   | OpenRouterChatUsage;
 
 /**

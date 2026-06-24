@@ -101,6 +101,14 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     } as ProviderMessage;
   }
 
+  function interactionsFunctionResultMessage(callId: string): ProviderMessage {
+    return {
+      type: 'function_result',
+      call_id: callId,
+      result: [{ type: 'text', text: 'tool completed' }],
+    } as ProviderMessage;
+  }
+
   function createShared(messages: ProviderMessage[]): ToolUseRoundShared {
     return {
       messages,
@@ -231,6 +239,31 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     expect(createResponse).toHaveBeenCalledTimes(2);
     expect(createUserFollowUpMessages).toHaveBeenCalledWith(
       [expect.objectContaining({ type: 'function_call_output' })],
+      expect.stringContaining('previous assistant turn after a tool result'),
+    );
+    expect(shared.messages.at(-1)).toEqual({
+      type: 'message',
+      role: 'assistant',
+      content: 'Final answer: 3842.',
+    });
+    expect(shared.endTurn).toBe(true);
+  });
+
+  it('continues when the model returns blank text after an Interactions function_result step', async () => {
+    const { createResponse, createUserFollowUpMessages, services } =
+      createBlankTurnServices([
+        { id: 'blank', text: '' },
+        { id: 'final', text: 'Final answer: 3842.' },
+      ]);
+    const shared = createShared([
+      interactionsFunctionResultMessage('executions-1'),
+    ]);
+
+    await createToolUseRoundFlow().setServices(services).run(shared);
+
+    expect(createResponse).toHaveBeenCalledTimes(2);
+    expect(createUserFollowUpMessages).toHaveBeenCalledWith(
+      [expect.objectContaining({ type: 'function_result' })],
       expect.stringContaining('previous assistant turn after a tool result'),
     );
     expect(shared.messages.at(-1)).toEqual({

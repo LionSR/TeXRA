@@ -291,6 +291,114 @@ describe('OpenAI model handler routing', () => {
   });
 });
 
+describe('Google Interactions API routing', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const googleConfig = (): ModelConfig => modelConfig(ModelProvider.GOOGLE);
+
+  // Re-import the factory alongside the platform it reads from. An earlier test
+  // in this file calls vi.resetModules(), which would otherwise desync the
+  // statically-imported factory from a freshly-imported @platform copy.
+  async function initWithFlag(
+    useInteractions: boolean,
+    useOpenRouter = false,
+  ): Promise<typeof import('@agent/runtime/ModelFactory')> {
+    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/FakePlatform'),
+    ]);
+    initPlatform(
+      createFakePlatform({
+        config: { 'texra.model.useGoogleInteractionsAPI': useInteractions },
+        // getUseOpenRouter() reads USE_OPENROUTER from global state first.
+        globalState: { 'texra.useOpenRouter': useOpenRouter },
+      }),
+    );
+    return import('@agent/runtime/ModelFactory');
+  }
+
+  it('routes Google to Interactions only when the flag is on', async () => {
+    let factory = await initWithFlag(true);
+    expect(factory.shouldUseGoogleInteractionsAPI(googleConfig(), false)).toBe(
+      true,
+    );
+
+    factory = await initWithFlag(false);
+    expect(factory.shouldUseGoogleInteractionsAPI(googleConfig(), false)).toBe(
+      false,
+    );
+  });
+
+  it('forces the Interactions handler for requiresInteractionsAPI models even with the flag off', async () => {
+    const factory = await initWithFlag(false);
+    const forced = {
+      ...googleConfig(),
+      requiresInteractionsAPI: true,
+    } as ModelConfig;
+    expect(factory.shouldUseGoogleInteractionsAPI(forced, false)).toBe(true);
+  });
+
+  it('never routes a flag-enabled (non-required) Google model to Interactions via OpenRouter', async () => {
+    const factory = await initWithFlag(true);
+    expect(factory.shouldUseGoogleInteractionsAPI(googleConfig(), true)).toBe(
+      false,
+    );
+  });
+
+  it('keeps the routing predicate + key derivation pure (no throw) for Interactions-only under OpenRouter', async () => {
+    const factory = await initWithFlag(true);
+    const forced = {
+      ...googleConfig(),
+      requiresInteractionsAPI: true,
+    } as ModelConfig;
+    // The predicate must not throw — key-derivation callers (history restore,
+    // modelSwitchDisabledReason) rely on string|undefined, never an exception.
+    expect(factory.shouldUseGoogleInteractionsAPI(forced, true)).toBe(false);
+    expect(factory.modelHandlerCompatibilityKey(forced, true, false)).toBe(
+      'ModelHandlerOpenRouterNative',
+    );
+  });
+
+  it('createModelHandler fails loudly for an Interactions-only model under active OpenRouter', async () => {
+    // OpenRouter cannot proxy Interactions — the live-routing path must error
+    // rather than silently route to OpenRouter (spec §6.3).
+    const factory = await initWithFlag(true, /* useOpenRouter */ true);
+    const forced = {
+      ...googleConfig(),
+      requiresInteractionsAPI: true,
+    } as ModelConfig;
+    await expect(factory.createModelHandler(forced)).rejects.toThrow(
+      /OpenRouter/,
+    );
+  });
+
+  it('exposes the Interactions compatibility key for history-restore parity', async () => {
+    let factory = await initWithFlag(true);
+    expect(
+      factory.modelHandlerCompatibilityKey(googleConfig(), false, false),
+    ).toBe('ModelHandlerGoogleInteractions');
+
+    factory = await initWithFlag(false);
+    expect(
+      factory.modelHandlerCompatibilityKey(googleConfig(), false, false),
+    ).toBe('ModelHandlerGoogleGenAI');
+  });
+
+  it('creates the Interactions handler tagged with its compatibility key', async () => {
+    const factory = await initWithFlag(true);
+    const handler = await factory.createModelHandler(googleConfig());
+    try {
+      expect(factory.activeModelHandlerCompatibilityKey(handler)).toBe(
+        'ModelHandlerGoogleInteractions',
+      );
+    } finally {
+      handler.dispose();
+    }
+  });
+});
+
 describe('OpenRouter-proxied provider capabilities', () => {
   // ModelFactory preserves config.provider when routing through OpenRouter
   // (new ModelHandlerOpenRouterNative({ ...config })). The capability getters
