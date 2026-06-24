@@ -11,6 +11,7 @@ import {
   STATE_SETTINGS,
   STATE_SETTING_KEYS,
   settingEnumOptions,
+  stateSettingByKey,
   type SettingStore,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
@@ -142,6 +143,44 @@ describe('state settings catalog', () => {
       );
       assert.equal(entry.enumDescriptions?.length, options.length, entry.key);
     }
+  });
+
+  it('drives the LaTeX tab enum option labels from catalog metadata', () => {
+    // Locks the catalog wording the extension's LaTeXTab now composes its
+    // <wa-select> labels from, so the displayed options stay byte-identical to
+    // the previously hand-listed arrays.
+    const mathMarkup = stateSettingByKey(
+      WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+    );
+    assert.ok(mathMarkup);
+    const mathMarkupLabels = (settingEnumOptions(mathMarkup) ?? []).map(
+      (value, index) => {
+        const base = `${value} — ${mathMarkup.enumDescriptions?.[index]}`;
+        return value === LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup
+          ? `${base} (default)`
+          : base;
+      },
+    );
+    assert.deepEqual(mathMarkupLabels, [
+      'off — suppress markup',
+      'whole — equation-level',
+      'coarse — within equations (default)',
+      'fine — small changes inside equations',
+    ]);
+
+    const formatter = stateSettingByKey(WorkspaceStateKey.LATEX_FORMATTER);
+    assert.ok(formatter);
+    const formatterLabels = (settingEnumOptions(formatter) ?? []).map(
+      (value) =>
+        value === LATEX_CONFIG_DEFAULTS.latexFormatter
+          ? `${value} (default)`
+          : value,
+    );
+    assert.deepEqual(formatterLabels, [
+      'latexindent (default)',
+      'tex-fmt',
+      'none',
+    ]);
   });
 
   it('shares no keys with the config-tree catalog', () => {
