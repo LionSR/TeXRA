@@ -303,8 +303,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * Non-terminal Interaction statuses — polling continues while the status is in
    * this set, and every other status is treated as terminal. Interactions has no
    * `queued` member (unlike OpenAI's `['queued','in_progress']`). `requires_action`
-   * is deliberately EXCLUDED: in workflow (non-tool) background mode it is
-   * unexpected and treated as terminal so the loop never hangs.
+   * is deliberately EXCLUDED so the loop stops on a tool-call turn; that status
+   * is then returned as a serviceable terminal (not an error) so any function
+   * calls reach the cycle.
    *
    * Verified live (gemini-3.5-flash): a `background:true` create returns
    * `in_progress`, and the first `get()` poll returns `completed` with full
@@ -1855,10 +1856,21 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       this.clearPendingBackgroundInteraction();
     }
 
-    if (current.status === 'completed') return current;
+    // `completed` and `requires_action` are both serviceable terminals: the
+    // latter carries function_call steps, so return it (don't throw) and let the
+    // cycle service the tools, mirroring the streaming/non-streaming paths and
+    // finalizeChain's chain-safe handling. Workflow agents normally carry no
+    // tools, but the gate (isWorkflowMode) is not a hard guarantee, so handle it
+    // rather than crash a run that does emit a call.
+    if (
+      current.status === 'completed' ||
+      current.status === 'requires_action'
+    ) {
+      return current;
+    }
 
-    // Terminal non-completed: failed / cancelled / incomplete / budget_exceeded /
-    // requires_action — all treated uniformly as a thrown, tagged error.
+    // Terminal failure: failed / cancelled / incomplete / budget_exceeded —
+    // treated uniformly as a thrown, tagged error.
     const status = current.status ?? 'unknown';
     this.logger.error(
       `Background interaction ${interactionId} ended with status "${status}".`,
