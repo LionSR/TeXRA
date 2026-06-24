@@ -416,21 +416,27 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   }
 
   /**
-   * Capture (or reject) the chain anchor after a response. Only chain from a
-   * `completed` interaction that carries a string id; otherwise invalidate so
-   * the next round full-resends rather than chaining onto an interaction the
-   * server may not have retained.
+   * Capture (or reject) the chain anchor after a response. Chain from a retained
+   * interaction that carries a string id; otherwise invalidate so the next round
+   * full-resends rather than chaining onto an interaction the server may not have
+   * retained.
    *
-   * Deliberately NOT chaining on `requires_action` (tool-call rounds): the
-   * tool-use flow appends the model-generated steps (thought + function_call,
-   * via `buildAssistantTurnSteps`) plus the function_result to the local
-   * transcript before the next request, but the server already holds the
-   * model-generated steps it produced. Chaining here would require anchoring
-   * `sentStepCount` past those server-held steps so the delta carries only the
-   * function_result — an accounting that can't be computed safely offline. So
-   * tool rounds full-resend (correct, just not delta-optimised). Optimising this
-   * is a follow-up that needs a live tool-use run to confirm the server-side
-   * step accounting. Pure multi-turn text (no tools) chains normally.
+   * Chain-safe statuses: `completed` (final answer) AND `requires_action`
+   * (tool-call round — the model emitted function_call(s) and is awaiting
+   * results; the interaction is retained and continuable via
+   * `previous_interaction_id`). This mirrors the OpenAI Responses handler, whose
+   * tool-call responses come back `completed`; Google surfaces the same point as
+   * `requires_action`. Without this, tool-using agents would drop the chain
+   * every round and never benefit from server-side state.
+   *
+   * SMOKE-TEST (needs a real-key tool-use run): on a chained tool round the next
+   * request's delta (`base.slice(sentStepCount)`) re-sends the model-generated
+   * `thought`/`function_call` steps the server already holds (sentStepCount is
+   * pinned to the pre-append length — parity with ModelHandlerOpenAIResponse,
+   * which also sets sentMessages before the flow appends the assistant turn). If
+   * the server rejects or duplicates the echoed function_call instead of
+   * reconciling it, advance sentStepCount past the server-held generated steps
+   * so only the function_result is sent.
    */
   private finalizeChain(
     response: GoogleGenAIInteraction,
@@ -439,7 +445,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   ): void {
     if (!stateful) return;
     const safeToChain =
-      response.status === 'completed' && typeof response.id === 'string';
+      (response.status === 'completed' ||
+        response.status === 'requires_action') &&
+      typeof response.id === 'string';
     if (safeToChain) {
       this.chainedInteractionId = response.id;
       // The server now holds the full transcript up to this point; the next

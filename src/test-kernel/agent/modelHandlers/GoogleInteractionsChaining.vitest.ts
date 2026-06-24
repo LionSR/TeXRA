@@ -60,7 +60,11 @@ function capturingClient(
 /** Completed-interaction SSE tail with one text step and a given id/status. */
 function completedEvents(
   id: string,
-  status: 'completed' | 'incomplete' | 'failed' = 'completed',
+  status:
+    | 'completed'
+    | 'incomplete'
+    | 'failed'
+    | 'requires_action' = 'completed',
   text = 'ok',
 ): SSEEvent[] {
   return [
@@ -238,6 +242,36 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     // Second call full-resends both steps, no previous_interaction_id.
     expect(calls[1].previousId).toBeUndefined();
     expect(calls[1].input).toHaveLength(2);
+  });
+
+  it('T4b: a requires_action (tool-call) response chains, so the next round continues the interaction', async () => {
+    // Tool-call rounds finish as `requires_action` (model emitted a function
+    // call, awaiting results). The interaction is retained and continuable, so
+    // the handler must chain onto it (mirrors OpenAI, whose tool responses are
+    // `completed`). Without this, tool-using agents drop the chain every round.
+    const handler = createHandler();
+    const calls: RecordedCall[] = [];
+    const client = capturingClient(calls, (i) =>
+      completedEvents(i === 0 ? 'int_1' : 'int_2', 'requires_action'),
+    );
+
+    const messages: Step[] = [userStep('a')];
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    // The flow appends the model-generated steps; round 2 continues the chain.
+    messages.push(userStep('b'));
+    await handler.createResponse({
+      client: client as never,
+      messages,
+      temperature: 0,
+    });
+
+    expect(calls[1].store).toBe(true);
+    expect(calls[1].previousId).toBe('int_1'); // chained onto the tool round
   });
 
   it('T5: an expired previous_interaction_id triggers exactly one full-resend retry', async () => {
