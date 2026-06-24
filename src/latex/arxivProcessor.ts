@@ -175,7 +175,9 @@ class ArxivSourceProcessor {
     let shouldCleanup = true;
     try {
       // AbortSignal.timeout covers both connection establishment and body streaming.
-      const response = await fetch(url, { signal: AbortSignal.timeout(timeout) });
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(timeout),
+      });
 
       if (response.status === StatusCodes.NOT_FOUND) {
         throw new AbortError('Source not available for this arXiv ID');
