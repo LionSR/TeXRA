@@ -4,7 +4,6 @@ All facts verified. I now have everything needed to write the definitive spec. W
 
 # Implementation Spec: Stateful Google Interactions Handler (store:true + previous_interaction_id chaining)
 
-**Worktree:** `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api`
 **Handler:** `src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts` (1483 lines, currently STATELESS)
 **Precedent:** `src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts`
 **SDK:** `@google/genai@2.9.0`

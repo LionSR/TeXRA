@@ -4,7 +4,6 @@ I now have complete, grounded understanding of the codebase, the OpenAI referenc
 
 # Implementation Spec: BACKGROUND-mode execution for `ModelHandlerGoogleInteractions`
 
-**Worktree:** `/Users/siruilu/Local/AI-Projects/coauthor/.claude/worktrees/google-interactions-api`
 **Handler:** `src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts`
 **Reference:** `src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts`
 
