@@ -4,7 +4,6 @@
 // switch the live conversation to a compatible model for future turns.
 
 import { Box, Text, useInput } from 'ink';
-import { Spinner } from '@inkjs/ui';
 import { useEffect, useRef } from 'react';
 
 import {
@@ -18,7 +17,11 @@ import {
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
 import { Select, selectIndexForHotkeyInput } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
-import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
+import {
+  CompactFormKeyHints,
+  FormFrame,
+  renderAsyncListFormTransient,
+} from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
@@ -138,20 +141,13 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     props.selectable,
   ]);
 
-  if (loading) {
-    return (
-      <FormFrame color="cyan" title="/model">
-        <Spinner label="Loading model registry..." />
-      </FormFrame>
-    );
-  }
-  if (error) {
-    return (
-      <FormFrame color="red" title="/model - error">
-        <Text>{error}</Text>
-      </FormFrame>
-    );
-  }
+  const transient = renderAsyncListFormTransient({
+    loading,
+    error,
+    title: '/model',
+    loadingLabel: 'Loading model registry...',
+  });
+  if (transient) return transient;
 
   if (isCompactFormRows(props.availableRows) && items.length > 0) {
     return (
