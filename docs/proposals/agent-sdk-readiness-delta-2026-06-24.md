@@ -3,7 +3,7 @@
 **Status:** Audit addendum. Read alongside the canonical
 [`agent-sdk-readiness.md`](./agent-sdk-readiness.md) (last refreshed 2026-06-20)
 and its ledger [`../agent-sdk-readiness-audit.md`](../agent-sdk-readiness-audit.md)
-(§1–§21). This pass does **not** restate those; it records only what is *new*
+(§1–§21). This pass does **not** restate those; it records only what is _new_
 since the sixteenth ledger pass, and re-confirms the standing verdict.
 
 **Scope re-audited:** `src/agent/core/` + `implementations/flows/`,
@@ -12,7 +12,7 @@ since the sixteenth ledger pass, and re-confirms the standing verdict.
 (`packages/extension/resources/{agents,tool_use_agents}/`, `src/tools/DelegationTools.ts`).
 
 **Method:** four independent fan-out audits (core flows, model handlers,
-logger/platform, subagent boundaries), each run *without* sight of the existing
+logger/platform, subagent boundaries), each run _without_ sight of the existing
 ledger, then reconciled against it. As the ledger itself predicts (§"Re-rebutted
 false positives", line 1627), an uninformed pass re-surfaces already-adjudicated
 candidates; those are filtered out below and listed under "Already adjudicated"
@@ -25,14 +25,14 @@ so they are not re-litigated.
 Each finding was re-traced to ground truth before any edit. Two of the first
 pass's claims changed materially:
 
-- **P1 is *latent*, not an active bug.** The only `onRoundFinalized`
+- **P1 is _latent_, not an active bug.** The only `onRoundFinalized`
   implementation is `createUsageRecordingCallback` → `UsageMonitor.recordUsage`,
   whose entire body is already wrapped in `try/catch` (`UsageMonitor.ts:111-197`,
   no rethrow). So the callback cannot throw today, and the double-`recordRound`
-  window is currently unreachable — it is defended *by luck* (an external
+  window is currently unreachable — it is defended _by luck_ (an external
   callee's exception-safety), not by structure. The first pass's "drop the
   catch-side `recordRound`" fix was also **wrong**: the catch is load-bearing for
-  the *other* path — a pre-finalize `BaseNode` (`ResponsePrepNode`/`ProcessNode`/
+  the _other_ path — a pre-finalize `BaseNode` (`ResponsePrepNode`/`ProcessNode`/
   `ContinuationNode`) throwing before the finalize node runs (verified: `Flow._orchestrate`
   → `BaseNode._run` has no try/catch, so those throws propagate straight to the
   catch, which is the only finalization for that round).
@@ -49,7 +49,7 @@ pass's claims changed materially:
 
 1. **P1 — structural hardening.** `ResponseCycleFinalizeNode.exec` now wraps
    `onRoundFinalized?.(run)` in `try/catch` (warn-logs on failure), making it the
-   single finalization point that cannot throw *after* `recordRound` has mutated
+   single finalization point that cannot throw _after_ `recordRound` has mutated
    run state. Behavior-identical today; closes the double-count footgun for any
    future throwing callback. The outer `ResponseCycleNode` catch is unchanged
    (still the safety net for genuine pre-finalize node throws).
@@ -74,7 +74,7 @@ pass's claims changed materially:
 
 ## TL;DR — verdict unchanged, one latent bug worth eyes
 
-**The codebase remains well-aligned and is *not* drowning in abstraction.** The
+**The codebase remains well-aligned and is _not_ drowning in abstraction.** The
 PocketFlow spine (`Node.exec → createFlow().run`), the `AgentTrace` emit/subscribe
 channel, the `platform()` composition root, the `createModelHandler` factory, the
 tool-conversion layer, and the lead-and-specialists delegation model are all
@@ -88,22 +88,22 @@ cleanups. They are ranked below.
 
 ## New delta findings (not in the existing ledger)
 
-### P1 — Latent double `recordRound` on the reflection error path *(bug candidate)*
+### P1 — Latent double `recordRound` on the reflection error path _(bug candidate)_
 
 - **Files:** `src/agent/implementations/flows/reflection/nodes/ResponseCycleNode.ts:131-132`
   (catch block) vs. `src/agent/core/flows/ResponseCycleFlow.ts:445-449`
   (`ResponseCycleFinalizeNode.exec`).
-- **What:** The inner response-cycle flow routes *every normal exit* through
+- **What:** The inner response-cycle flow routes _every normal exit_ through
   `ResponseCycleFinalizeNode`, which calls `recordRound(run, round)` then
   `await onRoundFinalized?.(run)` — the documented "single finalization point, no
   guard flags needed." The outer `ResponseCycleNode.exec` `catch` block (reached
-  only if `flow.run()` **throws**) *also* calls `recordRound(prepRes.run, prepRes.round)`
-  + `await this.services.onRoundFinalized(prepRes.run)`.
+  only if `flow.run()` **throws**) _also_ calls `recordRound(prepRes.run, prepRes.round)`
+  - `await this.services.onRoundFinalized(prepRes.run)`.
 - **Why it matters:** In the common case these are mutually exclusive (either the
   flow finalizes normally, or it throws before reaching the finalize node), so no
   double count occurs. **But there is one reachable double-record path:** if
   `recordRound` (line 447) succeeds inside the finalize node and then
-  `onRoundFinalized?.()` (line 448) *throws*, the flow propagates, the outer catch
+  `onRoundFinalized?.()` (line 448) _throws_, the flow propagates, the outer catch
   fires, and `recordRound` runs a **second** time for the same round — double-counting
   into the usage accumulator. The ledger knows `recordRound` has exactly these two
   callers (audit §line 2222-2223) but only classified it as a "trivial forwarding
@@ -114,7 +114,7 @@ cleanups. They are ranked below.
   (keep only the error classification → `outcome:'failed'`). Round accounting then
   lives **solely** in `ResponseCycleFinalizeNode`, matching the stated invariant
   and the `ToolUseCycleNode` shape. **Verify first:** confirm whether any throw can
-  reach the outer catch *without* the finalize node having run (e.g. a throw in a
+  reach the outer catch _without_ the finalize node having run (e.g. a throw in a
   node's `prep`/`post`); if so, that round would go unrecorded after the fix and
   the finalize node's coverage needs widening instead. This is the one item that
   warrants a human decision before touching.
@@ -140,7 +140,7 @@ cleanups. They are ranked below.
 - **What:** `platform().workspace.watch(...)` has **zero** production callers (grep
   for `.workspace.watch(` is empty); every real file-watch site calls
   `vscode.workspace.createFileSystemWatcher` directly (e.g.
-  `AgentDirectoryManager.ts:285`). Contrast `ConfigProvider.watch`, which *is*
+  `AgentDirectoryManager.ts:285`). Contrast `ConfigProvider.watch`, which _is_
   consumed via `configUtils.watchConfig`.
 - **Why:** dead surface area on a host-capability port — every host must satisfy a
   contract no agnostic consumer uses. This narrows the SDK-exported port surface.
@@ -152,7 +152,7 @@ cleanups. They are ranked below.
 - **Files:** `src/agent/implementations/flows/tooluse/ToolUseServices.ts:52` and
   `.../reflection/ReflectionServices.ts:38` each `export type` an alias of
   `FlowParams` (`= Record<string, unknown>`, `BaseFlowServices.ts:80`).
-- **What:** Both name an *empty* param bag per flow; the param slot is never read by
+- **What:** Both name an _empty_ param bag per flow; the param slot is never read by
   any node (the graphs thread `CycleParams`). They are imported across ~10 node
   files but carry no distinct type information — exactly the anti-shim shape the
   repo flags.
@@ -168,7 +168,7 @@ cleanups. They are ranked below.
   `flow.setServices({ ...this.services, get client(){…}, async refreshClient(){…}, run, workspace })`.
   The `client` / `refreshClient` getter pair is byte-identical.
 - **Important distinction from the ledger:** the ledger (line 1633) already rejected
-  *"inline the wrapper nodes"* — that rebuttal stands and is **not** what this is.
+  _"inline the wrapper nodes"_ — that rebuttal stands and is **not** what this is.
   This is a narrower DRY: extract a `withModelClient(services, modelHandler)` helper
   returning the `{ client, refreshClient }` slice (the `ModelClientServices` contract,
   `CycleServices.ts:25`), so the live-rebinding closure has one home instead of two
@@ -201,16 +201,16 @@ cleanups. They are ranked below.
 
 The uninformed passes re-surfaced these; the ledger's rulings hold at HEAD:
 
-| Re-surfaced candidate | Ruling (source) |
-| --- | --- |
-| "Remove `IModelHandler` as a duplicate of `ModelHandler`" | **Trap.** Optional `createBatchedToolUseFollowUpMessages` makes it load-bearing; removal breaks `tsc`. (proposal "Rejected findings"; ledger §re the non-optional constructive angle, line 2226) |
-| "Inline the `ResponseCycleNode`/`ToolUseCycleNode` flow-wrappers / the `createXCycleFlow` factories" | **Keep.** This *is* the mandated `Node.exec → createFlow → flow.run` shape. (ledger line 1633) |
-| "Merge `CycleServices` into `BaseFlowServices`" | **Keep.** Thin ≠ redundant; carries flow-specific fields. (ledger line 1640) |
-| "Split `modelHandlerOpenAIResponse.ts` (god-file) into collaborators" | **Real smell, not a quick win** — shared mutable state + background polling + test subclassing. Tracked design migration. (proposal "Rejected findings") |
-| "Merge `ModelHandlerOpenRouterNative` into the OpenAI base" | **Trap.** Two real SDK type families; the merge was deliberately deleted in PR #2962. (proposal "Rejected findings") |
-| "`AgentState.recordRound` is a trivial forwarding wrapper" | Noted trivial; **but see P1 above** — the dual-call *ordering* was never analyzed. (ledger line 2222) |
-| UsageMonitor `updateStreamUsage` + `logger.usage` "double emit" | **Documented dual-sink** (sidebar vs. transcript stats), agentCategory-gated, intentional. (ledger §4; `UsageMonitor.ts:162-165`) |
-| `@logger` not routed through `platform()` | **Intentional, documented** exception — logging is its own host-injected subsystem. (`platform.ts:23-28`) |
+| Re-surfaced candidate                                                                                | Ruling (source)                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| "Remove `IModelHandler` as a duplicate of `ModelHandler`"                                            | **Trap.** Optional `createBatchedToolUseFollowUpMessages` makes it load-bearing; removal breaks `tsc`. (proposal "Rejected findings"; ledger §re the non-optional constructive angle, line 2226) |
+| "Inline the `ResponseCycleNode`/`ToolUseCycleNode` flow-wrappers / the `createXCycleFlow` factories" | **Keep.** This _is_ the mandated `Node.exec → createFlow → flow.run` shape. (ledger line 1633)                                                                                                   |
+| "Merge `CycleServices` into `BaseFlowServices`"                                                      | **Keep.** Thin ≠ redundant; carries flow-specific fields. (ledger line 1640)                                                                                                                     |
+| "Split `modelHandlerOpenAIResponse.ts` (god-file) into collaborators"                                | **Real smell, not a quick win** — shared mutable state + background polling + test subclassing. Tracked design migration. (proposal "Rejected findings")                                         |
+| "Merge `ModelHandlerOpenRouterNative` into the OpenAI base"                                          | **Trap.** Two real SDK type families; the merge was deliberately deleted in PR #2962. (proposal "Rejected findings")                                                                             |
+| "`AgentState.recordRound` is a trivial forwarding wrapper"                                           | Noted trivial; **but see P1 above** — the dual-call _ordering_ was never analyzed. (ledger line 2222)                                                                                            |
+| UsageMonitor `updateStreamUsage` + `logger.usage` "double emit"                                      | **Documented dual-sink** (sidebar vs. transcript stats), agentCategory-gated, intentional. (ledger §4; `UsageMonitor.ts:162-165`)                                                                |
+| `@logger` not routed through `platform()`                                                            | **Intentional, documented** exception — logging is its own host-injected subsystem. (`platform.ts:23-28`)                                                                                        |
 
 ---
 
@@ -224,11 +224,11 @@ agent profiles are near-isomorphic to the SDK `AgentDefinition`
 (`AGENT_MODE_PRESETS`) are the "available subagents" roster, and read-only-by-tool
 reviewers (`changeReviewer` ships with **no bash**) already model SDK tool-scoping.
 
-**One angle worth adding:** the cleanest *new* extractions are the **internal
+**One angle worth adding:** the cleanest _new_ extractions are the **internal
 multi-phase workflow agents** — `devise` (draft→revise), `verifyFix`
 (expand→critique→fix), `elevate`/`humanize`/`enhance` (annotate→apply) — which
-fuse *generate / critique / apply / verify* into one conversation across reflection
-rounds. The `criticize`→`apply` agent *pair* already proves the split works across
+fuse _generate / critique / apply / verify_ into one conversation across reflection
+rounds. The `criticize`→`apply` agent _pair_ already proves the split works across
 agent boundaries; the multi-round single-agent versions are the monoliths. A
 dedicated **Verifier** subagent (tools: `wolfram`, `bash`, read-only file ops —
 which the prose-only workflow rounds lack today) inserted between draft and
@@ -270,5 +270,5 @@ adversarially-verified PR discipline:
 - `ToolUseServices.ts` / `ReflectionServices.ts` alias exports + ~10 node importers.
 - Existing ledger §line 1627-1644, 2215-2234, and the canonical proposal's
   Rejected-findings + subagent tables (reconciliation).
-</content>
-</invoke>
+  </content>
+  </invoke>
