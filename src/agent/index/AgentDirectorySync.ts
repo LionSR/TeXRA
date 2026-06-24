@@ -1,10 +1,8 @@
 // Standard library imports
 import * as path from 'node:path';
 
-// Third-party imports
-import fsExtra from 'fs-extra';
-
 // Local imports
+import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
@@ -62,7 +60,7 @@ export class PathAgentDirectoryBundleSource implements AgentDirectoryBundleSourc
     directoryName: BundledAgentDirectoryName,
     destinationPath: string,
   ): Promise<void> {
-    await fsExtra.copy(
+    await platform().fs.copy(
       path.join(this.resourcesBasePath, directoryName),
       destinationPath,
       { overwrite: true },
