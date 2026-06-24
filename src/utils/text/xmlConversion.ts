@@ -176,6 +176,7 @@ async function convertWithPandoc(text: string): Promise<string | null> {
   try {
     const { stdout } = await execa('pandoc', ['-f', format, '-t', 'markdown'], {
       input: text,
+      stripFinalNewline: false,
     });
     return normalizePandocReferences(stdout);
   } catch (err) {
