@@ -8,6 +8,7 @@ import { describe, it } from 'vitest';
 import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
 import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
 import {
+  CLI_STATE_SETTINGS,
   STATE_SETTINGS,
   STATE_SETTING_KEYS,
   settingEnumOptions,
@@ -181,6 +182,29 @@ describe('state settings catalog', () => {
       'tex-fmt',
       'none',
     ]);
+  });
+
+  it('exposes exactly the verified CLI-consumed settings', () => {
+    // Each entry below is confirmed to actually take effect in the CLI:
+    //  - git author identity is merged into spawned commands (execUtils) and
+    //    drives worktree delegation (DelegationTools);
+    //  - the workflow compile settings run in `texra workflow` / `texra run`
+    //    (the reflection flow, via OutputNode/runCompileCheck).
+    // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
+    // intentionally excluded. Changing the CLI roster must be a deliberate edit
+    // here, not an accident of flipping `hosts`.
+    assert.deepEqual(
+      [...CLI_STATE_SETTINGS].map((entry) => entry.key).sort(),
+      [
+        WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+        WorkspaceStateKey.GIT_AUTHOR_NAME,
+        WorkspaceStateKey.GIT_MARK_COMMITS,
+        WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+        WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+      ].sort(),
+    );
   });
 
   it('shares no keys with the config-tree catalog', () => {
