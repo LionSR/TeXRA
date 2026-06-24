@@ -2,18 +2,64 @@
 import { isIP } from 'node:net';
 
 // Third-party imports
-import axios from 'axios';
-import { StatusCodes } from 'http-status-codes';
+import ky, { HTTPError } from 'ky';
+import pRetry, { AbortError } from 'p-retry';
 import TurndownService from 'turndown';
 import { z } from 'zod';
 
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
-import { isTimeoutErrorCode } from '@tools/timeouts';
+import { isTimeoutError, isTransientHttpError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
+const WEB_FETCH_RETRIES = 2;
+const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/**
+ * Read a response body into a string, aborting with AbortError if accumulated
+ * bytes exceed `maxBytes`. Enforces the cap on received data rather than
+ * trusting the Content-Length header (chunked responses omit it entirely).
+ * Respects the charset from the Content-Type header (falls back to UTF-8).
+ */
+async function readBodyWithLimit(
+  response: Response,
+  maxBytes: number,
+): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    return '';
+  }
+  const ct = response.headers.get('content-type') ?? '';
+  const charsetMatch = /charset=([^\s;]+)/i.exec(ct);
+  const charset = charsetMatch?.[1]?.replace(/^["']|["']$/gu, '');
+  let decoder: TextDecoder;
+  try {
+    decoder = new TextDecoder(charset || 'utf-8');
+  } catch {
+    decoder = new TextDecoder();
+  }
+  const parts: string[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        throw new AbortError(
+          `Response too large (exceeds ${maxBytes / (1024 * 1024)} MB maximum).`,
+        );
+      }
+      parts.push(decoder.decode(value, { stream: true }));
+    }
+    parts.push(decoder.decode());
+  } finally {
+    reader.releaseLock();
+  }
+  return parts.join('');
+}
 
 const WebFetchInputSchema = z.strictObject({
   url: z
@@ -80,50 +126,64 @@ export class WebFetchTool extends defineTool({
       );
     }
 
-    let response;
+    let rawBody: string;
+    let contentType: string;
+
     try {
-      response = await axios.get(url, {
-        responseType: 'text',
-        timeout: WEB_FETCH_TIMEOUT_MS,
-        maxRedirects: 5,
-        maxContentLength: 10 * 1024 * 1024,
-        maxBodyLength: 10 * 1024 * 1024,
-        validateStatus: (status) =>
-          status >= StatusCodes.OK && status < StatusCodes.BAD_REQUEST,
-      });
+      ({ rawBody, contentType } = await pRetry(
+        async (): Promise<{ rawBody: string; contentType: string }> => {
+          let response: Response;
+          try {
+            // AbortSignal.timeout covers both connection and body read;
+            // ky's own timeout only clears once headers arrive.
+            response = await ky.get(url, {
+              timeout: false,
+              signal: AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS),
+              retry: 0,
+            });
+          } catch (error: unknown) {
+            if (isTransientHttpError(error)) throw error;
+            throw new AbortError(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          }
+
+          const lengthHeader = response.headers.get('content-length');
+          if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
+            throw new AbortError(
+              `Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES / (1024 * 1024)} MB.`,
+            );
+          }
+
+          const ct = response.headers.get('content-type') ?? '';
+          const text = await readBodyWithLimit(response, MAX_CONTENT_BYTES);
+          return { rawBody: text, contentType: ct };
+        },
+        { retries: WEB_FETCH_RETRIES, minTimeout: 500, randomize: true },
+      ));
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (isTimeoutErrorCode(error.code)) {
-          throw new ToolError(
-            `Request to ${url} timed out after ${WEB_FETCH_TIMEOUT_MS / 1000}s. ` +
-              `The remote server did not respond in time. Retry the request, or try a different URL.`,
-          );
-        }
-
-        if (error.response) {
-          throw new ToolError(
-            `HTTP ${error.response.status}: Failed to fetch ${url}`,
-          );
-        }
-
-        if (error.request) {
-          throw new ToolError(
-            `Network error fetching ${url}: ${error.message}`,
-          );
-        }
+      if (isTimeoutError(error)) {
+        throw new ToolError(
+          `Request to ${url} timed out after ${WEB_FETCH_TIMEOUT_MS / 1000}s. ` +
+            `The remote server did not respond in time. Retry the request, or try a different URL.`,
+        );
       }
-
+      if (error instanceof HTTPError) {
+        throw new ToolError(
+          `HTTP ${error.response.status}: Failed to fetch ${url}`,
+        );
+      }
+      if (error instanceof TypeError) {
+        throw new ToolError(`Network error fetching ${url}: ${error.message}`);
+      }
       throw new ToolError(`Failed to fetch ${url}: ${toErrorMessage(error)}`);
     }
 
-    const rawBody = response.data;
-    const contentType = String(
-      response.headers?.['content-type'] ?? '',
-    ).toLowerCase();
+    const ctLower = contentType.toLowerCase();
     const isMarkupContent =
-      contentType.includes('html') ||
-      contentType.includes('xml') ||
-      contentType.includes('xhtml') ||
+      ctLower.includes('html') ||
+      ctLower.includes('xml') ||
+      ctLower.includes('xhtml') ||
       (!contentType && rawBody.trim().startsWith('<'));
 
     let markdown: string;
