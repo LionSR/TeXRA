@@ -269,45 +269,29 @@ section p {
 .trust-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-  margin-top: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--vp-c-divider);
 }
 .trust-card {
-  position: relative;
-  background: var(--vp-c-bg-soft);
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 12px;
-  padding: 1.5rem;
-  transition: border-color 0.2s;
+  padding: 0 1.75rem;
+  border-left: 1px solid var(--vp-c-divider);
 }
-.trust-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 2px;
-  border-radius: 12px 12px 0 0;
-  background: linear-gradient(
-    90deg,
-    var(--vp-c-brand-1),
-    color-mix(in srgb, var(--vp-c-brand-1) 25%, transparent)
-  );
-  opacity: 0;
-  transition: opacity 0.2s;
+.trust-card:first-child {
+  padding-left: 0;
+  border-left: none;
 }
-.trust-card:hover {
-  border-color: color-mix(in srgb, var(--vp-c-brand-1) 45%, var(--vp-c-divider));
-}
-.trust-card:hover::before {
-  opacity: 1;
+.trust-card:last-child {
+  padding-right: 0;
 }
 .trust-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 10px;
-  margin-bottom: 0.9rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9px;
+  margin-bottom: 0.8rem;
   background: color-mix(in srgb, var(--vp-c-brand-1) 11%, transparent);
   color: var(--vp-c-brand-1);
 }
@@ -678,7 +662,18 @@ section p {
   }
   .trust-row {
     grid-template-columns: 1fr;
-    gap: 1rem;
+  }
+  .trust-card {
+    padding: 1.25rem 0;
+    border-left: none;
+    border-top: 1px solid var(--vp-c-divider);
+  }
+  .trust-card:first-child {
+    padding-top: 0;
+    border-top: none;
+  }
+  .trust-card:last-child {
+    padding-bottom: 0;
   }
   .lifecycle {
     flex-wrap: wrap;
