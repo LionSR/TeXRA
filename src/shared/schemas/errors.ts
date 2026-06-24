@@ -103,59 +103,33 @@ export const ProviderErrorPartialSchema = z.preprocess(
 );
 export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
 
-/** Minimal error info for retry state tracking */
+/**
+ * Minimal error info for retry state tracking.
+ *
+ * Structurally this is exactly a {@link ProviderError} without `rawErrorBody`
+ * (large, not worth persisting in retry state). Every carried field is already
+ * optional on the base schema, so the two shapes round-trip by narrowing /
+ * widening rather than by re-listing the field set in three places. Deriving
+ * the schema with `.omit()` keeps it from drifting out of sync with
+ * `ProviderErrorObjectSchema` as new error fields are added.
+ */
 export const RetryErrorInfoSchema = z.preprocess(
   normalizeProviderErrorRetryFlag,
-  z.object({
-    message: z.string(),
-    userRetryable: z.boolean(),
-    ...ProviderErrorObjectSchema.pick({
-      statusCode: true,
-      statusText: true,
-      provider: true,
-      isRelayError: true,
-      isCredentialExhausted: true,
-      isUpstreamCreditDepleted: true,
-      requestId: true,
-      streamDiagnostics: true,
-      partialText: true,
-    }).partial().shape,
-  }),
+  ProviderErrorObjectSchema.omit({ rawErrorBody: true }),
 );
 export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
 
-/** Convert a full ProviderError into the retry-state record. */
+/** Project a full ProviderError onto the retry-state record by dropping the
+ *  bulky `rawErrorBody`; every other field carries over unchanged. */
 export function toRetryErrorInfo(err: ProviderError): RetryErrorInfo {
-  return {
-    message: err.message,
-    userRetryable: err.userRetryable,
-    statusCode: err.statusCode,
-    statusText: err.statusText,
-    provider: err.provider,
-    isRelayError: err.isRelayError,
-    isCredentialExhausted: err.isCredentialExhausted,
-    isUpstreamCreditDepleted: err.isUpstreamCreditDepleted,
-    requestId: err.requestId,
-    streamDiagnostics: err.streamDiagnostics,
-    partialText: err.partialText,
-  };
+  const { rawErrorBody, ...rest } = err;
+  return rest;
 }
 
-/** Reconstruct a ProviderError from retry-state info. Leaves `isRelayError`
- *  `undefined` when absent so `normalizeProviderError` does not read a
- *  wrong relay verdict from the cached shape. */
+/** Reconstruct a ProviderError from retry-state info. `rawErrorBody` is absent
+ *  and `isRelayError` stays `undefined` when it was absent, so
+ *  `normalizeProviderError` does not read a wrong relay verdict from the cached
+ *  shape. */
 export function toProviderErrorFromRetry(info: RetryErrorInfo): ProviderError {
-  return {
-    message: info.message,
-    userRetryable: info.userRetryable,
-    isRelayError: info.isRelayError,
-    statusCode: info.statusCode,
-    statusText: info.statusText,
-    provider: info.provider,
-    isCredentialExhausted: info.isCredentialExhausted,
-    isUpstreamCreditDepleted: info.isUpstreamCreditDepleted,
-    requestId: info.requestId,
-    streamDiagnostics: info.streamDiagnostics,
-    partialText: info.partialText,
-  };
+  return { ...info };
 }
