@@ -8,26 +8,58 @@ function truncate(str: string, maxLen: number): string {
   return str.length > maxLen ? `${str.slice(0, maxLen - 3)}...` : str;
 }
 
+/**
+ * The recognized content-block shapes within a stored conversation. Stored
+ * blocks are untrusted JSON, so each variant only declares the fields this
+ * formatter reads; unknown shapes fall through to the JSON default.
+ */
+type ConversationBlock =
+  | { type: 'text'; text?: unknown }
+  | { type: 'tool_use'; name?: unknown; input?: unknown }
+  | { type: 'tool_result'; content?: unknown };
+
+/** Narrows an arbitrary stored block to a recognized variant by its `type` tag. */
+function asConversationBlock(block: unknown): ConversationBlock | undefined {
+  if (typeof block !== 'object' || block === null) return undefined;
+  const type = (block as { type?: unknown }).type;
+  if (type === 'text' || type === 'tool_use' || type === 'tool_result') {
+    return block as ConversationBlock;
+  }
+  return undefined;
+}
+
+function asText(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
 function formatBlock(block: unknown): string {
   if (typeof block === 'string') {
     return block;
   }
-  const b = block as Record<string, unknown>;
-  switch (b?.type) {
+  const typed = asConversationBlock(block);
+  switch (typed?.type) {
     case 'text':
-      return (b.text as string) ?? '';
+      return asText(typed.text);
     case 'tool_use':
-      return `[tool_use: ${b.name}(${truncate(JSON.stringify(b.input ?? {}), 100)})]`;
+      return `[tool_use: ${asText(typed.name)}(${truncate(JSON.stringify(typed.input ?? {}) ?? '', 100)})]`;
     case 'tool_result': {
       const output =
-        typeof b.content === 'string'
-          ? b.content
-          : (JSON.stringify(b.content) ?? '');
+        typeof typed.content === 'string'
+          ? typed.content
+          : (JSON.stringify(typed.content) ?? '');
       return `[tool_result: ${truncate(output, 100)}]`;
     }
     default:
-      return truncate(JSON.stringify(block), 100);
+      // `JSON.stringify` returns undefined for undefined/symbol/function
+      // blocks; fall back to '' so truncate never sees a non-string (matches
+      // the tool_result and message-content paths above).
+      return truncate(JSON.stringify(block) ?? '', 100);
   }
+}
+
+interface ConversationMessage {
+  role?: unknown;
+  content?: unknown;
 }
 
 function formatMessageContent(content: unknown): string {
@@ -44,8 +76,10 @@ function formatMessageContent(content: unknown): string {
 /** Render a stored conversation as numbered <message> blocks. */
 export function formatConversation(conversation: readonly unknown[]): string {
   const messages = conversation.map((msg, i) => {
-    const m = msg as { role?: string; content?: unknown };
-    const role = m.role ?? 'unknown';
+    const m = (msg ?? {}) as ConversationMessage;
+    // Coerce a missing, non-string, or empty role to "unknown": stored roles
+    // are untrusted, and an empty label would render a meaningless role="".
+    const role = asText(m.role) || 'unknown';
     const content = formatMessageContent(m.content);
     return `<message index="${i + 1}" role="${role}">\n${content}\n</message>`;
   });
