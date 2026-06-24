@@ -1,6 +1,7 @@
 /** Stateless YAML scanning for the agent registry. */
 
 import { glob } from 'glob';
+import pMap from 'p-map';
 import * as yaml from 'yaml';
 
 import {
@@ -56,7 +57,7 @@ export async function scanDirectory(
       })
     ).toSorted();
     const parsed = (
-      await Promise.all(files.map((file) => readYamlDefinition(file)))
+      await pMap(files, (file) => readYamlDefinition(file), { concurrency: 8 })
     ).filter(filterNotNull);
     const unique = entriesWithUniqueNames(parsed);
     const definitions = new Map(
