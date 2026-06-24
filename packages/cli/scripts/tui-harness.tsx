@@ -40,6 +40,7 @@ import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
+import { cliSettingsStores } from '../src/runtime/settingsStores';
 import {
   formatSlashCommandHelp,
   GOAL_MODE_HELP,
@@ -1592,6 +1593,7 @@ registerBuiltinSlashCommands({
   onResumeSelect: (id) => {
     appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
   },
+  getConfigStores: cliSettingsStores,
   onError: (error) => {
     appendHarnessAssistantTranscript(
       `Slash command failed: ${toErrorMessage(error)}`,

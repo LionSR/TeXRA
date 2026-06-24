@@ -3,6 +3,7 @@ import {
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_MARK_COMMITS,
+  DEFAULT_GIT_WORKTREE_SUPPORT,
 } from '@shared/constants/git';
 import { setWorktreeSupportEnabled } from '@tools/worktreeConfig';
 import { setGitAuthorEnv } from './gitAuthorEnv';
@@ -31,7 +32,7 @@ export function readGitAuthorSettingsFromState(
       DEFAULT_GIT_AUTHOR_EMAIL,
     worktreeSupport: workspaceState.get<boolean>(
       WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-      false,
+      DEFAULT_GIT_WORKTREE_SUPPORT,
     ),
   };
 }

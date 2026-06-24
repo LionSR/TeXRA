@@ -38,6 +38,7 @@ import {
 } from '@cli/runtime/modelAccess';
 import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
+import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -534,6 +535,7 @@ export async function runChat(
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: activateSkillForNextMessage,
     onResumeSelect: (id: ExecutionId) => chatController.resume(id),
+    getConfigStores: cliSettingsStores,
     onError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
     },
