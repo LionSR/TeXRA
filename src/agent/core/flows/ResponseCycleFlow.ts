@@ -19,6 +19,7 @@ import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import { K_SLICE } from '@agent/core/constants';
+import { toErrorMessage } from '@common/errors';
 import type { ToolDefinition } from '@model';
 import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
@@ -443,9 +444,21 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
 > {
   /** Finalize the round by recording stats and invoking callback. */
   async exec(): Promise<void> {
-    const { round, run, onRoundFinalized } = this.services;
+    const { round, run, onRoundFinalized, logger } = this.services;
     recordRound(run, round);
-    await onRoundFinalized?.(run);
+    // Best-effort finalization callback. `ResponseCycleNode` (the reflection
+    // wrapper) re-runs recordRound + onRoundFinalized from its catch block as a
+    // safety net for nodes that throw *before* reaching this single
+    // finalization point. Guarding the callback here keeps this node from
+    // throwing *after* recordRound has already mutated run state — otherwise
+    // that catch would re-record the round and double-count usage/response time.
+    try {
+      await onRoundFinalized?.(run);
+    } catch (error) {
+      logger.warn(
+        `Round finalization callback failed: ${toErrorMessage(error)}`,
+      );
+    }
   }
 }
 
