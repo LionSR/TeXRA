@@ -2,7 +2,6 @@
 // first message, tool-use agents can be chosen as the root chat agent.
 
 import { Box, Text } from 'ink';
-import { Spinner } from '@inkjs/ui';
 
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentOptionData } from '@shared/schemas';
@@ -10,7 +9,11 @@ import { agentName } from '@shared/schemas/agent';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
-import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
+import {
+  CompactFormKeyHints,
+  FormFrame,
+  renderAsyncListFormTransient,
+} from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
@@ -151,21 +154,13 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     onClose: props.onClose,
   });
 
-  if (loading) {
-    return (
-      <FormFrame color="cyan" title="/agent">
-        <Spinner label="Loading agent registry..." />
-      </FormFrame>
-    );
-  }
-
-  if (error) {
-    return (
-      <FormFrame color="red" title="/agent - error">
-        <Text>{error}</Text>
-      </FormFrame>
-    );
-  }
+  const transient = renderAsyncListFormTransient({
+    loading,
+    error,
+    title: '/agent',
+    loadingLabel: 'Loading agent registry...',
+  });
+  if (transient) return transient;
 
   const agents: AgentGroups = data ?? { toolUse: [], workflow: [] };
   const primarySectionTitle = agentPickerPrimarySectionTitle(agents.toolUse);
