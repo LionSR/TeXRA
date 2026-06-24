@@ -26,7 +26,12 @@ export interface SettingsStores {
 
 export type SettingsHostKind = 'extension' | 'cli';
 
-function slotFor(
+/**
+ * The storage slot a setting resolves to for a host: the CLI's `cliStore`
+ * override when set, otherwise the canonical `store`. Single source of the
+ * resolution rule — display labels and read/write all go through it.
+ */
+export function settingSlot(
   entry: StateSettingEntry,
   host: SettingsHostKind,
 ): SettingStore {
@@ -50,12 +55,32 @@ export function readSetting(
   stores: SettingsStores,
   host: SettingsHostKind = 'extension',
 ): unknown {
-  const raw = stores[slotFor(entry, host)].get<unknown>(entry.key);
+  const raw = stores[settingSlot(entry, host)].get<unknown>(entry.key);
   if (raw === undefined) {
     return settingDefault(entry);
   }
   const parsed = entry.schema.safeParse(raw);
   return parsed.success ? parsed.data : settingDefault(entry);
+}
+
+/**
+ * Persist a value to an entry's resolved slot. The only slot-specific detail is
+ * that `config` writes carry a target while state stores do not, so the
+ * dispatch lives here once for both write and reset.
+ */
+function writeSlot(
+  entry: StateSettingEntry,
+  value: unknown,
+  stores: SettingsStores,
+  host: SettingsHostKind,
+  target: ConfigTarget,
+): Promise<void> {
+  const slot = settingSlot(entry, host);
+  return Promise.resolve(
+    slot === 'config'
+      ? stores.config.update(entry.key, value, target)
+      : stores[slot].update(entry.key, value),
+  );
 }
 
 /**
@@ -70,13 +95,9 @@ export async function writeSetting(
   host: SettingsHostKind = 'extension',
   target: ConfigTarget = 'workspace',
 ): Promise<void> {
-  const parsed = entry.schema.parse(value);
-  const slot = slotFor(entry, host);
-  if (slot === 'config') {
-    await stores.config.update(entry.key, parsed, target);
-  } else {
-    await stores[slot].update(entry.key, parsed);
-  }
+  // `async` so a schema-rejected value surfaces as a rejected promise rather
+  // than a synchronous throw — callers rely on the uniform promise contract.
+  await writeSlot(entry, entry.schema.parse(value), stores, host, target);
 }
 
 /**
@@ -84,16 +105,11 @@ export async function writeSetting(
  * (`update(key, undefined)`), so the schema's `.prefault()` reappears on the
  * next read. Never writes the literal default value.
  */
-export async function resetSetting(
+export function resetSetting(
   entry: StateSettingEntry,
   stores: SettingsStores,
   host: SettingsHostKind = 'extension',
   target: ConfigTarget = 'workspace',
 ): Promise<void> {
-  const slot = slotFor(entry, host);
-  if (slot === 'config') {
-    await stores.config.update(entry.key, undefined, target);
-  } else {
-    await stores[slot].update(entry.key, undefined);
-  }
+  return writeSlot(entry, undefined, stores, host, target);
 }
