@@ -141,8 +141,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   },
 
   // --- Workflow auto-compile -------------------------------------------------
-  // Consumed today by the VS Code extension + desktop only (no CLI consumer
-  // yet); a later PR adds the CLI read path and flips `hosts` to include 'cli'.
+  // Read by the shared reflection/compile flow, which runs in every host
+  // including the CLI; the CLI reads/writes them from its own `state.json`
+  // (`platform().workspaceState`), the same slot the consumer reads.
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompile),
@@ -150,7 +151,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Compile the LaTeX project automatically after an agent writes its output.',
     category: 'workflow',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/agent/output/compileCheck.ts',
   },
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
@@ -162,7 +164,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Maximum time (in milliseconds) to wait for an automatic post-output compile before giving up.',
     category: 'workflow',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/agent/output/compileCheck.ts',
   },
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
@@ -171,7 +174,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Open the compiled PDF automatically after a successful auto-compile.',
     category: 'workflow',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer:
+      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
   },
   {
     key: WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
@@ -182,10 +187,13 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Reject an agent edit when the automatic post-output compile fails, so broken LaTeX is not accepted.',
     category: 'workflow',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer:
+      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
   },
 
   // --- LaTeXdiff -------------------------------------------------------------
+  // VS Code + desktop only for now (the CLI doesn't surface latexdiff config).
   {
     key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
@@ -243,7 +251,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Which formatter to run when formatting LaTeX source.',
     category: 'latex',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/latex/texFormatter.ts',
     enumDescriptions: [
       'Format with latexindent.',
       'Format with tex-fmt.',
@@ -299,4 +308,14 @@ export function settingEnumOptions(
 /** Whether a setting's schema is a boolean (used to classify edit affordance). */
 export function settingIsBoolean(entry: StateSettingEntry): boolean {
   return innerSchema(entry) instanceof z.ZodBoolean;
+}
+
+/** Whether a setting's schema is a string (free-text edit affordance). */
+export function settingIsString(entry: StateSettingEntry): boolean {
+  return innerSchema(entry) instanceof z.ZodString;
+}
+
+/** Whether a setting's schema is a number (numeric free-text edit affordance). */
+export function settingIsNumber(entry: StateSettingEntry): boolean {
+  return innerSchema(entry) instanceof z.ZodNumber;
 }

@@ -1,14 +1,13 @@
-// `/config` — view and toggle host-neutral settings from the chat TUI.
+// `/config` — view and edit host-neutral settings from the chat TUI.
 //
 // Unlike the single-Select pickers (`/approval`, `/api`), this is a list +
 // drill-in: the outer list shows every catalog entry the CLI consumes with its
 // current value and store; selecting a boolean toggles it inline, an enum opens
-// an inner value picker, and free-text (string/number) entries render read-only
-// for now (deferred editing). Reads/writes go through the host-aware
-// `settingsAccess` accessor so the same catalog drives the extension settings
-// view and this panel without drift.
+// an inner value picker, and a string/number opens an inline text editor.
+// Reads/writes go through the host-aware `settingsAccess` accessor so the same
+// catalog drives the extension settings view and this panel without drift.
 
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 
 import { stripPrefix } from '@shared/config/configKeys';
@@ -16,25 +15,53 @@ import { settingSlot } from '@shared/config/settingsAccess';
 import {
   settingEnumOptions,
   settingIsBoolean,
+  settingIsNumber,
+  settingIsString,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
 
+import { BaseTextInput } from '../input/BaseTextInput';
 import { KeyHints } from '../ui/KeyHints';
+import { POINTER } from '../ui/glyphs';
 import { Select, type SelectItem } from '../ui/Select';
 import { FormFrame } from './_shared/FormFrame';
 import { computeSelectWindowSize } from './_shared/selectWindow';
 
-export type SettingEditKind = 'boolean' | 'enum' | 'readonly';
+export type SettingEditKind =
+  | 'boolean'
+  | 'enum'
+  | 'string'
+  | 'number'
+  | 'readonly';
 
 /**
- * How a setting is edited in `/config`, derived from its schema: enum settings
- * drill into a value picker; booleans toggle inline; everything else
- * (string/number) is read-only for now (free-text editing is deferred).
+ * How a setting is edited in `/config`, derived from its schema: enums drill
+ * into a value picker, booleans toggle inline, strings/numbers open a text
+ * editor; anything else (e.g. a record) is read-only.
  */
 export function settingEditKind(entry: StateSettingEntry): SettingEditKind {
   if (settingEnumOptions(entry)) return 'enum';
   if (settingIsBoolean(entry)) return 'boolean';
+  if (settingIsNumber(entry)) return 'number';
+  if (settingIsString(entry)) return 'string';
   return 'readonly';
+}
+
+/**
+ * Coerce raw text-editor input to the value a `string`/`number` setting
+ * expects, or `null` when a number field's input is blank or non-numeric (so
+ * the caller can ignore the submit rather than write `NaN`). Range/format
+ * violations are left to the schema, which rejects them on write.
+ */
+export function coerceSettingInput(
+  raw: string,
+  isNumber: boolean,
+): { value: unknown } | null {
+  if (!isNumber) return { value: raw };
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  const parsed = Number(trimmed);
+  return Number.isNaN(parsed) ? null : { value: parsed };
 }
 
 export function formatSettingValue(value: unknown): string {
@@ -96,10 +123,57 @@ export interface ConfigFormProps {
 
 type ConfigFormMode =
   | { readonly kind: 'list' }
-  | { readonly kind: 'enum'; readonly entry: StateSettingEntry };
+  | { readonly kind: 'enum'; readonly entry: StateSettingEntry }
+  | {
+      readonly kind: 'text';
+      readonly entry: StateSettingEntry;
+      readonly isNumber: boolean;
+    };
 
 const LIST_CHROME_ROWS = 5;
 const ENUM_CHROME_ROWS = 4;
+
+/** Inline text editor for a string/number setting (its own input buffer). */
+function ConfigTextEditor(props: {
+  readonly entry: StateSettingEntry;
+  readonly initialValue: string;
+  readonly isNumber: boolean;
+  readonly onSubmit: (raw: string) => void;
+  readonly onCancel: () => void;
+}): React.JSX.Element {
+  const [buffer, setBuffer] = useState(props.initialValue);
+  // BaseTextInput owns Enter (onSubmit) and ignores Escape, so handle Escape
+  // here to back out to the list.
+  useInput((_input, key) => {
+    if (key.escape) props.onCancel();
+  });
+  return (
+    <FormFrame
+      color="cyan"
+      title={`/config · ${settingDisplayName(props.entry)}`}
+      showCloseHint={false}
+    >
+      <Box>
+        <Text>{`${POINTER} `}</Text>
+        <BaseTextInput
+          value={buffer}
+          placeholder={props.isNumber ? 'enter a number' : 'enter a value'}
+          onChange={setBuffer}
+          onSubmit={props.onSubmit}
+        />
+      </Box>
+      <Box marginTop={1}>
+        <KeyHints
+          hints={[
+            { key: 'Enter', action: 'save' },
+            { key: 'Esc', action: 'back' },
+          ]}
+          confirmCancel={false}
+        />
+      </Box>
+    </FormFrame>
+  );
+}
 
 export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   const [mode, setMode] = useState<ConfigFormMode>({ kind: 'list' });
@@ -156,6 +230,25 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     );
   }
 
+  if (mode.kind === 'text') {
+    const { entry, isNumber } = mode;
+    const current = props.readValue(entry);
+    return (
+      <ConfigTextEditor
+        key={entry.key}
+        entry={entry}
+        initialValue={current == null ? '' : String(current)}
+        isNumber={isNumber}
+        onSubmit={(raw) => {
+          const coerced = coerceSettingInput(raw, isNumber);
+          if (coerced) commit(entry, coerced.value);
+          setMode({ kind: 'list' });
+        }}
+        onCancel={() => setMode({ kind: 'list' })}
+      />
+    );
+  }
+
   const items = buildConfigListItems(props.entries, props.readValue);
 
   if (items.length === 0) {
@@ -180,6 +273,10 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
       commit(entry, !(props.readValue(entry) as boolean));
     } else if (kind === 'enum') {
       setMode({ kind: 'enum', entry });
+    } else if (kind === 'string') {
+      setMode({ kind: 'text', entry, isNumber: false });
+    } else if (kind === 'number') {
+      setMode({ kind: 'text', entry, isNumber: true });
     }
     // 'readonly' rows are disabled in the list and never reach here.
   };
