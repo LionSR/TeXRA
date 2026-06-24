@@ -21,6 +21,7 @@ const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MB
  * Read a response body into a string, aborting with AbortError if accumulated
  * bytes exceed `maxBytes`. Enforces the cap on received data rather than
  * trusting the Content-Length header (chunked responses omit it entirely).
+ * Respects the charset from the Content-Type header (falls back to UTF-8).
  */
 async function readBodyWithLimit(
   response: Response,
@@ -30,7 +31,14 @@ async function readBodyWithLimit(
   if (!reader) {
     return '';
   }
-  const decoder = new TextDecoder();
+  const ct = response.headers.get('content-type') ?? '';
+  const charsetMatch = /charset=([^\s;]+)/i.exec(ct);
+  let decoder: TextDecoder;
+  try {
+    decoder = new TextDecoder(charsetMatch?.[1] ?? 'utf-8');
+  } catch {
+    decoder = new TextDecoder();
+  }
   const parts: string[] = [];
   let total = 0;
   try {
