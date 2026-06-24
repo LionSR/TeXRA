@@ -28,7 +28,9 @@ describe('isTransientHttpError', () => {
   });
 
   it('treats AbortError with TimeoutError cause as transient (undici wrapping)', () => {
-    const cause = Object.assign(new Error('signal timed out'), { name: 'TimeoutError' });
+    const cause = Object.assign(new Error('signal timed out'), {
+      name: 'TimeoutError',
+    });
     const err = Object.assign(new Error('The operation was aborted'), {
       name: 'AbortError',
       cause,
