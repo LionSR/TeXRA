@@ -21,7 +21,9 @@ import {
   STATE_SETTINGS,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
+import { DEFAULT_GIT_AUTHOR_NAME } from '@shared/constants/git';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import {
   isStored,
   makeFakeSettingsStores,
@@ -187,5 +189,20 @@ describe('/config slash command wiring', () => {
 
     expect(isStored(config, WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(true);
     expect(props.readValue?.(markCommits)).toBe(false);
+  });
+
+  it('re-applies git author config so a toggle takes effect this session', async () => {
+    const { stores } = makeFakeSettingsStores();
+    registerBuiltinSlashCommands({ getConfigStores: () => stores });
+    openCliSlashCommandForm('config', '');
+
+    const props = renderConfigFormProps();
+    const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
+
+    await props.writeValue?.(markCommits, true);
+    expect(getGitAuthorEnv().GIT_AUTHOR_NAME).toBe(DEFAULT_GIT_AUTHOR_NAME);
+
+    await props.writeValue?.(markCommits, false);
+    expect(getGitAuthorEnv()).toEqual({});
   });
 });
