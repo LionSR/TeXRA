@@ -426,25 +426,37 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls2.create[0].input).toHaveLength(2);
   });
 
-  it('B8: requires_action is terminal in v0 (no infinite poll)', async () => {
+  it('B8: requires_action is a serviceable terminal — returned (not thrown) so tool calls reach the cycle', async () => {
     mockConfig();
     vi.useFakeTimers();
     const { handler } = createHandler();
+    const callStep: Step = {
+      type: 'function_call',
+      id: 'c1',
+      name: 'get_weather',
+      arguments: { location: 'Paris' },
+    };
     const { client } = bgClient({
       submit: () => ({ id: 'int_1', status: 'in_progress' }),
-      getSequence: [{ id: 'int_1', status: 'requires_action' }],
+      getSequence: [
+        { id: 'int_1', status: 'requires_action', steps: [callStep] },
+      ],
     });
 
-    const promise = handler.createResponse({
-      client: client as never,
-      messages: [userStep('a')],
-      temperature: 0,
-    });
-    const rejection = expect(promise).rejects.toThrow(
-      /status "requires_action"/,
+    // Polling stops on requires_action and returns it — no throw, no hang.
+    const result = await runWithPolls(
+      handler.createResponse({
+        client: client as never,
+        messages: [userStep('a')],
+        temperature: 0,
+      }),
+      1,
     );
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await rejection;
+
+    expect(result.response.status).toBe('requires_action');
+    expect(handler.extractToolUse(result.response).map((c) => c.name)).toEqual([
+      'get_weather',
+    ]);
   });
 
   it('B9: timeout guard throws after the max polling duration', async () => {
