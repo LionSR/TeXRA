@@ -251,10 +251,6 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   },
 ] as const;
 
-/** Catalog keyed by canonical `texra.*` key for direct lookup. */
-export const STATE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> =
-  new Map(STATE_SETTINGS.map((entry) => [entry.key, entry]));
-
 /** Every canonical `texra.*` key in the catalog. */
 export const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
   (entry) => entry.key,
