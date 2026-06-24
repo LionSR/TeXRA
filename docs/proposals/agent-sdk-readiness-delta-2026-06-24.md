@@ -109,15 +109,16 @@ cleanups. They are ranked below.
   callers (audit §line 2222-2223) but only classified it as a "trivial forwarding
   wrapper" — it never analyzed the dual-call ordering. `ToolUseCycleNode` has **no**
   symmetric catch-side metrics call, confirming the asymmetry is unintended.
-- **Recommended fix (behavior-neutral in the common case):** delete the
-  `recordRound` + `onRoundFinalized` calls from `ResponseCycleNode.exec`'s catch
-  (keep only the error classification → `outcome:'failed'`). Round accounting then
-  lives **solely** in `ResponseCycleFinalizeNode`, matching the stated invariant
-  and the `ToolUseCycleNode` shape. **Verify first:** confirm whether any throw can
-  reach the outer catch _without_ the finalize node having run (e.g. a throw in a
-  node's `prep`/`post`); if so, that round would go unrecorded after the fix and
-  the finalize node's coverage needs widening instead. This is the one item that
-  warrants a human decision before touching.
+- **Recommended fix — ⚠️ SUPERSEDED by the second-pass Update above.** The
+  original recommendation here was to _delete_ the catch-side `recordRound` +
+  `onRoundFinalized`. The "verify first" check it called for was carried out and
+  **invalidated that approach**: a pre-finalize `BaseNode` (`ResponsePrepNode`/
+  `ProcessNode`/`ContinuationNode`) _can_ throw before the finalize node runs, so
+  the catch is the only finalization for that round and must stay. The fix that
+  actually landed instead guards `onRoundFinalized` inside
+  `ResponseCycleFinalizeNode` so it cannot throw after `recordRound` — see
+  "Update (2026-06-24, second pass)" at the top of this document. This original
+  text is retained only as an audit trail of the corrected reasoning.
 
 ### P2 — Duplicate `extractTextFromReasoningDetails` in the MiniMax handler
 
