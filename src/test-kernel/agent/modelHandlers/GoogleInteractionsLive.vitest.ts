@@ -352,7 +352,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
       temperature: 0,
     });
     const t = handler.extractResponse(r.response, '');
-     
+
     console.log(
       '[live] streaming status:',
       r.response.status,
