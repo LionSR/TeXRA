@@ -57,6 +57,20 @@ export function isCliLoginProvider(
   return isOAuthProvider(provider);
 }
 
+// `--device` and `--no-browser` are distinct sign-in transports, not
+// refinements of each other (device-code shows no loopback URL), and the
+// device branch silently wins when both are set. Both the CLI command and the
+// chat `/login` path reject the combination so the choice is explicit instead
+// of quietly ignored.
+export const LOGIN_TRANSPORT_CONFLICT_MESSAGE =
+  'Use either --device or --no-browser, not both: --device signs in with a one-time code (no loopback URL), while --no-browser prints the loopback sign-in URL.';
+
+export function hasLoginTransportConflict(
+  args: Pick<CliLoginInit, 'device' | 'noBrowser'>,
+): boolean {
+  return args.device && args.noBrowser;
+}
+
 export function githubSelectAccountWarning(
   init: Pick<CliLoginInit, 'provider' | 'selectAccount' | 'loginHint'>,
 ): string | undefined {
