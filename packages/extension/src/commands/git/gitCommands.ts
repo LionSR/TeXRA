@@ -5,6 +5,14 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { toErrorMessage } from '@common/errors';
+import {
+  buildAuthenticatedRemoteUrl,
+  buildGitCredential,
+  overleafTokenSpec,
+  parseLatexGitUrl,
+  redactSensitive,
+  type GitCredential,
+} from '@latex/overleafProject';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
@@ -15,11 +23,6 @@ logger.initialize(CHANNEL);
 
 const COMMIT_LABEL_FORMAT = '%h: %s (%cr)';
 const COMMIT_HASH_PATTERN = /^[0-9a-fA-F]{4,40}$/;
-const LATEX_PROJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
-const LATEX_GIT_URL_PATTERN =
-  /^https?:\/\/(?:git@)?([^/]+)(\/git)?\/([a-f0-9]{24})$/i;
-const LATEX_PROJECT_URL_PATTERN =
-  /^https?:\/\/([^/]+)\/project\/([a-f0-9]{24})\/?$/i;
 const OVERLEAF_GIT_TOKEN_URL = 'https://www.overleaf.com/user/settings';
 const OVERLEAF_TOKEN_DOCS_URL =
   'https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens';
@@ -141,53 +144,6 @@ function findCommitInHistory(
   return label || sanitizedCommit;
 }
 
-/**
- * Parse Overleaf or ShareLaTeX URL. Returns null if invalid.
- * Accepts:
- *   - https://git.overleaf.com/<24-char-hex>
- *   - https://sharelatex.example.com/git/<24-char-hex>
- *   - https://git@sharelatex.example.com/git/<24-char-hex>
- *   - https://www.overleaf.com/project/<24-char-hex>
- *   - https://sharelatex.example.com/project/<24-char-hex>
- *   - bare 24-char hex (assumes Overleaf)
- */
-function parseLatexGitUrl(
-  input: string,
-): { host: string; path: string; isOverleaf: boolean } | null {
-  const trimmed = input.trim();
-
-  // Full git URL (e.g. https://git.overleaf.com/<id>)
-  const match = LATEX_GIT_URL_PATTERN.exec(trimmed);
-  if (match) {
-    const [, host, hasGit, id] = match;
-    return {
-      host,
-      path: hasGit ? `/git/${id}` : `/${id}`,
-      isOverleaf: host === 'git.overleaf.com',
-    };
-  }
-
-  // Project URL (e.g. https://www.overleaf.com/project/<id> or https://sharelatex.example.com/project/<id>)
-  const projectMatch = LATEX_PROJECT_URL_PATTERN.exec(trimmed);
-  if (projectMatch) {
-    const [, rawHost, id] = projectMatch;
-    const host = rawHost.replace(/^www\./, '');
-    const isOverleaf = host === 'overleaf.com';
-    return {
-      host: isOverleaf ? 'git.overleaf.com' : host,
-      path: isOverleaf ? `/${id}` : `/git/${id}`,
-      isOverleaf,
-    };
-  }
-
-  // Bare project ID -> Overleaf
-  if (LATEX_PROJECT_ID_PATTERN.test(trimmed)) {
-    return { host: 'git.overleaf.com', path: `/${trimmed}`, isOverleaf: true };
-  }
-
-  return null;
-}
-
 async function promptInput(
   title: string,
   prompt: string,
@@ -216,13 +172,13 @@ async function getGitToken(
   title: string,
   validate?: (t: string) => boolean,
   promptHint?: string,
-): Promise<{ remote: string; sensitive: string[] } | null> {
+): Promise<GitCredential | null> {
   const isValid = (t: string): boolean => validate?.(t) ?? true;
 
   // Try stored token first
   const stored = (await secrets.get(key))?.trim() ?? '';
   if (stored && isValid(stored)) {
-    return buildTokenResult(stored);
+    return buildGitCredential(stored);
   }
 
   // Clear invalid stored token
@@ -252,15 +208,7 @@ async function getGitToken(
   }
 
   await secrets.store(key, input);
-  return buildTokenResult(input);
-}
-
-function buildTokenResult(token: string): {
-  remote: string;
-  sensitive: string[];
-} {
-  const encoded = encodeURIComponent(token);
-  return { remote: `git:${encoded}`, sensitive: [token, encoded] };
+  return buildGitCredential(input);
 }
 
 const IGNORED_FILES = new Set(['.DS_Store', 'Thumbs.db']);
@@ -365,18 +313,8 @@ async function cloneOverleafProject(
     return;
   }
 
-  const tokenKey = parsed.isOverleaf
-    ? 'overleaf.gitToken'
-    : `sharelatex.${parsed.host}.token`;
-  const tokenTitle = parsed.isOverleaf
-    ? 'Overleaf Git Token'
-    : `ShareLaTeX Token (${parsed.host})`;
-  const tokenValidator = parsed.isOverleaf
-    ? (t: string) => t.startsWith('olp_')
-    : undefined;
-  const tokenHint = parsed.isOverleaf
-    ? 'Overleaf tokens start with olp_. Generate one at Account Settings → Git Integration.'
-    : undefined;
+  const { tokenKey, tokenTitle, tokenValidator, tokenHint } =
+    overleafTokenSpec(parsed);
 
   const creds = await getGitToken(
     context.secrets,
@@ -390,7 +328,7 @@ async function cloneOverleafProject(
   const canClone = await checkClonePreconditions(workspacePath);
   if (!canClone) return;
 
-  const remote = `https://${creds.remote}@${parsed.host}${parsed.path}`;
+  const remote = buildAuthenticatedRemoteUrl(parsed, creds);
   const label = parsed.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
 
   try {
@@ -437,8 +375,7 @@ async function cloneOverleafProject(
     }
 
     if (e instanceof Error) {
-      let msg = e.message;
-      for (const s of creds.sensitive) msg = msg.replaceAll(s, '***');
+      const msg = redactSensitive(e.message, creds.sensitive);
       logger.error(CHANNEL, `Clone failed: ${msg}`);
     }
   }
