@@ -141,9 +141,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   },
 
   // --- Workflow auto-compile -------------------------------------------------
-  // Read by the shared reflection/compile flow, which runs in every host
-  // including the CLI; the CLI reads/writes them from its own `state.json`
-  // (`platform().workspaceState`), the same slot the consumer reads.
+  // Consumed only by the reflection/compile flow (OutputNode), which runs in
+  // the VS Code extension + desktop. The CLI runs tool-use agents only, never
+  // the reflection flow, so it does not read these — keep it off `hosts`.
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompile),
@@ -151,8 +151,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Compile the LaTeX project automatically after an agent writes its output.',
     category: 'workflow',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/agent/output/compileCheck.ts',
+    hosts: ['vscode', 'desktop'],
   },
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
@@ -164,8 +163,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Maximum time (in milliseconds) to wait for an automatic post-output compile before giving up.',
     category: 'workflow',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/agent/output/compileCheck.ts',
+    hosts: ['vscode', 'desktop'],
   },
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
@@ -174,9 +172,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Open the compiled PDF automatically after a successful auto-compile.',
     category: 'workflow',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer:
-      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+    hosts: ['vscode', 'desktop'],
   },
   {
     key: WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
@@ -187,13 +183,11 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Reject an agent edit when the automatic post-output compile fails, so broken LaTeX is not accepted.',
     category: 'workflow',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer:
-      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+    hosts: ['vscode', 'desktop'],
   },
 
   // --- LaTeXdiff -------------------------------------------------------------
-  // VS Code + desktop only for now (the CLI doesn't surface latexdiff config).
+  // Reflection-flow only (LatexDiffManager); not consumed by the CLI.
   {
     key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
@@ -243,6 +237,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   },
 
   // --- LaTeX formatter -------------------------------------------------------
+  // Read by the formatter via LatexDiffManager (reflection flow); the CLI's
+  // tool-use flow never formats output, so this stays vscode/desktop only.
   {
     key: WorkspaceStateKey.LATEX_FORMATTER,
     schema: z
@@ -251,8 +247,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Which formatter to run when formatting LaTeX source.',
     category: 'latex',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/latex/texFormatter.ts',
+    hosts: ['vscode', 'desktop'],
     enumDescriptions: [
       'Format with latexindent.',
       'Format with tex-fmt.',
