@@ -240,8 +240,9 @@ export async function callBetterBibTeX<T>(
           'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',
       );
     }
-    // TypeError from fetch: network-level failure — for a localhost endpoint
-    // this almost always means Zotero is not running.
+    // TypeError from fetch (ECONNREFUSED → TypeError in native fetch): for a
+    // localhost endpoint this is always a connection failure. This try block
+    // wraps only the ky.post call, so no programmer TypeError can reach here.
     if (error instanceof TypeError) {
       throw new ToolError(
         `Zotero is not reachable on port ${port}. ` +

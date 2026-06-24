@@ -1,12 +1,12 @@
 // Third-party imports
-import ky from 'ky';
+import ky, { HTTPError } from 'ky';
 import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 // Internal imports
 import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
-import { isTransientHttpError } from '@tools/timeouts';
+import { isTimeoutError, isTransientHttpError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 
 const DDG_TIMEOUT_MS = 15_000; // 15 s
@@ -81,6 +81,19 @@ export class WebSearchTool extends defineTool({
         { retries: DDG_RETRIES, minTimeout: 500, randomize: true },
       );
     } catch (error) {
+      if (isTimeoutError(error)) {
+        throw new ToolError(
+          `Web search timed out after ${DDG_TIMEOUT_MS / 1000}s. Retry the request.`,
+        );
+      }
+      if (error instanceof HTTPError) {
+        throw new ToolError(
+          `Web search failed: HTTP ${error.response.status} from DuckDuckGo.`,
+        );
+      }
+      if (error instanceof TypeError) {
+        throw new ToolError(`Web search failed: network error — ${error.message}`);
+      }
       throw new ToolError(`Web search failed: ${toErrorMessage(error)}`);
     }
 
