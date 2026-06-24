@@ -17,6 +17,41 @@ const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
 const WEB_FETCH_RETRIES = 2;
 const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MB
 
+/**
+ * Read a response body into a string, aborting with AbortError if accumulated
+ * bytes exceed `maxBytes`. Enforces the cap on received data rather than
+ * trusting the Content-Length header (chunked responses omit it entirely).
+ */
+async function readBodyWithLimit(
+  response: Response,
+  maxBytes: number,
+): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    return '';
+  }
+  const decoder = new TextDecoder();
+  const parts: string[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        throw new AbortError(
+          `Response too large (exceeds ${maxBytes / (1024 * 1024)} MB maximum).`,
+        );
+      }
+      parts.push(decoder.decode(value, { stream: true }));
+    }
+    parts.push(decoder.decode());
+  } finally {
+    reader.releaseLock();
+  }
+  return parts.join('');
+}
+
 const WebFetchInputSchema = z.strictObject({
   url: z
     .url('Provide a valid absolute URL to fetch.')
@@ -112,7 +147,7 @@ export class WebFetchTool extends defineTool({
           }
 
           const ct = response.headers.get('content-type') ?? '';
-          const text = await response.text();
+          const text = await readBodyWithLimit(response, MAX_CONTENT_BYTES);
           return { rawBody: text, contentType: ct };
         },
         { retries: WEB_FETCH_RETRIES, minTimeout: 500, randomize: true },
@@ -135,10 +170,11 @@ export class WebFetchTool extends defineTool({
       throw new ToolError(`Failed to fetch ${url}: ${toErrorMessage(error)}`);
     }
 
+    const ctLower = contentType.toLowerCase();
     const isMarkupContent =
-      contentType.includes('html') ||
-      contentType.includes('xml') ||
-      contentType.includes('xhtml') ||
+      ctLower.includes('html') ||
+      ctLower.includes('xml') ||
+      ctLower.includes('xhtml') ||
       (!contentType && rawBody.trim().startsWith('<'));
 
     let markdown: string;
