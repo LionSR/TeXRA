@@ -4,10 +4,16 @@ import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ExecutionId } from '@shared/schemas';
+import {
+  readSetting,
+  writeSetting,
+  type SettingsStores,
+} from '@shared/config/settingsAccess';
 
 import { ApiModeForm } from '../forms/ApiModeForm';
 import { AgentListForm } from '../forms/AgentListForm';
 import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
+import { CLI_CONFIG_ROSTER, ConfigForm } from '../forms/ConfigForm';
 import { LoginForm, type LoginFormValue } from '../forms/LoginForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
@@ -79,6 +85,7 @@ export function registerBuiltinSlashCommands(options?: {
   onMemorySelect?: MemorySelectHandler;
   onResumeSelect?: ResumeSelectHandler;
   onSkillSelect?: SkillSelectHandler;
+  getConfigStores?: () => SettingsStores;
   onError?: ErrorHandler;
 }): void {
   const onAgentSelect: AgentSelectHandler =
@@ -281,6 +288,24 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
+  function ConfigFormAdapter(props: SlashFormProps): React.JSX.Element {
+    const stores = options?.getConfigStores?.();
+    return (
+      <ConfigForm
+        availableRows={props.availableRows}
+        entries={CLI_CONFIG_ROSTER}
+        readValue={(entry) =>
+          stores ? readSetting(entry, stores, 'cli') : undefined
+        }
+        writeValue={(entry, value) =>
+          stores ? writeSetting(entry, value, stores, 'cli') : undefined
+        }
+        onClose={() => props.onDone(undefined)}
+        onError={options?.onError}
+      />
+    );
+  }
+
   registerSlashCommand({
     name: 'help',
     description: 'Show available slash commands',
@@ -381,6 +406,14 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'List or toggle external integrations',
     category: 'configuration',
     formComponent: ToolsListFormAdapter,
+  });
+  registerSlashCommand({
+    name: 'config',
+    description: 'View and toggle settings',
+    aliases: ['settings'],
+    category: 'configuration',
+    formComponent: ConfigFormAdapter,
+    formEscapeAction: 'close',
   });
   registerSlashCommand({
     name: 'compact',
