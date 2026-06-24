@@ -44,10 +44,9 @@ import {
   getWebSocketEnabled,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
-import { flexibleFS } from '@utils/files/flexibleFS';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import { normalizeUsage } from '../support/UsageNormalizer';
-import { prepareExistingOutputContent } from '../utils/fileContentUtils';
+import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
 import { tagOpenAISdkError } from './openAISdkError';
 import { withSdkErrorTag } from '../support/sdkErrorTagging';
 import {
@@ -2089,75 +2088,40 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /** Initializes output file and handles prefill content. */
   async initializeOutputAndPrefill(
-    agentConfig: AgentConfig,
+    _agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: ResponseInputItem[],
     workspaceState: AgentWorkspaceState,
     outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, ResponseInputItem[]]> {
-    let endTurn = false;
-
-    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
-      if (prefill.length === 0) {
-        this.logger.debug(
-          'No prefill provided; skipping pseudo-prefill instruction',
-        );
-        return [endTurn, messages];
-      }
-      const pseudoPrefill = `Organize your response with xml tags. Start your response with:\n${prefill}`;
-      const lastMessage = messages.at(-1);
-      if (lastMessage) {
-        this.appendInputText(lastMessage, pseudoPrefill);
-      } else {
-        const pseudoPrefillMessage: ResponseInputItem.Message = {
-          type: 'message',
-          role: 'user',
-          content: [createInputText(pseudoPrefill)],
-        };
-        messages.push(pseudoPrefillMessage);
-      }
-      this.logger.debug(
-        `Added pseudo prefill message to messages:\n${pseudoPrefill}`,
-      );
-      return [endTurn, messages];
-    }
-
-    // Prepare existing file content (read, clean, extract scratchpad, update state)
-    const { fileContent } = await prepareExistingOutputContent(
-      outputLocation,
-      workspaceState,
-      this.logger,
-    );
-
-    messages.push(this.createAssistantMessage(fileContent));
-
-    if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.debug('End tag detected - skipping continuation');
-      endTurn = true;
-      return [endTurn, messages];
-    }
-
-    this.logger.debug(
-      'Output file exists but no end tag found - continuing from file',
-    );
-    // Only need to handle case where prefill needs to be prepended
-    // (workspace state was already updated above with file content)
-    if (!fileContent.includes(prefill)) {
-      workspaceState.assembly.accumulatedOutput = prefill + fileContent;
-      await flexibleFS.write(
-        outputLocation,
-        workspaceState.assembly.accumulatedOutput,
-      );
-    }
-
-    this.addContinueMessageWithoutPrefill(
+    return initializeOpenAiCompatibleOutputAndPrefill(
+      {
+        logger: this.logger,
+        appendPseudoPrefill: (msgs, pseudoPrefillMsg) => {
+          const lastMessage = msgs.at(-1);
+          if (lastMessage) {
+            this.appendInputText(lastMessage, pseudoPrefillMsg);
+          } else {
+            msgs.push({
+              type: 'message',
+              role: 'user',
+              content: [createInputText(pseudoPrefillMsg)],
+            });
+          }
+        },
+        pushAssistantText: (msgs, text) => {
+          msgs.push(this.createAssistantMessage(text));
+        },
+        addContinue: (msgs, ws, setting) =>
+          this.addContinueMessageWithoutPrefill(msgs, ws, setting),
+      },
+      agentSetting,
       messages,
       workspaceState,
-      agentSetting,
+      outputLocation,
+      prefill,
     );
-
-    return [endTurn, messages];
   }
 
   /** Updates message content for models with prefill support. */
