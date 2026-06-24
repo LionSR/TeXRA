@@ -176,9 +176,6 @@ importers:
       nanoid:
         specifier: ^5.1.15
         version: 5.1.15
-      node-pandoc:
-        specifier: ^0.3.0
-        version: 0.3.0
       openai:
         specifier: ^6.44.0
         version: 6.44.0(ws@8.21.0)(zod@4.4.3)
