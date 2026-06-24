@@ -554,13 +554,21 @@ export type CoreSettings = z.infer<typeof CoreSettingsSchema>;
  */
 type IsRecord<T> = string extends keyof T ? true : false;
 
+/**
+ * `NonNullable` is applied before the `extends object` test so that an optional
+ * group added without a default (`Group | undefined`) still recurses into its
+ * leaves instead of silently collapsing to a single key. The guard therefore
+ * stays sound whether a nested group is declared with `.prefault()` (every group
+ * today) or `.optional()`. Arrays and records resolve to leaves; nested settings
+ * groups recurse.
+ */
 type LeafPaths<T> = {
-  [K in keyof T & string]: T[K] extends readonly unknown[]
+  [K in keyof T & string]: NonNullable<T[K]> extends readonly unknown[]
     ? K
-    : T[K] extends object
-      ? IsRecord<T[K]> extends true
+    : NonNullable<T[K]> extends object
+      ? IsRecord<NonNullable<T[K]>> extends true
         ? K
-        : `${K}.${LeafPaths<T[K]>}`
+        : `${K}.${LeafPaths<NonNullable<T[K]>>}`
       : K;
 }[keyof T & string];
 
