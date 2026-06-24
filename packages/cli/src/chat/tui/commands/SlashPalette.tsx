@@ -14,6 +14,7 @@ import {
 
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
+import { POINTER } from '../ui/glyphs';
 
 export interface SlashPaletteProps {
   /** The current input value (excluding the leading `/`, after the slash). */
@@ -204,7 +205,7 @@ export function SlashPalette(
           <Box key={cmd.name} flexDirection="row">
             <Box flexShrink={0} width={commandLabelWidth}>
               <Text color={i === highlight ? 'cyan' : undefined}>
-                {i === highlight ? '›' : ' '} /{cmd.name}
+                {i === highlight ? POINTER : ' '} /{cmd.name}
               </Text>
             </Box>
             <Box flexShrink={1}>
