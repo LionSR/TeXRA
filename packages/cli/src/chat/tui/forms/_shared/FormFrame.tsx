@@ -3,6 +3,7 @@
 // bordered column with a colored title and an `Esc close` footer.
 
 import { Box, Text, useWindowSize } from 'ink';
+import { Spinner } from '@inkjs/ui';
 
 import { KeyHints, type KeyHint } from '@cli/chat/tui/ui/KeyHints';
 import { clamp } from '@utils/core';
@@ -53,6 +54,46 @@ export function FormFrame(props: FormFrameProps): React.JSX.Element {
       )}
     </Box>
   );
+}
+
+/**
+ * The loading / error transient frame every async list form rendered before its
+ * data resolved: a cyan `<Spinner>` frame while loading, then a red `{error}`
+ * frame on failure. Returns `null` once data is ready so callers fall through to
+ * their real layout: `const t = renderAsyncListFormTransient(...); if (t) return t;`.
+ * `showCloseHint` is forwarded to `FormFrame` so each form keeps its existing
+ * footer behaviour (forms with their own footer pass `false`).
+ */
+export function renderAsyncListFormTransient(props: {
+  readonly loading: boolean;
+  readonly error: string | undefined;
+  readonly title: string;
+  readonly loadingLabel: string;
+  readonly showCloseHint?: boolean;
+}): React.JSX.Element | null {
+  if (props.loading) {
+    return (
+      <FormFrame
+        color="cyan"
+        title={props.title}
+        showCloseHint={props.showCloseHint}
+      >
+        <Spinner label={props.loadingLabel} />
+      </FormFrame>
+    );
+  }
+  if (props.error !== undefined) {
+    return (
+      <FormFrame
+        color="red"
+        title={`${props.title} - error`}
+        showCloseHint={props.showCloseHint}
+      >
+        <Text>{props.error}</Text>
+      </FormFrame>
+    );
+  }
+  return null;
 }
 
 export function CompactFormKeyHints(props: {
