@@ -554,10 +554,46 @@ export const CoreSettingsSchema = z
 export type CoreSettings = z.infer<typeof CoreSettingsSchema>;
 
 /**
+ * Dotted leaf paths of the settings tree, enumerated at the type level.
+ *
+ * Drives the compile-time guards below so {@link CORE_SETTING_PATHS} stays in
+ * lockstep with {@link CoreSettingsShape}: a record/array/primitive field is a
+ * leaf, a nested settings group is recursed into.
+ */
+type IsRecord<T> = string extends keyof T ? true : false;
+
+/**
+ * `NonNullable` is applied before the `extends object` test so that an optional
+ * group added without a default (`Group | undefined`) still recurses into its
+ * leaves instead of silently collapsing to a single key. The guard therefore
+ * stays sound whether a nested group is declared with `.prefault()` (every group
+ * today) or `.optional()`. Arrays and records resolve to leaves; nested settings
+ * groups recurse.
+ */
+type LeafPaths<T> = {
+  [K in keyof T & string]: NonNullable<T[K]> extends readonly unknown[]
+    ? K
+    : NonNullable<T[K]> extends object
+      ? IsRecord<NonNullable<T[K]>> extends true
+        ? K
+        : `${K}.${LeafPaths<NonNullable<T[K]>>}`
+      : K;
+}[keyof T & string];
+
+/** Errors at build time unless `T` is exactly `never`. */
+type AssertNever<T extends never> = T;
+
+/**
  * Dotted leaf paths for every Core setting.
  *
  * Used by per-host "known TeXRA key" sets to derive `texra.*` prefixed key
  * lists for typo detection without hand-maintaining the list in each host.
+ *
+ * Kept in sync with the schema by the two compile-time guards just below: the
+ * `satisfies` clause rejects a typo'd or renamed path, and `_AssertCorePathsExhaustive`
+ * fails the build if a setting is added to the schema without a matching entry
+ * here. Previously both failure modes were silent (the list compiled fine while
+ * host typo-detection quietly broke).
  */
 export const CORE_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',
@@ -621,6 +657,11 @@ export const CORE_SETTING_PATHS = [
   'toolUse.requireBashApproval',
   'toolUse.persistence.enabled',
   'toolUse.persistence.ttlHours',
-] as const;
+] as const satisfies readonly LeafPaths<CoreSettings>[];
 
 export type CoreSettingPath = (typeof CORE_SETTING_PATHS)[number];
+
+// Build fails if any schema leaf path is missing from CORE_SETTING_PATHS above.
+type _AssertCorePathsExhaustive = AssertNever<
+  Exclude<LeafPaths<CoreSettings>, CoreSettingPath>
+>;
