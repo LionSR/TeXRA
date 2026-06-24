@@ -270,5 +270,3 @@ adversarially-verified PR discipline:
 - `ToolUseServices.ts` / `ReflectionServices.ts` alias exports + ~10 node importers.
 - Existing ledger §line 1627-1644, 2215-2234, and the canonical proposal's
   Rejected-findings + subagent tables (reconciliation).
-  </content>
-  </invoke>
