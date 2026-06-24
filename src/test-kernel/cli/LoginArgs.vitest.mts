@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertLoginTransportExclusive,
   loginInitFromArgs,
   shouldPromptForLoginProvider,
 } from '@cli/commands/auth';
+import { CliUsageError } from '@cli/runtime/cliContext';
 import {
   githubSelectAccountWarning,
+  hasLoginTransportConflict,
+  LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   parseChatLoginSlashArgs,
   resolveLoginProvider,
   unsupportedLoginProviderMessage,
@@ -147,6 +151,36 @@ describe('CLI login arguments (texra login)', () => {
       device: true,
       noBrowser: false,
     });
+  });
+
+  it('treats --device and --no-browser as a transport conflict only when both are set', () => {
+    expect(hasLoginTransportConflict({ device: true, noBrowser: true })).toBe(
+      true,
+    );
+    expect(hasLoginTransportConflict({ device: true, noBrowser: false })).toBe(
+      false,
+    );
+    expect(hasLoginTransportConflict({ device: false, noBrowser: true })).toBe(
+      false,
+    );
+    expect(hasLoginTransportConflict({ device: false, noBrowser: false })).toBe(
+      false,
+    );
+  });
+
+  it('rejects --device + --no-browser from the CLI login command', () => {
+    expect(() =>
+      assertLoginTransportExclusive({ device: true, noBrowser: true }),
+    ).toThrow(CliUsageError);
+    expect(() =>
+      assertLoginTransportExclusive({ device: true, noBrowser: true }),
+    ).toThrow(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
+    expect(() =>
+      assertLoginTransportExclusive({ device: true, noBrowser: false }),
+    ).not.toThrow();
+    expect(() =>
+      assertLoginTransportExclusive({ device: false, noBrowser: true }),
+    ).not.toThrow();
   });
 
   it('rejects invalid in-chat login slash command options', () => {
