@@ -157,7 +157,7 @@ describe('ProgressBackend', () => {
       hasTarget: () => true,
       configureUi: () => createUiConfig(),
     });
-    const subscription = backend.setupEventListeners();
+    const subscription = backend.setupEventListeners(bus);
 
     try {
       bus.emit('setActiveStream', {
