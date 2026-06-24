@@ -118,6 +118,18 @@
             "description": "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
             "scope": "resource"
           },
+          "texra.model.useGoogleInteractionsAPI": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use Google's Interactions API instead of Generate Content when available. Experimental; disabled by default. OpenRouter-proxied Google models always use Generate Content.",
+            "scope": "resource"
+          },
+          "texra.model.useGoogleInteractionsServerState": {
+            "type": "boolean",
+            "default": true,
+            "description": "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
+            "scope": "resource"
+          },
           "texra.model.useBackgroundResponses": {
             "type": "boolean",
             "default": true,
