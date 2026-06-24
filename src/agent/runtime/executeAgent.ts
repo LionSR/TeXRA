@@ -17,7 +17,11 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  AgentCategory,
+  type AgentToolUseSetting,
+  type AgentWorkflowSetting,
+} from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
@@ -47,7 +51,10 @@ import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
 import { AgentFlowError, type AgentFlowResult } from './AgentFlowResult';
-import type { AgentRunHandle } from './executionRegistry';
+import type {
+  AgentExecutionHandle,
+  AgentRunHandle,
+} from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const CHANNEL = 'executeAgent';
@@ -198,6 +205,7 @@ function createUsageRecordingCallback(
 async function runToolUseAgent(
   ctx: AgentLaunchContext,
   handle: AgentExecutionHandle,
+  setting: AgentToolUseSetting,
   options: Pick<
     ExecuteAgentOptions,
     'isSubagent' | 'onBeforeWaiting' | 'onFollowUpConsumed' | 'onProgress'
@@ -212,7 +220,7 @@ async function runToolUseAgent(
         ...ctx,
         ...createInterruptCallbacks(),
         onRoundFinalized,
-        setting: ctx.setting,
+        setting,
         isSubagent: options.isSubagent,
         onBeforeWaiting: options.onBeforeWaiting,
         onProgress: (update) => {
@@ -235,6 +243,9 @@ async function runToolUseAgent(
           options.onFollowUpConsumed?.();
         },
         onModelChanged: (modelHandler) => {
+          // The tool-use flow already wrote services.config.model
+          // (=== ctx.config.model, same object), so the live model is updated
+          // before this fires; only the usage side-effect is left to do here.
           ctx.usageMonitor.setModelInfo({
             capabilities: modelHandler.capabilities,
             config: modelHandler.config,
@@ -277,6 +288,7 @@ async function runToolUseAgent(
  */
 async function runReflectionAgent(
   ctx: AgentLaunchContext,
+  setting: AgentWorkflowSetting,
   options: Pick<ExecuteAgentOptions, 'onProgress'>,
 ): Promise<AgentFlowResult> {
   const { streamId } = ctx;
@@ -291,7 +303,7 @@ async function runReflectionAgent(
     ...ctx,
     ...createInterruptCallbacks(),
     onRoundFinalized,
-    setting: ctx.setting,
+    setting,
     parentStage: ctx.parentStage,
     onRoundCompleted,
   });
@@ -437,9 +449,9 @@ export async function executeAgent(
         logger.info(`Executing ${config.agent} with model ${config.model}`);
 
         if (setting.agentCategory === AgentCategory.ToolUse) {
-          return runToolUseAgent(ctx, handle, options);
+          return runToolUseAgent(ctx, handle, setting, options);
         }
-        return runReflectionAgent(ctx, options);
+        return runReflectionAgent(ctx, setting, options);
       },
       {
         isSubagent,
