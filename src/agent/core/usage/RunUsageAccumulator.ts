@@ -6,8 +6,7 @@ import {
   NormalizedUsageSchema,
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
-
-const TokenCountSchema = z.int().nonnegative();
+import { TokenCountSchema } from '@shared/schemas';
 
 /**
  * Schema for run usage totals. Internal only.
