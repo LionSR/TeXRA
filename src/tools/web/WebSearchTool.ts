@@ -73,9 +73,7 @@ export class WebSearchTool extends defineTool({
             return (await response.json()) as DuckDuckGoResponse;
           } catch (error: unknown) {
             if (isTransientHttpError(error)) throw error;
-            throw new AbortError(
-              ensureError(error),
-            );
+            throw new AbortError(ensureError(error));
           }
         },
         { retries: DDG_RETRIES, minTimeout: 500, randomize: true },
