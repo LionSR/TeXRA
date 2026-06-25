@@ -151,9 +151,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
             .json<unknown>();
         } catch (error: unknown) {
           if (isTransientHttpError(error)) throw error;
-          throw new AbortError(
-            ensureError(error),
-          );
+          throw new AbortError(ensureError(error));
         }
         // Validate the body at the boundary. A malformed shape is not transient,
         // so abort retries and let executeSingle surface it as a tool error.
