@@ -968,7 +968,13 @@ export class DesktopProgressBridge {
     const stream = this.state.activeStream;
     if (!stream) return undefined;
 
-    const outputsByRound = new Map(this.state.snapshots.getOutputFiles(stream));
+    // Sort rounds ascending so round and between-round diffs are produced (and
+    // opened) in order, matching the VS Code command.
+    const outputsByRound = new Map(
+      [...this.state.snapshots.getOutputFiles(stream)].sort(
+        (a, b) => a[0] - b[0],
+      ),
+    );
     const workspaceScan = this.getLatexdiffWorkspaceScan(stream, editedFile);
     if (outputsByRound.size === 0 && !workspaceScan) return undefined;
 
@@ -987,9 +993,16 @@ export class DesktopProgressBridge {
     const taskState = this.state.snapshots.getTaskState(stream);
     if (!taskState) return undefined;
 
-    const { agent, model, inputFiles } = taskState.agentConfig;
+    const { agent, model, inputFiles, outputFiles } = taskState.agentConfig;
     const inputFile = inputFiles.at(0) ?? editedFile;
-    return { agent, model, inputFile };
+    // Thread the run's output files so multi-document runs resolved via the
+    // run-dir / workspace scan diff every output, not just the primary input.
+    return {
+      agent,
+      model,
+      inputFile,
+      ...(outputFiles && outputFiles.length > 0 ? { outputFiles } : {}),
+    };
   }
 
   private async resolveResumeState(
