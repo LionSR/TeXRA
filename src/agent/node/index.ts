@@ -189,13 +189,18 @@ class Node<
     const effectiveMaxRetries = Math.max(1, this.maxRetries);
     const MAX_MANUAL_RETRIES = 100;
 
-    for (let manualRetryCount = 0; manualRetryCount < MAX_MANUAL_RETRIES; manualRetryCount++) {
+    for (
+      let manualRetryCount = 0;
+      manualRetryCount < MAX_MANUAL_RETRIES;
+      manualRetryCount++
+    ) {
       try {
         return await pRetry(
           () => {
             // Throw AbortError at each attempt start so p-retry surfaces it
             // immediately (before any delay) and skips onFailedAttempt.
-            if (this.signal?.aborted) throw new AbortError('Operation cancelled by user');
+            if (this.signal?.aborted)
+              throw new AbortError('Operation cancelled by user');
             return this.exec(prepRes);
           },
           {
@@ -217,7 +222,10 @@ class Node<
         // signal aborted during delay (p-retry rethrows signal.reason)
         // or shouldAutoRetry returned false: both skip manual retry.
         if (this.signal?.aborted) {
-          return await this.execFallback(prepRes, new Error('Operation cancelled by user'));
+          return await this.execFallback(
+            prepRes,
+            new Error('Operation cancelled by user'),
+          );
         }
         const shouldRetry = await this.retryPrompt(prepRes, e as Error);
         if (shouldRetry) continue;
