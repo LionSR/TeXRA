@@ -36,10 +36,10 @@
  * which the relay enforces below (immediate, even for a still-valid token).
  * ============================================================================
  *
- * TIER HIERARCHY (cumulative access):
- * - Max: Free-tier models plus any future Max-only additions
+ * TIER HIERARCHY (model access):
  * - free: input <= $1.5/M AND output <= $9/M
- * - Ultra: everything else
+ * - Max: every model
+ * - Ultra: every model
  *
  * Authentication: JWT tokens are extracted from SDK auth headers:
  * - OpenAI: Authorization: Bearer {jwt}
@@ -622,7 +622,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     }
   }
 
-  // 6. Validate model for non-Ultra tiers
+  // 6. Apply tier constraints for non-Ultra tiers.
   // Skip model validation for endpoints that don't require a model (e.g., file uploads)
   // - OpenAI: /v1/files
   // - Anthropic: /v1/files (same as OpenAI)

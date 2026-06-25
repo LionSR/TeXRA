@@ -1,11 +1,16 @@
 // Third-party imports
-import axios from 'axios';
+import ky, { HTTPError } from 'ky';
+import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 // Internal imports
-import { ToolResult } from '@shared/schemas/toolResult';
-import { wrapApiCall } from '@tools/utils';
+import { ensureError, toErrorMessage } from '@common/errors';
+import { ToolError, ToolResult } from '@shared/schemas/toolResult';
+import { isTimeoutError, isTransientHttpError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+
+const DDG_TIMEOUT_MS = 15_000; // 15 s
+const DDG_RETRIES = 2;
 
 const WebSearchInputSchema = z.strictObject({
   query: z
@@ -49,14 +54,49 @@ export class WebSearchTool extends defineTool({
   protected async execute(input: WebSearchInput): Promise<ToolResult> {
     const { query, max_results } = input;
 
-    const response = await wrapApiCall(
-      () =>
-        axios.get<DuckDuckGoResponse>('https://api.duckduckgo.com/', {
-          params: { q: query, format: 'json', no_redirect: 1, no_html: 1 },
-        }),
-      'Web search failed',
-    );
-    const data = response.data;
+    let data: DuckDuckGoResponse;
+    try {
+      data = await pRetry(
+        async () => {
+          try {
+            const response = await ky.get('https://api.duckduckgo.com/', {
+              searchParams: {
+                q: query,
+                format: 'json',
+                no_redirect: 1,
+                no_html: 1,
+              },
+              timeout: false,
+              signal: AbortSignal.timeout(DDG_TIMEOUT_MS),
+              retry: 0,
+            });
+            return (await response.json()) as DuckDuckGoResponse;
+          } catch (error: unknown) {
+            if (isTransientHttpError(error)) throw error;
+            throw new AbortError(ensureError(error));
+          }
+        },
+        { retries: DDG_RETRIES, minTimeout: 500, randomize: true },
+      );
+    } catch (error) {
+      if (isTimeoutError(error)) {
+        throw new ToolError(
+          `Web search timed out after ${DDG_TIMEOUT_MS / 1000}s. Retry the request.`,
+        );
+      }
+      if (error instanceof HTTPError) {
+        throw new ToolError(
+          `Web search failed: HTTP ${error.response.status} from DuckDuckGo.`,
+        );
+      }
+      if (error instanceof TypeError) {
+        throw new ToolError(
+          `Web search failed: network error — ${error.message}`,
+        );
+      }
+      throw new ToolError(`Web search failed: ${toErrorMessage(error)}`);
+    }
+
     const results: string[] = [];
 
     // Extract abstract/summary if available (direct answers)

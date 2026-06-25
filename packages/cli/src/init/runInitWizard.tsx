@@ -22,7 +22,6 @@ import type { CliModelAccess } from '../runtime/modelAccess';
 
 export interface InitWizardAgentOption {
   readonly name: string;
-  readonly description?: string;
 }
 
 export interface InitWizardOptions {
@@ -197,7 +196,6 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
           items={props.options.agents.map((agent) => ({
             value: agent.name,
             label: agent.name,
-            description: agent.description,
           }))}
           onSelect={(agent) => commit({ agent })}
           onCancel={cancel}

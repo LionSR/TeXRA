@@ -1,6 +1,6 @@
 {
   "name": "@texra-ai/cli",
-  "version": "0.38.9",
+  "version": "0.39.0",
   "description": "TeXRA CLI — your AI theorist in the terminal.",
   "license": "SEE LICENSE IN LICENSE.txt",
   "author": "TeXRA.ai",
@@ -75,7 +75,7 @@
     "p-queue": "^9.3.0",
     "picocolors": "^1.1.1",
     "react": "^19.2.7",
-    "semver": "^7.8.4",
+    "semver": "^7.8.5",
     "string-width": "^8.0.0",
     "strip-ansi": "^7.2.0",
     "typescript": "^6.0.3",

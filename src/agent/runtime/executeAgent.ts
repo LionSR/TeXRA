@@ -17,7 +17,11 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  AgentCategory,
+  type AgentToolUseSetting,
+  type AgentWorkflowSetting,
+} from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
@@ -30,6 +34,10 @@ import {
   type RoundOutput,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import type {
+  CompileFailureSummary,
+  OutputFileSummary,
+} from '@shared/schemas/output';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 
 import {
@@ -42,13 +50,8 @@ import { currentSession, type SessionHandle } from './SessionHandle';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
-import {
-  AgentFlowError,
-  type AgentFlowResult,
-  type CompileFailureSummary,
-  type OutputFileSummary,
-} from './AgentFlowResult';
-import type { AgentRunHandle } from './executionRegistry';
+import { AgentFlowError, type AgentFlowResult } from './AgentFlowResult';
+import type { AgentExecutionHandle, AgentRunHandle } from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const CHANNEL = 'executeAgent';
@@ -188,6 +191,127 @@ function createUsageRecordingCallback(
   };
 }
 
+/**
+ * Run the tool-use flow for a single agent execution.
+ *
+ * Owns all tool-use-specific wiring: progress counters, follow-up queuing,
+ * model-change side effects, and error wrapping into `AgentFlowError`.
+ * The caller (`executeAgent`) owns lifecycle and stream-status; this function
+ * owns only what is specific to the ToolUse category.
+ */
+async function runToolUseAgent(
+  ctx: AgentLaunchContext,
+  handle: AgentExecutionHandle,
+  setting: AgentToolUseSetting,
+  options: Pick<
+    ExecuteAgentOptions,
+    'isSubagent' | 'onBeforeWaiting' | 'onFollowUpConsumed' | 'onProgress'
+  >,
+): Promise<AgentFlowResult> {
+  const { streamId } = ctx;
+  let toolUseTurns = 0;
+  const onRoundFinalized = createUsageRecordingCallback(ctx);
+  try {
+    const result = await runToolUseFlow(
+      {
+        ...ctx,
+        ...createInterruptCallbacks(),
+        onRoundFinalized,
+        setting,
+        isSubagent: options.isSubagent,
+        onBeforeWaiting: options.onBeforeWaiting,
+        onProgress: (update) => {
+          if (update.kind === 'overview') {
+            toolUseTurns++;
+            ctx.runtimeHost.emit('updateConversationProgress', {
+              streamId,
+              progress: {
+                conversationTurns: toolUseTurns,
+                toolCallCount: update.toolCallCount,
+              },
+            });
+          }
+          options.onProgress?.(update);
+        },
+        onFollowUpConsumed: () => {
+          ctx.runtimeHost.emit('updateQueuedFollowUps', {
+            streamId: ctx.streamId,
+          });
+          options.onFollowUpConsumed?.();
+        },
+        onModelChanged: (modelHandler) => {
+          // The tool-use flow already wrote services.config.model
+          // (=== ctx.config.model, same object), so the live model is updated
+          // before this fires; only the usage side-effect is left to do here.
+          ctx.usageMonitor.setModelInfo({
+            capabilities: modelHandler.capabilities,
+            config: modelHandler.config,
+          });
+        },
+      },
+      undefined,
+      (flowContext) => {
+        handle.attachToolUseFlow(flowContext);
+        return () => handle.detachToolUseFlow(flowContext);
+      },
+    );
+    return buildToolUseFlowResult(
+      result,
+      ctx.executionId,
+      streamId,
+      ctx.attachedMemoryMisses,
+    );
+  } catch (err) {
+    const failedResult = getToolUseFlowErrorResult(err);
+    if (!failedResult) throw err;
+    throw new AgentFlowError(
+      getSdkErrorMessage(err),
+      buildToolUseFlowResult(
+        failedResult,
+        ctx.executionId,
+        streamId,
+        ctx.attachedMemoryMisses,
+      ),
+      { cause: err },
+    );
+  }
+}
+
+/**
+ * Run the reflection (workflow) flow for a single agent execution.
+ *
+ * Owns all workflow-specific wiring: per-round progress callbacks and usage
+ * recording. The caller (`executeAgent`) owns lifecycle and stream-status.
+ */
+async function runReflectionAgent(
+  ctx: AgentLaunchContext,
+  setting: AgentWorkflowSetting,
+  options: Pick<ExecuteAgentOptions, 'onProgress'>,
+): Promise<AgentFlowResult> {
+  const { streamId } = ctx;
+  const onRoundCompleted = createRoundProgressCallback(
+    ctx.executionId,
+    streamId,
+    ctx.runtimeHost,
+    options.onProgress,
+  );
+  const onRoundFinalized = createUsageRecordingCallback(ctx);
+  const result = await runReflectionFlow({
+    ...ctx,
+    ...createInterruptCallbacks(),
+    onRoundFinalized,
+    setting,
+    parentStage: ctx.parentStage,
+    onRoundCompleted,
+  });
+  return buildWorkflowFlowResult(
+    result,
+    ctx.executionId,
+    streamId,
+    ctx.attachedMemoryMisses,
+  );
+}
+
 /** Toast payload shown when the progress view cannot be opened. */
 type FallbackNotification = NonNullable<
   ProgressEventPayloads['requestEnsureProgressView']['fallbackNotification']
@@ -320,99 +444,11 @@ export async function executeAgent(
         });
 
         logger.info(`Executing ${config.agent} with model ${config.model}`);
-        const interrupts = createInterruptCallbacks();
 
         if (setting.agentCategory === AgentCategory.ToolUse) {
-          let toolUseTurns = 0;
-          const onRoundFinalized = createUsageRecordingCallback(ctx);
-          try {
-            const result = await runToolUseFlow(
-              {
-                ...ctx,
-                ...interrupts,
-                onRoundFinalized,
-                setting,
-                isSubagent,
-                onBeforeWaiting: options.onBeforeWaiting,
-                onProgress: (update) => {
-                  if (update.kind === 'overview') {
-                    toolUseTurns++;
-                    ctx.runtimeHost.emit('updateConversationProgress', {
-                      streamId,
-                      progress: {
-                        conversationTurns: toolUseTurns,
-                        toolCallCount: update.toolCallCount,
-                      },
-                    });
-                  }
-                  options.onProgress?.(update);
-                },
-                onFollowUpConsumed: () => {
-                  ctx.runtimeHost.emit('updateQueuedFollowUps', {
-                    streamId: ctx.streamId,
-                  });
-                  options.onFollowUpConsumed?.();
-                },
-                onModelChanged: (modelHandler) => {
-                  // The tool-use flow already wrote services.config.model
-                  // (=== ctx.config.model, same object), so the live model is
-                  // updated before this fires; only the usage side-effect is
-                  // left to do here.
-                  ctx.usageMonitor.setModelInfo({
-                    capabilities: modelHandler.capabilities,
-                    config: modelHandler.config,
-                  });
-                },
-              },
-              undefined,
-              (flowContext) => {
-                handle.attachToolUseFlow(flowContext);
-                return () => handle.detachToolUseFlow(flowContext);
-              },
-            );
-            return buildToolUseFlowResult(
-              result,
-              ctx.executionId,
-              streamId,
-              ctx.attachedMemoryMisses,
-            );
-          } catch (err) {
-            const failedResult = getToolUseFlowErrorResult(err);
-            if (!failedResult) throw err;
-            throw new AgentFlowError(
-              getSdkErrorMessage(err),
-              buildToolUseFlowResult(
-                failedResult,
-                ctx.executionId,
-                streamId,
-                ctx.attachedMemoryMisses,
-              ),
-              { cause: err },
-            );
-          }
+          return runToolUseAgent(ctx, handle, setting, options);
         }
-
-        const onRoundCompleted = createRoundProgressCallback(
-          ctx.executionId,
-          streamId,
-          ctx.runtimeHost,
-          options.onProgress,
-        );
-        const onRoundFinalized = createUsageRecordingCallback(ctx);
-        const result = await runReflectionFlow({
-          ...ctx,
-          ...interrupts,
-          onRoundFinalized,
-          setting,
-          parentStage: ctx.parentStage,
-          onRoundCompleted,
-        });
-        return buildWorkflowFlowResult(
-          result,
-          ctx.executionId,
-          streamId,
-          ctx.attachedMemoryMisses,
-        );
+        return runReflectionAgent(ctx, setting, options);
       },
       {
         isSubagent,

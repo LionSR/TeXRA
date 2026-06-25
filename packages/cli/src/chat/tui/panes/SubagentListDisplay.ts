@@ -1,4 +1,5 @@
 import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
+import { STATUS_DOT } from '../ui/glyphs';
 
 export function childStatusColor(status: string | undefined): string {
   if (!status) return 'green';
@@ -16,4 +17,4 @@ export function childStatusColor(status: string | undefined): string {
 // non-alt-screen repaint can leave stale glyphs behind on those reprints. Status
 // is conveyed by `childStatusColor`, and liveness by the `running · Ns` text, so
 // the animation bought churn without information.
-export const CHILD_STATUS_MARKER = '● ';
+export const CHILD_STATUS_MARKER = `${STATUS_DOT} `;

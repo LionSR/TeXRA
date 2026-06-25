@@ -12,6 +12,7 @@
 import { randomUUID } from 'node:crypto';
 
 // Local imports
+import { normalizeFilePath } from '@shared/utils/path';
 import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
 
 export const REVIEW_SEVERITIES = ['critical', 'warning', 'info'] as const;
@@ -47,7 +48,7 @@ export interface ReviewIssueReport {
 
 /** Strip diff-style `a/`/`b/` prefixes and normalize separators. */
 export function normalizeReviewFilePath(file: string): string {
-  let normalized = file.trim().replaceAll('\\', '/');
+  let normalized = normalizeFilePath(file.trim());
   if (normalized.startsWith('a/') || normalized.startsWith('b/')) {
     normalized = normalized.slice(2);
   }

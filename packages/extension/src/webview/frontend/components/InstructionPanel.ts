@@ -13,7 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
 
 // Local imports - shared schemas and types
-import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
+import type { ModelOptionData } from '@shared/schemas';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
@@ -113,14 +113,6 @@ export class InstructionPanel extends LitElement {
   private fileDrop = new FileDropController(this, (paths) =>
     postDroppedFiles(paths),
   );
-
-  /** Get the tooltip for an agent dropdown based on the selected agent's description. */
-  private getAgentTooltip(
-    options: AgentOptionData[],
-    selectedValue: string,
-  ): string {
-    return options.find((o) => o.value === selectedValue)?.description ?? '';
-  }
 
   /** Get the tooltip for the model dropdown based on the selected model's hint. */
   private getModelTooltip(
@@ -426,8 +418,6 @@ export class InstructionPanel extends LitElement {
                     class="agent-select"
                     data-session-type=${agent.sessionType}
                     aria-label=${agent.ariaLabel}
-                    title=${this.getAgentTooltip(agent.options, agent.value) ||
-                    nothing}
                     placement="top"
                     placeholder="Agent…"
                     .value=${agent.value}

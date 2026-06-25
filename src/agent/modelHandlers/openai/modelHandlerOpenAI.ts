@@ -42,11 +42,7 @@ import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCom
 import { tagOpenAISdkError } from './openAISdkError';
 
 // Local file imports
-import {
-  computeOpenAIPrice,
-  normalizeOpenAIUsage,
-  type OpenAIPricingConfig,
-} from './openAIUsage';
+import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { normalizeOpenAIMessageContent } from './openAIMessageUtils';
 import {
@@ -135,17 +131,6 @@ export class ModelHandlerOpenAI<
   }
 
   // ── Compaction internals ──────────────────────────────────────────────
-
-  /**
-   * Check if the conversation should be compacted based on token usage.
-   * Compaction is only triggered when:
-   * - In tool-use mode (only mode with multi-turn message accumulation)
-   * - Manual request via requestCompaction(), OR
-   * - Last known input tokens exceed the configured threshold
-   */
-  private shouldCompact(): boolean {
-    return this.shouldCompactByInputTokens(this.lastKnownInputTokens);
-  }
 
   /**
    * Compact the conversation using client-side summarization via system-prompt-swap.
@@ -560,7 +545,7 @@ export class ModelHandlerOpenAI<
     let updatedMessages: ChatCompletionMessageParam[] | undefined;
     let messagesToUse = rawMessages;
 
-    if (this.shouldCompact()) {
+    if (this.shouldCompactByInputTokens(this.lastKnownInputTokens)) {
       const isManual = this.compactionRequested;
       // Clear manual flag immediately when attempted — matches Anthropic and
       // OpenAI Responses handlers. Prevents infinite retry on graceful failure.
@@ -1039,16 +1024,7 @@ export class ModelHandlerOpenAI<
 
   /** Computes cost based on token usage and model pricing. */
   computePrice(responseUsage: ExtendedCompletionUsage | null): number {
-    return computeOpenAIPrice(responseUsage, this.pricingConfig());
-  }
-
-  /** Pricing/caching inputs for the extracted usage helpers. */
-  private pricingConfig(): OpenAIPricingConfig {
-    return {
-      inputPrice: this.config.inputPrice,
-      outputPrice: this.config.outputPrice,
-      cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
-    };
+    return computeOpenAIPrice(responseUsage, this.standardPricingConfig());
   }
 
   /**
@@ -1069,7 +1045,7 @@ export class ModelHandlerOpenAI<
       rawUsage,
       responseTimeMs,
       this.usageProvider,
-      this.pricingConfig(),
+      this.standardPricingConfig(),
     );
   }
 

@@ -359,13 +359,11 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
       instruction: SETUP_INSTRUCTION,
     });
 
-    // Activation fires `loadAgents()` fire-and-forget, so a user
-    // invoking the setup assistant from the first walkthrough step (or
-    // immediately after install, especially with remote-agent fetches
-    // in flight) can race the agent registry and hit "Could not find
-    // agent: setup". `loadAgents()` is idempotent: it returns the
-    // in-flight promise if loading is still running, or resolves
-    // immediately if already initialized, or kicks off a fresh load.
+    // Activation initializes the registry, but this command can also be
+    // invoked directly in tests or unusual startup paths. `loadAgents()` is
+    // idempotent: it returns the in-flight promise if loading is still
+    // running, resolves immediately if already initialized, or kicks off a
+    // fresh load.
     await loadAgents();
 
     const launch = async () => {

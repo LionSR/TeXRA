@@ -40,13 +40,24 @@ export type AgentSourceType = z.infer<typeof AgentSourceSchema>;
 export const AgentSource = AgentSourceSchema;
 export type AgentSource = AgentSourceType;
 
+const AGENT_NAME_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
+
+export const AgentNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((name) => AGENT_NAME_IDENTIFIER.test(name), {
+    message:
+      'Agent names must be identifiers: letters, numbers, underscores, or hyphens.',
+  });
+
 /**
  * Base schema for agent identity metadata shared across all agent representations.
  * View-specific schemas (RemoteAgentSchema, AgentSelectionItemSchema, etc.)
  * should extend this via `.extend()` rather than redefining these fields.
  */
 export const AgentMetadataBaseSchema = z.object({
-  name: z.string(),
+  name: AgentNameSchema,
   category: AgentCategorySchema,
   description: z.string().optional(),
 });

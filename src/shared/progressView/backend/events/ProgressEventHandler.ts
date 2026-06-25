@@ -3,8 +3,10 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
-import { bus } from '@eventBus/ProgressEventBus';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type {
+  ProgressEventBusLike,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
@@ -90,7 +92,7 @@ export class ProgressEventHandler {
     }
   }
 
-  setupEventListeners(): ProgressEventSubscription {
+  setupEventListeners(bus: ProgressEventBusLike): ProgressEventSubscription {
     const controller = new AbortController();
     const { signal } = controller;
 

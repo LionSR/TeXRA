@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { normalizeFilePath } from '@shared/utils/path';
 import {
   WORKFLOW_OUTPUT_BASENAME,
   workflowOutputPath,
@@ -28,7 +29,7 @@ function getSafeDocumentPathParts(source: string): {
   name: string;
   ext: string;
 } {
-  const sourcePath = source.replaceAll('\\', '/');
+  const sourcePath = normalizeFilePath(source);
   const parsed = path.posix.parse(sourcePath);
   const isAbsoluteSource =
     path.posix.isAbsolute(sourcePath) || /^[A-Za-z]:\//.test(sourcePath);

@@ -16,6 +16,11 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
+import { normalizeFilePath } from '@shared/utils/path';
+import {
+  CompileFailureSummarySchema,
+  OutputFileSummarySchema,
+} from '@shared/schemas/output';
 import { byString, filterNotNull } from '@utils/core';
 import { TASK_RUNS_DIR } from '@utils/files';
 
@@ -86,13 +91,17 @@ export interface ChildRecord extends ChildRecordData {
   id: ExecutionId;
 }
 
-/** Result metadata for background bash processes. */
+/** Lightweight metadata captured after an execution finishes. */
 const ResultMetaSchema = z.object({
   exitCode: z.int().optional(),
   wallTimeMs: z.number().nonnegative().optional(),
   success: z.boolean().optional(),
   timedOut: z.boolean().optional(),
   command: z.string().optional(),
+  copiedOutput: z.string().optional(),
+  copiedOutputs: z.array(z.string()).optional(),
+  outputs: z.array(OutputFileSummarySchema).optional(),
+  compileFailures: z.array(CompileFailureSummarySchema).optional(),
 });
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;
 
@@ -260,7 +269,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 function normalizeWorkspaceFilePaths(paths: readonly string[]): string[] {
   const normalized = new Set<string>();
   for (const rawPath of paths) {
-    const pathValue = rawPath.trim().replaceAll('\\', '/');
+    const pathValue = normalizeFilePath(rawPath.trim());
     if (pathValue) normalized.add(pathValue);
   }
   return [...normalized].sort(byString);

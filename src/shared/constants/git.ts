@@ -9,3 +9,10 @@ export const DEFAULT_GIT_AUTHOR_EMAIL = 'texra-ai@users.noreply.github.com';
  * wrong state on first paint before settings arrive.
  */
 export const DEFAULT_GIT_MARK_COMMITS = true;
+
+/**
+ * Default for `texra.git.worktreeSupport` when the workspace has never toggled
+ * it. Shared by the backend reader (`readGitAuthorSettingsFromState`) and the
+ * state-settings catalog so the default lives in one place.
+ */
+export const DEFAULT_GIT_WORKTREE_SUPPORT = false;

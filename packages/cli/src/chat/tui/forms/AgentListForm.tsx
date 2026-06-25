@@ -2,16 +2,18 @@
 // first message, tool-use agents can be chosen as the root chat agent.
 
 import { Box, Text } from 'ink';
-import { Spinner } from '@inkjs/ui';
 
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
-import { formatAgentOptionLabel } from '@shared/utils/agentOptionLabels';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
-import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
+import {
+  CompactFormKeyHints,
+  FormFrame,
+  renderAsyncListFormTransient,
+} from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
@@ -63,9 +65,7 @@ export function currentVisibleAgent(
     return (
       agent.value === current ||
       valueName === current ||
-      valueName === currentName ||
-      agent.label === current ||
-      agent.label === currentName
+      valueName === currentName
     );
   });
 }
@@ -117,7 +117,7 @@ export function agentSelectWindow({
   }
 
   const remainingRows = availableRows - chromeRows - itemCount;
-  if (workflowCount === 0 || remainingRows < 4) {
+  if (workflowCount === 0 || remainingRows < 3) {
     return {
       maxVisibleItems: itemCount,
       showOverflow: false,
@@ -126,7 +126,8 @@ export function agentSelectWindow({
     };
   }
 
-  const workflowRows = remainingRows - 3;
+  // Workflow heading and run hint are the fixed rows for the secondary list.
+  const workflowRows = remainingRows - 2;
   if (workflowCount <= workflowRows) {
     return {
       maxVisibleItems: itemCount,
@@ -153,27 +154,19 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     onClose: props.onClose,
   });
 
-  if (loading) {
-    return (
-      <FormFrame color="cyan" title="/agent">
-        <Spinner label="Loading agent registry..." />
-      </FormFrame>
-    );
-  }
-
-  if (error) {
-    return (
-      <FormFrame color="red" title="/agent - error">
-        <Text>{error}</Text>
-      </FormFrame>
-    );
-  }
+  const transient = renderAsyncListFormTransient({
+    loading,
+    error,
+    title: '/agent',
+    loadingLabel: 'Loading agent registry...',
+  });
+  if (transient) return transient;
 
   const agents: AgentGroups = data ?? { toolUse: [], workflow: [] };
   const primarySectionTitle = agentPickerPrimarySectionTitle(agents.toolUse);
   const items = agents.toolUse.map((agent) => ({
     value: agent.value,
-    label: formatAgentOptionLabel(agent.label),
+    label: agent.label,
   }));
   // The current agent may be stored as a canonical key (`source:name`) or a
   // bare name; rows are keyed by canonical value, so match Select in that same
@@ -186,7 +179,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   );
   const workflowRows = agents.workflow.map((agent) => ({
     value: agent.value,
-    name: formatAgentOptionLabel(agent.label),
+    name: agent.label,
   }));
   const selectWindow = agentSelectWindow({
     availableRows: props.availableRows,
@@ -238,8 +231,8 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     <FormFrame color="cyan" title="/agent" showCloseHint={false}>
       <Text dimColor wrap="truncate-end">
         {props.selectable
-          ? 'Choose the root agent for the first message.'
-          : 'Available agents. Start a new chat with texra chat --agent=<name> to choose the root agent.'}
+          ? 'Choose the root agent for this chat.'
+          : 'Viewing agents. Use texra chat --agent <name> to switch in a new chat.'}
       </Text>
       {currentAgentHint ? (
         <Text dimColor wrap="truncate-end">
@@ -258,7 +251,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         />
       </Box>
       {visibleWorkflowRows.length > 0 || selectWindow.showWorkflowOverflow ? (
-        <Box marginTop={1} flexDirection="column">
+        <Box flexDirection="column">
           <Text bold>Workflows</Text>
           {visibleWorkflowRows.map((workflow) => (
             <Text key={workflow.value} wrap="truncate-end">

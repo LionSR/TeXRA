@@ -79,6 +79,8 @@ export const DEFAULT_CORE_SETTINGS = {
     useImprovedConnection: false,
     improvedConnectionDomain: 'proxy.texra.ai',
     useOpenAIResponsesAPI: true,
+    useGoogleInteractionsAPI: false,
+    useGoogleInteractionsServerState: true,
     useBackgroundResponses: true,
     openaiParallelToolCalls: false,
     compactionThresholdPercent: 75,
@@ -264,11 +266,14 @@ export const DEFAULT_CORE_SETTINGS = {
   },
 };
 
-const stringArray = (defaultValue: string[]) =>
-  z.array(z.string()).prefault(defaultValue);
+const stringArray = (defaultValue: string[], description: string) =>
+  z.array(z.string()).describe(description).prefault(defaultValue);
 
-const stringRecord = (defaultValue: Record<string, string>) =>
-  z.record(z.string(), z.string()).prefault(defaultValue);
+const stringRecord = (
+  defaultValue: Record<string, string>,
+  description: string,
+) =>
+  z.record(z.string(), z.string()).describe(description).prefault(defaultValue);
 
 /**
  * Field shape for {@link CoreSettingsSchema}.
@@ -283,6 +288,9 @@ export const CoreSettingsShape = {
     .strictObject({
       autoOpenFinal: z
         .boolean()
+        .describe(
+          "When a workflow run completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
+        )
         .prefault(DEFAULT_CORE_SETTINGS.agentOutputs.autoOpenFinal),
     })
     .prefault(DEFAULT_CORE_SETTINGS.agentOutputs),
@@ -290,27 +298,47 @@ export const CoreSettingsShape = {
     .strictObject({
       enabled: z
         .boolean()
+        .describe(
+          'Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.inlineCriticism.enabled),
     })
     .prefault(DEFAULT_CORE_SETTINGS.inlineCriticism),
   goal: z
     .strictObject({
-      enabled: z.boolean().prefault(DEFAULT_CORE_SETTINGS.goal.enabled),
+      enabled: z
+        .boolean()
+        .describe(
+          'Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command="complete"). On by default; set to false to require manual continuation.',
+        )
+        .prefault(DEFAULT_CORE_SETTINGS.goal.enabled),
     })
     .prefault(DEFAULT_CORE_SETTINGS.goal),
   ui: z
     .strictObject({
       showApiKeyReminders: z
         .boolean()
+        .describe(
+          'Show API key reminders in the status bar and main view when no API keys are configured',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.ui.showApiKeyReminders),
       showLoginBanner: z
         .boolean()
+        .describe(
+          'Show login banner prompting users to sign in for access to remote agents',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.ui.showLoginBanner),
       showGettingStartedBanner: z
         .boolean()
+        .describe(
+          'Show getting started banner with import options when no LaTeX files are found',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.ui.showGettingStartedBanner),
       showOrchestratorBanner: z
         .boolean()
+        .describe(
+          'Show orchestrator and session reminder text in the main view',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.ui.showOrchestratorBanner),
     })
     .prefault(DEFAULT_CORE_SETTINGS.ui),
@@ -318,36 +346,71 @@ export const CoreSettingsShape = {
     .strictObject({
       useImprovedConnection: z
         .boolean()
+        .describe('Use improved connection for API requests')
         .prefault(DEFAULT_CORE_SETTINGS.model.useImprovedConnection),
       improvedConnectionDomain: z
         .string()
+        .describe('Domain to use when using improved connection')
         .prefault(DEFAULT_CORE_SETTINGS.model.improvedConnectionDomain),
       useOpenAIResponsesAPI: z
         .boolean()
+        .describe(
+          "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
+        )
         .prefault(DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI),
+      useGoogleInteractionsAPI: z
+        .boolean()
+        .describe(
+          "Use Google's Interactions API instead of Generate Content when available. Experimental; disabled by default. OpenRouter-proxied Google models always use Generate Content.",
+        )
+        .prefault(DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsAPI),
+      useGoogleInteractionsServerState: z
+        .boolean()
+        .describe(
+          "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
+        )
+        .prefault(DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsServerState),
       useBackgroundResponses: z
         .boolean()
+        .describe(
+          'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.model.useBackgroundResponses),
       openaiParallelToolCalls: z
         .boolean()
+        .describe(
+          'Let OpenAI models use multiple tools at the same time for faster results. Disabled by default for more predictable behavior.',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls),
       compactionThresholdPercent: z
         .number()
         .min(0)
         .max(100)
+        .describe(
+          "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
+        )
         .prefault(DEFAULT_CORE_SETTINGS.model.compactionThresholdPercent),
       gpt5ReasoningSummary: z
         .boolean()
+        .describe(
+          "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
+        )
         .prefault(DEFAULT_CORE_SETTINGS.model.gpt5ReasoningSummary),
       retry: z
         .strictObject({
           maxAttempts: z
             .number()
             .min(0)
+            .describe(
+              'Number of automatic retry attempts before surfacing a manual retry option for model calls. Set to 0 for no automatic retries (manual retry button only).',
+            )
             .prefault(DEFAULT_CORE_SETTINGS.model.retry.maxAttempts),
           backoffMs: z
             .number()
             .min(0)
+            .describe(
+              'Base backoff delay in milliseconds between retry attempts for model calls',
+            )
             .prefault(DEFAULT_CORE_SETTINGS.model.retry.backoffMs),
         })
         .prefault(DEFAULT_CORE_SETTINGS.model.retry),
@@ -357,6 +420,9 @@ export const CoreSettingsShape = {
     .strictObject({
       preferSubscription: z
         .boolean()
+        .describe(
+          'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental.',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex.preferSubscription),
     })
     .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex),
@@ -366,15 +432,19 @@ export const CoreSettingsShape = {
         .strictObject({
           mediaExtensions: stringArray(
             DEFAULT_CORE_SETTINGS.files.included.mediaExtensions,
+            'File extensions to include when searching for media files',
           ),
           inputExtensions: stringArray(
             DEFAULT_CORE_SETTINGS.files.included.inputExtensions,
+            'File extensions to include when searching for input files',
           ),
           contextExtensions: stringArray(
             DEFAULT_CORE_SETTINGS.files.included.contextExtensions,
+            'File extensions to include when searching for context files',
           ),
           editedExtensions: stringArray(
             DEFAULT_CORE_SETTINGS.files.included.editedExtensions,
+            'File extensions to include when searching for edited files',
           ),
         })
         .prefault(DEFAULT_CORE_SETTINGS.files.included),
@@ -382,20 +452,28 @@ export const CoreSettingsShape = {
         .strictObject({
           fileExtensions: stringArray(
             DEFAULT_CORE_SETTINGS.files.ignored.fileExtensions,
+            'File extensions to ignore when listing text files',
           ),
           inputFiles: stringArray(
             DEFAULT_CORE_SETTINGS.files.ignored.inputFiles,
+            'Files to ignore when listing input, sample, and edited files',
           ),
           inputDirectories: stringArray(
             DEFAULT_CORE_SETTINGS.files.ignored.inputDirectories,
+            'Additional directories to ignore when listing input and edited files',
           ),
           mediaDirectories: stringArray(
             DEFAULT_CORE_SETTINGS.files.ignored.mediaDirectories,
+            'Directories to ignore in the figure path',
           ),
           directories: stringArray(
             DEFAULT_CORE_SETTINGS.files.ignored.directories,
+            'Directories to ignore when listing files',
           ),
-          keywords: stringArray(DEFAULT_CORE_SETTINGS.files.ignored.keywords),
+          keywords: stringArray(
+            DEFAULT_CORE_SETTINGS.files.ignored.keywords,
+            'Keywords to ignore when selecting files',
+          ),
         })
         .prefault(DEFAULT_CORE_SETTINGS.files.ignored),
     })
@@ -404,14 +482,25 @@ export const CoreSettingsShape = {
     .number()
     .min(100)
     .max(10000)
+    .describe(
+      'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
+    )
     .prefault(DEFAULT_CORE_SETTINGS.maxImageDimension),
   bib: z
     .strictObject({
-      defaultPath: z.string().prefault(DEFAULT_CORE_SETTINGS.bib.defaultPath),
+      defaultPath: z
+        .string()
+        .describe(
+          'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
+        )
+        .prefault(DEFAULT_CORE_SETTINGS.bib.defaultPath),
       zoteroPort: z
         .number()
         .min(1)
         .max(65535)
+        .describe(
+          'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.bib.zoteroPort),
     })
     .prefault(DEFAULT_CORE_SETTINGS.bib),
@@ -419,36 +508,55 @@ export const CoreSettingsShape = {
     .strictObject({
       showLatexindentWarning: z
         .boolean()
+        .describe('Show warning when latexindent is not installed')
         .prefault(DEFAULT_CORE_SETTINGS.latex.showLatexindentWarning),
       latexindentConfig: z
         .string()
+        .describe('Path to latexindent configuration file')
         .prefault(DEFAULT_CORE_SETTINGS.latex.latexindentConfig),
       texfmtConfig: z
         .string()
+        .describe('Path to tex-fmt configuration file')
         .prefault(DEFAULT_CORE_SETTINGS.latex.texfmtConfig),
       tikzInputDirectory: z
         .string()
+        .describe(
+          'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.latex.tikzInputDirectory),
       tikzTemplate: z
         .string()
+        .describe(
+          'Template used for generating standalone documents when extracting and compiling TikZ figures',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.latex.tikzTemplate),
       includeWorkspaceInTexinputs: z
         .boolean()
+        .describe(
+          'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.latex.includeWorkspaceInTexinputs),
       wrapCritiqueInAlign: z
         .boolean()
+        .describe(
+          'When enabled, bare \\critique and \\comment commands inside align blocks are wrapped with \\intertext.',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.latex.wrapCritiqueInAlign),
       enabledReplacements: z
         .array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES))
+        .describe('List of enabled non-regex LaTeX replacement categories')
         .prefault(DEFAULT_CORE_SETTINGS.latex.enabledReplacements),
       enabledReplacementsRegex: z
         .array(z.enum(REGEX_REPLACEMENT_CATEGORIES))
+        .describe('List of enabled regex LaTeX replacement categories')
         .prefault(DEFAULT_CORE_SETTINGS.latex.enabledReplacementsRegex),
       customReplacementsRegex: stringRecord(
         DEFAULT_CORE_SETTINGS.latex.customReplacementsRegex,
+        "Custom regex replacements in the format: { 'pattern': 'replacement' }. Use capture groups with $1, $2, etc. Example: { '\\\\section\\{([^}]+)\\}': '\\section{$1}' }",
       ),
       customReplacements: stringRecord(
         DEFAULT_CORE_SETTINGS.latex.customReplacements,
+        "Custom LaTeX replacements in the format: { 'from': 'to' }. Example: { '\\alpha': '\\al' }",
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.latex),
@@ -456,9 +564,21 @@ export const CoreSettingsShape = {
     .strictObject({
       pictureEnvironments: z
         .string()
+        .describe(
+          'Regular expression pattern for environments to be treated as pictures. These environments will be processed as a unit without internal differencing.',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.latexdiff.pictureEnvironments),
       tempFileLocation: z
         .enum(LATEXDIFF_TEMP_FILE_LOCATIONS)
+        .describe(
+          'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
+        )
+        .meta({
+          enumDescriptions: [
+            'Create temp files in the same directory as the original file. Best for resolving \\input{} and relative paths.',
+            'Create temp files in .texra-temp directory at workspace root. Keeps source directories clean but may break relative paths.',
+          ],
+        })
         .prefault(DEFAULT_CORE_SETTINGS.latexdiff.tempFileLocation),
     })
     .prefault(DEFAULT_CORE_SETTINGS.latexdiff),
@@ -468,9 +588,15 @@ export const CoreSettingsShape = {
         .number()
         .min(1)
         .max(100)
+        .describe(
+          'Number of recent commits to show in the commit selection dropdown',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.git.numberOfCommitsToShow),
       emitPrCiStartedEvents: z
         .boolean()
+        .describe(
+          'Emit a PR subscription event when GitHub check runs first appear for a new head commit.',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.git.emitPrCiStartedEvents),
     })
     .prefault(DEFAULT_CORE_SETTINGS.git),
@@ -478,60 +604,108 @@ export const CoreSettingsShape = {
     .strictObject({
       runOnCommit: z
         .boolean()
+        .describe(
+          'Automatically review your changes for issues after each commit.',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.agentReview.runOnCommit),
       includeSubmodules: z
         .boolean()
+        .describe('Include changes from Git submodules in the review.')
         .prefault(DEFAULT_CORE_SETTINGS.agentReview.includeSubmodules),
       includeUntrackedFiles: z
         .boolean()
+        .describe(
+          'Include untracked files (new files not yet added to Git) in the review.',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.agentReview.includeUntrackedFiles),
       approach: z
         .enum(AGENT_REVIEW_APPROACHES)
+        .describe(
+          'Choose between quick or more thorough, higher-cost analysis.',
+        )
+        .meta({
+          enumDescriptions: [
+            'The reviewer verifies only its strongest suspicions with tools — fast and cheap.',
+            'The reviewer reads every changed file in full, checks callers, and pulls diagnostics before reporting — deeper, higher-cost analysis.',
+          ],
+        })
         .prefault(DEFAULT_CORE_SETTINGS.agentReview.approach),
-      model: z.string().prefault(DEFAULT_CORE_SETTINGS.agentReview.model),
+      model: z
+        .string()
+        .describe(
+          'Model id for the review session (e.g. a stronger model for thorough reviews). Leave empty to use the default agent model.',
+        )
+        .prefault(DEFAULT_CORE_SETTINGS.agentReview.model),
     })
     .prefault(DEFAULT_CORE_SETTINGS.agentReview),
   audio: z
     .strictObject({
-      soxPath: z.string().prefault(DEFAULT_CORE_SETTINGS.audio.soxPath),
+      soxPath: z
+        .string()
+        .describe('Path to the SoX executable. Overrides automatic detection.')
+        .prefault(DEFAULT_CORE_SETTINGS.audio.soxPath),
     })
     .prefault(DEFAULT_CORE_SETTINGS.audio),
   logger: z
     .strictObject({
-      debugMode: z.boolean().prefault(DEFAULT_CORE_SETTINGS.logger.debugMode),
+      debugMode: z
+        .boolean()
+        .describe('Whether to show verbose debug messages in the logger view')
+        .prefault(DEFAULT_CORE_SETTINGS.logger.debugMode),
     })
     .prefault(DEFAULT_CORE_SETTINGS.logger),
   debug: z
     .strictObject({
       saveDebugObjects: z
         .boolean()
+        .describe(
+          'Save message and response objects to JSON files for debugging purposes',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.debug.saveDebugObjects),
       saveInputPrompt: z
         .boolean()
+        .describe(
+          'Save the final input prompt sent to the model as an XML file for debugging purposes',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.debug.saveInputPrompt),
     })
     .prefault(DEFAULT_CORE_SETTINGS.debug),
   skills: z
     .strictObject({
-      enabled: z.boolean().prefault(DEFAULT_CORE_SETTINGS.skills.enabled),
+      enabled: z
+        .boolean()
+        .describe(
+          'Discover imported skills and expose them to tool-use agent prompts',
+        )
+        .prefault(DEFAULT_CORE_SETTINGS.skills.enabled),
     })
     .prefault(DEFAULT_CORE_SETTINGS.skills),
   toolUse: z
     .strictObject({
       requireEditApproval: z
         .boolean()
+        .describe(
+          'Require user approval in a diff view before tool-driven edits modify workspace files',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.toolUse.requireEditApproval),
       requireBashApproval: z
         .boolean()
+        .describe(
+          'Require user approval before tool-use agents execute bash commands',
+        )
         .prefault(DEFAULT_CORE_SETTINGS.toolUse.requireBashApproval),
       persistence: z
         .strictObject({
           enabled: z
             .boolean()
+            .describe('Persist tool-use conversations across VS Code restarts')
             .prefault(DEFAULT_CORE_SETTINGS.toolUse.persistence.enabled),
           ttlHours: z
             .number()
             .min(1)
+            .describe(
+              'Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup',
+            )
             .prefault(DEFAULT_CORE_SETTINGS.toolUse.persistence.ttlHours),
         })
         .prefault(DEFAULT_CORE_SETTINGS.toolUse.persistence),
@@ -546,10 +720,46 @@ export const CoreSettingsSchema = z
 export type CoreSettings = z.infer<typeof CoreSettingsSchema>;
 
 /**
+ * Dotted leaf paths of the settings tree, enumerated at the type level.
+ *
+ * Drives the compile-time guards below so {@link CORE_SETTING_PATHS} stays in
+ * lockstep with {@link CoreSettingsShape}: a record/array/primitive field is a
+ * leaf, a nested settings group is recursed into.
+ */
+type IsRecord<T> = string extends keyof T ? true : false;
+
+/**
+ * `NonNullable` is applied before the `extends object` test so that an optional
+ * group added without a default (`Group | undefined`) still recurses into its
+ * leaves instead of silently collapsing to a single key. The guard therefore
+ * stays sound whether a nested group is declared with `.prefault()` (every group
+ * today) or `.optional()`. Arrays and records resolve to leaves; nested settings
+ * groups recurse.
+ */
+type LeafPaths<T> = {
+  [K in keyof T & string]: NonNullable<T[K]> extends readonly unknown[]
+    ? K
+    : NonNullable<T[K]> extends object
+      ? IsRecord<NonNullable<T[K]>> extends true
+        ? K
+        : `${K}.${LeafPaths<NonNullable<T[K]>>}`
+      : K;
+}[keyof T & string];
+
+/** Errors at build time unless `T` is exactly `never`. */
+type AssertNever<T extends never> = T;
+
+/**
  * Dotted leaf paths for every Core setting.
  *
  * Used by per-host "known TeXRA key" sets to derive `texra.*` prefixed key
  * lists for typo detection without hand-maintaining the list in each host.
+ *
+ * Kept in sync with the schema by the two compile-time guards just below: the
+ * `satisfies` clause rejects a typo'd or renamed path, and `_AssertCorePathsExhaustive`
+ * fails the build if a setting is added to the schema without a matching entry
+ * here. Previously both failure modes were silent (the list compiled fine while
+ * host typo-detection quietly broke).
  */
 export const CORE_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',
@@ -562,6 +772,8 @@ export const CORE_SETTING_PATHS = [
   'model.useImprovedConnection',
   'model.improvedConnectionDomain',
   'model.useOpenAIResponsesAPI',
+  'model.useGoogleInteractionsAPI',
+  'model.useGoogleInteractionsServerState',
   'model.useBackgroundResponses',
   'model.openaiParallelToolCalls',
   'model.compactionThresholdPercent',
@@ -611,6 +823,11 @@ export const CORE_SETTING_PATHS = [
   'toolUse.requireBashApproval',
   'toolUse.persistence.enabled',
   'toolUse.persistence.ttlHours',
-] as const;
+] as const satisfies readonly LeafPaths<CoreSettings>[];
 
 export type CoreSettingPath = (typeof CORE_SETTING_PATHS)[number];
+
+// Build fails if any schema leaf path is missing from CORE_SETTING_PATHS above.
+type _AssertCorePathsExhaustive = AssertNever<
+  Exclude<LeafPaths<CoreSettings>, CoreSettingPath>
+>;

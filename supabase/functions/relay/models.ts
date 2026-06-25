@@ -7,8 +7,8 @@
  * flagship (gemini-3.x-pro at $2/$12, gpt-5 at $1.25/$10) can no longer leak into
  * free on input price alone. See MAX_FREE_INPUT_PRICE / MAX_FREE_OUTPUT_PRICE.
  * - free: input <= $1.5/M AND output <= $9/M
- * - Max: free-tier models plus any future Max-only additions
- * - Ultra: everything else
+ * - Max: every model (not bounded by the free-tier price ceiling)
+ * - Ultra: every model
  */
 
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
@@ -123,12 +123,8 @@ const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
 // =============================================================================
 
 const FREE_TIER_MODELS = RELAY_MODELS.filter((m) => m.minTier === 'free');
-const MAX_TIER_MODELS = RELAY_MODELS.filter(
-  (m) => m.minTier === 'free' || m.minTier === 'Max',
-);
 
 const FREE_TIER_SHORT_NAMES = FREE_TIER_MODELS.map((m) => m.shortName);
-const MAX_TIER_SHORT_NAMES = MAX_TIER_MODELS.map((m) => m.shortName);
 
 // All supported providers
 const ALL_PROVIDERS = [
@@ -151,7 +147,7 @@ export const TIER_CONFIG: TierModelConfig = {
   providers: [...ALL_PROVIDERS],
   tiers: {
     free: { models: FREE_TIER_SHORT_NAMES },
-    Max: { models: MAX_TIER_SHORT_NAMES },
+    Max: { models: '*' },
     Ultra: { models: '*' },
   },
 };
@@ -174,8 +170,8 @@ export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
  */
 export const TIER_REQUEST_LIMITS: TierRequestLimits = {
   free: { ratePerMinute: 20, concurrent: 2 },
-  Max: { ratePerMinute: 60, concurrent: 4 },
-  Ultra: { ratePerMinute: 120, concurrent: 8 },
+  Max: { ratePerMinute: 60, concurrent: 8 },
+  Ultra: { ratePerMinute: 120, concurrent: 16 },
 };
 
 // =============================================================================
@@ -264,13 +260,16 @@ function resolveAllModelsByApiName(modelName: string): RelayModel[] {
 
 /**
  * Check if a model is allowed for a given tier.
- * Free/Max tier: models within the free price ceiling (input <= $1.5/M AND
- * output <= $9/M); Max currently has identical access.
- * Ultra tier: all models.
+ * Free tier: models within the free price ceiling (input <= $1.5/M AND
+ * output <= $9/M).
+ * Max tier: any explicit model name.
+ * Ultra tier: all model names and model-less provider endpoints.
  *
  * When multiple llm-zoo entries share the same API model name, a `some()`
  * check is used: access is granted if at least one interpretation falls
- * within the user's tier. Unknown model names are denied for non-Ultra tiers.
+ * within the user's tier. Unknown model names are denied for the free tier and
+ * allowed for Max, where the relay only needs to distinguish explicit model
+ * requests from model-less provider endpoints.
  */
 export function isModelAllowedForTier(
   tier: string,
@@ -278,14 +277,10 @@ export function isModelAllowedForTier(
 ): boolean {
   if (tier === ULTRA_TIER) return true;
   if (!modelName) return false;
+  if (tier === MAX_TIER) return true;
 
   const models = resolveAllModelsByApiName(modelName);
   if (models.length === 0) return false;
 
-  if (tier === MAX_TIER) {
-    return models.some(
-      (m) => m.minTier === FREE_TIER || m.minTier === MAX_TIER,
-    );
-  }
   return models.some((m) => m.minTier === FREE_TIER);
 }

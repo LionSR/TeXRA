@@ -1,5 +1,4 @@
 name: codeReviewer
-displayName: Code Reviewer — read-only diff review
 description: Reviews a diff or file for correctness, clarity, security, and convention fit, and reports prioritized findings. Read-only — it does not edit.
 
 settings:

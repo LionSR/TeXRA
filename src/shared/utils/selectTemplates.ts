@@ -8,9 +8,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
-import { agentName } from '@shared/schemas/agent';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { formatAgentOptionLabel } from './agentOptionLabels';
 import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
 
 /**
@@ -20,7 +18,7 @@ import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
  */
 export const BROWSE_ALL_AGENTS_OPTION_VALUE = '__browse-all-agents__';
 
-function buildAgentTooltip(opt: AgentOptionData, displayLabel: string): string {
+function buildAgentTooltip(opt: AgentOptionData): string {
   const { properties } = AGENT_DECORATORS;
   const hints: string[] = [];
 
@@ -30,35 +28,27 @@ function buildAgentTooltip(opt: AgentOptionData, displayLabel: string): string {
     );
   if (opt.isRemote) hints.push(properties.remote.hint);
   if (opt.isCustom) hints.push(properties.custom.hint);
-  if (opt.label !== displayLabel) hints.push(opt.label);
-  if (opt.description) hints.push(opt.description);
   if (opt.isToolUse) hints.push('Can execute tools and code');
-  // When a displayName label hides the canonical identifier, surface it
-  // so power users can still see the name used in configs and commands.
-  const rawName = agentName(opt.value);
-  if (opt.label !== rawName) hints.push(`Agent id: ${rawName}`);
 
   return hints.join('\n');
 }
 
 function renderAgentOption(opt: AgentOptionData): TemplateResult {
-  const displayLabel = formatAgentOptionLabel(opt.label);
-  const tooltip = buildAgentTooltip(opt, displayLabel);
+  const tooltip = buildAgentTooltip(opt);
 
   const isOrch = opt.isOrchestrator;
   return html`
     <wa-option
       value=${opt.value}
       title=${tooltip || nothing}
-      data-label=${displayLabel}
+      data-label=${opt.label}
       data-tool-use=${opt.isToolUse ? 'true' : nothing}
       data-remote=${opt.isRemote ? 'true' : nothing}
       data-custom=${opt.isCustom ? 'true' : nothing}
-      data-description=${opt.description || nothing}
     >
       ${isOrch
         ? html`<span class="agent-icon">${waIcon('bullseye')} </span>`
-        : nothing}${displayLabel}
+        : nothing}${opt.label}
       ${opt.isRemote
         ? html`<span class="agent-icon">
             ${waIcon(AGENT_DECORATORS.properties.remote.icon)}</span

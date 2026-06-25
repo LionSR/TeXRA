@@ -32,6 +32,7 @@ export const VscodeSettingsExtensionShape = {
     .strictObject({
       enableVSCodeGitHub: z
         .boolean()
+        .describe('Enable VS Code native GitHub authentication (experimental)')
         .prefault(DEFAULT_VSCODE_SETTINGS_EXTENSION.auth.enableVSCodeGitHub),
     })
     .prefault(DEFAULT_VSCODE_SETTINGS_EXTENSION.auth),

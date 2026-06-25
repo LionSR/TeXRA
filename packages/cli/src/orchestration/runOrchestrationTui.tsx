@@ -150,6 +150,7 @@ export function OrchestrationApp(
         </Text>
         <Box marginTop={1}>
           <Select
+            key="orchestration-model-picker"
             items={modelItems}
             maxVisibleItems={maxVisibleItems}
             showOverflow={modelItems.length > maxVisibleItems}
@@ -181,6 +182,7 @@ export function OrchestrationApp(
       ) : null}
       <Box marginTop={1}>
         <Select
+          key="orchestration-launcher"
           items={items}
           maxVisibleItems={maxVisibleItems}
           showOverflow={items.length > maxVisibleItems}

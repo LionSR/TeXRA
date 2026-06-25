@@ -516,6 +516,18 @@
               "scope": "resource",
               "type": "boolean"
             },
+            "texra.model.useGoogleInteractionsAPI": {
+              "default": false,
+              "description": "Use Google's Interactions API instead of Generate Content when available. Experimental; disabled by default. OpenRouter-proxied Google models always use Generate Content.",
+              "scope": "resource",
+              "type": "boolean"
+            },
+            "texra.model.useGoogleInteractionsServerState": {
+              "default": true,
+              "description": "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
+              "scope": "resource",
+              "type": "boolean"
+            },
             "texra.model.useImprovedConnection": {
               "default": false,
               "description": "Use improved connection for API requests",

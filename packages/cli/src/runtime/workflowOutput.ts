@@ -4,10 +4,10 @@ import * as path from 'node:path';
 import type { AgentEntry } from '@agent/index';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import type { OutputFileSummary } from '@shared/schemas/output';
 import { getRunDir } from '@utils/files';
 
 import { CliUsageError, type CliContext } from './cliContext';
@@ -81,6 +81,10 @@ export async function assertOutputFileAvailable(
 
 export type CliWorkflowRunResult = Extract<
   CliRunResult,
+  { category: 'workflow' }
+>;
+type WorkflowAgentResult = Extract<
+  ExecuteAgentResult,
   { category: 'workflow' }
 >;
 
@@ -200,26 +204,16 @@ function latestWorkflowOutput(
 export async function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
-  result: ExecuteAgentResult,
+  result: WorkflowAgentResult,
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
-): Promise<{
-  copiedOutput: string | undefined;
-  displayResult: CliRunResult;
-}> {
+): Promise<CliWorkflowRunResult> {
   const { terminalStatus } = options;
-  if (
-    result.category === AgentCategory.Workflow &&
-    result.outputs.length === 0 &&
-    (outputFile || outputDir)
-  ) {
+  if (result.outputs.length === 0 && (outputFile || outputDir)) {
     if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-      return {
-        copiedOutput: undefined,
-        displayResult: createCliRunResult(result, terminalStatus, {
-          workingDirectory: context.cwd,
-        }),
-      };
+      return createCliRunResult(result, terminalStatus, {
+        workingDirectory: context.cwd,
+      });
     }
     if (outputDir) {
       throw new Error(
@@ -233,11 +227,8 @@ export async function resolveWorkflowOutput(
     }
   }
 
-  const runDirectory =
-    result.category === AgentCategory.Workflow
-      ? (options.runDirectory ?? getRunDir(result.executionId))
-      : undefined;
-  if (outputDir && result.category === AgentCategory.Workflow) {
+  const runDirectory = options.runDirectory ?? getRunDir(result.executionId);
+  if (outputDir) {
     const targetRoot = joinCwdRelative(outputDir, context.cwd);
     const expectedOutputFiles = options.expectedOutputFiles ?? [];
     const outputsByRelativePath = new Map<string, OutputFileSummary>();
@@ -270,33 +261,26 @@ export async function resolveWorkflowOutput(
       );
     }
 
-    const displayResult = createCliRunResult(result, terminalStatus, {
+    return createCliRunResult(result, terminalStatus, {
       workingDirectory: context.cwd,
       runDirectory,
       copiedOutputs,
     });
-    return { copiedOutput: undefined, displayResult };
   }
 
-  if (!outputFile || result.category !== AgentCategory.Workflow) {
-    return {
-      copiedOutput: undefined,
-      displayResult: createCliRunResult(result, terminalStatus, {
-        workingDirectory: context.cwd,
-        runDirectory,
-      }),
-    };
+  if (!outputFile) {
+    return createCliRunResult(result, terminalStatus, {
+      workingDirectory: context.cwd,
+      runDirectory,
+    });
   }
 
   const finalOutput = latestWorkflowOutput(result.outputs);
   if (!finalOutput) {
-    return {
-      copiedOutput: undefined,
-      displayResult: createCliRunResult(result, terminalStatus, {
-        workingDirectory: context.cwd,
-        runDirectory,
-      }),
-    };
+    return createCliRunResult(result, terminalStatus, {
+      workingDirectory: context.cwd,
+      runDirectory,
+    });
   }
 
   const targetPath = joinCwdRelative(outputFile, context.cwd);
@@ -305,12 +289,11 @@ export async function resolveWorkflowOutput(
     await fs.copyFile(finalOutput.absolutePath, targetPath);
   }
 
-  const displayResult = createCliRunResult(result, terminalStatus, {
+  return createCliRunResult(result, terminalStatus, {
     workingDirectory: context.cwd,
     runDirectory,
     copiedOutput: targetPath,
   });
-  return { copiedOutput: targetPath, displayResult };
 }
 
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {

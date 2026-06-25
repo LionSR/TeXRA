@@ -62,6 +62,7 @@ const CLI_MODEL_FALLBACK_MODE_BY_SOURCE = {
 
 export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
+  readonly models?: readonly string[];
 }
 
 export interface CliModelListOptions {
@@ -365,7 +366,7 @@ async function includedAccessRequiresLogin(
 export async function getCliModelAccessList(
   options: CliModelAccessListOptions = {},
 ): Promise<CliModelAccess[]> {
-  const models = await computeModelOptionsData();
+  const models = await computeModelOptionsData(options.models);
   const access = models.map((model) =>
     toCliModelAccess(model, options.apiMode),
   );
@@ -428,7 +429,56 @@ export function formatNoListableModelsMessage(
   ].join('\n');
 }
 
-export function formatCliModelDetails(entry: CliModelAccess): string {
+function formatCliModelRecovery(
+  entry: CliModelAccess,
+  apiMode: CliApiMode | undefined,
+): string | undefined {
+  if (entry.available) return undefined;
+
+  const {
+    includedModeAction,
+    loginAction,
+    personalModeAction,
+    configureKeyAction,
+  } = cliModelRecoveryActions();
+
+  const availability = entry.model.availability;
+
+  switch (availability) {
+    case 'included-login-required':
+      return apiMode === 'personal'
+        ? `${startSentence(loginAction)} for included relay access, then ${includedModeAction}.`
+        : `${startSentence(loginAction)} for included relay access, or ${personalModeAction} after configuring a provider API key.`;
+    case 'relay-quota-exhausted':
+      return apiMode === 'personal'
+        ? 'Retry later.'
+        : `Retry later, or ${personalModeAction} after configuring a provider API key.`;
+    case 'missing-key':
+      return apiMode === 'personal'
+        ? `${startSentence(configureKeyAction)} for personal mode, or ${loginAction} and ${includedModeAction} if this model is included.`
+        : `${startSentence(configureKeyAction)}, then ${personalModeAction}.`;
+    case 'provider-key':
+    case 'openrouter-key':
+      return apiMode === 'included'
+        ? `${startSentence(personalModeAction)}.`
+        : undefined;
+    case 'included-access':
+      return apiMode === 'personal'
+        ? `${startSentence(includedModeAction)}.`
+        : undefined;
+    case 'not-included':
+      return apiMode === 'personal'
+        ? `${startSentence(configureKeyAction)} for personal mode.`
+        : `${startSentence(configureKeyAction)}, then ${personalModeAction}.`;
+    default:
+      return undefined;
+  }
+}
+
+export function formatCliModelDetails(
+  entry: CliModelAccess,
+  apiMode?: CliApiMode,
+): string {
   const { model, status } = entry;
   const lines: string[] = [];
   lines.push(`id: ${model.value}`);
@@ -437,6 +487,8 @@ export function formatCliModelDetails(entry: CliModelAccess): string {
   lines.push(`status: ${status}`);
   if (model.availabilityLabel)
     lines.push(`availability: ${model.availabilityLabel}`);
+  const recovery = formatCliModelRecovery(entry, apiMode);
+  if (recovery) lines.push(`recovery: ${recovery}`);
   if (model.context) lines.push(`context: ${model.context}`);
   if (model.cost) lines.push(`cost: ${model.cost}`);
   if (model.hint) {

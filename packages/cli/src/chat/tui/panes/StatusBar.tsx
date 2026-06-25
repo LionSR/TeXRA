@@ -21,6 +21,7 @@ import {
 } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import {
+  clamp,
   filterNotNullish,
   formatCompactDuration,
   formatCompactTokenCount,
@@ -240,7 +241,7 @@ export function queuedFollowUpsSummary(
   const previewLength =
     maxColumns === undefined
       ? QUEUED_FOLLOW_UP_PREVIEW_LENGTH
-      : Math.min(QUEUED_FOLLOW_UP_PREVIEW_LENGTH, Math.max(0, maxColumns));
+      : clamp(maxColumns, 0, QUEUED_FOLLOW_UP_PREVIEW_LENGTH);
   if (previewLength < STATUS_BAR_MIN_RIGHT_PREVIEW) return undefined;
   if (messages.length > 1) {
     return queuedFollowUpsListSummary(messages, previewLength);
