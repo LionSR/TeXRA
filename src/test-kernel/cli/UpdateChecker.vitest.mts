@@ -88,8 +88,7 @@ describe('detectInstallMethod', () => {
 
 describe('isPackageManagerInstall', () => {
   it('treats node_modules-resident installs as managed', () => {
-    // npm/pnpm globals, and Homebrew's Cellar formula, all live under
-    // node_modules — the segment that marks a package-manager install.
+    // npm/pnpm/yarn/bun globals all live under node_modules.
     expect(
       isPackageManagerInstall(
         '/usr/local/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
@@ -100,11 +99,17 @@ describe('isPackageManagerInstall', () => {
         '/Users/me/Library/pnpm/global/5/node_modules/@texra-ai/cli/dist/bin/texra.js',
       ),
     ).toBe(true);
-    expect(
-      isPackageManagerInstall(
-        '/opt/homebrew/Cellar/texra/0.38.10/libexec/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
-      ),
-    ).toBe(true);
+  });
+
+  it('treats a Homebrew Cellar install as managed even without node_modules', () => {
+    // The tap formula installs the bundled binary under Cellar/<v>/, which need
+    // not contain a node_modules segment — the `cellar` segment marks it (same
+    // path shape detectInstallMethod recognizes as brew).
+    const brewPath =
+      '/opt/homebrew/Cellar/texra/0.38.10/libexec/dist/bin/texra.js';
+    expect(brewPath.toLowerCase().includes('node_modules')).toBe(false);
+    expect(isPackageManagerInstall(brewPath)).toBe(true);
+    expect(detectInstallMethod(brewPath)).toBe('brew');
   });
 
   it('is case-insensitive for Windows paths', () => {

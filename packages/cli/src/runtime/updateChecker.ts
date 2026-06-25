@@ -81,22 +81,24 @@ function currentModulePath(): string {
 }
 
 /**
- * True when the running binary lives inside a `node_modules` tree. Every
- * package-manager install places the package under `node_modules/@texra-ai/cli`
- * — npm/pnpm/yarn/bun globals and Homebrew's Cellar formula alike — so this
- * segment is a reliable marker of a managed install. A source checkout or
- * `npm link` build runs straight from `packages/cli/dist`, which has no
- * `node_modules` segment; for those an "update with `npm install -g …`" prompt
- * is misleading (it cannot update the checkout), so {@link notifyCliUpdate}
- * skips the check.
+ * True when the running binary was installed by a package manager. Two layouts
+ * mark a managed install:
+ * - a `node_modules` segment — npm/pnpm/yarn/bun globals install the package
+ *   under `node_modules/@texra-ai/cli`;
+ * - a `cellar` segment — Homebrew's tap formula installs the bundled binary
+ *   under `Cellar/texra/<version>/…`, which need not contain a `node_modules`
+ *   segment (this mirrors how {@link detectInstallMethod} recognizes brew).
+ *
+ * A source checkout or `npm link` build runs straight from `packages/cli/dist`
+ * and matches neither, so an "update with `npm install -g …`" prompt would be
+ * misleading (it cannot update the checkout) — {@link notifyCliUpdate} skips
+ * the check for those.
  */
 export function isPackageManagerInstall(
   modulePath: string = currentModulePath(),
 ): boolean {
-  return modulePath
-    .toLowerCase()
-    .split(/[\\/]+/)
-    .includes('node_modules');
+  const segments = modulePath.toLowerCase().split(/[\\/]+/);
+  return segments.includes('node_modules') || segments.includes('cellar');
 }
 
 export function buildUpdateCommand(
