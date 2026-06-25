@@ -10,9 +10,13 @@ import {
   type TodoItem,
   type Plan,
   type FileLocation,
+  type LineChanges,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
-import { FlattenedEditRecordSchema } from '@shared/schemas/toolResult';
+import {
+  FlattenedEditRecordSchema,
+  type EditRecord,
+} from '@shared/schemas/toolResult';
 import { isObject } from '@utils/core';
 import { pathToLocation } from '@utils/files';
 
@@ -47,10 +51,7 @@ type FileInteractionStateSnapshot = z.output<
 
 export class FileInteractionState {
   private readonly readFiles = new Set<string>();
-  private readonly edits = new Map<
-    string,
-    { added: number; removed: number }
-  >();
+  private readonly edits = new Map<string, LineChanges>();
   private _toolCallCount = 0;
 
   /** Total number of tool calls executed in this session. */
@@ -106,19 +107,15 @@ export class FileInteractionState {
     return this.readFiles.has(path);
   }
 
-  recordEdits(
-    edits:
-      | { path?: string; lineChanges?: { added?: number; removed?: number } }[]
-      | undefined,
-  ): {
-    edits: { path: string; lineChanges?: { added: number; removed: number } }[];
-    lineChanges?: { added: number; removed: number };
+  recordEdits(edits: EditRecord[] | undefined): {
+    edits: EditRecord[];
+    lineChanges?: LineChanges;
   } {
     if (!Array.isArray(edits)) {
       return { edits: [] };
     }
 
-    const perCallEdits = new Map<string, { added: number; removed: number }>();
+    const perCallEdits = new Map<string, LineChanges>();
     let totalAdded = 0;
     let totalRemoved = 0;
 
@@ -154,7 +151,7 @@ export class FileInteractionState {
   }
 
   private updateEditMap(
-    map: Map<string, { added: number; removed: number }>,
+    map: Map<string, LineChanges>,
     path: string,
     added: number,
     removed: number,
