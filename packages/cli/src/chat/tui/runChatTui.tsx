@@ -28,6 +28,7 @@ import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
+import { seedCliRosterFromDefaultTeam } from '@cli/runtime/defaultTeamRoster';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import {
@@ -37,6 +38,7 @@ import {
 } from '@cli/runtime/modelAccess';
 import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
+import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -270,6 +272,8 @@ export async function runChat(
     firstRunDone: getFirstRunDone(platform().globalState),
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
+  await loadAgents();
+  await seedCliRosterFromDefaultTeam();
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
     agentOverride: explicitAgent ?? setupAgentOverride,
@@ -277,7 +281,6 @@ export async function runChat(
     envAgent: context.envAgent,
     envModel: context.envModel,
   });
-  await loadAgents();
   const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
   if (agentUsageError) {
     writeTextStderr(agentUsageError);
@@ -532,6 +535,7 @@ export async function runChat(
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: activateSkillForNextMessage,
     onResumeSelect: (id: ExecutionId) => chatController.resume(id),
+    getConfigStores: cliSettingsStores,
     onError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
     },

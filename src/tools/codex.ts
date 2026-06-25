@@ -34,7 +34,6 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import { toErrorMessage } from '@common/errors';
 import type {
   StreamTabId,
   ExecutionId,
@@ -43,7 +42,6 @@ import type {
 } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
-import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import {
@@ -60,7 +58,11 @@ import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream, type ChildStream } from './childStream';
 import { codexThreads } from './agentCliSessionStores';
-import { publishAgentCliStreamUsage } from './agentCliShared';
+import {
+  publishAgentCliStreamUsage,
+  formatAgentCliDelivery,
+  formatAgentCliError,
+} from './agentCliShared';
 import {
   runAgentCliSession,
   type AgentCliSessionStrategy,
@@ -135,35 +137,17 @@ function formatCodexDelivery(
   turn: RunResult,
   threadId?: string | null,
 ): string {
-  const durationSec = (wallTimeMs / 1000).toFixed(1);
-  const response = turn.finalResponse || '(no response)';
-  const lines = [
-    `<codex-result id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}"${threadId ? ` thread-id="${escapeAttr(threadId)}"` : ''}>`,
-    `<wall-time>${durationSec}s</wall-time>`,
-    `<response>${escapeText(response)}</response>`,
-  ];
-
-  if (turn.usage) {
-    lines.push(
-      `<usage input="${turn.usage.input_tokens}" output="${turn.usage.output_tokens}" />`,
-    );
-  }
-
-  lines.push('</codex-result>');
-  return lines.join('\n');
-}
-
-/** Format a Codex error for delivery on the parent's follow-up queue. */
-function formatCodexError(
-  executionId: string,
-  prompt: string,
-  err: unknown,
-): string {
-  return [
-    `<codex-error id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}">`,
-    `<message>${escapeText(toErrorMessage(err))}</message>`,
-    '</codex-error>',
-  ].join('\n');
+  return formatAgentCliDelivery({
+    tag: 'codex-result',
+    executionId,
+    prompt,
+    wallTimeMs,
+    response: turn.finalResponse,
+    idAttr: { name: 'thread-id', value: threadId },
+    usage: turn.usage
+      ? { input: turn.usage.input_tokens, output: turn.usage.output_tokens }
+      : null,
+  });
 }
 
 // ============================================================================
@@ -433,7 +417,7 @@ function startCodexLoop(params: {
     formatDelivery: (turn, prompt, wallTimeMs) =>
       formatCodexDelivery(executionId, prompt, wallTimeMs, turn, thread.id),
     formatError: (_turn, prompt, err) =>
-      formatCodexError(executionId, prompt, err),
+      formatAgentCliError('codex-error', executionId, prompt, err),
     onSessionCleanup: () => {
       const threadId = thread.id;
       if (threadId) codexThreads.release(threadId);

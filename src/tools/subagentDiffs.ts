@@ -2,8 +2,8 @@ import path from 'node:path';
 
 import { diff_match_patch } from 'diff-match-patch';
 
-import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import type { ExecutionId } from '@shared/schemas';
+import type { OutputFileSummary } from '@shared/schemas/output';
 import { AbsoluteFS } from '@utils/files';
 import { getRunDir, ensureRunDir } from '@utils/files/taskRunStorage';
 import { countLines } from '@utils/text/stringUtils';

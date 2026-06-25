@@ -2,7 +2,6 @@
 // current chat TUI.
 
 import { Box, Text } from 'ink';
-import { Spinner } from '@inkjs/ui';
 
 import {
   listCliHistoryEntries,
@@ -14,7 +13,7 @@ import type { ExecutionId } from '@shared/schemas';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
-import { FormFrame } from './_shared/FormFrame';
+import { FormFrame, renderAsyncListFormTransient } from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   type SelectWindowSize,
@@ -48,21 +47,13 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
     },
   );
 
-  if (loading) {
-    return (
-      <FormFrame color="cyan" title="/resume">
-        <Spinner label="Loading execution history..." />
-      </FormFrame>
-    );
-  }
-
-  if (error) {
-    return (
-      <FormFrame color="red" title="/resume - error">
-        <Text>{error}</Text>
-      </FormFrame>
-    );
-  }
+  const transient = renderAsyncListFormTransient({
+    loading,
+    error,
+    title: '/resume',
+    loadingLabel: 'Loading execution history...',
+  });
+  if (transient) return transient;
 
   const entries = data ?? [];
   if (entries.length === 0) {

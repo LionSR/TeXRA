@@ -214,8 +214,9 @@ const BannerMessages = [
 ] as const;
 
 // ============================================================
-// Git diff message schemas (shared by the inbound union and the
-// extension's DiffManager, which parses each individually).
+// Git diff message schemas. Part of the inbound union, so
+// dispatchMainViewInbound validates and narrows them at the
+// dispatch boundary before DiffManager's typed handlers run.
 // ============================================================
 
 export const RequestRecentCommitsMessageSchema = z.object({

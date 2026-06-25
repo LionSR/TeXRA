@@ -92,6 +92,8 @@ type JsonSchemaObject = {
   default?: unknown;
   minimum?: number;
   maximum?: number;
+  description?: string;
+  enumDescriptions?: unknown[];
 };
 
 const GENERATED_PACKAGE_SCHEMA_FIELDS = [
@@ -102,6 +104,8 @@ const GENERATED_PACKAGE_SCHEMA_FIELDS = [
   'enum',
   'minimum',
   'maximum',
+  'description',
+  'enumDescriptions',
 ] as const;
 
 let texraSettingsJsonSchema: JsonSchemaObject | undefined;

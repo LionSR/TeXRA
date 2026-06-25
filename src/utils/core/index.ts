@@ -8,14 +8,12 @@
 export {
   isNonEmptyString,
   isString,
-  extractErrorMessage,
   formatCompactDuration,
   formatCompactTokenCount,
   formatDuration,
   serializeError,
   type SerializedError,
 } from './stringCore';
-export { toErrorMessage, ensureError } from './errorCore';
 export {
   isObject,
   isFiniteNumber,

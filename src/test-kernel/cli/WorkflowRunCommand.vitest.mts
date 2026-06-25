@@ -11,15 +11,20 @@ import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 const mocks = vi.hoisted(() => {
   return {
     executeCliConfig: vi.fn(),
+    emitCliResult: vi.fn(),
     withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
     isAuthenticated: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
     resolveCliRunModel: vi.fn(),
+    writeResultMeta: vi.fn(),
   };
 });
 
 vi.mock('@agent/storage', () => ({
+  getExecutionStore: vi.fn(() => ({
+    writeResultMeta: mocks.writeResultMeta,
+  })),
   writeTerminalStatus: vi.fn(),
 }));
 
@@ -55,7 +60,7 @@ vi.mock('@cli/runtime/runModel', () => ({
 }));
 
 vi.mock('@cli/commands/_helpers/output', () => ({
-  emitCliResult: vi.fn(),
+  emitCliResult: mocks.emitCliResult,
 }));
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
@@ -75,6 +80,8 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
     );
     return specs.has('-') && specs.size > 1;
   }),
+  isMaterializedStdinWorkflowInputPath: vi.fn(() => false),
+  STDIN_WORKFLOW_INPUT_BASENAME: 'stdin.tex',
 }));
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -296,10 +303,44 @@ describe('CLI workflow run command', () => {
     }
   });
 
+  it('enforces workflow results at the shared execution boundary', async () => {
+    const { runWorkflowAgent } = await import('@cli/commands/workflow');
+
+    const exitCode = await runWorkflowAgent(cliContext(), {
+      agent: 'polish',
+      inputFiles: ['paper.tex'],
+      contextFiles: [],
+      instruction: '',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.executeCliConfig.mock.calls[0]?.[2]).toMatchObject({
+      enforceCategory: true,
+      expectedCategory: AgentCategory.Workflow,
+      categoryMismatchMessage: 'Agent "polish" resolved to a non workflow run.',
+    });
+  });
+
   it('keeps the single-output copy target separate from workflow output names', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
     try {
       const generated = path.join(root, 'run', 'r1', 'paper.tex');
+      const outputSummary = {
+        round: 1,
+        relativePath: 'r1/paper.tex',
+        absolutePath: generated,
+        location: 'runStorage',
+        originalPath: path.join(root, 'paper.tex'),
+        added: null,
+        removed: null,
+      };
+      const compileFailure = {
+        round: 1,
+        displayName: 'paper.tex',
+        outputPath: 'r1/paper.tex',
+        logPath: 'compile/r1_paper.tex.log',
+        logAbsolutePath: path.join(root, 'run', 'compile', 'r1_paper.tex.log'),
+      };
       await fs.mkdir(path.dirname(generated), { recursive: true });
       await fs.writeFile(generated, 'polished');
       mocks.executeCliConfig.mockResolvedValueOnce({
@@ -310,18 +351,8 @@ describe('CLI workflow run command', () => {
           executionId: 'exec-output',
           streamId: 'stream-output',
           outcome: RUN_OUTCOME.COMPLETED,
-          outputs: [
-            {
-              round: 1,
-              relativePath: 'r1/paper.tex',
-              absolutePath: generated,
-              location: 'runStorage',
-              originalPath: path.join(root, 'paper.tex'),
-              added: null,
-              removed: null,
-            },
-          ],
-          compileFailures: [],
+          outputs: [outputSummary],
+          compileFailures: [compileFailure],
         },
         terminalStatus: EXECUTION_STATUS.COMPLETED,
       });
@@ -346,6 +377,124 @@ describe('CLI workflow run command', () => {
       await expect(
         fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
       ).resolves.toBe('polished');
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith({
+        copiedOutput: path.join(root, 'polished.tex'),
+        outputs: [outputSummary],
+        compileFailures: [compileFailure],
+      });
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('persists copied output-dir paths for history details', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
+    try {
+      const generated = path.join(root, 'run', 'r1', 'paper.tex');
+      const outputSummary = {
+        round: 1,
+        relativePath: 'r1/paper.tex',
+        absolutePath: generated,
+        location: 'runStorage',
+        originalPath: path.join(root, 'paper.tex'),
+        added: null,
+        removed: null,
+      };
+      await fs.mkdir(path.dirname(generated), { recursive: true });
+      await fs.writeFile(generated, 'polished');
+      mocks.executeCliConfig.mockResolvedValueOnce({
+        ok: true,
+        executionId: 'exec-output-dir',
+        result: {
+          category: AgentCategory.Workflow,
+          executionId: 'exec-output-dir',
+          streamId: 'stream-output-dir',
+          outcome: RUN_OUTCOME.COMPLETED,
+          outputs: [outputSummary],
+          compileFailures: [],
+        },
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+      });
+
+      const { runWorkflowAgent } = await import('@cli/commands/workflow');
+
+      const exitCode = await runWorkflowAgent(cliContext({ cwd: root }), {
+        agent: 'polish',
+        inputFiles: ['paper.tex'],
+        contextFiles: [],
+        outputDir: 'out',
+        instruction: '',
+      });
+
+      expect(exitCode).toBe(0);
+      await expect(
+        fs.readFile(path.join(root, 'out', 'paper.tex'), 'utf8'),
+      ).resolves.toBe('polished');
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith({
+        copiedOutputs: [path.join(root, 'out', 'paper.tex')],
+        outputs: [outputSummary],
+        compileFailures: [],
+      });
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not fail a completed workflow when copied output metadata cannot be persisted', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
+    try {
+      const generated = path.join(root, 'run', 'r1', 'paper.tex');
+      await fs.mkdir(path.dirname(generated), { recursive: true });
+      await fs.writeFile(generated, 'polished');
+      mocks.executeCliConfig.mockResolvedValueOnce({
+        ok: true,
+        executionId: 'exec-output-meta-fail',
+        result: {
+          category: AgentCategory.Workflow,
+          executionId: 'exec-output-meta-fail',
+          streamId: 'stream-output-meta-fail',
+          outcome: RUN_OUTCOME.COMPLETED,
+          outputs: [
+            {
+              round: 1,
+              relativePath: 'r1/paper.tex',
+              absolutePath: generated,
+              location: 'runStorage',
+              originalPath: path.join(root, 'paper.tex'),
+              added: null,
+              removed: null,
+            },
+          ],
+          compileFailures: [],
+        },
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+      });
+      mocks.writeResultMeta.mockRejectedValueOnce(
+        new Error('metadata disk full'),
+      );
+
+      const { runWorkflowAgent } = await import('@cli/commands/workflow');
+
+      const exitCode = await runWorkflowAgent(cliContext({ cwd: root }), {
+        agent: 'polish',
+        inputFiles: ['paper.tex'],
+        contextFiles: [],
+        outputDir: 'out',
+        instruction: '',
+      });
+
+      expect(exitCode).toBe(0);
+      await expect(
+        fs.readFile(path.join(root, 'out', 'paper.tex'), 'utf8'),
+      ).resolves.toBe('polished');
+      expect(mocks.emitCliResult).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({
+          json: expect.objectContaining({
+            copiedOutputs: [path.join(root, 'out', 'paper.tex')],
+          }),
+        }),
+      );
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

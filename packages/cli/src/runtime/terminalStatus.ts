@@ -1,5 +1,4 @@
 import { getExecutionStore } from '@agent/storage';
-import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { runAgent } from '@agent/runtime/runAgent';
 
 import { projectRunOutcome } from '@common/constants/streamStatus';
@@ -105,5 +104,3 @@ export async function readCliTerminalStatus(
     .catch(() => undefined);
   return cliTerminalStatus(result, meta?.terminalStatus);
 }
-
-export type { OutputFileSummary };

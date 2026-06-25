@@ -14,25 +14,28 @@ import {
   setActiveSidebarView,
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
+import { bus } from '@eventBus/ProgressEventBus';
+import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createChannelTrace } from '@logger';
 import {
   buildVisibleBasicModelOptionsData,
   computeModelOptionsData,
 } from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
-import type {
-  AgentProposalPermission,
-  BashPermission,
-  ExternalInquiryPermission,
-  PlanApprovalPermission,
-  ProgressViewOutboundMessage,
-  ProgressViewPlacement,
-  RetryPermission,
-  StreamTabId,
-  ToolEditPermission,
-  UserQuestionPermission,
+import {
+  AgentCategory,
+  type AgentProposalPermission,
+  type BashPermission,
+  type ExternalInquiryPermission,
+  type PlanApprovalPermission,
+  type ProgressViewOutboundMessage,
+  type ProgressViewPlacement,
+  type RetryPermission,
+  type StreamTabId,
+  type ToolEditPermission,
+  type UserQuestionPermission,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
+import { agentName } from '@shared/schemas/agent';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -237,7 +240,11 @@ export class ProgressViewProvider
         styleKey: 'progressStyleUri',
       },
     );
-    this.messageHandler = new ProgressViewMessageHandler(this, context);
+    this.messageHandler = new ProgressViewMessageHandler(
+      this,
+      context,
+      new VscodePromptHost(),
+    );
 
     ProgressViewProvider._instance = this;
     setProgressViewBridge(this);
@@ -257,7 +264,7 @@ export class ProgressViewProvider
 
   public async initialize(): Promise<void> {
     await this.backend.load();
-    this._disposables.push(this.backend.setupEventListeners());
+    this._disposables.push(this.backend.setupEventListeners(bus));
     this.logger.debug('ProgressViewProvider initialized');
   }
 
@@ -318,8 +325,8 @@ export class ProgressViewProvider
     const loadAgentOptions = async () => {
       const all = await computeAgentOptionsData();
       const raw = isWorkflow ? all.workflow : all.toolUse;
-      // proposal.agent is a plain name (not source/name), so use label as value.
-      return raw.map((opt) => ({ ...opt, value: opt.label }));
+      // proposal.agent is a plain name, so keep identity separate from label.
+      return raw.map((opt) => ({ ...opt, value: agentName(opt.value) }));
     };
     const [modelOptions, agentOptions] = await Promise.all([
       computeModelOptionsData().catch(() =>

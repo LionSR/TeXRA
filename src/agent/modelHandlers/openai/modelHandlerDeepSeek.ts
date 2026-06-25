@@ -40,14 +40,6 @@ export class ModelHandlerDeepSeek extends ReasoningModelHandlerOpenAI<DeepSeekTo
   }
 
   /**
-   * DeepSeek emits reasoning_content alongside parallel tool calls, which must be
-   * preserved by batching the results into a single follow-up message.
-   */
-  override get requiresBatchedParallelToolResults(): boolean {
-    return true;
-  }
-
-  /**
    * DeepSeek accepts a reasoning-level override whenever it supports reasoning,
    * even though it doesn't expose a granular configurable-effort capability.
    */

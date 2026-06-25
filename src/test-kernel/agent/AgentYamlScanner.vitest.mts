@@ -100,4 +100,84 @@ describe('agent YAML scanner', () => {
       entries.find((entry) => entry.name === 'missing-parent')?.rounds,
     ).toBeUndefined();
   });
+
+  it('uses the YAML name as the canonical registry name', async () => {
+    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
+    await writeFile(
+      resolve(agentDir, 'Readable Helper.yaml'),
+      [
+        'name: helper',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: help',
+        '',
+      ].join('\n'),
+    );
+
+    const entries = await scanDirectory(agentDir, 'custom');
+
+    expect(entries.map((entry) => entry.name)).toEqual(['helper']);
+  });
+
+  it('skips agent names that are not identifiers', async () => {
+    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
+    await writeFile(
+      resolve(agentDir, 'review.yaml'),
+      [
+        'name: review team',
+        'description: Verifies manuscripts.',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: review',
+        '',
+      ].join('\n'),
+    );
+
+    const entries = await scanDirectory(agentDir, 'custom');
+
+    expect(entries).toEqual([]);
+  });
+
+  it('skips duplicate YAML names instead of returning colliding entries', async () => {
+    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
+    await writeFile(
+      resolve(agentDir, 'first.yaml'),
+      [
+        'name: shared',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: first',
+        '',
+      ].join('\n'),
+    );
+    await writeFile(
+      resolve(agentDir, 'second.yaml'),
+      [
+        'name: shared',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: second',
+        '',
+      ].join('\n'),
+    );
+    await writeFile(
+      resolve(agentDir, 'unique.yaml'),
+      [
+        'name: unique',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: unique',
+        '',
+      ].join('\n'),
+    );
+
+    const entries = await scanDirectory(agentDir, 'custom');
+
+    expect(entries.map((entry) => entry.name)).toEqual(['unique']);
+  });
 });

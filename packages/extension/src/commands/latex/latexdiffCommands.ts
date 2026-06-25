@@ -27,23 +27,13 @@ import {
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import { CHANNEL, service } from '@latex/latexdiff/service';
-import {
-  discoverLatestExecutionOutputs,
-  scanRunDirForOutputs,
-} from '@latex/latexdiff/outputDiscovery';
-import {
-  runLatexdiffFromMetadata,
-  runLatexdiffViaWorkspaceScan,
-} from '@latex/latexdiff/diffOperations';
-import type {
-  DiffRunOutcome,
-  RunLatexdiffCommandConfig,
-} from '@latex/latexdiff/types';
+import { runLatexdiffForExecution } from '@latex/latexdiff/runLatexdiff';
+import type { RunLatexdiffCommandConfig } from '@latex/latexdiff/types';
 import * as logger from '@logger/logUtils';
-import { ExecutionIdSchema, RoundKeySchema } from '@shared/schemas';
+import { RoundKeySchema } from '@shared/schemas';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
-import { TaskRunFileService, flexibleFS, pathToLocation } from '@utils/files';
+import { flexibleFS, pathToLocation } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 
 import {
@@ -411,84 +401,21 @@ async function handleRunLatexdiff(
       }
     }
 
-    let discoveredExecutionId = runId;
-
-    // When the caller specifies a runId (progress-toolbar invocations do),
-    // scope output discovery to that execution first. Otherwise metadata
-    // auto-discovery can return a different, newer run with the same
-    // agent/model/inputFile — silently diffing against the wrong outputs.
-    if (!outputsByRound && runId) {
-      const parsedRunId = ExecutionIdSchema.safeParse(runId);
-      if (parsedRunId.success) {
-        const scanned = await scanRunDirForOutputs(
-          parsedRunId.data,
-          inputFile,
-          outputFiles,
-        );
-        if (scanned) {
-          outputsByRound = scanned;
-          discoveredExecutionId = parsedRunId.data;
-          logger.debug(
-            CHANNEL,
-            `Using run-dir scan outputs from execution ${parsedRunId.data}`,
-          );
-        }
-      }
-    }
-
-    // No runId given: fall back to searching executions by
-    // agent/model/inputFile and pulling their persisted stream-tab
-    // metadata. When the caller pinned a runId but the run-dir scan
-    // turned up nothing, DO NOT drop to latest-matching auto-discovery:
-    // that would silently diff against a different (usually newer)
-    // execution with the same agent/model/input.
-    if (!outputsByRound && !runId) {
-      const discovered = await discoverLatestExecutionOutputs({
-        agent,
-        model,
-        inputFile,
-      });
-      if (discovered) {
-        outputsByRound = discovered.rounds;
-        discoveredExecutionId = discovered.executionId;
-        logger.debug(
-          CHANNEL,
-          `Using metadata outputs from execution ${discovered.executionId}`,
-        );
-      }
-    }
-
-    const fileService = new TaskRunFileService(discoveredExecutionId);
-
-    const outcome = await vscode.window.withProgress(
+    const { outcome } = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
         title: 'Running LaTeX diffs',
         cancellable: false,
       },
-      async (progress): Promise<DiffRunOutcome> => {
-        progress.report({
-          increment: 0,
-          message: outputsByRound
-            ? 'Preparing metadata-driven LaTeX diffs...'
-            : 'Scanning workspace for LaTeX outputs...',
-        });
-
-        if (outputsByRound) {
-          return runLatexdiffFromMetadata({
-            rounds: outputsByRound,
-            mathMarkup,
-            generateBetweenRoundDiffs,
-            progress,
-            fileService,
-          });
-        }
-
-        return runLatexdiffViaWorkspaceScan({
+      (progress) => {
+        progress.report({ increment: 0, message: 'Preparing LaTeX diffs...' });
+        return runLatexdiffForExecution({
           agent,
           model,
           inputFile,
           outputFiles,
+          runId,
+          outputsByRound,
           mathMarkup,
           generateBetweenRoundDiffs,
           progress,

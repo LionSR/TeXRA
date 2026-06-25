@@ -12,18 +12,22 @@ export interface AgentOptionsDataPayload {
   toolUse: AgentOptionData[];
 }
 
-/** Convert AgentEntry to typed option data. */
-export function entryToOptionData(entry: AgentEntry): AgentOptionData {
+function entryToOptionData(entry: AgentEntry): AgentOptionData {
   const key = createKey(entry.source, entry.name);
   return {
     value: key,
-    label: entry.displayName ?? entry.name,
+    label: entry.name,
     isToolUse: entry.category === AgentCategory.ToolUse,
     isOrchestrator: hasDelegationTool(entry.tools),
     isRemote: entry.source === 'remote',
     isCustom: entry.source === 'custom',
-    description: entry.description,
   };
+}
+
+export function entriesToOptionData(
+  entries: readonly AgentEntry[],
+): AgentOptionData[] {
+  return entries.map(entryToOptionData);
 }
 
 /** Sort entries: preferred agents first (in priority order), then alphabetically. */

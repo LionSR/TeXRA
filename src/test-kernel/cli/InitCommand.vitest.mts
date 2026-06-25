@@ -39,16 +39,14 @@ describe('CLI init command', () => {
   });
 
   it('does not offer simplifier as a default init agent option', () => {
-    const options = defaultInitAgentOptions([
+    const registryAgents: Array<{ name: string; description: string }> = [
       { name: 'chat', description: 'General chat' },
       { name: 'simplifier', description: 'Code simplification' },
       { name: 'review', description: 'Code review' },
-    ]);
+    ];
+    const options = defaultInitAgentOptions(registryAgents);
 
-    expect(options).toEqual([
-      { name: 'chat', description: 'General chat' },
-      { name: 'review', description: 'Code review' },
-    ]);
+    expect(options).toEqual([{ name: 'chat' }, { name: 'review' }]);
   });
 
   it('disables init model rows unavailable in the active API mode', () => {

@@ -42,6 +42,10 @@ export function isKnownCliModel(model: string): boolean {
   return MODEL_CONFIGS[model] != null;
 }
 
+export function knownCliModelIds(): string[] {
+  return Object.keys(MODEL_CONFIGS);
+}
+
 function normalizeCliModelLookupKey(value: string): string {
   return value
     .trim()

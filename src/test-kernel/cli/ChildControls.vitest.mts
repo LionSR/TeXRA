@@ -1518,4 +1518,20 @@ describe('CLI child execution controls', () => {
       visibleCount: 3,
     });
   });
+
+  it('keeps empty picker windows empty', () => {
+    expect(
+      computePickerListLayout({
+        availableRows: 10,
+        highlight: 0,
+        itemCount: 0,
+        scopeLineCount: 1,
+      }),
+    ).toMatchObject({
+      hiddenAfter: 0,
+      hiddenBefore: 0,
+      start: 0,
+      visibleCount: 0,
+    });
+  });
 });

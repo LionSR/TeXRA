@@ -13,6 +13,7 @@ import {
 
 import { BaseTextInput } from '../input/BaseTextInput';
 import { KeyHints } from '../ui/KeyHints';
+import { POINTER } from '../ui/glyphs';
 
 export interface ApiKeyEntryFormProps {
   readonly provider: ApiProvider;
@@ -53,7 +54,7 @@ export function ApiKeyEntryForm(
       <Text dimColor>Provider: {label}</Text>
       {keyUrl ? <Text dimColor>Get a key: {keyUrl}</Text> : null}
       <Box marginTop={1}>
-        <Text>{'› '}</Text>
+        <Text>{`${POINTER} `}</Text>
         <BaseTextInput
           value={key}
           masked

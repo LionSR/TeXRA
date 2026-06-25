@@ -1229,12 +1229,12 @@ describe('desktop settings IPC', () => {
       workflow: [
         {
           source: 'builtInWorkflow' as const,
-          name: 'criticize',
+          name: 'correct',
           category: 'workflow' as const,
         },
         {
-          source: 'custom' as const,
-          name: 'generic',
+          source: 'builtInWorkflow' as const,
+          name: 'polish',
           category: 'workflow' as const,
         },
       ],
@@ -1250,6 +1250,26 @@ describe('desktop settings IPC', () => {
           name: 'research',
           category: 'toolUse' as const,
         },
+        {
+          source: 'builtInToolUse' as const,
+          name: 'numerics',
+          category: 'toolUse' as const,
+        },
+        {
+          source: 'builtInToolUse' as const,
+          name: 'review',
+          category: 'toolUse' as const,
+        },
+        {
+          source: 'builtInToolUse' as const,
+          name: 'presenter',
+          category: 'toolUse' as const,
+        },
+        {
+          source: 'builtInToolUse' as const,
+          name: 'latexFixer',
+          category: 'toolUse' as const,
+        },
       ],
     };
 
@@ -1260,7 +1280,7 @@ describe('desktop settings IPC', () => {
         loadCount += 1;
       },
       loadAgentOptionsData: async () => ({
-        workflow: [{ value: 'builtInWorkflow:criticize', label: 'criticize' }],
+        workflow: [{ value: 'builtInWorkflow:correct', label: 'correct' }],
         toolUse: [
           { value: 'builtInToolUse:orchestrator', label: 'orchestrator' },
         ],
@@ -1285,24 +1305,20 @@ describe('desktop settings IPC', () => {
     await flushAsyncWork();
 
     expect(loadCount).toBeGreaterThanOrEqual(1);
-    // Catalog-resolved names become source-qualified keys; the rest of the
-    // preset's roster is kept as bare names so those agents join the roster
-    // the moment they appear (sign-in, install) — see applyPresetRoster.
+    // Catalog-resolved names become source-qualified keys, preserving the
+    // winning source when a custom agent overrides a built-in name.
     expect(workspaceState.values.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
-      ['builtInWorkflow:criticize', 'custom:generic', 'devise', 'apply'],
+      ['builtInWorkflow:correct', 'builtInWorkflow:polish'],
     );
     expect(
       workspaceState.values.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
     ).toEqual([
       'builtInToolUse:orchestrator',
       'custom:research',
-      'numerics',
-      'review',
-      'search',
-      'presenter',
-      'simplifier',
-      'latexFixer',
-      'progressCheck',
+      'builtInToolUse:numerics',
+      'builtInToolUse:review',
+      'builtInToolUse:presenter',
+      'builtInToolUse:latexFixer',
     ]);
     expect(errorMessages).toEqual([]);
     expect(infoMessages).toEqual(['Applied "Physicist" team']);
@@ -1316,8 +1332,8 @@ describe('desktop settings IPC', () => {
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
       workflow: expect.arrayContaining([
-        expect.objectContaining({ name: 'criticize', enabled: true }),
-        expect.objectContaining({ name: 'generic', enabled: true }),
+        expect.objectContaining({ name: 'correct', enabled: true }),
+        expect.objectContaining({ name: 'polish', enabled: true }),
       ]),
       toolUse: expect.arrayContaining([
         expect.objectContaining({ name: 'orchestrator', enabled: true }),
@@ -1334,7 +1350,7 @@ describe('desktop settings IPC', () => {
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       optionsData: {
         workflow: [
-          expect.objectContaining({ value: 'builtInWorkflow:criticize' }),
+          expect.objectContaining({ value: 'builtInWorkflow:correct' }),
         ],
         toolUse: [
           expect.objectContaining({ value: 'builtInToolUse:orchestrator' }),

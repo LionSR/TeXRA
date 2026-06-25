@@ -31,7 +31,16 @@ import {
 import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
+  type LatexdiffMathMarkupValue,
+  type LatexFormatterValue,
 } from '@shared/constants/latex';
+
+// Local imports - state-backed settings catalog (single source for enum options)
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  settingEnumOptions,
+  stateSettingByKey,
+} from '@shared/schemas/stateSettings';
 
 // Local imports - shared constants
 import {
@@ -54,6 +63,44 @@ import { latexTabStyles } from './LaTeXTab.styles';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+
+/**
+ * Build the `<wa-select>` option list for an enum setting from the shared
+ * catalog so the allowed values + per-option text live in one place
+ * (`stateSettings.ts`) rather than being hand-listed here. The label format
+ * stays this tab's own: `value — description` for math markup, bare `value`
+ * for the formatter, with ` (default)` appended to the default option.
+ */
+function catalogEnumOptions<T extends string>(
+  key: string,
+  defaultValue: T,
+  withDescription: boolean,
+): Array<{ value: T; label: string }> {
+  const entry = stateSettingByKey(key);
+  const values = entry ? (settingEnumOptions(entry) ?? []) : [];
+  const descriptions = entry?.enumDescriptions ?? [];
+  return values.map((value, index) => {
+    const base =
+      withDescription && descriptions[index]
+        ? `${value} — ${descriptions[index]}`
+        : value;
+    const label = value === defaultValue ? `${base} (default)` : base;
+    return { value: value as T, label };
+  });
+}
+
+const LATEXDIFF_MATH_MARKUP_OPTIONS =
+  catalogEnumOptions<LatexdiffMathMarkupValue>(
+    WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+    LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
+    true,
+  );
+
+const LATEX_FORMATTER_OPTIONS = catalogEnumOptions<LatexFormatterValue>(
+  WorkspaceStateKey.LATEX_FORMATTER,
+  LATEX_CONFIG_DEFAULTS.latexFormatter,
+  false,
+);
 
 /** Path keys in LatexSettingsStatus for tool paths. */
 type ToolPathKey =
@@ -459,7 +506,7 @@ export class LaTeXTab extends LitElement {
         ${this.desktopHost
           ? nothing
           : html`
-              <div class="section-header" style="margin-top:var(--wa-space-s)">
+              <div class="section-header spaced">
                 ${waIcon('settings-gear')} Recommended Settings
               </div>
 
@@ -481,7 +528,7 @@ export class LaTeXTab extends LitElement {
 
   private renderInlineCriticismSetting(): TemplateResult {
     return html`
-      <div class="section-header" style="margin-top:var(--wa-space-s)">
+      <div class="section-header spaced">
         ${waIcon('comment-discussion')} Inline Criticism
       </div>
       <div class="setting-card">
@@ -524,7 +571,7 @@ export class LaTeXTab extends LitElement {
   private renderCompileDiffSettings(): TemplateResult {
     const cv = this.configValues;
     return html`
-      <div class="section-header" style="margin-top:var(--wa-space-s)">
+      <div class="section-header spaced">
         ${waIcon('zap')} Compile &amp; Diff
       </div>
       <div class="latex-description">
@@ -588,12 +635,7 @@ export class LaTeXTab extends LitElement {
         description: 'Granularity of markup in displayed math environments.',
         defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
         currentValue: cv.latexdiffMathMarkup,
-        options: [
-          { value: 'off', label: 'off — suppress markup' },
-          { value: 'whole', label: 'whole — equation-level' },
-          { value: 'coarse', label: 'coarse — within equations (default)' },
-          { value: 'fine', label: 'fine — small changes inside equations' },
-        ],
+        options: LATEXDIFF_MATH_MARKUP_OPTIONS,
       })}
       ${this.renderBooleanSetting({
         field: 'latexdiffChangesOnly',
@@ -610,11 +652,7 @@ export class LaTeXTab extends LitElement {
           '"none" disables formatting; "latexindent" requires Perl; "tex-fmt" is a Rust-based alternative.',
         defaultValue: LATEX_CONFIG_DEFAULTS.latexFormatter,
         currentValue: cv.latexFormatter,
-        options: [
-          { value: 'latexindent', label: 'latexindent (default)' },
-          { value: 'tex-fmt', label: 'tex-fmt' },
-          { value: 'none', label: 'none' },
-        ],
+        options: LATEX_FORMATTER_OPTIONS,
       })}
     `;
   }
@@ -724,7 +762,7 @@ export class LaTeXTab extends LitElement {
                   : Math.max(opts.min, integer);
               this.dispatchSetConfigValue(opts.field, clamped);
             }}
-            style="margin-top:var(--wa-space-2xs);width:140px;"
+            class="setting-number-input"
           ></wa-input>
         </div>
         ${isCustom
@@ -758,7 +796,7 @@ export class LaTeXTab extends LitElement {
               const v = (e.target as WaSelect).value as LatexConfigValueFor<F>;
               this.dispatchSetConfigValue(opts.field, v);
             }}
-            style="margin-top:var(--wa-space-2xs);"
+            class="setting-enum-select"
           >
             ${opts.options.map(
               (o) => html`

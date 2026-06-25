@@ -4,11 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### CLI
+
+#### Features
+
+- **`/config` settings panel** — view and change settings from the chat TUI without leaving the terminal. `/config` (alias `/settings`) lists each setting with its current value and where it is stored; press Enter to toggle a switch, pick from a choice list, or edit a value inline. Covers the git commit-author identity (applied to agent commits and worktrees) and the workflow auto-compile options the CLI uses for `texra workflow` / `texra run`. Settings come from the same shared catalog the VS Code extension uses, so the two surfaces stay in sync instead of drifting apart.
+- **`texra latexdiff` command** — generate round-aware LaTeX diffs for an agent run's outputs straight from the terminal, the same capability the VS Code extension offers. Point it at a run with `texra latexdiff <agent> -m <model> -i <file>`; add `--between-rounds` to also diff consecutive rounds, `--run-id` to target a specific execution, and `--output-format json|ndjson` for scripting.
+
+#### Improvements
+
+- **Leaner, non-overlapping CLI options** — trimmed redundant choices so the same thing has one spelling: `--api-mode` now accepts just `included`/`personal` (plus the `relay`/`byok` shorthands) instead of seven near-synonyms, the duplicate `texra agents inspect` is gone in favor of `texra agents show`, and `texra login` now rejects `--device` together with `--no-browser` (they are different sign-in transports) instead of silently ignoring one.
+
+## [0.38.10] - 2026-06-23
+
 ### Shared (all surfaces)
+
+#### Features
+
+- **Experimental: use your own ChatGPT subscription for Codex models** — sign in with your ChatGPT Plus/Pro/Team account and route Codex models through your subscription instead of a separate API key. In the CLI, sign in with `texra auth chatgpt login` and toggle it with `/subscription on|off` (alias `/sub`); in the VS Code extension, sign in from Settings → Models. Turn it on with the "chatgptCodex.preferSubscription" setting. The login opens your browser or, on a headless shell, shows a one-time device code; check or end the session with `texra auth chatgpt status` and `logout`. Off by default and clearly marked experimental and personal-use: it relies on an unofficial OpenAI endpoint that can change or stop working without notice, and it only ever uses your own signed-in session.
+- **Workflow round counts** — workflow progress now reports how many rounds are planned, so you can see how far a multi-round run has to go.
 
 #### Improvements
 
 - **More reliable Lean theorem search** — Loogle queries now retry automatically when the server times out, drops the connection, or returns a transient server error, so a brief hiccup no longer surfaces as a failed search; genuine bad requests still fail fast.
+- **Proofreading preserves math style** — the Correct agent now keeps your existing math formatting intact while fixing the surrounding prose.
+
+#### Bug Fixes
+
+- **Cleaner history previews** — provider "thinking" / reasoning text no longer leaks into the previews shown when browsing past conversations.
+- **OpenRouter setup mismatch** — when a configured model isn't available on OpenRouter, setup now surfaces the mismatch before prompting for credentials instead of after.
+
+#### Features
+
+- **Use Google's Interactions API for Gemini** — TeXRA can now talk to Gemini models through Google's newer Interactions API instead of Generate Content. Turn it on with the `model.useGoogleInteractionsAPI` setting (off by default; Generate Content stays the default and fallback). When enabled, conversation state is kept on Google's servers by default so each turn sends only the new message (smaller, faster requests) — Google retains the conversation for a limited period to make this work. To keep conversations off Google's servers and resend the full transcript each turn instead, turn off `model.useGoogleInteractionsServerState`.
 
 ### CLI
 
@@ -16,9 +44,41 @@ All notable changes to this project will be documented in this file.
 
 - **Smoother terminal redraws** — the chat TUI now repaints atomically (synchronized output) when you resize the window or switch between the main transcript and a focused sub-agent, so resizing and view switches no longer flicker or leave stray fragments on terminals that support it.
 
+#### Bug Fixes
+
+- **Discoverable hidden models and agents** — hidden CLI models, launchable agents, and JSON agent listings now surface their entries (with hints) instead of appearing empty, and shell completion offers the right agents and `--model` values for zsh.
+- **Tidier agent and child pickers** — the agent picker and child-stream picker now keep their labels, rows, and copy within the frame instead of overflowing in narrow terminals.
+- **Multi-agent launcher polish** — clearer launcher hint, completions scoped to the launch category, zero-count categories omitted, and a more stable multi-agent run validator.
+- **Correct workflow output handling** — workflows write nested output paths and directories correctly, use stable filenames for stdin input, persist copied outputs in history, and preserve file lineage when inputs share a basename.
+- **Better history defaults** — `texra history` with no subcommand now lists your history, and history details show the team identity and the workflow's output files; runs hidden because they belong to another working directory now explain why instead of silently vanishing.
+- **Friendlier errors and hints** — unknown commands are rejected before help is shown, model names are normalized, model-recovery hints appear when a model is unavailable, rejected interactive flags are reported precisely, and the personal-API status label is clearer.
+- **Smaller transcript and approval fixes** — the inquiry tool's raw syntax is hidden in the transcript, edit-approval hunk counts are pluralized correctly, quiet-agent visibility notices are suppressed, and the active-response follow-up tip is shown.
+- **Correct status and credentials** — the `/status` view shows the right working directory, CLI credentials are stored under your configured storage root (so a custom storage location keeps its own sign-in), and an invalid workflow input is reported clearly instead of surfacing as an unrelated model error.
+- **`agents inspect` alias** — `texra agents inspect` is now accepted as an alias.
+- **Local software-engineer team** — the built-in software-engineer team now completes correctly when run locally.
+
+### Desktop
+
 #### Features
 
-- **Experimental: use your own ChatGPT subscription for Codex models** — sign in with your ChatGPT Plus/Pro/Team account from the terminal with `texra auth chatgpt login`, then turn on "chatgptCodex.preferSubscription" in your CLI config to route Codex models through your subscription instead of a separate API key. The command opens your browser or, on a headless shell, shows a one-time device code; check or end the session with `texra auth chatgpt status` and `logout`. Off by default and clearly marked experimental and personal-use: it relies on an unofficial OpenAI endpoint that can change or stop working without notice, and it only ever uses your own signed-in session.
+- **Real onboarding state** — the desktop app now derives its onboarding funnel state from your actual credentials and setup instead of always reporting "done".
+
+#### Bug Fixes
+
+- **More secure, more reliable sign-in** — desktop OAuth callbacks are bound to a per-attempt nonce and the auth-bridge deep link is locked to the TeXRA publisher, and sign-in is relayed through an https bridge so Linux/Firefox can complete the flow.
+- **No stale display after close** — a disposed desktop window no longer briefly shows restored content.
+
+### Extension (VS Code)
+
+#### Features
+
+- **Sign in with ChatGPT in Settings → Models** — the extension adds a ChatGPT-subscription sign-in control alongside the GitHub-token status, with a matching sign-in/sign-out round-trip.
+- **Improved onboarding actions** — clearer first-run onboarding with more direct setup actions.
+
+#### Bug Fixes
+
+- **Clearer onboarding flow** — credential onboarding is shown first, entry points are clarified, the walkthrough is aligned with credential setup, ChatGPT onboarding is prioritized, and onboarding refreshes after a setup action.
+- **Stable task rows** — stopped task rows stay in place instead of jumping.
 
 ## [0.38.9] - 2026-06-18
 
