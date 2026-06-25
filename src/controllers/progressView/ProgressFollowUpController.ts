@@ -39,7 +39,16 @@ export interface ProgressFollowUpWorkspace {
 
 export interface ProgressFollowUpControllerDeps {
   getAgentCategory(agent: string): AgentCategory | undefined;
+  loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
+  state: ProgressFollowUpState;
   workspace: ProgressFollowUpWorkspace;
+}
+
+export interface ProgressFollowUpState {
+  getTaskState(stream: StreamTabId): TaskState | undefined;
+  getOutputFiles(stream: StreamTabId): Map<number, OutputFileInfo[]>;
+  getCompileFailures(stream: StreamTabId): Map<number, CompileFailure[]>;
+  getExecutionId(stream: StreamTabId): string | undefined;
 }
 
 interface CompileFixerTarget {
@@ -82,8 +91,48 @@ export interface CompileFixerInput {
   executionId?: string;
 }
 
+export type StreamToolUseFollowUpInput = Omit<
+  ToolUseFollowUpInput,
+  'taskState' | 'outputFiles' | 'modelOptions' | 'executionId'
+>;
+
 export class ProgressFollowUpController {
   constructor(private readonly deps: ProgressFollowUpControllerDeps) {}
+
+  async planToolUseFollowUpForStream(
+    input: StreamToolUseFollowUpInput,
+  ): Promise<ProgressFollowUpPlan> {
+    const modelOptions = await this.deps.loadModelOptions();
+    const outputFiles = [
+      ...this.deps.state.getOutputFiles(input.streamId).values(),
+    ].flat();
+
+    return this.planToolUseFollowUp({
+      ...input,
+      taskState: this.deps.state.getTaskState(input.streamId),
+      outputFiles,
+      modelOptions,
+      executionId: this.deps.state.getExecutionId(input.streamId),
+    });
+  }
+
+  async planCompileFixerForStream(
+    streamId: StreamTabId,
+  ): Promise<ProgressFollowUpPlan> {
+    const modelOptions = await this.deps.loadModelOptions();
+    const compileFailures = [
+      ...this.deps.state.getCompileFailures(streamId).values(),
+    ].flat();
+
+    return this.planCompileFixer({
+      streamId,
+      taskState: this.deps.state.getTaskState(streamId),
+      compileFailures,
+      runOutputs: this.deps.state.getOutputFiles(streamId),
+      modelOptions,
+      executionId: this.deps.state.getExecutionId(streamId),
+    });
+  }
 
   planToolUseFollowUp(input: ToolUseFollowUpInput): ProgressFollowUpPlan {
     if (!input.taskState || !isWorkflowTaskState(input.taskState)) {

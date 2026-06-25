@@ -83,7 +83,7 @@ async function runChatgptLogin(
 const chatgptLoginCommand = defineCliCommand({
   meta: {
     name: 'login',
-    description: 'Sign in with your ChatGPT subscription (experimental)',
+    description: 'Sign in with your ChatGPT subscription',
   },
   args: {
     ...GLOBAL_ARGS,
@@ -177,8 +177,7 @@ export const CHATGPT_SUBCOMMAND_NAMES = Object.keys(CHATGPT_SUBCOMMANDS);
 export const chatgptAuthCommand = defineCommand({
   meta: {
     name: 'chatgpt',
-    description:
-      'Sign in with your ChatGPT subscription to use Codex models (experimental)',
+    description: 'Sign in with your ChatGPT subscription to use Codex models',
   },
   args: { ...GLOBAL_ARGS },
   default: 'status',

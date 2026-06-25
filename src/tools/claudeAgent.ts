@@ -36,10 +36,8 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import { toErrorMessage } from '@common/errors';
 import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
-import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import {
@@ -59,7 +57,11 @@ import {
 } from './claudeAgentImport';
 import { createChildStream, type ChildStream } from './childStream';
 import { claudeAgentSessions } from './agentCliSessionStores';
-import { publishAgentCliStreamUsage } from './agentCliShared';
+import {
+  publishAgentCliStreamUsage,
+  formatAgentCliDelivery,
+  formatAgentCliError,
+} from './agentCliShared';
 import {
   runAgentCliSession,
   type AgentCliSessionStrategy,
@@ -146,37 +148,25 @@ function formatClaudeDelivery(
   wallTimeMs: number,
   turn: TurnResult,
 ): string {
-  const durationSec = (wallTimeMs / 1000).toFixed(1);
-  const response = turn.finalResponse || '(no response)';
-  const lines = [
-    `<claude-agent-result id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}"${turn.sessionId ? ` session-id="${escapeAttr(turn.sessionId)}"` : ''}>`,
-    `<wall-time>${durationSec}s</wall-time>`,
-    `<response>${escapeText(response)}</response>`,
-  ];
-
-  if (turn.usage) {
-    lines.push(
-      `<usage input="${turn.usage.input_tokens ?? 0}" output="${turn.usage.output_tokens ?? 0}" />`,
-    );
-  }
-  if (typeof turn.totalCostUsd === 'number' && turn.totalCostUsd > 0) {
-    lines.push(`<cost-usd>${turn.totalCostUsd.toFixed(4)}</cost-usd>`);
-  }
-
-  lines.push('</claude-agent-result>');
-  return lines.join('\n');
-}
-
-function formatClaudeError(
-  executionId: string,
-  prompt: string,
-  err: unknown,
-): string {
-  return [
-    `<claude-agent-error id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}">`,
-    `<message>${escapeText(toErrorMessage(err))}</message>`,
-    '</claude-agent-error>',
-  ].join('\n');
+  const extraLines =
+    typeof turn.totalCostUsd === 'number' && turn.totalCostUsd > 0
+      ? [`<cost-usd>${turn.totalCostUsd.toFixed(4)}</cost-usd>`]
+      : undefined;
+  return formatAgentCliDelivery({
+    tag: 'claude-agent-result',
+    executionId,
+    prompt,
+    wallTimeMs,
+    response: turn.finalResponse,
+    idAttr: { name: 'session-id', value: turn.sessionId },
+    usage: turn.usage
+      ? {
+          input: turn.usage.input_tokens ?? 0,
+          output: turn.usage.output_tokens ?? 0,
+        }
+      : null,
+    extraLines,
+  });
 }
 
 // ============================================================================
@@ -472,7 +462,8 @@ function startClaudeAgentLoop(params: {
     formatDelivery: (turn, prompt, wallTimeMs) =>
       formatClaudeDelivery(executionId, prompt, wallTimeMs, turn),
     formatError: (turn, prompt, err) =>
-      formatClaudeError(
+      formatAgentCliError(
+        'claude-agent-error',
         executionId,
         prompt,
         err ?? turn?.errorMessage ?? turn?.finalResponse,

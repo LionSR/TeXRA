@@ -1,5 +1,7 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
+import * as path from 'node:path';
+
 import { platform } from '@platform/platform';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as logger from '@logger/logUtils';
@@ -21,7 +23,7 @@ import {
 import { scanDirectory } from './agentYamlScanner';
 import { loadRemoteAgents, persistRemoteAgentMeta } from './remoteAgentMeta';
 import {
-  entryToOptionData,
+  entriesToOptionData,
   sortAgentEntries,
   type AgentOptionsDataPayload,
 } from './agentOptionsBuilder';
@@ -111,14 +113,16 @@ export async function loadAgents(
     return;
   }
 
+  const previousInitialized = initialized;
+  const previousCacheIncludesRemote = cacheIncludesRemote;
   initPromise = doLoad({ includeRemote })
     .then(() => {
       initialized = true;
       cacheIncludesRemote = includeRemote;
     })
     .catch((error: unknown) => {
-      initialized = false;
-      cacheIncludesRemote = false;
+      initialized = previousInitialized;
+      cacheIncludesRemote = previousCacheIncludesRemote;
       throw error;
     })
     .finally(() => {
@@ -130,7 +134,6 @@ export async function loadAgents(
 
 async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
   const startTime = Date.now();
-  cache.clear();
 
   // Migrate legacy builtIn:* → builtInWorkflow:* in persisted state
   migrateLegacySourceKeys();
@@ -160,6 +163,8 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
     ...remoteEntries,
   ];
 
+  migrateFilenameAgentNameKeys(allEntries);
+
   // Apply category overrides from config
   const toolUseOverrides = new Set(
     platform().workspaceState.get<string[]>(
@@ -168,12 +173,18 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
     ),
   );
 
+  const nextCache = new Map<string, AgentEntry>();
   for (const entry of allEntries) {
     if (toolUseOverrides.has(entry.name)) {
       entry.category = AgentCategory.ToolUse;
       entry.rounds = undefined;
     }
     const key = `${entry.source}:${entry.name}`;
+    nextCache.set(key, entry);
+  }
+
+  cache.clear();
+  for (const [key, entry] of nextCache) {
     cache.set(key, entry);
   }
 
@@ -219,6 +230,74 @@ function migrateLegacyAgentNameKeys(): void {
     void platform().workspaceState.update(stateKey, unique(migrated));
     logger.info(CHANNEL, `Migrated legacy agent names in ${stateKey}`);
   }
+}
+
+/**
+ * Before canonical YAML names, local agents were keyed by their filename. Keep
+ * persisted visibility selections alive after switching identity to `name:`.
+ */
+function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
+  const currentKeys = new Set(
+    entries.map((entry) => createKey(entry.source, entry.name)),
+  );
+  const currentNames = new Set(entries.map((entry) => entry.name));
+  const qualifiedCandidates = new Map<string, Set<string>>();
+  const bareCandidates = new Map<string, Set<string>>();
+
+  for (const entry of entries) {
+    if (!entry.path) continue;
+    const oldName = path.basename(entry.path, '.yaml');
+    if (!oldName || oldName === entry.name) continue;
+
+    const oldKey = createKey(entry.source, oldName);
+    if (!currentKeys.has(oldKey)) {
+      const targets = qualifiedCandidates.get(oldKey) ?? new Set<string>();
+      targets.add(createKey(entry.source, entry.name));
+      qualifiedCandidates.set(oldKey, targets);
+    }
+    if (!currentNames.has(oldName)) {
+      const targets = bareCandidates.get(oldName) ?? new Set<string>();
+      targets.add(entry.name);
+      bareCandidates.set(oldName, targets);
+    }
+  }
+
+  const qualified = singleTargetMappings(qualifiedCandidates);
+  const bare = singleTargetMappings(bareCandidates);
+
+  if (qualified.size === 0 && bare.size === 0) return;
+
+  for (const stateKey of [
+    WorkspaceStateKey.ENABLED_AGENTS,
+    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+  ] as const) {
+    const stored = platform().workspaceState.get<string[]>(stateKey, []);
+    if (!stored?.length) continue;
+
+    const migrated = stored.map((key) => {
+      const name = agentName(key);
+      const prefix = key.slice(0, key.length - name.length);
+      if (prefix) return qualified.get(key) ?? key;
+      return bare.get(name) ?? key;
+    });
+    if (migrated.every((key, i) => key === stored[i])) continue;
+
+    void platform().workspaceState.update(stateKey, unique(migrated));
+    logger.info(CHANNEL, `Migrated filename-based agent names in ${stateKey}`);
+  }
+}
+
+function singleTargetMappings(
+  candidates: ReadonlyMap<string, ReadonlySet<string>>,
+): Map<string, string> {
+  const mappings = new Map<string, string>();
+  for (const [oldName, targets] of candidates) {
+    if (targets.size === 1) {
+      const target = targets.values().next().value;
+      if (target) mappings.set(oldName, target);
+    }
+  }
+  return mappings;
 }
 
 /**
@@ -477,12 +556,11 @@ export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload
   }
 
   return {
-    workflow: sortAgentEntries(getVisibleAgents('workflow'), [
-      DEFAULT_WORKFLOW_AGENT,
-    ]).map(entryToOptionData),
-    toolUse: sortAgentEntries(
-      getVisibleAgents('toolUse'),
-      PREFERRED_TOOL_USE_AGENTS,
-    ).map(entryToOptionData),
+    workflow: entriesToOptionData(
+      sortAgentEntries(getVisibleAgents('workflow'), [DEFAULT_WORKFLOW_AGENT]),
+    ),
+    toolUse: entriesToOptionData(
+      sortAgentEntries(getVisibleAgents('toolUse'), PREFERRED_TOOL_USE_AGENTS),
+    ),
   };
 }

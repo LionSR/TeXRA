@@ -34,6 +34,8 @@
  * - **CI / check-run status and inline annotations.** Per-PR by design.
  */
 
+import { LRUCache } from 'lru-cache';
+
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 import { shouldDropBotEvent } from './botFilter';
@@ -46,7 +48,7 @@ import {
   formatRepoReviewComment,
   formatRepoSubscriptionError,
 } from './formatRepoEvent';
-import { getNewestTimestamp, setRecent, trimMap, trimSet } from './formatUtils';
+import { getNewestTimestamp, trimSet } from './formatUtils';
 import { ghGet } from './githubClient';
 import {
   PollingSourceBase,
@@ -76,10 +78,10 @@ const PER_PAGE = 100;
 // Initial seed window when first subscribing: only events newer than this are
 // surfaced. Without it the very first tick would replay the entire backlog.
 const SEED_WINDOW_MS = 60_000;
-// Cap on `prStateByNumber` to keep long-lived subscriptions on busy repos
-// from accumulating an entry per PR ever seen. FIFO eviction by Map
-// insertion order; touched PRs are re-inserted at the tail so closed-and-
-// forgotten PRs roll off first.
+// Cap on the per-PR LRU maps to keep long-lived subscriptions on busy repos
+// from accumulating an entry per PR ever seen. The `LRUCache` evicts the
+// least-recently-used PR on overflow; `.get()`/`.set()` both refresh recency,
+// so closed-and-forgotten PRs roll off before actively-touched ones.
 const MAX_PR_STATE_ENTRIES = 500;
 // Cap on the per-comment seen-id sets, mirroring PRPollingSource. Events
 // older than this fall out of the dedup window — but the `since` cursor
@@ -143,15 +145,15 @@ interface SubscriptionState extends BasePollSubscriptionState {
    * "opened" / "closed" / "merged" event per transition rather than every
    * time the PR shows up in the list endpoint.
    */
-  prStateByNumber: Map<number, 'open' | 'closed' | 'merged'>;
+  prStateByNumber: LRUCache<number, 'open' | 'closed' | 'merged'>;
   /**
    * Per-PR `updated_at` cursor for the merge-conflict probe; only advanced
    * after a successful probe so transient probe failures keep the PR as a
    * candidate next tick. See `probeMergeableStates`.
    */
-  prUpdatedAtByNumber: Map<number, string>;
+  prUpdatedAtByNumber: LRUCache<number, string>;
   /** Per-PR last *definite* `mergeable_state`; see `isDefiniteMergeableState`. */
-  prMergeableByNumber: Map<number, string>;
+  prMergeableByNumber: LRUCache<number, string>;
 }
 
 class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
@@ -314,9 +316,8 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
             formatRepoPRClosed(state.slug, pr.number, next === 'merged'),
           );
         }
-        setRecent(state.prStateByNumber, pr.number, next);
+        state.prStateByNumber.set(pr.number, next);
       }
-      trimMap(state.prStateByNumber, MAX_PR_STATE_ENTRIES);
     }
 
     if (issueRes.status === 200) {
@@ -443,11 +444,11 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       // by silently. Leaving the cursor unchanged keeps the PR a candidate
       // next tick so we re-probe until GitHub resolves the state.
       if (!isDefiniteMergeableState(mergeable)) continue;
-      // setRecent (delete + set) refreshes insertion order so the
-      // FIFO trimMap below evicts least-recently-touched, not first-seen.
-      setRecent(state.prUpdatedAtByNumber, number, updatedAt);
+      // `.set()` refreshes LRU recency so the cap evicts least-recently-touched
+      // PRs, not first-seen ones.
+      state.prUpdatedAtByNumber.set(number, updatedAt);
       const prev = state.prMergeableByNumber.get(number);
-      setRecent(state.prMergeableByNumber, number, mergeable);
+      state.prMergeableByNumber.set(number, mergeable);
       // Silent seed on first definite reading; resolved transitions are
       // intentionally not surfaced at the repo level (see method doc).
       if (!isDefiniteMergeableState(prev)) continue;
@@ -472,9 +473,6 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
         );
       }
     }
-
-    trimMap(state.prMergeableByNumber, MAX_PR_STATE_ENTRIES);
-    trimMap(state.prUpdatedAtByNumber, MAX_PR_STATE_ENTRIES);
   }
 }
 
@@ -495,9 +493,9 @@ function createInitialState(owner: string, repo: string): SubscriptionState {
     },
     seenIssueCommentIds: new Set(),
     seenReviewCommentIds: new Set(),
-    prStateByNumber: new Map(),
-    prUpdatedAtByNumber: new Map(),
-    prMergeableByNumber: new Map(),
+    prStateByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
+    prUpdatedAtByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
+    prMergeableByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
     lastSuccessAt: now,
     consecutiveFailures: 0,
     skipPollUntilMs: 0,

@@ -18,19 +18,16 @@ const SAMPLE_OPTIONS: FollowupOptionsState = {
     {
       value: 'tooluse-research',
       label: 'tooluse-research',
-      description: 'Interactive research over the workflow outputs',
       isToolUse: true,
     },
     {
       value: 'tooluse-revise',
       label: 'tooluse-revise',
-      description: 'Iteratively revise the revised files',
       isToolUse: true,
     },
     {
       value: 'tooluse-explain',
       label: 'tooluse-explain',
-      description: 'Walk through what changed and why',
       isToolUse: true,
     },
   ],

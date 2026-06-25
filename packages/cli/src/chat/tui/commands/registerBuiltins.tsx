@@ -1,13 +1,22 @@
 // Registers the slash commands the input palette surfaces.
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ExecutionId } from '@shared/schemas';
+import {
+  readSetting,
+  resetSetting,
+  writeSetting,
+  type SettingsStores,
+} from '@shared/config/settingsAccess';
+import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
 
 import { ApiModeForm } from '../forms/ApiModeForm';
 import { AgentListForm } from '../forms/AgentListForm';
 import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
+import { ConfigForm } from '../forms/ConfigForm';
 import { LoginForm, type LoginFormValue } from '../forms/LoginForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
@@ -79,6 +88,7 @@ export function registerBuiltinSlashCommands(options?: {
   onMemorySelect?: MemorySelectHandler;
   onResumeSelect?: ResumeSelectHandler;
   onSkillSelect?: SkillSelectHandler;
+  getConfigStores?: () => SettingsStores;
   onError?: ErrorHandler;
 }): void {
   const onAgentSelect: AgentSelectHandler =
@@ -325,7 +335,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'login',
-    description: 'Sign in to TeXRA or ChatGPT subscription',
+    description: 'Sign in to ChatGPT or Researcher Access',
     category: 'account',
     formComponent: LoginFormAdapter,
   });
@@ -382,6 +392,46 @@ export function registerBuiltinSlashCommands(options?: {
     category: 'configuration',
     formComponent: ToolsListFormAdapter,
   });
+  // Only offer /config when the host wired the stores it reads/writes — a
+  // command that can't reach a store would render an inert panel.
+  const getConfigStores = options?.getConfigStores;
+  if (getConfigStores) {
+    const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => {
+      const stores = getConfigStores();
+      return (
+        <ConfigForm
+          availableRows={props.availableRows}
+          entries={CLI_STATE_SETTINGS}
+          readValue={(entry) => readSetting(entry, stores, 'cli')}
+          writeValue={async (entry, value) => {
+            await writeSetting(entry, value, stores, 'cli');
+            // Git-author settings are applied to process env / worktree state
+            // at startup; re-apply so a /config change takes effect this session
+            // instead of only after a restart.
+            if (entry.category === 'git') {
+              applyCliGitAuthorConfig(stores.config);
+            }
+          }}
+          resetValue={async (entry) => {
+            await resetSetting(entry, stores, 'cli');
+            if (entry.category === 'git') {
+              applyCliGitAuthorConfig(stores.config);
+            }
+          }}
+          onClose={() => props.onDone(undefined)}
+          onError={options?.onError}
+        />
+      );
+    };
+    registerSlashCommand({
+      name: 'config',
+      description: 'View and toggle settings',
+      aliases: ['settings'],
+      category: 'configuration',
+      formComponent: ConfigFormAdapter,
+      formEscapeAction: 'close',
+    });
+  }
   registerSlashCommand({
     name: 'compact',
     description: 'Request context compaction',

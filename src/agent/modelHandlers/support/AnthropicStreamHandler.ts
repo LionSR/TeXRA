@@ -23,6 +23,7 @@ import type {
   WebSearchResultBlock,
   WebFetchToolResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 
 /**
  * Minimal stream interface derived from the Anthropic SDK's BetaMessageStream.
@@ -446,35 +447,25 @@ export class AnthropicStreamHandler {
   }
 
   /**
-   * Parses the fetch URL from accumulated input JSON.
+   * Extract a single string field from accumulated server-tool input JSON.
+   * Falls back to regex for partial JSON common during streaming.
    */
-  private parseFetchUrl(input: string | undefined): string {
+  private parseStreamField(input: string | undefined, field: string): string {
     if (!input) return '';
-
-    try {
-      const parsed = JSON.parse(input) as { url?: string };
-      return parsed.url ?? '';
-    } catch {
-      // Partial JSON (common for streaming), try to extract URL with regex
-      const match = input.match(/"url"\s*:\s*"([^"]+)"/);
-      return match?.[1] ?? '';
-    }
+    const parsed = safeParseJson(input);
+    if (parsed.ok) return (parsed.value as Record<string, string>)[field] ?? '';
+    const match = input.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`));
+    return match?.[1] ?? '';
   }
 
-  /**
-   * Parses the search query from accumulated input JSON.
-   */
-  private parseSearchQuery(input: string | undefined): string {
-    if (!input) return '';
+  /** Parses the fetch URL from accumulated input JSON. */
+  private parseFetchUrl(input: string | undefined): string {
+    return this.parseStreamField(input, 'url');
+  }
 
-    try {
-      const parsed = JSON.parse(input) as { query?: string };
-      return parsed.query ?? '';
-    } catch {
-      // Partial JSON (common for streaming), try to extract query with regex
-      const match = input.match(/"query"\s*:\s*"([^"]+)"/);
-      return match?.[1] ?? '';
-    }
+  /** Parses the search query from accumulated input JSON. */
+  private parseSearchQuery(input: string | undefined): string {
+    return this.parseStreamField(input, 'query');
   }
 
   /**

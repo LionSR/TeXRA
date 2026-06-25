@@ -1,5 +1,4 @@
 name: setup
-displayName: Setup — install & configure TeXRA
 description: Setup assistant — diagnoses the environment, installs missing dependencies, configures TeXRA, and orchestrates the user's first task.
 
 settings:

@@ -447,19 +447,32 @@ describe('CLI root argument routing', () => {
 
   it('rejects headless-only flags on interactive command bodies', () => {
     expect(() => rejectHeadlessOnlyFlags(['--print'], 'chat')).toThrow(
-      'texra chat is interactive',
+      'texra chat is interactive and does not support --print.',
+    );
+    expect(() => rejectHeadlessOnlyFlags(['-p'], 'chat')).toThrow(
+      'texra chat is interactive and does not support --print.',
     );
     expect(() =>
       rejectHeadlessOnlyFlags(['--output-format=json'], 'orchestrate'),
-    ).toThrow('texra orchestrate is interactive');
+    ).toThrow(
+      'texra orchestrate is interactive and does not support --output-format.',
+    );
     expect(() => rejectHeadlessOnlyFlags(['--no-input'], 'chat')).toThrow(
-      'texra chat is interactive',
+      'texra chat is interactive and does not support --no-input.',
     );
     expect(() => rejectHeadlessOnlyFlags(['--no-input=true'], 'chat')).toThrow(
-      'texra chat is interactive',
+      'texra chat is interactive and does not support --no-input.',
     );
     expect(() => rejectHeadlessOnlyFlags(['--print=true'], 'chat')).toThrow(
-      'texra chat is interactive',
+      'texra chat is interactive and does not support --print.',
+    );
+    expect(() =>
+      rejectHeadlessOnlyFlags(
+        ['--print', '--output-format', 'json', '--no-input'],
+        'chat',
+      ),
+    ).toThrow(
+      'texra chat is interactive and does not support --print, --output-format, and --no-input.',
     );
     expect(() =>
       rejectHeadlessOnlyFlags(['--approval-policy', 'ask'], 'chat'),
@@ -967,27 +980,25 @@ describe('CLI root argument routing', () => {
   });
 
   it('keeps stopped workflows with missing requested outputs interrupted', async () => {
-    await expect(
-      resolveWorkflowOutput(
-        'corrected.tex',
-        undefined,
-        {
-          outcome: RUN_OUTCOME.CANCELLED,
-          category: AgentCategory.Workflow,
-          executionId: 'stopped-without-output',
-          streamId: 'stopped-stream-without-output',
-          outputs: [],
-          compileFailures: [],
-        },
-        cliContext(),
-        { terminalStatus: EXECUTION_STATUS.INTERRUPTED },
-      ),
-    ).resolves.toMatchObject({
-      copiedOutput: undefined,
-      displayResult: {
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+    const result = await resolveWorkflowOutput(
+      'corrected.tex',
+      undefined,
+      {
+        outcome: RUN_OUTCOME.CANCELLED,
+        category: AgentCategory.Workflow,
+        executionId: 'stopped-without-output',
+        streamId: 'stopped-stream-without-output',
+        outputs: [],
+        compileFailures: [],
       },
+      cliContext(),
+      { terminalStatus: EXECUTION_STATUS.INTERRUPTED },
+    );
+
+    expect(result).toMatchObject({
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
     });
+    expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
   });
 
   it('formats model list network failures without raw stack traces', () => {
@@ -1265,14 +1276,22 @@ describe('runCli usage output stream routing', () => {
   it('preserves the interactive-command error for headless-only flags', async () => {
     const result = await runCli(['chat', '--print']);
     expect(result.exitCode).toBe(2);
-    expect(stderr).toContain('texra chat is interactive');
+    expect(stderr).toContain(
+      'texra chat is interactive and does not support --print.',
+    );
+    expect(stderr).not.toContain('--output-format');
+    expect(stderr).not.toContain('--no-input');
     expect(stderr).not.toContain('Unknown option');
     expect(stdout).toBe('');
 
     stderr = '';
     const resumeResult = await runCli(['resume', 'abc123', '--print']);
     expect(resumeResult.exitCode).toBe(2);
-    expect(stderr).toContain('texra resume is interactive');
+    expect(stderr).toContain(
+      'texra resume is interactive and does not support --print.',
+    );
+    expect(stderr).not.toContain('--output-format');
+    expect(stderr).not.toContain('--no-input');
     expect(stderr).not.toContain('Unknown option');
     expect(stdout).toBe('');
 
@@ -1284,21 +1303,33 @@ describe('runCli usage output stream routing', () => {
       'abc123',
     ]);
     expect(resumeShortcutResult.exitCode).toBe(2);
-    expect(stderr).toContain('texra resume is interactive');
+    expect(stderr).toContain(
+      'texra resume is interactive and does not support --output-format.',
+    );
+    expect(stderr).not.toContain('--print');
+    expect(stderr).not.toContain('--no-input');
     expect(stderr).not.toContain('Unknown option');
     expect(stdout).toBe('');
 
     stderr = '';
     const setupResult = await runCli(['setup', '--no-input']);
     expect(setupResult.exitCode).toBe(2);
-    expect(stderr).toContain('texra setup is interactive');
+    expect(stderr).toContain(
+      'texra setup is interactive and does not support --no-input.',
+    );
+    expect(stderr).not.toContain('--print');
+    expect(stderr).not.toContain('--output-format');
     expect(stderr).not.toContain('Unknown option');
     expect(stdout).toBe('');
 
     stderr = '';
     const inlineSetupResult = await runCli(['setup', '--no-input=true']);
     expect(inlineSetupResult.exitCode).toBe(2);
-    expect(stderr).toContain('texra setup is interactive');
+    expect(stderr).toContain(
+      'texra setup is interactive and does not support --no-input.',
+    );
+    expect(stderr).not.toContain('--print');
+    expect(stderr).not.toContain('--output-format');
     expect(stderr).not.toContain('Unknown option');
     expect(stdout).toBe('');
   });
@@ -1323,6 +1354,7 @@ describe('runCli usage output stream routing', () => {
       'explain autonomous goal mode and approved-plan startup',
     );
     expect(stdout).toContain('/login, /logout');
+    expect(stdout).toContain('ChatGPT or Researcher Access');
     expect(stdout).toContain('Ctrl-T');
     expect(stdout).toContain('Tab');
     expect(stdout).toContain('cycle visible streams');
@@ -1370,10 +1402,31 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
+  it('shows ChatGPT and Researcher examples in login help', async () => {
+    let result = await runCli(['login', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('EXAMPLES');
+    expect(stdout).toContain('texra auth chatgpt login');
+    expect(stdout).toContain('texra login');
+    expect(stdout).toContain('Researcher Access');
+    expect(stderr).toBe('');
+
+    stdout = '';
+    stderr = '';
+    result = await runCli(['auth', 'login', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('USAGE texra auth login');
+    expect(stdout).toContain('texra auth chatgpt login');
+    expect(stdout).toContain('texra login --device');
+    expect(stderr).toBe('');
+  });
+
   it('shows EXAMPLES and a docs link in root --help', async () => {
     const result = await runCli(['--help']);
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('EXAMPLES');
+    expect(stdout).toContain('texra auth chatgpt login');
+    expect(stdout).toContain('texra login');
     expect(stdout).toContain('texra chat');
     expect(stdout).toContain('texra run <agent> --input file.tex');
     expect(stdout).toContain('texra agents list');
@@ -1480,6 +1533,57 @@ describe('runCli usage output stream routing', () => {
     expect(result.exitCode).toBe(2);
     expect(stderr).toContain('USAGE texra history show');
     expect(stdout).toBe('');
+  });
+
+  it('defaults bare history to list while accepting global flags', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-history-'));
+    try {
+      const result = await runCli([
+        'history',
+        '--cwd',
+        root,
+        '--output-format',
+        'json',
+      ]);
+
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(stdout)).toEqual([]);
+      expect(stderr).toBe('');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('forwards history globals before an explicit subcommand', async () => {
+    const missingRoot = path.join(
+      os.tmpdir(),
+      `texra-history-missing-${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}`,
+    );
+
+    const result = await runCli([
+      'history',
+      '--cwd',
+      missingRoot,
+      'list',
+      '--output-format',
+      'json',
+    ]);
+
+    expect(result.exitCode).toBe(2);
+    expect(stderr).toContain(`--cwd: path does not exist: ${missingRoot}`);
+    expect(stdout).toBe('');
+  });
+
+  it('shows the history parent default and global flags in help', async () => {
+    const result = await runCli(['history', '--help']);
+
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('USAGE texra history');
+    expect(stdout).toContain('--output-format=<text|json|ndjson>');
+    expect(stdout).toContain('list');
+    expect(stderr).toBe('');
   });
 
   it('accepts the documented multi-agent inspect command', async () => {

@@ -46,9 +46,10 @@ import { chatCommand } from './chat';
 import { completionCommand } from './completion';
 import { doctorCommand } from './doctor';
 import { helpCommand } from './help';
-import { historyCommand } from './history';
+import { HISTORY_SUBCOMMAND_NAMES, historyCommand } from './history';
 import { initCommand } from './init';
 import { installGithubActionCommand } from './installGithubAction';
+import { latexdiffCommand } from './latex';
 import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
 import { multiAgentCommand } from './multiAgent';
@@ -97,6 +98,7 @@ export const rootCommand = withUsageSections(
       skills: skillsCommand,
       tools: toolsCommand,
       'multi-agent': multiAgentCommand,
+      latexdiff: latexdiffCommand,
       models: modelsCommand,
       // `login`/`logout` are convenience shortcuts; the full auth surface
       // (login, logout, status, usage, token) lives under `auth`.
@@ -118,7 +120,9 @@ export const rootCommand = withUsageSections(
       title: 'EXAMPLES',
       rows: [
         ['texra', 'open the interactive launcher'],
-        ['texra setup', 'sign in or add a provider API key (guided)'],
+        ['texra setup', 'choose ChatGPT, sign in, or add a key (guided)'],
+        ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
+        ['texra login', 'sign in with Researcher Access'],
         ['texra chat', 'start an interactive tool-use session'],
         ['texra run <agent> --input file.tex', 'run a workflow agent headless'],
         ['texra agents list', 'list the available agents'],
@@ -158,12 +162,17 @@ export async function runCli(
   argv?: readonly string[],
 ): Promise<{ exitCode: number }> {
   resetExitCode();
-  const rawArgs = reorderNestedGlobalFlags(
-    reorderGlobalFlags(
-      normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
-    ),
-    { command: 'auth', subCommands: AUTH_SUBCOMMAND_NAMES },
+  let rawArgs = reorderGlobalFlags(
+    normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
   );
+  rawArgs = reorderNestedGlobalFlags(rawArgs, {
+    command: 'auth',
+    subCommands: AUTH_SUBCOMMAND_NAMES,
+  });
+  rawArgs = reorderNestedGlobalFlags(rawArgs, {
+    command: 'history',
+    subCommands: HISTORY_SUBCOMMAND_NAMES,
+  });
   setUsageColorOverrideFromRawArgs(rawArgs);
 
   const unknownCommand = await detectUnknownCliCommand(rawArgs);

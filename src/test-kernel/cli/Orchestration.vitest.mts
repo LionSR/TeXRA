@@ -320,17 +320,15 @@ describe('CLI orchestration items', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [],
       history: [
-        historyEntry('aaaaaaaaaaaa', { agent: 'assistant' }),
+        historyEntry('aaaaaaaaaaaa', { agent: 'research' }),
         historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
       ],
-      toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
+      toolUseAgents: [toolUseAgent('research'), toolUseAgent('review')],
     });
 
     expect(items.map((item) => item.label)).toContain('New chat');
     expect(items.map((item) => item.label)).toContain('Chat with review');
-    expect(items.map((item) => item.label)).not.toContain(
-      'Chat with assistant',
-    );
+    expect(items.map((item) => item.label)).not.toContain('Chat with research');
   });
 
   it('lists team presets as runnable orchestration actions', () => {
@@ -350,6 +348,44 @@ describe('CLI orchestration items', () => {
         disabled: false,
       }),
     );
+  });
+
+  it('shows only the preferred team preset when it is available', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [
+        readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),
+        readyPresetPlan({ id: 'physicist', name: 'Physicist' }),
+        readyPresetPlan({ id: 'mathematician', name: 'Mathematician' }),
+      ],
+      history: [],
+      toolUseAgents: [],
+      preferredPresetId: 'physicist',
+    });
+
+    expect(items.map((item) => item.label)).toEqual([
+      'New chat',
+      'Team Physicist',
+      'Help',
+    ]);
+  });
+
+  it('falls back to the capped team preset list when the preferred team is missing', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [
+        readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),
+        readyPresetPlan({ id: 'physicist', name: 'Physicist' }),
+      ],
+      history: [],
+      toolUseAgents: [],
+      preferredPresetId: 'obsolete-team',
+    });
+
+    expect(items.map((item) => item.label)).toEqual([
+      'New chat',
+      'Team Lean Project',
+      'Team Physicist',
+      'Help',
+    ]);
   });
 
   it('does not promote built-in team members to fallback roots', () => {

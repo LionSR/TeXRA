@@ -17,7 +17,7 @@
  */
 
 // Third-party imports
-import axios, { AxiosError } from 'axios';
+import ky from 'ky';
 import { type Work } from '@jamesgopsill/crossref-client';
 import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
@@ -26,7 +26,7 @@ import { z } from 'zod';
 import pTimeout from 'p-timeout';
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@shared/schemas/toolResult';
-import { isTimeoutErrorCode } from '@tools/timeouts';
+import { isTimeoutError } from '@tools/timeouts';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { CROSSREF_CONSTANTS, crossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
@@ -120,8 +120,10 @@ interface ConnectorResult {
  */
 async function checkZoteroRunning(port: number): Promise<void> {
   try {
-    await axios.get(`http://127.0.0.1:${port}/connector/ping`, {
-      timeout: ZOTERO_PING_TIMEOUT_MS,
+    await ky.get(`http://127.0.0.1:${port}/connector/ping`, {
+      timeout: false,
+      signal: AbortSignal.timeout(ZOTERO_PING_TIMEOUT_MS),
+      retry: 0,
     });
   } catch {
     throw new ToolError(
@@ -139,27 +141,17 @@ async function callZoteroConnector(
   body: object,
   port: number,
 ): Promise<ConnectorResult> {
+  let response: Response;
   try {
-    const response = await axios.post(
-      `http://127.0.0.1:${port}/connector/${endpoint}`,
-      body,
-      {
-        timeout: ZOTERO_CONNECTOR_TIMEOUT_MS,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
-    if (
-      response.status === StatusCodes.OK ||
-      response.status === StatusCodes.CREATED
-    ) {
-      return { status: 'success' };
-    }
-    return {
-      status: 'error',
-      message: `Unexpected response status: ${response.status}`,
-    };
-  } catch (error) {
-    if (error instanceof AxiosError && isTimeoutErrorCode(error.code)) {
+    response = await ky.post(`http://127.0.0.1:${port}/connector/${endpoint}`, {
+      json: body,
+      timeout: false,
+      signal: AbortSignal.timeout(ZOTERO_CONNECTOR_TIMEOUT_MS),
+      retry: 0,
+      throwHttpErrors: false,
+    });
+  } catch (error: unknown) {
+    if (isTimeoutError(error)) {
       return {
         status: 'error',
         message:
@@ -167,12 +159,25 @@ async function callZoteroConnector(
           `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
       };
     }
-    const message =
-      error instanceof AxiosError && error.response?.data?.error
-        ? String(error.response.data.error)
-        : toErrorMessage(error);
-    return { status: 'error', message };
+    return { status: 'error', message: toErrorMessage(error) };
   }
+
+  if (
+    response.status === StatusCodes.OK ||
+    response.status === StatusCodes.CREATED
+  ) {
+    return { status: 'success' };
+  }
+
+  // Try to extract a machine-readable error message from the response body.
+  let errorMessage = `Unexpected response status: ${response.status}`;
+  try {
+    const data = (await response.json()) as { error?: string };
+    if (data?.error) errorMessage = String(data.error);
+  } catch {
+    // Body is not JSON or is empty; use the generic status message.
+  }
+  return { status: 'error', message: errorMessage };
 }
 
 /**

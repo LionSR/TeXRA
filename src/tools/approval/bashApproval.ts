@@ -17,8 +17,8 @@ import { createStreamApprovalController } from './streamApprovalQueue';
 
 const BashApprovalRequestSchema = z.object({
   command: z.string(),
-  cwd: z.string().optional(),
-  streamId: StreamTabIdSchema.optional(),
+  cwd: z.string().nullish(),
+  streamId: StreamTabIdSchema.nullish(),
 });
 export type BashApprovalRequest = z.infer<typeof BashApprovalRequestSchema>;
 

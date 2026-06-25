@@ -368,7 +368,7 @@ export class DesktopProgressBridge {
     });
     this.state = this.backend.state;
     this.streamLogs = this.state.streamLogs;
-    const backendSubscription = this.backend.setupEventListeners();
+    const backendSubscription = this.backend.setupEventListeners(bus);
     // Compose the extracted progress-event bridge for ghost-stream hydration,
     // stream-snapshot persistence, restored-display sending, and progress-event
     // → rail-update translation.  See #6329.

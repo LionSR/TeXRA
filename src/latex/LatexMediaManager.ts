@@ -84,20 +84,22 @@ export class LatexMediaManager {
       return;
     }
 
-    const tasks = [...absolutePaths].map(async (absolutePath) => {
-      try {
-        await this.fileService!.mirrorWorkspaceFile(
-          pathToLocation(absolutePath),
-        );
-      } catch (error) {
-        const message = toErrorMessage(error);
-        this.logger.debug(
-          `Unable to mirror figure dependency ${absolutePath}: ${message}`,
-        );
-      }
-    });
-
-    await Promise.all(tasks);
+    await pMap(
+      [...absolutePaths],
+      async (absolutePath) => {
+        try {
+          await this.fileService!.mirrorWorkspaceFile(
+            pathToLocation(absolutePath),
+          );
+        } catch (error) {
+          const message = toErrorMessage(error);
+          this.logger.debug(
+            `Unable to mirror figure dependency ${absolutePath}: ${message}`,
+          );
+        }
+      },
+      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
+    );
   }
 
   /**
@@ -191,8 +193,9 @@ export class LatexMediaManager {
     // path first so a mirrored symlink inside run storage points back to
     // the original workspace tree — otherwise project-local .cls/.sty/.bst/
     // latexmkrc files that live beside the real source are invisible.
-    await Promise.all(
-      texFiles.map(async (file) => {
+    await pMap(
+      texFiles,
+      async (file) => {
         let siblingDir = path.dirname(file.absolutePath);
         try {
           siblingDir = path.dirname(
@@ -204,7 +207,8 @@ export class LatexMediaManager {
           );
         }
         await this.mirrorProjectSiblings(siblingDir);
-      }),
+      },
+      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
     );
 
     while (worklist.length > 0) {
@@ -215,8 +219,9 @@ export class LatexMediaManager {
       const deps = await this.collectDependencies(file);
       if (deps.length === 0) continue;
 
-      await Promise.all(
-        deps.map(async (absolutePath) => {
+      await pMap(
+        deps,
+        async (absolutePath) => {
           const depLocation = pathToLocation(absolutePath);
           const isTex = hasExtension(absolutePath, '.tex');
           try {
@@ -231,7 +236,8 @@ export class LatexMediaManager {
               `Unable to mirror LaTeX dependency ${absolutePath}: ${toErrorMessage(error)}`,
             );
           }
-        }),
+        },
+        { concurrency: LATEX_CONCURRENCY, stopOnError: false },
       );
       this.logger.debug(
         `Mirrored ${deps.length} LaTeX dependencies from ${file.absolutePath}`,
@@ -323,8 +329,9 @@ export class LatexMediaManager {
 
     if (candidates.length === 0) return;
 
-    await Promise.all(
-      candidates.map(async (absolutePath) => {
+    await pMap(
+      candidates,
+      async (absolutePath) => {
         try {
           const stats = await platform().fs.stat(absolutePath);
           if (!isFile(stats.type)) return;
@@ -336,7 +343,8 @@ export class LatexMediaManager {
             `Unable to mirror project sibling ${absolutePath}: ${toErrorMessage(error)}`,
           );
         }
-      }),
+      },
+      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
     );
   }
 
@@ -412,11 +420,10 @@ export class LatexMediaManager {
         pathToLocation(path.normalize(path.join(baseDir, relativePath))),
       );
 
-      const existenceChecks = await Promise.all(
-        fileLocations.map(async (loc) => ({
-          loc,
-          exists: await flexibleFS.exists(loc),
-        })),
+      const existenceChecks = await pMap(
+        fileLocations,
+        async (loc) => ({ loc, exists: await flexibleFS.exists(loc) }),
+        { concurrency: LATEX_CONCURRENCY, stopOnError: false },
       );
 
       for (const { loc, exists } of existenceChecks) {
@@ -500,11 +507,10 @@ export class LatexMediaManager {
       return;
     }
 
-    const existingFilesInfo = await Promise.all(
-      files.map(async (file) => ({
-        file,
-        exists: await flexibleFS.exists(file),
-      })),
+    const existingFilesInfo = await pMap(
+      files,
+      async (file) => ({ file, exists: await flexibleFS.exists(file) }),
+      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
     );
     const existingFiles = existingFilesInfo
       .filter((f) => f.exists)

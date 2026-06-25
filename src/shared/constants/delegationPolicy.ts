@@ -14,6 +14,8 @@
  *   (orchestrator → sub-orchestrator → leaf agent), and so on.
  */
 
+import { clamp } from '@utils/core';
+
 /** Supported range for the max-depth setting and its default. */
 export const NESTED_DELEGATION_DEPTH_RANGE = {
   min: 1,
@@ -33,9 +35,10 @@ export function clampNestedDelegationDepth(value: unknown): number {
     typeof value === 'number' && Number.isFinite(value)
       ? value
       : NESTED_DELEGATION_DEPTH_RANGE.default;
-  return Math.min(
+  return clamp(
+    Math.round(n),
+    NESTED_DELEGATION_DEPTH_RANGE.min,
     NESTED_DELEGATION_DEPTH_RANGE.max,
-    Math.max(NESTED_DELEGATION_DEPTH_RANGE.min, Math.round(n)),
   );
 }
 

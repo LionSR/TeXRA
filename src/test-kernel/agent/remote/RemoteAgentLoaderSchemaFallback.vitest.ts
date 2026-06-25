@@ -145,6 +145,34 @@ describe('remote agent schema compatibility', () => {
     ]);
   });
 
+  it('drops remote rows with non-identifier agent names', async () => {
+    installRemoteAgentListClient({
+      data: [
+        {
+          id: 'agent-1',
+          name: 'review team',
+          description: 'Legacy row',
+          visibility: ['public'],
+          tools: [],
+          agent_category: 'toolUse',
+        },
+        {
+          id: 'agent-2',
+          name: 'review',
+          description: 'Canonical row',
+          visibility: ['public'],
+          tools: [],
+          agent_category: 'toolUse',
+        },
+      ],
+      error: null,
+    });
+
+    const agents = await RemoteAgentLoader.listRemoteAgents();
+
+    expect(agents.map((agent) => agent.name)).toEqual(['review']);
+  });
+
   it('does not hide unrelated list-query errors behind legacy fallback', async () => {
     const selectedColumns = installRemoteAgentListClient({
       data: null,

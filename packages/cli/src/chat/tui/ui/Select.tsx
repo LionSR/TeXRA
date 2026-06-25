@@ -1,7 +1,7 @@
 // Numbered select primitive for slash forms + future palettes.
 //
-// Renders each item with a `›` pointer on the focused row (Ink figures.pointer
-// equivalent in plain ASCII) and a `✓` on the currently-active value per
+// Renders each item with the shared POINTER glyph on the focused row and the
+// TICK glyph on the currently-active value (see ./glyphs) per
 // docs/prds/cli-tui-ink/10-architecture.md § Intuitiveness conventions.
 //
 // `↑/↓` walks the rows, Enter calls `onSelect`, Esc calls `onCancel`. Items
@@ -9,9 +9,10 @@
 // `1`-`9` for the first nine rows, then `a`-`z` for rows 10-35.
 
 import { Box, Text, useInput } from 'ink';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { clamp, clampIndex } from '@utils/core';
+import { POINTER, TICK } from './glyphs';
 
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 
@@ -193,11 +194,32 @@ export function selectIndexForHotkey(input: string): number | undefined {
 
 /**
  * Ink can deliver rapid key presses as one input chunk. Menus should still
- * honor the first shortcut instead of silently dropping the whole chunk.
+ * honor the first shortcut from a tiny burst instead of silently dropping it.
+ * Longer chunks are likely pasted text or a slash command racing a closing
+ * form, so treating their first letter as a row shortcut is surprising.
  */
 export function selectIndexForHotkeyInput(input: string): number | undefined {
+  if (input.length > 2) return undefined;
   const first = input.at(0);
   return first == null ? undefined : selectIndexForHotkey(first);
+}
+
+export function isRawSelectNavigationInput(input: string): boolean {
+  return input.startsWith('\u001B[') || input.startsWith('\u001BO');
+}
+
+export function isRawSelectEscChordInput(input: string): boolean {
+  return (
+    input.startsWith('\u001B') &&
+    input.length === 2 &&
+    !isRawSelectNavigationInput(input)
+  );
+}
+
+export function rawSelectArrowDirection(input: string): -1 | 1 | undefined {
+  if (input === '\u001B[A' || input === '\u001BOA') return -1;
+  if (input === '\u001B[B' || input === '\u001BOB') return 1;
+  return undefined;
 }
 
 export function Select<T>(props: SelectProps<T>): React.JSX.Element {
@@ -207,6 +229,9 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
     items: props.items,
   });
   const [highlight, setHighlight] = useState(initial);
+  // Select cancel handlers close their foreground form, so the component
+  // unmounts after this flips. Future persistent Select users should reset it.
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
     setHighlight((h) => clampIndex(h, props.items.length));
@@ -228,11 +253,10 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   });
 
   useInput((input, key) => {
-    if (isEscapeInput(input, key)) {
-      props.onCancel();
-      return;
-    }
-    if (key.upArrow) {
+    if (cancelledRef.current) return;
+    const rawNavigationInput = isRawSelectNavigationInput(input);
+    const rawArrowDirection = rawSelectArrowDirection(input);
+    if (key.upArrow || rawArrowDirection === -1) {
       setHighlight((h) =>
         nextSelectHighlightIndex({
           direction: -1,
@@ -242,7 +266,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       );
       return;
     }
-    if (key.downArrow) {
+    if (key.downArrow || rawArrowDirection === 1) {
       setHighlight((h) =>
         nextSelectHighlightIndex({
           direction: 1,
@@ -252,16 +276,33 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       );
       return;
     }
+    // A fast Esc followed by another key can arrive as an Alt/meta chord or
+    // as raw ESC + one printable key. Select forms have no meta shortcuts, so
+    // treat that as cancel-and-drop without swallowing raw terminal navigation.
+    if (
+      isEscapeInput(input, key) ||
+      (key.meta && !rawNavigationInput) ||
+      isRawSelectEscChordInput(input)
+    ) {
+      cancelledRef.current = true;
+      props.onCancel();
+      return;
+    }
     if (isPlainReturnInput(input, key)) {
       const choice = props.items[highlight];
       if (choice && !choice.disabled) props.onSelect(choice.value);
       return;
     }
-    // Single-key jumps (1-9, then a-z) for direct selection. Ignore modified
-    // chords: Ctrl+C exits the app (the App's unified handler owns it now that
-    // we render with exitOnCtrlC: false, so Ink no longer mutes it), and
-    // Ctrl/Alt+<letter> were never meant as row hotkeys.
-    if (!key.ctrl && !key.meta) {
+    if (!key.ctrl && input.length > 2) {
+      if (rawNavigationInput) return;
+      cancelledRef.current = true;
+      props.onCancel();
+      return;
+    }
+    // Single-key jumps (1-9, then a-z) for direct selection. Ignore Ctrl
+    // chords: Ctrl+C exits the app through App's unified handler, and other
+    // Ctrl+<letter> chords were never meant as row hotkeys.
+    if (!key.ctrl) {
       const idx = selectIndexForHotkeyInput(input);
       if (idx != null && idx < props.items.length) {
         const choice = props.items[idx];
@@ -281,8 +322,8 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         const i = visibleRange.start + offset;
         const focused = i === highlight;
         const active = item.value === props.activeValue;
-        const pointer = focused ? '›' : ' ';
-        const tick = active ? '✓' : ' ';
+        const pointer = focused ? POINTER : ' ';
+        const tick = active ? TICK : ' ';
         const hotkey = selectHotkeyForIndex(i);
         const shortcut = hotkey ? `${hotkey}.` : '  ';
         const showInlineOverflow = focused && inlineOverflowText;

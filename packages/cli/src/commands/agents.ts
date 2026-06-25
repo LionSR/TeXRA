@@ -13,6 +13,7 @@ import {
   type CliAgentListOptions,
 } from '../runtime/agents';
 import { CliExitCode } from '../runtime/exitCodes';
+import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 
@@ -27,9 +28,12 @@ export async function listAgents(
   options: CliAgentListOptions = {},
 ): Promise<number> {
   await initLocalCliPlatform(context);
+  if (options.includeHidden !== true) {
+    await seedCliRosterFromDefaultTeam();
+  }
   const result = await loadCliAgentList(options);
 
-  if (context.outputFormat === 'text' && !context.quietLogs) {
+  if (!context.quietLogs) {
     const hiddenNotice = formatCliHiddenAgentsNotice(
       result.hiddenCount,
       options.category,
@@ -42,7 +46,13 @@ export async function listAgents(
     {
       json: result.agents,
       ndjson: result.agents.map((agent) => ({ kind: 'agent', agent })),
-      text: formatCliAgentList(result.agents),
+      text: formatCliAgentList(result.agents, {
+        category: options.category,
+        showEmptyState:
+          options.includeHidden !== true &&
+          !context.quietLogs &&
+          context.outputFormat === 'text',
+      }),
     },
     { paged: true },
   );
@@ -107,18 +117,14 @@ const agentsShowCommand = defineCliCommand({
   run: (context, ctx) => showAgent(context, ctx.args.name),
 });
 
-const agentsInspectCommand = defineCliCommand({
-  meta: { name: 'inspect', description: 'Inspect one agent' },
-  args: agentDetailsArgs,
-  run: (context, ctx) => showAgent(context, ctx.args.name),
-});
-
 export const agentsCommand = defineCommand({
   meta: { name: 'agents', description: 'Inspect TeXRA agents' },
+  // Unlike `multi-agent inspect` (which resolves a team run plan), an agent has
+  // no separate "inspected" view — `show` already prints everything — so there
+  // is just one inspection verb here.
   subCommands: {
     list: agentsListCommand,
     show: agentsShowCommand,
-    inspect: agentsInspectCommand,
     run: agentsRunCommand,
   },
 });
