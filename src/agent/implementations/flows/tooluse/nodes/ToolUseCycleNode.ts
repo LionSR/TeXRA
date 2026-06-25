@@ -5,7 +5,9 @@ import {
   createToolUseRoundFlow,
   type ToolUseRoundShared,
 } from '@agent/core/flows/ToolUseRoundFlow';
+import { withModelClient } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import { MESSAGE_TYPES, toRetryErrorInfo } from '@shared/schemas';
 import type { RetryErrorInfo } from '@shared/schemas';
@@ -15,7 +17,7 @@ import {
   type CyclePrepResult,
   assertPreparedShared,
 } from './types';
-import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
+import type { ToolUseServices } from '../ToolUseServices';
 
 type ToolUseCycleOutcome =
   | { outcome: 'completed'; messages: ProviderMessage[] }
@@ -30,7 +32,7 @@ type ToolUseCycleOutcome =
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,
-  ToolUseFlowParams,
+  FlowParams,
   ToolUseServices<C>
 > {
   async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {
@@ -77,19 +79,17 @@ export class ToolUseCycleNode<C> extends Node<
     };
 
     const flow = createToolUseRoundFlow<C>();
-    let client = await modelHandler.getClient();
-    flow.setServices({
-      ...this.services,
-      get client() {
-        return client;
-      },
-      async refreshClient() {
-        client = await modelHandler.getClient();
-      },
-      setting: { ...setting, tools: resolvedTools },
-      run: prepRes.runState,
-      workspace: prepRes.workspaceState,
-    });
+    flow.setServices(
+      await withModelClient(
+        {
+          ...this.services,
+          setting: { ...setting, tools: resolvedTools },
+          run: prepRes.runState,
+          workspace: prepRes.workspaceState,
+        },
+        modelHandler,
+      ),
+    );
 
     const { onProgress, persistTodos } = this.services;
     let todoPersistChain = Promise.resolve();

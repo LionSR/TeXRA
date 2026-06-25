@@ -2,10 +2,7 @@ import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass'
 import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
-import type {
-  BaseFlowContextInit,
-  FlowParams,
-} from '@agent/core/flows/BaseFlowServices';
+import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
@@ -48,5 +45,3 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
    */
   readonly delegationTrimmed?: boolean;
 }
-
-export type { FlowParams as ToolUseFlowParams };
