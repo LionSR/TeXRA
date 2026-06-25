@@ -11,6 +11,8 @@
  * 24 h detach gate) lives here once.
  */
 
+import pMap from 'p-map';
+
 import type { AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -251,8 +253,10 @@ export abstract class PollingSourceBase<
     try {
       const now = Date.now();
       const entries = [...this.subscriptions.entries()];
-      await Promise.allSettled(
-        entries.map(([key, state]) => this.pollEntry(key, state, now)),
+      await pMap(
+        entries,
+        ([key, state]) => this.pollEntry(key, state, now),
+        { concurrency: this.config.maxConcurrent, stopOnError: false },
       );
       await this.runAfterTick(entries, now);
       if (this.subscriptions.size === 0) this.stopTimer();
