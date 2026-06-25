@@ -31,6 +31,7 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { ToolDefinition } from '@model';
 import replacementEngine from '@replacement/engine';
 
@@ -40,7 +41,6 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Local imports - utils
 import { delay, isNonEmptyString, isObject } from '@utils/core';
-import { safeParseJson } from '@common/parsing/safeParseJson';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
