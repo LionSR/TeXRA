@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const TokenCountSchema = z.int().nonnegative();
+export const TokenCountSchema = z.int().nonnegative();
 
 export const TokenUsageStatsSchema = z.strictObject({
   inputTokens: TokenCountSchema,

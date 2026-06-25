@@ -31,7 +31,7 @@ const ToolEditApprovalRequestSchema = z.object({
   originalContent: z.string(),
   proposedContent: z.string(),
   sourceTool: z.string(),
-  streamId: StreamTabIdSchema.optional(),
+  streamId: StreamTabIdSchema.nullish(),
 });
 export type ToolEditApprovalRequest = z.infer<
   typeof ToolEditApprovalRequestSchema
