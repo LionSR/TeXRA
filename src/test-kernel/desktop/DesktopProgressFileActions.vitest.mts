@@ -21,6 +21,7 @@ type RunContext = {
     agent: string;
     model: string;
     inputFile: string;
+    outputFiles?: string[];
   };
 };
 
@@ -55,6 +56,7 @@ function outputInfo(filePath: string): OutputFileInfo {
 
 async function loadFileActions(mocks: {
   outcome?: DiffOutcome;
+  throws?: boolean;
   fallbackResult?: {
     success: boolean;
     message?: string;
@@ -73,10 +75,13 @@ async function loadFileActions(mocks: {
   // host-neutral `runLatexdiffForExecution`; mock it at that boundary so these
   // tests cover the desktop param-building + outcome-handling, not the core
   // (which `RunLatexdiff.vitest.mts` exercises in isolation).
-  const runLatexdiffForExecution = vi.fn(async () => ({
-    outcome: mocks.outcome ?? { results: [], totalOperations: 0 },
-    source: 'metadata' as const,
-  }));
+  const runLatexdiffForExecution = vi.fn(async () => {
+    if (mocks.throws) throw new Error('No workspace path found');
+    return {
+      outcome: mocks.outcome ?? { results: [], totalOperations: 0 },
+      source: 'metadata' as const,
+    };
+  });
   const runDiff = vi.fn(
     async () =>
       mocks.fallbackResult ?? {
@@ -239,5 +244,111 @@ describe('DesktopProgressFileActions latexdiff', () => {
     expect(runLatexdiffForExecution).toHaveBeenCalledOnce();
     expect(runDiff).toHaveBeenCalledOnce();
     expect(openPath).toHaveBeenCalledWith('/workspace/fallback_diff.tex');
+  });
+
+  it('opens every successful diff, not just the first', async () => {
+    const outcome = {
+      results: [
+        {
+          success: true,
+          basePath: '/run/r1/main.tex',
+          diffFileName: 'main_diff.tex',
+        },
+        {
+          success: true,
+          basePath: '/run/r2/main.tex',
+          diffFileName: 'main_diff.tex',
+        },
+        { success: false, message: 'one failed' },
+      ],
+      totalOperations: 3,
+    };
+    const { actions, openPath, runDiff } = await loadFileActions({ outcome });
+
+    await actions.runLatexdiffForRun(
+      '/workspace/main.tex',
+      '/run/r2/main.tex',
+      {
+        outputsByRound: new Map([[1, [outputInfo('/run/r1/main.tex')]]]),
+      },
+    );
+
+    expect(openPath).toHaveBeenCalledWith('/run/r1/main_diff.tex');
+    expect(openPath).toHaveBeenCalledWith('/run/r2/main_diff.tex');
+    expect(openPath).toHaveBeenCalledTimes(2);
+    expect(runDiff).not.toHaveBeenCalled();
+  });
+
+  it('falls back to single-file latexdiff when the shared core throws', async () => {
+    const { actions, openPath, runDiff } = await loadFileActions({
+      throws: true,
+      fallbackResult: { success: true, diffFileName: 'fallback_diff.tex' },
+    });
+
+    await actions.runLatexdiffForRun(
+      '/workspace/base.tex',
+      '/run/r1/main.tex',
+      {
+        outputsByRound: new Map(),
+        workspaceScan: { agent: 'a', model: 'm', inputFile: 'main.tex' },
+      },
+    );
+
+    expect(runDiff).toHaveBeenCalledOnce();
+    expect(openPath).toHaveBeenCalledWith('/workspace/fallback_diff.tex');
+  });
+
+  it('falls back to single-file latexdiff when every shared operation failed', async () => {
+    const { actions, openPath, runDiff } = await loadFileActions({
+      outcome: {
+        results: [{ success: false, message: 'missing base' }],
+        totalOperations: 1,
+      },
+      fallbackResult: { success: true, diffFileName: 'fallback_diff.tex' },
+    });
+
+    await actions.runLatexdiffForRun(
+      '/workspace/base.tex',
+      '/run/r1/main.tex',
+      {
+        outputsByRound: new Map([[1, [outputInfo('/run/r1/main.tex')]]]),
+      },
+    );
+
+    expect(runDiff).toHaveBeenCalledOnce();
+    expect(openPath).toHaveBeenCalledWith('/workspace/fallback_diff.tex');
+  });
+
+  it('threads the run output files into the shared core for scan resolution', async () => {
+    const { actions, runLatexdiffForExecution } = await loadFileActions({
+      outcome: {
+        results: [
+          {
+            success: true,
+            basePath: '/workspace/a.tex',
+            diffFileName: 'a_diff.tex',
+          },
+        ],
+        totalOperations: 1,
+      },
+    });
+
+    await actions.runLatexdiffForRun(
+      '/workspace/a.tex',
+      '/workspace/a_r1.tex',
+      {
+        outputsByRound: new Map(),
+        workspaceScan: {
+          agent: 'orchestrator',
+          model: 'gpt-5',
+          inputFile: 'a.tex',
+          outputFiles: ['a.tex', 'b.tex'],
+        },
+      },
+    );
+
+    expect(runLatexdiffForExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ outputFiles: ['a.tex', 'b.tex'] }),
+    );
   });
 });

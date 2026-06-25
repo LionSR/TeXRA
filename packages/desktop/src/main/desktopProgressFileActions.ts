@@ -51,6 +51,8 @@ export interface DesktopLatexdiffWorkspaceScan {
   agent: string;
   model: string;
   inputFile: string;
+  /** Multi-document outputs to diff; defaults to `inputFile` when omitted. */
+  outputFiles?: string[];
 }
 
 export interface DesktopLatexdiffRunContext {
@@ -166,11 +168,14 @@ export class DesktopProgressFileActions {
     runContext: DesktopLatexdiffRunContext,
   ): Promise<void> {
     const outcome = await this.runSharedLatexdiff(runContext);
-    if (outcome && outcome.totalOperations > 0) {
-      await this.openSharedLatexdiffResult(outcome);
-      return;
-    }
+    const opened = outcome
+      ? await this.openSharedLatexdiffResults(outcome)
+      : false;
+    if (opened) return;
 
+    // No round-aware diff was produced (no rounds resolved, the shared core
+    // threw, or every operation failed) — fall back to a single-file diff so
+    // the user still gets a comparison.
     await this.runLatexdiffFile(baseFile, editedFile);
   }
 
@@ -223,47 +228,56 @@ export class DesktopProgressFileActions {
     // with the VS Code command and the CLI, instead of re-implementing it here.
     // Desktop has no per-operation progress UI.
     const progress: DiffProgressReporter = { report: () => undefined };
-    const { outcome } = await runLatexdiffForExecution({
-      agent: scan?.agent ?? '',
-      model: scan?.model ?? '',
-      inputFile: scan?.inputFile ?? '',
-      runId: runContext.executionId ?? null,
-      outputsByRound:
-        runContext.outputsByRound.size > 0 ? runContext.outputsByRound : null,
-      mathMarkup: DEFAULT_MATH_MARKUP,
-      generateBetweenRoundDiffs: true,
-      progress,
-    });
-    return outcome;
+    try {
+      const { outcome } = await runLatexdiffForExecution({
+        agent: scan?.agent ?? '',
+        model: scan?.model ?? '',
+        inputFile: scan?.inputFile ?? '',
+        outputFiles: scan?.outputFiles,
+        runId: runContext.executionId ?? null,
+        outputsByRound:
+          runContext.outputsByRound.size > 0 ? runContext.outputsByRound : null,
+        mathMarkup: DEFAULT_MATH_MARKUP,
+        generateBetweenRoundDiffs: true,
+        progress,
+      });
+      return outcome;
+    } catch {
+      // The core can throw (e.g. no workspace path). Don't abort the whole
+      // action — return undefined so the caller falls back to single-file.
+      return undefined;
+    }
   }
 
-  private async openSharedLatexdiffResult(
+  /**
+   * Open every successful diff (between-round runs produce many), mirroring the
+   * VS Code command. Returns whether at least one diff was opened, so the
+   * caller can fall back to a single-file diff when none were.
+   */
+  private async openSharedLatexdiffResults(
     outcome: DiffRunOutcome,
-  ): Promise<void> {
-    const result = outcome.results.find(
+  ): Promise<boolean> {
+    const successes = outcome.results.filter(
       (
         entry,
       ): entry is DiffRunResult & { basePath: string; diffFileName: string } =>
         entry.success && Boolean(entry.basePath) && Boolean(entry.diffFileName),
     );
-    if (!result) {
-      const firstMessage = outcome.results.find(
-        (entry) => entry.message,
-      )?.message;
-      await this.options.showErrorMessage?.(
-        firstMessage ?? 'All LaTeX diff operations failed for this run.',
+
+    for (const result of successes) {
+      const diffFilePath = path.join(
+        path.dirname(result.basePath),
+        result.diffFileName,
       );
-      return;
+      if (this.options.openBuildDisplay) {
+        await this.options.openBuildDisplay(
+          createExternalLocation(diffFilePath),
+        );
+      } else {
+        await this.options.openPath?.(diffFilePath);
+      }
     }
 
-    const diffFilePath = path.join(
-      path.dirname(result.basePath),
-      result.diffFileName,
-    );
-    if (this.options.openBuildDisplay) {
-      await this.options.openBuildDisplay(createExternalLocation(diffFilePath));
-      return;
-    }
-    await this.options.openPath?.(diffFilePath);
+    return successes.length > 0;
   }
 }
