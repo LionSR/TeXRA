@@ -11,6 +11,11 @@ import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { fillRows } from '../render/terminalText';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
+import {
+  ERROR_ENTRY_PREFIX,
+  STATUS_DOT,
+  USER_ENTRY_PREFIX,
+} from '../ui/glyphs';
 import { isInquiryContinuationText } from './transcriptEntries';
 import { ToolUseRow } from './ToolUseRow';
 import { toolUseDisplayLines } from './toolRenderers';
@@ -27,7 +32,7 @@ export const PROCESS_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 function prefixedWrappedLines(
   text: string,
   cols: number,
-  prefix = '› ',
+  prefix = USER_ENTRY_PREFIX,
 ): readonly string[] {
   const continuationPrefix = ' '.repeat(prefix.length);
   return wrapAnsiToWidth(text, Math.max(1, cols - prefix.length))
@@ -53,7 +58,7 @@ function displayRows({
 export function compactPrefixedDisplayRows({
   fillWidth,
   maxRows,
-  prefix = '› ',
+  prefix = USER_ENTRY_PREFIX,
   text,
   width,
 }: {
@@ -190,7 +195,7 @@ function ProcessEntryRow({
       flexDirection="column"
     >
       <Box>
-        <Text color={color}>● </Text>
+        <Text color={color}>{STATUS_DOT} </Text>
         <Text>{process.title}</Text>
         {process.status ? <Text dimColor>{` · ${process.status}`}</Text> : null}
         {process.elapsed ? (
@@ -447,7 +452,8 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
     );
   }
 
-  const prefix = entry.role === 'error' ? '! ' : '› ';
+  const prefix =
+    entry.role === 'error' ? ERROR_ENTRY_PREFIX : USER_ENTRY_PREFIX;
   const color = entry.role === 'error' ? 'red' : undefined;
   const cols = Math.max(1, Math.floor(width ?? 80) - 2);
   return (
