@@ -7,7 +7,7 @@
  * @common/errors/sdkErrorUtils - they are not part of the public barrel.
  */
 export { formatError } from './errorFormatUtils';
-export { toErrorMessage, ensureError } from './errorMessage';
+export { toErrorMessage, ensureError, extractErrorMessage } from './errorMessage';
 export {
   isAbortError,
   isFileNotFoundError,
