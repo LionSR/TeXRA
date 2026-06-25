@@ -90,7 +90,10 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       entry.isSettled = () => settled;
       this.pending.set(requestId, entry);
       registerPendingApproval(requestId, {
-        streamId: request.streamId,
+        // `streamId` is `.nullish()` on the tool schema (string | null |
+        // undefined); the approval registry expects `string | undefined`, so
+        // collapse null → undefined (matches nativeToolEditApproval).
+        streamId: request.streamId ?? undefined,
         runtimeHost: this.options.runtimeHost,
         isSettled: () => settled,
         settle: (value) => this.settle(requestId, value),
