@@ -6,11 +6,12 @@ import {
   appendFollowUpAsUserMessage,
   followUpDisplayText,
 } from '@agent/toolUse/followUpMessages';
+import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { STREAM_STATUS } from '@shared/schemas';
 import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
-import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
+import type { ToolUseServices } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
 
 interface WaitPrepResult {
@@ -26,7 +27,7 @@ interface WaitPrepResult {
 
 export class ToolUseWaitNode<C> extends Node<
   ToolUseRunShared,
-  ToolUseFlowParams,
+  FlowParams,
   ToolUseServices<C>
 > {
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
