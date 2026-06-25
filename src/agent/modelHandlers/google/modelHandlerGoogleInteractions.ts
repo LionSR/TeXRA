@@ -31,6 +31,7 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { ToolDefinition } from '@model';
 import replacementEngine from '@replacement/engine';
 
@@ -39,7 +40,7 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Local imports - utils
-import { delay, isNonEmptyString } from '@utils/core';
+import { delay, isNonEmptyString, isObject } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
@@ -2145,17 +2146,14 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   private parseArguments(buffer: string): Record<string, unknown> {
     if (!buffer) return {};
-    try {
-      const parsed = JSON.parse(buffer) as unknown;
-      return typeof parsed === 'object' && parsed !== null
-        ? (parsed as Record<string, unknown>)
-        : {};
-    } catch (error) {
+    const parsed = safeParseJson(buffer);
+    if (!parsed.ok) {
       this.logger.warn(
-        `Failed to parse streamed tool arguments: ${getSdkErrorMessage(error)}`,
+        `Failed to parse streamed tool arguments: ${getSdkErrorMessage(parsed.error)}`,
       );
       return {};
     }
+    return isObject(parsed.value) ? parsed.value : {};
   }
 
   // ===========================================================================
