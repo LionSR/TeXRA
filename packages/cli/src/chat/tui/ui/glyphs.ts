@@ -16,3 +16,21 @@ export const TICK = '✓';
 
 /** Steady status dot for tool rows and subagent rows (never animated). */
 export const STATUS_DOT = '●';
+
+/** Decorative brand marker at the head of the status bar (aria-hidden). */
+export const STATUS_DIAMOND = '◆';
+
+/** Warning marker for inline failure notices (e.g. render-error fallback). */
+export const WARNING = '⚠';
+
+// Todo checklist markers. Completed / in-progress / pending (default).
+export const TODO_DONE = '☑';
+export const TODO_ACTIVE = '☐';
+export const TODO_PENDING = '□';
+
+/** Transcript row prefixes (trailing space included for the gutter). User rows
+ *  (and the default fallback) reuse the same chevron as selects (POINTER) so the
+ *  look stays consistent; error rows use a bang. Assistant rows carry no prefix
+ *  — they render as plain Markdown. */
+export const USER_ENTRY_PREFIX = `${POINTER} `;
+export const ERROR_ENTRY_PREFIX = '! ';
