@@ -228,7 +228,10 @@ class Node<
         // signal aborted during delay (p-retry rethrows signal.reason) or
         // shouldAutoRetry returned false: forward the original exec error.
         if (this.signal?.aborted) {
-          return await this.execFallback(prepRes, lastExecError ?? (e as Error));
+          return await this.execFallback(
+            prepRes,
+            lastExecError ?? (e as Error),
+          );
         }
         const shouldRetry = await this.retryPrompt(prepRes, e as Error);
         if (shouldRetry) continue;

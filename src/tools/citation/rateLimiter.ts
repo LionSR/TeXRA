@@ -1,6 +1,9 @@
 import pThrottle from 'p-throttle';
 
-const limiters = new Map<string, { minDelayMs: number; wait: () => Promise<void> }>();
+const limiters = new Map<
+  string,
+  { minDelayMs: number; wait: () => Promise<void> }
+>();
 
 /** Enforces a minimum delay between consecutive requests to the same API. */
 export async function waitForRateLimit(
@@ -11,7 +14,9 @@ export async function waitForRateLimit(
   if (!existing || existing.minDelayMs !== minDelayMs) {
     limiters.set(apiName, {
       minDelayMs,
-      wait: pThrottle({ limit: 1, interval: minDelayMs })(() => Promise.resolve()),
+      wait: pThrottle({ limit: 1, interval: minDelayMs })(() =>
+        Promise.resolve(),
+      ),
     });
   }
   await limiters.get(apiName)!.wait();
