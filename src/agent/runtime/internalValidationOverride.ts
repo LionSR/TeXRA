@@ -6,7 +6,7 @@
  * handlers for a deterministic stub at the provider boundary, so a `texra run`
  * smoke test exercises the full CLI + executeAgent path without reaching a live
  * model API. This gate is build-tooling scaffolding, not provider-routing
- * domain logic, so it lives apart from {@link ../runtime/ModelFactory} to keep
+ * domain logic, so it lives apart from {@link ./ModelFactory} to keep
  * the factory's provider routing free of synchronous file reads and CI env
  * plumbing.
  *
