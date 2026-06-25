@@ -11,11 +11,8 @@ import {
 } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
-import {
-  runLatexdiffFromMetadata,
-  runLatexdiffViaWorkspaceScan,
-} from '@latex/latexdiff/diffOperations';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
+import { runLatexdiffForExecution } from '@latex/latexdiff/runLatexdiff';
 import type {
   DiffProgressReporter,
   DiffRunOutcome,
@@ -27,7 +24,6 @@ import {
   AbsoluteFS,
   createExternalLocation,
   pathToLocation,
-  TaskRunFileService,
 } from '@utils/files';
 
 export interface DesktopProgressFileActionOptions {
@@ -218,33 +214,27 @@ export class DesktopProgressFileActions {
   private async runSharedLatexdiff(
     runContext: DesktopLatexdiffRunContext,
   ): Promise<DiffRunOutcome | undefined> {
-    const progress: DiffProgressReporter = {
-      report: () => {
-        // Desktop has no per-operation progress UI.
-      },
-    };
+    const scan = runContext.workspaceScan;
+    // Nothing to diff without either pre-resolved rounds or a scan identity.
+    if (runContext.outputsByRound.size === 0 && !scan) return undefined;
 
-    if (runContext.outputsByRound.size > 0) {
-      const outcome = await runLatexdiffFromMetadata({
-        rounds: runContext.outputsByRound,
-        mathMarkup: DEFAULT_MATH_MARKUP,
-        generateBetweenRoundDiffs: true,
-        progress,
-        fileService: new TaskRunFileService(runContext.executionId),
-      });
-      if (outcome.totalOperations > 0) return outcome;
-    }
-
-    if (runContext.workspaceScan) {
-      return runLatexdiffViaWorkspaceScan({
-        ...runContext.workspaceScan,
-        mathMarkup: DEFAULT_MATH_MARKUP,
-        generateBetweenRoundDiffs: true,
-        progress,
-      });
-    }
-
-    return undefined;
+    // Delegate the resolve + dispatch policy (caller metadata → run-id scan →
+    // auto-discovery → workspace scan) to the single host-neutral core shared
+    // with the VS Code command and the CLI, instead of re-implementing it here.
+    // Desktop has no per-operation progress UI.
+    const progress: DiffProgressReporter = { report: () => undefined };
+    const { outcome } = await runLatexdiffForExecution({
+      agent: scan?.agent ?? '',
+      model: scan?.model ?? '',
+      inputFile: scan?.inputFile ?? '',
+      runId: runContext.executionId ?? null,
+      outputsByRound:
+        runContext.outputsByRound.size > 0 ? runContext.outputsByRound : null,
+      mathMarkup: DEFAULT_MATH_MARKUP,
+      generateBetweenRoundDiffs: true,
+      progress,
+    });
+    return outcome;
   }
 
   private async openSharedLatexdiffResult(
