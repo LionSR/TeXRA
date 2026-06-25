@@ -55,7 +55,9 @@ export function parseToolInput(
 
   const parsed = safeParseJson(raw);
   if (!parsed.ok) {
-    logger.debug(`Tool call ${callId}: Failed to parse input as JSON, using raw string`);
+    logger.debug(
+      `Tool call ${callId}: Failed to parse input as JSON, using raw string`,
+    );
     return raw;
   }
   return parsed.value;
