@@ -8,6 +8,11 @@ import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceSt
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
+import type {
+  IModelHandler,
+  SdkToolCall,
+} from '@agent/modelHandlers/types/IModelHandler';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { TaskRunFileService } from '@utils/files';
 
 /**
@@ -25,6 +30,40 @@ import type { TaskRunFileService } from '@utils/files';
 export interface ModelClientServices<C = unknown> {
   readonly client: C;
   readonly refreshClient?: () => Promise<void>;
+}
+
+/**
+ * Bridge the live model client into a cycle/round services object before the
+ * outer node runs the inner flow.
+ *
+ * The `client` getter and `refreshClient` are defined on the **returned
+ * literal** — never spread from a pre-evaluated object — so the relay-401
+ * token-refresh path keeps live rebinding: `refreshClient()` re-fetches the
+ * provider client after a mid-run model switch and the getter reflects it on
+ * the next read. Spreading the result of this call elsewhere would snapshot
+ * `client` and silently break that liveness, so callers pass the result
+ * straight to `flow.setServices(...)`.
+ */
+export async function withModelClient<C, T extends object>(
+  base: T,
+  modelHandler: IModelHandler<
+    ProviderMessage,
+    unknown,
+    unknown,
+    SdkToolCall,
+    C
+  >,
+): Promise<T & ModelClientServices<C>> {
+  let client = await modelHandler.getClient();
+  return {
+    ...base,
+    get client(): C {
+      return client;
+    },
+    async refreshClient(): Promise<void> {
+      client = await modelHandler.getClient();
+    },
+  };
 }
 
 export interface TextConnectionService {
