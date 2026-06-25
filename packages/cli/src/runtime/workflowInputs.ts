@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { glob, hasMagic } from 'glob';
+import { unique } from '@utils/core';
 
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { tryPlatform } from '@platform/platform';
@@ -326,11 +327,11 @@ async function finishWorkflowInputExpansion(
     }
     expanded.push(...entry);
   }
-  const unique = [...new Set(expanded)];
-  if (unique.length === 0 && options.allowEmpty !== true) {
+  const deduped = unique(expanded);
+  if (deduped.length === 0 && options.allowEmpty !== true) {
     throw new CliUsageError('At least one workflow input file is required.');
   }
-  return unique;
+  return deduped;
 }
 
 /**

@@ -16,7 +16,7 @@ import {
   parseWorkflowOutputRoundDir,
 } from '@agent/output/workflowOutputLayout';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import { isFileNotFoundError } from '@common/errors';
+import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type {
   ExecutionId,
@@ -201,7 +201,7 @@ export async function scanRunDirForOutputs(
   } catch (error) {
     logger.debug(
       CHANNEL,
-      `RunDir scan for ${executionId} failed: ${String(error)}`,
+      `RunDir scan for ${executionId} failed: ${toErrorMessage(error)}`,
     );
     return null;
   }
@@ -254,7 +254,7 @@ export async function discoverLatestExecutionOutputs(query: {
   } catch (error) {
     logger.debug(
       CHANNEL,
-      `Metadata-driven latexdiff discovery failed: ${String(error)}`,
+      `Metadata-driven latexdiff discovery failed: ${toErrorMessage(error)}`,
     );
   }
   return null;
