@@ -253,11 +253,10 @@ export abstract class PollingSourceBase<
     try {
       const now = Date.now();
       const entries = [...this.subscriptions.entries()];
-      await pMap(
-        entries,
-        ([key, state]) => this.pollEntry(key, state, now),
-        { concurrency: this.config.maxConcurrent, stopOnError: false },
-      );
+      await pMap(entries, ([key, state]) => this.pollEntry(key, state, now), {
+        concurrency: this.config.maxConcurrent,
+        stopOnError: false,
+      });
       await this.runAfterTick(entries, now);
       if (this.subscriptions.size === 0) this.stopTimer();
     } finally {
