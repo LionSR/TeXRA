@@ -21,8 +21,12 @@ landing**.
 ## Update (2026-06-25, applied) — the two open core cleanups landed
 
 A follow-up "check deeper and refactor" pass applied the two genuinely-safe,
-deliberately-deferred core cleanups from the 2026-06-24 delta. Both are
-behavior-neutral and verified (typecheck ×4 ✓, eslint ✓, 649 agent tests ✓):
+deliberately-deferred core cleanups from the 2026-06-24 delta. **These two
+changes are introduced by this PR (#6620), not present at `b2dcd42`** — that SHA
+is the pre-refactor base the rest of this checkpoint verifies against, so a
+reader cross-referencing it will find the P3a/P3b diff in this PR's commit, not
+at `b2dcd42`. Both are behavior-neutral and verified (typecheck ×4 ✓, eslint ✓,
+649 agent tests ✓):
 
 1. **Delta P3a — empty-type flow-param aliases removed.** Deleted the
    `export type { FlowParams as ToolUseFlowParams }` / `… as ReflectionFlowParams`
@@ -57,17 +61,18 @@ relocation**, exactly as the canonical plan sequences it.
 
 ## Verified at HEAD (`b2dcd42`, 2026-06-25)
 
-| Audit claim                                             | Tree state                                                           | Result |
-| ------------------------------------------------------- | -------------------------------------------------------------------- | ------ |
-| Step 5 — `@texra/core` populated (not the 1-line stub)  | `packages/core/src/index.ts` = 134 LOC curated surface               | ✓      |
-| Step 1 — dead `getDefaultAgentRuntimeHost` singleton    | grep: zero hits in `src/`                                            | ✓      |
-| Delta P2b — dead `WorkspaceProvider.watch` port removed | `src/platform/interfaces/workspace.ts`: no `watch`                   | ✓      |
-| Delta P1 — finalize-callback guard                      | `ResponseCycleFlow.ts:455-461` wraps `onRoundFinalized` in try/catch | ✓      |
-| Delta P3a — empty-type flow-param aliases               | removed; 8 nodes use `FlowParams` directly (see Update above)        | landed |
-| Delta P3b — `withModelClient` closure duplication       | extracted to `CycleServices.withModelClient` (liveness-safe)         | landed |
+| Audit claim                                             | Tree state                                                           | Result  |
+| ------------------------------------------------------- | -------------------------------------------------------------------- | ------- |
+| Step 5 — `@texra/core` populated (not the 1-line stub)  | `packages/core/src/index.ts` = 134 LOC curated surface               | ✓       |
+| Step 1 — dead `getDefaultAgentRuntimeHost` singleton    | grep: zero hits in `src/`                                            | ✓       |
+| Delta P2b — dead `WorkspaceProvider.watch` port removed | `src/platform/interfaces/workspace.ts`: no `watch`                   | ✓       |
+| Delta P1 — finalize-callback guard                      | `ResponseCycleFlow.ts:455-461` wraps `onRoundFinalized` in try/catch | ✓       |
+| Delta P3a — empty-type flow-param aliases               | removed; 8 nodes use `FlowParams` directly (see Update above)        | this PR |
+| Delta P3b — `withModelClient` closure duplication       | extracted to `CycleServices.withModelClient` (liveness-safe)         | this PR |
 
-No drift: everything the audit marked LANDED is present; everything it marked
-deferred is still deferred. The audit is trustworthy as written.
+No drift in the `b2dcd42` rows: everything the audit marked LANDED is present;
+everything it marked deferred is still deferred. The last two rows (P3a/P3b) are
+not at `b2dcd42` — they are the changes this PR introduces (see Update above).
 
 ## Recommendations landing since 2026-06-24
 
@@ -136,9 +141,11 @@ plan's Steps 6–7 / surface track; do not re-open the adjudicated traps.
 - `npm run typecheck` — exit 0 across all four projects (root, test-kernel,
   `texra`, `@texra-ai/cli`).
 - `npx eslint` over the 11 touched files — 0 errors (import-order auto-fixed).
-- `npx vitest run src/test-kernel/agent` — 649 passed, 4 skipped (incl.
+- `npx vitest run src/test-kernel/agent` — 649 passed, 4 skipped (across 117
+  files). The 5 suites most directly covering this change all passed:
   `ResponseCycleTools`, `ReflectionOutputLocation`, `ToolUseWaitNode`,
-  `ToolUseRoundFollowUpMedia`, `RetryState`).
+  `ToolUseRoundFollowUpMedia`, `RetryState` (these are passing suites, not the
+  4 skipped tests).
 - Behavior-equivalence of `withModelClient`: the returned literal has the same
   keys/values as the former inline `setServices` argument; the getter closes over
   the same `client` variable `refreshClient` reassigns, and neither call site
