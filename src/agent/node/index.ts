@@ -223,7 +223,10 @@ class Node<
       } catch (e) {
         if (e instanceof AbortError) {
           // AbortError is thrown by our pre-attempt check above.
-          return await this.execFallback(prepRes, lastExecError ?? (e.originalError ?? e));
+          return await this.execFallback(
+            prepRes,
+            lastExecError ?? e.originalError ?? e,
+          );
         }
         // signal aborted during delay (p-retry rethrows signal.reason) or
         // shouldAutoRetry returned false: forward the original exec error.
