@@ -27,7 +27,6 @@ export function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-
 /**
  * Format a duration in milliseconds to a compact human-readable string
  * (e.g. `3m 42s`, `1h 5m`, `2d 4h`).
