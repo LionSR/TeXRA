@@ -29,6 +29,7 @@ import {
 
 import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
+import { STATUS_DIAMOND } from '../ui/glyphs';
 import {
   approvalQueueStatus,
   type ApprovalQueueStatusKind,
@@ -658,7 +659,7 @@ export function buildStatusBarDisplay(
   input: StatusBarDisplayInput,
 ): StatusBarDisplay {
   const left: StatusBarSegment[] = [
-    { text: '◆', color: 'cyan', decorative: true },
+    { text: STATUS_DIAMOND, color: 'cyan', decorative: true },
   ];
 
   if (input.pendingExitHint) {
