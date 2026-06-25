@@ -11,7 +11,10 @@ const MANIFEST_PATHS = [
   'packages/extension/package.json',
 ];
 
-const VERSION_PATTERN = /^v?(\d+)\.(\d+)\.(\d+)$/;
+// Accept the canonical extension tag (`v0.38.9`), the CLI tag (`cli-v0.38.9`),
+// and a bare version (`0.38.9`). Release tags are cut in pairs off the same
+// commit, so either tag resolves to the same next version.
+const VERSION_PATTERN = /^(?:cli-v|v)?(\d+)\.(\d+)\.(\d+)$/;
 
 // Release trains use patch values 0 through 10; after .10, development moves
 // to the next minor train.
@@ -26,6 +29,7 @@ function printUsage() {
       '',
       'Examples:',
       '  node scripts/bump-workspace-version.mjs --from v0.37.10',
+      '  node scripts/bump-workspace-version.mjs --from cli-v0.37.10',
       '  node scripts/bump-workspace-version.mjs --version 0.38.0 --check',
     ].join('\n'),
   );
@@ -75,7 +79,9 @@ function parseArgs(argv) {
 function parseVersion(rawVersion, label) {
   const match = VERSION_PATTERN.exec(rawVersion);
   if (match == null) {
-    fail(`${label} must be MAJOR.MINOR.PATCH, with an optional leading v.`);
+    fail(
+      `${label} must be MAJOR.MINOR.PATCH, with an optional leading v or cli-v prefix.`,
+    );
   }
 
   const [, major, minor, patch] = match;

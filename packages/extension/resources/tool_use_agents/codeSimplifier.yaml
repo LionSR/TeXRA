@@ -1,5 +1,4 @@
 name: codeSimplifier
-displayName: Code Simplifier — refactor for clarity
 description: Refactors working code for clarity, reuse, and efficiency without changing its behaviour, then confirms the tests still pass. Quality only — it does not hunt for bugs.
 
 settings:

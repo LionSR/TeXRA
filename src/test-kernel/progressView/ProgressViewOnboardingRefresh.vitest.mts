@@ -8,6 +8,10 @@ import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
+
+// Local imports - test support
+import { FakePromptHost } from '../support/FakeHosts';
+
 import type * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
@@ -93,7 +97,11 @@ describe('progress-view onboarding refresh wiring', () => {
     const context = createExtensionContext();
     const provider = createProgressViewProvider();
     provider.refreshOnboardingFunnel.mockResolvedValue(undefined);
-    const handler = new ProgressViewMessageHandler(provider, context);
+    const handler = new ProgressViewMessageHandler(
+      provider,
+      context,
+      new FakePromptHost(),
+    );
 
     await handler.handleMessage(
       {
@@ -130,7 +138,11 @@ describe('progress-view onboarding refresh wiring', () => {
     async (action) => {
       const context = createExtensionContext();
       const provider = createProgressViewProvider();
-      const handler = new ProgressViewMessageHandler(provider, context);
+      const handler = new ProgressViewMessageHandler(
+        provider,
+        context,
+        new FakePromptHost(),
+      );
 
       await handler.handleMessage(
         {
@@ -146,6 +158,48 @@ describe('progress-view onboarding refresh wiring', () => {
       expect(provider.refreshOnboardingFunnel).not.toHaveBeenCalled();
     },
   );
+
+  it('uses PromptHost warning options before deleting all streams', async () => {
+    const context = createExtensionContext();
+    const provider = createProgressViewProvider();
+    const prompt = new FakePromptHost({
+      promptResponses: ['Cancel', 'Delete All'],
+    });
+    (
+      provider.state.streamLogs as unknown as {
+        keys(): StreamTabId[];
+      }
+    ).keys = vi.fn(() => []);
+
+    const handler = new ProgressViewMessageHandler(provider, context, prompt);
+
+    await handler.handleMessage(
+      { command: PROGRESS_VIEW_COMMANDS.DELETE_ALL },
+      createWebviewView(),
+    );
+
+    expect(prompt.messages[0]).toMatchObject({
+      kind: 'warning',
+      message:
+        'Are you sure you want to delete all streams? This action cannot be undone.',
+      options: {
+        modal: true,
+        items: ['Delete All', { label: 'Cancel', isCloseAffordance: true }],
+      },
+    });
+    expect(provider.state.clearAll).not.toHaveBeenCalled();
+
+    await handler.handleMessage(
+      { command: PROGRESS_VIEW_COMMANDS.DELETE_ALL },
+      createWebviewView(),
+    );
+
+    expect(provider.state.clearAll).toHaveBeenCalledOnce();
+    expect(provider.webviewBridge.clearAll).toHaveBeenCalledOnce();
+    expect(provider.syncFullView).toHaveBeenCalledWith({
+      forceRebuild: true,
+    });
+  });
 
   it('delegates onboarding refresh through the main view provider', async () => {
     const refreshOnboardingFunnel = vi.fn().mockResolvedValue(undefined);

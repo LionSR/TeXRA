@@ -22,9 +22,8 @@ import {
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '../render/terminalText';
+import { STATUS_DOT } from '../ui/glyphs';
 
-// Terminal-safe Unicode glyph — Font Awesome is not available in Ink TUI.
-const STATUS_DOT = '●';
 const OUTPUT_CORNER = '⎿';
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;

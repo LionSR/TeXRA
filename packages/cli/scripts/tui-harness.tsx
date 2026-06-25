@@ -13,6 +13,7 @@ import { getAgentsByCategory, loadAgents } from '@agent/index';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@common/errors';
+import { DEFAULT_STARTUP_TEAM_ID } from '@controllers/onboarding/defaultTeamSeeding';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { platform, tryPlatform } from '@platform/platform';
 import {
@@ -39,6 +40,7 @@ import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
+import { cliSettingsStores } from '../src/runtime/settingsStores';
 import {
   formatSlashCommandHelp,
   GOAL_MODE_HELP,
@@ -148,6 +150,8 @@ const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
 const SHOW_WIDE_FIRST_CHILD_LINE =
   process.env.HARNESS_WIDE_FIRST_CHILD_LINE === '1';
 const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
+const SHOW_ORCHESTRATION_STATUS_LINES =
+  process.env.HARNESS_ORCHESTRATION_STATUS_LINES !== '0';
 const SHOW_DELEGATED_ORCHESTRATION_HISTORY =
   process.env.HARNESS_DELEGATED_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
@@ -265,6 +269,9 @@ function parseList(value: string | undefined): string[] {
 const HARNESS_VISIBLE_TOOL_USE_AGENTS = parseList(
   process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS,
 );
+const HARNESS_VISIBLE_WORKFLOW_AGENTS = parseList(
+  process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS,
+);
 
 if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
@@ -284,6 +291,12 @@ if (process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined) {
     HARNESS_VISIBLE_TOOL_USE_AGENTS,
   );
 }
+if (process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined) {
+  await platform().workspaceState.update(
+    WorkspaceStateKey.ENABLED_AGENTS,
+    HARNESS_VISIBLE_WORKFLOW_AGENTS,
+  );
+}
 await loadAgents({ includeRemote: false });
 
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
@@ -293,6 +306,7 @@ const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   }),
   history: harnessOrchestrationHistory(),
   toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
+  preferredPresetId: DEFAULT_STARTUP_TEAM_ID,
 });
 
 function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
@@ -424,7 +438,11 @@ if (SHOW_ORCHESTRATION) {
           : []
       }
       apiMode={HARNESS_API_MODE}
-      statusLines={harnessOrchestrationStatusLines()}
+      statusLines={
+        SHOW_ORCHESTRATION_STATUS_LINES
+          ? harnessOrchestrationStatusLines()
+          : undefined
+      }
       allowDefaultModelLaunch={false}
       onResolve={() => undefined}
     />,
@@ -1575,6 +1593,7 @@ registerBuiltinSlashCommands({
   onResumeSelect: (id) => {
     appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
   },
+  getConfigStores: cliSettingsStores,
   onError: (error) => {
     appendHarnessAssistantTranscript(
       `Slash command failed: ${toErrorMessage(error)}`,

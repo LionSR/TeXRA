@@ -1,51 +1,60 @@
 // Third-party imports
-import { AxiosError, AxiosHeaders } from 'axios';
+import { HTTPError, TimeoutError } from 'ky';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - tools
 import { isTransientHttpError } from '@tools/timeouts';
 
-function axiosErrorWithStatus(status: number): AxiosError {
-  const error = new AxiosError('http error', 'ERR_BAD_RESPONSE');
-  error.response = {
-    status,
-    statusText: '',
-    data: undefined,
-    headers: {},
-    config: { headers: new AxiosHeaders() },
-  };
-  return error;
+function kyErrorWithStatus(status: number): HTTPError {
+  return new HTTPError(
+    new Response(null, { status }),
+    new Request('https://example.com'),
+    {} as never,
+  );
 }
 
 describe('isTransientHttpError', () => {
-  it('treats request timeouts as transient', () => {
+  it('treats ky TimeoutError as transient', () => {
     expect(
-      isTransientHttpError(new AxiosError('timeout', 'ECONNABORTED')),
+      isTransientHttpError(
+        new TimeoutError(new Request('https://example.com')),
+      ),
     ).toBe(true);
-    expect(isTransientHttpError(new AxiosError('timeout', 'ETIMEDOUT'))).toBe(
-      true,
-    );
   });
 
-  it('treats network failures with no response as transient', () => {
-    // No `.response` set — the request never completed.
-    expect(isTransientHttpError(new AxiosError('reset', 'ECONNRESET'))).toBe(
-      true,
-    );
+  it('treats AbortSignal.timeout() errors as transient', () => {
+    const err = Object.assign(new Error('Timeout'), { name: 'TimeoutError' });
+    expect(isTransientHttpError(err)).toBe(true);
+  });
+
+  it('treats AbortError with TimeoutError cause as transient (undici wrapping)', () => {
+    const cause = Object.assign(new Error('signal timed out'), {
+      name: 'TimeoutError',
+    });
+    const err = Object.assign(new Error('The operation was aborted'), {
+      name: 'AbortError',
+      cause,
+    });
+    expect(isTransientHttpError(err)).toBe(true);
+  });
+
+  it('treats network failures (no response) as transient', () => {
+    // fetch throws TypeError for connection reset, DNS failure, socket hang-up
+    expect(isTransientHttpError(new TypeError('Failed to fetch'))).toBe(true);
   });
 
   it('treats rate limits and 5xx server errors as transient', () => {
-    expect(isTransientHttpError(axiosErrorWithStatus(429))).toBe(true);
-    expect(isTransientHttpError(axiosErrorWithStatus(500))).toBe(true);
-    expect(isTransientHttpError(axiosErrorWithStatus(503))).toBe(true);
+    expect(isTransientHttpError(kyErrorWithStatus(429))).toBe(true);
+    expect(isTransientHttpError(kyErrorWithStatus(500))).toBe(true);
+    expect(isTransientHttpError(kyErrorWithStatus(503))).toBe(true);
   });
 
   it('treats 4xx responses as permanent', () => {
-    expect(isTransientHttpError(axiosErrorWithStatus(400))).toBe(false);
-    expect(isTransientHttpError(axiosErrorWithStatus(404))).toBe(false);
+    expect(isTransientHttpError(kyErrorWithStatus(400))).toBe(false);
+    expect(isTransientHttpError(kyErrorWithStatus(404))).toBe(false);
   });
 
-  it('treats non-axios errors as permanent', () => {
+  it('treats non-http errors as permanent', () => {
     expect(isTransientHttpError(new Error('boom'))).toBe(false);
     expect(isTransientHttpError('nope')).toBe(false);
     expect(isTransientHttpError(undefined)).toBe(false);

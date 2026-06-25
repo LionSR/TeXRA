@@ -2,7 +2,6 @@
 // and toggles integrations that are marked toggleable in EXTERNAL_TOOL_DEFS.
 
 import { Box, Text } from 'ink';
-import { Spinner } from '@inkjs/ui';
 
 import {
   readCliToolStatuses,
@@ -12,7 +11,11 @@ import {
 import { toolStatusLabel } from '@shared/tools/toolStatusLabels';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
-import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
+import {
+  CompactFormKeyHints,
+  FormFrame,
+  renderAsyncListFormTransient,
+} from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
@@ -70,21 +73,14 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
     onClose: props.onClose,
   });
 
-  if (loading) {
-    return (
-      <FormFrame color="cyan" title="/tools" showCloseHint={false}>
-        <Spinner label="Checking tool integrations..." />
-      </FormFrame>
-    );
-  }
-
-  if (error) {
-    return (
-      <FormFrame color="red" title="/tools - error" showCloseHint={false}>
-        <Text>{error}</Text>
-      </FormFrame>
-    );
-  }
+  const transient = renderAsyncListFormTransient({
+    loading,
+    error,
+    title: '/tools',
+    loadingLabel: 'Checking tool integrations...',
+    showCloseHint: false,
+  });
+  if (transient) return transient;
 
   const tools = data ?? [];
   const selectWindow = toolsSelectWindow({

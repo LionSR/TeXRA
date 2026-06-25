@@ -16,12 +16,15 @@ import type { DeepSeekToolCall, OpenAIToolCall } from '../types/IModelHandler';
  *   content on separate channels, so the aggregator is always on.
  * - `shouldIncludeReasoningInToolCalls()` — when the model reasons, its
  *   reasoning must be replayed into tool-use follow-up messages.
+ * - `requiresBatchedParallelToolResults` — most providers with separate
+ *   reasoning channels need one batched follow-up message to preserve that
+ *   reasoning across parallel tool calls.
  *
  * Overrides that vary between these providers stay on the concrete handlers:
- * `requiresBatchedParallelToolResults` (GLM does not batch), the
- * content-stringification flags (DeepSeek stringifies unconditionally while
- * Kimi/GLM/MiniMax preserve vision parts), the `thinking`/`reasoning_split`
- * parameter shape, and each provider's reasoning-field extraction.
+ * the GLM batching exception, content-stringification flags (DeepSeek
+ * stringifies unconditionally while Kimi/GLM/MiniMax preserve vision parts),
+ * the `thinking`/`reasoning_split` parameter shape, and each provider's
+ * reasoning-field extraction.
  *
  * Providers that merely tolerate reasoning tokens without a separate channel
  * (xAI, DashScope) intentionally keep extending {@link ModelHandlerOpenAI}.
@@ -30,6 +33,10 @@ export class ReasoningModelHandlerOpenAI<
   TCall extends OpenAIToolCall | DeepSeekToolCall = OpenAIToolCall,
 > extends ModelHandlerOpenAI<TCall> {
   protected override useReasoningStreamAggregator = true;
+
+  override get requiresBatchedParallelToolResults(): boolean {
+    return true;
+  }
 
   protected override shouldIncludeReasoningInToolCalls(): boolean {
     return this.capabilities.supportsReasoning;

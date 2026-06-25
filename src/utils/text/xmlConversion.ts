@@ -6,7 +6,7 @@
 // Third-party imports
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
-import nodePandoc from 'node-pandoc';
+import { execa } from 'execa';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -14,6 +14,7 @@ import { toErrorMessage } from '@common/errors';
 // Local imports - utils
 import * as logger from '@logger/logUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
+import { extendEnvPath } from '@utils/system/platformPaths';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Format Detection (inlined from xmlFormatDetection.ts - only used here)
@@ -174,21 +175,12 @@ async function convertWithPandoc(text: string): Promise<string | null> {
   }
 
   try {
-    const result = await new Promise<string>((resolve, reject) => {
-      nodePandoc(
-        text,
-        ['-f', format, '-t', 'markdown'],
-        (err: Error | null, res: string) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(res);
-          }
-        },
-      );
+    const { stdout } = await execa('pandoc', ['-f', format, '-t', 'markdown'], {
+      input: text,
+      stripFinalNewline: false,
+      env: { ...process.env, PATH: extendEnvPath() },
     });
-    // Normalize Pandoc reference syntax to canonical LaTeX format
-    return normalizePandocReferences(result);
+    return normalizePandocReferences(stdout);
   } catch (err) {
     logger.error(CHANNEL, `Pandoc conversion failed: ${toErrorMessage(err)}`);
     return null;

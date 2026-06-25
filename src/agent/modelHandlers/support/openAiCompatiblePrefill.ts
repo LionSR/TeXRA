@@ -78,7 +78,7 @@ export async function initializeOpenAiCompatibleOutputAndPrefill<
     return [true, messages];
   }
 
-  adapter.logger.warn(
+  adapter.logger.debug(
     'Output file exists but no end tag found - continuing from file',
   );
   // Only need to handle case where prefill needs to be prepended

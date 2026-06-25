@@ -1,5 +1,4 @@
 name: assistant
-displayName: Assistant — general research aide
 description: General-purpose scientific assistant covering the full research workflow — literature, computation, formal proofs, writing, document production, and delegation. Prefer a more specialized agent when the task maps cleanly to one; pick assistant when the work spans several of its domains.
 
 settings:

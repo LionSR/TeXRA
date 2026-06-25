@@ -191,36 +191,37 @@ export const GLOBAL_BOOL_FLAGS = new Set<string>(
   }),
 );
 
-const HEADLESS_ONLY_GLOBAL_FLAG_SPELLINGS =
-  HEADLESS_ONLY_GLOBAL_ARG_NAMES.flatMap((name) =>
-    flagSpellings(name, GLOBAL_ARGS[name]),
-  );
-const HEADLESS_ONLY_GLOBAL_FLAG_LABELS = formatCommaList(
-  HEADLESS_ONLY_GLOBAL_FLAG_SPELLINGS.filter((flag) => flag.startsWith('--')),
-);
-const HEADLESS_ONLY_GLOBAL_FLAGS = new Set<string>(
-  HEADLESS_ONLY_GLOBAL_FLAG_SPELLINGS,
-);
-
 export function optString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function isHeadlessOnlyFlag(arg: string): boolean {
-  if (HEADLESS_ONLY_GLOBAL_FLAGS.has(arg)) return true;
-  return HEADLESS_ONLY_GLOBAL_FLAG_SPELLINGS.some(
-    (flag) => flag.startsWith('--') && arg.startsWith(`${flag}=`),
-  );
+function headlessOnlyFlagLabel(arg: string): string | undefined {
+  for (const name of HEADLESS_ONLY_GLOBAL_ARG_NAMES) {
+    for (const spelling of flagSpellings(name, GLOBAL_ARGS[name])) {
+      if (arg === spelling) return `--${name}`;
+      if (spelling.startsWith('--') && arg.startsWith(`${spelling}=`)) {
+        return spelling;
+      }
+    }
+  }
+  return undefined;
 }
 
 export function rejectHeadlessOnlyFlags(
   rawArgs: readonly string[],
   commandName: string,
 ): void {
-  if (!rawArgs.some(isHeadlessOnlyFlag)) return;
+  const labels = [
+    ...new Set(
+      rawArgs
+        .map(headlessOnlyFlagLabel)
+        .filter((label): label is string => label !== undefined),
+    ),
+  ];
+  if (labels.length === 0) return;
 
   throw new CliUsageError(
-    `texra ${commandName} is interactive and does not support ${HEADLESS_ONLY_GLOBAL_FLAG_LABELS}. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,
+    `texra ${commandName} is interactive and does not support ${formatCommaList(labels)}. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,
   );
 }
 

@@ -40,6 +40,7 @@ function isToolResultMessage(message: ProviderMessage | undefined): boolean {
   const record: Record<string, unknown> = message;
 
   if (record['type'] === 'function_call_output') return true;
+  if (record['type'] === 'function_result') return true;
   if (record['role'] === 'tool') return true;
 
   return (

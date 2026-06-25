@@ -61,8 +61,23 @@ export const OutputFileInfoSchema = OutputFileSchema.extend({
 
 export const OutputFileInfoListSchema = OutputFileInfoSchema.array();
 
+/**
+ * Flattened projection of {@link OutputFileInfo} for agent results and
+ * execution metadata. It keeps persisted workflow summaries independent from
+ * the richer file-location internals used while a run is active.
+ */
+export const OutputFileSummarySchema = z.object({
+  round: z.int().nonnegative(),
+  relativePath: z.string(),
+  absolutePath: z.string(),
+  location: z.enum(['workspace', 'runStorage', 'external']),
+  originalPath: z.string().nullable(),
+  added: z.int().nonnegative().nullable(),
+  removed: z.int().nonnegative().nullable(),
+});
+
 export const CompileFailureSchema = z.strictObject({
-  round: z.number(),
+  round: z.int().nonnegative(),
   displayName: z.string(),
   output: FileLocationSchema,
   log: FileLocationSchema,
@@ -72,7 +87,21 @@ export const CompileFailureSchema = z.strictObject({
 export type OutputFile = z.infer<typeof OutputFileSchema>;
 export type FileLineage = z.infer<typeof FileLineageSchema>;
 export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
+export type OutputFileSummary = z.infer<typeof OutputFileSummarySchema>;
 export type CompileFailure = z.infer<typeof CompileFailureSchema>;
+
+/**
+ * Flattened projection of {@link CompileFailure} for agent results and
+ * execution metadata.
+ */
+export const CompileFailureSummarySchema = z.object({
+  round: z.int().nonnegative(),
+  displayName: z.string(),
+  outputPath: z.string(),
+  logPath: z.string(),
+  logAbsolutePath: z.string(),
+});
+export type CompileFailureSummary = z.infer<typeof CompileFailureSummarySchema>;
 
 export const CompileResultSchema = z.discriminatedUnion('status', [
   z.strictObject({

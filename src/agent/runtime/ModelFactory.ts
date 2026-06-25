@@ -33,6 +33,7 @@ export type ModelHandlerCompatibilityKey =
   | 'ModelHandlerAnthropic'
   | 'ModelHandlerOpenAI'
   | 'ModelHandlerGoogleGenAI'
+  | 'ModelHandlerGoogleInteractions'
   | 'ModelHandlerDeepSeek'
   | 'ModelHandlerXAI'
   | 'ModelHandlerKimi'
@@ -171,6 +172,63 @@ function requiresOpenAIResponsesAPI(
   );
 }
 
+/**
+ * Whether a model is pinned to the Interactions API. `requiresInteractionsAPI`
+ * is a future per-model opt-in (parallel to `requiresResponsesAPI`); it is not
+ * yet on the external llm-zoo ModelConfig, so read it defensively. v0 registers
+ * no model with it set.
+ */
+function modelRequiresInteractionsAPI(config: ModelConfig): boolean {
+  return (
+    config.provider === ModelProvider.GOOGLE &&
+    !config.openRouterOnly &&
+    (config as { requiresInteractionsAPI?: boolean })
+      .requiresInteractionsAPI === true
+  );
+}
+
+/**
+ * Check if the Google Interactions API should be used for this config.
+ *
+ * Additive sibling to the chat/`generateContent` Google route, gated behind
+ * `texra.model.useGoogleInteractionsAPI` (default off). OpenRouter can NOT proxy
+ * Interactions, so an active OpenRouter proxy always returns false — the chat
+ * handler (or OpenRouter) remains the fallback. This is a PURE predicate (never
+ * throws): the unsupported Interactions-only + OpenRouter combination is failed
+ * loudly at handler creation (`assertGoogleInteractionsRoutable`), not here, so
+ * key-derivation callers (history restore, `modelSwitchDisabledReason`) stay
+ * exception-free — matching `requiresOpenAIResponsesAPI`'s contract.
+ */
+export function shouldUseGoogleInteractionsAPI(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+): boolean {
+  if (config.provider !== ModelProvider.GOOGLE || config.openRouterOnly) {
+    return false;
+  }
+  if (useOpenRouter) return false;
+  if (modelRequiresInteractionsAPI(config)) return true;
+  return getConfig<boolean>('texra.model.useGoogleInteractionsAPI', false);
+}
+
+/**
+ * Fail loudly when an Interactions-only model is selected while OpenRouter is
+ * active — OpenRouter cannot proxy Interactions, so silently routing it through
+ * the OpenRouter handler would be wrong (spec §6.3). Called from
+ * `createModelHandler` only (the live-routing path that actually instantiates a
+ * handler), keeping the routing predicate pure.
+ */
+export function assertGoogleInteractionsRoutable(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+): void {
+  if (modelRequiresInteractionsAPI(config) && useOpenRouter) {
+    throw new Error(
+      `Model ${config.name} requires the Google Interactions API, which cannot be used through OpenRouter. Disable OpenRouter or select a different model.`,
+    );
+  }
+}
+
 /** Check if OpenAI Responses API should be used for this config. */
 export function shouldUseResponsesAPI(
   config: ModelConfig,
@@ -257,6 +315,9 @@ export function modelHandlerCompatibilityKey(
   );
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     return 'ModelHandlerOpenAIResponse';
+  }
+  if (shouldUseGoogleInteractionsAPI(config, useOpenRouter)) {
+    return 'ModelHandlerGoogleInteractions';
   }
   if (config.openRouterOnly || useOpenRouter) {
     return 'ModelHandlerOpenRouterNative';
@@ -367,6 +428,21 @@ export async function createModelHandler(
       'ModelHandlerOpenAIResponse',
     );
   }
+
+  // Google Interactions API (additive, flag-gated; never via OpenRouter)
+  if (shouldUseGoogleInteractionsAPI(config, useOpenRouter)) {
+    logger.debug(CHANNEL, 'Using Google Interactions API Handler');
+    const { ModelHandlerGoogleInteractions } =
+      await import('@agent/modelHandlers/google/modelHandlerGoogleInteractions');
+    return withModelHandlerCompatibilityKey(
+      withReasoningOverride(new ModelHandlerGoogleInteractions(config)),
+      'ModelHandlerGoogleInteractions',
+    );
+  }
+
+  // An Interactions-only model cannot be served through OpenRouter — fail loudly
+  // here rather than silently routing it to the OpenRouter handler below.
+  assertGoogleInteractionsRoutable(config, useOpenRouter);
 
   // Route through OpenRouter if configured
   if (config.openRouterOnly || useOpenRouter) {

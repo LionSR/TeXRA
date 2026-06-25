@@ -289,7 +289,7 @@ describe('CLI context config defaults', () => {
   it('parses TEXRA_API_MODE aliases before runtime initialization', async () => {
     const context = await buildCliContext({
       ambient,
-      env: { TEXRA_API_MODE: 'direct' },
+      env: { TEXRA_API_MODE: 'byok' },
       globalArgs: { cwd: tmpdir() },
     });
 

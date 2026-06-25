@@ -4,6 +4,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AbsoluteFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { byStringProp } from '@utils/core/comparators';
+import { normalizeFilePath } from '@shared/utils/path';
 
 export interface ExecutionWorkspaceFile {
   readonly path: string;
@@ -36,7 +37,7 @@ export function resolveExecutionWorkspaceFilePath(
 
   return {
     absolutePath,
-    path: relativePath.replaceAll('\\', '/'),
+    path: normalizeFilePath(relativePath),
   };
 }
 

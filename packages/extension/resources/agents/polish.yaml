@@ -1,5 +1,4 @@
 name: polish
-displayName: Polish — instruction-driven rewrite
 description: Rewrites and restructures text to improve clarity, flow, and readability based on your instructions.
 
 settings:

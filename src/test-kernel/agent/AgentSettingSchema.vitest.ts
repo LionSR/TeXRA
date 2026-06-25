@@ -38,19 +38,29 @@ describe('AgentSettingSchema', () => {
 });
 
 describe('AgentDefinitionSchema', () => {
-  it('trims displayName and rejects blank labels', () => {
-    expect(
-      AgentDefinitionSchema.parse({
-        name: 'assistant',
-        displayName: '  Assistant  ',
-      }).displayName,
-    ).toBe('Assistant');
+  it('rejects unknown top-level metadata', () => {
+    const result = AgentDefinitionSchema.safeParse({
+      name: 'assistant',
+      title: 'Assistant',
+    });
 
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error('unknown metadata should not be valid');
+    }
+    expect(result.error.issues).toEqual([
+      expect.objectContaining({
+        code: 'unrecognized_keys',
+        keys: ['title'],
+      }),
+    ]);
+  });
+
+  it('rejects names that are not identifiers', () => {
     expect(() =>
       AgentDefinitionSchema.parse({
-        name: 'assistant',
-        displayName: '   ',
+        name: 'review team',
       }),
-    ).toThrow();
+    ).toThrow('Agent names must be identifiers');
   });
 });

@@ -30,20 +30,39 @@ describe('CLI AgentListForm row budget', () => {
     ).toBe('lean');
   });
 
-  it('resolves current agents by value name when rows use display labels', () => {
-    const displayAgents = [
-      { value: 'builtInToolUse:setup', label: 'Setup assistant' },
-      { value: 'remote:orchestrator', label: 'Orchestrator' },
+  it('resolves current agents by canonical names and values', () => {
+    const canonicalAgents = [
+      { value: 'remote:review', label: 'review' },
+      { value: 'remote:leanOrchestrator', label: 'leanOrchestrator' },
     ];
 
-    const setupAgent = currentVisibleAgent(displayAgents, 'setup');
+    const reviewAgent = currentVisibleAgent(canonicalAgents, 'review');
 
-    expect(setupAgent?.label).toBe('Setup assistant');
-    expect(setupAgent?.value).toBe('builtInToolUse:setup');
+    expect(reviewAgent?.label).toBe('review');
+    expect(reviewAgent?.value).toBe('remote:review');
     expect(
-      currentVisibleAgent(displayAgents, 'remote:orchestrator')?.label,
-    ).toBe('Orchestrator');
-    expect(hiddenCurrentAgentHint(displayAgents, 'setup')).toBeUndefined();
+      currentVisibleAgent(canonicalAgents, 'leanOrchestrator')?.label,
+    ).toBe('leanOrchestrator');
+    expect(hiddenCurrentAgentHint(canonicalAgents, 'review')).toBeUndefined();
+  });
+
+  it('does not match arbitrary labels when canonical names differ', () => {
+    const agentsWithReadableLabel = [
+      {
+        value: 'remote:review',
+        label: 'Readable review label',
+      },
+    ];
+
+    expect(
+      currentVisibleAgent(agentsWithReadableLabel, 'Readable review label'),
+    ).toBeUndefined();
+    expect(currentVisibleAgent(agentsWithReadableLabel, 'review')?.value).toBe(
+      'remote:review',
+    );
+    expect(
+      hiddenCurrentAgentHint(agentsWithReadableLabel, 'Readable review label'),
+    ).toBe('Current: Readable review label (hidden from picker)');
   });
 
   it('labels the current agent when it is hidden from the picker', () => {
@@ -99,6 +118,22 @@ describe('CLI AgentListForm row budget', () => {
       maxVisibleItems: 1,
       showOverflow: true,
       maxVisibleWorkflows: 0,
+      showWorkflowOverflow: false,
+    });
+  });
+
+  it('shows the full default workflow roster in the normal picker budget', () => {
+    expect(
+      agentSelectWindow({
+        availableRows: 18,
+        extraRows: 1,
+        itemCount: 5,
+        workflowCount: 2,
+      }),
+    ).toEqual({
+      maxVisibleItems: 5,
+      showOverflow: false,
+      maxVisibleWorkflows: 2,
       showWorkflowOverflow: false,
     });
   });

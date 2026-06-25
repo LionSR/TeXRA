@@ -1,6 +1,11 @@
-import { writeTerminalStatus } from '@agent/storage';
+import {
+  getExecutionStore,
+  writeTerminalStatus,
+  type ResultMeta,
+} from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS } from '@shared/schemas';
 
 import {
@@ -9,7 +14,7 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { writeErrorStderr } from '../runtime/logSinks';
+import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
   resolveCliRunModel,
@@ -30,10 +35,7 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { executeCliConfig } from '../runtime/runExecution';
-import {
-  terminalStatusExitCode,
-  type CliRunResult,
-} from '../runtime/terminalStatus';
+import { terminalStatusExitCode } from '../runtime/terminalStatus';
 import {
   hasMixedStdinWorkflowInputSpecs,
   withExpandedRunInputs,
@@ -41,6 +43,7 @@ import {
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
+  type CliWorkflowRunResult,
   expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
   resolveWorkflowOutput,
@@ -113,26 +116,27 @@ export async function runWorkflowAgent(
         enforceCategory: true,
         registerExecution: true,
         markErrorOnThrow: true,
+        expectedCategory: AgentCategory.Workflow,
+        categoryMismatchMessage: `Agent "${init.agent}" resolved to a non workflow run.`,
       });
       if (!execution.ok) return execution.exitCode;
 
       const { executionId, result, terminalStatus } = execution;
-      let displayResult: CliRunResult;
+      let workflowResult: CliWorkflowRunResult;
       try {
-        displayResult = (
-          await resolveWorkflowOutput(
-            init.output,
-            init.outputDir,
-            result,
-            runContext,
-            {
-              expectedOutputFiles: init.outputDir
-                ? expectedOutputFilesForOutputDir(agent, inputFiles)
-                : undefined,
-              terminalStatus,
-            },
-          )
-        ).displayResult;
+        workflowResult = await resolveWorkflowOutput(
+          init.output,
+          init.outputDir,
+          result,
+          runContext,
+          {
+            expectedOutputFiles: init.outputDir
+              ? expectedOutputFilesForOutputDir(agent, inputFiles)
+              : undefined,
+            terminalStatus,
+          },
+        );
+        await persistWorkflowResultMeta(executionId, workflowResult);
       } catch (error) {
         if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
           writeErrorStderr(error);
@@ -145,17 +149,37 @@ export async function runWorkflowAgent(
       }
 
       emitCliResult(runContext, {
-        json: displayResult,
-        ndjson: { kind: 'result', result: displayResult },
-        text:
-          displayResult.category === AgentCategory.Workflow
-            ? formatWorkflowTextResult(displayResult)
-            : terminalStatus,
+        json: workflowResult,
+        ndjson: { kind: 'result', result: workflowResult },
+        text: formatWorkflowTextResult(workflowResult),
       });
 
       return terminalStatusExitCode(terminalStatus, runContext);
     },
   );
+}
+
+async function persistWorkflowResultMeta(
+  executionId: string,
+  result: CliWorkflowRunResult,
+): Promise<void> {
+  try {
+    const resultMeta: ResultMeta = {
+      outputs: [...result.outputs],
+      compileFailures: [...result.compileFailures],
+    };
+    if (result.copiedOutput) {
+      resultMeta.copiedOutput = result.copiedOutput;
+    }
+    if (result.copiedOutputs?.length) {
+      resultMeta.copiedOutputs = [...result.copiedOutputs];
+    }
+    await getExecutionStore(executionId).writeResultMeta(resultMeta);
+  } catch (error) {
+    writeTextStderr(
+      `Warning: could not persist workflow result metadata: ${toErrorMessage(error)}`,
+    );
+  }
 }
 
 export const runWorkflowCommand = defineCliCommand({

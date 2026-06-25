@@ -1,5 +1,4 @@
 name: lean
-displayName: Lean — Lean 4 proof assistant
 description: Lean 4 proof assistant with VS Code integration and CLI fallback.
 
 settings:

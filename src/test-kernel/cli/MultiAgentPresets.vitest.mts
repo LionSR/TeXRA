@@ -63,7 +63,7 @@ describe('CLI multi-agent presets', () => {
     const output = formatCliMultiAgentPresetList(plans);
 
     expect(output).toContain(
-      'built-in\tphysicist\tPhysicist\tworkflow:4\ttool-use:9',
+      'built-in\tphysicist\tPhysicist\tworkflow:2\ttool-use:6',
     );
     expect(output).not.toContain('Hint:');
   });
@@ -158,7 +158,7 @@ describe('CLI multi-agent presets', () => {
       'physicist',
     )!;
     const plan = planCliMultiAgentPresetRun(preset, {
-      workflowAgents: [agent('criticize', AgentCategory.Workflow)],
+      workflowAgents: [agent('correct', AgentCategory.Workflow)],
       toolUseAgents: [
         agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
         agent('review', AgentCategory.ToolUse),
@@ -166,7 +166,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
-      'degraded; 1/4 workflows; 2/9 tools',
+      'degraded; 1/2 workflows; 2/6 tools',
     );
     expect(formatCliMultiAgentPresetLauncherHints(plan)).toEqual([
       'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
@@ -188,7 +188,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
-      'WARN preset physicist references unavailable agents: workflow:criticize, workflow:generic, workflow:devise, workflow:apply, tool-use:research, tool-use:numerics, tool-use:search, tool-use:presenter, tool-use:simplifier, tool-use:latexFixer, tool-use:progressCheck',
+      'WARN preset physicist references unavailable agents: workflow:correct, workflow:polish, tool-use:research, tool-use:numerics, tool-use:presenter, tool-use:latexFixer',
       'WARN preset physicist is degraded; running root agent orchestrator with 1 available team agent.',
     ]);
   });
@@ -206,7 +206,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
-      'WARN preset physicist references unavailable agents: workflow:criticize, workflow:generic, workflow:devise, workflow:apply, tool-use:research, tool-use:numerics, tool-use:review, tool-use:search, tool-use:presenter, tool-use:simplifier, tool-use:latexFixer, tool-use:progressCheck',
+      'WARN preset physicist references unavailable agents: workflow:correct, workflow:polish, tool-use:research, tool-use:numerics, tool-use:review, tool-use:presenter, tool-use:latexFixer',
     ]);
   });
 
@@ -230,8 +230,8 @@ describe('CLI multi-agent presets', () => {
 
     expect(cliMultiAgentPresetAvailability(plan)).toMatchObject({
       status: 'available',
-      toolUse: { available: 9, total: 9 },
-      workflow: { available: 4, total: 4 },
+      toolUse: { available: 6, total: 6 },
+      workflow: { available: 2, total: 2 },
     });
   });
 
@@ -273,8 +273,8 @@ describe('CLI multi-agent presets', () => {
 
     expect(cliMultiAgentPresetAvailability(plan)).toMatchObject({
       status: 'unavailable',
-      toolUse: { available: 0, total: 9 },
-      workflow: { available: 0, total: 4 },
+      toolUse: { available: 0, total: 6 },
+      workflow: { available: 0, total: 2 },
     });
     expect(cliMultiAgentPresetTeamLaunchBlockReason(plan)).toBe(
       'no runnable team root',
@@ -537,8 +537,8 @@ describe('CLI multi-agent presets', () => {
     )!;
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [
-        agent('criticize', AgentCategory.Workflow),
-        agent('generic', AgentCategory.Workflow),
+        agent('correct', AgentCategory.Workflow),
+        agent('polish', AgentCategory.Workflow),
       ],
       toolUseAgents: [
         agent('review', AgentCategory.ToolUse),
@@ -549,22 +549,19 @@ describe('CLI multi-agent presets', () => {
 
     expect(details).toContain('Team root agent:\n  orchestrator');
     expect(details).toContain(
-      'Available workflow agents:\n  criticize\n  generic',
+      'Available workflow agents:\n  correct\n  polish',
     );
     expect(details).toContain(
       'Available tool-use agents:\n  orchestrator\n  review',
     );
-    expect(details).toContain('Missing workflow agents:\n  devise\n  apply');
+    expect(details).toContain('Missing workflow agents:\n  (none)');
     expect(details).toContain(
       [
         'Missing tool-use agents:',
         '  research',
         '  numerics',
-        '  search',
         '  presenter',
-        '  simplifier',
         '  latexFixer',
-        '  progressCheck',
         '',
         'Hint: Researcher Access sign-in may load additional remote team agents.',
       ].join('\n'),
@@ -596,10 +593,8 @@ describe('CLI multi-agent presets', () => {
     )!;
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [
-        agent('criticize', AgentCategory.Workflow),
-        agent('generic', AgentCategory.Workflow),
-        agent('devise', AgentCategory.Workflow),
-        agent('apply', AgentCategory.Workflow),
+        agent('correct', AgentCategory.Workflow),
+        agent('polish', AgentCategory.Workflow),
       ],
       toolUseAgents: [
         agent('review', AgentCategory.ToolUse),
@@ -609,10 +604,8 @@ describe('CLI multi-agent presets', () => {
 
     expect(plan.rootAgent?.name).toBe('orchestrator');
     expect(plan.workflowAgentKeys).toEqual([
-      'builtInWorkflow:criticize',
-      'builtInWorkflow:generic',
-      'builtInWorkflow:devise',
-      'builtInWorkflow:apply',
+      'builtInWorkflow:correct',
+      'builtInWorkflow:polish',
     ]);
     expect(plan.toolUseAgentKeys).toEqual([
       'builtInToolUse:orchestrator',
@@ -835,7 +828,7 @@ describe('CLI multi-agent presets', () => {
     expect(sourceQualifiedPlan.rootAgent?.name).toBe('review');
   });
 
-  it('allows simplifier when explicitly requested as the preset root', () => {
+  it('allows a preset member when explicitly requested as the root', () => {
     const preset = findCliMultiAgentPreset(
       cliMultiAgentPresets(undefined),
       'physicist',
@@ -843,14 +836,14 @@ describe('CLI multi-agent presets', () => {
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [
-        agent('review', AgentCategory.ToolUse),
-        agent('simplifier', AgentCategory.ToolUse, ['delegate_agent']),
+        agent('review', AgentCategory.ToolUse, ['delegate_agent']),
+        agent('research', AgentCategory.ToolUse),
       ],
-      agentOverride: 'simplifier',
+      agentOverride: 'review',
     });
 
-    expect(plan.rootAgent?.name).toBe('simplifier');
-    expect(plan.toolUseAgentKeys).toContain('builtInToolUse:simplifier');
+    expect(plan.rootAgent?.name).toBe('review');
+    expect(plan.toolUseAgentKeys).toContain('builtInToolUse:review');
   });
 
   it('tracks a missing root override as a plan gap', () => {

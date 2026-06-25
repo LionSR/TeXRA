@@ -301,6 +301,42 @@ describe('CLI history runtime', () => {
     expect(text).not.toContain('CLI output:  /tmp/texra-output/polished.tex ');
   });
 
+  it('surfaces workflow result metadata in history details', async () => {
+    const outputSummary = {
+      round: 1,
+      relativePath: 'r1/paper.tex',
+      absolutePath: '/tmp/run/r1/paper.tex',
+      location: 'runStorage' as const,
+      originalPath: '/tmp/paper.tex',
+      added: 8,
+      removed: 0,
+    };
+    const compileFailure = {
+      round: 1,
+      displayName: 'paper.tex',
+      outputPath: 'r1/paper.tex',
+      logPath: 'compile/r1_paper.tex.log',
+      logAbsolutePath: '/tmp/run/compile/r1_paper.tex.log',
+    };
+    mocks.readResultMeta.mockResolvedValue({
+      copiedOutput: '/tmp/annotated.tex',
+      outputs: [outputSummary],
+      compileFailures: [compileFailure],
+    });
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+    const text = formatCliHistoryDetailsText(details!);
+
+    expect(details?.resultMeta).toEqual({
+      copiedOutput: '/tmp/annotated.tex',
+      outputs: [outputSummary],
+      compileFailures: [compileFailure],
+    });
+    expect(text).toContain('"copiedOutput":"/tmp/annotated.tex"');
+    expect(text).toContain('"compileFailures"');
+    expect(text).toContain('compile/r1_paper.tex.log');
+  });
+
   it('shows a bounded final assistant preview when no report is stored', async () => {
     mocks.readConversation.mockResolvedValue([
       { role: 'user', content: 'Review the proof.' },

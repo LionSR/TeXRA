@@ -1,5 +1,4 @@
 name: engineer
-displayName: Engineer — software team lead
 description: Software engineering team lead. Turns a coding goal into focused tasks, delegates to coder, codeReviewer, testEngineer, and codeSimplifier, reviews their work, and keeps the codebase coherent.
 
 settings:
