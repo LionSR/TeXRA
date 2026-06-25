@@ -1,4 +1,5 @@
 import type { AgentTrace } from '@agent/trace';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 
 /**
  * Safely parse tool call arguments from raw string to object.
@@ -9,13 +10,13 @@ export function parseToolArguments(raw: unknown, logger: AgentTrace): unknown {
     return raw;
   }
 
-  try {
-    return JSON.parse(raw);
-  } catch (error) {
+  const parsed = safeParseJson(raw);
+  if (!parsed.ok) {
     logger.warn(
       'Tool call arguments could not be parsed as JSON; using raw string.',
-      { data: error },
+      { data: parsed.error },
     );
     return raw;
   }
+  return parsed.value;
 }

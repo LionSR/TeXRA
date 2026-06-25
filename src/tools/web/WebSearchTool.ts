@@ -4,7 +4,7 @@ import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 // Internal imports
-import { toErrorMessage } from '@common/errors';
+import { ensureError, toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import { isTimeoutError, isTransientHttpError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
@@ -73,9 +73,7 @@ export class WebSearchTool extends defineTool({
             return (await response.json()) as DuckDuckGoResponse;
           } catch (error: unknown) {
             if (isTransientHttpError(error)) throw error;
-            throw new AbortError(
-              error instanceof Error ? error : new Error(String(error)),
-            );
+            throw new AbortError(ensureError(error));
           }
         },
         { retries: DDG_RETRIES, minTimeout: 500, randomize: true },
