@@ -99,7 +99,7 @@ function isToolFileAttachment(value: unknown): value is ToolFileAttachment {
  * Extracts file attachments from a tool result and returns a typed payload.
  * Binary data (base64Data, bytes) is stripped from the result.
  *
- * Uses Zod schema with passthrough() so parsing never fails - unknown fields
+ * Uses a Zod looseObject schema so parsing never fails - unknown fields
  * are preserved for forward compatibility.
  *
  * @param result - Raw tool result (may contain binary data)
@@ -114,7 +114,7 @@ export function extractToolAttachments(
     ? attachmentsCandidate.filter(isToolFileAttachment)
     : [];
 
-  // Parse with Zod - passthrough() ensures this never fails
+  // Parse with Zod - looseObject ensures this never fails
   const parsed = ToolResultPayloadSchema.parse(result);
 
   // Build sanitized result, stripping binary data, undefined values, and redundant error fields
