@@ -13,18 +13,19 @@ import {
 
 import { cliState } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
+import { TODO_ACTIVE, TODO_DONE, TODO_PENDING } from '../ui/glyphs';
 
 // Marker glyph + color per todo status; statuses absent here (e.g. PENDING)
 // fall back to the default empty box with no color.
 const TODO_STATUS_DISPLAY: Partial<
   Record<TodoStatus, { marker: string; color: string }>
 > = {
-  [TODO_STATUS.COMPLETED]: { marker: '☑', color: 'green' },
-  [TODO_STATUS.IN_PROGRESS]: { marker: '☐', color: 'cyan' },
+  [TODO_STATUS.COMPLETED]: { marker: TODO_DONE, color: 'green' },
+  [TODO_STATUS.IN_PROGRESS]: { marker: TODO_ACTIVE, color: 'cyan' },
 };
 
 function todoMarker(status: TodoStatus): string {
-  return TODO_STATUS_DISPLAY[status]?.marker ?? '□';
+  return TODO_STATUS_DISPLAY[status]?.marker ?? TODO_PENDING;
 }
 
 function todoColor(status: TodoStatus): string | undefined {

@@ -17,6 +17,8 @@ import { Component, type ReactNode } from 'react';
 import { toErrorMessage } from '@common/errors';
 import * as logUtils from '@logger/logUtils';
 
+import { WARNING } from '../ui/glyphs';
+
 interface EntryErrorBoundaryProps {
   // Names the failed entry in the inline marker and the log line (e.g. its
   // role or "session header"). Falls back to "entry" when omitted.
@@ -78,7 +80,7 @@ export class EntryErrorBoundary extends Component<
     return (
       <Box paddingX={1}>
         <Text color="red" dimColor>
-          {`⚠ failed to render ${this.props.label ?? 'entry'}${detail ? `: ${detail}` : ''}`}
+          {`${WARNING} failed to render ${this.props.label ?? 'entry'}${detail ? `: ${detail}` : ''}`}
         </Text>
       </Box>
     );
