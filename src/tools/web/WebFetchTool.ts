@@ -143,9 +143,7 @@ export class WebFetchTool extends defineTool({
             });
           } catch (error: unknown) {
             if (isTransientHttpError(error)) throw error;
-            throw new AbortError(
-              ensureError(error),
-            );
+            throw new AbortError(ensureError(error));
           }
 
           const lengthHeader = response.headers.get('content-length');
