@@ -1,5 +1,6 @@
+import pRetry, { AbortError } from 'p-retry';
+
 import * as logger from '@logger/logUtils';
-import { delay } from '@utils/core';
 
 export type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
@@ -179,7 +180,6 @@ class Node<
     return cloned;
   }
   async _exec(prepRes: unknown): Promise<unknown> {
-    // Guard against infinite loop: ensure at least 1 retry attempt
     if (this.maxRetries < 1) {
       logger.warn(
         CHANNEL,
@@ -187,57 +187,61 @@ class Node<
       );
     }
     const effectiveMaxRetries = Math.max(1, this.maxRetries);
-
-    // Safety limit for manual retries to prevent infinite loops from buggy retryPrompt
     const MAX_MANUAL_RETRIES = 100;
-    let manualRetryCount = 0;
 
-    // Outer loop for manual retry (restarts auto-retry cycle)
-    while (manualRetryCount < MAX_MANUAL_RETRIES) {
-      for (
-        let currentRetry = 0;
-        currentRetry < effectiveMaxRetries;
-        currentRetry++
-      ) {
-        // Check abort at start of each retry for responsive cancellation
-        // This ensures we don't attempt exec when the user has already cancelled
+    for (
+      let manualRetryCount = 0;
+      manualRetryCount < MAX_MANUAL_RETRIES;
+      manualRetryCount++
+    ) {
+      // Track the last exec error so we can forward it to execFallback when
+      // the abort signal fires during the inter-retry delay (p-retry would
+      // otherwise rethrow signal.reason, discarding the original failure).
+      let lastExecError: Error | undefined;
+      try {
+        return await pRetry(
+          () => {
+            // Throw AbortError at each attempt start so p-retry surfaces it
+            // immediately (before any delay) and skips onFailedAttempt.
+            if (this.signal?.aborted)
+              throw new AbortError('Operation cancelled by user');
+            return this.exec(prepRes);
+          },
+          {
+            retries: effectiveMaxRetries - 1,
+            minTimeout: this.wait * 1000,
+            factor: 1, // linear (fixed) delay to preserve existing behaviour
+            randomize: false, // explicit: default is false; no jitter on fixed delays
+            signal: this.signal, // aborts the inter-retry delay early
+            shouldRetry: ({ error }) => {
+              lastExecError = error;
+              if (this.signal?.aborted) return false;
+              return this.shouldAutoRetry(error);
+            },
+          },
+        );
+      } catch (e) {
+        if (e instanceof AbortError) {
+          // AbortError is thrown by our pre-attempt check above.
+          return await this.execFallback(
+            prepRes,
+            lastExecError ?? e.originalError ?? e,
+          );
+        }
+        // signal aborted during delay (p-retry rethrows signal.reason) or
+        // shouldAutoRetry returned false: forward the original exec error.
         if (this.signal?.aborted) {
-          const cancelError = new Error('Operation cancelled by user');
-          return await this.execFallback(prepRes, cancelError);
+          return await this.execFallback(
+            prepRes,
+            lastExecError ?? (e as Error),
+          );
         }
-        try {
-          return await this.exec(prepRes);
-        } catch (e) {
-          // If abort signal is set and aborted, skip retries and go to fallback
-          // This prevents unnecessary retries when the user intentionally cancelled
-          const isAborted = this.signal?.aborted;
-          const isLastAutoRetry = currentRetry === effectiveMaxRetries - 1;
-          const skipAutoRetry = !this.shouldAutoRetry(e as Error);
-
-          if (isLastAutoRetry || isAborted || skipAutoRetry) {
-            // Auto-retries exhausted - try manual retry (unless aborted)
-            if (!isAborted) {
-              const shouldRetry = await this.retryPrompt(prepRes, e as Error);
-              if (shouldRetry) {
-                manualRetryCount++;
-                break; // Break inner loop to restart auto-retries
-              }
-            }
-            return await this.execFallback(prepRes, e as Error);
-          }
-          if (this.wait > 0) {
-            await delay(this.wait * 1000);
-            // Check abort after delay to exit quickly if cancelled during wait
-            if (this.signal?.aborted) {
-              return await this.execFallback(prepRes, e as Error);
-            }
-          }
-        }
+        const shouldRetry = await this.retryPrompt(prepRes, e as Error);
+        if (shouldRetry) continue;
+        return await this.execFallback(prepRes, e as Error);
       }
-      // If we broke from inner loop, continue outer loop to restart auto-retries
     }
 
-    // Safeguard: if we somehow exit the loop without returning, throw
     throw new Error(
       `Node exceeded maximum manual retry limit (${MAX_MANUAL_RETRIES})`,
     );
