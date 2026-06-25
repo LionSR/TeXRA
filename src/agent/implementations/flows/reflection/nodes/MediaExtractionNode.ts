@@ -1,14 +1,12 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import type { FileLocation } from '@shared/schemas';
 
 import { getFilesForRound } from '../helpers';
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
-import type {
-  ReflectionFlowParams,
-  ReflectionServices,
-} from '../ReflectionServices';
+import type { ReflectionServices } from '../ReflectionServices';
 
 interface PrepInput {
   files: FileLocation[];
@@ -19,7 +17,7 @@ interface PrepInput {
 
 export class MediaExtractionNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  ReflectionFlowParams,
+  FlowParams,
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<PrepInput> {

@@ -6,20 +6,19 @@ import {
   createResponseCycleFlow,
   type ResponseCycleShared,
 } from '@agent/core/flows/ResponseCycleFlow';
+import { withModelClient } from '@agent/core/flows/CycleServices';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/execution/AgentState';
 import { bestConnectionMethod } from '@agent/runtime/textConnection';
+import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { ensureError, normalizeProviderError } from '@common/errors';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { toRetryErrorInfo } from '@shared/schemas';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
-import type {
-  ReflectionFlowParams,
-  ReflectionServices,
-} from '../ReflectionServices';
+import type { ReflectionServices } from '../ReflectionServices';
 
 interface CyclePrepInput {
   shared: ReflectionFlowShared;
@@ -41,7 +40,7 @@ type CycleOutcome =
 
 export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  ReflectionFlowParams,
+  FlowParams,
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<CyclePrepInput> {
@@ -99,20 +98,18 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
       const flow = createResponseCycleFlow<C>();
       const { modelHandler } = this.services;
-      let client = await modelHandler.getClient();
-      flow.setServices({
-        ...this.services,
-        bestConnectionMethod,
-        get client() {
-          return client;
-        },
-        async refreshClient() {
-          client = await modelHandler.getClient();
-        },
-        round: prepRes.round,
-        run: prepRes.run,
-        workspace: prepRes.workspace,
-      });
+      flow.setServices(
+        await withModelClient(
+          {
+            ...this.services,
+            bestConnectionMethod,
+            round: prepRes.round,
+            run: prepRes.run,
+            workspace: prepRes.workspace,
+          },
+          modelHandler,
+        ),
+      );
       await flow.run(cycleShared);
 
       if (cycleShared.lastError) {
