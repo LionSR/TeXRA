@@ -13,8 +13,8 @@ import { z, type ZodType } from 'zod';
  * validated by Zod itself. This field is runtime-only (added by defineTool(),
  * not present in YAML configs) but acknowledged in the schema for type safety.
  *
- * Uses passthrough() to allow forward compatibility with future runtime fields
- * without breaking validation when tools flow through AgentSettingSchema.
+ * Uses z.looseObject() to allow forward compatibility with future runtime
+ * fields without breaking validation when tools flow through AgentSettingSchema.
  */
 export const ToolDefinitionSchema = z.looseObject({
   /** Name of the tool or function */
