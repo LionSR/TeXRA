@@ -1,12 +1,13 @@
-import { readFileSync } from 'node:fs';
-import * as path from 'node:path';
-
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { platform } from '@platform/platform';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { LEVEL_TO_EFFORT } from '@agent/modelHandlers/support/reasoningEffort';
+import {
+  internalValidationModelHandlerEnvName,
+  shouldUseInternalValidationModelHandler,
+} from '@agent/runtime/internalValidationOverride';
 import {
   codexBackendModelId,
   isCodexSignedIn,
@@ -255,47 +256,6 @@ function applyShortModelNamePreference(
   return { ...config, fullName: short };
 }
 
-function shouldUseInternalValidationModelHandler(): boolean {
-  // All env reads are lazy — evaluated at call time, not at module load, so
-  // they happen after initPlatform() and can be overridden between test cases.
-  // Direct property access (not computed) is required so esbuild's `define`
-  // can inline these at bundle time for the CLI validation build.
-  if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1')
-    return false;
-
-  const envKey =
-    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV ?? '';
-  const flagEnvKey =
-    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV ?? '';
-  const expectedFlagContent =
-    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT ?? '';
-
-  if (process.env[envKey] !== '1') return false;
-
-  const flagPath = process.env[flagEnvKey];
-  if (process.env.CI !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
-    throw new Error(
-      `${envKey}=1 is restricted to package validation with CI=1 and an absolute ${flagEnvKey} path.`,
-    );
-  }
-
-  let flagContent: string;
-  try {
-    flagContent = readFileSync(flagPath, 'utf8').trim();
-  } catch (error) {
-    throw new Error(
-      `${envKey}=1 requires a readable validation flag file at ${flagPath}.`,
-      { cause: error },
-    );
-  }
-
-  if (flagContent !== expectedFlagContent) {
-    throw new Error(`${envKey}=1 received an invalid validation flag file.`);
-  }
-
-  return true;
-}
-
 /** Returns the conversation-history format used by the handler for this model. */
 export function modelHandlerCompatibilityKey(
   originalConfig: ModelConfig,
@@ -382,7 +342,7 @@ export async function createModelHandler(
     // a user-facing model selector or an injected command-layer substitute.
     logger.warn(
       CHANNEL,
-      `${process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is replacing provider handlers with the internal validation handler.`,
+      `${internalValidationModelHandlerEnvName()}=1 is replacing provider handlers with the internal validation handler.`,
     );
     const { ModelHandlerValidation } =
       await import('@agent/modelHandlers/modelHandlerValidation');
