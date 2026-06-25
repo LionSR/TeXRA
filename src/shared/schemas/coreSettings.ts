@@ -275,6 +275,23 @@ const stringRecord = (
 ) =>
   z.record(z.string(), z.string()).describe(description).prefault(defaultValue);
 
+const boolField = (defaultValue: boolean, description: string) =>
+  z.boolean().describe(description).prefault(defaultValue);
+
+const stringField = (defaultValue: string, description: string) =>
+  z.string().describe(description).prefault(defaultValue);
+
+const numberField = (
+  defaultValue: number,
+  description: string,
+  range?: { min?: number; max?: number },
+) => {
+  let schema = z.number();
+  if (range?.min !== undefined) schema = schema.min(range.min);
+  if (range?.max !== undefined) schema = schema.max(range.max);
+  return schema.describe(description).prefault(defaultValue);
+};
+
 /**
  * Field shape for {@link CoreSettingsSchema}.
  *
@@ -286,144 +303,109 @@ const stringRecord = (
 export const CoreSettingsShape = {
   agentOutputs: z
     .strictObject({
-      autoOpenFinal: z
-        .boolean()
-        .describe(
-          "When a workflow run completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.agentOutputs.autoOpenFinal),
+      autoOpenFinal: boolField(
+        DEFAULT_CORE_SETTINGS.agentOutputs.autoOpenFinal,
+        "When a workflow run completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.agentOutputs),
   inlineCriticism: z
     .strictObject({
-      enabled: z
-        .boolean()
-        .describe(
-          'Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.inlineCriticism.enabled),
+      enabled: boolField(
+        DEFAULT_CORE_SETTINGS.inlineCriticism.enabled,
+        'Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.',
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.inlineCriticism),
   goal: z
     .strictObject({
-      enabled: z
-        .boolean()
-        .describe(
-          'Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command="complete"). On by default; set to false to require manual continuation.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.goal.enabled),
+      enabled: boolField(
+        DEFAULT_CORE_SETTINGS.goal.enabled,
+        'Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command="complete"). On by default; set to false to require manual continuation.',
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.goal),
   ui: z
     .strictObject({
-      showApiKeyReminders: z
-        .boolean()
-        .describe(
-          'Show API key reminders in the status bar and main view when no API keys are configured',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.ui.showApiKeyReminders),
-      showLoginBanner: z
-        .boolean()
-        .describe(
-          'Show login banner prompting users to sign in for access to remote agents',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.ui.showLoginBanner),
-      showGettingStartedBanner: z
-        .boolean()
-        .describe(
-          'Show getting started banner with import options when no LaTeX files are found',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.ui.showGettingStartedBanner),
-      showOrchestratorBanner: z
-        .boolean()
-        .describe(
-          'Show orchestrator and session reminder text in the main view',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.ui.showOrchestratorBanner),
+      showApiKeyReminders: boolField(
+        DEFAULT_CORE_SETTINGS.ui.showApiKeyReminders,
+        'Show API key reminders in the status bar and main view when no API keys are configured',
+      ),
+      showLoginBanner: boolField(
+        DEFAULT_CORE_SETTINGS.ui.showLoginBanner,
+        'Show login banner prompting users to sign in for access to remote agents',
+      ),
+      showGettingStartedBanner: boolField(
+        DEFAULT_CORE_SETTINGS.ui.showGettingStartedBanner,
+        'Show getting started banner with import options when no LaTeX files are found',
+      ),
+      showOrchestratorBanner: boolField(
+        DEFAULT_CORE_SETTINGS.ui.showOrchestratorBanner,
+        'Show orchestrator and session reminder text in the main view',
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.ui),
   model: z
     .strictObject({
-      useImprovedConnection: z
-        .boolean()
-        .describe('Use improved connection for API requests')
-        .prefault(DEFAULT_CORE_SETTINGS.model.useImprovedConnection),
-      improvedConnectionDomain: z
-        .string()
-        .describe('Domain to use when using improved connection')
-        .prefault(DEFAULT_CORE_SETTINGS.model.improvedConnectionDomain),
-      useOpenAIResponsesAPI: z
-        .boolean()
-        .describe(
-          "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI),
-      useGoogleInteractionsAPI: z
-        .boolean()
-        .describe(
-          "Use Google's Interactions API instead of Generate Content when available. Experimental; disabled by default. OpenRouter-proxied Google models always use Generate Content.",
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsAPI),
-      useGoogleInteractionsServerState: z
-        .boolean()
-        .describe(
-          "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsServerState),
-      useBackgroundResponses: z
-        .boolean()
-        .describe(
-          'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.model.useBackgroundResponses),
-      openaiParallelToolCalls: z
-        .boolean()
-        .describe(
-          'Let OpenAI models use multiple tools at the same time for faster results. Disabled by default for more predictable behavior.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls),
-      compactionThresholdPercent: z
-        .number()
-        .min(0)
-        .max(100)
-        .describe(
-          "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.model.compactionThresholdPercent),
-      gpt5ReasoningSummary: z
-        .boolean()
-        .describe(
-          "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.model.gpt5ReasoningSummary),
+      useImprovedConnection: boolField(
+        DEFAULT_CORE_SETTINGS.model.useImprovedConnection,
+        'Use improved connection for API requests',
+      ),
+      improvedConnectionDomain: stringField(
+        DEFAULT_CORE_SETTINGS.model.improvedConnectionDomain,
+        'Domain to use when using improved connection',
+      ),
+      useOpenAIResponsesAPI: boolField(
+        DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI,
+        "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
+      ),
+      useGoogleInteractionsAPI: boolField(
+        DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsAPI,
+        "Use Google's Interactions API instead of Generate Content when available. Experimental; disabled by default. OpenRouter-proxied Google models always use Generate Content.",
+      ),
+      useGoogleInteractionsServerState: boolField(
+        DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsServerState,
+        "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
+      ),
+      useBackgroundResponses: boolField(
+        DEFAULT_CORE_SETTINGS.model.useBackgroundResponses,
+        'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
+      ),
+      openaiParallelToolCalls: boolField(
+        DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
+        'Let OpenAI models use multiple tools at the same time for faster results. Disabled by default for more predictable behavior.',
+      ),
+      compactionThresholdPercent: numberField(
+        DEFAULT_CORE_SETTINGS.model.compactionThresholdPercent,
+        "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
+        { min: 0, max: 100 },
+      ),
+      gpt5ReasoningSummary: boolField(
+        DEFAULT_CORE_SETTINGS.model.gpt5ReasoningSummary,
+        "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
+      ),
       retry: z
         .strictObject({
-          maxAttempts: z
-            .number()
-            .min(0)
-            .describe(
-              'Number of automatic retry attempts before surfacing a manual retry option for model calls. Set to 0 for no automatic retries (manual retry button only).',
-            )
-            .prefault(DEFAULT_CORE_SETTINGS.model.retry.maxAttempts),
-          backoffMs: z
-            .number()
-            .min(0)
-            .describe(
-              'Base backoff delay in milliseconds between retry attempts for model calls',
-            )
-            .prefault(DEFAULT_CORE_SETTINGS.model.retry.backoffMs),
+          maxAttempts: numberField(
+            DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+            'Number of automatic retry attempts before surfacing a manual retry option for model calls. Set to 0 for no automatic retries (manual retry button only).',
+            { min: 0 },
+          ),
+          backoffMs: numberField(
+            DEFAULT_CORE_SETTINGS.model.retry.backoffMs,
+            'Base backoff delay in milliseconds between retry attempts for model calls',
+            { min: 0 },
+          ),
         })
         .prefault(DEFAULT_CORE_SETTINGS.model.retry),
     })
     .prefault(DEFAULT_CORE_SETTINGS.model),
   chatgptCodex: z
     .strictObject({
-      preferSubscription: z
-        .boolean()
-        .describe(
-          'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex.preferSubscription),
+      preferSubscription: boolField(
+        DEFAULT_CORE_SETTINGS.chatgptCodex.preferSubscription,
+        'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental.',
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex),
   files: z
@@ -478,70 +460,54 @@ export const CoreSettingsShape = {
         .prefault(DEFAULT_CORE_SETTINGS.files.ignored),
     })
     .prefault(DEFAULT_CORE_SETTINGS.files),
-  maxImageDimension: z
-    .number()
-    .min(100)
-    .max(10000)
-    .describe(
-      'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
-    )
-    .prefault(DEFAULT_CORE_SETTINGS.maxImageDimension),
+  maxImageDimension: numberField(
+    DEFAULT_CORE_SETTINGS.maxImageDimension,
+    'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
+    { min: 100, max: 10000 },
+  ),
   bib: z
     .strictObject({
-      defaultPath: z
-        .string()
-        .describe(
-          'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.bib.defaultPath),
-      zoteroPort: z
-        .number()
-        .min(1)
-        .max(65535)
-        .describe(
-          'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.bib.zoteroPort),
+      defaultPath: stringField(
+        DEFAULT_CORE_SETTINGS.bib.defaultPath,
+        'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
+      ),
+      zoteroPort: numberField(
+        DEFAULT_CORE_SETTINGS.bib.zoteroPort,
+        'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
+        { min: 1, max: 65535 },
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.bib),
   latex: z
     .strictObject({
-      showLatexindentWarning: z
-        .boolean()
-        .describe('Show warning when latexindent is not installed')
-        .prefault(DEFAULT_CORE_SETTINGS.latex.showLatexindentWarning),
-      latexindentConfig: z
-        .string()
-        .describe('Path to latexindent configuration file')
-        .prefault(DEFAULT_CORE_SETTINGS.latex.latexindentConfig),
-      texfmtConfig: z
-        .string()
-        .describe('Path to tex-fmt configuration file')
-        .prefault(DEFAULT_CORE_SETTINGS.latex.texfmtConfig),
-      tikzInputDirectory: z
-        .string()
-        .describe(
-          'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.latex.tikzInputDirectory),
-      tikzTemplate: z
-        .string()
-        .describe(
-          'Template used for generating standalone documents when extracting and compiling TikZ figures',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.latex.tikzTemplate),
-      includeWorkspaceInTexinputs: z
-        .boolean()
-        .describe(
-          'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.latex.includeWorkspaceInTexinputs),
-      wrapCritiqueInAlign: z
-        .boolean()
-        .describe(
-          'When enabled, bare \\critique and \\comment commands inside align blocks are wrapped with \\intertext.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.latex.wrapCritiqueInAlign),
+      showLatexindentWarning: boolField(
+        DEFAULT_CORE_SETTINGS.latex.showLatexindentWarning,
+        'Show warning when latexindent is not installed',
+      ),
+      latexindentConfig: stringField(
+        DEFAULT_CORE_SETTINGS.latex.latexindentConfig,
+        'Path to latexindent configuration file',
+      ),
+      texfmtConfig: stringField(
+        DEFAULT_CORE_SETTINGS.latex.texfmtConfig,
+        'Path to tex-fmt configuration file',
+      ),
+      tikzInputDirectory: stringField(
+        DEFAULT_CORE_SETTINGS.latex.tikzInputDirectory,
+        'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
+      ),
+      tikzTemplate: stringField(
+        DEFAULT_CORE_SETTINGS.latex.tikzTemplate,
+        'Template used for generating standalone documents when extracting and compiling TikZ figures',
+      ),
+      includeWorkspaceInTexinputs: boolField(
+        DEFAULT_CORE_SETTINGS.latex.includeWorkspaceInTexinputs,
+        'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
+      ),
+      wrapCritiqueInAlign: boolField(
+        DEFAULT_CORE_SETTINGS.latex.wrapCritiqueInAlign,
+        'When enabled, bare \\critique and \\comment commands inside align blocks are wrapped with \\intertext.',
+      ),
       enabledReplacements: z
         .array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES))
         .describe('List of enabled non-regex LaTeX replacement categories')
@@ -562,12 +528,10 @@ export const CoreSettingsShape = {
     .prefault(DEFAULT_CORE_SETTINGS.latex),
   latexdiff: z
     .strictObject({
-      pictureEnvironments: z
-        .string()
-        .describe(
-          'Regular expression pattern for environments to be treated as pictures. These environments will be processed as a unit without internal differencing.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.latexdiff.pictureEnvironments),
+      pictureEnvironments: stringField(
+        DEFAULT_CORE_SETTINGS.latexdiff.pictureEnvironments,
+        'Regular expression pattern for environments to be treated as pictures. These environments will be processed as a unit without internal differencing.',
+      ),
       tempFileLocation: z
         .enum(LATEXDIFF_TEMP_FILE_LOCATIONS)
         .describe(
@@ -584,40 +548,31 @@ export const CoreSettingsShape = {
     .prefault(DEFAULT_CORE_SETTINGS.latexdiff),
   git: z
     .strictObject({
-      numberOfCommitsToShow: z
-        .number()
-        .min(1)
-        .max(100)
-        .describe(
-          'Number of recent commits to show in the commit selection dropdown',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.git.numberOfCommitsToShow),
-      emitPrCiStartedEvents: z
-        .boolean()
-        .describe(
-          'Emit a PR subscription event when GitHub check runs first appear for a new head commit.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.git.emitPrCiStartedEvents),
+      numberOfCommitsToShow: numberField(
+        DEFAULT_CORE_SETTINGS.git.numberOfCommitsToShow,
+        'Number of recent commits to show in the commit selection dropdown',
+        { min: 1, max: 100 },
+      ),
+      emitPrCiStartedEvents: boolField(
+        DEFAULT_CORE_SETTINGS.git.emitPrCiStartedEvents,
+        'Emit a PR subscription event when GitHub check runs first appear for a new head commit.',
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.git),
   agentReview: z
     .strictObject({
-      runOnCommit: z
-        .boolean()
-        .describe(
-          'Automatically review your changes for issues after each commit.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.agentReview.runOnCommit),
-      includeSubmodules: z
-        .boolean()
-        .describe('Include changes from Git submodules in the review.')
-        .prefault(DEFAULT_CORE_SETTINGS.agentReview.includeSubmodules),
-      includeUntrackedFiles: z
-        .boolean()
-        .describe(
-          'Include untracked files (new files not yet added to Git) in the review.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.agentReview.includeUntrackedFiles),
+      runOnCommit: boolField(
+        DEFAULT_CORE_SETTINGS.agentReview.runOnCommit,
+        'Automatically review your changes for issues after each commit.',
+      ),
+      includeSubmodules: boolField(
+        DEFAULT_CORE_SETTINGS.agentReview.includeSubmodules,
+        'Include changes from Git submodules in the review.',
+      ),
+      includeUntrackedFiles: boolField(
+        DEFAULT_CORE_SETTINGS.agentReview.includeUntrackedFiles,
+        'Include untracked files (new files not yet added to Git) in the review.',
+      ),
       approach: z
         .enum(AGENT_REVIEW_APPROACHES)
         .describe(
@@ -630,83 +585,69 @@ export const CoreSettingsShape = {
           ],
         })
         .prefault(DEFAULT_CORE_SETTINGS.agentReview.approach),
-      model: z
-        .string()
-        .describe(
-          'Model id for the review session (e.g. a stronger model for thorough reviews). Leave empty to use the default agent model.',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.agentReview.model),
+      model: stringField(
+        DEFAULT_CORE_SETTINGS.agentReview.model,
+        'Model id for the review session (e.g. a stronger model for thorough reviews). Leave empty to use the default agent model.',
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.agentReview),
   audio: z
     .strictObject({
-      soxPath: z
-        .string()
-        .describe('Path to the SoX executable. Overrides automatic detection.')
-        .prefault(DEFAULT_CORE_SETTINGS.audio.soxPath),
+      soxPath: stringField(
+        DEFAULT_CORE_SETTINGS.audio.soxPath,
+        'Path to the SoX executable. Overrides automatic detection.',
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.audio),
   logger: z
     .strictObject({
-      debugMode: z
-        .boolean()
-        .describe('Whether to show verbose debug messages in the logger view')
-        .prefault(DEFAULT_CORE_SETTINGS.logger.debugMode),
+      debugMode: boolField(
+        DEFAULT_CORE_SETTINGS.logger.debugMode,
+        'Whether to show verbose debug messages in the logger view',
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.logger),
   debug: z
     .strictObject({
-      saveDebugObjects: z
-        .boolean()
-        .describe(
-          'Save message and response objects to JSON files for debugging purposes',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.debug.saveDebugObjects),
-      saveInputPrompt: z
-        .boolean()
-        .describe(
-          'Save the final input prompt sent to the model as an XML file for debugging purposes',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.debug.saveInputPrompt),
+      saveDebugObjects: boolField(
+        DEFAULT_CORE_SETTINGS.debug.saveDebugObjects,
+        'Save message and response objects to JSON files for debugging purposes',
+      ),
+      saveInputPrompt: boolField(
+        DEFAULT_CORE_SETTINGS.debug.saveInputPrompt,
+        'Save the final input prompt sent to the model as an XML file for debugging purposes',
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.debug),
   skills: z
     .strictObject({
-      enabled: z
-        .boolean()
-        .describe(
-          'Discover imported skills and expose them to tool-use agent prompts',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.skills.enabled),
+      enabled: boolField(
+        DEFAULT_CORE_SETTINGS.skills.enabled,
+        'Discover imported skills and expose them to tool-use agent prompts',
+      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.skills),
   toolUse: z
     .strictObject({
-      requireEditApproval: z
-        .boolean()
-        .describe(
-          'Require user approval in a diff view before tool-driven edits modify workspace files',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.toolUse.requireEditApproval),
-      requireBashApproval: z
-        .boolean()
-        .describe(
-          'Require user approval before tool-use agents execute bash commands',
-        )
-        .prefault(DEFAULT_CORE_SETTINGS.toolUse.requireBashApproval),
+      requireEditApproval: boolField(
+        DEFAULT_CORE_SETTINGS.toolUse.requireEditApproval,
+        'Require user approval in a diff view before tool-driven edits modify workspace files',
+      ),
+      requireBashApproval: boolField(
+        DEFAULT_CORE_SETTINGS.toolUse.requireBashApproval,
+        'Require user approval before tool-use agents execute bash commands',
+      ),
       persistence: z
         .strictObject({
-          enabled: z
-            .boolean()
-            .describe('Persist tool-use conversations across VS Code restarts')
-            .prefault(DEFAULT_CORE_SETTINGS.toolUse.persistence.enabled),
-          ttlHours: z
-            .number()
-            .min(1)
-            .describe(
-              'Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup',
-            )
-            .prefault(DEFAULT_CORE_SETTINGS.toolUse.persistence.ttlHours),
+          enabled: boolField(
+            DEFAULT_CORE_SETTINGS.toolUse.persistence.enabled,
+            'Persist tool-use conversations across VS Code restarts',
+          ),
+          ttlHours: numberField(
+            DEFAULT_CORE_SETTINGS.toolUse.persistence.ttlHours,
+            'Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup',
+            { min: 1 },
+          ),
         })
         .prefault(DEFAULT_CORE_SETTINGS.toolUse.persistence),
     })
