@@ -28,8 +28,9 @@ export const TODO_DONE = '☑';
 export const TODO_ACTIVE = '☐';
 export const TODO_PENDING = '□';
 
-/** Transcript row prefixes (trailing space included for the gutter). User and
- *  assistant rows reuse the same chevron as selects (POINTER) so the look stays
- *  consistent; error rows use a bang. */
+/** Transcript row prefixes (trailing space included for the gutter). User rows
+ *  (and the default fallback) reuse the same chevron as selects (POINTER) so the
+ *  look stays consistent; error rows use a bang. Assistant rows carry no prefix
+ *  — they render as plain Markdown. */
 export const USER_ENTRY_PREFIX = `${POINTER} `;
 export const ERROR_ENTRY_PREFIX = '! ';
