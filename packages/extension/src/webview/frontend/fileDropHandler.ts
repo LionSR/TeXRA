@@ -1,5 +1,6 @@
 // Local imports - common webview
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { unique } from '@utils/core';
 
 // Local imports - shared utilities
 import { postMessage } from '@shared/hostBridge';
@@ -200,7 +201,7 @@ export function postDroppedFiles(
   paths: string[],
   target?: MultipleDocumentFileType,
 ): boolean {
-  const uniquePaths = [...new Set(paths.filter(Boolean))];
+  const uniquePaths = unique(paths.filter(Boolean));
   if (uniquePaths.length === 0) return false;
 
   postMessage(MAIN_VIEW_COMMANDS.ATTACH_DROPPED_FILES, {
