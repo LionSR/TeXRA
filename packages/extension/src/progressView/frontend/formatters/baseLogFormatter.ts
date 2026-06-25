@@ -1,7 +1,7 @@
 /**
  * Base log formatter utilities for open state management and error handling.
  */
-import { toErrorMessage } from '@utils/core';
+import { toErrorMessage } from '@common/errors';
 
 export type FormatOptions = {
   preservedOpen?: boolean;

@@ -11,7 +11,7 @@
  * | `extractErrorMessage(err)` | `string \| undefined` | Optional extraction, returns undefined for non-errors |
  * | `serializeError(err)` | `SerializedError` | Convert Error to plain object for logging/transport |
  *
- * For guaranteed string conversion, use `toErrorMessage()` from `@utils/core`.
+ * For guaranteed string conversion, use `toErrorMessage()` from `@common/errors`.
  */
 
 import prettyMilliseconds from 'pretty-ms';
@@ -46,7 +46,7 @@ export function isString(value: unknown): value is string {
  * Returns undefined if the value is not an Error or non-empty string.
  *
  * Use this when you need optional extraction. For guaranteed string output,
- * use `toErrorMessage()` from `@utils/core`.
+ * use `toErrorMessage()` from `@common/errors`.
  */
 export function extractErrorMessage(err: unknown): string | undefined {
   if (err instanceof Error && isNonEmptyString(err.message)) {
