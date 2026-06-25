@@ -8,7 +8,6 @@
 export {
   isNonEmptyString,
   isString,
-  extractErrorMessage,
   formatCompactDuration,
   formatCompactTokenCount,
   formatDuration,
