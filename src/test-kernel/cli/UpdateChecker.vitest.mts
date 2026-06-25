@@ -10,6 +10,7 @@ import {
   fetchLatestHomebrewFormulaVersion,
   formatUpdateCommand,
   isNewerVersion,
+  isPackageManagerInstall,
 } from '@cli/runtime/updateChecker';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 
@@ -86,6 +87,49 @@ describe('detectInstallMethod', () => {
         '/home/linuxbrew/.linuxbrew/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
       ),
     ).toBe('npm');
+  });
+});
+
+describe('isPackageManagerInstall', () => {
+  it('treats node_modules-resident installs as managed', () => {
+    // npm/pnpm globals, and Homebrew's Cellar formula, all live under
+    // node_modules — the segment that marks a package-manager install.
+    expect(
+      isPackageManagerInstall(
+        '/usr/local/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
+      ),
+    ).toBe(true);
+    expect(
+      isPackageManagerInstall(
+        '/Users/me/Library/pnpm/global/5/node_modules/@texra-ai/cli/dist/bin/texra.js',
+      ),
+    ).toBe(true);
+    expect(
+      isPackageManagerInstall(
+        '/opt/homebrew/Cellar/texra/0.38.10/libexec/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
+      ),
+    ).toBe(true);
+  });
+
+  it('is case-insensitive for Windows paths', () => {
+    expect(
+      isPackageManagerInstall(
+        'C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\@texra-ai\\cli\\dist\\bin\\texra.js',
+      ),
+    ).toBe(true);
+  });
+
+  it('treats a source/dev or linked checkout as unmanaged', () => {
+    // A dev build runs straight from packages/cli/dist — no node_modules
+    // segment — which is exactly why this gate is needed: detectInstallMethod
+    // would otherwise fall back to 'npm' and prompt `npm install -g`.
+    const devPath =
+      '/Users/me/Local/AI-Projects/coauthor/packages/cli/dist/bin/texra.js';
+    expect(isPackageManagerInstall(devPath)).toBe(false);
+    expect(detectInstallMethod(devPath)).toBe('npm');
+    expect(
+      isPackageManagerInstall('/Users/me/.local/share/texra/dist/bin/texra.js'),
+    ).toBe(false);
   });
 });
 
