@@ -84,6 +84,25 @@ function currentModulePath(): string {
   }
 }
 
+/**
+ * True when the running binary lives inside a `node_modules` tree. Every
+ * package-manager install places the package under `node_modules/@texra-ai/cli`
+ * — npm/pnpm/yarn/bun globals and Homebrew's Cellar formula alike — so this
+ * segment is a reliable marker of a managed install. A source checkout or
+ * `npm link` build runs straight from `packages/cli/dist`, which has no
+ * `node_modules` segment; for those an "update with `npm install -g …`" prompt
+ * is misleading (it cannot update the checkout), so {@link notifyCliUpdate}
+ * skips the check.
+ */
+export function isPackageManagerInstall(
+  modulePath: string = currentModulePath(),
+): boolean {
+  return modulePath
+    .toLowerCase()
+    .split(/[\\/]+/)
+    .includes('node_modules');
+}
+
 export function buildUpdateCommand(
   method: InstallMethod,
   pkg: string = CLI_PACKAGE_NAME,
@@ -370,6 +389,9 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   if (!ambient.stdinIsTty || !ambient.stdoutIsTty || !ambient.stderrIsTty)
     return;
   if (context.outputFormat === 'ndjson' || context.quietLogs === true) return;
+  // A source checkout or `npm link` build runs from `packages/cli/dist`, not a
+  // node_modules tree; an `npm install -g` prompt can't update it, so skip.
+  if (!isPackageManagerInstall()) return;
 
   const method = detectInstallMethod();
   const latest =
