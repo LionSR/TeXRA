@@ -1,18 +1,4 @@
-/**
- * String validation, formatting, and error extraction utilities.
- *
- * ## Error Utility Guide
- *
- * This module provides low-level error utilities. For higher-level error handling,
- * see `@common/errors`.
- *
- * | Function | Returns | Use Case |
- * |----------|---------|----------|
- * | `extractErrorMessage(err)` | `string \| undefined` | Optional extraction, returns undefined for non-errors |
- * | `serializeError(err)` | `SerializedError` | Convert Error to plain object for logging/transport |
- *
- * For guaranteed string conversion, use `toErrorMessage()` from `@common/errors`.
- */
+/** String validation, formatting, duration, and token count utilities. */
 
 import prettyMilliseconds from 'pretty-ms';
 import { serializeError, type ErrorObject } from 'serialize-error';
@@ -41,22 +27,6 @@ export function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-/**
- * Extract error message from Error objects or strings.
- * Returns undefined if the value is not an Error or non-empty string.
- *
- * Use this when you need optional extraction. For guaranteed string output,
- * use `toErrorMessage()` from `@common/errors`.
- */
-export function extractErrorMessage(err: unknown): string | undefined {
-  if (err instanceof Error && isNonEmptyString(err.message)) {
-    return err.message.trim();
-  }
-  if (isNonEmptyString(err)) {
-    return err.trim();
-  }
-  return undefined;
-}
 
 /**
  * Format a duration in milliseconds to a compact human-readable string
