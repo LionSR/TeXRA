@@ -194,6 +194,10 @@ class Node<
       manualRetryCount < MAX_MANUAL_RETRIES;
       manualRetryCount++
     ) {
+      // Track the last exec error so we can forward it to execFallback when
+      // the abort signal fires during the inter-retry delay (p-retry would
+      // otherwise rethrow signal.reason, discarding the original failure).
+      let lastExecError: Error | undefined;
       try {
         return await pRetry(
           () => {
@@ -207,8 +211,10 @@ class Node<
             retries: effectiveMaxRetries - 1,
             minTimeout: this.wait * 1000,
             factor: 1, // linear (fixed) delay to preserve existing behaviour
+            randomize: false, // explicit: default is false; no jitter on fixed delays
             signal: this.signal, // aborts the inter-retry delay early
             shouldRetry: ({ error }) => {
+              lastExecError = error;
               if (this.signal?.aborted) return false;
               return this.shouldAutoRetry(error);
             },
@@ -219,13 +225,10 @@ class Node<
           // AbortError is thrown by our pre-attempt check above.
           return await this.execFallback(prepRes, e.originalError);
         }
-        // signal aborted during delay (p-retry rethrows signal.reason)
-        // or shouldAutoRetry returned false: both skip manual retry.
+        // signal aborted during delay (p-retry rethrows signal.reason) or
+        // shouldAutoRetry returned false: forward the original exec error.
         if (this.signal?.aborted) {
-          return await this.execFallback(
-            prepRes,
-            new Error('Operation cancelled by user'),
-          );
+          return await this.execFallback(prepRes, lastExecError ?? (e as Error));
         }
         const shouldRetry = await this.retryPrompt(prepRes, e as Error);
         if (shouldRetry) continue;
