@@ -54,8 +54,7 @@ function outputInfo(filePath: string): OutputFileInfo {
 }
 
 async function loadFileActions(mocks: {
-  metadataOutcome?: DiffOutcome;
-  scanOutcome?: DiffOutcome;
+  outcome?: DiffOutcome;
   fallbackResult?: {
     success: boolean;
     message?: string;
@@ -65,18 +64,19 @@ async function loadFileActions(mocks: {
   actions: FileActionsInstance;
   openPath: ReturnType<typeof vi.fn>;
   showErrorMessage: ReturnType<typeof vi.fn>;
-  runLatexdiffFromMetadata: ReturnType<typeof vi.fn>;
-  runLatexdiffViaWorkspaceScan: ReturnType<typeof vi.fn>;
+  runLatexdiffForExecution: ReturnType<typeof vi.fn>;
   runDiff: ReturnType<typeof vi.fn>;
 }> {
   vi.resetModules();
 
-  const runLatexdiffFromMetadata = vi.fn(
-    async () => mocks.metadataOutcome ?? { results: [], totalOperations: 0 },
-  );
-  const runLatexdiffViaWorkspaceScan = vi.fn(
-    async () => mocks.scanOutcome ?? { results: [], totalOperations: 0 },
-  );
+  // The desktop adapter delegates the resolve + dispatch policy to the shared
+  // host-neutral `runLatexdiffForExecution`; mock it at that boundary so these
+  // tests cover the desktop param-building + outcome-handling, not the core
+  // (which `RunLatexdiff.vitest.mts` exercises in isolation).
+  const runLatexdiffForExecution = vi.fn(async () => ({
+    outcome: mocks.outcome ?? { results: [], totalOperations: 0 },
+    source: 'metadata' as const,
+  }));
   const runDiff = vi.fn(
     async () =>
       mocks.fallbackResult ?? {
@@ -85,9 +85,8 @@ async function loadFileActions(mocks: {
       },
   );
 
-  vi.doMock('@latex/latexdiff/diffOperations', () => ({
-    runLatexdiffFromMetadata,
-    runLatexdiffViaWorkspaceScan,
+  vi.doMock('@latex/latexdiff/runLatexdiff', () => ({
+    runLatexdiffForExecution,
   }));
   vi.doMock('@latex/latexdiff', () => ({
     LaTeXdiffService: class {
@@ -107,9 +106,6 @@ async function loadFileActions(mocks: {
         kind: 'external',
         absolutePath,
       }),
-      TaskRunFileService: class {
-        constructor(readonly executionId?: string) {}
-      },
     };
   });
 
@@ -135,8 +131,7 @@ async function loadFileActions(mocks: {
     actions,
     openPath,
     showErrorMessage,
-    runLatexdiffFromMetadata,
-    runLatexdiffViaWorkspaceScan,
+    runLatexdiffForExecution,
     runDiff,
   };
 }
@@ -144,13 +139,13 @@ async function loadFileActions(mocks: {
 describe('DesktopProgressFileActions latexdiff', () => {
   afterEach(() => {
     vi.doUnmock('@latex/latexdiff');
-    vi.doUnmock('@latex/latexdiff/diffOperations');
+    vi.doUnmock('@latex/latexdiff/runLatexdiff');
     vi.doUnmock('@utils/files');
     vi.restoreAllMocks();
   });
 
-  it('uses metadata-driven round diffs before single-file latexdiff', async () => {
-    const metadataOutcome = {
+  it('passes pre-resolved round outputs to the shared core', async () => {
+    const outcome = {
       results: [
         {
           success: true,
@@ -160,8 +155,8 @@ describe('DesktopProgressFileActions latexdiff', () => {
       ],
       totalOperations: 1,
     };
-    const { actions, openPath, runLatexdiffFromMetadata, runDiff } =
-      await loadFileActions({ metadataOutcome });
+    const { actions, openPath, runLatexdiffForExecution, runDiff } =
+      await loadFileActions({ outcome });
     const outputsByRound = new Map([[1, [outputInfo('/run/r1/main.tex')]]]);
 
     await actions.runLatexdiffForRun(
@@ -173,9 +168,10 @@ describe('DesktopProgressFileActions latexdiff', () => {
       },
     );
 
-    expect(runLatexdiffFromMetadata).toHaveBeenCalledWith(
+    expect(runLatexdiffForExecution).toHaveBeenCalledWith(
       expect.objectContaining({
-        rounds: outputsByRound,
+        outputsByRound,
+        runId: 'exec-1',
         mathMarkup: 'coarse',
         generateBetweenRoundDiffs: true,
       }),
@@ -184,8 +180,8 @@ describe('DesktopProgressFileActions latexdiff', () => {
     expect(openPath).toHaveBeenCalledWith('/run/r1/main_diff.tex');
   });
 
-  it('uses workspace scan when no output metadata is available', async () => {
-    const scanOutcome = {
+  it('passes the scan identity (and no rounds) when only a workspace scan is available', async () => {
+    const outcome = {
       results: [
         {
           success: true,
@@ -195,13 +191,8 @@ describe('DesktopProgressFileActions latexdiff', () => {
       ],
       totalOperations: 1,
     };
-    const {
-      actions,
-      openPath,
-      runLatexdiffFromMetadata,
-      runLatexdiffViaWorkspaceScan,
-      runDiff,
-    } = await loadFileActions({ scanOutcome });
+    const { actions, openPath, runLatexdiffForExecution, runDiff } =
+      await loadFileActions({ outcome });
 
     await actions.runLatexdiffForRun(
       '/workspace/main.tex',
@@ -216,12 +207,12 @@ describe('DesktopProgressFileActions latexdiff', () => {
       },
     );
 
-    expect(runLatexdiffFromMetadata).not.toHaveBeenCalled();
-    expect(runLatexdiffViaWorkspaceScan).toHaveBeenCalledWith(
+    expect(runLatexdiffForExecution).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: 'orchestrator',
         model: 'gpt-5',
         inputFile: 'main.tex',
+        outputsByRound: null,
         mathMarkup: 'coarse',
         generateBetweenRoundDiffs: true,
       }),
@@ -230,10 +221,10 @@ describe('DesktopProgressFileActions latexdiff', () => {
     expect(openPath).toHaveBeenCalledWith('/workspace/main_diff.tex');
   });
 
-  it('falls back to single-file latexdiff when shared discovery finds no rounds', async () => {
-    const { actions, openPath, runLatexdiffFromMetadata, runDiff } =
+  it('falls back to single-file latexdiff when the shared core finds no operations', async () => {
+    const { actions, openPath, runLatexdiffForExecution, runDiff } =
       await loadFileActions({
-        metadataOutcome: { results: [], totalOperations: 0 },
+        outcome: { results: [], totalOperations: 0 },
         fallbackResult: { success: true, diffFileName: 'fallback_diff.tex' },
       });
 
@@ -245,7 +236,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       },
     );
 
-    expect(runLatexdiffFromMetadata).toHaveBeenCalledOnce();
+    expect(runLatexdiffForExecution).toHaveBeenCalledOnce();
     expect(runDiff).toHaveBeenCalledOnce();
     expect(openPath).toHaveBeenCalledWith('/workspace/fallback_diff.tex');
   });
