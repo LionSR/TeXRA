@@ -24,6 +24,7 @@ import {
 } from '@agent/output/compileFailureRoundContext';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { tryOperation } from '@agent/output/outputOperations';
+import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import {
   MESSAGE_TYPES,
   type AgentFileLocation,
@@ -35,10 +36,7 @@ import {
 import { flexibleFS } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
-import type {
-  ReflectionFlowParams,
-  ReflectionServices,
-} from '../ReflectionServices';
+import type { ReflectionServices } from '../ReflectionServices';
 
 interface OutputPrepInput {
   outputLocation: AgentFileLocation;
@@ -57,7 +55,7 @@ interface OutputExecResult {
 
 export class OutputNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  ReflectionFlowParams,
+  FlowParams,
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
