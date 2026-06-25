@@ -11,6 +11,7 @@
 // shift over a letter to the unshifted Ctrl combo (see 10-architecture.md).
 
 import { type StreamTabId } from '@shared/schemas';
+import { unique } from '@utils/core';
 
 import { visibleSubagentRows } from './childExecutions';
 import { cliState, type StreamSlice } from './cliState';
@@ -28,7 +29,7 @@ function orderedDescendantsFromSlice(
   ]) {
     if (child.childStreamId) out.push(child.childStreamId);
   }
-  return [...new Set(out)];
+  return unique(out);
 }
 
 export function orderedDescendantsFromTree(init: {
