@@ -264,7 +264,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
           <Text color="red">
             {compactPrefixedDisplayRows({
               fillWidth,
-              prefix: '! ',
+              prefix: ERROR_ENTRY_PREFIX,
               text: entry.text,
               width: cols,
             })}
