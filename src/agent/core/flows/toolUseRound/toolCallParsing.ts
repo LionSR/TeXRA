@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { AgentTrace } from '@agent/trace';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import { toErrorMessage } from '@common/errors';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
@@ -52,14 +53,12 @@ export function parseToolInput(
     return raw;
   }
 
-  try {
-    return JSON.parse(raw);
-  } catch {
-    logger.debug(
-      `Tool call ${callId}: Failed to parse input as JSON, using raw string`,
-    );
+  const parsed = safeParseJson(raw);
+  if (!parsed.ok) {
+    logger.debug(`Tool call ${callId}: Failed to parse input as JSON, using raw string`);
     return raw;
   }
+  return parsed.value;
 }
 
 /** Normalize a tool call error into a user-friendly message with optional diagnostics. */
