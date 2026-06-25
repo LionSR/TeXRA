@@ -1,18 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildRelaunchCommand,
-  buildRelaunchEnv,
   buildUpdateCommand,
   detectInstallMethod,
-  exitCodeForRelaunchClose,
   fetchLatestCliVersion,
   fetchLatestHomebrewFormulaVersion,
   formatUpdateCommand,
   isNewerVersion,
   isPackageManagerInstall,
 } from '@cli/runtime/updateChecker';
-import { CliExitCode } from '@cli/runtime/exitCodes';
 
 describe('isNewerVersion', () => {
   it('compares numerically across all components', () => {
@@ -158,69 +154,6 @@ describe('buildUpdateCommand / formatUpdateCommand', () => {
       command: 'brew',
       args: ['update', '&&', 'brew', 'upgrade', 'texra'],
     });
-  });
-});
-
-describe('buildRelaunchCommand', () => {
-  it('re-execs the entrypoint through the running Node, preserving argv', () => {
-    expect(
-      buildRelaunchCommand(
-        '/usr/local/bin/texra',
-        ['chat', '--agent', 'research'],
-        '/usr/bin/node',
-      ),
-    ).toEqual({
-      command: '/usr/bin/node',
-      args: ['/usr/local/bin/texra', 'chat', '--agent', 'research'],
-    });
-  });
-
-  it('handles a bare launch with no user arguments', () => {
-    expect(buildRelaunchCommand('/usr/local/bin/texra', [], 'node')).toEqual({
-      command: 'node',
-      args: ['/usr/local/bin/texra'],
-    });
-  });
-
-  it('returns undefined when there is no entrypoint to re-exec', () => {
-    expect(buildRelaunchCommand('', ['chat'], 'node')).toBeUndefined();
-    expect(buildRelaunchCommand('   ', ['chat'], 'node')).toBeUndefined();
-  });
-});
-
-describe('buildRelaunchEnv', () => {
-  it('preserves the current environment while skipping the redundant update check', () => {
-    expect(buildRelaunchEnv({ HOME: '/Users/me' })).toEqual({
-      HOME: '/Users/me',
-      TEXRA_NO_UPDATE_CHECK: '1',
-    });
-  });
-
-  it('overwrites an inherited update-check setting for the relaunched process', () => {
-    expect(buildRelaunchEnv({ TEXRA_NO_UPDATE_CHECK: '0' })).toEqual({
-      TEXRA_NO_UPDATE_CHECK: '1',
-    });
-  });
-});
-
-describe('exitCodeForRelaunchClose', () => {
-  it('mirrors the child exit code when one is available', () => {
-    expect(exitCodeForRelaunchClose(0, null)).toBe(CliExitCode.Success);
-    expect(exitCodeForRelaunchClose(7, 'SIGTERM')).toBe(7);
-  });
-
-  it('uses conventional signal exit codes when the child was killed', () => {
-    expect(exitCodeForRelaunchClose(null, 'SIGINT')).toBe(
-      CliExitCode.Interrupted,
-    );
-    expect(exitCodeForRelaunchClose(null, 'SIGTERM')).toBe(
-      CliExitCode.Terminated,
-    );
-    expect(exitCodeForRelaunchClose(null, 'SIGKILL')).toBe(137);
-  });
-
-  it('falls back to success only when no code or signal was reported', () => {
-    expect(exitCodeForRelaunchClose(null, null)).toBe(CliExitCode.Success);
   });
 });
 

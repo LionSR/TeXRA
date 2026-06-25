@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process';
-import { constants as osConstants } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { gt as semverGt, valid as semverValid } from 'semver';
@@ -8,8 +7,6 @@ import { z } from 'zod';
 import {
   cliEnvValue,
   readCliAmbientState,
-  readCliArgv,
-  readCliEnv,
   readCliEntrypointPath,
   type CliContext,
 } from './cliContext';
@@ -29,7 +26,6 @@ const CLI_HOMEBREW_FORMULA = 'texra';
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const DEFAULT_TIMEOUT_MS = 2500;
 const HOMEBREW_COMMAND_TIMEOUT_MS = 10000;
-const POSIX_SIGNAL_EXIT_OFFSET = 128;
 const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 
 /** Package manager the running binary was installed with. */
@@ -275,93 +271,22 @@ function affirmative(answer: string): boolean {
 }
 
 /**
- * Build the argv to re-exec the just-installed binary in place, preserving the
- * user's own arguments. We launch through `execPath` (the running Node) rather
- * than the bin's shebang so it works regardless of how the entrypoint is
- * marked executable. Returns `undefined` when there is no entrypoint to
- * re-exec — caller falls back to asking the user to restart by hand.
- */
-export function buildRelaunchCommand(
-  entrypoint: string,
-  argv: readonly string[],
-  execPath: string = process.execPath,
-): { command: string; args: string[] } | undefined {
-  if (!entrypoint.trim()) return undefined;
-  return { command: execPath, args: [entrypoint, ...argv] };
-}
-
-/** Env for the fresh process, skipping the redundant post-update check once. */
-export function buildRelaunchEnv(
-  env: Record<string, string | undefined>,
-): Record<string, string | undefined> {
-  return { ...env, [UPDATE_CHECK_SKIP_ENV]: '1' };
-}
-
-export function exitCodeForRelaunchClose(
-  code: number | null,
-  signal: NodeJS.Signals | null,
-): number {
-  if (code != null) return code;
-  if (!signal) return CliExitCode.Success;
-
-  const signalNumber = osConstants.signals[signal];
-  return typeof signalNumber === 'number'
-    ? POSIX_SIGNAL_EXIT_OFFSET + signalNumber
-    : CliExitCode.Terminated;
-}
-
-/**
- * Replace this now-stale process with a fresh one running the just-installed
- * binary, carrying the same argv. Inherits stdio so the child owns the terminal
- * and mirrors the child's exit code, making the in-session update seamless: the
- * launcher/session the user lands in actually runs `latest` instead of silently
- * continuing on the old code (which would keep reporting the previous version
- * in the header, `/status`, and the launcher).
+ * Announce that the new version installed, then exit. We intentionally do NOT
+ * re-exec the freshly installed binary under the user: this process is still
+ * the old code, and silently swapping the running program mid-session is more
+ * surprising than a one-line hand-off. Asking the user to run `texra` again is
+ * the clean boundary — the next invocation runs `latest` from a fresh process.
  *
- * Never returns on success — it calls `process.exit`. If the child can't be
- * spawned, or there is nothing to re-exec, it prints the restart hint and exits
- * cleanly so we never carry on executing the stale build.
+ * Never returns — it calls `process.exit`.
  */
-async function relaunchAfterUpdate(
-  latest: string,
-  style: CliStyle,
-): Promise<never> {
-  const invocation = buildRelaunchCommand(
-    readCliEntrypointPath(),
-    readCliArgv(),
+function announceUpdateInstalled(latest: string, style: CliStyle): never {
+  writeTextStderr(
+    style.success(`Updated to ${latest}.`) +
+      style.muted(' Run ') +
+      style.command('texra') +
+      style.muted(' again to use it.'),
   );
-  if (!invocation) {
-    writeTextStderr(
-      style.success(
-        `Updated to ${latest}. Restart texra to use the new version.`,
-      ),
-    );
-    process.exit(CliExitCode.Success);
-  }
-
-  writeTextStderr(style.success(`Updated to ${latest}. Restarting…`));
-  await new Promise<never>(() => {
-    const child = spawn(invocation.command, invocation.args, {
-      stdio: 'inherit',
-      // The relaunched process just verified it is current, so suppress its own
-      // startup check: it would otherwise re-hit the registry (and could even
-      // re-prompt) on every auto-update. This only skips that single
-      // once-per-process check; there are no later in-session checks to lose.
-      env: buildRelaunchEnv(readCliEnv()),
-    });
-    child.on('error', () => {
-      writeTextStderr(
-        style.muted('Could not restart automatically — ') +
-          style.success(`run texra again to use ${latest}.`),
-      );
-      process.exit(CliExitCode.Success);
-    });
-    child.on('close', (code, signal) => {
-      process.exit(exitCodeForRelaunchClose(code, signal));
-    });
-  });
-  // Unreachable: every branch above ends the process via `process.exit`.
-  throw new Error('unreachable: relaunchAfterUpdate did not exit');
+  process.exit(CliExitCode.Success);
 }
 
 let notified = false;
@@ -430,8 +355,8 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
     return;
   }
 
-  // The new version is on disk, but THIS process is still the old code. Re-exec
-  // the freshly installed binary so the session that follows actually runs the
-  // update; otherwise it silently does nothing until a manual relaunch.
-  await relaunchAfterUpdate(latest, style);
+  // The new version is on disk, but THIS process is still the old code. Don't
+  // re-exec it under the user — announce success and let them run `texra` again
+  // so the next session starts clean on the new version.
+  announceUpdateInstalled(latest, style);
 }
