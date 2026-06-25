@@ -3,10 +3,7 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices'
 import type { OutputState } from '@agent/output/outputState';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import type {
-  BaseFlowContextInit,
-  FlowParams,
-} from '@agent/core/flows/BaseFlowServices';
+import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { LatexMediaManager } from '@latex/LatexMediaManager';
 import type { AgentFileLocation, WorkspaceFileLocation } from '@shared/schemas';
 import type { PromptBuilder } from '@utils/prompt';
@@ -34,5 +31,3 @@ export interface ReflectionServices<
   readonly baseFiles: WorkspaceFileLocation[];
   readonly onRoundFinalized: RoundFinalizedCallback;
 }
-
-export type { FlowParams as ReflectionFlowParams };
