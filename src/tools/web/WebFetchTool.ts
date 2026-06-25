@@ -8,7 +8,7 @@ import TurndownService from 'turndown';
 import { z } from 'zod';
 
 // Local imports - core
-import { toErrorMessage } from '@common/errors';
+import { ensureError, toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import { isTimeoutError, isTransientHttpError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
@@ -144,7 +144,7 @@ export class WebFetchTool extends defineTool({
           } catch (error: unknown) {
             if (isTransientHttpError(error)) throw error;
             throw new AbortError(
-              error instanceof Error ? error : new Error(String(error)),
+              ensureError(error),
             );
           }
 

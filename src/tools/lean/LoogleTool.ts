@@ -8,7 +8,7 @@ import ky from 'ky';
 import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
-import { toErrorMessage } from '@common/errors';
+import { ensureError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { ToolResult } from '@shared/schemas/toolResult';
 import { isTimeoutError, isTransientHttpError } from '@tools/timeouts';
@@ -152,7 +152,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
         } catch (error: unknown) {
           if (isTransientHttpError(error)) throw error;
           throw new AbortError(
-            error instanceof Error ? error : new Error(String(error)),
+            ensureError(error),
           );
         }
         // Validate the body at the boundary. A malformed shape is not transient,
