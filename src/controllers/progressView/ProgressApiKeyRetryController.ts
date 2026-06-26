@@ -79,10 +79,15 @@ export class ProgressApiKeyRetryController {
       };
     }
 
+    // Disable relay (included access) so the retry uses the user's own key —
+    // not the relay JWT — whenever the switch promises "your own API key".
+    // Both relay exhaustion (viaRelay) and subscription exhaustion
+    // (chatgptSubscription) fall through to `super.getApiKey()`, which otherwise
+    // still prefers relay when included access is on, so the retry would never
+    // reach the stored OpenAI key the UI describes. A direct-key failure
+    // (neither flag) leaves relay untouched for other providers.
     let disabledIncludedModelAccess = false;
-    // Only disable relay access when the failing call actually went through
-    // relay. Direct-key failures should not revoke relay for other providers.
-    if (request.viaRelay === true) {
+    if (request.viaRelay === true || request.chatgptSubscription === true) {
       await this.deps.setUseIncludedModelAccess(false);
       this.deps.invalidateModelOptionsCache();
       disabledIncludedModelAccess = true;

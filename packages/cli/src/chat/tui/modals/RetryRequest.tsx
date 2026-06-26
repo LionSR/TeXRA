@@ -18,10 +18,11 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const subject = props.payload.errorMessage ?? props.payload.operation;
   const isChatGptSubscription = isCliChatGptSubscriptionRetry(props.payload);
   const canSwitchToPersonalKey = isCliApiSwitchableRetry(props.payload);
-  // The subscription switch turns off the "prefer ChatGPT subscription"
-  // preference; the relay switch flips the api-mode to personal keys.
+  // Both switches flip the api-mode to personal keys so the retry uses the
+  // user's own key (not the relay JWT); the subscription switch additionally
+  // turns off the "prefer ChatGPT subscription" preference.
   const switchDecision: ApprovalDecision = isChatGptSubscription
-    ? { accepted: true, disableChatGptSubscription: true }
+    ? { accepted: true, disableChatGptSubscription: true, apiMode: 'personal' }
     : { accepted: true, apiMode: 'personal' };
   const switchHint = isChatGptSubscription
     ? 'Press k to switch from your ChatGPT subscription to your OpenAI API key before retrying.'

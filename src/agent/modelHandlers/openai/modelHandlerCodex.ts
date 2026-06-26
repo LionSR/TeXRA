@@ -169,63 +169,6 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   // very likely fails; the toggle exists so it can be tested in practice.
   protected override backgroundModeSupported = true;
 
-  // The Codex backend is streaming-only (`400 Stream must be set to true`
-  // otherwise), so take the streaming path unless background mode is active
-  // (then the base polling path needs non-streaming). The SDK's `ResponseStream`
-  // accumulates the deltas natively, and the base path rebuilds `output` from
-  // the streamed `output_item.done` events.
-  public override getStreamingConfig(): boolean {
-    return !this.isBackgroundModeActive();
-  }
-
-  /**
-   * Allow WebSocket transport against the Codex backend whenever the SAME global
-   * `texra.websocket.openai` toggle is on (`getWebSocketEnabled()`) — no
-   * Codex-specific flag. The SDK derives the WebSocket URL + auth from the
-   * (Codex) client, so this targets the Codex endpoint; whether that endpoint
-   * speaks WebSocket is what's being tested. Off by default → the base gate
-   * (default endpoint only) keeps it disabled.
-   */
-  protected override isWebSocketModeEnabled(): boolean {
-    return getWebSocketEnabled() || super.isWebSocketModeEnabled();
-  }
-
-  // The Codex backend has no `/responses/input_tokens` or `/compact` endpoint
-  // (they return 403); rely on the handler's heuristic fallbacks instead.
-  public override get supportsTokenCounting(): boolean {
-    return false;
-  }
-
-  public override get supportsManualCompaction(): boolean {
-    return false;
-  }
-
-  protected override get supportsResponseChaining(): boolean {
-    return false;
-  }
-
-  // The Codex backend keeps no server-side state (store:false, also enforced at
-  // the fetch layer). This drives the base request `store` field and gates the
-  // encrypted-reasoning replay path: with no previous_response_id chaining,
-  // reasoning continuity comes from replaying `reasoning.encrypted_content`
-  // blobs in each turn's input instead.
-  //
-  // EXPERIMENTAL exception: background mode (polling) needs server-side storage,
-  // so when it's active store:true is requested — which also auto-disables the
-  // encrypted-reasoning replay (reasoning then lives server-side, like the base
-  // path), keeping the two mechanisms from conflicting.
-  protected override get storesResponsesServerSide(): boolean {
-    return this.isBackgroundModeActive();
-  }
-
-  protected override get supportsInlineInputFileUpload(): boolean {
-    return false;
-  }
-
-  protected override get supportsToolResultFileUpload(): boolean {
-    return false;
-  }
-
   /**
    * Whether this handler should still drive the ChatGPT subscription. Re-read
    * per request (not cached at construction) so that turning the preference off
@@ -236,12 +179,85 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
    * here is enough to reroute the in-place retry, mirroring how the base
    * handler re-resolves relay vs direct credentials per request.
    *
+   * EVERY Codex-specific override below is gated on this so the fallback is a
+   * genuine drop to the base handler — once the subscription is off the request
+   * runs against the normal OpenAI Responses endpoint with the base handler's
+   * full capabilities (token counting, compaction, response chaining, file
+   * upload, store:true, WebSocket eligibility), not Codex-restricted ones.
+   *
    * (Sign-in is intentionally not re-checked: the switch flips this preference,
    * not the stored session, and an auth lapse still surfaces as an actionable
    * error from {@link resolveAccessToken}.)
    */
   private usingSubscription(): boolean {
     return isPreferCodexSubscription();
+  }
+
+  // The Codex backend is streaming-only (`400 Stream must be set to true`
+  // otherwise), so take the streaming path unless background mode is active
+  // (then the base polling path needs non-streaming). After the fallback the
+  // base streaming logic applies.
+  public override getStreamingConfig(): boolean {
+    return this.usingSubscription()
+      ? !this.isBackgroundModeActive()
+      : super.getStreamingConfig();
+  }
+
+  /**
+   * Allow WebSocket transport against the Codex backend whenever the SAME global
+   * `texra.websocket.openai` toggle is on (`getWebSocketEnabled()`) — no
+   * Codex-specific flag. The SDK derives the WebSocket URL + auth from the
+   * (Codex) client, so this targets the Codex endpoint; whether that endpoint
+   * speaks WebSocket is what's being tested. Gated on the subscription: once it
+   * is off, the base rule (default OpenAI endpoint only) applies, so WebSocket
+   * is never attempted against a relay/proxy/custom base URL.
+   */
+  protected override isWebSocketModeEnabled(): boolean {
+    return this.usingSubscription()
+      ? getWebSocketEnabled()
+      : super.isWebSocketModeEnabled();
+  }
+
+  // The Codex backend has no `/responses/input_tokens` or `/compact` endpoint
+  // (they return 403); rely on the handler's heuristic fallbacks instead. After
+  // the fallback to the OpenAI API key the base capabilities are restored.
+  public override get supportsTokenCounting(): boolean {
+    return this.usingSubscription() ? false : super.supportsTokenCounting;
+  }
+
+  public override get supportsManualCompaction(): boolean {
+    return this.usingSubscription() ? false : super.supportsManualCompaction;
+  }
+
+  protected override get supportsResponseChaining(): boolean {
+    return this.usingSubscription() ? false : super.supportsResponseChaining;
+  }
+
+  // The Codex backend keeps no server-side state (store:false, also enforced at
+  // the fetch layer). This drives the base request `store` field and gates the
+  // encrypted-reasoning replay path: with no previous_response_id chaining,
+  // reasoning continuity comes from replaying `reasoning.encrypted_content`
+  // blobs in each turn's input instead.
+  //
+  // Background mode (polling) needs server-side storage, so when it's active
+  // store:true is requested — which also auto-disables the encrypted-reasoning
+  // replay (reasoning then lives server-side, like the base path). Once the
+  // subscription is off entirely, the base store:true + chaining is restored.
+  protected override get storesResponsesServerSide(): boolean {
+    if (!this.usingSubscription()) return super.storesResponsesServerSide;
+    return this.isBackgroundModeActive();
+  }
+
+  protected override get supportsInlineInputFileUpload(): boolean {
+    return this.usingSubscription()
+      ? false
+      : super.supportsInlineInputFileUpload;
+  }
+
+  protected override get supportsToolResultFileUpload(): boolean {
+    return this.usingSubscription()
+      ? false
+      : super.supportsToolResultFileUpload;
   }
 
   /** Subscription usage consumes ChatGPT quota, not TeXRA-tracked API spend;

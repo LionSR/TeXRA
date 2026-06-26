@@ -2345,9 +2345,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // store:true (default): only reasoning items immediately preceding a
     //   web_search_call are kept — that pairing is required by the API, and
     //   previous_response_id retains everything else server-side.
-    // store:false (Codex/stateless): keep EVERY reasoning item (each carries
-    //   `encrypted_content`) so the next turn can replay it for reasoning
-    //   continuity; web_search_call items are still preserved alongside.
+    // store:false (Codex/stateless): keep every reasoning item that actually
+    //   carries a non-empty `encrypted_content` blob so the next turn can replay
+    //   it for reasoning continuity; web_search_call items are preserved
+    //   alongside. A summary-only reasoning item (no encrypted_content) is
+    //   skipped — replaying it empty would be rejected by the stateless endpoint
+    //   rather than chained.
     // Preserving output order keeps the item-pairing invariant intact when the
     // blocks are replayed before the function_call.
     const preserveAllReasoning = !this.storesResponsesServerSide;
@@ -2355,7 +2358,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       [];
     for (const [i, item] of output.entries()) {
       if (preserveAllReasoning && isOpenAIReasoningItem(item)) {
-        contentBlocks.push(item);
+        const encrypted = item.encrypted_content;
+        if (typeof encrypted === 'string' && encrypted.length > 0) {
+          contentBlocks.push(item);
+        }
         continue;
       }
       if (isOpenAIWebSearchCall(item)) {

@@ -215,16 +215,18 @@ describe('ProgressApiKeyRetryController', () => {
       chatgptSubscription: true,
     });
 
+    // The subscription switch also drops relay so the retry reaches the stored
+    // OpenAI key rather than the relay JWT.
     assert.deepEqual(result, {
       proceeded: true,
       retried: true,
-      disabledIncludedModelAccess: false,
+      disabledIncludedModelAccess: true,
       disabledChatGptSubscription: true,
     });
     assert.deepEqual(harness.prompts, ['openai']);
-    assert.deepEqual(harness.includedAccessValues, []);
+    assert.deepEqual(harness.includedAccessValues, [false]);
     assert.equal(harness.codexDisableCount, 1);
-    assert.equal(harness.invalidations, 1);
+    assert.equal(harness.invalidations, 2);
     assert.deepEqual(harness.retries, ['stream-d']);
   });
 

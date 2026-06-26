@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
@@ -68,6 +68,30 @@ function encryptedBlobs(blocks: ReadonlyArray<{ type?: string }>): string[] {
 }
 
 describe('extractServerToolData reasoning preservation by store mode', () => {
+  // The store:false (encrypted-reasoning) path is gated on the subscription
+  // being active; turning it off drops the Codex handler to base behavior.
+  beforeEach(async () => {
+    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/FakePlatform'),
+    ]);
+    initPlatform(
+      createFakePlatform({
+        config: { 'texra.chatgptCodex.preferSubscription': true },
+      }),
+    );
+  });
+
+  it('skips reasoning items that carry no encrypted_content (would be rejected empty)', () => {
+    const summaryOnly = { type: 'reasoning', summary: [] } as never;
+    const response = responseWith([summaryOnly, reasoning('enc1')]);
+
+    const codexBlocks =
+      codexHandler().extractServerToolData(response).contentBlocks;
+    // Only the blob-carrying item survives.
+    expect(encryptedBlobs(codexBlocks)).toEqual(['enc1']);
+  });
+
   it('store:false (Codex) preserves every reasoning item carrying encrypted_content', () => {
     const response = responseWith([reasoning('enc1'), functionCall()]);
 
