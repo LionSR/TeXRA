@@ -36,11 +36,7 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
-import {
-  agentKey,
-  agentName,
-  type AgentSource,
-} from '@shared/schemas/agent';
+import { agentKey, agentName, type AgentSource } from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';
