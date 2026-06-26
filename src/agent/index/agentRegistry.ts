@@ -10,7 +10,11 @@ import type {
   AgentCategory as AgentCategoryType,
   AgentSource,
 } from '@shared/schemas/agent';
-import { agentKey as createKey, agentName } from '@shared/schemas/agent';
+import {
+  agentKey as createKey,
+  agentKeyOf,
+  agentName,
+} from '@shared/schemas/agent';
 import { unique } from '@utils/core';
 import { getAgentDirectories } from './agentDirectoriesRegistry';
 import {
@@ -227,7 +231,7 @@ function migrateLegacyAgentNameKeys(): void {
       const rewritten = key.slice(0, key.length - name.length) + alias;
       if (getAgent(rewritten)) return rewritten;
       const canonical = getAgent(alias);
-      return canonical ? createKey(canonical.source, canonical.name) : key;
+      return canonical ? agentKeyOf(canonical) : key;
     });
     if (migrated.every((key, i) => key === stored[i])) continue;
 
@@ -241,9 +245,7 @@ function migrateLegacyAgentNameKeys(): void {
  * persisted visibility selections alive after switching identity to `name:`.
  */
 function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
-  const currentKeys = new Set(
-    entries.map((entry) => createKey(entry.source, entry.name)),
-  );
+  const currentKeys = new Set(entries.map((entry) => agentKeyOf(entry)));
   const currentNames = new Set(entries.map((entry) => entry.name));
   const qualifiedCandidates = new Map<string, Set<string>>();
   const bareCandidates = new Map<string, Set<string>>();
@@ -256,7 +258,7 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
     const oldKey = createKey(entry.source, oldName);
     if (!currentKeys.has(oldKey)) {
       const targets = qualifiedCandidates.get(oldKey) ?? new Set<string>();
-      targets.add(createKey(entry.source, entry.name));
+      targets.add(agentKeyOf(entry));
       qualifiedCandidates.set(oldKey, targets);
     }
     if (!currentNames.has(oldName)) {
@@ -454,7 +456,7 @@ export function resolveAgentKey(
   if (!agentIdentifier) return agentIdentifier;
   const entry = getAgent(agentIdentifier, lookupCategory);
   if (!entry) return agentIdentifier;
-  return createKey(entry.source, entry.name);
+  return agentKeyOf(entry);
 }
 
 // =============================================================================
@@ -507,7 +509,7 @@ export function findAgentByIdentifier(
   return entries.find((entry) =>
     identifier === name
       ? entry.name === name
-      : createKey(entry.source, entry.name) === identifier,
+      : agentKeyOf(entry) === identifier,
   );
 }
 

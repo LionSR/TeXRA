@@ -1,6 +1,6 @@
 // Local imports - shared
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
-import { agentKey } from '@shared/schemas/agent';
+import { agentKeyOf } from '@shared/schemas/agent';
 
 export interface SettingsAgentVisibilityEntry {
   source: AgentSource;
@@ -31,7 +31,7 @@ export class SettingsAgentVisibilityController {
   }): Promise<void> {
     const raw = this.deps.state.getEnabledAgentKeys(input.category);
     const current = raw ?? [];
-    const key = agentKey(input.source, input.name);
+    const key = agentKeyOf(input);
 
     let updated: string[];
     if (input.enabled) {
@@ -42,7 +42,7 @@ export class SettingsAgentVisibilityController {
     } else if (raw === undefined) {
       updated = this.deps.state
         .getAgents(input.category)
-        .map((entry) => agentKey(entry.source, entry.name))
+        .map((entry) => agentKeyOf(entry))
         .filter((candidate) => candidate !== key);
     } else {
       updated = current.filter(
@@ -62,14 +62,11 @@ export class SettingsAgentVisibilityController {
     const sourceAgents = allAgents.filter(
       (entry) => entry.source === input.source,
     );
-    const targetKeys = new Set(
-      sourceAgents.map((entry) => agentKey(entry.source, entry.name)),
-    );
+    const targetKeys = new Set(sourceAgents.map((entry) => agentKeyOf(entry)));
     const targetLegacyNames = new Set(sourceAgents.map((entry) => entry.name));
 
     const raw = this.deps.state.getEnabledAgentKeys(input.category);
-    const current =
-      raw ?? allAgents.map((entry) => agentKey(entry.source, entry.name));
+    const current = raw ?? allAgents.map((entry) => agentKeyOf(entry));
 
     let updated: string[];
     if (input.enabled) {
