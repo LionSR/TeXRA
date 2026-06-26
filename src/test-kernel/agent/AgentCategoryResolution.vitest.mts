@@ -102,7 +102,10 @@ describe('cross-category agent resolution', () => {
     // The tool-use delegation validates via getVisibleAgent and carries the
     // entry's source; launch resolves that exact key — the built-in tool-use
     // entry, never the colliding custom workflow shadow.
-    const toolUse = launchAs('toolUse', getVisibleAgent('toolUse', 'assistant'));
+    const toolUse = launchAs(
+      'toolUse',
+      getVisibleAgent('toolUse', 'assistant'),
+    );
     expect(toolUse?.entry.category).toBe('toolUse');
     expect(toolUse?.entry.source).toBe('builtInToolUse');
 

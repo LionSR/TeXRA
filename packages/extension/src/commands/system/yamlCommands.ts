@@ -90,11 +90,7 @@ export async function handleLoadSpecificAgent(): Promise<void> {
     // launch, there's no category context here, so use the plain name resolver.
     const agentPath = resolveAgent(agentName);
     if (!agentPath) {
-      void showLoggedErrorMessage(
-        CHANNEL,
-        'Could not find agent',
-        agentName,
-      );
+      void showLoggedErrorMessage(CHANNEL, 'Could not find agent', agentName);
       return;
     }
     logger.info(
