@@ -63,7 +63,7 @@ describe('CLI multi-agent presets', () => {
     const output = formatCliMultiAgentPresetList(plans);
 
     expect(output).toContain(
-      'built-in\tphysicist\tPhysicist\tworkflow:2\ttool-use:6',
+      'built-in\tphysicist\tPhysicist\tworkflow:6\ttool-use:9',
     );
     expect(output).not.toContain('Hint:');
   });
@@ -166,7 +166,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
-      'degraded; 1/2 workflows; 2/6 tools',
+      'degraded; 1/6 workflows; 2/9 tools',
     );
     expect(formatCliMultiAgentPresetLauncherHints(plan)).toEqual([
       'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
@@ -188,7 +188,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
-      'WARN preset physicist references unavailable agents: workflow:correct, workflow:polish, tool-use:research, tool-use:numerics, tool-use:presenter, tool-use:latexFixer',
+      'WARN preset physicist references unavailable agents: workflow:correct, workflow:polish, workflow:generic, workflow:devise, workflow:apply, workflow:criticize, tool-use:research, tool-use:numerics, tool-use:presenter, tool-use:simplifier, tool-use:latexFixer, tool-use:progressCheck, tool-use:search',
       'WARN preset physicist is degraded; running root agent orchestrator with 1 available team agent.',
     ]);
   });
@@ -206,7 +206,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
-      'WARN preset physicist references unavailable agents: workflow:correct, workflow:polish, tool-use:research, tool-use:numerics, tool-use:review, tool-use:presenter, tool-use:latexFixer',
+      'WARN preset physicist references unavailable agents: workflow:correct, workflow:polish, workflow:generic, workflow:devise, workflow:apply, workflow:criticize, tool-use:research, tool-use:numerics, tool-use:review, tool-use:presenter, tool-use:simplifier, tool-use:latexFixer, tool-use:progressCheck, tool-use:search',
     ]);
   });
 
@@ -230,8 +230,8 @@ describe('CLI multi-agent presets', () => {
 
     expect(cliMultiAgentPresetAvailability(plan)).toMatchObject({
       status: 'available',
-      toolUse: { available: 6, total: 6 },
-      workflow: { available: 2, total: 2 },
+      toolUse: { available: 9, total: 9 },
+      workflow: { available: 6, total: 6 },
     });
   });
 
@@ -273,8 +273,8 @@ describe('CLI multi-agent presets', () => {
 
     expect(cliMultiAgentPresetAvailability(plan)).toMatchObject({
       status: 'unavailable',
-      toolUse: { available: 0, total: 6 },
-      workflow: { available: 0, total: 2 },
+      toolUse: { available: 0, total: 9 },
+      workflow: { available: 0, total: 6 },
     });
     expect(cliMultiAgentPresetTeamLaunchBlockReason(plan)).toBe(
       'no runnable team root',
@@ -554,14 +554,19 @@ describe('CLI multi-agent presets', () => {
     expect(details).toContain(
       'Available tool-use agents:\n  orchestrator\n  review',
     );
-    expect(details).toContain('Missing workflow agents:\n  (none)');
+    expect(details).toContain(
+      'Missing workflow agents:\n  generic\n  devise\n  apply\n  criticize',
+    );
     expect(details).toContain(
       [
         'Missing tool-use agents:',
         '  research',
         '  numerics',
         '  presenter',
+        '  simplifier',
         '  latexFixer',
+        '  progressCheck',
+        '  search',
         '',
         'Hint: Researcher Access sign-in may load additional remote team agents.',
       ].join('\n'),
