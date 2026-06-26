@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { ExecutionIdSchema } from '@shared/schemas';
 
 /** Non-empty string for the required file-operation identity fields. */
-export const RequiredString = z.string().min(1);
+const RequiredString = z.string().min(1);
 
 /**
  * Identity shared by every pack/clean file operation: the input file plus the
