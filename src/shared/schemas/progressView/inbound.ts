@@ -170,6 +170,12 @@ const ToggleSuperYoloBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS),
 });
 
+// Set-on (idempotent) bypass enable, distinct from the shield's toggle: the
+// inline "Yolo (this session)" prompt button means "enable", never "flip".
+const EnableApprovalBypassMessageSchema = StreamScopedBaseSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS),
+});
+
 const SendFollowUpMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP),
   text: TrimmedStringSchema,
@@ -363,6 +369,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     ToolEditApprovalActionMessageSchema,
     ToggleToolEditApprovalBypassMessageSchema,
     ToggleSuperYoloBypassMessageSchema,
+    EnableApprovalBypassMessageSchema,
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
     PlanApprovalActionMessageSchema,

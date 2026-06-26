@@ -1,0 +1,95 @@
+// Third-party imports
+import { describe, expect, it } from 'vitest';
+
+// Local imports - component type
+import type { ApproveSplitButton } from '@progressView/frontend/components/ApproveSplitButton';
+
+// Local imports - test utilities
+import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+
+async function mount(canBypass: boolean): Promise<ApproveSplitButton> {
+  const element = document.createElement(
+    'approve-split-button',
+  ) as ApproveSplitButton;
+  element.approveTitle = 'Approve';
+  element.canBypass = canBypass;
+  document.body.append(element);
+  await element.updateComplete;
+  return element;
+}
+
+function recordEvents(element: ApproveSplitButton): string[] {
+  const events: string[] = [];
+  element.addEventListener('approve', () => events.push('approve'));
+  element.addEventListener('approve-session', () =>
+    events.push('approve-session'),
+  );
+  return events;
+}
+
+describe('approve-split-button', () => {
+  useLitComponentTestDom(
+    () => import('@progressView/frontend/components/ApproveSplitButton'),
+  );
+
+  it('renders a plain Approve button (no menu) when canBypass is false', async () => {
+    const element = await mount(false);
+    const events = recordEvents(element);
+
+    expect(element.shadowRoot?.querySelector('.approve-split')).toBeFalsy();
+    expect(element.shadowRoot?.querySelector('wa-dropdown-item')).toBeFalsy();
+
+    const approve = element.shadowRoot?.querySelector(
+      'wa-button[data-action="approve"]',
+    ) as HTMLElement | undefined;
+    expect(approve).toBeTruthy();
+    approve?.dispatchEvent(new CustomEvent('click', { bubbles: true }));
+    expect(events).toEqual(['approve']);
+  });
+
+  it('renders the Yolo split menu when canBypass is true', async () => {
+    const element = await mount(true);
+
+    expect(element.shadowRoot?.querySelector('.approve-split')).toBeTruthy();
+    const item = element.shadowRoot?.querySelector(
+      'wa-dropdown-item[value="approve-session"]',
+    ) as HTMLElement | undefined;
+    expect(item).toBeTruthy();
+    expect(item?.textContent).toContain('Yolo (this session)');
+  });
+
+  it('emits approve on the main button click in split mode', async () => {
+    const element = await mount(true);
+    const events = recordEvents(element);
+
+    const approve = element.shadowRoot?.querySelector(
+      'wa-button[data-action="approve"]',
+    ) as HTMLElement | undefined;
+    approve?.dispatchEvent(new CustomEvent('click', { bubbles: true }));
+    expect(events).toEqual(['approve']);
+  });
+
+  it('emits approve-session only for the Yolo menu item', async () => {
+    const element = await mount(true);
+    const events = recordEvents(element);
+    const menu = element.shadowRoot?.querySelector('.approve-split-menu');
+    expect(menu).toBeTruthy();
+
+    // An unrecognized menu value is a no-op.
+    menu?.dispatchEvent(
+      new CustomEvent('wa-select', {
+        detail: { item: { value: 'nope' } },
+        bubbles: true,
+      }),
+    );
+    expect(events).toEqual([]);
+
+    menu?.dispatchEvent(
+      new CustomEvent('wa-select', {
+        detail: { item: { value: 'approve-session' } },
+        bubbles: true,
+      }),
+    );
+    expect(events).toEqual(['approve-session']);
+  });
+});

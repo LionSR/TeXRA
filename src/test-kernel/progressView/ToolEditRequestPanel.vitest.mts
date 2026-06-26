@@ -1,6 +1,5 @@
 // Third-party imports
-import { JSDOM } from 'jsdom';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
 import type { PermissionState } from '@progressView/frontend/permissionState';
@@ -10,62 +9,7 @@ import type { ToolEditRequestPanel } from '@progressView/frontend/components/Too
 import type { ToolEditPermission } from '@shared/schemas';
 
 // Local imports - test utilities
-import { installAttachInternalsFallback } from '../settings/litComponentTestUtils';
-
-const originalGlobals = {
-  document: globalThis.document,
-  window: globalThis.window,
-  customElements: globalThis.customElements,
-  HTMLElement: globalThis.HTMLElement,
-  Element: globalThis.Element,
-  Document: globalThis.Document,
-  ShadowRoot: globalThis.ShadowRoot,
-  CSSStyleSheet: globalThis.CSSStyleSheet,
-  Event: globalThis.Event,
-  CustomEvent: globalThis.CustomEvent,
-  Node: (globalThis as { Node?: unknown }).Node,
-};
-
-function installDom(): JSDOM {
-  const dom = new JSDOM('<!doctype html><body></body>', {
-    url: 'http://localhost',
-  });
-  globalThis.window = dom.window as unknown as Window & typeof globalThis;
-  globalThis.document = dom.window.document;
-  globalThis.customElements = dom.window.customElements;
-  globalThis.HTMLElement = dom.window.HTMLElement;
-  globalThis.Element = dom.window.Element;
-  globalThis.Document = dom.window.Document;
-  globalThis.ShadowRoot = dom.window.ShadowRoot;
-  globalThis.CSSStyleSheet = dom.window.CSSStyleSheet;
-  globalThis.Event = dom.window.Event;
-  globalThis.CustomEvent = dom.window.CustomEvent;
-  (globalThis as { Node: unknown }).Node = dom.window.Node;
-  installAttachInternalsFallback(
-    dom.window as unknown as Parameters<
-      typeof installAttachInternalsFallback
-    >[0],
-  );
-  return dom;
-}
-
-function restoreDom(): void {
-  globalThis.document = originalGlobals.document;
-  globalThis.window = originalGlobals.window;
-  globalThis.customElements = originalGlobals.customElements;
-  globalThis.HTMLElement = originalGlobals.HTMLElement;
-  globalThis.Element = originalGlobals.Element;
-  globalThis.Document = originalGlobals.Document;
-  globalThis.ShadowRoot = originalGlobals.ShadowRoot;
-  globalThis.CSSStyleSheet = originalGlobals.CSSStyleSheet;
-  globalThis.Event = originalGlobals.Event;
-  globalThis.CustomEvent = originalGlobals.CustomEvent;
-  if (originalGlobals.Node === undefined) {
-    delete (globalThis as { Node?: unknown }).Node;
-  } else {
-    (globalThis as { Node: unknown }).Node = originalGlobals.Node;
-  }
-}
+import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 function createPermission(data: Partial<ToolEditPermission>): PermissionState {
   return {
@@ -97,20 +41,11 @@ async function mountPanel(
   return element;
 }
 
-beforeAll(async () => {
-  installDom();
-  await import('@progressView/frontend/components/ToolEditRequestPanel');
-});
-
-afterEach(() => {
-  document.body.replaceChildren();
-});
-
-afterAll(() => {
-  restoreDom();
-});
-
 describe('tool-edit-request-panel', () => {
+  useLitComponentTestDom(
+    () => import('@progressView/frontend/components/ToolEditRequestPanel'),
+  );
+
   it('renders inline diff when only proposed content is available', async () => {
     const element = await mountPanel(
       createPermission({
@@ -153,5 +88,69 @@ describe('tool-edit-request-panel', () => {
     expect(
       (diffView as HTMLElement & { proposedText?: string }).proposedText,
     ).toBe('');
+  });
+
+  it('renders a non-bypass Approve and ignores "a" when bypass is not allowed', async () => {
+    const element = await mountPanel(createPermission({ allowBypass: false }));
+    const actions: string[] = [];
+    element.addEventListener('permission-action', (event) => {
+      actions.push((event as CustomEvent<{ action: string }>).detail.action);
+    });
+
+    const split = element.shadowRoot?.querySelector('approve-split-button') as
+      | (HTMLElement & { canBypass?: boolean })
+      | undefined;
+    expect(split).toBeTruthy();
+    expect(split?.canBypass).toBe(false);
+    expect(element.handleKeyboardShortcut('a')).toBe(false);
+    expect(actions).toEqual([]);
+  });
+
+  it('renders a non-bypass Approve when streamId is empty even if bypass is allowed', async () => {
+    const element = await mountPanel(
+      createPermission({ allowBypass: true, streamId: '' }),
+    );
+
+    const split = element.shadowRoot?.querySelector('approve-split-button') as
+      | (HTMLElement & { canBypass?: boolean })
+      | undefined;
+    expect(split?.canBypass).toBe(false);
+    expect(element.handleKeyboardShortcut('a')).toBe(false);
+  });
+
+  it('passes canBypass to the split button and "a" emits approveSession', async () => {
+    const element = await mountPanel(
+      createPermission({ allowBypass: true, streamId: 'stream-1' }),
+    );
+    const actions: string[] = [];
+    element.addEventListener('permission-action', (event) => {
+      actions.push((event as CustomEvent<{ action: string }>).detail.action);
+    });
+
+    const split = element.shadowRoot?.querySelector('approve-split-button') as
+      | (HTMLElement & { canBypass?: boolean })
+      | undefined;
+    expect(split?.canBypass).toBe(true);
+
+    expect(element.handleKeyboardShortcut('a')).toBe(true);
+    expect(actions).toEqual(['approveSession']);
+  });
+
+  it('ignores "a" while the rejection feedback box is open', async () => {
+    const element = await mountPanel(
+      createPermission({ allowBypass: true, streamId: 'stream-1' }),
+    );
+    const actions: string[] = [];
+    element.addEventListener('permission-action', (event) => {
+      actions.push((event as CustomEvent<{ action: string }>).detail.action);
+    });
+
+    // First 'n' opens the feedback textarea (does not submit yet).
+    expect(element.handleKeyboardShortcut('n')).toBe(true);
+    await element.updateComplete;
+
+    // With feedback focused, 'a' must not hijack typing into the textarea.
+    expect(element.handleKeyboardShortcut('a')).toBe(false);
+    expect(actions).toEqual([]);
   });
 });
