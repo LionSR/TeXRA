@@ -293,13 +293,21 @@ class GatherInputNode extends Node<AgentCreatorShared> {
   }
 }
 
-class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
+/**
+ * Builds the {@link AgentBlueprint} for the category chosen upstream. Both
+ * categories share the same prep/post and the same `AGENT_NAME`/`DESCRIPTION`
+ * render vars; only `toolUse` runs the tool-pick step and contributes the
+ * tool-derived vars. The tool pick happens before the target directory is
+ * resolved so cancelling it short-circuits without side effects.
+ */
+class BlueprintNode extends Node<AgentCreatorShared> {
   constructor(private ui: AgentCreatorUI) {
     super();
   }
 
   async prep(shared: AgentCreatorShared) {
     return {
+      category: shared.category,
       agentName: shared.agentName!,
       description: shared.description!,
       config: shared.config,
@@ -307,71 +315,43 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
   }
 
   async exec(prepRes: {
+    category: AgentCategory;
     agentName: string;
     description: string;
     config: CreatorConfig;
   }): Promise<AgentBlueprint | undefined> {
-    const { agentName, description, config } = prepRes;
+    const { category, agentName, description, config } = prepRes;
+    const base = { AGENT_NAME: agentName, DESCRIPTION: description };
+
+    if (category === 'toolUse') {
+      const picked = await this.ui.pickTools(agentName, description);
+      if (!picked) return undefined;
+      const targetDir = await this.ui.getCustomAgentDir();
+      return {
+        category: 'toolUse',
+        agentName,
+        filePath: path.join(targetDir, `${agentName}.yaml`),
+        aiVars: {
+          ...base,
+          SELECTED_TOOLS: picked.tools.join(', '),
+          SELECTED_GROUPS: picked.groups.join(', '),
+        },
+        fallbackTemplate: config.templates.toolUse,
+        fallbackVars: {
+          ...base,
+          TOOLS_YAML: picked.tools.map((t) => `    - ${t}`).join('\n'),
+        },
+      };
+    }
+
     const targetDir = await this.ui.getCustomAgentDir();
     return {
       category: 'workflow',
       agentName,
       filePath: path.join(targetDir, `${agentName}.yaml`),
-      aiVars: { AGENT_NAME: agentName, DESCRIPTION: description },
+      aiVars: { ...base },
       fallbackTemplate: config.templates.workflowSingle,
-      fallbackVars: { AGENT_NAME: agentName, DESCRIPTION: description },
-    };
-  }
-
-  async post(
-    shared: AgentCreatorShared,
-    _prepRes: unknown,
-    execRes: AgentBlueprint | undefined,
-  ): Promise<string | undefined> {
-    if (!execRes) return 'cancel';
-    shared.blueprint = execRes;
-    return FlowTransition.DEFAULT;
-  }
-}
-
-class ToolUseBlueprintNode extends Node<AgentCreatorShared> {
-  constructor(private ui: AgentCreatorUI) {
-    super();
-  }
-
-  async prep(shared: AgentCreatorShared) {
-    return {
-      agentName: shared.agentName!,
-      description: shared.description!,
-      config: shared.config,
-    };
-  }
-
-  async exec(prepRes: {
-    agentName: string;
-    description: string;
-    config: CreatorConfig;
-  }): Promise<AgentBlueprint | undefined> {
-    const { agentName, description, config } = prepRes;
-    const picked = await this.ui.pickTools(agentName, description);
-    if (!picked) return undefined;
-    const targetDir = await this.ui.getCustomAgentDir();
-    return {
-      category: 'toolUse',
-      agentName,
-      filePath: path.join(targetDir, `${agentName}.yaml`),
-      aiVars: {
-        AGENT_NAME: agentName,
-        DESCRIPTION: description,
-        SELECTED_TOOLS: picked.tools.join(', '),
-        SELECTED_GROUPS: picked.groups.join(', '),
-      },
-      fallbackTemplate: config.templates.toolUse,
-      fallbackVars: {
-        AGENT_NAME: agentName,
-        DESCRIPTION: description,
-        TOOLS_YAML: picked.tools.map((t) => `    - ${t}`).join('\n'),
-      },
+      fallbackVars: { ...base },
     };
   }
 
@@ -526,16 +506,14 @@ export function createAgentCreatorFlow(
   ui: AgentCreatorUI,
 ): Flow<AgentCreatorShared> {
   const gatherInput = new GatherInputNode(ui);
-  const workflowBlueprint = new WorkflowBlueprintNode(ui);
-  const toolUseBlueprint = new ToolUseBlueprintNode(ui);
+  const blueprint = new BlueprintNode(ui);
   const generate = new GenerateNode(ui);
   const register = new RegisterNode(ui);
 
-  gatherInput.on('workflow', workflowBlueprint);
-  gatherInput.on('toolUse', toolUseBlueprint);
+  gatherInput.on('workflow', blueprint);
+  gatherInput.on('toolUse', blueprint);
 
-  workflowBlueprint.next(generate);
-  toolUseBlueprint.next(generate);
+  blueprint.next(generate);
   generate.next(register);
 
   return new Flow<AgentCreatorShared>(gatherInput);
