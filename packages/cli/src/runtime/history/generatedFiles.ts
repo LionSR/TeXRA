@@ -1,0 +1,201 @@
+import * as path from 'node:path';
+
+import { listExecutionWorkspaceFiles } from '@agent/storage';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { isFileNotFoundError } from '@common/errors';
+import type { ExecutionId } from '@shared/schemas';
+import { StorageFS } from '@utils/files';
+import { byStringProp } from '@utils/core/comparators';
+import { isObject } from '@utils/core/typeGuards';
+import { isDirectory } from '@utils/files/fsEntryType';
+import { resolveStoragePath } from '@utils/files/taskRunStorage';
+
+import type { CliHistoryFile } from '../history';
+
+const HISTORY_FILE_SCAN_DEPTH = 2;
+const WORKSPACE_FILE_TOOL_NAMES = new Set(['write_file', 'edit_file']);
+
+const KV_FILES = new Set([
+  'meta.json',
+  'config.json',
+  'conversation.json',
+  'todos.json',
+  'report.json',
+  'workspace-files.json',
+  'result-meta.json',
+]);
+
+function isHistoryKvFile(name: string): boolean {
+  return (
+    KV_FILES.has(name) || name.startsWith('child-') || name.startsWith('flow_')
+  );
+}
+
+export async function listGeneratedFiles(
+  id: ExecutionId,
+): Promise<CliHistoryFile[]> {
+  const runDir = await resolveStoragePath(id);
+  if (!runDir) return [];
+  return walkStorageDirectory(runDir, '', HISTORY_FILE_SCAN_DEPTH);
+}
+
+async function walkStorageDirectory(
+  basePath: string,
+  relativePath: string,
+  maxDepth: number,
+): Promise<CliHistoryFile[]> {
+  const fullPath = relativePath ? path.join(basePath, relativePath) : basePath;
+  const entries = await StorageFS.readDir(fullPath).catch((error: unknown) => {
+    if (isFileNotFoundError(error)) return [];
+    throw error;
+  });
+
+  const files: CliHistoryFile[] = [];
+  for (const [name, type] of entries) {
+    if (isHistoryKvFile(name)) continue;
+    const rawRelative = relativePath ? path.join(relativePath, name) : name;
+    const childPath = path.join(basePath, rawRelative);
+    const entryIsDirectory = isDirectory(type);
+    const stat = await StorageFS.stat(childPath).catch(() => ({ size: 0 }));
+    files.push({
+      path: rawRelative.replaceAll('\\', '/'),
+      size: stat.size,
+      isDirectory: entryIsDirectory,
+    });
+    if (entryIsDirectory && maxDepth > 1) {
+      files.push(
+        ...(await walkStorageDirectory(basePath, rawRelative, maxDepth - 1)),
+      );
+    }
+  }
+  return files.sort(byStringProp((f) => f.path));
+}
+
+export async function listWorkspaceToolFiles(
+  config: AgentConfig | null,
+  persistedPaths: readonly string[],
+  conversation: readonly unknown[] | null,
+): Promise<CliHistoryFile[]> {
+  const filePaths = persistedPaths.length
+    ? persistedPaths
+    : conversation?.length
+      ? extractWorkspaceFileToolPaths(conversation)
+      : [];
+  const workspaceFiles = await listExecutionWorkspaceFiles(config, filePaths);
+  return workspaceFiles.map((file) => ({
+    path: file.displayPath,
+    size: file.size,
+    isDirectory: file.isDirectory,
+  }));
+}
+
+function extractWorkspaceFileToolPaths(
+  conversation: readonly unknown[],
+): string[] {
+  const paths: string[] = [];
+  for (const message of conversation) {
+    if (!isObject(message)) continue;
+
+    const responseToolPath = extractResponseFunctionCallFilePath(message);
+    if (responseToolPath) paths.push(responseToolPath);
+
+    const toolCalls = Array.isArray(message.tool_calls)
+      ? message.tool_calls
+      : [];
+    for (const toolCall of toolCalls) {
+      const toolPath = extractOpenAiToolCallFilePath(toolCall);
+      if (toolPath) paths.push(toolPath);
+    }
+
+    const contentBlocks = Array.isArray(message.content) ? message.content : [];
+    for (const block of contentBlocks) {
+      const toolPath = extractContentToolUseFilePath(block);
+      if (toolPath) paths.push(toolPath);
+    }
+
+    const parts = Array.isArray(message.parts) ? message.parts : [];
+    for (const part of parts) {
+      const toolPath = extractGoogleFunctionCallFilePath(part);
+      if (toolPath) paths.push(toolPath);
+    }
+  }
+  return paths;
+}
+
+function extractResponseFunctionCallFilePath(
+  message: Record<string, unknown>,
+): string | undefined {
+  if (message.type !== 'function_call') return undefined;
+  if (
+    typeof message.name !== 'string' ||
+    !WORKSPACE_FILE_TOOL_NAMES.has(message.name)
+  ) {
+    return undefined;
+  }
+  return extractToolArgumentsFilePath(message.arguments);
+}
+
+function extractOpenAiToolCallFilePath(toolCall: unknown): string | undefined {
+  if (!isObject(toolCall)) return undefined;
+  const fn = isObject(toolCall.function) ? toolCall.function : {};
+  if (typeof fn.name !== 'string' || !WORKSPACE_FILE_TOOL_NAMES.has(fn.name)) {
+    return undefined;
+  }
+  return extractToolArgumentsFilePath(fn.arguments);
+}
+
+function extractContentToolUseFilePath(block: unknown): string | undefined {
+  if (!isObject(block) || block.type !== 'tool_use') return undefined;
+  if (
+    typeof block.name !== 'string' ||
+    !WORKSPACE_FILE_TOOL_NAMES.has(block.name)
+  ) {
+    return undefined;
+  }
+  return extractToolArgumentsFilePath(block.input);
+}
+
+function extractGoogleFunctionCallFilePath(part: unknown): string | undefined {
+  if (!isObject(part) || !isObject(part.functionCall)) return undefined;
+  const { functionCall } = part;
+  if (
+    typeof functionCall.name !== 'string' ||
+    !WORKSPACE_FILE_TOOL_NAMES.has(functionCall.name)
+  ) {
+    return undefined;
+  }
+  return extractToolArgumentsFilePath(functionCall.args);
+}
+
+function extractToolArgumentsFilePath(
+  argumentsValue: unknown,
+): string | undefined {
+  const args = parseToolArguments(argumentsValue);
+  const toolPath = typeof args?.path === 'string' ? args.path.trim() : '';
+  return toolPath || undefined;
+}
+
+function parseToolArguments(
+  argumentsValue: unknown,
+): Record<string, unknown> | undefined {
+  if (isObject(argumentsValue)) return argumentsValue;
+  if (typeof argumentsValue !== 'string') return undefined;
+  try {
+    const parsed: unknown = JSON.parse(argumentsValue);
+    return isObject(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function mergeHistoryFiles(
+  ...fileGroups: readonly (readonly CliHistoryFile[])[]
+): CliHistoryFile[] {
+  const files = new Map<string, CliHistoryFile>();
+  for (const group of fileGroups) {
+    for (const file of group) {
+      if (!files.has(file.path)) files.set(file.path, file);
+    }
+  }
+  return [...files.values()].sort(byStringProp((f) => f.path));
+}
