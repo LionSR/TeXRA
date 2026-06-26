@@ -47,6 +47,19 @@ describe('cross-category agent resolution', () => {
         '',
       ].join('\n'),
     );
+    await writeFile(
+      resolve(customDir, 'secretAgent.yaml'),
+      [
+        'name: secretAgent',
+        'description: Internal tool-use agent hidden from dropdowns.',
+        'settings:',
+        '  agentCategory: toolUse',
+        '  internal: true',
+        'prompts:',
+        '  systemPrompt: Internal agent.',
+        '',
+      ].join('\n'),
+    );
 
     const { initPlatform } = await import('@platform/platform');
     initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
@@ -101,5 +114,15 @@ describe('cross-category agent resolution', () => {
   it('returns undefined for a name absent from the requested category', () => {
     // `correct` is a workflow agent; it must not resolve as a tool-use launch.
     expect(resolveAgentInCategory('toolUse', 'correct')).toBeUndefined();
+  });
+
+  it('hides internal agents from dropdowns but keeps them launchable', () => {
+    // Internal agents are excluded from the visible/dropdown set…
+    expect(getVisibleAgent('toolUse', 'secretAgent')).toBeUndefined();
+    // …but the launch resolver must still reach them (launchable by commands).
+    expect(resolveAgentInCategory('toolUse', 'secretAgent')?.entry.name).toBe(
+      'secretAgent',
+    );
+    expect(getCategoryAgent('toolUse', 'secretAgent')?.internal).toBe(true);
   });
 });

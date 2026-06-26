@@ -396,11 +396,25 @@ export function resolveAgent(identifier: string): ResolvedAgent | undefined {
   return { entry, definitionPath: entry.path, resolvedName: entry.name };
 }
 
+/**
+ * Agents in a category, deduplicated by name. `includeInternal` controls
+ * whether internal agents (hidden from dropdowns but launchable by commands)
+ * are in the set: dropdowns exclude them, launch resolution includes them.
+ */
+function categoryEntries(
+  category: AgentCategory,
+  includeInternal: boolean,
+): AgentEntry[] {
+  return deduplicateByName(
+    [...cache.values()].filter(
+      (e) => e.category === category && (includeInternal || !e.internal),
+    ),
+  );
+}
+
 /** Get non-internal agents for a category, deduplicated by name. */
 export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
-  return deduplicateByName(
-    [...cache.values()].filter((e) => e.category === category && !e.internal),
-  );
+  return categoryEntries(category, false);
 }
 
 /** Get agents by source. */
@@ -546,8 +560,11 @@ export function getCategoryAgent(
   category: AgentCategory,
   identifier: string,
 ): AgentEntry | undefined {
+  // Include internal agents: they are hidden from dropdowns but launchable by
+  // commands, so the launch resolver must be able to reach them — only the
+  // visible-set resolver (getVisibleAgent) filters them out.
   return resolveWithinCategory(
-    getAgentsByCategory(category),
+    categoryEntries(category, true),
     category,
     identifier,
   );
