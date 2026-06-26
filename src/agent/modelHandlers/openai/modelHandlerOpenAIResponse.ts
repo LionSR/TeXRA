@@ -361,8 +361,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    *
    * Also incompatible with background mode (polling-based, doesn't benefit
    * from persistent connection).
+   *
+   * `protected` so a subclass on a non-default endpoint (e.g. the Codex
+   * backend) can opt into trying WebSocket against its own base URL.
    */
-  private isWebSocketModeEnabled(): boolean {
+  protected isWebSocketModeEnabled(): boolean {
     return getWebSocketEnabled() && this.getBaseUrl() === null;
   }
 

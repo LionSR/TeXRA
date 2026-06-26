@@ -38,6 +38,7 @@ import {
 } from '@auth/codex';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { getWebSocketEnabled } from '@utils/config/providerConfig';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 import type { ResponseUsage } from 'openai/resources/responses/responses';
@@ -104,8 +105,15 @@ const codexFetch = (async (input, init) => {
   try {
     const body = JSON.parse(init.body) as Record<string, unknown>;
     delete body.max_output_tokens;
-    delete body.background;
-    body.store = false;
+    // When background mode is active the handler sets `background: true` (and
+    // store:true via storesResponsesServerSide). Leave the transport fields
+    // untouched then, so the real backend verdict is observed; otherwise enforce
+    // the streaming/stateless shape the backend requires.
+    const testingBackground = body.background === true;
+    if (!testingBackground) {
+      delete body.background;
+      body.store = false;
+    }
 
     const instructions: string[] = [];
     if (typeof body.instructions === 'string' && body.instructions.trim()) {
@@ -137,7 +145,9 @@ const codexFetch = (async (input, init) => {
     body.instructions =
       instructions.join('\n\n') || 'You are a helpful assistant.';
 
-    body.stream = true;
+    if (!testingBackground) {
+      body.stream = true;
+    }
     init = { ...init, body: JSON.stringify(body) };
   } catch (error) {
     // Body isn't JSON we can edit — the backend will reject it (missing
@@ -152,16 +162,32 @@ const codexFetch = (async (input, init) => {
 }) satisfies typeof fetch;
 
 export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
-  protected override backgroundModeSupported = false;
+  // Background mode is honored through the SAME `model.useBackgroundResponses`
+  // toggle every OpenAI Responses model uses (plus the usual workflow + GPT
+  // eligibility) — no Codex-specific flag. EXPERIMENTAL on this backend: it
+  // forces store:false and has no polling endpoint, so a background request
+  // very likely fails; the toggle exists so it can be tested in practice.
+  protected override backgroundModeSupported = true;
 
   // The Codex backend is streaming-only (`400 Stream must be set to true`
-  // otherwise), so always take the streaming path regardless of the user's
-  // streaming toggle. The SDK's `ResponseStream` then accumulates the deltas
-  // natively, and the base path rebuilds `output` from the streamed
-  // `output_item.done` events (the backend leaves `response.completed.output`
-  // empty).
+  // otherwise), so take the streaming path unless background mode is active
+  // (then the base polling path needs non-streaming). The SDK's `ResponseStream`
+  // accumulates the deltas natively, and the base path rebuilds `output` from
+  // the streamed `output_item.done` events.
   public override getStreamingConfig(): boolean {
-    return true;
+    return !this.isBackgroundModeActive();
+  }
+
+  /**
+   * Allow WebSocket transport against the Codex backend whenever the SAME global
+   * `texra.websocket.openai` toggle is on (`getWebSocketEnabled()`) — no
+   * Codex-specific flag. The SDK derives the WebSocket URL + auth from the
+   * (Codex) client, so this targets the Codex endpoint; whether that endpoint
+   * speaks WebSocket is what's being tested. Off by default → the base gate
+   * (default endpoint only) keeps it disabled.
+   */
+  protected override isWebSocketModeEnabled(): boolean {
+    return getWebSocketEnabled() || super.isWebSocketModeEnabled();
   }
 
   // The Codex backend has no `/responses/input_tokens` or `/compact` endpoint
@@ -183,8 +209,13 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   // encrypted-reasoning replay path: with no previous_response_id chaining,
   // reasoning continuity comes from replaying `reasoning.encrypted_content`
   // blobs in each turn's input instead.
+  //
+  // EXPERIMENTAL exception: background mode (polling) needs server-side storage,
+  // so when it's active store:true is requested — which also auto-disables the
+  // encrypted-reasoning replay (reasoning then lives server-side, like the base
+  // path), keeping the two mechanisms from conflicting.
   protected override get storesResponsesServerSide(): boolean {
-    return false;
+    return this.isBackgroundModeActive();
   }
 
   protected override get supportsInlineInputFileUpload(): boolean {
