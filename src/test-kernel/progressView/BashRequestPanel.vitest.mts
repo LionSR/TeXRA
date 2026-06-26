@@ -36,10 +36,11 @@ async function mountPanel(
   return element;
 }
 
-// Parity with ToolEditRequestPanel: the bash panel wires the Yolo affordance
-// through its own `handleExtraKey('a')` override + `middleActions`, so a
-// regression there would not be caught by the tool-edit tests despite the
-// shared BaseFeedbackPanel logic.
+// Parity with ToolEditRequestPanel: the bash panel gets the Yolo affordance
+// entirely from shared BaseFeedbackPanel logic (`canBypass`, the `a` shortcut in
+// `handleKeyboardShortcut`, and the `<approve-split-button>` in
+// `renderApproveButton`), so these tests guard that the bash panel wires it up
+// — a base-class regression would not be caught by the tool-edit tests alone.
 describe('bash-request-panel', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/BashRequestPanel'),
