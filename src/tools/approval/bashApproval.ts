@@ -25,7 +25,6 @@ const BashApprovalResultSchema = z.object({
 });
 export type BashApprovalResult = z.infer<typeof BashApprovalResultSchema>;
 
-
 const DEFAULT_BASH_REJECTION_INSTRUCTION =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
   'Continue without running it, use a non-shell method, or explain what approval would be needed.';
