@@ -1,6 +1,5 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import { z } from 'zod';
 
 // Local imports
 import type { FileOpResult } from '@agent/types';
@@ -12,25 +11,14 @@ import {
   runCleanRunDir,
 } from '@housekeeping';
 import * as logger from '@logger/logUtils';
-import { ExecutionIdSchema } from '@shared/schemas';
+import { FileOpParamsSchema, fileOpConfigFields } from './fileOpSchemas';
 import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
 
-const RequiredString = z.string().min(1);
-
-const CleanParamsSchema = z.object({
-  inputFile: RequiredString,
-  agent: RequiredString,
-  model: RequiredString,
-});
-
-const CleanConfigSchema = CleanParamsSchema.extend({
-  outputFiles: z.array(z.string()).prefault([]),
-  streamId: z.string().optional(),
-  executionId: ExecutionIdSchema.optional(),
-  skipProgressViewClear: z.boolean().optional(),
+const CleanConfigSchema = FileOpParamsSchema.extend({
+  ...fileOpConfigFields,
 });
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
@@ -71,7 +59,7 @@ async function handleCleanSingle(
 ): Promise<void> {
   const data = await parseWithErrorDisplay(
     CHANNEL,
-    CleanParamsSchema,
+    FileOpParamsSchema,
     { inputFile, agent, model },
     'cleanSingle params',
   );
@@ -97,7 +85,7 @@ async function handleCleanMultiple(
 ): Promise<void> {
   const data = await parseWithErrorDisplay(
     CHANNEL,
-    CleanParamsSchema,
+    FileOpParamsSchema,
     { inputFile, agent, model },
     'cleanMultiple params',
   );
