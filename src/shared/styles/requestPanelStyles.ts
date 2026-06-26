@@ -219,10 +219,6 @@ export const requestPanelStyles: CSSResult = css`
     max-width: min(9rem, 100%);
   }
 
-  .workflow-proposal__actions wa-button[data-action]::part(base) {
-    justify-content: center;
-  }
-
   .approval-request__actions wa-button[data-action] {
     flex: 0 1 7rem;
     width: auto;
@@ -233,6 +229,12 @@ export const requestPanelStyles: CSSResult = css`
   :is(${ACTIONS}) wa-button[data-action]::part(base) {
     justify-content: flex-start;
     gap: ${sp.small};
+  }
+
+  /* Center the capped proposal labels. Must follow the shared flex-start rule
+     above — equal specificity, so source order decides the cascade. */
+  .workflow-proposal__actions wa-button[data-action]::part(base) {
+    justify-content: center;
   }
 
   .approval-request__actions wa-button[data-action]::part(base) {
