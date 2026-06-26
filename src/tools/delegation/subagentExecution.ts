@@ -31,8 +31,6 @@ import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
-// Local imports - model
-
 // Local imports - tools
 import {
   AgentCategory,
