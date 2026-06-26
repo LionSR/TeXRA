@@ -51,17 +51,16 @@ jobs:
           fi
 
   validate:
-    name: validate (${{ matrix.os }})
+    name: validate
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ matrix.os }}
+    # OS-independent checks (typecheck/lint/tests/compile) and the
+    # Linux-only artifacts (CLI TUI frames, extension VSIX) live here and run
+    # once, on Linux. The macOS-specific Electron webview smoke is a separate
+    # `webview-smoke` job so the expensive macOS runner (~10x Linux billing)
+    # never re-runs platform-independent work it would only duplicate.
+    runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
 
     steps:
       - name: Checkout repository
@@ -98,7 +97,6 @@ jobs:
         run: pnpm run test
 
       - name: Validate CLI TUI smoke frames
-        if: runner.os == 'Linux'
         run: |
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
           pnpm --filter @texra-ai/cli validate:tui -- \
@@ -106,7 +104,7 @@ jobs:
             edit-approval subagent-picker hidden-root-approval-tab-return
 
       - name: Upload CLI TUI smoke frames
-        if: runner.os == 'Linux' && always()
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: texra-cli-tui-smoke-frames
@@ -120,37 +118,64 @@ jobs:
       # Desktop app packaging is intentionally not part of PR CI. Keep this
       # check scoped to the VS Code extension package.
       - name: Build extension VSIX package
-        if: runner.os == 'Linux'
         run: pnpm --filter texra build:fast
 
       - name: Check extension VSIX contents
-        if: runner.os == 'Linux'
         run: pnpm run check:vsix-contents
 
-      - name: Build webview smoke assets
-        if: runner.os == 'macOS'
-        run: pnpm run vite:webviews
-
-      - name: Smoke extension webviews in Electron
-        if: runner.os == 'macOS'
-        run: pnpm run smoke:webviews:run
-
-      - name: Upload webview smoke screenshots
-        if: runner.os == 'macOS' && always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: texra-webview-smoke-screenshots
-          path: artifacts/webview-smoke/*.png
-          if-no-files-found: ignore
-          retention-days: 14
-
       - name: Upload extension VSIX artifact
-        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
           name: texra-extension-vsix
           path: releases/*.vsix
           if-no-files-found: error
+          retention-days: 14
+
+  webview-smoke:
+    name: webview smoke (macOS)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    # macOS-only because the smoke renders the packaged webviews in Electron on
+    # the macOS runner. It needs just the Vite webview bundles
+    # (packages/extension/dist/*/bundle.js) — not the esbuild extension-host
+    # compile, typecheck, lint, or kernel tests, which the `validate` job
+    # already covers on Linux. Keeping this job lean avoids paying macOS rates
+    # to re-run platform-independent checks.
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build webview smoke assets
+        run: pnpm run vite:webviews
+
+      - name: Smoke extension webviews in Electron
+        run: pnpm run smoke:webviews:run
+
+      - name: Upload webview smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-webview-smoke-screenshots
+          path: artifacts/webview-smoke/*.png
+          if-no-files-found: ignore
           retention-days: 14
 
   docs-check:
@@ -187,16 +212,22 @@ jobs:
     needs:
       - changes
       - validate
+      - webview-smoke
       - docs-check
     if: always()
 
     steps:
       - name: Require validation jobs success
         run: |
-          # On code PRs the validate matrix gates; on docs-only PRs it is skipped
-          # and the lightweight docs build gates instead — require whichever ran.
+          # On code PRs the validate + webview-smoke jobs gate; on docs-only PRs
+          # they are skipped and the lightweight docs build gates instead —
+          # require whichever ran.
           if [ '${{ needs.validate.result }}' != 'success' ] && [ '${{ needs.validate.result }}' != 'skipped' ]; then
-            echo 'Validation matrix result: ${{ needs.validate.result }}'
+            echo 'Validation result: ${{ needs.validate.result }}'
+            exit 1
+          fi
+          if [ '${{ needs.webview-smoke.result }}' != 'success' ] && [ '${{ needs.webview-smoke.result }}' != 'skipped' ]; then
+            echo 'Webview smoke result: ${{ needs.webview-smoke.result }}'
             exit 1
           fi
           if [ '${{ needs.docs-check.result }}' != 'success' ] && [ '${{ needs.docs-check.result }}' != 'skipped' ]; then
