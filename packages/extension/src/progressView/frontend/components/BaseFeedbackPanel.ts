@@ -41,6 +41,11 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
           return true;
         }
         return false;
+      case 'a':
+        // Session-bypass ("Yolo") accelerator. A no-op (returns false) on
+        // prompts that don't allow bypass or while the feedback box is open,
+        // so it only acts on the edit/bash prompts that surface the affordance.
+        return this.handleApproveSessionKey();
       default:
         return this.handleExtraKey(key);
     }
@@ -156,10 +161,9 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
 
   /**
    * Handle the shared `a` = approve-session shortcut — the keyboard accelerator
-   * for the Approve menu's "Yolo (this session)" item. Subclasses that offer the
-   * Yolo affordance call this from `handleExtraKey`. No-op while the feedback
-   * textarea is open (so typing "a" there is not hijacked) or when the prompt
-   * does not allow bypass.
+   * for the Approve menu's "Yolo (this session)" item, wired from
+   * `handleKeyboardShortcut`. No-op while the feedback textarea is open (so
+   * typing "a" there is not hijacked) or when the prompt does not allow bypass.
    */
   protected handleApproveSessionKey(): boolean {
     if (this.showFeedback || !this.canBypass) {

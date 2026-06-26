@@ -40,9 +40,6 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
       this.handleDiffAction();
       return true;
     }
-    if (key === 'a') {
-      return this.handleApproveSessionKey();
-    }
     return false;
   }
 

@@ -35,13 +35,6 @@ export class BashRequestPanel extends BaseFeedbackPanel {
     requestPanelStyles,
   ];
 
-  protected override handleExtraKey(key: string): boolean {
-    if (key === 'a') {
-      return this.handleApproveSessionKey();
-    }
-    return false;
-  }
-
   override render(): TemplateResult {
     const data = this.permission.data as BashPermission;
 
