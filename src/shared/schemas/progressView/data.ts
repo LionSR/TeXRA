@@ -6,6 +6,7 @@
 import { z } from 'zod';
 
 import { AgentCategorySchema } from '../agent';
+import { StreamTabIdSchema } from '../identifiers';
 
 // ============================================================
 // Shared Field Schemas
@@ -19,6 +20,13 @@ export type AgentCategoryFilter = z.infer<typeof AgentCategoryFilterSchema>;
 
 export const ProgressViewPlacementSchema = z.enum(['sidebar', 'editor']);
 export type ProgressViewPlacement = z.infer<typeof ProgressViewPlacementSchema>;
+
+/**
+ * Base schema for stream-scoped messages: those carrying a single `stream` tab
+ * id. Compose with `.extend(...)` so the `stream` field is declared once and
+ * inbound/outbound message schemas stay consistent.
+ */
+export const StreamScopedBaseSchema = z.object({ stream: StreamTabIdSchema });
 
 // ============================================================
 // Progress View Data Schemas

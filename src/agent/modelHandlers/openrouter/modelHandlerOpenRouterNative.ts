@@ -5,7 +5,6 @@ import { ModelProvider } from 'llm-zoo';
 // Local imports - agent
 import { logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -44,6 +43,7 @@ import {
   OpenRouterStreamAggregator,
   toOpenRouterReasoningEffort,
 } from './openRouterStreaming';
+import { shouldContinueOnLengthStop } from '../utils/stopReasonUtils';
 import { ModelHandler } from '../ModelHandler';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
@@ -617,12 +617,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     reasoning: string,
     workspaceState?: AgentWorkspaceState,
   ): void {
-    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
-      workspaceState.reasoning.thinkingBlocks = [
-        { type: 'thinking', thinking: reasoning },
-      ];
-      workspaceState.reasoning.thinkingAdded = true;
-    }
+    this.applyStringReasoningToWorkspaceState(reasoning, workspaceState);
     this.logger.debug(
       `Reasoning content preview: ${reasoning.slice(0, K_SLICE)}...`,
     );
@@ -718,10 +713,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    return (
-      stopReason === OPENAI_CHAT_FINISH.LENGTH &&
-      !hasEndTag(agentSetting, newResponse)
-    );
+    return shouldContinueOnLengthStop(stopReason, newResponse, agentSetting);
   }
 
   addContinueMessageWithoutPrefill(
