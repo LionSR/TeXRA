@@ -505,3 +505,65 @@ describe('direct handler capability overrides', () => {
     ).toBe(false);
   });
 });
+
+describe('routing precedence: compat-key ↔ createModelHandler invariant', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetCodexCoordinator();
+  });
+
+  // The handler-routing precedence is encoded twice: once in the pure
+  // `modelHandlerCompatibilityKey` predicate (used exception-free by
+  // history-restore and model-switch gating) and once in the live
+  // `createModelHandler` dispatch. The two must never drift on the *key* they
+  // produce — otherwise the key a restored session keys on could disagree with
+  // the handler actually built. For every registered model the key tagged onto
+  // the created handler must equal the predicted key, and a model with no
+  // handler route (predicted `undefined`, e.g. Copilot) must make
+  // `createModelHandler` reject rather than silently build a mismatched
+  // handler. Default routing (no OpenRouter proxy) is the shared baseline both
+  // paths observe. The Codex-subscription override in `createModelHandler` is
+  // intentionally absent from the predicate, but it is key-neutral: a signed-in
+  // run still tags `ModelHandlerCodex` with `ModelHandlerOpenAIResponse` (only
+  // the class differs, not the key), so this signed-out sweep guards the key
+  // invariant for both states.
+  it('tags every registered model with its predicted compatibility key', async () => {
+    // Re-import the factory alongside a freshly-initialized platform. An
+    // earlier test in this file calls vi.resetModules(), which would otherwise
+    // desync the statically-imported factory from the platform it reads; this
+    // also makes the block robust to isolated `--grep` runs rather than
+    // free-riding on a prior test's initPlatform.
+    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/FakePlatform'),
+    ]);
+    initPlatform(createFakePlatform());
+    const {
+      modelHandlerCompatibilityKey: compatKey,
+      createModelHandler: create,
+      activeModelHandlerCompatibilityKey: activeKey,
+    } = await import('@agent/runtime/ModelFactory');
+
+    const mismatches: string[] = [];
+    for (const [name, config] of Object.entries(MODEL_CONFIGS)) {
+      const predicted = compatKey(config);
+      if (predicted === undefined) {
+        await expect(
+          create(config),
+          `${name}: no handler route, createModelHandler should reject`,
+        ).rejects.toThrow();
+        continue;
+      }
+      const handler = await create(config);
+      try {
+        const actual = activeKey(handler);
+        if (actual !== predicted) {
+          mismatches.push(`${name}: predicted ${predicted}, got ${actual}`);
+        }
+      } finally {
+        handler.dispose();
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+});
