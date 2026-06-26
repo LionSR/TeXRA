@@ -195,28 +195,14 @@ export const requestPanelStyles: CSSResult = css`
     max-width: 100%;
   }
 
-  /* The primary action buttons (which carry data-action) fill the row
-     equally; the diff dropdown's own buttons keep their bespoke sizing. */
+  /* The primary action buttons (which carry data-action) hug their content and
+     stay button-sized: they never grow to fill a wide panel, are width-capped,
+     and group at the start of the row. The diff dropdown's own buttons (tool
+     edit approvals) keep their bespoke sizing below. */
   :is(${ACTIONS}) wa-button[data-action] {
-    min-width: auto;
-    flex: 1 1 var(--action-button-basis, 8rem);
-  }
-
-  /* Per-panel basis tunes how many action buttons fit per row before wrapping.
-     Default 8rem (retry / inquiry / question); bash / plan want wider rows.
-     Tool edit approvals and workflow proposals stay compact below. */
-  .bash-approval-request__actions,
-  .plan-approval-request__actions {
-    --action-button-basis: 12rem;
-  }
-
-  /* The proposal's approve/reject/setup buttons keep a capped, button-sized
-     width and don't grow to fill a wide panel — they hug their content and
-     stay grouped at the start of the row. */
-  .workflow-proposal__actions wa-button[data-action] {
     flex: 0 1 auto;
     min-width: min(5.5rem, 100%);
-    max-width: min(9rem, 100%);
+    max-width: min(14rem, 100%);
   }
 
   .approval-request__actions wa-button[data-action] {
@@ -226,15 +212,11 @@ export const requestPanelStyles: CSSResult = css`
     max-width: min(7rem, 100%);
   }
 
+  /* Center the label within each content-sized button (they sit at or above
+     the 5.5rem min-width floor, so centering keeps short labels balanced). */
   :is(${ACTIONS}) wa-button[data-action]::part(base) {
-    justify-content: flex-start;
-    gap: ${sp.small};
-  }
-
-  /* Center the capped proposal labels. Must follow the shared flex-start rule
-     above — equal specificity, so source order decides the cascade. */
-  .workflow-proposal__actions wa-button[data-action]::part(base) {
     justify-content: center;
+    gap: ${sp.small};
   }
 
   .approval-request__actions wa-button[data-action]::part(base) {
