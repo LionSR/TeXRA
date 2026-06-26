@@ -160,9 +160,11 @@ const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
   viaRelay: z.boolean().optional(),
 });
 
-const ToggleToolEditApprovalBypassMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS),
-});
+const ToggleToolEditApprovalBypassMessageSchema = StreamScopedBaseSchema.extend(
+  {
+    command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS),
+  },
+);
 
 const ToggleSuperYoloBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS),

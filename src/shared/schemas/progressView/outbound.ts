@@ -141,10 +141,12 @@ export const UpdateRunUsageMessageSchema = StreamScopedBaseSchema.extend({
   usage: TokenUsageStatsSchema,
 });
 
-export const UpdateQueuedFollowUpsMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS),
-  messages: z.array(z.string()),
-});
+export const UpdateQueuedFollowUpsMessageSchema = StreamScopedBaseSchema.extend(
+  {
+    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS),
+    messages: z.array(z.string()),
+  },
+);
 
 export const SetFollowupOptionsMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS),
