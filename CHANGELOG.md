@@ -19,7 +19,7 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
-- **"Yolo (this session)" right on the approval prompt** — edit and bash approval prompts now include a **Yolo (this session)** button (keyboard shortcut `a`) next to Approve/Reject, mirroring the CLI's "approve session". It approves the current action and turns off approval prompts for edits and bash commands for the rest of that stream — the same effect as the toolbar shield, but discoverable at the moment you're asked. Previously the only way to enable auto-approval was the shield icon in the progress-view toolbar, which first-time users could easily miss.
+- **"Yolo (this session)" right on the approval prompt** — edit and bash approval prompts now offer a **Yolo (this session)** option under the Approve button's ▾ menu (keyboard shortcut `a`), mirroring the CLI's "approve session". It approves the current action and turns off approval prompts for edits and bash commands for the rest of that stream — the same effect as the toolbar shield, but discoverable at the moment you're asked. Previously the only way to enable auto-approval was the shield icon in the progress-view toolbar, which first-time users could easily miss.
 
 ## [0.38.10] - 2026-06-23
 

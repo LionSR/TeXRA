@@ -45,36 +45,33 @@ describe('bash-request-panel', () => {
     () => import('@progressView/frontend/components/BashRequestPanel'),
   );
 
-  it('hides the Yolo button and ignores "a" when bypass is not allowed', async () => {
+  it('keeps Approve plain and ignores "a" when bypass is not allowed', async () => {
     const element = await mountPanel(createPermission({ allowBypass: false }));
     const actions: string[] = [];
     element.addEventListener('permission-action', (event) => {
       actions.push((event as CustomEvent<{ action: string }>).detail.action);
     });
 
+    expect(element.shadowRoot?.querySelector('.approve-split')).toBeFalsy();
     expect(
       element.shadowRoot?.querySelector(
-        'wa-button[data-action="approveSession"]',
+        'wa-dropdown-item[value="approveSession"]',
       ),
     ).toBeFalsy();
     expect(element.handleKeyboardShortcut('a')).toBe(false);
     expect(actions).toEqual([]);
   });
 
-  it('hides the Yolo button when streamId is empty even if bypass is allowed', async () => {
+  it('keeps Approve plain when streamId is empty even if bypass is allowed', async () => {
     const element = await mountPanel(
       createPermission({ allowBypass: true, streamId: '' }),
     );
 
-    expect(
-      element.shadowRoot?.querySelector(
-        'wa-button[data-action="approveSession"]',
-      ),
-    ).toBeFalsy();
+    expect(element.shadowRoot?.querySelector('.approve-split')).toBeFalsy();
     expect(element.handleKeyboardShortcut('a')).toBe(false);
   });
 
-  it('offers a Yolo button and "a" shortcut that emit approveSession', async () => {
+  it('offers a Yolo split-menu option and "a" shortcut that emit approveSession', async () => {
     const element = await mountPanel(
       createPermission({ allowBypass: true, streamId: 'stream-1' }),
     );
@@ -83,11 +80,12 @@ describe('bash-request-panel', () => {
       actions.push((event as CustomEvent<{ action: string }>).detail.action);
     });
 
-    const yoloButton = element.shadowRoot?.querySelector(
-      'wa-button[data-action="approveSession"]',
+    expect(element.shadowRoot?.querySelector('.approve-split')).toBeTruthy();
+    const yoloItem = element.shadowRoot?.querySelector(
+      'wa-dropdown-item[value="approveSession"]',
     ) as HTMLElement | undefined;
-    expect(yoloButton).toBeTruthy();
-    expect(yoloButton?.textContent).toContain('Yolo (this session)');
+    expect(yoloItem).toBeTruthy();
+    expect(yoloItem?.textContent).toContain('Yolo (this session)');
 
     expect(element.handleKeyboardShortcut('a')).toBe(true);
     expect(actions).toEqual(['approveSession']);

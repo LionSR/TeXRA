@@ -5,12 +5,16 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
-// Side-effect imports - register WA textarea component
+// Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared utilities
 import { FEEDBACK_ELIGIBLE_KINDS } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view events
 import { APPROVE_SESSION_ACTION } from '../events';
@@ -122,13 +126,49 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
   }
 
   protected renderApproveButton(approveTitle: string): TemplateResult {
-    return renderLabeledActionButton({
+    const approveButton = renderLabeledActionButton({
       icon: 'check',
       text: 'Approve',
       title: approveTitle,
       action: 'approve',
+      className: this.canBypass ? 'approve-split-main' : undefined,
       onClick: () => this.emitAction('approve'),
     });
+    if (!this.canBypass) {
+      return approveButton;
+    }
+    // When the prompt allows session bypass, Approve becomes a split button:
+    // the main click approves once; the ▾ caret opens a menu whose "Yolo (this
+    // session)" item approves AND auto-approves edits + bash for the rest of the
+    // stream. Keeps the row compact while surfacing the session option right on
+    // the prompt (the `a` shortcut hits the same action). Mirrors the diff
+    // split-button in ToolEditRequestPanel.
+    return html`
+      <div class="approve-split">
+        ${approveButton}
+        <wa-dropdown
+          class="approve-split-menu"
+          placement="bottom-end"
+          @wa-select=${this.handleApproveMenuSelect}
+        >
+          <wa-button
+            slot="trigger"
+            class="action-icon-button approve-split-trigger"
+            appearance="plain"
+            variant="neutral"
+            size="small"
+            type="button"
+            aria-label="More approve options"
+            title="Approve and stop asking for edits & bash this session (a)"
+          >
+            ${waIcon('chevron-down')}
+          </wa-button>
+          <wa-dropdown-item value=${APPROVE_SESSION_ACTION}>
+            ${waIcon('shield')} Yolo (this session)
+          </wa-dropdown-item>
+        </wa-dropdown>
+      </div>
+    `;
   }
 
   /**
@@ -148,29 +188,25 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
   }
 
   /**
-   * Inline "Yolo (this session)" button. Approves the current request AND turns
-   * on auto-approval (edits + bash) for the rest of this stream's session,
-   * mirroring the toolbar shield and the CLI's `a` = "approve session". The
-   * `approveSession` action is decomposed by the event handler into an approve
-   * plus a bypass enable, so it never reaches the backend approval protocol.
-   * Rendered only when the prompt advertises `allowBypass`.
+   * Resolve a selection from the Approve split-button menu. Its only item is
+   * "Yolo (this session)"; selecting it emits the same `approveSession` action
+   * as the `a` shortcut, which the event handler decomposes into an approve plus
+   * a session-bypass enable (edits + bash), so it never reaches the backend
+   * approval protocol.
    */
-  protected renderYoloButton(): TemplateResult | typeof nothing {
-    if (!this.canBypass) {
-      return nothing;
+  private handleApproveMenuSelect = (
+    event: CustomEvent<{ item: HTMLElement }>,
+  ): void => {
+    const action =
+      (event.detail?.item as HTMLElement & { value?: string })?.value ?? '';
+    if (action === APPROVE_SESSION_ACTION) {
+      this.emitAction(APPROVE_SESSION_ACTION);
     }
-    return renderLabeledActionButton({
-      icon: 'shield',
-      text: 'Yolo (this session)',
-      title: 'Approve and stop asking for edits & bash this session (a)',
-      className: 'yolo-approve-button',
-      action: APPROVE_SESSION_ACTION,
-      onClick: () => this.emitAction(APPROVE_SESSION_ACTION),
-    });
-  }
+  };
 
   /**
-   * Handle the shared `a` = approve-session shortcut. Subclasses that offer the
+   * Handle the shared `a` = approve-session shortcut — the keyboard accelerator
+   * for the Approve menu's "Yolo (this session)" item. Subclasses that offer the
    * Yolo affordance call this from `handleExtraKey`. No-op while the feedback
    * textarea is open (so typing "a" there is not hijacked) or when the prompt
    * does not allow bypass.

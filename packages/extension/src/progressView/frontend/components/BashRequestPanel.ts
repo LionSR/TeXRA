@@ -59,7 +59,6 @@ export class BashRequestPanel extends BaseFeedbackPanel {
       `,
       approveTitle: 'Allow this command to execute (y)',
       rejectTitle: 'Reject this command (n)',
-      middleActions: this.renderYoloButton(),
     });
   }
 }
