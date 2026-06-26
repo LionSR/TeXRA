@@ -1308,7 +1308,14 @@ describe('desktop settings IPC', () => {
     // Catalog-resolved names become source-qualified keys, preserving the
     // winning source when a custom agent overrides a built-in name.
     expect(workspaceState.values.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
-      ['builtInWorkflow:correct', 'builtInWorkflow:polish'],
+      [
+        'builtInWorkflow:correct',
+        'builtInWorkflow:polish',
+        'generic',
+        'devise',
+        'apply',
+        'criticize',
+      ],
     );
     expect(
       workspaceState.values.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
@@ -1318,7 +1325,10 @@ describe('desktop settings IPC', () => {
       'builtInToolUse:numerics',
       'builtInToolUse:review',
       'builtInToolUse:presenter',
+      'simplifier',
       'builtInToolUse:latexFixer',
+      'progressCheck',
+      'search',
     ]);
     expect(errorMessages).toEqual([]);
     expect(infoMessages).toEqual(['Applied "Physicist" team']);
