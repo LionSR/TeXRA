@@ -12,12 +12,15 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { setAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import {
+  findAgentByIdentifier,
   getCategoryAgent,
   getVisibleAgent,
   refresh,
   resolveAgent,
   resolveAgentInCategory,
 } from '@agent/index/agentRegistry';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { AgentEntry } from '@agent/index/agentEntry';
 
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
@@ -124,5 +127,33 @@ describe('cross-category agent resolution', () => {
       'secretAgent',
     );
     expect(getCategoryAgent('toolUse', 'secretAgent')?.internal).toBe(true);
+  });
+});
+
+describe('findAgentByIdentifier (shared identity rule)', () => {
+  function entry(name: string, source: AgentEntry['source']): AgentEntry {
+    return { name, source, path: '', category: AgentCategory.ToolUse };
+  }
+  const entries = [
+    entry('review', 'builtInToolUse'),
+    entry('review', 'custom'),
+  ];
+
+  it('matches a bare name by name (first candidate wins)', () => {
+    expect(findAgentByIdentifier(entries, 'review')?.source).toBe(
+      'builtInToolUse',
+    );
+  });
+
+  it('matches a source-qualified key only by exact key', () => {
+    expect(findAgentByIdentifier(entries, 'custom:review')?.source).toBe(
+      'custom',
+    );
+    // A key whose source is absent from the set must not fall back to the name.
+    expect(findAgentByIdentifier(entries, 'remote:review')).toBeUndefined();
+  });
+
+  it('returns undefined when no candidate matches', () => {
+    expect(findAgentByIdentifier(entries, 'missing')).toBeUndefined();
   });
 });

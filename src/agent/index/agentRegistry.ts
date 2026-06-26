@@ -494,11 +494,12 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
  * custom `chat` shadowing the renamed built-in). Bare identifiers may match any
  * candidate by name.
  *
- * This is the single identity-matching rule shared by every category-scoped
- * resolver ({@link getVisibleAgent}, {@link getCategoryAgent}) so validation and
- * launch never apply divergent matching.
+ * This is the single identity-matching rule. Every resolver that picks an entry
+ * out of a list by name-or-key — the category-scoped resolvers here, plus
+ * out-of-registry callers like the CLI multi-agent preset planner — goes through
+ * it so the rule lives in exactly one place.
  */
-function findEntryByIdentifier(
+export function findAgentByIdentifier(
   entries: readonly AgentEntry[],
   identifier: string,
 ): AgentEntry | undefined {
@@ -521,7 +522,7 @@ function resolveWithinCategory(
   category: AgentCategory,
   identifier: string,
 ): AgentEntry | undefined {
-  const exact = findEntryByIdentifier(entries, identifier);
+  const exact = findAgentByIdentifier(entries, identifier);
   if (exact) return exact;
 
   // Legacy-alias fallback (e.g. `chat` → `assistant`). getAgent is category-

@@ -1,5 +1,9 @@
 import { platform } from '@platform/platform';
-import { BUILTIN_TEAM_ROOT_AGENT_NAMES, type AgentEntry } from '@agent/index';
+import {
+  BUILTIN_TEAM_ROOT_AGENT_NAMES,
+  findAgentByIdentifier,
+  type AgentEntry,
+} from '@agent/index';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
@@ -473,7 +477,7 @@ function resolvePresetAgents(
   const resolved: AgentEntry[] = [];
   const missing: string[] = [];
   for (const name of names) {
-    const entry = agents.find((agent) => agent.name === name);
+    const entry = findAgentByIdentifier(agents, name);
     if (entry) {
       resolved.push(entry);
     } else {
@@ -489,9 +493,9 @@ function resolveAgentOverride(
 ): { agent?: AgentEntry; missing?: string } {
   const query = override?.trim();
   if (!query) return {};
-  const agent = agents.find(
-    (agent) => agent.name === query || toAgentKey(agent) === query,
-  );
+  // Accepts a bare name or a source-qualified key via the registry's canonical
+  // identity matcher, instead of re-implementing the name-or-key rule here.
+  const agent = findAgentByIdentifier(agents, query);
   return agent ? { agent } : { missing: query };
 }
 
