@@ -10,12 +10,11 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
-import { commandOnly } from '../messageFactories';
+import { commandOnly, withFilesArray } from '../messageFactories';
 import { OnboardingFunnelStateSchema } from '../onboarding';
 import { AgentOptionDataSchema, ModelOptionDataSchema } from './state';
 
 const FileListSchema = z.array(z.string());
-const FilesPayloadSchema = z.object({ files: FileListSchema });
 const SingleFileSelectedSchema = z.object({ filePath: z.string() });
 
 export const SetModelOptionsMessageSchema = z.object({
@@ -33,12 +32,13 @@ export const SetAgentOptionsMessageSchema = z.object({
     .optional(),
 });
 
-export const SetEditedFileMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_EDITED_FILE),
-});
+export const SetEditedFileMessageSchema = withFilesArray(
+  MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
+);
 
-export const SetBaseFileMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_BASE_FILE),
+export const SetBaseFileMessageSchema = withFilesArray(
+  MAIN_VIEW_COMMANDS.SET_BASE_FILE,
+).extend({
   preserveBaseFile: z.boolean().nullish(),
 });
 
@@ -46,21 +46,21 @@ export const EditedFileSelectedMessageSchema = SingleFileSelectedSchema.extend({
   command: z.literal(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
 });
 
-export const SetInputFilesMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_INPUT_FILES),
-});
+export const SetInputFilesMessageSchema = withFilesArray(
+  MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
+);
 
-export const SetContextFilesMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES),
-});
+export const SetContextFilesMessageSchema = withFilesArray(
+  MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES,
+);
 
-export const SetMediaFilesMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_MEDIA_FILES),
-});
+export const SetMediaFilesMessageSchema = withFilesArray(
+  MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
+);
 
-export const SetOutputFilesMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES),
-});
+export const SetOutputFilesMessageSchema = withFilesArray(
+  MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
+);
 
 export const AddMediaFileMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE),

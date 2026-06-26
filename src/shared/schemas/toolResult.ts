@@ -113,27 +113,6 @@ export function formatZodIssuesForDiagnostics(
   });
 }
 
-export interface DiagnosticsPayload {
-  path: string;
-  command: 'list' | 'count';
-  severity: Record<string, number>;
-  /** Diagnostic messages from the linter (platform-specific type at runtime). */
-  messages?: unknown[];
-}
-
-/**
- * Union type for diagnostic information attached to tool results.
- * - ZodIssue[]: Validation errors from schema parsing
- * - Error-like: Regular errors with name and optional stack
- * - DiagnosticsPayload: Structured diagnostics from tools
- * - unknown: Other diagnostic formats for forward compatibility
- */
-export type ErrorDiagnostics =
-  | ZodIssue[]
-  | { name: string; stack?: string }
-  | DiagnosticsPayload
-  | unknown;
-
 // ============================================================================
 // ToolResult Schema
 // ============================================================================
