@@ -37,6 +37,29 @@ import {
 /** Partial result before relay detection (isRelayError/rawErrorBody added later). */
 type SdkMatchResult = Omit<ProviderError, 'isRelayError' | 'rawErrorBody'>;
 
+/**
+ * Single source of truth for the user-facing HTTP error string and its message
+ * fallbacks: the status text, the `HTTP {code}[ {text}] – {message}` prefix,
+ * the reason-phrase fallback, and the `'Provider request failed'` last resort.
+ * Pure display formatting — it does not touch retry/recovery classification.
+ */
+function describeHttpError(
+  err: unknown,
+  statusCode: number | undefined,
+  extractedMessage: string | undefined,
+): { statusText: string | undefined; message: string } {
+  const statusText = detectStatusText(err, statusCode);
+  const fallbackMessage = statusCode
+    ? safeGetReasonPhrase(statusCode)
+    : undefined;
+  const finalMessage =
+    extractedMessage ?? fallbackMessage ?? 'Provider request failed';
+  const message = statusCode
+    ? `HTTP ${statusCode}${statusText ? ` ${statusText}` : ''} – ${finalMessage}`
+    : finalMessage;
+  return { statusText, message };
+}
+
 function matchLegacySdkError(err: unknown): SdkErrorEntry | undefined {
   const errorClassNames = getErrorClassNames(err);
   return SDK_ERRORS.find(({ classNames }) =>
@@ -82,28 +105,24 @@ function matchSdkError(
     entry.fallbackStatusCode ??
     inferStatusCodeFromBody(rawErrorBody) ??
     rawStatusCode;
-  const statusText = detectStatusText(err, statusCode);
-  const fallbackMessage = statusCode
-    ? safeGetReasonPhrase(statusCode)
-    : undefined;
-  const finalMessage =
-    extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+  const { statusText, message } = describeHttpError(
+    err,
+    statusCode,
+    extractErrorMessage(err),
+  );
 
   if (!statusCode) {
     // SDK errors without status codes are unusual - be conservative and don't offer retry
     return {
-      message: finalMessage,
+      message,
       provider,
       userRetryable: false,
       requestId,
     };
   }
 
-  const prefix = statusText
-    ? `HTTP ${statusCode} ${statusText}`
-    : `HTTP ${statusCode}`;
   return {
-    message: `${prefix} – ${finalMessage}`,
+    message,
     statusCode,
     statusText,
     provider,
@@ -182,28 +201,19 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // Unrecognized error — extract what we can
   const statusCode =
     detectStatusCode(err) ?? inferStatusCodeFromBody(rawErrorBody);
-  const statusText = detectStatusText(err, statusCode);
   const provider = detectProvider(err);
   const requestId = detectRequestId(err);
-  const fallbackMessage = statusCode
-    ? safeGetReasonPhrase(statusCode)
-    : undefined;
-  const finalMessage =
-    extractedMessage ?? fallbackMessage ?? 'Provider request failed';
+  const { statusText, message } = describeHttpError(
+    err,
+    statusCode,
+    extractedMessage,
+  );
   // No status code on an unrecognized error likely means a network-level failure
   // (DNS, proxy, TLS, etc.) — show retry button for safety.
   const userRetryable =
     isRelay ||
     isCredentialExhausted ||
     (statusCode ? isRetryableStatusCode(statusCode) : true);
-
-  let message = finalMessage;
-  if (statusCode) {
-    const prefix = statusText
-      ? `HTTP ${statusCode} ${statusText}`
-      : `HTTP ${statusCode}`;
-    message = `${prefix} – ${finalMessage}`;
-  }
 
   return {
     message,
