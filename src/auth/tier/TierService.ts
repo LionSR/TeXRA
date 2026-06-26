@@ -15,6 +15,7 @@
 
 import { LRUCache } from 'lru-cache';
 
+import { z } from 'zod';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   SpendingStatusSchema,
@@ -33,7 +34,6 @@ import {
   type TierModelsConfig,
   type UserAccessStatus,
 } from './types';
-import type { z } from 'zod';
 
 const CHANNEL = 'TierService';
 
@@ -153,7 +153,7 @@ export class TierService {
     if (parsed.success) return parsed.data;
     this.logger.error(
       CHANNEL,
-      `Invalid ${label} payload: ${parsed.error.message}`,
+      `Invalid ${label} payload: ${z.prettifyError(parsed.error)}`,
     );
     return null;
   }
@@ -244,7 +244,7 @@ export class TierService {
     if (!parsed.success) {
       this.logger.error(
         CHANNEL,
-        `Invalid tier config response: ${parsed.error.message}`,
+        `Invalid tier config response: ${z.prettifyError(parsed.error)}`,
       );
       return { config: null, userStatus, spendingStatus };
     }

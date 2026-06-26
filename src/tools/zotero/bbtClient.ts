@@ -255,7 +255,7 @@ export async function callBetterBibTeX<T>(
   const parsed = jsonRpcResponseSchema(resultSchema).safeParse(raw);
   if (!parsed.success) {
     throw new ToolError(
-      `Better BibTeX returned an unexpected response for ${method}: ${parsed.error.message}`,
+      `Better BibTeX returned an unexpected response for ${method}: ${z.prettifyError(parsed.error)}`,
     );
   }
   if (parsed.data.error) {

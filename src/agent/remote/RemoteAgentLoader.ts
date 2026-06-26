@@ -94,7 +94,7 @@ function parseListItemRow(row: RemoteAgentListRow): RemoteAgentListItem | null {
   if (!result.success) {
     logger.warn(
       CHANNEL,
-      `Invalid metadata for agent "${row.name}": ${result.error.message}`,
+      `Invalid metadata for agent "${row.name}": ${z.prettifyError(result.error)}`,
     );
     return null;
   }
@@ -258,7 +258,7 @@ function parseRemoteAgentListErrorBody(
 ): RemoteAgentListQueryError {
   if (!rawBody) return {};
   const result = parseJsonWith(rawBody, RemoteAgentListQueryErrorSchema);
-  return result.ok ? result.value : { message: rawBody };
+  return result.unwrapOr({ message: rawBody });
 }
 
 /** Fetch and parse agent config from edge function. */

@@ -11,7 +11,7 @@ export function parseToolArguments(raw: unknown, logger: AgentTrace): unknown {
   }
 
   const parsed = safeParseJson(raw);
-  if (!parsed.ok) {
+  if (parsed.isErr()) {
     logger.warn(
       'Tool call arguments could not be parsed as JSON; using raw string.',
       { data: parsed.error },
