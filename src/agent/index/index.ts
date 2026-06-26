@@ -41,6 +41,7 @@ export {
   loadAgents,
   getAgent,
   resolveAgent,
+  resolveAgentInCategory,
   getAgentsByCategory,
   getAgentsBySource,
   refresh,

@@ -231,6 +231,40 @@ describe('agent registry legacy aliases', () => {
     );
   });
 
+  it('migrates a cross-source legacy key to a key that resolves', async () => {
+    // A stale `builtInWorkflow:chat` aliases to `assistant`, which only exists
+    // as a built-in tool-use agent. Rewriting only the name part would yield
+    // `builtInWorkflow:assistant`, a dangling key that resolves to nothing; the
+    // migration must fall back to the alias target's canonical key instead.
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform(
+        {
+          workspaceState: {
+            [WorkspaceStateKey.ENABLED_AGENTS]: ['builtInWorkflow:chat'],
+          },
+        },
+        { fs: nodeFilesystem },
+      ),
+    );
+    setAgentDirectories({
+      custom: async () => '',
+      builtIn: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+      builtInToolUse: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    });
+
+    await refresh({ includeRemote: false });
+
+    const migrated = platform().workspaceState.get<string[]>(
+      WorkspaceStateKey.ENABLED_AGENTS,
+    );
+    expect(migrated).toEqual(['builtInToolUse:assistant']);
+    // The migrated key must resolve — no dangling enabled entry.
+    expect(getAgent(migrated![0]!)?.name).toBe('assistant');
+  });
+
   it('migrates persisted filename-based custom agent keys to YAML names', async () => {
     const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
     await writeFile(

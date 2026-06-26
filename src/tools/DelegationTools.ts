@@ -827,7 +827,26 @@ async function proposeAndExecute(
   if (result.action !== 'approve') {
     throw new Error(`Unexpected non-approve proposal result: ${result.action}`);
   }
-  const modelOverride = result.model;
+  // Route an approved model override through the same availability gate the
+  // initial delegation uses (resolveAvailableDelegationModel), so a model that
+  // is unavailable in the active API mode fails synchronously here instead of
+  // launching and then failing asynchronously. Re-selecting the proposed model
+  // needs no re-check — it was already resolved when the proposal was built.
+  let modelOverride: string | undefined;
+  if (result.model && result.model !== proposal.model) {
+    try {
+      modelOverride = await resolveAvailableDelegationModel({
+        requestedModel: result.model,
+        parentModel: proposal.model,
+      });
+    } catch (err) {
+      return {
+        summary: `Approved model override '${result.model}' is not available`,
+        output: `Cannot launch with model '${result.model}': ${toErrorMessage(err)} Re-propose the delegation.`,
+        isError: true,
+      };
+    }
+  }
   const agentOverride =
     result.agent && result.agent !== proposal.agent ? result.agent : undefined;
   const resolvedAgentOverride = agentOverride

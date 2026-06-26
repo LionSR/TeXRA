@@ -458,6 +458,111 @@ describe('headless delegation', () => {
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
+  it('rejects an approved model override unavailable in the active API mode', async () => {
+    mocks.isProposalBypassed.mockReturnValue(false);
+    // Only deepseekT is available; gpt5 is not — the override must be rejected
+    // synchronously, mirroring the initial delegate path's availability gate.
+    mocks.computeModelOptionsData.mockResolvedValue([
+      {
+        value: 'deepseekT',
+        label: 'DeepSeek',
+        disabled: false,
+        requiresKey: false,
+      },
+    ]);
+    const host = runtimeHost();
+    const coordinators = {
+      plan: new PlanApprovalCoordinator(host),
+      proposal: new AgentProposalCoordinator(host),
+      retry: new RetryRequestCoordinatorImpl(host),
+    };
+    host.emit.mockImplementation((event, payload) => {
+      if (event !== 'showAgentProposal') return;
+      runCoordinatorBridge.resolveProposal(
+        (payload as { proposalId: string }).proposalId,
+        { action: 'approve', model: 'gpt5' },
+      );
+    });
+
+    const result = await withRunContext(
+      createRunContext({
+        runtimeHost: host,
+        streamId: 'parent-stream',
+        executionId: 'parent-exec',
+        model: 'deepseekT',
+        coordinators,
+      }),
+      () =>
+        new DelegateAgentTool().call({
+          agent: 'review',
+          model: null,
+          instruction: 'Check the proof.',
+          memories: [],
+          working_directory: null,
+          execution_id: null,
+        }),
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.summary).toBe(
+      "Approved model override 'gpt5' is not available",
+    );
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
+  });
+
+  it('launches with an approved model override that is available', async () => {
+    mocks.isProposalBypassed.mockReturnValue(false);
+    mocks.computeModelOptionsData.mockResolvedValue([
+      {
+        value: 'deepseekT',
+        label: 'DeepSeek',
+        disabled: false,
+        requiresKey: false,
+      },
+      { value: 'gpt5', label: 'GPT-5', disabled: false, requiresKey: false },
+    ]);
+    const host = runtimeHost();
+    const coordinators = {
+      plan: new PlanApprovalCoordinator(host),
+      proposal: new AgentProposalCoordinator(host),
+      retry: new RetryRequestCoordinatorImpl(host),
+    };
+    host.emit.mockImplementation((event, payload) => {
+      if (event !== 'showAgentProposal') return;
+      runCoordinatorBridge.resolveProposal(
+        (payload as { proposalId: string }).proposalId,
+        { action: 'approve', model: 'gpt5' },
+      );
+    });
+
+    const result = await withRunContext(
+      createRunContext({
+        runtimeHost: host,
+        streamId: 'parent-stream',
+        executionId: 'parent-exec',
+        model: 'deepseekT',
+        coordinators,
+      }),
+      () =>
+        new DelegateAgentTool().call({
+          agent: 'review',
+          model: null,
+          instruction: 'Check the proof.',
+          memories: [],
+          working_directory: null,
+          execution_id: null,
+        }),
+    );
+
+    expect(result.isError).toBeFalsy();
+    expect(result.summary).toBe("Launched 'review' (async)");
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt5' }),
+      expect.any(String),
+      expect.anything(),
+    );
+  });
+
   it('canonicalizes legacy tool-use agent names before launch', async () => {
     mocks.getVisibleAgents.mockReturnValue([
       {

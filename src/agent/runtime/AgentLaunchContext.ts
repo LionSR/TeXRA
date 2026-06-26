@@ -4,7 +4,12 @@ import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { createRunTrace, type RunTrace } from '@transcript';
-import { isRemoteAgent, resolveAgent, type ResolvedAgent } from '@agent/index';
+import {
+  isRemoteAgent,
+  resolveAgent,
+  resolveAgentInCategory,
+  type ResolvedAgent,
+} from '@agent/index';
 import {
   logSdkError,
   logUserMessage,
@@ -160,8 +165,15 @@ export async function withExecutionRunContext<T>(
 export async function getAgentPath(
   agentIdentifier: string,
   runtimeHost: AgentRuntimeHost,
+  category?: AgentCategory,
 ): Promise<ResolvedAgent> {
-  const result = resolveAgent(agentIdentifier);
+  // When the caller authoritatively knows the category, resolve within it so a
+  // same-name agent in another category/source can't be picked — the launch
+  // must land on the exact entry validation chose. Without a category, fall
+  // back to the source-priority resolver for callers that don't track one.
+  const result = category
+    ? resolveAgentInCategory(category, agentIdentifier)
+    : resolveAgent(agentIdentifier);
   if (result) return result;
 
   runtimeHost.emit('showAgentConfigBanner', { agentName: agentIdentifier });
@@ -218,7 +230,14 @@ async function assembleAgentLaunchContext(
 ): Promise<AgentLaunchContext> {
   const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
-  const resolution = await getAgentPath(fullConfig.agent, runtimeHost);
+  // Resolve within the category the caller vouches for (enforceCategory), so the
+  // launched agent is the same entry validation/display resolved. Without that
+  // opt-in, agentCategory may be a schema prefault, so stay category-agnostic.
+  const resolution = await getAgentPath(
+    fullConfig.agent,
+    runtimeHost,
+    input.enforceCategory ? configPayload.agentCategory : undefined,
+  );
   // `loadAgentSettingAndPrompts` already applies `ensureAgentCategoryForSource`
   // before parsing, and `AgentSettingSchema` prefaults `agentCategory` (to
   // Workflow when absent), so `setting.agentCategory` is always populated here —
