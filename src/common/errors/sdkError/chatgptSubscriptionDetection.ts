@@ -1,4 +1,5 @@
 import { isObject, isString } from '@utils/core';
+import { capitalize } from '@utils/text/stringUtils';
 
 /**
  * Detection + formatting for the ChatGPT-subscription (Codex backend) usage
@@ -19,7 +20,6 @@ import { isObject, isString } from '@utils/core';
 export interface ChatGptSubscriptionLimit {
   readonly planType?: string;
   readonly resetsInSeconds?: number;
-  readonly resetsAt?: number;
 }
 
 function pickStringField(value: unknown, key: string): string | undefined {
@@ -54,15 +54,9 @@ export function parseChatGptSubscriptionLimit(
     return {
       planType: pickStringField(candidate, 'plan_type'),
       resetsInSeconds: pickNumberField(candidate, 'resets_in_seconds'),
-      resetsAt: pickNumberField(candidate, 'resets_at'),
     };
   }
   return null;
-}
-
-/** Whether the raw error body is a ChatGPT-subscription usage-limit error. */
-export function isChatGptSubscriptionLimitBody(rawErrorBody: unknown): boolean {
-  return parseChatGptSubscriptionLimit(rawErrorBody) !== null;
 }
 
 /**
@@ -91,9 +85,7 @@ function formatResetDuration(totalSeconds: number): string {
 export function describeChatGptSubscriptionLimit(
   info: ChatGptSubscriptionLimit,
 ): string {
-  const plan = info.planType
-    ? ` (${info.planType.charAt(0).toUpperCase()}${info.planType.slice(1)} plan)`
-    : '';
+  const plan = info.planType ? ` (${capitalize(info.planType)} plan)` : '';
   const reset =
     info.resetsInSeconds !== undefined
       ? ` Resets in ${formatResetDuration(info.resetsInSeconds)}.`

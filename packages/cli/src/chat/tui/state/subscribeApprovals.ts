@@ -14,7 +14,6 @@
 // event).
 
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
-import { setPreferCodexSubscription } from '@auth/codex';
 import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   approvalPromptAllowed,
@@ -31,7 +30,6 @@ import {
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   handleProgressViewBashApprovalAction,
   setBashApprovalSessionBypass,
@@ -43,7 +41,8 @@ import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool'
 
 import { assertNever } from '../assertNever';
 import { notify } from '../notifications/terminalNotifier';
-import { bumpCodexPreferenceVersion, cliState } from './cliState';
+import { cliState } from './cliState';
+import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,
   enqueueApproval,
@@ -284,9 +283,7 @@ async function applyRetryDecision(
     });
   }
   if (decision.disableChatGptSubscription) {
-    await setPreferCodexSubscription(false);
-    invalidateModelOptionsCache();
-    bumpCodexPreferenceVersion();
+    await setCliCodexSubscription(false);
   }
   runCoordinatorBridge.triggerRetry(payload.streamId, decision.userMessage);
 }

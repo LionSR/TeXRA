@@ -1,5 +1,7 @@
-import { setPreferCodexSubscription } from '@auth/codex';
-import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
+import {
+  refreshCodexPreferenceViews,
+  setCliCodexSubscription,
+} from '@cli/chat/tui/state/codexSubscription';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import {
@@ -27,7 +29,6 @@ import {
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import { toErrorMessage } from '@common/errors/errorMessage';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 import { setCliSessionApiMode } from './apiModeCommands';
 
@@ -53,9 +54,7 @@ async function loginToChatGptSubscription(
   const session = await signInCliChatGpt(args, {
     writeProgress: appendLocalAssistantTranscript,
   });
-  const update = await setPreferCodexSubscription(true);
-  invalidateModelOptionsCache();
-  bumpCodexPreferenceVersion();
+  const update = await setCliCodexSubscription(true);
 
   appendLocalAssistantTranscript(
     [
@@ -149,8 +148,7 @@ export async function logoutFromChat(): Promise<void> {
 
   try {
     const chatGptUpdate = await signOutCliChatGpt();
-    invalidateModelOptionsCache();
-    bumpCodexPreferenceVersion();
+    refreshCodexPreferenceViews();
     lines.push(chatGptSignOutPreferenceMessage(chatGptUpdate));
   } catch (error: unknown) {
     lines.push(`ChatGPT sign-out failed: ${toErrorMessage(error)}`);

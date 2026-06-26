@@ -40,7 +40,6 @@ export {
 export { isRelayMonthlyLimitMessage } from './sdkError/relayDetection';
 
 export {
-  isChatGptSubscriptionLimitBody,
   parseChatGptSubscriptionLimit,
   describeChatGptSubscriptionLimit,
   type ChatGptSubscriptionLimit,

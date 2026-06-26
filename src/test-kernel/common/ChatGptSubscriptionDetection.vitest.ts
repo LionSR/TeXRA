@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   describeChatGptSubscriptionLimit,
   formatProviderHttpError,
-  isChatGptSubscriptionLimitBody,
   parseChatGptSubscriptionLimit,
 } from '@common/errors/sdkErrorUtils';
 
@@ -22,9 +21,7 @@ describe('parseChatGptSubscriptionLimit', () => {
     expect(limit).toEqual({
       planType: 'pro',
       resetsInSeconds: 159728,
-      resetsAt: 1782634869,
     });
-    expect(isChatGptSubscriptionLimitBody(USAGE_LIMIT_BODY)).toBe(true);
   });
 
   it('parses the SDK-enveloped { error } form', () => {
@@ -38,7 +35,7 @@ describe('parseChatGptSubscriptionLimit', () => {
       null,
     );
     expect(parseChatGptSubscriptionLimit(undefined)).toBe(null);
-    expect(isChatGptSubscriptionLimitBody({ message: 'nope' })).toBe(false);
+    expect(parseChatGptSubscriptionLimit({ message: 'nope' })).toBe(null);
   });
 
   it('formats a human-readable reset hint', () => {
