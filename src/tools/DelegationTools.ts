@@ -47,6 +47,8 @@ import {
   workingDirectoryField,
   withToolUseSubagentHandoffInstruction,
   rejectOversizedBibAttachments,
+  WorkflowAgentInputSchema,
+  type WorkflowAgentInput,
 } from './delegation/inputFields';
 
 // Local imports - utils
@@ -54,6 +56,7 @@ import { WorkspaceFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core/stringCore';
 
 export { rejectOversizedBibAttachments } from './delegation/inputFields';
+export type { WorkflowAgentInput };
 
 /** Get required context fields, throwing if unavailable. */
 function getRequiredContext(): RunContext & {
@@ -71,59 +74,6 @@ function getRequiredContext(): RunContext & {
 // ============================================================================
 // delegate_workflow tool - for document processing agents
 // ============================================================================
-
-/** Schema for delegate_workflow tool (document processing). */
-const WorkflowAgentInputSchema = z.strictObject({
-  agent: z.string().describe('Name of the workflow agent to execute'),
-  model: z
-    .string()
-    .nullish()
-    .describe(
-      'Model short name from the Available models line. Omit unless the user explicitly requested a model; defaults to the current model when available.',
-    ),
-  instruction: z
-    .string()
-    .describe(
-      'What the agent should do, in plain prose. If you attach context or media files, name each one and say what role it plays — e.g., "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png shows the panel layout to match". The sub-agent has no other signal for why each file was attached.',
-    ),
-  inputFiles: z
-    .array(z.string())
-    .min(1)
-    .describe(
-      'Files the agent rewrites. List every file you want it to touch. The agent emits one revised <document> per entry.',
-    ),
-  contextFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe(
-      'Read-only context the agent should see but not modify: guidance, examples, related papers, bibliographies (.bib), style/macro definitions (.sty/.cls). Explain each one in the instruction.',
-    ),
-  mediaFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe('Images, figures, PDFs, or audio files the agent should view.'),
-  extractFigures: z
-    .boolean()
-    .nullish()
-    .describe(
-      'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles.',
-    ),
-  extractTikz: z
-    .boolean()
-    .nullish()
-    .describe(
-      'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files.',
-    ),
-  outputFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe(
-      'Output file paths. Must be a subset of input files—never create new files or change format. Leave empty for default suffix-based outputs.',
-    ),
-  memories: memoriesField,
-});
-
-export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
 /** Tool for delegating tasks to workflow agents (document processing). */
 export class WorkflowAgentTool extends defineTool({
