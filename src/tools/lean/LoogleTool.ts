@@ -159,7 +159,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
         if (!parsed.success) {
           throw new AbortError(
             new Error(
-              `Unexpected Loogle response shape: ${parsed.error.message}`,
+              `Unexpected Loogle response shape: ${z.prettifyError(parsed.error)}`,
             ),
           );
         }

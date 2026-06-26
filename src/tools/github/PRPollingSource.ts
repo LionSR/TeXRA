@@ -11,6 +11,8 @@
  * layer above.
  */
 
+import { z } from 'zod';
+
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getConfig } from '@utils/config';
 import { shouldDropBotEvent } from './botFilter';
@@ -333,7 +335,7 @@ export class PRPollingSource extends PollingSourceBase<
       const parsed = GhPullRequestSchema.safeParse(prRes.data);
       if (!parsed.success) {
         this.logger.warn(
-          `Skipping PR poll for ${prKeyToString(pr)}: malformed pull-request payload; ${parsed.error.message}`,
+          `Skipping PR poll for ${prKeyToString(pr)}: malformed pull-request payload; ${z.prettifyError(parsed.error)}`,
         );
         return;
       }
