@@ -1,11 +1,7 @@
 import { defineCommand } from 'citty';
 
 import { CliExitCode } from '../runtime/exitCodes';
-import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliSkillIssue,
   formatCliSkillList,
@@ -19,6 +15,7 @@ import {
   SKILL_SOURCE_ARGS,
   collectStringFlagValues,
 } from './_helpers/globalArgs';
+import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 async function listSkills(
@@ -38,42 +35,36 @@ async function listSkills(
     ? CliExitCode.Usage
     : CliExitCode.Success;
 
-  if (context.outputFormat === 'json') {
-    // Match the bare-array JSON shape every other `<resource> list` command
-    // emits (agents, models, multi-agent, history, tools). Parse errors are
-    // surfaced on stderr below (same as the text branch) so the stdout
-    // contract stays scriptable with `jq '.[]'`. NDJSON consumers still get
-    // structured `kind: skill-issue` records for the same errors.
+  // Parse errors surface on stderr for json + text (NDJSON consumers get them
+  // as `kind: skill-issue` records instead), so the stdout contract stays
+  // scriptable with `jq '.[]'`.
+  if (context.outputFormat !== 'ndjson') {
     for (const issue of result.errors) {
       writeTextStderr(formatCliSkillIssue(issue));
     }
-    writeTextStdout(
-      JSON.stringify(result.skills.map(skillListRecord), null, 2),
-    );
-    return exitCode;
   }
 
-  if (context.outputFormat === 'ndjson') {
-    const ts = new Date().toISOString();
-    for (const entry of result.skills) {
-      writeNdjsonStdout({
-        kind: 'skill',
-        ts,
+  // Emit the bare-array JSON / per-line NDJSON shape every other
+  // `<resource> list` command produces, via the shared emitCliResult helper.
+  // The text list is suppressed on a usage error with no skills (nothing
+  // useful to show); the helper skips the write for the resulting empty string.
+  emitCliResult(context, {
+    json: result.skills.map(skillListRecord),
+    ndjson: [
+      ...result.skills.map((entry) => ({
+        kind: 'skill' as const,
         skill: skillListRecord(entry),
-      });
-    }
-    for (const issue of result.errors) {
-      writeNdjsonStdout({ kind: 'skill-issue', ts, issue });
-    }
-    return exitCode;
-  }
-
-  for (const issue of result.errors) {
-    writeTextStderr(formatCliSkillIssue(issue));
-  }
-  if (exitCode === CliExitCode.Success || result.skills.length > 0) {
-    writeTextStdout(formatCliSkillList(result.skills));
-  }
+      })),
+      ...result.errors.map((issue) => ({
+        kind: 'skill-issue' as const,
+        issue,
+      })),
+    ],
+    text:
+      exitCode === CliExitCode.Success || result.skills.length > 0
+        ? formatCliSkillList(result.skills)
+        : '',
+  });
   return exitCode;
 }
 
