@@ -16,6 +16,12 @@
  *     requires `store: false`, applied via a custom `fetch` so the large base
  *     request-builder is untouched. (System prompts already go to top-level
  *     `instructions`, which the backend wants.)
+ *
+ * All three are gated on the "prefer ChatGPT subscription" preference, re-read
+ * per request: if the user turns it off mid-run (e.g. the "Use your own API
+ * key" switch after a `usage_limit_reached` error), this handler transparently
+ * falls back to the base Responses handler's OpenAI API-key path on the same
+ * instance — no handler swap needed.
  */
 import OpenAI from 'openai';
 
@@ -28,6 +34,7 @@ import {
   CODEX_ORIGINATOR_HEADER,
   CodexAuthError,
   codexCoordinator,
+  isPreferCodexSubscription,
 } from '@auth/codex';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
@@ -179,22 +186,54 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return false;
   }
 
-  /** Subscription usage consumes ChatGPT quota, not TeXRA-tracked API spend. */
-  public override computePrice(_responseUsage: ResponseUsage): number {
-    return 0;
+  /**
+   * Whether this handler should still drive the ChatGPT subscription. Re-read
+   * per request (not cached at construction) so that turning the preference off
+   * mid-run — e.g. via the "Use your own API key" retry switch after a
+   * `usage_limit_reached` error — makes the next attempt fall back to the
+   * user's OpenAI API key on this same handler instance. The OpenAI client is
+   * rebuilt every request from `getApiKey()`/`getBaseUrl()`, so re-resolving
+   * here is enough to reroute the in-place retry, mirroring how the base
+   * handler re-resolves relay vs direct credentials per request.
+   *
+   * (Sign-in is intentionally not re-checked: the switch flips this preference,
+   * not the stored session, and an auth lapse still surfaces as an actionable
+   * error from {@link resolveAccessToken}.)
+   */
+  private usingSubscription(): boolean {
+    return isPreferCodexSubscription();
   }
 
-  /** OAuth access token in place of an API key (becomes the Bearer header). */
+  /** Subscription usage consumes ChatGPT quota, not TeXRA-tracked API spend;
+   *  once switched to the API key, fall back to real per-token pricing. */
+  public override computePrice(responseUsage: ResponseUsage): number {
+    return this.usingSubscription() ? 0 : super.computePrice(responseUsage);
+  }
+
+  /** OAuth access token in place of an API key (becomes the Bearer header),
+   *  or the user's OpenAI API key once the subscription preference is off. */
   public override async getApiKey(): Promise<string> {
-    return this.resolveAccessToken();
+    return this.usingSubscription()
+      ? this.resolveAccessToken()
+      : super.getApiKey();
   }
 
-  /** Always the Codex backend (also disables the WebSocket transport path). */
+  /** The Codex backend while the subscription is active (also disables the
+   *  WebSocket transport path), else the default OpenAI base from the parent. */
   public override getBaseUrl(): string | null {
-    return CODEX_BACKEND_BASE_URL;
+    return this.usingSubscription() ? CODEX_BACKEND_BASE_URL : super.getBaseUrl();
   }
 
   protected override async createOpenAIClient(): Promise<OpenAI> {
+    if (!this.usingSubscription()) {
+      // Preference switched off (e.g. after a usage limit) — route this request
+      // through the user's OpenAI API key via the standard Responses client.
+      this.logger.debug(
+        'ChatGPT subscription preference is off — using the OpenAI API key.',
+      );
+      return super.createOpenAIClient();
+    }
+
     const apiKey = await this.resolveAccessToken();
     const accountId = await codexCoordinator().getAccountId();
     const defaultHeaders: Record<string, string> = {

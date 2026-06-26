@@ -288,9 +288,15 @@ export function handlePermissionAction(
         // Non-terminal: panel stays open. The extension handler will
         // trigger retry on success, or leave the panel for the user
         // to choose Retry/Dismiss if the user cancels the key picker.
+        const chatgptSubscription =
+          permission.data.errorDetails?.isChatGptSubscriptionLimited === true;
         postMessage(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY, {
           stream: permission.data.streamId,
-          provider: permission.data.errorDetails?.provider,
+          // Subscription quota exhaustion always means the OpenAI key is the
+          // fallback credential, regardless of how the error tagged provider.
+          provider: chatgptSubscription
+            ? 'openai'
+            : permission.data.errorDetails?.provider,
           upstreamCreditDepleted:
             permission.data.errorDetails?.isUpstreamCreditDepleted === true
               ? true
@@ -299,6 +305,7 @@ export function handlePermissionAction(
             permission.data.errorDetails?.isRelayError === true
               ? true
               : undefined,
+          chatgptSubscription: chatgptSubscription ? true : undefined,
         });
         break;
       }

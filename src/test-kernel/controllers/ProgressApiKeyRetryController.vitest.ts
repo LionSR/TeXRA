@@ -26,6 +26,7 @@ function createHarness(options: HarnessOptions = {}): {
   keys: Map<ApiProvider, string | undefined>;
   prompts: Array<ApiProvider | undefined>;
   includedAccessValues: boolean[];
+  codexDisableCount: number;
   invalidations: number;
   retries: string[];
 } {
@@ -36,6 +37,7 @@ function createHarness(options: HarnessOptions = {}): {
   );
   const prompts: Array<ApiProvider | undefined> = [];
   const includedAccessValues: boolean[] = [];
+  let codexDisableCount = 0;
   let invalidations = 0;
   const retries: string[] = [];
 
@@ -43,6 +45,9 @@ function createHarness(options: HarnessOptions = {}): {
     keys,
     prompts,
     includedAccessValues,
+    get codexDisableCount() {
+      return codexDisableCount;
+    },
     get invalidations() {
       return invalidations;
     },
@@ -58,6 +63,9 @@ function createHarness(options: HarnessOptions = {}): {
       },
       setUseIncludedModelAccess: async (enabled) => {
         includedAccessValues.push(enabled);
+      },
+      disablePreferCodexSubscription: async () => {
+        codexDisableCount += 1;
       },
       invalidateModelOptionsCache: () => {
         invalidations += 1;
@@ -90,6 +98,7 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: true,
+      disabledChatGptSubscription: false,
     });
     assert.deepEqual(harness.prompts, ['anthropic']);
     assert.deepEqual(harness.includedAccessValues, [false]);
@@ -116,6 +125,7 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: false,
       retried: false,
       disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
     });
     assert.deepEqual(harness.prompts, ['anthropic']);
     assert.deepEqual(harness.includedAccessValues, []);
@@ -141,6 +151,7 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: true,
+      disabledChatGptSubscription: false,
     });
     assert.deepEqual(harness.prompts, [undefined]);
     assert.deepEqual(harness.includedAccessValues, [false]);
@@ -162,6 +173,7 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: true,
+      disabledChatGptSubscription: false,
     });
     assert.deepEqual(harness.prompts, [undefined]);
     assert.deepEqual(harness.includedAccessValues, [false]);
@@ -185,9 +197,53 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: true,
       retried: false,
       disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
     });
     assert.deepEqual(harness.includedAccessValues, []);
     assert.equal(harness.invalidations, 0);
     assert.deepEqual(harness.retries, ['stream-c']);
+  });
+
+  it('disables the ChatGPT subscription and retries with a usable OpenAI key', async () => {
+    const harness = createHarness({
+      keys: { openai: 'stored-openai' },
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-d',
+      provider: 'openai',
+      chatgptSubscription: true,
+    });
+
+    assert.deepEqual(result, {
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: true,
+    });
+    assert.deepEqual(harness.prompts, ['openai']);
+    assert.deepEqual(harness.includedAccessValues, []);
+    assert.equal(harness.codexDisableCount, 1);
+    assert.equal(harness.invalidations, 1);
+    assert.deepEqual(harness.retries, ['stream-d']);
+  });
+
+  it('does not disable the subscription when no usable OpenAI key is available', async () => {
+    const harness = createHarness({ keys: {} });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-e',
+      provider: 'openai',
+      chatgptSubscription: true,
+    });
+
+    assert.deepEqual(result, {
+      proceeded: false,
+      retried: false,
+      disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
+    });
+    assert.equal(harness.codexDisableCount, 0);
+    assert.deepEqual(harness.retries, []);
   });
 });

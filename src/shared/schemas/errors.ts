@@ -64,6 +64,13 @@ const ProviderErrorObjectSchema = z.object({
    *  uses this to require a new key rather than reusing the depleted
    *  stored credential. */
   isUpstreamCreditDepleted: z.boolean().optional(),
+  /** True when a ChatGPT-subscription (Codex) request was rejected because the
+   *  plan's usage quota is exhausted. Like the relay monthly limit it is a
+   *  credential exhaustion (auto-retry suppressed, "Use your own API key"
+   *  offered), but accepting that switch disables the "prefer ChatGPT
+   *  subscription" preference and retries through the OpenAI API key rather
+   *  than disabling relay. */
+  isChatGptSubscriptionLimited: z.boolean().optional(),
   requestId: z.string().optional(),
   rawErrorBody: z.unknown().optional(),
   streamDiagnostics: StreamDiagnosticsSchema.optional(),
