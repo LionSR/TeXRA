@@ -18,6 +18,7 @@ import {
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
   proposalApprovalState,
+  setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 
@@ -412,6 +413,36 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       event: 'updateToolEditApprovalBypassState',
       payload: { streamId: stream, bypassActive: false },
     });
+  });
+
+  it('forces edit and bash bypass on without inverting a decoupled stream', async () => {
+    // Reproduces the inline "Yolo (this session)" path on a delegated child
+    // stream where edit-YOLO was granted but bash stayed gated. A toggle would
+    // flip edit OFF; ENABLE_APPROVAL_BYPASS must force both ON.
+    const stream = 'stream:yolo-enable';
+    const { host } = createRecordingRuntimeHost();
+    const showInfo = vi.fn();
+    const handlers = createProgressViewCommandHandlers(
+      createActions({ bypass: { runtimeHost: host, showInfo } }),
+    );
+
+    setToolEditApprovalSessionBypass(stream, true, host);
+    expect(isApprovalBypassedForStream(stream)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream)).toBe(false);
+
+    expect(
+      dispatchProgressViewInbound(
+        { command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, stream },
+        handlers,
+      ),
+    ).toBe(true);
+    await Promise.resolve();
+
+    expect(isApprovalBypassedForStream(stream)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream)).toBe(true);
+    expect(showInfo).toHaveBeenCalledWith(
+      'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.',
+    );
   });
 
   it('makes delegated task bypass enable edit and bash bypasses', async () => {

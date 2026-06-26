@@ -22,6 +22,12 @@ All notable changes to this project will be documented in this file.
 
 - **Leaner, non-overlapping CLI options** — trimmed redundant choices so the same thing has one spelling: `--api-mode` now accepts just `included`/`personal` (plus the `relay`/`byok` shorthands) instead of seven near-synonyms, the duplicate `texra agents inspect` is gone in favor of `texra agents show`, and `texra login` now rejects `--device` together with `--no-browser` (they are different sign-in transports) instead of silently ignoring one.
 
+### Extension (VS Code)
+
+#### Improvements
+
+- **"Yolo (this session)" right on the approval prompt** — edit and bash approval prompts now offer a **Yolo (this session)** option under the Approve button's ▾ menu (keyboard shortcut `a`), mirroring the CLI's "approve session". It approves the current action and turns off approval prompts for edits and bash commands for the rest of that stream — the same effect as the toolbar shield, but discoverable at the moment you're asked. Previously the only way to enable auto-approval was the shield icon in the progress-view toolbar, which first-time users could easily miss.
+
 ## [0.38.10] - 2026-06-23
 
 ### Shared (all surfaces)
