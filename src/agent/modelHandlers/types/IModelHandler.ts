@@ -209,7 +209,6 @@ export interface IModelHandler<
 
   getStreamingConfig(): boolean;
   setOutputStreaming(enabled: boolean): void;
-  isOutputStreamingEnabled(): boolean;
   isBackgroundModeActive(): boolean;
 
   /** Whether this handler supports manual context compaction. */

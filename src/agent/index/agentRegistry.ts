@@ -35,11 +35,7 @@ logger.initialize(CHANNEL);
 // Re-exports kept stable for external consumers.
 export type { AgentEntry, ResolvedAgent } from './agentEntry';
 export { extractToolNames } from './agentYamlScanner';
-export {
-  BUILTIN_TEAM_ROOT_AGENT_NAMES,
-  BUNDLED_ORCHESTRATOR_AGENT_NAMES,
-  REMOTE_ORCHESTRATOR_AGENT_NAMES,
-} from './agentRegistryConstants';
+export { BUILTIN_TEAM_ROOT_AGENT_NAMES } from './agentRegistryConstants';
 export { createKey };
 
 /** Legacy prefix from pre-rename era (builtIn → builtInWorkflow). */
