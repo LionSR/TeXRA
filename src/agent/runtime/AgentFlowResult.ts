@@ -72,6 +72,21 @@ export function getAgentFlowErrorResult(
 /** The discriminant of {@link AgentFlowResult}: which flow produced the result. */
 export type AgentFlowCategory = AgentFlowResult['category'];
 
+/**
+ * Optional `AgentFlowResult` fields shared by both result categories. Included
+ * only when meaningful so an empty miss list or a zero cost never lands in the
+ * result — the single owner of that inclusion rule for every builder.
+ */
+export function buildOptionalFlowResultFields(
+  memoryMisses: AgentFlowResult['memoryMisses'],
+  totalCostUsd: number | undefined,
+): { memoryMisses?: AgentFlowResult['memoryMisses']; totalCostUsd?: number } {
+  return {
+    ...(memoryMisses && memoryMisses.length > 0 ? { memoryMisses } : {}),
+    ...(totalCostUsd != null && totalCostUsd > 0 ? { totalCostUsd } : {}),
+  };
+}
+
 export function buildTerminalFlowResult(
   category: AgentFlowCategory,
   outcome: RunOutcome,
@@ -82,7 +97,7 @@ export function buildTerminalFlowResult(
   const meta = {
     executionId,
     streamId,
-    ...(memoryMisses && memoryMisses.length > 0 ? { memoryMisses } : {}),
+    ...buildOptionalFlowResultFields(memoryMisses, undefined),
   };
   if (category === 'toolUse') {
     return { category, outcome, ...meta };
