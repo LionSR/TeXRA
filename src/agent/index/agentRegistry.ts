@@ -10,7 +10,11 @@ import type {
   AgentCategory as AgentCategoryType,
   AgentSource,
 } from '@shared/schemas/agent';
-import { agentKey as createKey, agentName } from '@shared/schemas/agent';
+import {
+  agentKey as createKey,
+  agentKeyOf,
+  agentName,
+} from '@shared/schemas/agent';
 import { unique } from '@utils/core';
 import { getAgentDirectories } from './agentDirectoriesRegistry';
 import {
@@ -209,6 +213,10 @@ function migrateLegacyAgentNameKeys(): void {
     WorkspaceStateKey.ENABLED_AGENTS,
     WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
   ] as const) {
+    const category =
+      stateKey === WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
+        ? AgentCategory.ToolUse
+        : AgentCategory.Workflow;
     const stored = platform().workspaceState.get<string[]>(stateKey, []);
     if (!stored?.length) continue;
 
@@ -219,7 +227,18 @@ function migrateLegacyAgentNameKeys(): void {
       if (key === name ? getAgent(name)?.name === name : cache.has(key)) {
         return key;
       }
-      return key.slice(0, key.length - name.length) + alias;
+      // Rewrite the name part to the alias target, preserving the original
+      // key's shape (bare vs source-qualified) when it resolves to an agent IN
+      // THIS LIST'S CATEGORY. Otherwise resolve the alias within the category,
+      // so the rewrite can never persist a wrong-category key — e.g. a custom
+      // workflow `assistant` shadowing the built-in tool-use one must not land
+      // in tool-use visibility state (the settings UI matches keys literally,
+      // so a cross-category key would orphan the toggle). Keep the original key
+      // when no agent of this category matches, rather than inventing one.
+      const rewritten = key.slice(0, key.length - name.length) + alias;
+      if (getAgent(rewritten)?.category === category) return rewritten;
+      const canonical = getCategoryAgent(category, alias);
+      return canonical ? agentKeyOf(canonical) : key;
     });
     if (migrated.every((key, i) => key === stored[i])) continue;
 
@@ -233,9 +252,7 @@ function migrateLegacyAgentNameKeys(): void {
  * persisted visibility selections alive after switching identity to `name:`.
  */
 function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
-  const currentKeys = new Set(
-    entries.map((entry) => createKey(entry.source, entry.name)),
-  );
+  const currentKeys = new Set(entries.map((entry) => agentKeyOf(entry)));
   const currentNames = new Set(entries.map((entry) => entry.name));
   const qualifiedCandidates = new Map<string, Set<string>>();
   const bareCandidates = new Map<string, Set<string>>();
@@ -248,7 +265,7 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
     const oldKey = createKey(entry.source, oldName);
     if (!currentKeys.has(oldKey)) {
       const targets = qualifiedCandidates.get(oldKey) ?? new Set<string>();
-      targets.add(createKey(entry.source, entry.name));
+      targets.add(agentKeyOf(entry));
       qualifiedCandidates.set(oldKey, targets);
     }
     if (!currentNames.has(oldName)) {
@@ -388,11 +405,25 @@ export function resolveAgent(identifier: string): ResolvedAgent | undefined {
   return { entry, definitionPath: entry.path, resolvedName: entry.name };
 }
 
+/**
+ * Agents in a category, deduplicated by name. `includeInternal` controls
+ * whether internal agents (hidden from dropdowns but launchable by commands)
+ * are in the set: dropdowns exclude them, launch resolution includes them.
+ */
+function categoryEntries(
+  category: AgentCategory,
+  includeInternal: boolean,
+): AgentEntry[] {
+  return deduplicateByName(
+    [...cache.values()].filter(
+      (e) => e.category === category && (includeInternal || !e.internal),
+    ),
+  );
+}
+
 /** Get non-internal agents for a category, deduplicated by name. */
 export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
-  return deduplicateByName(
-    [...cache.values()].filter((e) => e.category === category && !e.internal),
-  );
+  return categoryEntries(category, false);
 }
 
 /** Get agents by source. */
@@ -432,7 +463,7 @@ export function resolveAgentKey(
   if (!agentIdentifier) return agentIdentifier;
   const entry = getAgent(agentIdentifier, lookupCategory);
   if (!entry) return agentIdentifier;
-  return createKey(entry.source, entry.name);
+  return agentKeyOf(entry);
 }
 
 // =============================================================================
@@ -466,6 +497,52 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
 }
 
 /**
+ * Match an identifier against a candidate set. A source-qualified identifier
+ * names one specific entry, so only an exact key match counts — matching its
+ * bare name could hit a different entry that shares the legacy name (e.g. a
+ * custom `chat` shadowing the renamed built-in). Bare identifiers may match any
+ * candidate by name.
+ *
+ * This is the single identity-matching rule. Every resolver that picks an entry
+ * out of a list by name-or-key — the category-scoped resolvers here, plus
+ * out-of-registry callers like the CLI multi-agent preset planner — goes through
+ * it so the rule lives in exactly one place.
+ */
+export function findAgentByIdentifier(
+  entries: readonly AgentEntry[],
+  identifier: string,
+): AgentEntry | undefined {
+  const name = agentName(identifier);
+  return entries.find((entry) =>
+    identifier === name
+      ? entry.name === name
+      : agentKeyOf(entry) === identifier,
+  );
+}
+
+/**
+ * Resolve an identifier within a category-scoped candidate set: exact identity
+ * match first, then the alias-aware canonical resolver mapped back into the set
+ * by name. Callers supply the scope (visible-only or the full category); the
+ * matching rule is identical regardless of scope.
+ */
+function resolveWithinCategory(
+  entries: readonly AgentEntry[],
+  category: AgentCategory,
+  identifier: string,
+): AgentEntry | undefined {
+  const exact = findAgentByIdentifier(entries, identifier);
+  if (exact) return exact;
+
+  // Legacy-alias fallback (e.g. `chat` → `assistant`). getAgent is category-
+  // blind, so map its result back into the category scope by name; an entry
+  // from another category is correctly rejected here.
+  const entry = getAgent(identifier, category);
+  if (!entry) return undefined;
+  return entries.find((candidate) => candidate.name === entry.name);
+}
+
+/**
  * Resolve an identifier to a currently visible agent entry. Visibility and
  * legacy aliases are owned by the registry, so callers do not need to repeat
  * rename or enabled-agent matching rules.
@@ -474,22 +551,46 @@ export function getVisibleAgent(
   category: AgentCategory,
   identifier: string,
 ): AgentEntry | undefined {
-  const entries = getVisibleAgents(category);
-  const name = agentName(identifier);
-  // A source-qualified identifier names one specific entry, so only an exact
-  // key match counts — matching its bare name could hit a different visible
-  // agent that shares the legacy name (e.g. a custom `chat` shadowing the
-  // renamed built-in). Bare identifiers may match any visible agent by name.
-  const exact = entries.find((entry) =>
-    identifier === name
-      ? entry.name === name
-      : createKey(entry.source, entry.name) === identifier,
+  return resolveWithinCategory(
+    getVisibleAgents(category),
+    category,
+    identifier,
   );
-  if (exact) return exact;
+}
 
-  const entry = getAgent(identifier, category);
+/**
+ * Resolve an identifier to an agent in a category, ignoring visibility. This is
+ * the launch-time resolver: it restricts resolution to the requested category
+ * so a same-name agent in another category/source can never be picked — a
+ * guarantee the source-priority-only {@link getAgent} cannot give. It shares
+ * {@link resolveWithinCategory} with {@link getVisibleAgent}, so the agent a
+ * delegation validates and the agent it launches are resolved by one rule.
+ */
+export function getCategoryAgent(
+  category: AgentCategory,
+  identifier: string,
+): AgentEntry | undefined {
+  // Include internal agents: they are hidden from dropdowns but launchable by
+  // commands, so the launch resolver must be able to reach them — only the
+  // visible-set resolver (getVisibleAgent) filters them out.
+  return resolveWithinCategory(
+    categoryEntries(category, true),
+    category,
+    identifier,
+  );
+}
+
+/**
+ * {@link resolveAgent} restricted to a category — the launch-time counterpart
+ * that keeps category/source from being dropped during resolution.
+ */
+export function resolveAgentInCategory(
+  category: AgentCategory,
+  identifier: string,
+): ResolvedAgent | undefined {
+  const entry = getCategoryAgent(category, identifier);
   if (!entry) return undefined;
-  return entries.find((visible) => visible.name === entry.name);
+  return { entry, definitionPath: entry.path, resolvedName: entry.name };
 }
 
 /**

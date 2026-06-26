@@ -5,21 +5,15 @@
 
 import { css, type CSSResult } from 'lit';
 
-/** Reflect banner visibility onto the host for CSS targeting and a11y. */
-export function applyBannerVisibility(
-  host: HTMLElement,
-  visible: boolean,
-): void {
-  host.dataset.visible = visible ? 'true' : 'false';
-  host.setAttribute('aria-hidden', visible ? 'false' : 'true');
-}
-
 export const bannerStyles: CSSResult = css`
   :host {
     display: block;
   }
 
-  :host(:not([data-visible='true'])) {
+  /* Banners reflect a boolean \`visible\` property to the host attribute; when
+     absent the host is removed from layout (and via display:none from the
+     accessibility tree, so no aria-hidden is needed). */
+  :host(:not([visible])) {
     display: none;
   }
 
