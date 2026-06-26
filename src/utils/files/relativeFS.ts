@@ -43,7 +43,7 @@ export abstract class RelativeFS extends BaseFS {
   ): Promise<T> {
     const raw = await this.read(target);
     const result = schema ? parseJsonWith(raw, schema) : safeParseJson(raw);
-    if (!result.ok) {
+    if (result.isErr()) {
       throw new Error(
         `Failed to parse JSON from ${target}: ${result.error.message}`,
         { cause: result.error },

@@ -194,7 +194,7 @@ async function retrieveToolUseResumeData(
     const snapshotResult = ToolUseSessionSnapshotSchema.safeParse(rawSnapshot);
     if (!snapshotResult.success) {
       logger.warn(
-        `Invalid snapshot structure for stream: ${streamId}: ${snapshotResult.error.message}`,
+        `Invalid snapshot structure for stream: ${streamId}: ${z.prettifyError(snapshotResult.error)}`,
       );
       return null;
     }

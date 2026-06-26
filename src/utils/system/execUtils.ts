@@ -10,6 +10,7 @@ import {
   type SyncOptions,
 } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
+import treeKill from 'tree-kill';
 
 // Local imports - log
 
@@ -125,32 +126,46 @@ function workspacePathOrProcessCwd(): string {
 }
 
 /**
- * Send a signal to a process group (POSIX) or directly to the process (Windows).
- * On POSIX, sends to the process group first (negative PID); falls back to
- * the direct PID if the group signal fails (e.g. process is not a group leader).
- * Returns true if the signal was delivered, false if the process already exited.
+ * Signal a process and all of its descendants.
+ *
+ * Two platform strategies, each picking the most reliable mechanism:
+ *
+ * - **Windows** has no process-group signalling, so a bare `process.kill(pid)`
+ *   only hit the shell and left piped children (e.g. `find | head`) running
+ *   with stdout still open, hanging `await subprocess`. We delegate to
+ *   `tree-kill`, which shells out to `taskkill /T /F` to tear down the whole
+ *   process tree — closing that long-standing orphaned-children gap.
+ *
+ * - **POSIX** signals the whole process group via the negative PID. Callers
+ *   that need teardown spawn the shell `detached` (a new group leader), so the
+ *   group kill reaches backgrounded children (`cmd &`) directly and
+ *   synchronously. Group membership is stronger than a parent/child (`ps
+ *   --ppid`) walk here: it survives re-parenting and double-forks that a tree
+ *   walk would miss. Falls back to the bare PID when the target isn't a group
+ *   leader.
+ *
+ * Best-effort and fire-and-forget — a process that already exited is a no-op,
+ * matching the previous contract where every caller ignored the result.
  */
-export function signalProcessGroup(
-  pid: number,
-  signal: NodeJS.Signals,
-): boolean {
+export function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
   if (IS_WINDOWS) {
-    try {
-      process.kill(pid, signal);
-      return true;
-    } catch {
-      return false;
-    }
+    treeKill(pid, signal, (error) => {
+      if (error) {
+        logger.debug(
+          CHANNEL,
+          `tree-kill failed for pid ${pid} (${signal}): ${toErrorMessage(error)}`,
+        );
+      }
+    });
+    return;
   }
   try {
     process.kill(-pid, signal);
-    return true;
   } catch {
     try {
       process.kill(pid, signal);
-      return true;
     } catch {
-      return false;
+      // Process already exited — nothing to signal.
     }
   }
 }

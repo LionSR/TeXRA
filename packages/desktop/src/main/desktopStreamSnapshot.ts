@@ -20,6 +20,8 @@
  * the previous file intact rather than corrupting the snapshot.
  */
 
+import { z } from 'zod';
+
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
   emptyRestoredStreamsFile,
@@ -132,7 +134,7 @@ function parseHydrated(
   if (!parsed.success) {
     log.warn(
       '[texra-desktop] Discarding malformed stream snapshot file',
-      parsed.error.issues.slice(0, 3),
+      z.prettifyError(parsed.error),
     );
     return emptyRestoredStreamsFile().streams;
   }
