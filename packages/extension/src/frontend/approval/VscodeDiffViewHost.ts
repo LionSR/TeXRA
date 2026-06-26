@@ -31,10 +31,8 @@ export class VscodeDiffViewHost implements DiffViewHost {
   }
 
   async closeDiff(session: DiffSession): Promise<void> {
-    const targetUris = new Set([
-      this.toUri(session.original).toString(),
-      this.toUri(session.proposed).toString(),
-    ]);
+    const originalUri = this.toUri(session.original).toString();
+    const proposedUri = this.toUri(session.proposed).toString();
 
     const tabsToClose: vscode.Tab[] = [];
     for (const group of vscode.window.tabGroups.all) {
@@ -44,9 +42,12 @@ export class VscodeDiffViewHost implements DiffViewHost {
           typeof vscode.TabInputTextDiff !== 'undefined' &&
           input instanceof vscode.TabInputTextDiff
         ) {
-          const original = input.original.toString();
-          const modified = input.modified.toString();
-          if (targetUris.has(original) && targetUris.has(modified)) {
+          // Require an exact pair match so we never close an unrelated diff
+          // that merely shares one side, nor a tab whose sides are swapped.
+          if (
+            input.original.toString() === originalUri &&
+            input.modified.toString() === proposedUri
+          ) {
             tabsToClose.push(tab);
           }
           continue;
@@ -56,7 +57,8 @@ export class VscodeDiffViewHost implements DiffViewHost {
           typeof vscode.TabInputText !== 'undefined' &&
           input instanceof vscode.TabInputText
         ) {
-          if (targetUris.has(input.uri.toString())) {
+          const uri = input.uri.toString();
+          if (uri === originalUri || uri === proposedUri) {
             tabsToClose.push(tab);
           }
         }

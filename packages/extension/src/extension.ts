@@ -42,7 +42,6 @@ import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
-import { isTerminalStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
 import {
@@ -55,6 +54,7 @@ import {
 import { runTerminalCommand } from '@frontend/setupTerminalRunner';
 import { agentDirectories } from '@frontend/agents';
 import { FileLister } from '@frontend/files';
+import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { killActiveRecording } from '@frontend/media/audio';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
@@ -63,6 +63,7 @@ import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolE
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
+import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
@@ -81,7 +82,7 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
-import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import { type StreamStatus, type TokenUsageStats } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
@@ -217,7 +218,9 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   });
   registerAgentFeatures();
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => disposeStatusListener?.());
+  // `disposeStatusListener` and `statusBarItem` are owned solely by
+  // `context.subscriptions` (see the push near the end of `activate`), matching
+  // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
   registerAgentShutdownHandlers(lifecycle);
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
@@ -234,7 +237,6 @@ export async function activate(context: vscode.ExtensionContext) {
     bus.emit('extensionDeactivating', undefined),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => statusBarItem?.dispose());
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   FileLister.initialize(context);
   initializeServerSideKeyAccess(
@@ -661,9 +663,30 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  const runningStreams = new Set<string>();
+  const statusBarUsageTracker = new StatusBarUsageTracker();
+  const updateStatusBarTooltip = () => {
+    const { cost, inputTokens, outputTokens } =
+      statusBarUsageTracker.totalUsage;
+    if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
+      statusBarItem!.tooltip = 'Show TeXRA Tasks';
+      return;
+    }
+    const tip = new vscode.MarkdownString(
+      [
+        '| TeXRA usage | |',
+        '| --- | ---: |',
+        `| Cost | $${cost.toFixed(4)} |`,
+        `| Input tokens | ${inputTokens.toLocaleString()} |`,
+        `| Output tokens | ${outputTokens.toLocaleString()} |`,
+        '',
+        '*Click to open the TeXRA task board*',
+      ].join('\n'),
+    );
+    tip.isTrusted = false;
+    statusBarItem!.tooltip = tip;
+  };
   const updateStatusBarText = () => {
-    const count = runningStreams.size;
+    const count = statusBarUsageTracker.activeStreamCount;
     if (count > 1) {
       statusBarItem!.text = `$(loading) TeXRA: ${count} active`;
     } else if (count === 1) {
@@ -673,17 +696,27 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   };
 
-  disposeStatusListener = bus.on(
+  const disposeStreamStatusListener = bus.on(
     'updateStreamStatus',
     ({ streamId, status }: { streamId: string; status: StreamStatus }) => {
-      if (status === STREAM_STATUS.RUNNING) {
-        runningStreams.add(streamId);
-      } else if (isTerminalStatus(status)) {
-        runningStreams.delete(streamId);
-      }
+      statusBarUsageTracker.updateStreamStatus(streamId, status);
+      updateStatusBarTooltip();
       updateStatusBarText();
     },
   );
+  const disposeUsageListener = bus.on(
+    'updateStreamUsage',
+    ({ streamId, usage }: { streamId: string; usage: TokenUsageStats }) => {
+      // UsageMonitor emits per-round deltas; the tracker accumulates them.
+      if (statusBarUsageTracker.recordUsage(streamId, usage)) {
+        updateStatusBarTooltip();
+      }
+    },
+  );
+  disposeStatusListener = () => {
+    disposeStreamStatusListener();
+    disposeUsageListener();
+  };
 
   const showMainView = async () => {
     const mvp = getMainViewProvider();
@@ -697,6 +730,10 @@ export async function activate(context: vscode.ExtensionContext) {
   };
 
   const agentEventDisposable = registerAgentEventListeners();
+
+  // Surface curated research tools to VS Code's Language Model Tool API
+  // (Copilot Chat `#texra_*` references). No-op on hosts without the API.
+  registerLanguageModelTools(context);
 
   context.subscriptions.push(
     agentEventDisposable,

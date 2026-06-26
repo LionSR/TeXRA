@@ -30,7 +30,14 @@ async function setApiKeyForProvider(
   provider: ApiProvider,
   skipDialog = false,
 ): Promise<void> {
-  if (!skipDialog) {
+  // VS Code 1.109+ supports placing a QuickInputButton in the input box's
+  // title area, so we can offer "Get API Key" inline and skip the extra
+  // info-message step. On older hosts (incl. Cursor 1.105) we keep the
+  // legacy two-step dialog.
+  const vsMinor = Number.parseInt(vscode.version.split('.')[1] ?? '0', 10);
+  const supportsTitleButton = vsMinor >= 109;
+
+  if (!skipDialog && !supportsTitleButton) {
     const actions: Array<vscode.MessageItem & { id: 'enter' | 'getApiKey' }> = [
       { title: 'Enter Key', id: 'enter' },
       { title: 'Get API Key', id: 'getApiKey' },
@@ -50,11 +57,7 @@ async function setApiKeyForProvider(
     }
   }
 
-  const apiKey = await vscode.window.showInputBox({
-    prompt: `Enter ${provider} API key`,
-    password: true,
-    placeHolder: '************************************',
-  });
+  const apiKey = await promptForApiKey(provider, supportsTitleButton);
 
   if (!apiKey) {
     return;
@@ -81,6 +84,57 @@ async function setApiKeyForProvider(
 }
 
 /**
+ * Prompt for an API key. When the host supports title-area input buttons
+ * (VS Code 1.109+), attach a "Get API Key" button that opens the provider's
+ * key portal without closing the input box, so the user can paste straight
+ * away. Otherwise fall back to a plain input box.
+ */
+async function promptForApiKey(
+  provider: ApiProvider,
+  withGetKeyButton: boolean,
+): Promise<string | undefined> {
+  if (!withGetKeyButton) {
+    return vscode.window.showInputBox({
+      prompt: `Enter ${provider} API key`,
+      password: true,
+      placeHolder: '************************************',
+    });
+  }
+
+  return await new Promise<string | undefined>((resolve) => {
+    const ib = vscode.window.createInputBox();
+    let settled = false;
+    const finish = (value: string | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      ib.dispose();
+    };
+    ib.title = `Set ${provider} API key`;
+    ib.prompt = `Enter ${provider} API key`;
+    ib.password = true;
+    ib.placeholder = '************************************';
+    const getKeyButton: vscode.QuickInputButton = {
+      iconPath: new vscode.ThemeIcon('link-external'),
+      tooltip: `Get ${provider} API key`,
+    };
+    ib.buttons = [getKeyButton];
+    ib.onDidTriggerButton((button) => {
+      if (button === getKeyButton) {
+        void vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
+      }
+    });
+    ib.onDidAccept(() => {
+      finish(ib.value);
+    });
+    ib.onDidHide(() => {
+      finish(undefined);
+    });
+    ib.show();
+  });
+}
+
+/**
  * Set an API key. Migrated to the shared command registry in
  * #3781 batch 4. The registry forwards a single typed argument so the
  * optional `provider` is parsed at the dispatch boundary.
@@ -92,14 +146,51 @@ export async function setApiKey(provider?: ApiProvider): Promise<void> {
   }
 
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
-  const providerPick = await vscode.window.showQuickPick(providerItems, {
-    placeHolder: 'Select API provider',
-    prompt: 'Choose the AI provider to configure an API key for',
-  });
+  const providerPick = await pickProvider(
+    providerItems,
+    'Select API provider',
+    "Keys are stored in VS Code's encrypted secret store, never on disk.",
+  );
 
   if (providerPick?.provider) {
     await setApiKeyForProvider(providerPick.provider);
   }
+}
+
+type ProviderQuickPickItem = Awaited<
+  ReturnType<typeof SecretManager.getApiProviderQuickPickItems>
+>[number];
+
+/** Shared provider picker with a persistent prompt hint (VS Code 1.108+). */
+async function pickProvider(
+  items: ProviderQuickPickItem[],
+  placeholder: string,
+  promptHint: string,
+): Promise<ProviderQuickPickItem | undefined> {
+  return await new Promise<ProviderQuickPickItem | undefined>((resolve) => {
+    const qp = vscode.window.createQuickPick<ProviderQuickPickItem>();
+    let settled = false;
+    const finish = (value: ProviderQuickPickItem | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      qp.dispose();
+    };
+    qp.placeholder = placeholder;
+    qp.items = items;
+    if ('prompt' in qp) {
+      (
+        qp as vscode.QuickPick<ProviderQuickPickItem> & { prompt: string }
+      ).prompt = promptHint;
+    }
+    qp.onDidAccept(() => {
+      finish(qp.activeItems[0] ?? qp.selectedItems[0]);
+    });
+    qp.onDidHide(() => {
+      finish(undefined);
+    });
+    qp.show();
+  });
 }
 
 /**
@@ -108,10 +199,11 @@ export async function setApiKey(provider?: ApiProvider): Promise<void> {
  */
 export async function removeApiKey(): Promise<void> {
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
-  const providerPick = await vscode.window.showQuickPick(providerItems, {
-    placeHolder: 'Select API provider to remove key',
-    prompt: 'Choose the AI provider whose API key you want to remove',
-  });
+  const providerPick = await pickProvider(
+    providerItems,
+    'Select API provider to remove key',
+    'Only removes the key from TeXRA — does not delete it from the provider.',
+  );
 
   const provider = providerPick?.provider;
   if (!provider) {

@@ -207,25 +207,49 @@ async function resolveAcceptTarget(
   }
 
   const copyTarget = buildCopyTarget(baseLocation, copyMeta);
-  const pick = await vscode.window.showQuickPick(
-    [
-      {
-        label: '$(replace) Replace original',
-        description: replaceTarget.targetFileName,
-        target: replaceTarget,
-      },
-      {
-        label: '$(files) Save as copy',
-        description: copyTarget.targetFileName,
-        target: copyTarget,
-      },
-    ],
+  type AcceptItem = vscode.QuickPickItem & {
+    target: { targetLocation: FileLocation; targetFileName: string };
+  };
+  const acceptItems: AcceptItem[] = [
     {
-      title: 'Accept edits',
-      placeHolder: `Accept '${path.basename(editedPath)}' into the workspace`,
-      ignoreFocusOut: true,
+      label: '$(replace) Replace original',
+      description: replaceTarget.targetFileName,
+      target: replaceTarget,
     },
-  );
+    {
+      label: '$(files) Save as copy',
+      description: copyTarget.targetFileName,
+      target: copyTarget,
+    },
+  ];
+
+  const pick = await new Promise<AcceptItem | undefined>((resolve) => {
+    const qp = vscode.window.createQuickPick<AcceptItem>();
+    let settled = false;
+    const finish = (value: AcceptItem | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      qp.dispose();
+    };
+    qp.title = 'Accept edits';
+    qp.placeholder = `Accept '${path.basename(editedPath)}' into the workspace`;
+    qp.ignoreFocusOut = true;
+    qp.items = acceptItems;
+    // VS Code 1.108+: keep the edited filename visible after the placeholder
+    // is cleared by typing — this is a destructive replace-vs-copy choice.
+    if ('prompt' in qp) {
+      (qp as vscode.QuickPick<AcceptItem> & { prompt: string }).prompt =
+        `Edited file: ${path.basename(editedPath)}`;
+    }
+    qp.onDidAccept(() => {
+      finish(qp.activeItems[0] ?? qp.selectedItems[0]);
+    });
+    qp.onDidHide(() => {
+      finish(undefined);
+    });
+    qp.show();
+  });
   return pick?.target;
 }
 

@@ -173,6 +173,7 @@ async function nativeRequestApproval(
   const title = `Tool edit (${sourceTool}): ${description}${changeSuffix}`;
   let result: ToolEditApprovalResult = { accepted: false };
   let diffSession: DiffSession | undefined;
+  let tabCloseDisposable: vscode.Disposable | undefined;
   try {
     const openedSession = await diffViewHost.openDiff(
       originalSource,
@@ -225,6 +226,42 @@ async function nativeRequestApproval(
         isSettled: () => settled,
         settle,
       });
+
+      // Closing the proposed diff tab (e.g. Ctrl+W) must resolve the approval
+      // as a rejection. Without this the approval Promise would never settle
+      // and the agent would hang indefinitely. The listener is self-cleaning:
+      // it disposes once the approval settles (including the programmatic
+      // close in the `finally` block below).
+      const proposedUriStr = vscode.Uri.file(
+        proposedSource.filePath,
+      ).toString();
+      tabCloseDisposable = vscode.window.tabGroups.onDidChangeTabs((event) => {
+        if (settled) {
+          tabCloseDisposable?.dispose();
+          return;
+        }
+        const wasClosed = event.closed.some((tab) => {
+          const input = tab.input;
+          if (
+            typeof vscode.TabInputTextDiff !== 'undefined' &&
+            input instanceof vscode.TabInputTextDiff
+          ) {
+            return input.modified.toString() === proposedUriStr;
+          }
+          if (
+            typeof vscode.TabInputText !== 'undefined' &&
+            input instanceof vscode.TabInputText
+          ) {
+            return input.uri.toString() === proposedUriStr;
+          }
+          return false;
+        });
+        if (wasClosed) {
+          tabCloseDisposable?.dispose();
+          settle({ accepted: false });
+        }
+      });
+
       void showProgressViewApprovalPrompt(
         requestId,
         request,
@@ -251,6 +288,8 @@ async function nativeRequestApproval(
       lineChanges: result.lineChanges ?? lineChanges,
     };
   } finally {
+    // Stop listening for tab closes before we programmatically close the diff.
+    tabCloseDisposable?.dispose();
     // Get entry before deleting to access workspace temp cleanup functions
     const entry = pendingApprovals.get(requestId);
     pendingApprovals.delete(requestId);

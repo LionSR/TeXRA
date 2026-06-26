@@ -22,6 +22,22 @@ All notable changes to this project will be documented in this file.
 - **Clearer validation error messages** — when a configuration value, stored session, or API response fails schema validation, the error now reads as a concise human-readable summary of what was wrong instead of a raw JSON dump of the validation internals.
 - **Diagnostic logs survive circular references** — object-to-log formatting no longer collapses to an opaque `[object Object]` when a value contains a circular reference; the structure is preserved with `[Circular]` markers so log lines stay useful.
 
+### VS Code Extension
+
+#### Features
+
+- **TeXRA research tools in Copilot Chat** — when running on a VS Code build that supports the Language Model Tool API, TeXRA's arXiv search, web fetch, and Crossref search are available in Copilot Chat as `#texra_arxiv_search`, `#texra_web_fetch`, and `#texra_crossref_search`, so agents can pull papers, web pages, and citations without leaving chat. Hosts without the API simply don't show them.
+- **Live usage in the status bar** — hovering the TeXRA status bar item now shows a running cost and input/output token total for active streams, so you can keep an eye on spend without opening the task board.
+
+#### Improvements
+
+- **Clearer pickers** — file, credential, review, and tool-selection menus now keep an explanatory hint visible as you type (on VS Code 1.108+): the latexdiff math-markup and review pickers show your saved default, the API-key picker reminds you keys are stored encrypted, the "Accept edits" picker keeps the edited filename in view, and the review flow echoes your focus text. Entering an API key offers a one-click "Get API key" button inline (VS Code 1.109+).
+
+#### Bug Fixes
+
+- **Tool-edit approval no longer hangs when you close the diff** — closing the proposed-edit diff tab now rejects the edit instead of leaving the agent waiting indefinitely.
+- **More precise diff cleanup** — finishing a tool-edit approval now only closes that exact diff, never an unrelated diff that happens to share a file.
+
 ### CLI
 
 #### Features
