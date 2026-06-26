@@ -151,8 +151,12 @@ describe('seedRosterFromDefaultTeam', () => {
     expect(seeded).toBe(true);
     const roster = workspaceRoster();
     expect(roster.workflow?.toSorted()).toEqual([
+      'apply',
       'builtInWorkflow:correct',
       'builtInWorkflow:polish',
+      'criticize',
+      'devise',
+      'generic',
     ]);
     expect(roster.toolUse).toContain('builtInToolUse:review');
     expect(roster.toolUse).toContain('builtInToolUse:research');
@@ -170,8 +174,12 @@ describe('seedRosterFromDefaultTeam', () => {
     expect(seeded).toBe(true);
     const roster = workspaceRoster();
     expect(roster.workflow?.toSorted()).toEqual([
+      'apply',
       'builtInWorkflow:correct',
       'builtInWorkflow:polish',
+      'criticize',
+      'devise',
+      'generic',
     ]);
     expect(roster.toolUse).toContain('builtInToolUse:review');
     expect(roster.toolUse).toContain('builtInToolUse:research');
