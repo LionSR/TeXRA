@@ -215,5 +215,3 @@ per-session state relocation, the typed `delegateTo` primitive, and wiring
   path (none), `isOutputStreamingEnabled` (only its own declaration + definition).
 - `git log` since 2026-06-25 over `src/agent` (the PR #6620 / `cee3eb6` landings
   cited above).
-  </content>
-  </invoke>
