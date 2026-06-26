@@ -153,4 +153,35 @@ describe('tool-edit-request-panel', () => {
     expect(element.handleKeyboardShortcut('a')).toBe(false);
     expect(actions).toEqual([]);
   });
+
+  it('emits approveSession only for the Yolo split-menu item', async () => {
+    const element = await mountPanel(
+      createPermission({ allowBypass: true, streamId: 'stream-1' }),
+    );
+    const actions: string[] = [];
+    element.addEventListener('permission-action', (event) => {
+      actions.push((event as CustomEvent<{ action: string }>).detail.action);
+    });
+
+    const menu = element.shadowRoot?.querySelector('.approve-split-menu');
+    expect(menu).toBeTruthy();
+
+    // An unrecognized menu value is a no-op.
+    menu?.dispatchEvent(
+      new CustomEvent('wa-select', {
+        detail: { item: { value: 'nope' } },
+        bubbles: true,
+      }),
+    );
+    expect(actions).toEqual([]);
+
+    // Selecting the Yolo item emits approveSession (same action as `a`).
+    menu?.dispatchEvent(
+      new CustomEvent('wa-select', {
+        detail: { item: { value: 'approveSession' } },
+        bubbles: true,
+      }),
+    );
+    expect(actions).toEqual(['approveSession']);
+  });
 });
