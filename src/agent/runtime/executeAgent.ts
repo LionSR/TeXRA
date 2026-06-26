@@ -50,7 +50,11 @@ import { currentSession, type SessionHandle } from './SessionHandle';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
-import { AgentFlowError, type AgentFlowResult } from './AgentFlowResult';
+import {
+  AgentFlowError,
+  buildOptionalFlowResultFields,
+  type AgentFlowResult,
+} from './AgentFlowResult';
 import type { AgentExecutionHandle, AgentRunHandle } from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
@@ -106,21 +110,6 @@ function toCompileFailureSummaries(
       logAbsolutePath: failure.log.absolutePath,
     })),
   );
-}
-
-/**
- * Optional `AgentFlowResult` fields shared by both result categories. Included
- * only when meaningful so an empty miss list or a zero cost never lands in the
- * result — the single owner of that inclusion rule for both builders below.
- */
-function buildOptionalFlowResultFields(
-  memoryMisses: AgentFlowResult['memoryMisses'],
-  totalCostUsd: number | undefined,
-): { memoryMisses?: AgentFlowResult['memoryMisses']; totalCostUsd?: number } {
-  return {
-    ...(memoryMisses && memoryMisses.length > 0 ? { memoryMisses } : {}),
-    ...(totalCostUsd != null && totalCostUsd > 0 ? { totalCostUsd } : {}),
-  };
 }
 
 /** Build a workflow AgentFlowResult from a reflection flow run. */
