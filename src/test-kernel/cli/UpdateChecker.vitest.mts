@@ -1,17 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildRelaunchCommand,
-  buildRelaunchEnv,
   buildUpdateCommand,
   detectInstallMethod,
-  exitCodeForRelaunchClose,
   fetchLatestCliVersion,
   fetchLatestHomebrewFormulaVersion,
   formatUpdateCommand,
   isNewerVersion,
+  isPackageManagerInstall,
 } from '@cli/runtime/updateChecker';
-import { CliExitCode } from '@cli/runtime/exitCodes';
 
 describe('isNewerVersion', () => {
   it('compares numerically across all components', () => {
@@ -89,6 +86,54 @@ describe('detectInstallMethod', () => {
   });
 });
 
+describe('isPackageManagerInstall', () => {
+  it('treats node_modules-resident installs as managed', () => {
+    // npm/pnpm/yarn/bun globals all live under node_modules.
+    expect(
+      isPackageManagerInstall(
+        '/usr/local/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
+      ),
+    ).toBe(true);
+    expect(
+      isPackageManagerInstall(
+        '/Users/me/Library/pnpm/global/5/node_modules/@texra-ai/cli/dist/bin/texra.js',
+      ),
+    ).toBe(true);
+  });
+
+  it('treats a Homebrew Cellar install as managed even without node_modules', () => {
+    // The tap formula installs the bundled binary under Cellar/<v>/, which need
+    // not contain a node_modules segment — the `cellar` segment marks it (same
+    // path shape detectInstallMethod recognizes as brew).
+    const brewPath =
+      '/opt/homebrew/Cellar/texra/0.38.10/libexec/dist/bin/texra.js';
+    expect(brewPath.toLowerCase().includes('node_modules')).toBe(false);
+    expect(isPackageManagerInstall(brewPath)).toBe(true);
+    expect(detectInstallMethod(brewPath)).toBe('brew');
+  });
+
+  it('is case-insensitive for Windows paths', () => {
+    expect(
+      isPackageManagerInstall(
+        'C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\@texra-ai\\cli\\dist\\bin\\texra.js',
+      ),
+    ).toBe(true);
+  });
+
+  it('treats a source/dev or linked checkout as unmanaged', () => {
+    // A dev build runs straight from packages/cli/dist — no node_modules
+    // segment — which is exactly why this gate is needed: detectInstallMethod
+    // would otherwise fall back to 'npm' and prompt `npm install -g`.
+    const devPath =
+      '/Users/me/Local/AI-Projects/coauthor/packages/cli/dist/bin/texra.js';
+    expect(isPackageManagerInstall(devPath)).toBe(false);
+    expect(detectInstallMethod(devPath)).toBe('npm');
+    expect(
+      isPackageManagerInstall('/Users/me/.local/share/texra/dist/bin/texra.js'),
+    ).toBe(false);
+  });
+});
+
 describe('buildUpdateCommand / formatUpdateCommand', () => {
   it('produces the matching install invocation per manager', () => {
     expect(formatUpdateCommand('npm')).toBe(
@@ -114,69 +159,6 @@ describe('buildUpdateCommand / formatUpdateCommand', () => {
       command: 'brew',
       args: ['update', '&&', 'brew', 'upgrade', 'texra'],
     });
-  });
-});
-
-describe('buildRelaunchCommand', () => {
-  it('re-execs the entrypoint through the running Node, preserving argv', () => {
-    expect(
-      buildRelaunchCommand(
-        '/usr/local/bin/texra',
-        ['chat', '--agent', 'research'],
-        '/usr/bin/node',
-      ),
-    ).toEqual({
-      command: '/usr/bin/node',
-      args: ['/usr/local/bin/texra', 'chat', '--agent', 'research'],
-    });
-  });
-
-  it('handles a bare launch with no user arguments', () => {
-    expect(buildRelaunchCommand('/usr/local/bin/texra', [], 'node')).toEqual({
-      command: 'node',
-      args: ['/usr/local/bin/texra'],
-    });
-  });
-
-  it('returns undefined when there is no entrypoint to re-exec', () => {
-    expect(buildRelaunchCommand('', ['chat'], 'node')).toBeUndefined();
-    expect(buildRelaunchCommand('   ', ['chat'], 'node')).toBeUndefined();
-  });
-});
-
-describe('buildRelaunchEnv', () => {
-  it('preserves the current environment while skipping the redundant update check', () => {
-    expect(buildRelaunchEnv({ HOME: '/Users/me' })).toEqual({
-      HOME: '/Users/me',
-      TEXRA_NO_UPDATE_CHECK: '1',
-    });
-  });
-
-  it('overwrites an inherited update-check setting for the relaunched process', () => {
-    expect(buildRelaunchEnv({ TEXRA_NO_UPDATE_CHECK: '0' })).toEqual({
-      TEXRA_NO_UPDATE_CHECK: '1',
-    });
-  });
-});
-
-describe('exitCodeForRelaunchClose', () => {
-  it('mirrors the child exit code when one is available', () => {
-    expect(exitCodeForRelaunchClose(0, null)).toBe(CliExitCode.Success);
-    expect(exitCodeForRelaunchClose(7, 'SIGTERM')).toBe(7);
-  });
-
-  it('uses conventional signal exit codes when the child was killed', () => {
-    expect(exitCodeForRelaunchClose(null, 'SIGINT')).toBe(
-      CliExitCode.Interrupted,
-    );
-    expect(exitCodeForRelaunchClose(null, 'SIGTERM')).toBe(
-      CliExitCode.Terminated,
-    );
-    expect(exitCodeForRelaunchClose(null, 'SIGKILL')).toBe(137);
-  });
-
-  it('falls back to success only when no code or signal was reported', () => {
-    expect(exitCodeForRelaunchClose(null, null)).toBe(CliExitCode.Success);
   });
 });
 
