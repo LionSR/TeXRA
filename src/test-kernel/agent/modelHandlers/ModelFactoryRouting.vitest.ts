@@ -505,3 +505,42 @@ describe('direct handler capability overrides', () => {
     ).toBe(false);
   });
 });
+
+describe('routing precedence: compat-key ↔ createModelHandler invariant', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetCodexCoordinator();
+  });
+
+  // The handler-routing precedence is encoded twice: once in the pure
+  // `modelHandlerCompatibilityKey` predicate (used exception-free by
+  // history-restore and model-switch gating) and once in the live
+  // `createModelHandler` dispatch. The two must never drift — otherwise the
+  // key a restored session keys on could disagree with the handler actually
+  // built. For every registered model the key tagged onto the created handler
+  // must equal the predicted key, and a model with no handler route (predicted
+  // `undefined`, e.g. Copilot) must make `createModelHandler` reject rather
+  // than silently build a mismatched handler. Default routing (no OpenRouter
+  // proxy, signed out) is the shared baseline both paths observe, so they are
+  // compared under identical inputs.
+  it('tags every registered model with its predicted compatibility key', async () => {
+    const mismatches: string[] = [];
+    for (const [name, config] of Object.entries(MODEL_CONFIGS)) {
+      const predicted = modelHandlerCompatibilityKey(config);
+      if (predicted === undefined) {
+        await expect(
+          createModelHandler(config),
+          `${name}: no handler route, createModelHandler should reject`,
+        ).rejects.toThrow();
+        continue;
+      }
+      const actual = activeModelHandlerCompatibilityKey(
+        await createModelHandler(config),
+      );
+      if (actual !== predicted) {
+        mismatches.push(`${name}: predicted ${predicted}, got ${actual}`);
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+});
