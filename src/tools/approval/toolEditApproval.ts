@@ -10,10 +10,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
-import {
-  TOOL_EDIT_APPROVAL_ACTIONS,
-  type ToolEditApprovalAction,
-} from '@shared/schemas/prompts';
+import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import {
   LineChangesSchema,
   type LineChanges,
@@ -53,10 +50,6 @@ export type ToolEditApprovalResult = z.infer<
 const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
 
 export const REVEAL_TIMEOUT_MS = 1500;
-
-// Defined in the schema layer (see @shared/schemas/prompts); re-exported here
-// so existing importers of `@tools/approval/toolEditApproval` keep working.
-export { TOOL_EDIT_APPROVAL_ACTIONS, type ToolEditApprovalAction };
 
 export const toolEditApprovalController =
   createStreamApprovalController<ToolEditApprovalResult>({

@@ -59,9 +59,9 @@ import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
-  cleanupApprovalsForStream,
   cleanupUnscopedApprovals,
   handleProgressViewBashApprovalAction,
+  releaseStreamResources,
 } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 import { handleExternalInquiryAction } from '@tools/inquiry';
@@ -753,9 +753,9 @@ export class DesktopProgressBridge {
     this.deletedStreams.add(streamId);
     this.progressEvents.onStreamDeleted(streamId);
 
-    // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
-    cleanupApprovalsForStream(streamId, this.session);
-    ToolUseFollowUpQueue.release(streamId);
+    // Releases approval state (pending approvals, bypass flags, coordinator
+    // requests) and the follow-up queue for this stream.
+    releaseStreamResources(streamId, this.session);
 
     this.deleteAgentProposalsForStream(streamId);
     this.releasePendingPermissionsForStream(streamId);
@@ -785,8 +785,7 @@ export class DesktopProgressBridge {
     // process-global and streamId-keyed; the coordinator half is session-owned).
     for (const streamId of streamIds) {
       this.deletedStreams.add(streamId);
-      cleanupApprovalsForStream(streamId, this.session);
-      ToolUseFollowUpQueue.release(streamId);
+      releaseStreamResources(streamId, this.session);
     }
     // Catch pending approvals with no concrete stream context (undefined or
     // empty streamId) — the per-stream loop skips them because they do not
