@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import * as nodeFsOps from '@platform/defaults/nodeFsOps';
 import type {
   FileSystemProvider,
   FileStat,
@@ -35,36 +36,17 @@ export class VscodeFileSystem implements FileSystemProvider {
     };
   }
 
-  async isSymlink(target: string): Promise<boolean> {
-    // vscode.workspace.fs.readDirectory does not reliably set the SymbolicLink
-    // bit in the returned FileType bitmask on all platforms. Use lstat directly
-    // (the extension host is always Node) to get the authoritative answer.
-    const lstats = await fs.promises.lstat(target);
-    return lstats.isSymbolicLink();
-  }
+  // isSymlink / realPath / readFileChunk bypass vscode.workspace.fs and use
+  // node:fs directly; the shared bodies and the rationale live in nodeFsOps.
+  isSymlink = nodeFsOps.isSymlink;
 
-  async realPath(target: string): Promise<string> {
-    return fs.promises.realpath(target);
-  }
+  realPath = nodeFsOps.realPath;
 
   async readFile(target: string): Promise<Uint8Array> {
     return vscode.workspace.fs.readFile(vscode.Uri.file(target));
   }
 
-  async readFileChunk(
-    target: string,
-    offset: number,
-    length: number,
-  ): Promise<Uint8Array> {
-    const handle = await fs.promises.open(target, 'r');
-    try {
-      const buffer = Buffer.alloc(length);
-      const { bytesRead } = await handle.read(buffer, 0, length, offset);
-      return buffer.subarray(0, bytesRead);
-    } finally {
-      await handle.close();
-    }
-  }
+  readFileChunk = nodeFsOps.readFileChunk;
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
     await vscode.workspace.fs.writeFile(vscode.Uri.file(target), content);
