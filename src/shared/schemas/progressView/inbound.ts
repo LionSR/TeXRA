@@ -12,7 +12,6 @@ import {
 } from '@shared/utils/dispatcher';
 
 import { SwitchViewMessageSchema } from '../commonViewMessages';
-import { StreamTabIdSchema } from '../identifiers';
 import {
   ExternalInquirySessionLinksSchema,
   ExternalInquiryThreadIdSchema,
@@ -26,7 +25,7 @@ import {
   USER_QUESTION_ACTIONS,
   UserQuestionAnswersSchema,
 } from '../prompts';
-import { AgentCategoryFilterSchema } from './data';
+import { AgentCategoryFilterSchema, StreamScopedBaseSchema } from './data';
 import { GettingStartedActionSchema } from '../mainView/state';
 
 const TrimmedStringSchema = z
@@ -76,73 +75,59 @@ const DebugModeSetMessageSchema = z.object({
   debugMode: z.boolean(),
 });
 
-const SwitchStreamMessageSchema = z.object({
+const SwitchStreamMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM),
-  stream: StreamTabIdSchema,
 });
 
-const InboundDeleteStreamMessageSchema = z.object({
+const InboundDeleteStreamMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
-  stream: StreamTabIdSchema,
 });
 
-const StopStreamMessageSchema = z.object({
+const StopStreamMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.STOP_STREAM),
-  stream: StreamTabIdSchema,
 });
 
-const CompactResponseMessageSchema = z.object({
+const CompactResponseMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE),
-  stream: StreamTabIdSchema,
 });
 
-const ResumeMessageSchema = z.object({
+const ResumeMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RESUME),
-  stream: StreamTabIdSchema,
 });
 
-const RunNewMessageSchema = z.object({
+const RunNewMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_NEW),
-  stream: StreamTabIdSchema,
 });
 
-const DiffStreamMessageSchema = z.object({
+const DiffStreamMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DIFF_STREAM),
-  stream: StreamTabIdSchema,
 });
 
-const PackStreamMessageSchema = z.object({
+const PackStreamMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.PACK_STREAM),
-  stream: StreamTabIdSchema,
 });
 
-const CleanStreamMessageSchema = z.object({
+const CleanStreamMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.CLEAN_STREAM),
-  stream: StreamTabIdSchema,
 });
 
-const RestoreStateMessageSchema = z.object({
+const RestoreStateMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RESTORE_STATE),
-  stream: StreamTabIdSchema,
 });
 
-const OpenTaskStorageMessageSchema = z.object({
+const OpenTaskStorageMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE),
-  stream: StreamTabIdSchema,
 });
 
-const RunCompileFixerMessageSchema = z.object({
+const RunCompileFixerMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER),
-  stream: StreamTabIdSchema,
 });
 
-const GetFollowupOptionsMessageSchema = z.object({
+const GetFollowupOptionsMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS),
-  stream: StreamTabIdSchema,
 });
 
-const FollowupConfigSchema = z.object({
-  stream: StreamTabIdSchema,
+const FollowupConfigSchema = StreamScopedBaseSchema.extend({
   agent: TrimmedStringSchema,
   model: TrimmedStringSchema,
   initialQuestion: z.string().optional(),
@@ -156,14 +141,12 @@ const RunFollowupMessageSchema = FollowupConfigSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP),
 });
 
-const CancelRetryRequestMessageSchema = z.object({
+const CancelRetryRequestMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST),
-  stream: StreamTabIdSchema,
 });
 
-const UseOwnApiKeyMessageSchema = z.object({
+const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY),
-  stream: StreamTabIdSchema,
   provider: z.string().optional(),
   /** True when the underlying cause is an upstream provider credit
    *  depletion (Anthropic 400 "credit balance is too low"), meaning the
@@ -177,19 +160,16 @@ const UseOwnApiKeyMessageSchema = z.object({
   viaRelay: z.boolean().optional(),
 });
 
-const ToggleToolEditApprovalBypassMessageSchema = z.object({
+const ToggleToolEditApprovalBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS),
-  stream: StreamTabIdSchema,
 });
 
-const ToggleSuperYoloBypassMessageSchema = z.object({
+const ToggleSuperYoloBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS),
-  stream: StreamTabIdSchema,
 });
 
-const SendFollowUpMessageSchema = z.object({
+const SendFollowUpMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP),
-  stream: StreamTabIdSchema,
   text: TrimmedStringSchema,
   /** Pasted images (base64) to attach to this follow-up turn. */
   images: z
@@ -203,15 +183,13 @@ const SendFollowUpMessageSchema = z.object({
     .optional(),
 });
 
-const PolishFollowUpMessageSchema = z.object({
+const PolishFollowUpMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP),
-  stream: StreamTabIdSchema,
   text: TrimmedStringSchema,
 });
 
-const RetryStreamRequestMessageSchema = z.object({
+const RetryStreamRequestMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST),
-  stream: StreamTabIdSchema,
   feedback: z.string().optional(),
 });
 

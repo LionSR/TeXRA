@@ -31,7 +31,11 @@ import { PlanSchema } from '../plan';
 import { TodoItemSchema } from '../todo';
 import { ContextStateDataSchema } from '../contextManagement';
 import { RunUsageMapSchema, TokenUsageStatsSchema } from '../usage';
-import { AgentCategoryFilterSchema, ProgressViewPlacementSchema } from './data';
+import {
+  AgentCategoryFilterSchema,
+  ProgressViewPlacementSchema,
+  StreamScopedBaseSchema,
+} from './data';
 
 export const UpdateStreamsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS),
@@ -46,44 +50,40 @@ export const SetActiveStreamMessageSchema = z.object({
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
 });
 
-export const UpdateConversationProgressMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS),
-  stream: StreamTabIdSchema,
-  progress: ConversationProgressSchema,
-});
+export const UpdateConversationProgressMessageSchema =
+  StreamScopedBaseSchema.extend({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS),
+    progress: ConversationProgressSchema,
+  });
 
-export const UpdateStreamBadgesMessageSchema = z.object({
+export const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES),
-  stream: StreamTabIdSchema,
   activeSubagents: z.array(ActiveChildInfoSchema),
   finishedSubagentCount: z.number(),
   activeProcesses: z.array(ActiveChildInfoSchema),
   finishedProcessCount: z.number(),
 });
 
-export const UpdateProcessOutputMessageSchema = z.object({
+export const UpdateProcessOutputMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT),
-  stream: StreamTabIdSchema,
   executionId: z.string(),
   stdout: z.string(),
   stderr: z.string(),
 });
 
-export const UpdateParentStreamMessageSchema = z.object({
+export const UpdateParentStreamMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM),
-  stream: StreamTabIdSchema,
   parentStreamId: StreamTabIdSchema.nullish(),
 });
 
-export const UpdateStreamDescriptionMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION),
-  stream: StreamTabIdSchema,
-  description: z.string(),
-});
+export const UpdateStreamDescriptionMessageSchema =
+  StreamScopedBaseSchema.extend({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION),
+    description: z.string(),
+  });
 
-export const UpdateStreamStatusMessageSchema = z.object({
+export const UpdateStreamStatusMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS),
-  stream: StreamTabIdSchema,
   status: StreamStatusSchema,
   lastTimestamp: z.number().optional(),
 });
@@ -103,9 +103,8 @@ function RoundUpdateMessageSchema<C extends string, T extends z.ZodType>(
   command: C,
   elementSchema: T,
 ) {
-  return z.object({
+  return StreamScopedBaseSchema.extend({
     command: z.literal(command),
-    stream: StreamTabIdSchema,
     rounds: z.record(z.string(), z.array(elementSchema)).optional(),
     reset: z.boolean().optional(),
   });
@@ -126,34 +125,29 @@ export const UpdateCompileFailuresMessageSchema = RoundUpdateMessageSchema(
   CompileFailureSchema,
 );
 
-export const UpdateTodosMessageSchema = z.object({
+export const UpdateTodosMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TODOS),
-  stream: StreamTabIdSchema,
   todos: z.array(TodoItemSchema),
 });
 
-export const UpdatePlanMessageSchema = z.object({
+export const UpdatePlanMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PLAN),
-  stream: StreamTabIdSchema,
   plan: PlanSchema.nullable(),
 });
 
-export const UpdateRunUsageMessageSchema = z.object({
+export const UpdateRunUsageMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE),
-  stream: StreamTabIdSchema,
   runId: z.string(),
   usage: TokenUsageStatsSchema,
 });
 
-export const UpdateQueuedFollowUpsMessageSchema = z.object({
+export const UpdateQueuedFollowUpsMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS),
-  stream: StreamTabIdSchema,
   messages: z.array(z.string()),
 });
 
-export const SetFollowupOptionsMessageSchema = z.object({
+export const SetFollowupOptionsMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS),
-  stream: StreamTabIdSchema,
   toolUseAgentsData: z.array(AgentOptionDataSchema).optional(),
   modelOptionsData: z.array(ModelOptionDataSchema).optional(),
 });
@@ -225,9 +219,8 @@ export type UpdatePermissionMessage = z.infer<
 
 const BypassTypeSchema = z.enum(['toolEdit', 'superYolo']);
 
-export const UpdateBypassMessageSchema = z.object({
+export const UpdateBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS),
-  stream: StreamTabIdSchema,
   type: BypassTypeSchema,
   bypassActive: z.boolean(),
 });
@@ -301,9 +294,8 @@ export const SyncStreamContentMessageSchema = z.object({
   goalObjective: z.string().optional(),
 });
 
-const GoalActiveUpdatedMessageSchema = z.object({
+const GoalActiveUpdatedMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED),
-  stream: StreamTabIdSchema,
   active: z.boolean(),
   status: GoalStatusSchema.optional(),
   objective: z.string().optional(),
@@ -314,9 +306,8 @@ export const ProgressSetThemeMessageSchema = z.object({
   theme: z.enum(['dark', 'light']),
 });
 
-export const ProgressDeleteStreamMessageSchema = z.object({
+export const ProgressDeleteStreamMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
-  stream: StreamTabIdSchema,
 });
 
 export const ProgressDeleteAllMessageSchema = z.object({

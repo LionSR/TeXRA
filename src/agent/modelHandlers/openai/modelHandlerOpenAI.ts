@@ -8,7 +8,6 @@ import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/pa
 // Local imports - agent components
 import { logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type {
   OpenAIAPIResponseUsage,
@@ -56,6 +55,7 @@ import {
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { parseToolArguments } from '../utils/parseArguments';
+import { shouldContinueOnLengthStop } from '../utils/stopReasonUtils';
 import { ModelHandler } from '../ModelHandler';
 import {
   BaseReasoningStreamAggregator,
@@ -1164,10 +1164,7 @@ export class ModelHandlerOpenAI<
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    return (
-      stopReason === OPENAI_CHAT_FINISH.LENGTH &&
-      !hasEndTag(agentSetting, newResponse)
-    );
+    return shouldContinueOnLengthStop(stopReason, newResponse, agentSetting);
   }
 
   /**
@@ -1202,12 +1199,7 @@ export class ModelHandlerOpenAI<
       return null;
     }
 
-    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
-      workspaceState.reasoning.thinkingBlocks = [
-        { type: 'thinking', thinking: reasoning },
-      ];
-      workspaceState.reasoning.thinkingAdded = true;
-    }
+    this.applyStringReasoningToWorkspaceState(reasoning, workspaceState);
 
     this.logger.debug(
       `Reasoning content preview: ${reasoning.slice(0, K_SLICE)}...`,
