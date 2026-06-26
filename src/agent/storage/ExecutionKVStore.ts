@@ -173,18 +173,27 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 
   // -- Typed readers --------------------------------------------------------
 
-  async readMeta(): Promise<ExecutionMeta | null> {
-    const raw = await this.read(KEYS.META);
+  /**
+   * Read a key and validate it against a schema, returning the parsed value or
+   * `null` when the key is absent or fails validation. Single source of truth
+   * for the read-validate-or-null policy shared by the typed readers below.
+   */
+  private async readValidated<T>(
+    key: string,
+    schema: z.ZodType<T>,
+  ): Promise<T | null> {
+    const raw = await this.read(key);
     if (!raw) return null;
-    const result = ExecutionMetaSchema.safeParse(raw);
+    const result = schema.safeParse(raw);
     return result.success ? result.data : null;
   }
 
+  async readMeta(): Promise<ExecutionMeta | null> {
+    return this.readValidated(KEYS.META, ExecutionMetaSchema);
+  }
+
   async readConfig(): Promise<AgentConfig | null> {
-    const raw = await this.read(KEYS.CONFIG);
-    if (!raw) return null;
-    const result = AgentConfigSchema.safeParse(raw);
-    return result.success ? result.data : null;
+    return this.readValidated<AgentConfig>(KEYS.CONFIG, AgentConfigSchema);
   }
 
   async readReport(): Promise<string | null> {
@@ -225,10 +234,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 
   async readResultMeta(): Promise<ResultMeta | null> {
-    const raw = await this.read(KEYS.RESULT_META);
-    if (!raw) return null;
-    const result = ResultMetaSchema.safeParse(raw);
-    return result.success ? result.data : null;
+    return this.readValidated(KEYS.RESULT_META, ResultMetaSchema);
   }
 
   // -- Typed writers --------------------------------------------------------
