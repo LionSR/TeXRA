@@ -17,20 +17,22 @@ import {
   getVisibleAgent,
   refresh,
   resolveAgent,
+  resolveAgentForLaunch,
 } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import { agentKey } from '@shared/schemas/agent';
 
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
   '../../..',
 );
 
-/** Resolve exactly as launch does: by the `(source, name)` key the delegation
- * captured at validation time (see `getAgentPath` → `resolveAgent`). */
-function launchAs(entry: AgentEntry | undefined) {
-  return entry ? resolveAgent(agentKey(entry.source, entry.name)) : undefined;
+/** Resolve exactly as launch does: through the single launch resolver, by the
+ * source the delegation captured at validation time (see `getAgentPath`). */
+function launchAs(category: AgentCategory, entry: AgentEntry | undefined) {
+  return entry
+    ? resolveAgentForLaunch(category, entry.name, entry.source)
+    : undefined;
 }
 
 /**
@@ -100,22 +102,48 @@ describe('cross-category agent resolution', () => {
     // The tool-use delegation validates via getVisibleAgent and carries the
     // entry's source; launch resolves that exact key — the built-in tool-use
     // entry, never the colliding custom workflow shadow.
-    const toolUse = launchAs(getVisibleAgent('toolUse', 'assistant'));
+    const toolUse = launchAs('toolUse', getVisibleAgent('toolUse', 'assistant'));
     expect(toolUse?.entry.category).toBe('toolUse');
     expect(toolUse?.entry.source).toBe('builtInToolUse');
 
     // The same mechanism reaches the custom workflow entry when that is what a
     // workflow delegation validated.
-    const workflow = launchAs(getVisibleAgent('workflow', 'assistant'));
+    const workflow = launchAs(
+      'workflow',
+      getVisibleAgent('workflow', 'assistant'),
+    );
     expect(workflow?.entry.category).toBe('workflow');
     expect(workflow?.entry.source).toBe('custom');
   });
 
   it('launch resolution matches validation for the colliding tool-use name', () => {
     const validated = getVisibleAgent('toolUse', 'assistant');
-    const launched = launchAs(validated);
+    const launched = launchAs('toolUse', validated);
     expect(launched?.entry.source).toBe(validated?.source);
     expect(launched?.entry.name).toBe(validated?.name);
+  });
+
+  it('falls back to category resolution, never blind name, when no source is pinned', () => {
+    // A direct launch without a pinned source (e.g. the webview "Run") must
+    // still resolve within its category — the same rule validation uses — so the
+    // colliding custom workflow `assistant` can never be picked for a tool-use
+    // launch. The old blind name fallback (source priority) would have returned
+    // the custom workflow entry here.
+    const toolUse = resolveAgentForLaunch(AgentCategory.ToolUse, 'assistant');
+    expect(toolUse?.entry.source).toBe('builtInToolUse');
+    expect(toolUse?.entry.category).toBe('toolUse');
+
+    const workflow = resolveAgentForLaunch(AgentCategory.Workflow, 'assistant');
+    expect(workflow?.entry.source).toBe('custom');
+
+    // A stale/missing source falls through to the category floor rather than
+    // failing or resolving blind.
+    const stale = resolveAgentForLaunch(
+      AgentCategory.ToolUse,
+      'assistant',
+      'remote',
+    );
+    expect(stale?.entry.source).toBe('builtInToolUse');
   });
 
   it('still resolves a non-colliding name and legacy aliases within category', () => {

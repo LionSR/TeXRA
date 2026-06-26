@@ -8,6 +8,7 @@ import {
   withExecutionRunContext,
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { useRunContext } from '@agent/runtime/RunContext';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -17,7 +18,11 @@ describe('AgentLaunchContext', () => {
     const explicit = createRecordingHost();
 
     await expect(
-      getAgentPath('__missing_agent_for_launch_context_test__', explicit.host),
+      getAgentPath(
+        '__missing_agent_for_launch_context_test__',
+        explicit.host,
+        AgentCategory.ToolUse,
+      ),
     ).rejects.toThrow('Could not find agent');
 
     expect(explicit.events).toEqual([

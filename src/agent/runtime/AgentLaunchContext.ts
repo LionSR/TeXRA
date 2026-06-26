@@ -4,7 +4,11 @@ import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { createRunTrace, type RunTrace } from '@transcript';
-import { isRemoteAgent, resolveAgent, type ResolvedAgent } from '@agent/index';
+import {
+  isRemoteAgent,
+  resolveAgentForLaunch,
+  type ResolvedAgent,
+} from '@agent/index';
 import {
   logSdkError,
   logUserMessage,
@@ -36,7 +40,7 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
-import { agentKey, agentName, type AgentSource } from '@shared/schemas/agent';
+import type { AgentSource } from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';
@@ -161,17 +165,14 @@ export async function withExecutionRunContext<T>(
 export async function getAgentPath(
   agentIdentifier: string,
   runtimeHost: AgentRuntimeHost,
+  category: AgentCategory,
   source?: AgentSource | null,
 ): Promise<ResolvedAgent> {
-  // The delegation pipeline captures the agent's source when it first validates
-  // the agent (getVisibleAgent), so launch resolves the exact (source, name)
-  // entry by key — landing on the identical entry validation chose instead of
-  // re-resolving an ambiguous bare name through source priority. Callers that
-  // don't pin a source (legacy records, direct launches) fall back to the
-  // name-based resolver.
-  const result = source
-    ? resolveAgent(agentKey(source, agentName(agentIdentifier)))
-    : resolveAgent(agentIdentifier);
+  // Single launch resolution rule (resolveAgentForLaunch): the exact
+  // (source, name) entry the delegation pinned at validation, else the
+  // category-scoped resolver validation also uses. Never blind source-priority
+  // on a bare name, so launch can't diverge from what was validated.
+  const result = resolveAgentForLaunch(category, agentIdentifier, source);
   if (result) return result;
 
   runtimeHost.emit('showAgentConfigBanner', { agentName: agentIdentifier });
@@ -230,11 +231,12 @@ async function assembleAgentLaunchContext(
   const fullConfig = AgentConfigSchema.parse(configPayload);
   // Resolve by the source the delegation captured at validation time, so launch
   // lands on the exact entry validation/display resolved. When no source is
-  // pinned (legacy records, direct launches), getAgentPath falls back to
-  // name-based resolution.
+  // pinned (direct launches, restored records), resolution falls to the
+  // category-scoped rule validation uses — never blind name resolution.
   const resolution = await getAgentPath(
     fullConfig.agent,
     runtimeHost,
+    fullConfig.agentCategory,
     fullConfig.agentSource,
   );
   // `loadAgentSettingAndPrompts` already applies `ensureAgentCategoryForSource`

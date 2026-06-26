@@ -19,6 +19,7 @@ import { z } from 'zod';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { collectReviewDiff, isPathInChangeSet } from '@agent/review/reviewDiff';
 import {
   buildFixInstruction,
@@ -303,6 +304,9 @@ class AgentReviewServiceImpl {
       const model = getConfig<string>('agentReview.model', '').trim();
       const config = AgentConfigSchema.parse({
         agent: REVIEW_AGENT,
+        // changeReviewer is a tool-use agent; set the category explicitly so
+        // launch resolves it within tool-use (the config default is Workflow).
+        agentCategory: AgentCategory.ToolUse,
         instruction,
         displayInstruction: `Agent review: diff with ${baseDescription} (${changedFiles.length} file${changedFiles.length === 1 ? '' : 's'})${options.userInstructions ? ' · custom focus' : ''}`,
         // The instruction's paths are repo-relative; anchor the session's
@@ -501,6 +505,9 @@ class AgentReviewServiceImpl {
     try {
       await vscode.commands.executeCommand('texra.execute', {
         agent: FIX_AGENT,
+        // coder is a tool-use agent; set the category explicitly so launch
+        // resolves it within tool-use (the config default is Workflow).
+        agentCategory: AgentCategory.ToolUse,
         instruction,
         // Issue paths are relative to the reviewed repository root.
         ...(this.reviewRoot ? { workingDirectory: this.reviewRoot } : {}),

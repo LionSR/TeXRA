@@ -9,8 +9,6 @@ import * as yaml from 'yaml';
 import { getAgentsByCategory, resolveAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
-import { getAgentPath } from '@agent/runtime/AgentLaunchContext';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
@@ -88,8 +86,17 @@ export async function handleLoadSpecificAgent(): Promise<void> {
 
     logger.info(CHANNEL, `Testing loading of agent: ${agentName}`);
 
-    // Use getAgentPath to resolve the agent
-    const agentPath = await getAgentPath(agentName, extensionAgentRuntimeHost);
+    // Diagnostic loader: resolve the free-form name to its definition. Unlike a
+    // launch, there's no category context here, so use the plain name resolver.
+    const agentPath = resolveAgent(agentName);
+    if (!agentPath) {
+      void showLoggedErrorMessage(
+        CHANNEL,
+        'Could not find agent',
+        agentName,
+      );
+      return;
+    }
     logger.info(
       CHANNEL,
       `Loading from path: ${path.dirname(agentPath.definitionPath)}`,

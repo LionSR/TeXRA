@@ -559,13 +559,12 @@ export function getVisibleAgent(
 }
 
 /**
- * Resolve an identifier to an agent in a category, ignoring visibility. Used by
- * the legacy-alias migration to map a persisted key onto the canonical agent of
- * its category partition (including internal agents, which are hidden from
- * dropdowns but still hold a visibility slot). Launch no longer resolves by
- * category — it pins the exact `(source, name)` entry the delegation captured —
- * so this shares {@link resolveWithinCategory} with {@link getVisibleAgent} only
- * to keep the migration's matching rule identical to validation's.
+ * Resolve an identifier to an agent in a category, ignoring visibility
+ * (including internal agents, which are hidden from dropdowns but still hold a
+ * visibility slot). Shares {@link resolveWithinCategory} with
+ * {@link getVisibleAgent} so the category-scoped matching rule is identical to
+ * validation's. Used by the legacy-alias migration and as the category floor of
+ * {@link resolveAgentForLaunch}.
  */
 export function getCategoryAgent(
   category: AgentCategory,
@@ -576,6 +575,28 @@ export function getCategoryAgent(
     category,
     identifier,
   );
+}
+
+/**
+ * The single launch-time resolver. Prefers the exact `(source, name)` entry the
+ * delegation pinned when it validated the agent, so launch lands on precisely
+ * the entry validation chose. When no source is pinned (or it's stale), it
+ * resolves within the launch `category` — the same rule validation uses — so a
+ * same-name agent in another category can never be picked. It never falls back
+ * to blind source-priority on a bare name, so launch cannot diverge from
+ * validation: every caller either pins a source or supplies a trustworthy
+ * category.
+ */
+export function resolveAgentForLaunch(
+  category: AgentCategory,
+  identifier: string,
+  source?: AgentSource | null,
+): ResolvedAgent | undefined {
+  const entry =
+    (source ? getAgent(createKey(source, agentName(identifier))) : undefined) ??
+    getCategoryAgent(category, identifier);
+  if (!entry) return undefined;
+  return { entry, definitionPath: entry.path, resolvedName: entry.name };
 }
 
 /**
