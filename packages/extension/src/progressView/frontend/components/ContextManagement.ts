@@ -10,6 +10,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - local components (re-use StatItem type)
 import type { StatItem } from './StatisticsPanel';
@@ -123,13 +124,13 @@ export class ContextManagement extends LitElement {
       >
         <summary class="details-summary">
           <wa-icon
-            library="texra"
+            library=${TEXRA_ICON_LIBRARY}
             name="chevron-right"
             class="toggle-icon"
             aria-hidden="true"
           ></wa-icon>
           <wa-icon
-            library="texra"
+            library=${TEXRA_ICON_LIBRARY}
             name=${this.config.icon}
             class="context-icon"
             aria-hidden="true"
@@ -143,7 +144,7 @@ export class ContextManagement extends LitElement {
             (item) => html`
               <span class="stat-item" title=${item.label}>
                 <wa-icon
-                  library="texra"
+                  library=${TEXRA_ICON_LIBRARY}
                   name=${item.icon}
                   aria-hidden="true"
                 ></wa-icon>
@@ -156,7 +157,7 @@ export class ContextManagement extends LitElement {
                 <div class="summary-block">
                   <div class="summary-title">
                     <wa-icon
-                      library="texra"
+                      library=${TEXRA_ICON_LIBRARY}
                       name="note"
                       aria-hidden="true"
                     ></wa-icon>

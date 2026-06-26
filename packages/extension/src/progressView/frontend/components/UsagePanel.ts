@@ -10,6 +10,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
 import type { TokenUsageStats } from '@shared/schemas';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { clamp, formatCompactTokenCount } from '@utils/core';
 
 // Local imports - progress view
@@ -172,11 +173,15 @@ export class UsagePanel extends LitElement {
     const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
 
     return html`
-      <wa-icon library="texra" name="pie-chart" aria-hidden="true"></wa-icon>
+      <wa-icon
+        library=${TEXRA_ICON_LIBRARY}
+        name="pie-chart"
+        aria-hidden="true"
+      ></wa-icon>
       <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
         <wa-icon
-          library="texra"
+          library=${TEXRA_ICON_LIBRARY}
           name="arrow-up"
           title="Input tokens"
           aria-hidden="true"
@@ -187,7 +192,7 @@ export class UsagePanel extends LitElement {
           () =>
             html` ·
               <wa-icon
-                library="texra"
+                library=${TEXRA_ICON_LIBRARY}
                 name="cloud-download"
                 title="Cache read tokens (discounted)"
                 aria-hidden="true"
@@ -199,7 +204,7 @@ export class UsagePanel extends LitElement {
           () =>
             html` ·
               <wa-icon
-                library="texra"
+                library=${TEXRA_ICON_LIBRARY}
                 name="cloud-upload"
                 title="Cache miss tokens (full price)"
                 aria-hidden="true"
@@ -211,7 +216,7 @@ export class UsagePanel extends LitElement {
           () =>
             html` ·
               <wa-icon
-                library="texra"
+                library=${TEXRA_ICON_LIBRARY}
                 name="database"
                 title="Cache creation tokens (1.25x cost)"
                 aria-hidden="true"
@@ -220,7 +225,7 @@ export class UsagePanel extends LitElement {
         )}
         ·
         <wa-icon
-          library="texra"
+          library=${TEXRA_ICON_LIBRARY}
           name="arrow-down"
           title="Output tokens"
           aria-hidden="true"
@@ -238,7 +243,11 @@ export class UsagePanel extends LitElement {
 
     return html`
       <span class="context-gauge" title="${clamped.toFixed(0)}% context used">
-        <wa-icon library="texra" name="window" aria-hidden="true"></wa-icon>
+        <wa-icon
+          library=${TEXRA_ICON_LIBRARY}
+          name="window"
+          aria-hidden="true"
+        ></wa-icon>
         <span class="context-gauge__track">
           <span
             class="context-gauge__fill"

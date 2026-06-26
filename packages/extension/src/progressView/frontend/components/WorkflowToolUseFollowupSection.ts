@@ -19,6 +19,7 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { selectStyles } from '@shared/styles/selectStyles';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import {
   renderAgentOptions,
   renderModelOptions,
@@ -171,7 +172,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
             >
               <wa-icon
                 slot="start"
-                library="texra"
+                library=${TEXRA_ICON_LIBRARY}
                 name="reply"
                 aria-hidden="true"
               ></wa-icon>
@@ -186,7 +187,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
             >
               <wa-icon
                 slot="start"
-                library="texra"
+                library=${TEXRA_ICON_LIBRARY}
                 name="play"
                 aria-hidden="true"
               ></wa-icon>

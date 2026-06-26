@@ -11,6 +11,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view helpers
 import { buildDetailsSummary } from '../formatters/htmlBuilders';
@@ -84,7 +85,7 @@ export class StatisticsPanel extends LitElement {
             (item) => html`
               <span class="stat-item" title=${item.label}>
                 <wa-icon
-                  library="texra"
+                  library=${TEXRA_ICON_LIBRARY}
                   name=${item.icon}
                   aria-hidden="true"
                 ></wa-icon>
