@@ -63,7 +63,7 @@ import { generateExecutionId } from '@utils/core/executionId';
 // Shared utilities
 // ============================================================================
 
-const LOG_CHANNEL = 'DelegationTools';
+const LOG_CHANNEL = 'delegation';
 logger.initialize(LOG_CHANNEL);
 
 /** Metadata about how the delegation was approved, included in the tool result. */
