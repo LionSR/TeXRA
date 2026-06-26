@@ -154,4 +154,37 @@ describe('tool-edit-request-panel', () => {
       (diffView as HTMLElement & { proposedText?: string }).proposedText,
     ).toBe('');
   });
+
+  it('hides the Yolo button and ignores "a" when bypass is not allowed', async () => {
+    const element = await mountPanel(createPermission({ allowBypass: false }));
+    const actions: string[] = [];
+    element.addEventListener('permission-action', (event) => {
+      actions.push((event as CustomEvent<{ action: string }>).detail.action);
+    });
+
+    expect(
+      element.shadowRoot?.querySelector(
+        'wa-button[data-action="approveSession"]',
+      ),
+    ).toBeFalsy();
+    expect(element.handleKeyboardShortcut('a')).toBe(false);
+    expect(actions).toEqual([]);
+  });
+
+  it('offers a Yolo button and "a" shortcut that emit approveSession', async () => {
+    const element = await mountPanel(createPermission({ allowBypass: true }));
+    const actions: string[] = [];
+    element.addEventListener('permission-action', (event) => {
+      actions.push((event as CustomEvent<{ action: string }>).detail.action);
+    });
+
+    const yoloButton = element.shadowRoot?.querySelector(
+      'wa-button[data-action="approveSession"]',
+    ) as HTMLElement | undefined;
+    expect(yoloButton).toBeTruthy();
+    expect(yoloButton?.textContent).toContain('Yolo (this session)');
+
+    expect(element.handleKeyboardShortcut('a')).toBe(true);
+    expect(actions).toEqual(['approveSession']);
+  });
 });

@@ -128,6 +128,54 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
     });
   }
 
+  /**
+   * Whether this prompt advertises the session-bypass ("Yolo") affordance.
+   * Only tool-edit and bash permissions carry `allowBypass`; it is true exactly
+   * when the stream is not already auto-approving (a bypassed stream never
+   * prompts, so a visible prompt always means bypass is currently off).
+   */
+  protected get canBypass(): boolean {
+    return Boolean(
+      (this.permission.data as { allowBypass?: boolean }).allowBypass,
+    );
+  }
+
+  /**
+   * Inline "Yolo (this session)" button. Approves the current request AND turns
+   * on auto-approval (edits + bash) for the rest of this stream's session,
+   * mirroring the toolbar shield and the CLI's `a` = "approve session". The
+   * `approveSession` action is decomposed by the event handler into an approve
+   * plus a bypass toggle, so it never reaches the backend approval protocol.
+   * Rendered only when the prompt advertises `allowBypass`.
+   */
+  protected renderYoloButton(): TemplateResult | typeof nothing {
+    if (!this.canBypass) {
+      return nothing;
+    }
+    return renderLabeledActionButton({
+      icon: 'shield',
+      text: 'Yolo (this session)',
+      title: 'Approve and stop asking for edits & bash this session (a)',
+      className: 'yolo-approve-button',
+      action: 'approveSession',
+      onClick: () => this.emitAction('approveSession'),
+    });
+  }
+
+  /**
+   * Handle the shared `a` = approve-session shortcut. Subclasses that offer the
+   * Yolo affordance call this from `handleExtraKey`. No-op while the feedback
+   * textarea is open (so typing "a" there is not hijacked) or when the prompt
+   * does not allow bypass.
+   */
+  protected handleApproveSessionKey(): boolean {
+    if (this.showFeedback || !this.canBypass) {
+      return false;
+    }
+    this.emitAction('approveSession');
+    return true;
+  }
+
   protected renderRejectButton(rejectTitle: string): TemplateResult {
     return renderLabeledActionButton({
       icon: this.showFeedback ? 'check' : 'close',

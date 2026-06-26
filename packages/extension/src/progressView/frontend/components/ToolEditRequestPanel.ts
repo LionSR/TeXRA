@@ -40,6 +40,9 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
       this.handleDiffAction();
       return true;
     }
+    if (key === 'a') {
+      return this.handleApproveSessionKey();
+    }
     return false;
   }
 
@@ -61,6 +64,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
       approveTitle: 'Approve (y)',
       rejectTitle: 'Reject (n)',
       leadingActions: this.renderDiffActions(),
+      middleActions: this.renderYoloButton(),
       trailing: this.renderInlineDiff(data),
     });
   }

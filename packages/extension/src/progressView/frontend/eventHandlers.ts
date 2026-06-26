@@ -243,15 +243,30 @@ export function handlePermissionAction(
         permission.kind === PERMISSION_KIND.TOOL_EDIT
           ? PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
           : PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION;
+      // "Yolo (this session)" approves the current request like a normal
+      // approve, then enables auto-approval (edits + bash) for the rest of the
+      // stream — mirroring the toolbar shield and the CLI's `a` = approve
+      // session. It never reaches the backend approval protocol.
+      const isYolo = action === 'approveSession';
       postMessage(command, {
         requestId: permission.data.requestId,
-        action,
+        action: isYolo ? 'approve' : action,
         feedback,
       });
-      // Only remove for terminal actions (approve/reject).
+      if (isYolo) {
+        // A prompt only shows while bypass is OFF (a bypassed stream
+        // auto-approves without prompting), so the toggle always turns it on.
+        const stream = permission.data.streamId;
+        if (stream) {
+          postMessage(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS, {
+            stream,
+          });
+        }
+      }
+      // Only remove for terminal actions (approve/reject/approveSession).
       // Non-terminal actions like openDiff, previewProposed, showLatexdiff
       // just open editors without settling the approval.
-      if (action === 'approve' || action === 'reject') {
+      if (action === 'approve' || action === 'reject' || isYolo) {
         removePrompt(
           ctx,
           permission.kind,
