@@ -76,6 +76,7 @@ export async function promptReviewOptions(
   const approachPick = await vscode.window.showQuickPick(approachItems, {
     title: 'Agent Review — Approach',
     placeHolder: 'Choose review depth',
+    prompt: 'Quick checks key suspicions (fast); Thorough reads all changed files (deeper)',
     ignoreFocusOut: true,
   });
   if (!approachPick) return undefined;
@@ -98,6 +99,7 @@ export async function promptReviewOptions(
   const branchPick = await vscode.window.showQuickPick(branchItems, {
     title: 'Agent Review — Diff Against',
     placeHolder: 'Choose the branch to compare against',
+    prompt: 'The review will diff the current branch against the selected branch',
     ignoreFocusOut: true,
   });
   if (!branchPick) return undefined;
