@@ -5,7 +5,7 @@ import {
   parseAgentModePresets,
 } from '@shared/schemas/agentPresets';
 import {
-  agentKey,
+  agentKeyOf,
   type AgentCategory,
   type AgentSource,
 } from '@shared/schemas/agent';
@@ -106,7 +106,7 @@ function resolvePresetAgentKeys(
   const unresolved: string[] = [];
   const keys = names.map((name) => {
     const entry = entries.find((candidate) => candidate.name === name);
-    if (entry) return agentKey(entry.source, entry.name);
+    if (entry) return agentKeyOf(entry);
     unresolved.push(name);
     // Keep unresolved names so relay-only team members survive until sign-in
     // loads the source that can resolve them.
@@ -204,7 +204,7 @@ export class SettingsAgentCatalogController {
     entry: SettingsAgentCatalogEntry,
     enabledKeys: string[] | undefined,
   ): AgentSelectionItem {
-    const key = agentKey(entry.source, entry.name);
+    const key = agentKeyOf(entry);
     return {
       name: entry.name,
       source: entry.source,

@@ -1,32 +1,22 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import {
-  LitElement,
-  html,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { AgentConfigBannerState } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
+import { bannerStyles } from '../styles/bannerStyles';
 import { renderWarningBanner } from './bannerFrame';
+import { StateVisibleBanner } from './StateVisibleBanner';
 import { MainViewEvents } from '../events';
 
 @customElement('agent-config-banner')
-export class AgentConfigBanner extends LitElement {
+export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState> {
   static override styles = [designTokens, commonViewStyles, bannerStyles];
 
   @property({ attribute: false }) state: AgentConfigBannerState = {
     visible: false,
   };
-
-  override updated(changed: PropertyValues<this>): void {
-    if (changed.has('state')) {
-      applyBannerVisibility(this, this.state.visible);
-    }
-  }
 
   private handleAction(action: 'edit' | 'dir' | 'docs'): void {
     this.dispatchEvent(
