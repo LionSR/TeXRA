@@ -127,19 +127,10 @@ export class PersistedFlow<
 
   async run(shared: S): Promise<Action | undefined> {
     await this.ensureRecord(shared);
-    while (await this.step()) {
+    while ((await this.stepWithResult()).hasMore) {
       // step loop
     }
     return this.cachedRecord?.nodes.at(-1)?.action as Action | undefined;
-  }
-
-  /**
-   * Execute a single step (one node).
-   * Returns true if there are more nodes to execute.
-   */
-  async step(): Promise<boolean> {
-    const result = await this.stepWithResult();
-    return result.hasMore;
   }
 
   /**
