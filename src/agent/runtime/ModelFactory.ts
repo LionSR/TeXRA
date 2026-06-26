@@ -246,6 +246,18 @@ export function shouldUseResponsesAPI(
   );
 }
 
+/**
+ * Single owner for the "prefer short model names" preference read. Read live
+ * (no caching) so a mid-session settings change is honored on the next handler
+ * creation, matching the other `globalState` reads in this module.
+ */
+function getPreferShortModelNames(): boolean {
+  return platform().globalState.get<boolean>(
+    GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+    false,
+  );
+}
+
 function applyShortModelNamePreference(
   config: ModelConfig,
   preferShortModelNames: boolean,
@@ -260,10 +272,7 @@ function applyShortModelNamePreference(
 export function modelHandlerCompatibilityKey(
   originalConfig: ModelConfig,
   useOpenRouter = getUseOpenRouter(),
-  preferShortModelNames = platform().globalState.get<boolean>(
-    GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-    false,
-  ),
+  preferShortModelNames = getPreferShortModelNames(),
 ): ModelHandlerCompatibilityKey | undefined {
   if (shouldUseInternalValidationModelHandler()) {
     return 'ModelHandlerValidation';
@@ -313,10 +322,7 @@ function withModelHandlerCompatibilityKey<T extends ModelHandler>(
 function withShortModelName(config: ModelConfig): ModelConfig {
   const resolved = applyShortModelNamePreference(
     config,
-    platform().globalState.get<boolean>(
-      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-      false,
-    ),
+    getPreferShortModelNames(),
   );
   if (resolved === config) return config;
 
