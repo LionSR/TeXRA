@@ -2104,7 +2104,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   private parseArguments(buffer: string): Record<string, unknown> {
     if (!buffer) return {};
     const parsed = safeParseJson(buffer);
-    if (!parsed.ok) {
+    if (parsed.isErr()) {
       this.logger.warn(
         `Failed to parse streamed tool arguments: ${getSdkErrorMessage(parsed.error)}`,
       );

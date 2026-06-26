@@ -1,4 +1,5 @@
 // Third-party imports
+import { z } from 'zod';
 import * as vscode from 'vscode';
 
 // Local imports - controllers
@@ -41,7 +42,7 @@ async function restoreState(
   const parsed = TaskStateSchema.safeParse(state);
   if (!parsed.success) {
     logger.info(CHANNEL, RESTORE_MALFORMED_MESSAGE, {
-      data: { validationError: parsed.error.message },
+      data: { validationError: z.prettifyError(parsed.error) },
     });
     await vscode.window.showErrorMessage(RESTORE_MALFORMED_MESSAGE);
     return false;

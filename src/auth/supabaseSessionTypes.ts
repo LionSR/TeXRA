@@ -99,7 +99,7 @@ export function parseStoredSupabaseSession(
     if (!parsed.success) {
       options?.warn?.(
         logSource,
-        `Stored session has invalid schema: ${parsed.error.message}`,
+        `Stored session has invalid schema: ${z.prettifyError(parsed.error)}`,
       );
       return null;
     }
@@ -122,7 +122,7 @@ export async function parseTokenExchangeResponse(
   if (!parsed.success) {
     log?.error?.(
       'SupabaseSession',
-      `Token exchange response validation failed: ${parsed.error.message}`,
+      `Token exchange response validation failed: ${z.prettifyError(parsed.error)}`,
     );
     throw new Error('Invalid response format from authentication server');
   }
