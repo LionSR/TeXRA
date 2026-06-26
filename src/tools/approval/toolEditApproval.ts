@@ -93,6 +93,13 @@ export function setToolEditApprovalSessionBypass(
   );
 }
 
+/**
+ * Flip the stream's tool-edit bypass. Retained as part of the symmetric
+ * set/toggle/is bypass API (mirrors `toggleBashApprovalSessionBypass`) and
+ * exercised by the approval-gate unit tests. It has no production caller today:
+ * the shield toolbar toggle forces state via `setToolEditApprovalSessionBypass`
+ * (see `applyCoupledBypass` in ProgressViewCommandHandlers).
+ */
 export function toggleToolEditApprovalSessionBypass(
   streamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
