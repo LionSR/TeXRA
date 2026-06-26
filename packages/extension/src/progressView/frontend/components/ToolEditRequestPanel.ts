@@ -46,10 +46,9 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
   override render(): TemplateResult {
     const data = this.permission.data as ToolEditPermission;
     const diffMeta = this.renderDiffMeta(data);
-    const metaParts: MetaPart[] = [
-      ...(data.sourceTool ? [`Requested by ${data.sourceTool}`] : []),
-      ...(diffMeta ? [diffMeta] : []),
-    ];
+    const metaParts: MetaPart[] = [];
+    if (data.sourceTool) metaParts.push(`Requested by ${data.sourceTool}`);
+    if (diffMeta !== nothing) metaParts.push(diffMeta);
 
     return this.renderRequestShell({
       prefix: 'approval-request',

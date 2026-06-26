@@ -269,7 +269,7 @@ function buildAcceptRunFilesSections(
       const isMapped = dest && source && dest !== source;
       const edit = editsByPath.get(dest);
       const diffStats = edit?.lineChanges
-        ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed" style="margin-left:var(--wa-space-2xs)">-${edit.lineChanges.removed}</span></span>`
+        ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed">-${edit.lineChanges.removed}</span></span>`
         : nothing;
       // prettier-ignore
       return html`<li class="detail-item"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${dest} role="button" tabindex="0">${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
