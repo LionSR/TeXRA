@@ -292,7 +292,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     return html`
       <details class="external-inquiry-request__transcript">
         <summary class="external-inquiry-request__transcript-summary">
-          <wa-icon library=${TEXRA_ICON_LIBRARY} name="history" aria-hidden="true"></wa-icon>
+          <wa-icon
+            library=${TEXRA_ICON_LIBRARY}
+            name="history"
+            aria-hidden="true"
+          ></wa-icon>
           Conversation transcript (${answeredTurns.length})
         </summary>
         <div class="external-inquiry-request__transcript-turns">
@@ -363,7 +367,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   private renderSearchHint(): TemplateResult {
     return html`
       <div class="external-inquiry-request__search-hint">
-        <wa-icon library=${TEXRA_ICON_LIBRARY} name="lightbulb" aria-hidden="true"></wa-icon>
+        <wa-icon
+          library=${TEXRA_ICON_LIBRARY}
+          name="lightbulb"
+          aria-hidden="true"
+        ></wa-icon>
         Consider enabling <strong>Search</strong> mode in the external tool for
         this question
       </div>

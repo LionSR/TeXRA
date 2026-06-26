@@ -455,7 +455,11 @@ export class TaskGroupList extends LitElement {
       <span class="group-title">${group.name}</span>
       <span class="group-time">
         <span class="group-start-time" data-start=${String(group.startTime)}>
-          <wa-icon library=${TEXRA_ICON_LIBRARY} name="clock" aria-hidden="true"></wa-icon>
+          <wa-icon
+            library=${TEXRA_ICON_LIBRARY}
+            name="clock"
+            aria-hidden="true"
+          ></wa-icon>
           ${formattedStartTime}
         </span>
         ${durationText

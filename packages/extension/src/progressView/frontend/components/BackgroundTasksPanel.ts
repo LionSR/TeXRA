@@ -301,7 +301,11 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <wa-details class="collapsible-quiet" open>
         <div slot="summary" class="section-label">
-          <wa-icon library=${TEXRA_ICON_LIBRARY} name="comments" aria-hidden="true"></wa-icon>
+          <wa-icon
+            library=${TEXRA_ICON_LIBRARY}
+            name="comments"
+            aria-hidden="true"
+          ></wa-icon>
           <span
             >Inquiries${openCount
               ? html` &middot; ${openCount} open`
@@ -371,7 +375,11 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <wa-details class="collapsible-quiet">
         <div slot="summary" class="section-label">
-          <wa-icon library=${TEXRA_ICON_LIBRARY} name=${icon} aria-hidden="true"></wa-icon>
+          <wa-icon
+            library=${TEXRA_ICON_LIBRARY}
+            name=${icon}
+            aria-hidden="true"
+          ></wa-icon>
           <span
             >${label}${hasActive
               ? html` &middot; ${active.length} active`

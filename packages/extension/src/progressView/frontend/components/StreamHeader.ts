@@ -19,7 +19,11 @@ import {
 } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
-import { TEXRA_ICON_LIBRARY, type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import {
+  TEXRA_ICON_LIBRARY,
+  type TeXRAIconName,
+  waIcon,
+} from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -438,7 +442,11 @@ export class StreamHeader extends LitElement {
       size="small"
       title=${ifDefined(getProgressBadgeTitle(this.progress))}
     >
-      <wa-icon library=${TEXRA_ICON_LIBRARY} name="pulse" aria-hidden="true"></wa-icon>
+      <wa-icon
+        library=${TEXRA_ICON_LIBRARY}
+        name="pulse"
+        aria-hidden="true"
+      ></wa-icon>
       ${renderProgressBadgeContent(this.progress)}
     </wa-tag>`;
   }
@@ -459,7 +467,11 @@ export class StreamHeader extends LitElement {
         title="Go to parent: ${displayName}"
         @click=${this.navigateToParent}
       >
-        <wa-icon library=${TEXRA_ICON_LIBRARY} name="arrow-left" aria-hidden="true"></wa-icon>
+        <wa-icon
+          library=${TEXRA_ICON_LIBRARY}
+          name="arrow-left"
+          aria-hidden="true"
+        ></wa-icon>
         ${displayName}
       </span>
     `;

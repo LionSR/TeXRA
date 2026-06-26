@@ -129,7 +129,11 @@ export class LatexdiffResults extends LitElement {
         data-run-id=${ifDefined(runId)}
         title=${ifDefined(message)}
       >
-        <wa-icon library=${TEXRA_ICON_LIBRARY} name=${icon} aria-hidden="true"></wa-icon>
+        <wa-icon
+          library=${TEXRA_ICON_LIBRARY}
+          name=${icon}
+          aria-hidden="true"
+        ></wa-icon>
         ${this.renderFileLink(baseFile, baseLabel)}
         <span class="arrow">→</span>
         ${this.renderFileLink(revisedFile, revisedLabel)}

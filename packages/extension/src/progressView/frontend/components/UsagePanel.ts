@@ -173,7 +173,11 @@ export class UsagePanel extends LitElement {
     const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
 
     return html`
-      <wa-icon library=${TEXRA_ICON_LIBRARY} name="pie-chart" aria-hidden="true"></wa-icon>
+      <wa-icon
+        library=${TEXRA_ICON_LIBRARY}
+        name="pie-chart"
+        aria-hidden="true"
+      ></wa-icon>
       <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
         <wa-icon
@@ -239,7 +243,11 @@ export class UsagePanel extends LitElement {
 
     return html`
       <span class="context-gauge" title="${clamped.toFixed(0)}% context used">
-        <wa-icon library=${TEXRA_ICON_LIBRARY} name="window" aria-hidden="true"></wa-icon>
+        <wa-icon
+          library=${TEXRA_ICON_LIBRARY}
+          name="window"
+          aria-hidden="true"
+        ></wa-icon>
         <span class="context-gauge__track">
           <span
             class="context-gauge__fill"

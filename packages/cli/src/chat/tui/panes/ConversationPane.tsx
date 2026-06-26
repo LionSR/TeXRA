@@ -40,7 +40,9 @@ function ThinkingRow(): React.JSX.Element {
   const dots = '.'.repeat((Math.floor(now / 1000) % 3) + 1);
   return (
     <Box>
-      <Text dimColor>{THINKING_MARKER} Thinking{dots}</Text>
+      <Text dimColor>
+        {THINKING_MARKER} Thinking{dots}
+      </Text>
     </Box>
   );
 }

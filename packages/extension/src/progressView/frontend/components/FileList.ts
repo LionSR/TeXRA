@@ -21,7 +21,11 @@ import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { TEXRA_ICON_LIBRARY, type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import {
+  TEXRA_ICON_LIBRARY,
+  type TeXRAIconName,
+  waIcon,
+} from '@shared/wa/webAwesomeIcons';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
