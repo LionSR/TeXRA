@@ -213,6 +213,10 @@ function migrateLegacyAgentNameKeys(): void {
     WorkspaceStateKey.ENABLED_AGENTS,
     WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
   ] as const) {
+    const category =
+      stateKey === WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
+        ? AgentCategory.ToolUse
+        : AgentCategory.Workflow;
     const stored = platform().workspaceState.get<string[]>(stateKey, []);
     if (!stored?.length) continue;
 
@@ -223,14 +227,17 @@ function migrateLegacyAgentNameKeys(): void {
       if (key === name ? getAgent(name)?.name === name : cache.has(key)) {
         return key;
       }
-      // Rewrite the name part to the alias target, keeping the original source
-      // prefix when that source hosts the target. When it does not (e.g. a
-      // stale `builtInWorkflow:chat` whose target `assistant` only exists as
-      // builtInToolUse), fall back to the target's canonical key so the entry
-      // still enables a real agent instead of dangling.
+      // Rewrite the name part to the alias target, preserving the original
+      // key's shape (bare vs source-qualified) when it resolves to an agent IN
+      // THIS LIST'S CATEGORY. Otherwise resolve the alias within the category,
+      // so the rewrite can never persist a wrong-category key — e.g. a custom
+      // workflow `assistant` shadowing the built-in tool-use one must not land
+      // in tool-use visibility state (the settings UI matches keys literally,
+      // so a cross-category key would orphan the toggle). Keep the original key
+      // when no agent of this category matches, rather than inventing one.
       const rewritten = key.slice(0, key.length - name.length) + alias;
-      if (getAgent(rewritten)) return rewritten;
-      const canonical = getAgent(alias);
+      if (getAgent(rewritten)?.category === category) return rewritten;
+      const canonical = getCategoryAgent(category, alias);
       return canonical ? agentKeyOf(canonical) : key;
     });
     if (migrated.every((key, i) => key === stored[i])) continue;

@@ -231,17 +231,20 @@ describe('agent registry legacy aliases', () => {
     );
   });
 
-  it('migrates a cross-source legacy key to a key that resolves', async () => {
-    // A stale `builtInWorkflow:chat` aliases to `assistant`, which only exists
-    // as a built-in tool-use agent. Rewriting only the name part would yield
-    // `builtInWorkflow:assistant`, a dangling key that resolves to nothing; the
-    // migration must fall back to the alias target's canonical key instead.
+  it('migrates a cross-source legacy key to the canonical key in its category', async () => {
+    // A stale `builtInWorkflow:chat` in the tool-use list aliases to
+    // `assistant`, which only exists as a built-in tool-use agent. Rewriting
+    // only the name part would yield `builtInWorkflow:assistant`, a dangling
+    // key; the migration resolves the alias within the list's category and
+    // persists the canonical `builtInToolUse:assistant` instead.
     const { initPlatform } = await import('@platform/platform');
     initPlatform(
       createFakePlatform(
         {
           workspaceState: {
-            [WorkspaceStateKey.ENABLED_AGENTS]: ['builtInWorkflow:chat'],
+            [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
+              'builtInWorkflow:chat',
+            ],
           },
         },
         { fs: nodeFilesystem },
@@ -258,11 +261,66 @@ describe('agent registry legacy aliases', () => {
     await refresh({ includeRemote: false });
 
     const migrated = platform().workspaceState.get<string[]>(
-      WorkspaceStateKey.ENABLED_AGENTS,
+      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
     );
     expect(migrated).toEqual(['builtInToolUse:assistant']);
     // The migrated key must resolve — no dangling enabled entry.
     expect(getAgent(migrated![0]!)?.name).toBe('assistant');
+  });
+
+  it('migrates within category when a custom agent shadows a built-in name', async () => {
+    // Collision: a custom *workflow* `assistant` shadows the built-in tool-use
+    // `assistant`. A category-blind fallback would pick the custom workflow
+    // entry by source priority and wrongly persist `custom:assistant` into the
+    // tool-use list. Migration must resolve within each list's own category.
+    const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
+    await writeFile(
+      resolve(customDir, 'assistant.yaml'),
+      [
+        'name: assistant',
+        'description: Custom workflow agent shadowing a built-in name.',
+        'settings:',
+        '  agentCategory: workflow',
+        'prompts:',
+        '  systemPrompt: Custom workflow assistant.',
+        '',
+      ].join('\n'),
+    );
+
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform(
+        {
+          workspaceState: {
+            [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
+              'builtInWorkflow:chat',
+            ],
+            [WorkspaceStateKey.ENABLED_AGENTS]: ['remote:chat'],
+          },
+        },
+        { fs: nodeFilesystem },
+      ),
+    );
+    setAgentDirectories({
+      custom: async () => customDir,
+      builtIn: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+      builtInToolUse: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    });
+
+    await refresh({ includeRemote: false });
+
+    // Tool-use list → the tool-use assistant, never the custom workflow shadow.
+    expect(
+      platform().workspaceState.get<string[]>(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      ),
+    ).toEqual(['builtInToolUse:assistant']);
+    // Workflow list → the custom workflow assistant (its own category).
+    expect(
+      platform().workspaceState.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS),
+    ).toEqual(['custom:assistant']);
   });
 
   it('migrates persisted filename-based custom agent keys to YAML names', async () => {
