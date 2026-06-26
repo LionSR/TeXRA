@@ -10,7 +10,10 @@ export interface PanelOptions {
   viewPath: string;
   column?: vscode.ViewColumn;
   retainContextWhenHidden?: boolean;
-  iconPath?: vscode.ThemeIcon | vscode.Uri | { light: vscode.Uri; dark: vscode.Uri };
+  iconPath?:
+    | vscode.ThemeIcon
+    | vscode.Uri
+    | { light: vscode.Uri; dark: vscode.Uri };
 }
 
 /**
