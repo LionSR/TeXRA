@@ -12,8 +12,10 @@
  *      injected tools are subject to delegation and approval gates but bypass
  *      the disabled/unavailable filters (they are runtime infrastructure, not
  *      user-selectable tools).
- *   7. Annotate delegation tools with the models currently available for
- *      delegation, so the model sees an accurate "Available models:" line.
+ *   7. Annotate delegation tools with the models and agents currently available
+ *      for delegation, so the model sees an accurate "Available models:" line
+ *      and an "Available agents:" roster instead of a snapshot frozen when the
+ *      tool registry was first constructed.
  *
  * Routine filtering outcomes (disabled, unavailable, not in registry) are
  * intentionally silent — YAML typos are surfaced once at load time by
@@ -29,6 +31,7 @@ import type { ToolDefinition } from '@model';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   DELEGATION_TOOLS,
+  DELEGATION_TOOL_CATEGORY,
   hasDelegationTool,
 } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -41,6 +44,10 @@ import {
   availableModelNamesFromOptions,
   withDelegationModelAvailability,
 } from '@tools/delegationModelAvailability';
+import {
+  visibleDelegationAgentsBlock,
+  withDelegationAgentAvailability,
+} from '@tools/delegationAgentAvailability';
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import {
   toolInjectionRegistry,
@@ -169,12 +176,35 @@ export async function resolveAgentTools({
   const availableModelNames =
     await availableDelegationModelNamesForTools(resolved);
   return {
-    tools:
-      availableModelNames === undefined
-        ? resolved
-        : resolved.map((tool) =>
-            withDelegationModelAvailability(tool, availableModelNames),
-          ),
+    tools: resolved.map((tool) =>
+      annotateDelegationTool(tool, availableModelNames),
+    ),
     delegationTrimmed,
   };
+}
+
+/**
+ * Refresh a delegation tool's "Available models:" and "Available agents:" lines
+ * from the current roster. Non-delegation tools are returned untouched. The
+ * model line is skipped when no delegation tool is present (`availableModelNames
+ * === undefined`); in that case `category` is also undefined, so nothing runs.
+ */
+function annotateDelegationTool(
+  tool: ToolDefinition,
+  availableModelNames: readonly string[] | null | undefined,
+): ToolDefinition {
+  const category = DELEGATION_TOOL_CATEGORY[tool.name];
+  if (!category) return tool;
+  const withModels =
+    availableModelNames === undefined
+      ? tool
+      : withDelegationModelAvailability(tool, availableModelNames);
+  // Both annotators no-op without a description, and resolving the visible
+  // roster reaches platform state — skip that lookup when there is nothing to
+  // annotate (e.g. a tool config that carries only a name).
+  if (!withModels.description) return withModels;
+  return withDelegationAgentAvailability(
+    withModels,
+    visibleDelegationAgentsBlock(category),
+  );
 }

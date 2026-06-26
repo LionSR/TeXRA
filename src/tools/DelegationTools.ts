@@ -12,7 +12,6 @@
 import { z } from 'zod';
 
 // Local imports - agent
-import { getVisibleAgents } from '@agent/index/agentRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
@@ -36,7 +35,6 @@ import { defineTool } from '@tools/core/define';
 
 // Local imports - delegation
 import {
-  formatAgentList,
   proposeAndExecute,
   requireVisibleAgent,
   resolveAvailableDelegationModel,
@@ -81,8 +79,7 @@ export class WorkflowAgentTool extends defineTool({
   description:
     () => `Delegate to a workflow agent. The agent rewrites every file you list in inputFiles, emitting one revised <document> per input. Use for whole-document operations: proofreading, polishing, applying reviews, adding derivations, merging revisions. For interactive tool use or selective edits, use delegate_agent instead.
 
-Available agents:
-${formatAgentList(getVisibleAgents('workflow'))}
+Available agents: loaded from the active roster at runtime.
 
 Pick the agent whose description matches the task — don't default to correct. correct is for proofreading only. For applying review suggestions use apply; for new derivations use devise; for instruction-driven rewriting use polish; for critical review use criticize.
 
@@ -204,8 +201,7 @@ export class DelegateAgentTool extends defineTool({
 
 When a subagent result is delivered, preserve its stated evidence, tool names, and caveats accurately; do not substitute or invent methods while summarizing it for the user.
 
-Available agents:
-${formatAgentList(getVisibleAgents('toolUse'))}
+Available agents: loaded from the active roster at runtime.
 
 Agent selection: choose the most specific agent whose description matches the task. Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks. When using a general-purpose agent, state why the work does not map cleanly to a listed specialist.
 

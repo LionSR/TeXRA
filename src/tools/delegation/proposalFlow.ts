@@ -45,21 +45,6 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'continue directly with available context, or ask the user a clarifying question.',
 ].join(' ');
 
-/** Format an agent list for tool descriptions. */
-export function formatAgentList(
-  agents: { name: string; description?: string; tools?: string[] }[],
-): string {
-  return agents
-    .map((agent) => {
-      const desc = agent.description || 'No description';
-      const toolsSuffix = agent.tools?.length
-        ? `\n  Tools: ${agent.tools.join(', ')}`
-        : '';
-      return `- ${agent.name}: ${desc}${toolsSuffix}`;
-    })
-    .join('\n');
-}
-
 export async function resolveAvailableDelegationModel(input: {
   readonly requestedModel?: string | null;
   readonly parentModel?: string | null;
