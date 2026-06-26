@@ -81,36 +81,30 @@ export const GetHistoryDataMessageSchema = commandOnly(
   HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA,
 );
 
-export const RerunAgentMessageSchema = z.object({
+export const RerunAgentMessageSchema = HistoryIdMessageSchema.extend({
   command: z.literal(HISTORY_VIEW_COMMANDS.RERUN_AGENT),
-  historyId: z.string().min(1),
 });
 
-export const RestoreAgentMessageSchema = z.object({
+export const RestoreAgentMessageSchema = HistoryIdMessageSchema.extend({
   command: z.literal(HISTORY_VIEW_COMMANDS.RESTORE_AGENT),
-  historyId: z.string().min(1),
 });
 
-export const DeleteAgentMessageSchema = z.object({
+export const DeleteAgentMessageSchema = HistoryIdMessageSchema.extend({
   command: z.literal(HISTORY_VIEW_COMMANDS.DELETE_AGENT),
-  historyId: z.string().min(1),
 });
 
 export const ClearHistoryMessageSchema = commandOnly(
   HISTORY_VIEW_COMMANDS.CLEAR_HISTORY,
 );
 
-export const ExportChatMdMessageSchema = z.object({
+export const ExportChatMdMessageSchema = HistoryIdMessageSchema.extend({
   command: z.literal(HISTORY_VIEW_COMMANDS.EXPORT_CHAT_MD),
-  historyId: z.string().min(1),
 });
 
-export const ExportChatTexMessageSchema = z.object({
+export const ExportChatTexMessageSchema = HistoryIdMessageSchema.extend({
   command: z.literal(HISTORY_VIEW_COMMANDS.EXPORT_CHAT_TEX),
-  historyId: z.string().min(1),
 });
 
-export const ExportChatHtmlMessageSchema = z.object({
+export const ExportChatHtmlMessageSchema = HistoryIdMessageSchema.extend({
   command: z.literal(HISTORY_VIEW_COMMANDS.EXPORT_CHAT_HTML),
-  historyId: z.string().min(1),
 });

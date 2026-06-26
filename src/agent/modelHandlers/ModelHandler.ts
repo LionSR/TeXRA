@@ -973,6 +973,20 @@ export abstract class ModelHandler<
     workspaceState?: AgentWorkspaceState,
   ): string | null;
 
+  /** Applies a single-string reasoning value to workspace thinking state.
+   *  No-op when workspaceState is absent or thinking was already recorded. */
+  protected applyStringReasoningToWorkspaceState(
+    reasoning: string,
+    workspaceState?: AgentWorkspaceState,
+  ): void {
+    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
+      workspaceState.reasoning.thinkingBlocks = [
+        { type: 'thinking', thinking: reasoning },
+      ];
+      workspaceState.reasoning.thinkingAdded = true;
+    }
+  }
+
   /**
    * Extracts tool-use information from provider responses.
    * @param responseObject The raw response object from the model
