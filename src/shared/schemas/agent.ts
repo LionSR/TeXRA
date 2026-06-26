@@ -69,6 +69,15 @@ export function agentKey(source: string, name: string): string {
   return `${source}:${name}`;
 }
 
+/**
+ * Canonical key for an agent-like record. Single source for the "entry → key"
+ * mapping so the dozen-plus call sites don't each spell out
+ * `agentKey(x.source, x.name)`.
+ */
+export function agentKeyOf(entry: { source: string; name: string }): string {
+  return agentKey(entry.source, entry.name);
+}
+
 /** Extract the plain agent name from a possibly source-qualified key ("source:name" → "name"). */
 export function agentName(key: string): string {
   const idx = key.indexOf(':');

@@ -18,7 +18,7 @@ import {
   hasAnyProviderApiKey,
 } from '@controllers/onboarding/onboardingFunnel';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import { getAgent, createKey } from '@agent/index/agentRegistry';
+import { getAgent } from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -26,7 +26,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult } from '@hosts/terminalHost';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
-import { AgentCategory } from '@shared/schemas/agent';
+import { AgentCategory, agentKeyOf } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { setDesktopAgentResumeHandler } from './desktopAgentResume.js';
@@ -675,7 +675,7 @@ function createWindow(options: {
         const entry = getAgent('setup', AgentCategory.ToolUse);
         ipcRef.current?.postToRenderer({
           command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
-          agentId: entry ? createKey(entry.source, entry.name) : 'setup',
+          agentId: entry ? agentKeyOf(entry) : 'setup',
           sessionType: 'toolUse' as const,
         });
       },

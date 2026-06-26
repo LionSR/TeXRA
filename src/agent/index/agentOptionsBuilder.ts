@@ -2,7 +2,7 @@
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentOptionData } from '@shared/schemas';
-import { agentKey as createKey } from '@shared/schemas/agent';
+import { agentKeyOf } from '@shared/schemas/agent';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
 import type { AgentEntry } from './agentEntry';
@@ -13,7 +13,7 @@ export interface AgentOptionsDataPayload {
 }
 
 function entryToOptionData(entry: AgentEntry): AgentOptionData {
-  const key = createKey(entry.source, entry.name);
+  const key = agentKeyOf(entry);
   return {
     value: key,
     label: entry.name,

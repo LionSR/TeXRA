@@ -1,20 +1,14 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import {
-  LitElement,
-  html,
-  css,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { PROMO_NOTICE_SHORT } from '@shared/copy/promoNotice';
 
-import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
+import { bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('login-banner')
@@ -75,13 +69,7 @@ export class LoginBanner extends LitElement {
     `,
   ];
 
-  @property({ type: Boolean }) visible = false;
-
-  override updated(changed: PropertyValues<this>): void {
-    if (changed.has('visible')) {
-      applyBannerVisibility(this, this.visible);
-    }
-  }
+  @property({ type: Boolean, reflect: true }) visible = false;
 
   private handleSignIn(): void {
     this.dispatchEvent(MainViewEvents.signIn());
