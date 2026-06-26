@@ -20,7 +20,6 @@ import {
 } from '@google/genai';
 
 // Local imports - agent
-import { ReasoningEffort } from 'llm-zoo';
 import { logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
@@ -49,6 +48,11 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
+import {
+  isGemini3Model,
+  resolveGeminiThinkingLevel,
+  resolveGoogleClient,
+} from './googleHandlerShared';
 import { computeGooglePrice, normalizeGoogleUsage } from './googleUsage';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagGoogleSdkError } from './googleSdkError';
@@ -113,7 +117,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   private isGemini3Model(): boolean {
-    return /^gemini-3[\.\-]/.test(this.config.fullName);
+    return isGemini3Model(this.config.fullName);
   }
 
   /**
@@ -141,43 +145,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   private getThinkingLevel(): ThinkingLevel | undefined {
-    const requestedLevel = this.capabilities.reasoningEffort;
-    const isGemini3 = this.isGemini3Model();
-
-    switch (requestedLevel) {
-      case ReasoningEffort.NONE:
-        if (isGemini3) {
-          this.logger.warn(
-            "Gemini 3 models can't fully disable thinking. Using thinking_level 'LOW'.",
-          );
-        }
-        // Use LOW as the minimum supported level across all thinking models.
-        // Returning undefined would omit thinkingLevel entirely, making the
-        // API fall back to its default (medium/high) — defeating the user's intent.
-        return ThinkingLevel.LOW;
-
-      case ReasoningEffort.LOW:
-        return ThinkingLevel.LOW;
-
-      case ReasoningEffort.MEDIUM:
-        // Gemini 3 Pro only supports LOW/HIGH; MEDIUM falls back to HIGH for Pro
-        if (isGemini3 && this.config.fullName.includes('-pro')) {
-          this.logger.debug(
-            'Gemini 3 Pro does not support MEDIUM thinking level. Using HIGH.',
-          );
-          return ThinkingLevel.HIGH;
-        }
-        return ThinkingLevel.MEDIUM;
-
-      case ReasoningEffort.HIGH:
-      case ReasoningEffort.XHIGH:
-      case ReasoningEffort.MAX:
-        // Gemini tops out at HIGH thinking; xhigh/max both map to it.
-        return ThinkingLevel.HIGH;
-
-      default:
-        return undefined;
-    }
+    return resolveGeminiThinkingLevel({
+      reasoningEffort: this.capabilities.reasoningEffort,
+      isGemini3: this.isGemini3Model(),
+      isPro: this.config.fullName.includes('-pro'),
+      logger: this.logger,
+      levels: {
+        low: ThinkingLevel.LOW,
+        medium: ThinkingLevel.MEDIUM,
+        high: ThinkingLevel.HIGH,
+      },
+      labels: { low: 'LOW', medium: 'MEDIUM', high: 'HIGH' },
+    });
   }
 
   protected getInlineUploadLimitBytes(): number {
@@ -288,43 +267,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   async getClient(): Promise<GoogleGenAI> {
-    // When using server-side relay keys, always create a fresh client to ensure
-    // auth tokens are refreshed (tokens expire and need refresh every 30 mins).
-    // Personal API keys don't expire, so caching is safe for those.
-    if (this.shouldUseServerSideKeys()) {
-      const credential = await this.getApiKey();
-      const baseUrl = this.getBaseUrl();
-      this.logger.debug(
-        `Using Google GenAI Native SDK with relay auth. Base URL: ${baseUrl}`,
-      );
-      return new GoogleGenAI({
-        apiKey: credential,
-        httpOptions: {
-          baseUrl: baseUrl ?? undefined,
-          // Disable SDK-level retries so that only the flow-level retry loop
-          // (RetryState.getNodeRetryConfig) manages the user's retry budget.
-          // Without this, transient errors would be retried by BOTH the SDK and
-          // the flow, multiplying the configured attempt count.
-          retryOptions: { attempts: 1 },
-        },
-      });
-    }
-
-    // For personal API keys, cache the client
-    if (!this.googleClient) {
-      const credential = await this.getApiKey();
-      const baseUrl = this.getBaseUrl();
-      this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
-
-      this.googleClient = new GoogleGenAI({
-        apiKey: credential,
-        httpOptions: {
-          baseUrl: baseUrl ?? undefined,
-          retryOptions: { attempts: 1 },
-        },
-      });
-    }
-    return this.googleClient;
+    return resolveGoogleClient({
+      sdkLabel: 'Native',
+      shouldUseServerSideKeys: this.shouldUseServerSideKeys(),
+      getApiKey: () => this.getApiKey(),
+      getBaseUrl: () => this.getBaseUrl(),
+      logger: this.logger,
+      cached: this.googleClient,
+      setCached: (client) => {
+        this.googleClient = client;
+      },
+    });
   }
 
   /**
