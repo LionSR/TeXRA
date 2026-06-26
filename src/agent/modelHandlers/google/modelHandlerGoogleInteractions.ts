@@ -13,7 +13,6 @@ import {
 } from '@google/genai';
 
 // Local imports - agent
-import { ReasoningEffort } from 'llm-zoo';
 import { logProgressStatus, logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
@@ -44,6 +43,11 @@ import { delay, isNonEmptyString, isObject } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
+import {
+  isGemini3Model,
+  resolveGeminiThinkingLevel,
+  resolveGoogleClient,
+} from './googleHandlerShared';
 
 // Local file imports
 import {
@@ -482,7 +486,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   }
 
   private isGemini3Model(): boolean {
-    return /^gemini-3[\.\-]/.test(this.config.fullName);
+    return isGemini3Model(this.config.fullName);
   }
 
   private getMediaResolution(mimeType: string): MediaResolution | undefined {
@@ -506,39 +510,14 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * `GenerationConfig.thinking_level` lowercase literals.
    */
   private getThinkingLevel(): ThinkingLevel | undefined {
-    const requestedLevel = this.capabilities.reasoningEffort;
-    const isGemini3 = this.isGemini3Model();
-
-    switch (requestedLevel) {
-      case ReasoningEffort.NONE:
-        if (isGemini3) {
-          this.logger.warn(
-            "Gemini 3 models can't fully disable thinking. Using thinking_level 'low'.",
-          );
-        }
-        return 'low';
-
-      case ReasoningEffort.LOW:
-        return 'low';
-
-      case ReasoningEffort.MEDIUM:
-        // Gemini 3 Pro only supports low/high; medium falls back to high for Pro.
-        if (isGemini3 && this.config.fullName.includes('-pro')) {
-          this.logger.debug(
-            'Gemini 3 Pro does not support medium thinking level. Using high.',
-          );
-          return 'high';
-        }
-        return 'medium';
-
-      case ReasoningEffort.HIGH:
-      case ReasoningEffort.XHIGH:
-      case ReasoningEffort.MAX:
-        return 'high';
-
-      default:
-        return undefined;
-    }
+    return resolveGeminiThinkingLevel<ThinkingLevel>({
+      reasoningEffort: this.capabilities.reasoningEffort,
+      isGemini3: this.isGemini3Model(),
+      isPro: this.config.fullName.includes('-pro'),
+      logger: this.logger,
+      levels: { low: 'low', medium: 'medium', high: 'high' },
+      labels: { low: 'low', medium: 'medium', high: 'high' },
+    });
   }
 
   protected getInlineUploadLimitBytes(): number {
@@ -546,40 +525,18 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   }
 
   async getClient(): Promise<GoogleGenAI> {
-    // When using server-side relay keys, always create a fresh client to ensure
-    // auth tokens are refreshed (tokens expire every ~30 mins). Personal API
-    // keys don't expire, so caching is safe for those. (REUSE: identical to the
-    // chat handler; `apiVersion` left unset for v0 — see spec §6.4.)
-    if (this.shouldUseServerSideKeys()) {
-      const credential = await this.getApiKey();
-      const baseUrl = this.getBaseUrl();
-      this.logger.debug(
-        `Using Google GenAI Interactions SDK with relay auth. Base URL: ${baseUrl}`,
-      );
-      return new GoogleGenAI({
-        apiKey: credential,
-        httpOptions: {
-          baseUrl: baseUrl ?? undefined,
-          retryOptions: { attempts: 1 },
-        },
-      });
-    }
-
-    if (!this.googleClient) {
-      const credential = await this.getApiKey();
-      const baseUrl = this.getBaseUrl();
-      this.logger.debug(
-        `Using Google GenAI Interactions SDK. Base URL: ${baseUrl}`,
-      );
-      this.googleClient = new GoogleGenAI({
-        apiKey: credential,
-        httpOptions: {
-          baseUrl: baseUrl ?? undefined,
-          retryOptions: { attempts: 1 },
-        },
-      });
-    }
-    return this.googleClient;
+    // `apiVersion` left unset for v0 — see spec §6.4.
+    return resolveGoogleClient({
+      sdkLabel: 'Interactions',
+      shouldUseServerSideKeys: this.shouldUseServerSideKeys(),
+      getApiKey: () => this.getApiKey(),
+      getBaseUrl: () => this.getBaseUrl(),
+      logger: this.logger,
+      cached: this.googleClient,
+      setCached: (client) => {
+        this.googleClient = client;
+      },
+    });
   }
 
   override get supportsTokenCounting(): boolean {
