@@ -29,7 +29,7 @@ lead-and-specialists delegation model. The four audits independently reached the
 same conclusion the canonical plan already holds — there are no barrels, no
 re-export shims, and no trivial/two-layer identity factories in `modelHandlers/`;
 the logger is already a single hop (host-injected sink, no `platform().log`
-port); and the cycle-wrapper nodes are the *mandated* shape, not the anti-pattern.
+port); and the cycle-wrapper nodes are the _mandated_ shape, not the anti-pattern.
 The live work remains **surface curation and per-session state relocation**.
 
 ## Drift since 2026-06-25
@@ -41,7 +41,7 @@ The plan keeps landing through the PR train. Since the `b2dcd42` checkpoint base
   liveness-safe). Both now present at HEAD, confirming the prior checkpoint's
   "this PR" rows.
 - **`cee3eb6`** `refactor(agent): collapse the two AgentCreator blueprint nodes
-  into one` — another abstraction-collapse landing in the same direction.
+into one` — another abstraction-collapse landing in the same direction.
 - **`93af483`**, **`b9bd9b5`**, **`7043749`** — CLI module split + config-catalog
   unification plan; unrelated to the four audit areas, no regressions to the spine.
 
@@ -89,19 +89,19 @@ all are deferred to the reviewed PR train rather than applied unattended.
 
 ### Core / runtime
 
-- **`RetryState` interface + redundant third parameter** *(HIGH)*. `RetryState`
+- **`RetryState` interface + redundant third parameter** _(HIGH)_. `RetryState`
   (`src/agent/core/flows/RetryState.ts:29-31`) is a one-field interface
   (`lastError?`) whose only field is already on `BaseCycleFields`
   (`CommonCycleTypes.ts`). `handleInvocationResult(execRes, state, retryState, …)`
   takes `state` and `retryState` as separate params, but the sole non-test call
   site passes the **same object for both**: `handleInvocationResult(execRes,
-  shared, shared, …)` (`ModelInvocationNode.ts:123`). Collapse to a single
+shared, shared, …)` (`ModelInvocationNode.ts:123`). Collapse to a single
   `state` param widened to carry `lastError`, and delete the `RetryState`
   interface. Behavior-neutral; a function-signature change, so left for review.
 
 ### Model handlers (port-narrowing / surface curation track)
 
-- **Four port members that leak internal surface** *(MEDIUM — design)*.
+- **Four port members that leak internal surface** _(MEDIUM — design)_.
   `getAgentCategory()` (getter), `canProcessToolResultAttachments`,
   `createMediaContent`, and `createAssistantMessage` are on `IModelHandler` but
   are only ever invoked as `this.x` inside handler implementations — no external
@@ -109,20 +109,20 @@ all are deferred to the reviewed PR train rather than applied unattended.
   Candidates to drop from the port (keep as `protected`/abstract on the base).
   This is the same "trim the ~45-member flattened-union port" item the canonical
   plan tracks; advance it deliberately, not mechanically.
-- **Three `public` base methods that should be `protected`** *(LOW)*.
+- **Three `public` base methods that should be `protected`** _(LOW)_.
   `createMediaMessage`, `containCutOffMessage`, `getApiKey` (`ModelHandler.ts`)
   have only `this.` callers in subclasses (plus one test). Tighten visibility.
-- **`createResponse` template body duplicated in two handlers** *(LOW)*.
+- **`createResponse` template body duplicated in two handlers** _(LOW)_.
   `modelHandlerOpenAIResponse.ts` and `modelHandlerGoogleInteractions.ts` override
   `createResponse` itself and hand-copy the base's `withSdkErrorTag(this.
-  sdkErrorTagger, …)` wrap just to add a single-turn `inFlight` guard. Add a
+sdkErrorTagger, …)` wrap just to add a single-turn `inFlight` guard. Add a
   `protected` guard hook so the base keeps owning the error-tag wrap and the two
   only supply the guard (~12 lines of copied template body removed, drift risk
   eliminated).
 
 ### Public surface (barrel curation)
 
-- **Over-wide `@agent/index` barrel** *(LOW)*. `src/agent/index/index.ts`
+- **Over-wide `@agent/index` barrel** _(LOW)_. `src/agent/index/index.ts`
   re-exports ~10 type symbols with zero cross-module consumers
   (`AgentDirectoryServiceOptions`, `CustomAgentDirectoryStore`,
   `AgentDirectoryDocsId`, `AgentDirectoryBundleSource`, `AgentDirectoryStorage`,
@@ -132,7 +132,7 @@ all are deferred to the reviewed PR train rather than applied unattended.
   the SDK-facing surface. Deferred because barrel curation is a deliberate surface
   decision, not a mechanical delete.
 - **`PlatformAgentDirectoryBootstrapOptions` exported, zero external consumers**
-  *(LOW)* (`platformAgentDirectories.ts:23`). Inline as the parameter type or drop
+  _(LOW)_ (`platformAgentDirectories.ts:23`). Inline as the parameter type or drop
   the `export`.
 - **NOTE — `sortAgentEntries` export is NOT removable.** The
   2026-06-26 audit flagged dropping its `export` (`agentOptionsBuilder.ts:34`) as
@@ -142,7 +142,7 @@ all are deferred to the reviewed PR train rather than applied unattended.
 
 ### Documentation drift
 
-- **Stale `agent-trace-sdk-surface.md`** *(doc fix)*. That proposal
+- **Stale `agent-trace-sdk-surface.md`** _(doc fix)_. That proposal
   (`docs/proposals/agent-trace-sdk-surface.md:26`) references a `@agent/core/logger`
   facade, an `AgentLogger` class, and `platform().log` — **none of which exist**
   (the logger was already flattened to a single host-injected sink). The proposal
@@ -153,24 +153,24 @@ all are deferred to the reviewed PR train rather than applied unattended.
 The uninformed passes re-surfaced these; the standing rulings hold at HEAD
 (`93af483`). See the delta-2026-06-24 table for citations.
 
-| Re-surfaced candidate | Ruling |
-| --- | --- |
-| Remove `IModelHandler` as a "duplicate" of `ModelHandler` | **Trap** — optional `createBatchedToolUseFollowUpMessages` makes it load-bearing; removal breaks `tsc`. |
-| Inline the cycle-wrapper nodes / `createXCycleFlow` factories | **Keep** — this *is* the mandated `Node.exec → createFlow → flow.run` shape. |
-| Merge `ModelHandlerOpenRouterNative` into the OpenAI base | **Trap** — two real SDK type families; the merge was deliberately deleted in PR #2962. |
-| Dedup MiniMax `extractTextFromReasoningDetails` into the shared util | **Trap** — different input shapes; the shared util would return empty reasoning for MiniMax's `type: 'thinking'` items. |
-| Split `modelHandlerOpenAIResponse.ts` (god-file) into collaborators | **Real smell, not a quick win** — shared mutable state + background polling + test subclassing. Tracked design migration. |
-| `@logger` not routed through `platform()` | **Intentional, documented** — logging is its own host-injected subsystem (`platform.ts:23-28`). |
-| UsageMonitor `updateStreamUsage` + `logger.usage` "double emit" | **Documented dual-sink** (sidebar vs. transcript), agentCategory-gated, intentional. |
+| Re-surfaced candidate                                                | Ruling                                                                                                                    |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Remove `IModelHandler` as a "duplicate" of `ModelHandler`            | **Trap** — optional `createBatchedToolUseFollowUpMessages` makes it load-bearing; removal breaks `tsc`.                   |
+| Inline the cycle-wrapper nodes / `createXCycleFlow` factories        | **Keep** — this _is_ the mandated `Node.exec → createFlow → flow.run` shape.                                              |
+| Merge `ModelHandlerOpenRouterNative` into the OpenAI base            | **Trap** — two real SDK type families; the merge was deliberately deleted in PR #2962.                                    |
+| Dedup MiniMax `extractTextFromReasoningDetails` into the shared util | **Trap** — different input shapes; the shared util would return empty reasoning for MiniMax's `type: 'thinking'` items.   |
+| Split `modelHandlerOpenAIResponse.ts` (god-file) into collaborators  | **Real smell, not a quick win** — shared mutable state + background polling + test subclassing. Tracked design migration. |
+| `@logger` not routed through `platform()`                            | **Intentional, documented** — logging is its own host-injected subsystem (`platform.ts:23-28`).                           |
+| UsageMonitor `updateStreamUsage` + `logger.usage` "double emit"      | **Documented dual-sink** (sidebar vs. transcript), agentCategory-gated, intentional.                                      |
 
 ## Subagent split points — re-confirmed
 
 No change to the canonical/delta analysis. TeXRA already has a **mature subagent
-mechanism**; the only gap is that it is a *tool call*, not a typed primitive:
+mechanism**; the only gap is that it is a _tool call_, not a typed primitive:
 
 - YAML agent profiles (`{ name, description, settings.tools, prompts.systemPrompt }`)
   are near-isomorphic to the SDK `AgentDefinition`; the two flow implementations
-  (reflection, tool-use) run *all* 6 workflow + ~18 tool-use agents — a new
+  (reflection, tool-use) run _all_ 6 workflow + ~18 tool-use agents — a new
   subagent is a YAML + tool-list, never new flow code.
 - Teams (`AGENT_MODE_PRESETS`) are the SDK "available subagents" roster;
   `delegate_agent`/`delegate_workflow` + `executeSubagent`
@@ -190,8 +190,8 @@ Split points ranked by value/effort (unchanged):
 3. **Formalize workflow agents (`polish`/`correct`/`merge`) as SDK actors with
    typed I/O contracts** — already isolated single-turn deterministic actors.
 4. **Relocate the three module-global registries onto the per-session handle**
-   (`executionRegistry` Maps, `runCoordinators.bridgeState` — *relocate, never
-   delete*, it is load-bearing — and the interrupt registry). Gates concurrent
+   (`executionRegistry` Maps, `runCoordinators.bridgeState` — _relocate, never
+   delete_, it is load-bearing — and the interrupt registry). Gates concurrent
    in-process sessions.
 5. **Decompose in-agent multi-phase workflow agents** (`devise`, `verifyFix`)
    into draft → Verifier → apply hand-offs — gated by #4.
@@ -215,5 +215,5 @@ per-session state relocation, the typed `delegateTo` primitive, and wiring
   path (none), `isOutputStreamingEnabled` (only its own declaration + definition).
 - `git log` since 2026-06-25 over `src/agent` (the PR #6620 / `cee3eb6` landings
   cited above).
-</content>
-</invoke>
+  </content>
+  </invoke>
