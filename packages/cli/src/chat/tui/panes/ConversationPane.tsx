@@ -10,6 +10,7 @@ import {
 } from '../state/cliState';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
+import { THINKING_MARKER } from '../ui/glyphs';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
   BoundedTranscriptEntry,
@@ -39,7 +40,7 @@ function ThinkingRow(): React.JSX.Element {
   const dots = '.'.repeat((Math.floor(now / 1000) % 3) + 1);
   return (
     <Box>
-      <Text dimColor>✻ Thinking{dots}</Text>
+      <Text dimColor>{THINKING_MARKER} Thinking{dots}</Text>
     </Box>
   );
 }

@@ -20,6 +20,7 @@ import {
 // Local imports - shared schemas
 import type { ProviderErrorPartial, RetryPermission } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderDotMeta } from '@shared/wa/metaStrip';
 import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - base class
@@ -74,7 +75,7 @@ export class RetryRequestPanel extends BaseRequestPanel {
             ${isRelay ? '[Relay] ' : ''}
             ${data.operation ? `Failed: ${data.operation}` : 'Request failed'}
           </div>
-          <div class="retry-request__meta">${metaParts.join(' \u2022 ')}</div>
+          <div class="retry-request__meta">${renderDotMeta(metaParts)}</div>
           ${when(
             data.errorMessage,
             () =>

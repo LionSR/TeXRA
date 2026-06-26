@@ -17,7 +17,7 @@ import {
 } from '@shared/schemas';
 
 // Local imports - shared utilities
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - Lit template utilities
 import {
@@ -143,13 +143,13 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   // prettier-ignore
   const contentTemplate = html`<div class="banner-content log-entry-content banner-content--error">${detailTemplate}</div>`;
   // prettier-ignore
-  const toggleIcon = html`<wa-icon library="texra" name="chevron-right" class="toggle-icon" aria-hidden="true" style=${styleMap({ visibility: hasDetails ? '' : 'hidden' })}></wa-icon>`;
+  const toggleIcon = html`<wa-icon library=${TEXRA_ICON_LIBRARY} name="chevron-right" class="toggle-icon" aria-hidden="true" style=${styleMap({ visibility: hasDetails ? '' : 'hidden' })}></wa-icon>`;
   // prettier-ignore
   const labelSpan = html`<span class="label" title=${tooltipTimestamp}>[${timeDisplay}] ${summaryText}</span>`;
   // prettier-ignore
   const copyButton = html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="small" type="button" title="Copy error details" aria-label="Copy error details" data-default-title="Copy error details" data-success-title="Copied!" data-copy-id=${copyId} data-copy-type="banner" ?hidden=${!hasDetails}>${waIcon('copy')}</wa-button>`;
   // prettier-ignore
-  const summaryTemplate = html`<summary class="details-summary">${toggleIcon}<wa-icon library="texra" name="error" class="icon" aria-hidden="true"></wa-icon>${labelSpan}${copyButton}</summary>`;
+  const summaryTemplate = html`<summary class="details-summary">${toggleIcon}<wa-icon library=${TEXRA_ICON_LIBRARY} name="error" class="icon" aria-hidden="true"></wa-icon>${labelSpan}${copyButton}</summary>`;
   // prettier-ignore
   return html`<details class=${classMap({
     'banner-details': true,

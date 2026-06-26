@@ -21,7 +21,7 @@ import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import { TEXRA_ICON_LIBRARY, type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
@@ -319,7 +319,7 @@ export class FileList extends LitElement {
                 >
                   <wa-icon
                     slot="start"
-                    library="texra"
+                    library=${TEXRA_ICON_LIBRARY}
                     name="tools"
                     aria-hidden="true"
                   ></wa-icon>
@@ -338,7 +338,7 @@ export class FileList extends LitElement {
     return html`
       <div class="storage-hint" role="note">
         <wa-icon
-          library="texra"
+          library=${TEXRA_ICON_LIBRARY}
           name="folder-opened"
           aria-hidden="true"
         ></wa-icon>
@@ -440,7 +440,7 @@ export class FileList extends LitElement {
       <div class="file-item">
         ${failure
           ? html`<wa-icon
-              library="texra"
+              library=${TEXRA_ICON_LIBRARY}
               name="warning"
               class="compile-warning"
               title="Compile check failed"

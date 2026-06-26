@@ -20,6 +20,7 @@ import {
 // Local imports - shared schemas
 import type { ToolEditPermission } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - base class
@@ -45,6 +46,10 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
   override render(): TemplateResult {
     const data = this.permission.data as ToolEditPermission;
     const diffMeta = this.renderDiffMeta(data);
+    const metaParts: MetaPart[] = [
+      ...(data.sourceTool ? [`Requested by ${data.sourceTool}`] : []),
+      ...(diffMeta ? [diffMeta] : []),
+    ];
 
     return this.renderRequestShell({
       prefix: 'approval-request',
@@ -52,11 +57,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
         <div class="approval-request__path">
           ${data.relativePath || data.path}
         </div>
-        <div class="approval-request__meta">
-          ${data.sourceTool ? `Requested by ${data.sourceTool}` : ''}
-          ${data.sourceTool && diffMeta ? html`<span>•</span>` : nothing}
-          ${diffMeta}
-        </div>
+        <div class="approval-request__meta">${renderDotMeta(metaParts)}</div>
       `,
       approveTitle: 'Approve (y)',
       rejectTitle: 'Reject (n)',

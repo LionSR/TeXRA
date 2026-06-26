@@ -37,6 +37,7 @@ import {
 } from '@progressView/frontend/formatters/constants';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
 import type { EditInput } from '@tools/EditTool';
 import type { TextEditorInput } from '@tools/TextEditorTool';
@@ -271,7 +272,7 @@ function buildAcceptRunFilesSections(
         ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed" style="margin-left:var(--wa-space-2xs)">-${edit.lineChanges.removed}</span></span>`
         : nothing;
       // prettier-ignore
-      return html`<li class="detail-item"><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${dest} role="button" tabindex="0">${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
+      return html`<li class="detail-item"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${dest} role="button" tabindex="0">${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
     })}`;
     // prettier-ignore
     sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
@@ -317,13 +318,13 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
     extractFlags.push('Extract TikZ');
   if (extractFlags.length > 0) {
     // prettier-ignore
-    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<wa-badge variant="neutral" appearance="filled"><wa-icon library="texra" name="file-media" aria-hidden="true"></wa-icon> ${f}</wa-badge>`)}`));
+    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<wa-badge variant="neutral" appearance="filled"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file-media" aria-hidden="true"></wa-icon> ${f}</wa-badge>`)}`));
   }
 
   const fileGroups = getProposalFileGroups(delegateInput);
   if (fileGroups.length > 0) {
     // prettier-ignore
-    const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> <span class="${g.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(g.clickable ? f : undefined)} role=${ifDefined(g.clickable ? 'button' : undefined)} tabindex=${ifDefined(g.clickable ? '0' : undefined)}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
+    const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file" aria-hidden="true"></wa-icon> <span class="${g.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(g.clickable ? f : undefined)} role=${ifDefined(g.clickable ? 'button' : undefined)} tabindex=${ifDefined(g.clickable ? '0' : undefined)}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
     // prettier-ignore
     sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
   }
@@ -384,7 +385,7 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
     // prettier-ignore
     const statusIconTemplate = statusIconName === SPINNER_ICON_NAME
       ? html`<wa-spinner></wa-spinner>`
-      : html`<wa-icon library="texra" name=${statusIconName} aria-hidden="true"></wa-icon>`;
+      : html`<wa-icon library=${TEXRA_ICON_LIBRARY} name=${statusIconName} aria-hidden="true"></wa-icon>`;
     // prettier-ignore
     sections.push(buildToolUseSection('Status:', html`<wa-badge variant="neutral" appearance="filled">${statusIconTemplate} ${mcpOutput.status}</wa-badge>`));
     renderedMcpOutput = true;

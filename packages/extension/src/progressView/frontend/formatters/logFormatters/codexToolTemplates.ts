@@ -33,6 +33,7 @@ import {
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 type RenderableSection = TemplateResult | typeof nothing | undefined | null;
 type BadgeData = { iconName: string; label: string };
@@ -53,7 +54,7 @@ function renderBadge({ iconName, label }: BadgeData): TemplateResult {
   // prettier-ignore
   const iconTemplate = iconName === SPINNER_ICON_NAME
     ? html`<wa-spinner></wa-spinner>`
-    : html`<wa-icon library="texra" name=${iconName} aria-hidden="true"></wa-icon>`;
+    : html`<wa-icon library=${TEXRA_ICON_LIBRARY} name=${iconName} aria-hidden="true"></wa-icon>`;
   // prettier-ignore
   return html`<wa-badge variant="neutral" appearance="filled">${iconTemplate} ${label}</wa-badge>`;
 }
@@ -142,7 +143,7 @@ function renderCodexFileChangeItem(
 ): TemplateResult {
   return html`
     <li class="detail-item">
-      <wa-icon library="texra" name="file" aria-hidden="true"></wa-icon>
+      <wa-icon library=${TEXRA_ICON_LIBRARY} name="file" aria-hidden="true"></wa-icon>
       <span
         class="file-link clickable-link"
         data-file=${change.path}
@@ -226,7 +227,7 @@ function renderCodexTodoItem(item: {
   return html`
     <li class="detail-item">
       <wa-icon
-        library="texra"
+        library=${TEXRA_ICON_LIBRARY}
         name=${item.completed ? 'pass-filled' : 'circle-large-outline'}
         aria-hidden="true"
       ></wa-icon>

@@ -12,6 +12,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';
@@ -128,7 +129,7 @@ export class LatexdiffResults extends LitElement {
         data-run-id=${ifDefined(runId)}
         title=${ifDefined(message)}
       >
-        <wa-icon library="texra" name=${icon} aria-hidden="true"></wa-icon>
+        <wa-icon library=${TEXRA_ICON_LIBRARY} name=${icon} aria-hidden="true"></wa-icon>
         ${this.renderFileLink(baseFile, baseLabel)}
         <span class="arrow">→</span>
         ${this.renderFileLink(revisedFile, revisedLabel)}
