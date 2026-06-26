@@ -13,8 +13,12 @@ import {
   runPackRunDir,
 } from '@housekeeping';
 import * as logger from '@logger/logUtils';
-import { ExecutionIdSchema } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
+import {
+  FileOpParamsSchema,
+  fileOpConfigFields,
+  type FileOpParams,
+} from './fileOpSchemas';
 import {
   emitClearMissingOutputs,
   type ClearMissingOutputsOptions,
@@ -23,23 +27,13 @@ import {
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
 
-const RequiredString = z.string().min(1);
-
-const BasePackSchema = z.object({
-  inputFile: RequiredString,
-  agent: RequiredString,
-  model: RequiredString,
-});
-
-const PackConfigSchema = BasePackSchema.extend({
+const PackConfigSchema = FileOpParamsSchema.extend({
+  // Pack permits an empty model in config; clean keeps it required.
   model: z.string().prefault(''),
-  outputFiles: z.array(z.string()).prefault([]),
-  streamId: z.string().optional(),
-  executionId: ExecutionIdSchema.optional(),
-  skipProgressViewClear: z.boolean().optional(),
+  ...fileOpConfigFields,
 });
 
-const PackMultipleSchema = BasePackSchema.extend({
+const PackMultipleSchema = FileOpParamsSchema.extend({
   inputFile: z.string().prefault(''),
   inputFiles: z.array(z.string()).prefault([]),
 }).refine((d) => d.inputFile || d.inputFiles.length > 0, {
@@ -77,13 +71,7 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
-interface PackParams {
-  agent: string;
-  model: string;
-  inputFile: string;
-}
-
-async function executePackOperation<T extends PackParams>(
+async function executePackOperation<T extends FileOpParams>(
   schema: z.ZodType<T>,
   input: unknown,
   label: string,
@@ -159,7 +147,7 @@ async function handlePackSingle(
   model: string,
 ): Promise<void> {
   return executePackOperation(
-    BasePackSchema,
+    FileOpParamsSchema,
     { inputFile, agent, model },
     'params',
     (data) => runPackSingle(data.model, data.inputFile, data.agent),
