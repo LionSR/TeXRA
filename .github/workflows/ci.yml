@@ -51,7 +51,7 @@ jobs:
           fi
 
   validate:
-    name: validate
+    name: validate (linux)
     needs: changes
     if: needs.changes.outputs.code == 'true'
     # OS-independent checks (typecheck/lint/tests/compile) and the
