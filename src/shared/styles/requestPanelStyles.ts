@@ -195,13 +195,16 @@ export const requestPanelStyles: CSSResult = css`
     max-width: 100%;
   }
 
-  /* The primary action buttons (which carry data-action) hug their content and
-     stay button-sized: they never grow to fill a wide panel, are width-capped,
-     and group at the start of the row. The diff dropdown's own buttons (tool
-     edit approvals) keep their bespoke sizing below. */
-  :is(${ACTIONS}) wa-button[data-action] {
+  /* The primary action buttons hug their content and stay button-sized: they
+     never grow to fill a wide panel and are width-capped, so they group at the
+     start of the row instead of stretching, and the label centers within the
+     button's own padding. Keyed off the semantic .action-button class the
+     button helper sets in its template (not the data-action behaviour hook)
+     and sized on the host element, so there is no shadow-part piercing and no
+     source-order tiebreak to keep in sync. Tool edit approvals override with
+     their bespoke sizing below, winning by specificity. */
+  :is(${ACTIONS}) .action-button {
     flex: 0 1 auto;
-    min-width: min(5.5rem, 100%);
     max-width: min(14rem, 100%);
   }
 
@@ -210,13 +213,6 @@ export const requestPanelStyles: CSSResult = css`
     width: auto;
     min-width: min(5.5rem, 100%);
     max-width: min(7rem, 100%);
-  }
-
-  /* Center the label within each content-sized button (they sit at or above
-     the 5.5rem min-width floor, so centering keeps short labels balanced). */
-  :is(${ACTIONS}) wa-button[data-action]::part(base) {
-    justify-content: center;
-    gap: ${sp.small};
   }
 
   .approval-request__actions wa-button[data-action]::part(base) {
