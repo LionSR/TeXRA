@@ -135,4 +135,22 @@ describe('tool-edit-request-panel', () => {
     expect(element.handleKeyboardShortcut('a')).toBe(true);
     expect(actions).toEqual(['approveSession']);
   });
+
+  it('ignores "a" while the rejection feedback box is open', async () => {
+    const element = await mountPanel(
+      createPermission({ allowBypass: true, streamId: 'stream-1' }),
+    );
+    const actions: string[] = [];
+    element.addEventListener('permission-action', (event) => {
+      actions.push((event as CustomEvent<{ action: string }>).detail.action);
+    });
+
+    // First 'n' opens the feedback textarea (does not submit yet).
+    expect(element.handleKeyboardShortcut('n')).toBe(true);
+    await element.updateComplete;
+
+    // With feedback focused, 'a' must not hijack typing into the textarea.
+    expect(element.handleKeyboardShortcut('a')).toBe(false);
+    expect(actions).toEqual([]);
+  });
 });

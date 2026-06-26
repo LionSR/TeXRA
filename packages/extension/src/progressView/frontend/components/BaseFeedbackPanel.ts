@@ -199,6 +199,8 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
   ): void => {
     const action =
       (event.detail?.item as HTMLElement & { value?: string })?.value ?? '';
+    // Only the Yolo item is actionable; any other value is intentionally a
+    // no-op (defensive against future menu items or stray wa-select events).
     if (action === APPROVE_SESSION_ACTION) {
       this.emitAction(APPROVE_SESSION_ACTION);
     }
