@@ -203,15 +203,24 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   /* Per-panel basis tunes how many action buttons fit per row before wrapping.
-     Default 8rem (retry / inquiry / question); bash / plan want wider rows,
-     the workflow proposal narrower. Tool edit approvals stay compact below. */
+     Default 8rem (retry / inquiry / question); bash / plan want wider rows.
+     Tool edit approvals and workflow proposals stay compact below. */
   .bash-approval-request__actions,
   .plan-approval-request__actions {
     --action-button-basis: 12rem;
   }
 
-  .workflow-proposal__actions {
-    --action-button-basis: 6rem;
+  /* The proposal's approve/reject/setup buttons keep a capped, button-sized
+     width and don't grow to fill a wide panel — they hug their content and
+     stay grouped at the start of the row. */
+  .workflow-proposal__actions wa-button[data-action] {
+    flex: 0 1 auto;
+    min-width: min(5.5rem, 100%);
+    max-width: min(9rem, 100%);
+  }
+
+  .workflow-proposal__actions wa-button[data-action]::part(base) {
+    justify-content: center;
   }
 
   .approval-request__actions wa-button[data-action] {
