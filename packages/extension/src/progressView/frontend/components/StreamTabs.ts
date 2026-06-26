@@ -33,7 +33,7 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import './WorktreeChip';
 import { formatRelativeTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
 import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles, streamTabsContainerStyles } from './streamTabsStyles';
 import { ELEMENT_IDS, FILTER_BUTTONS } from '../constants';
@@ -64,7 +64,7 @@ function buildTooltip(
     info.inputFile && `Input: ${info.inputFile}`,
   ]
     .filter(Boolean)
-    .join(' • ');
+    .join(' · ');
   const parts = [mainLine];
   if (info.description) {
     parts.push(info.description);
@@ -148,7 +148,7 @@ export class StreamTab extends LitElement {
               aria-expanded=${this.expanded ? 'true' : 'false'}
             >
               <wa-icon
-                library="texra"
+                library=${TEXRA_ICON_LIBRARY}
                 name="chevron-right"
                 aria-hidden="true"
               ></wa-icon>
@@ -167,7 +167,7 @@ export class StreamTab extends LitElement {
             >
             ${this.childCount > 0 && this.compact
               ? html`<wa-icon
-                  library="texra"
+                  library=${TEXRA_ICON_LIBRARY}
                   name="chevron-right"
                   class="compact-subagent-hint"
                   role="img"
@@ -202,7 +202,7 @@ export class StreamTab extends LitElement {
                     >${stream.modelLabel ?? stream.model ?? ''}</span
                   >
                   <wa-icon
-                    library="texra"
+                    library=${TEXRA_ICON_LIBRARY}
                     name=${agentDecorator.icon}
                     class="agent-category"
                     aria-hidden="true"
@@ -212,7 +212,7 @@ export class StreamTab extends LitElement {
                     stream.isRemote,
                     () => html`
                       <wa-icon
-                        library="texra"
+                        library=${TEXRA_ICON_LIBRARY}
                         name=${AGENT_DECORATORS.properties.remote.icon}
                         class="remote-agent"
                         aria-hidden="true"

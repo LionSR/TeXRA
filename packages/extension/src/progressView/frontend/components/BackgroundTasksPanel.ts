@@ -35,6 +35,7 @@ import {
   type InquiryThreadUpdatedEvent,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { ProgressEvents } from '../events';
 
 // Local imports - contexts
@@ -300,7 +301,11 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <wa-details class="collapsible-quiet" open>
         <div slot="summary" class="section-label">
-          <wa-icon library="texra" name="comments" aria-hidden="true"></wa-icon>
+          <wa-icon
+            library=${TEXRA_ICON_LIBRARY}
+            name="comments"
+            aria-hidden="true"
+          ></wa-icon>
           <span
             >Inquiries${openCount
               ? html` &middot; ${openCount} open`
@@ -328,7 +333,7 @@ export class BackgroundTasksPanel extends LitElement {
       <div class="task-item">
         <div class="task-header">
           <wa-icon
-            library="texra"
+            library=${TEXRA_ICON_LIBRARY}
             name="circle-question"
             aria-hidden="true"
             class="task-icon task-icon--inquiry"
@@ -370,7 +375,11 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <wa-details class="collapsible-quiet">
         <div slot="summary" class="section-label">
-          <wa-icon library="texra" name=${icon} aria-hidden="true"></wa-icon>
+          <wa-icon
+            library=${TEXRA_ICON_LIBRARY}
+            name=${icon}
+            aria-hidden="true"
+          ></wa-icon>
           <span
             >${label}${hasActive
               ? html` &middot; ${active.length} active`
@@ -413,7 +422,7 @@ export class BackgroundTasksPanel extends LitElement {
       <div class="task-item">
         <div class="task-header">
           <wa-icon
-            library="texra"
+            library=${TEXRA_ICON_LIBRARY}
             name=${icon}
             aria-hidden="true"
             class=${classMap({

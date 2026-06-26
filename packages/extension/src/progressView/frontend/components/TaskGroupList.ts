@@ -21,7 +21,7 @@ import { designTokens } from '@shared/styles';
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
 import { formatDuration } from '@utils/core';
 
 // Local imports - progress view constants
@@ -333,7 +333,7 @@ export class TaskGroupList extends LitElement {
           aria-label=${`Show ${revealCount} older ${suffix}`}
         >
           <wa-icon
-            library="texra"
+            library=${TEXRA_ICON_LIBRARY}
             name="chevron-up"
             aria-hidden="true"
           ></wa-icon>
@@ -446,7 +446,7 @@ export class TaskGroupList extends LitElement {
       <span class="group-status-icon">
         ${statusIcon
           ? html`<wa-icon
-              library="texra"
+              library=${TEXRA_ICON_LIBRARY}
               name=${statusIcon}
               aria-hidden="true"
             ></wa-icon>`
@@ -455,7 +455,11 @@ export class TaskGroupList extends LitElement {
       <span class="group-title">${group.name}</span>
       <span class="group-time">
         <span class="group-start-time" data-start=${String(group.startTime)}>
-          <wa-icon library="texra" name="clock" aria-hidden="true"></wa-icon>
+          <wa-icon
+            library=${TEXRA_ICON_LIBRARY}
+            name="clock"
+            aria-hidden="true"
+          ></wa-icon>
           ${formattedStartTime}
         </span>
         ${durationText

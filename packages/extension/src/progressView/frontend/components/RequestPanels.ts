@@ -55,6 +55,7 @@ import './ProposalRequestPanel';
 import './PlanApprovalRequestPanel';
 import './ExternalInquiryPanel';
 import './UserQuestionPanel';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 /** Section configuration for rendering permission groups */
 interface SectionConfig {
@@ -192,7 +193,7 @@ export class RequestPanels extends LitElement {
     return html`
       <div class="${config.cssClass}__header">
         <wa-icon
-          library="texra"
+          library=${TEXRA_ICON_LIBRARY}
           name=${config.icon}
           aria-hidden="true"
         ></wa-icon>
@@ -252,7 +253,7 @@ export class RequestPanels extends LitElement {
           @click=${this._eiPrev}
         >
           <wa-icon
-            library="texra"
+            library=${TEXRA_ICON_LIBRARY}
             name="chevron-left"
             aria-hidden="true"
           ></wa-icon>
@@ -268,7 +269,7 @@ export class RequestPanels extends LitElement {
           @click=${this._eiNext}
         >
           <wa-icon
-            library="texra"
+            library=${TEXRA_ICON_LIBRARY}
             name="chevron-right"
             aria-hidden="true"
           ></wa-icon>

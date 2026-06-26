@@ -6,6 +6,7 @@ import {
   isChildExecutionErrorStatus,
 } from './childExecutionStatus';
 import { childExecutionLabel } from './childExecutions';
+import { TOOL_OUTPUT_CORNER } from '../ui/glyphs';
 import type {
   CompletedProcessTranscript,
   ConversationEntry,
@@ -55,7 +56,7 @@ export function completedProcessDisplayLines(
   return [
     header,
     ...process.tailLines.map((line, index) => {
-      const prefix = index === 0 ? '⎿ ' : '  ';
+      const prefix = index === 0 ? `${TOOL_OUTPUT_CORNER} ` : '  ';
       return `${prefix}${line}`;
     }),
   ];
