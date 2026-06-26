@@ -8,13 +8,9 @@ import {
   setOnboardingDeclined,
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
-import {
-  refresh,
-  computeAgentOptionsData,
-  createKey,
-  getAgent,
-} from '@agent/index';
+import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { agentKeyOf } from '@shared/schemas/agent';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - common
@@ -207,7 +203,7 @@ export class MainViewProvider
       const entry = getAgent('setup', AgentCategory.ToolUse);
       view.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
-        agentId: entry ? createKey(entry.source, entry.name) : 'setup',
+        agentId: entry ? agentKeyOf(entry) : 'setup',
         sessionType: 'toolUse',
       });
     }

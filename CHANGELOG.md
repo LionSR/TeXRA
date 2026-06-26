@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **Delegation launches the agent it validated** — when a custom or remote agent shares a name with a built-in agent of the other type (e.g. a custom workflow `assistant` next to the built-in tool-use `assistant`), delegating no longer resolves a different agent at launch than the one shown and validated, which previously failed with a spurious "is a workflow agent but was launched as tool-use" error. Validation and launch now resolve the name through one category-aware rule.
+- **Unavailable model overrides fail fast** — approving a delegation after switching the model to one that isn't available in the active API mode now reports it immediately, instead of reporting the subagent as launched and then failing asynchronously. The approve path uses the same availability check as the initial delegation.
+
 ### CLI
 
 #### Features
