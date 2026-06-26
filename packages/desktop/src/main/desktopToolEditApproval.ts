@@ -15,6 +15,7 @@ import {
   type LatexPreviewEntry,
 } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
+import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import {
   computeLineChangeSummary,
   computeUserPatch,
@@ -22,7 +23,6 @@ import {
   registerPendingApproval,
   setToolEditApprovalHandler,
   unregisterPendingApproval,
-  type ToolEditApprovalAction,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';

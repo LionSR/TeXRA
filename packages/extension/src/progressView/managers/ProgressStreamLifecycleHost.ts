@@ -5,10 +5,7 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
-import {
-  cleanupAllApprovals,
-  cleanupApprovalsForStream,
-} from '@tools/approval';
+import { cleanupAllApprovals, releaseStreamResources } from '@tools/approval';
 
 import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } from '@controllers/progressView/ProgressStreamLifecycleController';
 import type { ProgressViewProvider } from '../ProgressViewProvider';
@@ -48,13 +45,15 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
   }
 
   cleanupDeletedStream(stream: StreamTabId): void {
-    cleanupApprovalsForStream(stream);
-    ToolUseFollowUpQueue.release(stream);
+    releaseStreamResources(stream);
     this.backupCleaner.clearStreamBackups(stream);
     this.provider.webviewBridge.clearStream(stream);
   }
 
   cleanupDeletedStreams(streams: StreamTabId[]): void {
+    // Process-wide approval reset for the single-session extension host.
+    // ToolUseFollowUpQueue has no bulk-release method, so queues are released
+    // per stream after the approval sweep.
     cleanupAllApprovals();
     for (const stream of streams) {
       ToolUseFollowUpQueue.release(stream);

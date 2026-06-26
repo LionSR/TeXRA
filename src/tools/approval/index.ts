@@ -12,6 +12,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
 import {
   _rejectAllPendingUserQuestions,
@@ -42,6 +43,25 @@ export function cleanupApprovalsForStream(
   bashApprovalController.bypass.clearForStream(streamId);
   proposalApprovalState.clearForStream(streamId);
   session.coordinators.cleanupRequestsForStream(streamId);
+}
+
+/**
+ * Release all agent resources held for a deleted stream: approval state
+ * (pending approvals, bypass flags, coordinator requests) AND the follow-up
+ * queue. These two always need to be cleared together when a stream is
+ * removed, so this is the single function hosts should call instead of
+ * combining {@link cleanupApprovalsForStream} + `ToolUseFollowUpQueue.release`
+ * manually.
+ *
+ * Host-specific teardown (webview state, backup files, goal store, etc.)
+ * remains the caller's responsibility after this returns.
+ */
+export function releaseStreamResources(
+  streamId: StreamTabId,
+  session: SessionHandle = defaultSession(),
+): void {
+  cleanupApprovalsForStream(streamId, session);
+  ToolUseFollowUpQueue.release(streamId);
 }
 
 /**
@@ -96,7 +116,6 @@ export {
   setBashApprovalSessionBypass,
   toggleBashApprovalSessionBypass,
   isBashApprovalBypassedForStream,
-  type BashApprovalAction,
   type BashApprovalRequest,
   type BashApprovalResult,
 } from './bashApproval';
@@ -112,7 +131,6 @@ export {
   setToolEditApprovalSessionBypass,
   toggleToolEditApprovalSessionBypass,
   isApprovalBypassedForStream,
-  type ToolEditApprovalAction,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
   type WriteApprovedContentResult,
