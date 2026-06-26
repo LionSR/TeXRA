@@ -215,6 +215,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Whether the backend stores responses server-side (`store: true`). The base
+   * OpenAI Responses API does. A stateless backend (the Codex ChatGPT-subscription
+   * endpoint forces `store: false`) keeps no server-side reasoning, so it must
+   * (a) request `reasoning.encrypted_content` and (b) replay those blobs in the
+   * next turn's input for cross-turn reasoning continuity — the store:true path
+   * relies on `previous_response_id` instead and must NOT replay them (the items
+   * already live server-side, so resending throws "Duplicate item found").
+   *
+   * Single source for the `store` request field and the encrypted-reasoning gate.
+   */
+  protected get storesResponsesServerSide(): boolean {
+    return true;
+  }
+
+  /**
    * Override streaming config to disable streaming when background mode is enabled.
    * Background responses use polling for completed results, incompatible with streaming.
    */
@@ -1376,7 +1391,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const params: ResponseCreateParamsBase = {
       ...baseParams,
       max_output_tokens: maxOutputTokens,
-      store: true,
+      store: this.storesResponsesServerSide,
       ...(convertedTools?.length && {
         tool_choice: 'auto' as const,
         ...(!parallelToolCalls && { parallel_tool_calls: false }),
@@ -1405,6 +1420,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // native web search even when no explicit tools are passed.
     if (this.capabilities.supportsNativeWebSearch) {
       params.include = ['web_search_call.action.sources'];
+    }
+
+    // Stateless (store:false) backends keep no server-side reasoning, so request
+    // encrypted reasoning blobs to replay in the next turn's input for cross-turn
+    // reasoning continuity (matching the Codex CLI / OpenCode). The store:true
+    // path retains reasoning via previous_response_id and must not replay it.
+    if (
+      !this.storesResponsesServerSide &&
+      this.capabilities.supportsReasoning
+    ) {
+      params.include = [
+        ...(params.include ?? []),
+        'reasoning.encrypted_content',
+      ];
     }
 
     // Extend reasoning with summary option for API call (not needed for token counting)
@@ -2308,15 +2337,32 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return { webSearchResults: [], webFetchResults: [], contentBlocks: [] };
     }
 
-    // Extract content blocks that need to be preserved
-    // Only include reasoning items that are immediately followed by web_search_call
-    // to satisfy both API requirements (reasoning needs following item, web_search needs preceding reasoning)
+    // Extract content blocks that need to be preserved, in output order.
+    //
+    // store:true (default): only reasoning items immediately preceding a
+    //   web_search_call are kept — that pairing is required by the API, and
+    //   previous_response_id retains everything else server-side.
+    // store:false (Codex/stateless): keep EVERY reasoning item (each carries
+    //   `encrypted_content`) so the next turn can replay it for reasoning
+    //   continuity; web_search_call items are still preserved alongside.
+    // Preserving output order keeps the item-pairing invariant intact when the
+    // blocks are replayed before the function_call.
+    const preserveAllReasoning = !this.storesResponsesServerSide;
     const contentBlocks: (ResponseFunctionWebSearch | ResponseReasoningItem)[] =
       [];
     for (const [i, item] of output.entries()) {
+      if (preserveAllReasoning && isOpenAIReasoningItem(item)) {
+        contentBlocks.push(item);
+        continue;
+      }
       if (isOpenAIWebSearchCall(item)) {
-        // Check if there's a reasoning item immediately before this web_search_call
-        if (i > 0 && isOpenAIReasoningItem(output[i - 1])) {
+        // store:true: pair the immediately-preceding reasoning with the
+        // web_search_call (store:false already captured it above).
+        if (
+          !preserveAllReasoning &&
+          i > 0 &&
+          isOpenAIReasoningItem(output[i - 1])
+        ) {
           contentBlocks.push(output[i - 1] as ResponseReasoningItem);
         }
         contentBlocks.push(item);

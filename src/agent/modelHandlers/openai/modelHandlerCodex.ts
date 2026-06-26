@@ -178,6 +178,15 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return false;
   }
 
+  // The Codex backend keeps no server-side state (store:false, also enforced at
+  // the fetch layer). This drives the base request `store` field and gates the
+  // encrypted-reasoning replay path: with no previous_response_id chaining,
+  // reasoning continuity comes from replaying `reasoning.encrypted_content`
+  // blobs in each turn's input instead.
+  protected override get storesResponsesServerSide(): boolean {
+    return false;
+  }
+
   protected override get supportsInlineInputFileUpload(): boolean {
     return false;
   }
