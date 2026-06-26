@@ -13,7 +13,7 @@ import { hljs } from '@shared/highlighting/hljs';
 
 // Local imports - shared utilities
 import { getBasename } from '@shared/utils/path';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - Lit template utilities
 import {
@@ -152,7 +152,7 @@ export function buildDetailsSummary(
   // prettier-ignore
   const iconTemplate = iconName === SPINNER_ICON_NAME
     ? html`<wa-spinner class="icon"></wa-spinner>`
-    : html`<wa-icon library="texra" name=${iconName} class="icon" aria-hidden="true"></wa-icon>`;
+    : html`<wa-icon library=${TEXRA_ICON_LIBRARY} name=${iconName} class="icon" aria-hidden="true"></wa-icon>`;
   // prettier-ignore
   const timestampTemplate = timestamp
     ? html` <span class="timestamp" title=${timestamp.tooltip}>${timestamp.display}</span>`
@@ -163,7 +163,7 @@ export function buildDetailsSummary(
   const extraTemplate = extraContent ?? nothing;
   // Toggle icon uses CSS rotation via details[open] selector - always start with chevron-right
   // prettier-ignore
-  return html`<summary class="details-summary"><wa-icon library="texra" name="chevron-right" class="toggle-icon" aria-hidden="true"></wa-icon> ${iconTemplate} <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</summary>`;
+  return html`<summary class="details-summary"><wa-icon library=${TEXRA_ICON_LIBRARY} name="chevron-right" class="toggle-icon" aria-hidden="true"></wa-icon> ${iconTemplate} <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</summary>`;
 }
 
 /** Build rendered templates for file list. */
@@ -184,7 +184,7 @@ export function buildFileListRender(files: FileListEntry[]): {
     const sourceText = file.sourceDisplay ?? source;
 
     // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}><wa-icon library="texra" name=${iconName} aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${fileName}</span>${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
+    return html`<li class="detail-item" title=${filePath}><wa-icon library=${TEXRA_ICON_LIBRARY} name=${iconName} aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${fileName}</span>${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
   })}`;
 
   const loadedFiles = files.filter((file) => file.ok).length;
@@ -264,7 +264,7 @@ export function buildCodeBlock(
   // prettier-ignore
   const languageBadge = showLanguage ? html`<span class="code-block-language">${getLanguageLabel(language)}</span>` : nothing;
   // prettier-ignore
-  const copyButton = showCopy ? html`<button class="code-block-copy" title="Copy to clipboard" data-copy-id=${registerCopyContent(text)} data-copy-type="code-block"><wa-icon library="texra" name="copy" aria-hidden="true"></wa-icon></button>` : nothing;
+  const copyButton = showCopy ? html`<button class="code-block-copy" title="Copy to clipboard" data-copy-id=${registerCopyContent(text)} data-copy-type="code-block"><wa-icon library=${TEXRA_ICON_LIBRARY} name="copy" aria-hidden="true"></wa-icon></button>` : nothing;
   // prettier-ignore
   const codeTemplate = html`<pre class=${classMap(preClasses)}><code>${isHighlighted ? unsafeHTML(highlighted) : text}</code></pre>`;
   // prettier-ignore
@@ -290,7 +290,7 @@ export function buildFileLinkWithLines(
   const displayText = fileName + lineInfo;
 
   // prettier-ignore
-  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(startLine)} role="button" tabindex="0"><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> ${displayText}</span>`;
+  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(startLine)} role="button" tabindex="0"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file" aria-hidden="true"></wa-icon> ${displayText}</span>`;
 }
 
 // ============================================================================
@@ -304,7 +304,7 @@ export function buildMemoryPathDisplay(
   if (!memoryPath) return nothing;
   const fileName = getBasename(memoryPath) || memoryPath;
   // prettier-ignore
-  return html`<span class="memory-path"><wa-icon library="texra" name="database" aria-hidden="true"></wa-icon> ${fileName} <span class="file-source">(${memoryPath})</span></span>`;
+  return html`<span class="memory-path"><wa-icon library=${TEXRA_ICON_LIBRARY} name="database" aria-hidden="true"></wa-icon> ${fileName} <span class="file-source">(${memoryPath})</span></span>`;
 }
 
 // ============================================================================
@@ -317,7 +317,7 @@ export function buildExecutionsPathDisplay(
 ): TemplateResult | typeof nothing {
   if (!execPath) return nothing;
   // prettier-ignore
-  return html`<span class="memory-path"><wa-icon library="texra" name="history" aria-hidden="true"></wa-icon> ${execPath}</span>`;
+  return html`<span class="memory-path"><wa-icon library=${TEXRA_ICON_LIBRARY} name="history" aria-hidden="true"></wa-icon> ${execPath}</span>`;
 }
 
 // ============================================================================

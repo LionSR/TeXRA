@@ -22,9 +22,7 @@ import {
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '../render/terminalText';
-import { STATUS_DOT } from '../ui/glyphs';
-
-const OUTPUT_CORNER = '⎿';
+import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '../ui/glyphs';
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;
 // Header chrome around the preview: `● ` plus ` (` and `)`.
@@ -175,7 +173,7 @@ export function toolUsePatchDisplayLines(
   // component (live cards + scrollback render through it); these lines feed the
   // transcript viewer and stay uncolored.
   return groups.flatMap((group) => [
-    `${OUTPUT_CORNER} ${group.fileLabel}`,
+    `${TOOL_OUTPUT_CORNER} ${group.fileLabel}`,
     ...diffDisplayLines(group.hunks).map((line) => `  ${line.text}`),
   ]);
 }
@@ -276,7 +274,7 @@ function outputDisplayLines(
     ? elideOutputLines(lines)
     : { head: lines, tail: [] as readonly string[], hiddenCount: 0 };
   const out = sliced.head.map((line, index) =>
-    index === 0 ? `${OUTPUT_CORNER} ${line}` : `  ${line}`,
+    index === 0 ? `${TOOL_OUTPUT_CORNER} ${line}` : `  ${line}`,
   );
   if (sliced.hiddenCount > 0) {
     out.push(`  ${elisionMarker(sliced.hiddenCount)}`);
@@ -312,13 +310,13 @@ function universalToolUseDisplayLines(
     ...patchLines,
     ...(toolUse.isError
       ? [
-          `${OUTPUT_CORNER} ${truncateWithEllipsis(
+          `${TOOL_OUTPUT_CORNER} ${truncateWithEllipsis(
             collapseWhitespace(errorText),
             MAX_ERROR_PREVIEW,
           )}`,
         ]
       : []),
-    ...(showNoOutput ? [`${OUTPUT_CORNER} (no output)`] : []),
+    ...(showNoOutput ? [`${TOOL_OUTPUT_CORNER} (no output)`] : []),
   ];
 }
 
@@ -333,11 +331,11 @@ function bashToolUseDisplayLines(
     formatHeader(toolUse),
     ...outputLines,
     ...(toolUse.isError && exitCode !== undefined
-      ? [`${OUTPUT_CORNER} exit ${exitCode}`]
+      ? [`${TOOL_OUTPUT_CORNER} exit ${exitCode}`]
       : []),
     ...(toolUse.isError
       ? [
-          `${OUTPUT_CORNER} ${truncateWithEllipsis(
+          `${TOOL_OUTPUT_CORNER} ${truncateWithEllipsis(
             collapseWhitespace(errorText),
             MAX_ERROR_PREVIEW,
           )}`,
@@ -346,7 +344,7 @@ function bashToolUseDisplayLines(
     ...(toolUse.status === TOOL_USE_STATUS.COMPLETED &&
     !toolUse.isError &&
     outputLines.length === 0
-      ? [`${OUTPUT_CORNER} (no output)`]
+      ? [`${TOOL_OUTPUT_CORNER} (no output)`]
       : []),
   ];
 }
@@ -366,7 +364,7 @@ function PatchPreview({
     <Box flexDirection="column" paddingLeft={2}>
       {groups.map((group, index) => (
         <Box key={`${group.fileLabel}-${index}`} flexDirection="column">
-          <Text dimColor>{`${OUTPUT_CORNER} ${group.fileLabel}`}</Text>
+          <Text dimColor>{`${TOOL_OUTPUT_CORNER} ${group.fileLabel}`}</Text>
           <Box flexDirection="column" paddingLeft={2}>
             <DiffView hunks={group.hunks} width={diffWidth} />
           </Box>
@@ -390,7 +388,7 @@ function OutputBlock({
     <Box flexDirection="column" paddingLeft={2}>
       {head.map((line, index) => (
         <Box key={`h${index}`} flexDirection="row" flexWrap="nowrap">
-          <Text dimColor>{index === 0 ? `${OUTPUT_CORNER} ` : '  '}</Text>
+          <Text dimColor>{index === 0 ? `${TOOL_OUTPUT_CORNER} ` : '  '}</Text>
           <Text>{line}</Text>
         </Box>
       ))}
@@ -419,7 +417,7 @@ function CornerLine({
 }): React.JSX.Element {
   return (
     <Box flexDirection="row" flexWrap="nowrap" paddingLeft={2}>
-      <Text dimColor>{`${OUTPUT_CORNER} `}</Text>
+      <Text dimColor>{`${TOOL_OUTPUT_CORNER} `}</Text>
       <Text color={color} dimColor={!color}>
         {children}
       </Text>

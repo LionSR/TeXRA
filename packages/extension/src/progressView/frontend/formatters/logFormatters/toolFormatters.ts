@@ -15,6 +15,7 @@
 import type { LogMessageData } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { isObject } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 
@@ -197,7 +198,7 @@ export function formatToolUseTemplate(
       : null;
 
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration" role="button" tabindex="0"><wa-icon library="texra" name="reply" aria-hidden="true"></wa-icon> Setup</span>` : nothing}`;
+  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration" role="button" tabindex="0"><wa-icon library=${TEXRA_ICON_LIBRARY} name="reply" aria-hidden="true"></wa-icon> Setup</span>` : nothing}`;
 
   // prettier-ignore
   return html`<details class=${classMap({

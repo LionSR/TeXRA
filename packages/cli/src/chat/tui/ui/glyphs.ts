@@ -34,3 +34,9 @@ export const TODO_PENDING = '□';
  *  — they render as plain Markdown. */
 export const USER_ENTRY_PREFIX = `${POINTER} `;
 export const ERROR_ENTRY_PREFIX = '! ';
+
+/** Corner glyph that opens each tool-output block. */
+export const TOOL_OUTPUT_CORNER = '⎿';
+
+/** Thinking-phase marker shown in the liveness row while the model reasons. */
+export const THINKING_MARKER = '✻';

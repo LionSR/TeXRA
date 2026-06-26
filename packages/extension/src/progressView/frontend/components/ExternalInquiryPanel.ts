@@ -36,6 +36,7 @@ import {
 } from '@shared/styles';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
@@ -291,7 +292,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     return html`
       <details class="external-inquiry-request__transcript">
         <summary class="external-inquiry-request__transcript-summary">
-          <wa-icon library="texra" name="history" aria-hidden="true"></wa-icon>
+          <wa-icon
+            library=${TEXRA_ICON_LIBRARY}
+            name="history"
+            aria-hidden="true"
+          ></wa-icon>
           Conversation transcript (${answeredTurns.length})
         </summary>
         <div class="external-inquiry-request__transcript-turns">
@@ -362,7 +367,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   private renderSearchHint(): TemplateResult {
     return html`
       <div class="external-inquiry-request__search-hint">
-        <wa-icon library="texra" name="lightbulb" aria-hidden="true"></wa-icon>
+        <wa-icon
+          library=${TEXRA_ICON_LIBRARY}
+          name="lightbulb"
+          aria-hidden="true"
+        ></wa-icon>
         Consider enabling <strong>Search</strong> mode in the external tool for
         this question
       </div>
@@ -374,7 +383,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
       <div class="external-inquiry-request__attach-files">
         <div class="external-inquiry-request__attach-label">
           <wa-icon
-            library="texra"
+            library=${TEXRA_ICON_LIBRARY}
             name="cloud-upload"
             aria-hidden="true"
           ></wa-icon>
@@ -385,7 +394,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
             (file) => html`
               <div class="external-inquiry-request__file-item">
                 <wa-icon
-                  library="texra"
+                  library=${TEXRA_ICON_LIBRARY}
                   name="file"
                   aria-hidden="true"
                 ></wa-icon>

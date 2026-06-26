@@ -43,6 +43,7 @@ import { getBasename } from '@shared/utils/path';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderWorkflowExtractFlagBadges } from '@shared/wa/extractFlagBadges';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
@@ -124,7 +125,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
             ? html`
                 <div class="workflow-proposal__agent-select">
                   <wa-icon
-                    library="texra"
+                    library=${TEXRA_ICON_LIBRARY}
                     name="sparkle"
                     aria-hidden="true"
                   ></wa-icon>
@@ -142,7 +143,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
             ? html`
                 <div class="workflow-proposal__model-select">
                   <wa-icon
-                    library="texra"
+                    library=${TEXRA_ICON_LIBRARY}
                     name="robot"
                     aria-hidden="true"
                   ></wa-icon>
