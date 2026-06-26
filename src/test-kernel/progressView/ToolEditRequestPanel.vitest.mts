@@ -171,8 +171,23 @@ describe('tool-edit-request-panel', () => {
     expect(actions).toEqual([]);
   });
 
+  it('hides the Yolo button when streamId is empty even if bypass is allowed', async () => {
+    const element = await mountPanel(
+      createPermission({ allowBypass: true, streamId: '' }),
+    );
+
+    expect(
+      element.shadowRoot?.querySelector(
+        'wa-button[data-action="approveSession"]',
+      ),
+    ).toBeFalsy();
+    expect(element.handleKeyboardShortcut('a')).toBe(false);
+  });
+
   it('offers a Yolo button and "a" shortcut that emit approveSession', async () => {
-    const element = await mountPanel(createPermission({ allowBypass: true }));
+    const element = await mountPanel(
+      createPermission({ allowBypass: true, streamId: 'stream-1' }),
+    );
     const actions: string[] = [];
     element.addEventListener('permission-action', (event) => {
       actions.push((event as CustomEvent<{ action: string }>).detail.action);

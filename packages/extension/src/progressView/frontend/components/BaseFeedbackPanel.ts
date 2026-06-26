@@ -12,6 +12,9 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import { FEEDBACK_ELIGIBLE_KINDS } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
+// Local imports - progress view events
+import { APPROVE_SESSION_ACTION } from '../events';
+
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
 
@@ -132,12 +135,16 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
    * Whether this prompt advertises the session-bypass ("Yolo") affordance.
    * Only tool-edit and bash permissions carry `allowBypass`; it is true exactly
    * when the stream is not already auto-approving (a bypassed stream never
-   * prompts, so a visible prompt always means bypass is currently off).
+   * prompts, so a visible prompt always means bypass is currently off). Also
+   * requires a concrete `streamId`: session bypass is per-stream, so without one
+   * there is nothing to scope it to and the button would silently no-op.
    */
   protected get canBypass(): boolean {
-    return Boolean(
-      (this.permission.data as { allowBypass?: boolean }).allowBypass,
-    );
+    const data = this.permission.data as {
+      allowBypass?: boolean;
+      streamId?: string;
+    };
+    return Boolean(data.allowBypass && data.streamId);
   }
 
   /**
@@ -157,8 +164,8 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
       text: 'Yolo (this session)',
       title: 'Approve and stop asking for edits & bash this session (a)',
       className: 'yolo-approve-button',
-      action: 'approveSession',
-      onClick: () => this.emitAction('approveSession'),
+      action: APPROVE_SESSION_ACTION,
+      onClick: () => this.emitAction(APPROVE_SESSION_ACTION),
     });
   }
 
@@ -172,7 +179,7 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
     if (this.showFeedback || !this.canBypass) {
       return false;
     }
-    this.emitAction('approveSession');
+    this.emitAction(APPROVE_SESSION_ACTION);
     return true;
   }
 

@@ -20,6 +20,7 @@ import {
 import { removePrompt, resolvedProposalIds } from './slices/permissionSlice';
 import { updateToolUseState } from './stateUtils';
 import { clearInquiryDraft } from './components/ExternalInquiryPanel';
+import { APPROVE_SESSION_ACTION } from './events';
 import type {
   FilterEventDetail,
   FollowupCommandDetail,
@@ -247,18 +248,20 @@ export function handlePermissionAction(
       // approve, then enables auto-approval (edits + bash) for the rest of the
       // stream — mirroring the toolbar shield and the CLI's `a` = approve
       // session. It never reaches the backend approval protocol.
-      const isYolo = action === 'approveSession';
+      const isYolo = action === APPROVE_SESSION_ACTION;
       postMessage(command, {
         requestId: permission.data.requestId,
         action: isYolo ? 'approve' : action,
         feedback,
       });
       if (isYolo) {
-        // A prompt only shows while bypass is OFF (a bypassed stream
-        // auto-approves without prompting), so the toggle always turns it on.
+        // Force bypass ON (set-on, not toggle): edit and bash bypass can be
+        // decoupled on a delegated child stream, so a toggle keyed on edit
+        // state could invert it. The button only renders with a real stream
+        // (see canBypass), but guard anyway.
         const stream = permission.data.streamId;
         if (stream) {
-          postMessage(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS, {
+          postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, {
             stream,
           });
         }

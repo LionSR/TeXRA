@@ -11,7 +11,6 @@ import {
   proposalApprovalState,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
-  toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
 
 // Local imports - utilities
@@ -131,6 +130,26 @@ export function createProgressViewCommandHandlers(
 ): ProgressViewInboundHandlerRegistry {
   const { lifecycle, run, file, followUp, approval } = actions;
   const { runtimeHost, showInfo } = actions.bypass;
+
+  // Single source of truth for the coupled edit + bash session bypass behind
+  // the one Yolo concept. The shield toolbar button flips it; the inline "Yolo
+  // (this session)" prompt button forces it on. Bash rides along silently — the
+  // shield reflects tool-edit state — so both surfaces stay in lockstep.
+  const applyCoupledBypass = async (
+    stream: StreamTabId,
+    enabled: boolean,
+  ): Promise<void> => {
+    setToolEditApprovalSessionBypass(stream, enabled, runtimeHost);
+    setBashApprovalSessionBypass(stream, enabled, runtimeHost, {
+      silent: true,
+    });
+    await showInfo?.(
+      enabled
+        ? 'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.'
+        : 'YOLO mode disabled: Tool actions and bash commands will prompt for approval.',
+    );
+  };
+
   return {
     [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
       lifecycle.setActiveStream(data.stream),
@@ -178,20 +197,17 @@ export function createProgressViewCommandHandlers(
     // The UI exposes one shield for file edits + bash and one stronger
     // delegated task auto-approval; keep the cross-approval side effects
     // symmetric here.
-    [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: async (data) => {
-      const isNowEnabled = toggleToolEditApprovalSessionBypass(
+    [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: (data) =>
+      applyCoupledBypass(
         data.stream,
-        runtimeHost,
-      );
-      setBashApprovalSessionBypass(data.stream, isNowEnabled, runtimeHost, {
-        silent: true,
-      });
-      await showInfo?.(
-        isNowEnabled
-          ? 'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.'
-          : 'YOLO mode disabled: Tool actions and bash commands will prompt for approval.',
-      );
-    },
+        !isApprovalBypassedForStream(data.stream),
+      ),
+    // Inline "Yolo (this session)" prompt button: force bypass ON. Unlike the
+    // shield toggle this is idempotent, so it can never invert an already-on
+    // edit bypass on a stream whose bash is still gated (e.g. a delegated child
+    // where edit-YOLO and bash inheritance were granted independently).
+    [PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS]: (data) =>
+      applyCoupledBypass(data.stream, true),
     [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: async (data) => {
       const isNowEnabled = proposalApprovalState.toggleBypass(
         data.stream,

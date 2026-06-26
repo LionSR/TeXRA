@@ -46,6 +46,17 @@ export interface WorkflowFollowupFormData {
 
 export type FollowupCommandDetail = WorkflowFollowupFormData;
 
+/**
+ * Frontend-only panel action emitted by the inline "Yolo (this session)"
+ * button / `a` shortcut on the edit and bash approval prompts.
+ * `handlePermissionAction` decomposes it into a normal approve plus a
+ * session-bypass toggle, so — unlike `approve` / `reject` / `openDiff` — it
+ * never reaches the backend approval protocol (`BASH_APPROVAL_ACTIONS` /
+ * `TOOL_EDIT_APPROVAL_ACTIONS` in `@shared/schemas`). Single source of truth
+ * shared by the panel that emits it and the handler that consumes it.
+ */
+export const APPROVE_SESSION_ACTION = 'approveSession';
+
 export interface PermissionActionDetail {
   permission: PermissionState;
   action: string;
