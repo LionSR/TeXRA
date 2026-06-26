@@ -30,7 +30,7 @@ jobs:
           # Heavy validation (typecheck/lint/tests/build) only runs when a PR touches
           # something other than docs. Docs-only PRs fall through to the
           # lightweight docs-build job below, keeping CI spend down. Pushes to
-          # main and manual dispatches always run the full matrix.
+          # main and manual dispatches always run full validation.
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "Event '${{ github.event_name }}' -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
@@ -181,7 +181,7 @@ jobs:
   docs-check:
     name: docs build
     needs: changes
-    # Runs only for docs-only PRs (where the heavy validate matrix is skipped).
+    # Runs only for docs-only PRs (where the heavy validate job is skipped).
     # The VitePress docs are a self-contained npm sub-project, so this mirrors
     # docs-deploy.yml's install/build rather than the pnpm workspace.
     if: needs.changes.outputs.code != 'true'
