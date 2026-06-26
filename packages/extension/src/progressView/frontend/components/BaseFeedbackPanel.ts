@@ -152,7 +152,7 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
    * on auto-approval (edits + bash) for the rest of this stream's session,
    * mirroring the toolbar shield and the CLI's `a` = "approve session". The
    * `approveSession` action is decomposed by the event handler into an approve
-   * plus a bypass toggle, so it never reaches the backend approval protocol.
+   * plus a bypass enable, so it never reaches the backend approval protocol.
    * Rendered only when the prompt advertises `allowBypass`.
    */
   protected renderYoloButton(): TemplateResult | typeof nothing {

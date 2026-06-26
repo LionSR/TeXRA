@@ -245,20 +245,19 @@ export function handlePermissionAction(
           ? PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
           : PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION;
       // "Yolo (this session)" approves the current request like a normal
-      // approve, then enables auto-approval (edits + bash) for the rest of the
+      // approve and enables auto-approval (edits + bash) for the rest of the
       // stream — mirroring the toolbar shield and the CLI's `a` = approve
       // session. It never reaches the backend approval protocol.
       const isYolo = action === APPROVE_SESSION_ACTION;
-      postMessage(command, {
-        requestId: permission.data.requestId,
-        action: isYolo ? 'approve' : action,
-        feedback,
-      });
       if (isYolo) {
-        // Force bypass ON (set-on, not toggle): edit and bash bypass can be
-        // decoupled on a delegated child stream, so a toggle keyed on edit
-        // state could invert it. The button only renders with a real stream
-        // (see canBypass), but guard anyway.
+        // Enable session bypass BEFORE settling the approval. Webview messages
+        // are delivered FIFO and ENABLE_APPROVAL_BYPASS sets the per-stream
+        // bypass synchronously when handled, so it lands before the approve
+        // message unblocks the agent — the agent can't race ahead and
+        // re-prompt the next gated action. Set-on (not toggle) is also
+        // inversion-proof: edit and bash bypass can be decoupled on a delegated
+        // child stream. The button only renders with a real stream (see
+        // canBypass), but guard anyway.
         const stream = permission.data.streamId;
         if (stream) {
           postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, {
@@ -266,6 +265,11 @@ export function handlePermissionAction(
           });
         }
       }
+      postMessage(command, {
+        requestId: permission.data.requestId,
+        action: isYolo ? 'approve' : action,
+        feedback,
+      });
       // Only remove for terminal actions (approve/reject/approveSession).
       // Non-terminal actions like openDiff, previewProposed, showLatexdiff
       // just open editors without settling the approval.
