@@ -19,6 +19,7 @@ import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { isDebugModeEnabled } from '@logger/logUtils';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchMainViewInbound,
@@ -428,7 +429,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private handleDebugModeRequest(): void {
-    const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
+    const debugMode = isDebugModeEnabled();
     this.postToActiveView({
       command: MAIN_VIEW_COMMANDS.DEBUG_MODE_SET,
       debugMode,
