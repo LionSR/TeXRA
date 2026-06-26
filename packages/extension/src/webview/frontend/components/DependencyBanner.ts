@@ -13,7 +13,7 @@ import { when } from 'lit/directives/when.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { DependencyBannerState } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
+import { bannerStyles } from '../styles/bannerStyles';
 import { renderWarningBanner } from './bannerFrame';
 import { MainViewEvents } from '../events';
 
@@ -43,9 +43,12 @@ export class DependencyBanner extends LitElement {
     visible: false,
   };
 
-  override updated(changed: PropertyValues<this>): void {
+  /** Reflected to the host so bannerStyles can hide the banner via CSS. */
+  @property({ type: Boolean, reflect: true }) visible = false;
+
+  override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has('state')) {
-      applyBannerVisibility(this, this.state.visible);
+      this.visible = this.state.visible;
     }
   }
 

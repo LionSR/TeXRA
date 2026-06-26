@@ -11,7 +11,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import type { ApiKeyBannerState } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { capitalize } from '@utils/text/stringUtils';
-import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
+import { bannerStyles } from '../styles/bannerStyles';
 import { renderWarningBanner } from './bannerFrame';
 import { MainViewEvents } from '../events';
 
@@ -23,9 +23,12 @@ export class ApiKeyBanner extends LitElement {
     visible: false,
   };
 
-  override updated(changed: PropertyValues<this>): void {
+  /** Reflected to the host so bannerStyles can hide the banner via CSS. */
+  @property({ type: Boolean, reflect: true }) visible = false;
+
+  override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has('state')) {
-      applyBannerVisibility(this, this.state.visible);
+      this.visible = this.state.visible;
     }
   }
 
