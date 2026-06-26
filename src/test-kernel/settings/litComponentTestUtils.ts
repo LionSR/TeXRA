@@ -18,6 +18,18 @@ type TestDomWindow = JSDOM['window'] & {
   };
 };
 
+/**
+ * Minimal ResizeObserver stub: jsdom doesn't implement it, and Web Awesome
+ * controls (e.g. wa-textarea, used by the rejection-feedback box) construct one
+ * in their `updated()` lifecycle. No-op observe/disconnect is enough for unit
+ * tests, which don't assert on resize behavior.
+ */
+class ResizeObserverStub {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
 const domGlobalKeys = [
   'window',
   'document',
@@ -40,6 +52,7 @@ const domGlobalKeys = [
   'getComputedStyle',
   'requestAnimationFrame',
   'cancelAnimationFrame',
+  'ResizeObserver',
 ] as const;
 
 const DEFAULT_VALIDITY = {
@@ -278,6 +291,8 @@ export function useLitComponentTestDom(
         clearTimeout(handle as unknown as ReturnType<typeof setTimeout>)) as (
         handle: number,
       ) => void,
+      // jsdom lacks ResizeObserver; Web Awesome's wa-textarea constructs one.
+      ResizeObserver: ResizeObserverStub,
     } satisfies Record<(typeof domGlobalKeys)[number], unknown>;
 
     for (const key of domGlobalKeys) {

@@ -59,6 +59,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   RUN_COMPILE_FIXER: 'runCompileFixer',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
   TOGGLE_TOOL_EDIT_APPROVAL_BYPASS: 'toggleToolEditApprovalBypass',
+  ENABLE_APPROVAL_BYPASS: 'enableApprovalBypass',
   AGENT_PROPOSAL_ACTION: 'agentProposalAction',
   BASH_APPROVAL_ACTION: 'bashApprovalAction',
   PLAN_APPROVAL_ACTION: 'planApprovalAction',
