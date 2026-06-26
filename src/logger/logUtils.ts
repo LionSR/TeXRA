@@ -97,6 +97,15 @@ function ensureChannel(channel: string, isAgent: boolean): OutputSink {
  * Write one line to the per-channel sink. Single emission point — both the
  * functional logger API and the trace subscriber funnel through this.
  */
+/**
+ * Single owner of the `texra.logger.debugMode` setting (config key + default).
+ * Gates the verbose data line below and the transcript recorder's `verbose`
+ * flag, so the key and its default live in exactly one place.
+ */
+export function isDebugModeEnabled(): boolean {
+  return getConfig<boolean>('texra.logger.debugMode', false);
+}
+
 function writeLine(
   level: LogLevel,
   channel: string,
@@ -111,7 +120,7 @@ function writeLine(
   );
 
   if (data === null || data === undefined) return;
-  if (!getConfig<boolean>('texra.logger.debugMode', false)) return;
+  if (!isDebugModeEnabled()) return;
 
   sink.appendLine(
     typeof data === 'string' ? data : JSON.stringify(data, null, 2),
