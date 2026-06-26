@@ -90,33 +90,35 @@ describe('tool-edit-request-panel', () => {
     ).toBe('');
   });
 
-  it('keeps Approve plain and ignores "a" when bypass is not allowed', async () => {
+  it('renders a non-bypass Approve and ignores "a" when bypass is not allowed', async () => {
     const element = await mountPanel(createPermission({ allowBypass: false }));
     const actions: string[] = [];
     element.addEventListener('permission-action', (event) => {
       actions.push((event as CustomEvent<{ action: string }>).detail.action);
     });
 
-    expect(element.shadowRoot?.querySelector('.approve-split')).toBeFalsy();
-    expect(
-      element.shadowRoot?.querySelector(
-        'wa-dropdown-item[value="approveSession"]',
-      ),
-    ).toBeFalsy();
+    const split = element.shadowRoot?.querySelector('approve-split-button') as
+      | (HTMLElement & { canBypass?: boolean })
+      | undefined;
+    expect(split).toBeTruthy();
+    expect(split?.canBypass).toBe(false);
     expect(element.handleKeyboardShortcut('a')).toBe(false);
     expect(actions).toEqual([]);
   });
 
-  it('keeps Approve plain when streamId is empty even if bypass is allowed', async () => {
+  it('renders a non-bypass Approve when streamId is empty even if bypass is allowed', async () => {
     const element = await mountPanel(
       createPermission({ allowBypass: true, streamId: '' }),
     );
 
-    expect(element.shadowRoot?.querySelector('.approve-split')).toBeFalsy();
+    const split = element.shadowRoot?.querySelector('approve-split-button') as
+      | (HTMLElement & { canBypass?: boolean })
+      | undefined;
+    expect(split?.canBypass).toBe(false);
     expect(element.handleKeyboardShortcut('a')).toBe(false);
   });
 
-  it('offers a Yolo split-menu option and "a" shortcut that emit approveSession', async () => {
+  it('passes canBypass to the split button and "a" emits approveSession', async () => {
     const element = await mountPanel(
       createPermission({ allowBypass: true, streamId: 'stream-1' }),
     );
@@ -125,12 +127,10 @@ describe('tool-edit-request-panel', () => {
       actions.push((event as CustomEvent<{ action: string }>).detail.action);
     });
 
-    expect(element.shadowRoot?.querySelector('.approve-split')).toBeTruthy();
-    const yoloItem = element.shadowRoot?.querySelector(
-      'wa-dropdown-item[value="approveSession"]',
-    ) as HTMLElement | undefined;
-    expect(yoloItem).toBeTruthy();
-    expect(yoloItem?.textContent).toContain('Yolo (this session)');
+    const split = element.shadowRoot?.querySelector('approve-split-button') as
+      | (HTMLElement & { canBypass?: boolean })
+      | undefined;
+    expect(split?.canBypass).toBe(true);
 
     expect(element.handleKeyboardShortcut('a')).toBe(true);
     expect(actions).toEqual(['approveSession']);
@@ -152,36 +152,5 @@ describe('tool-edit-request-panel', () => {
     // With feedback focused, 'a' must not hijack typing into the textarea.
     expect(element.handleKeyboardShortcut('a')).toBe(false);
     expect(actions).toEqual([]);
-  });
-
-  it('emits approveSession only for the Yolo split-menu item', async () => {
-    const element = await mountPanel(
-      createPermission({ allowBypass: true, streamId: 'stream-1' }),
-    );
-    const actions: string[] = [];
-    element.addEventListener('permission-action', (event) => {
-      actions.push((event as CustomEvent<{ action: string }>).detail.action);
-    });
-
-    const menu = element.shadowRoot?.querySelector('.approve-split-menu');
-    expect(menu).toBeTruthy();
-
-    // An unrecognized menu value is a no-op.
-    menu?.dispatchEvent(
-      new CustomEvent('wa-select', {
-        detail: { item: { value: 'nope' } },
-        bubbles: true,
-      }),
-    );
-    expect(actions).toEqual([]);
-
-    // Selecting the Yolo item emits approveSession (same action as `a`).
-    menu?.dispatchEvent(
-      new CustomEvent('wa-select', {
-        detail: { item: { value: 'approveSession' } },
-        bubbles: true,
-      }),
-    );
-    expect(actions).toEqual(['approveSession']);
   });
 });

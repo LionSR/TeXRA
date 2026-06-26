@@ -358,66 +358,6 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   /* ================================================================
-   * Approve split button (primary "approve once" + "Yolo this session" menu).
-   * Generic across every action row (bash + tool edit), modeled on the
-   * tool-edit diff-dropdown split button above.
-   * ================================================================ */
-
-  :is(${ACTIONS}) .approve-split {
-    position: relative;
-    display: inline-flex;
-    align-items: stretch;
-    flex: 1 1 var(--action-button-basis, 8rem);
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  :is(${ACTIONS}) .approve-split .approve-split-main {
-    flex: 1 1 auto;
-    width: auto;
-    min-width: 0;
-    max-width: none;
-  }
-
-  :is(${ACTIONS}) .approve-split .approve-split-main::part(base) {
-    width: 100%;
-    justify-content: center;
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-  }
-
-  /* wa-dropdown handles its own popup positioning; the trigger still lays out
-     alongside the main approve button as the split's right half. */
-  :is(${ACTIONS}) .approve-split .approve-split-menu {
-    flex: 0 0 auto;
-    display: inline-flex;
-  }
-
-  :is(${ACTIONS}) .approve-split .approve-split-trigger {
-    flex: 0 0 auto;
-    width: 20px;
-    min-width: 20px;
-    padding: 0;
-  }
-
-  :is(${ACTIONS}) .approve-split .approve-split-trigger::part(base) {
-    padding: 0;
-    color: var(--wa-color-success-fill-loud);
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-    border-left: var(--border-thin) solid
-      var(--wa-color-button-separator, var(--wa-form-control-border-color));
-  }
-
-  :is(${ACTIONS})
-    .approve-split
-    wa-dropdown[open]
-    .approve-split-trigger
-    wa-icon {
-    transform: rotate(180deg);
-  }
-
-  /* ================================================================
    * Bash approval requests
    * ================================================================ */
 
