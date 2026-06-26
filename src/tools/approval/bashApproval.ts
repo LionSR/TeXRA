@@ -4,10 +4,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
-import {
-  BASH_APPROVAL_ACTIONS,
-  type BashApprovalAction,
-} from '@shared/schemas/prompts';
+import type { BashApprovalAction } from '@shared/schemas/prompts';
 import { requireRuntimeHost } from '@tools/contextHelpers';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { getConfig } from '@utils/config/configUtils';
@@ -28,9 +25,6 @@ const BashApprovalResultSchema = z.object({
 });
 export type BashApprovalResult = z.infer<typeof BashApprovalResultSchema>;
 
-// Defined in the schema layer (see @shared/schemas/prompts); re-exported here
-// so existing importers of `@tools/approval/bashApproval` keep working.
-export { BASH_APPROVAL_ACTIONS, type BashApprovalAction };
 
 const DEFAULT_BASH_REJECTION_INSTRUCTION =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +

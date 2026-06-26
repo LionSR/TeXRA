@@ -116,7 +116,6 @@ export {
   setBashApprovalSessionBypass,
   toggleBashApprovalSessionBypass,
   isBashApprovalBypassedForStream,
-  type BashApprovalAction,
   type BashApprovalRequest,
   type BashApprovalResult,
 } from './bashApproval';
@@ -132,7 +131,6 @@ export {
   setToolEditApprovalSessionBypass,
   toggleToolEditApprovalSessionBypass,
   isApprovalBypassedForStream,
-  type ToolEditApprovalAction,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
   type WriteApprovedContentResult,
