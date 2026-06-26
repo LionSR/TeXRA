@@ -221,7 +221,9 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   /** The Codex backend while the subscription is active (also disables the
    *  WebSocket transport path), else the default OpenAI base from the parent. */
   public override getBaseUrl(): string | null {
-    return this.usingSubscription() ? CODEX_BACKEND_BASE_URL : super.getBaseUrl();
+    return this.usingSubscription()
+      ? CODEX_BACKEND_BASE_URL
+      : super.getBaseUrl();
   }
 
   protected override async createOpenAIClient(): Promise<OpenAI> {
