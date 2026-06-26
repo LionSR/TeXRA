@@ -559,38 +559,23 @@ export function getVisibleAgent(
 }
 
 /**
- * Resolve an identifier to an agent in a category, ignoring visibility. This is
- * the launch-time resolver: it restricts resolution to the requested category
- * so a same-name agent in another category/source can never be picked — a
- * guarantee the source-priority-only {@link getAgent} cannot give. It shares
- * {@link resolveWithinCategory} with {@link getVisibleAgent}, so the agent a
- * delegation validates and the agent it launches are resolved by one rule.
+ * Resolve an identifier to an agent in a category, ignoring visibility. Used by
+ * the legacy-alias migration to map a persisted key onto the canonical agent of
+ * its category partition (including internal agents, which are hidden from
+ * dropdowns but still hold a visibility slot). Launch no longer resolves by
+ * category — it pins the exact `(source, name)` entry the delegation captured —
+ * so this shares {@link resolveWithinCategory} with {@link getVisibleAgent} only
+ * to keep the migration's matching rule identical to validation's.
  */
 export function getCategoryAgent(
   category: AgentCategory,
   identifier: string,
 ): AgentEntry | undefined {
-  // Include internal agents: they are hidden from dropdowns but launchable by
-  // commands, so the launch resolver must be able to reach them — only the
-  // visible-set resolver (getVisibleAgent) filters them out.
   return resolveWithinCategory(
     categoryEntries(category, true),
     category,
     identifier,
   );
-}
-
-/**
- * {@link resolveAgent} restricted to a category — the launch-time counterpart
- * that keeps category/source from being dropped during resolution.
- */
-export function resolveAgentInCategory(
-  category: AgentCategory,
-  identifier: string,
-): ResolvedAgent | undefined {
-  const entry = getCategoryAgent(category, identifier);
-  if (!entry) return undefined;
-  return { entry, definitionPath: entry.path, resolvedName: entry.name };
 }
 
 /**

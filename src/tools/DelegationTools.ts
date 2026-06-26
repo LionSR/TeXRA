@@ -97,7 +97,8 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
-    const agentName = requireVisibleAgent('workflow', input.agent).name;
+    const agent = requireVisibleAgent('workflow', input.agent);
+    const agentName = agent.name;
     const ctx = getRequiredContext();
 
     const model = await resolveAvailableDelegationModel({
@@ -139,6 +140,7 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
       agent: agentName,
+      agentSource: agent.source,
       model,
       instruction: input.instruction,
       inputFiles: input.inputFiles,
@@ -236,7 +238,8 @@ Git worktree support: ${
       );
     }
 
-    const agentName = requireVisibleAgent('toolUse', input.agent).name;
+    const agent = requireVisibleAgent('toolUse', input.agent);
+    const agentName = agent.name;
 
     const ctx = getRequiredContext();
 
@@ -249,6 +252,7 @@ Git worktree support: ${
     const proposal = ToolUseAgentProposalSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       agent: agentName,
+      agentSource: agent.source,
       model,
       instruction: withToolUseSubagentHandoffInstruction(input.instruction),
       memories: input.memories,

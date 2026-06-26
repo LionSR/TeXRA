@@ -17,15 +17,21 @@ import {
   getVisibleAgent,
   refresh,
   resolveAgent,
-  resolveAgentInCategory,
 } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentEntry } from '@agent/index/agentEntry';
+import { agentKey } from '@shared/schemas/agent';
 
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
   '../../..',
 );
+
+/** Resolve exactly as launch does: by the `(source, name)` key the delegation
+ * captured at validation time (see `getAgentPath` → `resolveAgent`). */
+function launchAs(entry: AgentEntry | undefined) {
+  return entry ? resolveAgent(agentKey(entry.source, entry.name)) : undefined;
+}
 
 /**
  * Regression: a custom *workflow* agent named `assistant` collides with the
@@ -33,7 +39,8 @@ const REPO_ROOT = resolve(
  * `getVisibleAgent`, but the launch historically re-resolved via the
  * category-blind `getAgent` (source priority: custom > … > builtInToolUse), so
  * it picked the wrong (workflow) entry and the run failed with a category
- * mismatch. The category-scoped resolver keeps validation and launch in lockstep.
+ * mismatch. The fix carries the validated entry's *source* to launch, which
+ * resolves the exact `(source, name)` key — so launch can never diverge.
  */
 describe('cross-category agent resolution', () => {
   beforeAll(async () => {
@@ -89,19 +96,24 @@ describe('cross-category agent resolution', () => {
     );
   });
 
-  it('resolves an identifier within the requested category at launch', () => {
-    const toolUse = resolveAgentInCategory('toolUse', 'assistant');
+  it('pins launch to the exact (source, name) entry validation captured', () => {
+    // The tool-use delegation validates via getVisibleAgent and carries the
+    // entry's source; launch resolves that exact key — the built-in tool-use
+    // entry, never the colliding custom workflow shadow.
+    const toolUse = launchAs(getVisibleAgent('toolUse', 'assistant'));
     expect(toolUse?.entry.category).toBe('toolUse');
     expect(toolUse?.entry.source).toBe('builtInToolUse');
 
-    const workflow = resolveAgentInCategory('workflow', 'assistant');
+    // The same mechanism reaches the custom workflow entry when that is what a
+    // workflow delegation validated.
+    const workflow = launchAs(getVisibleAgent('workflow', 'assistant'));
     expect(workflow?.entry.category).toBe('workflow');
     expect(workflow?.entry.source).toBe('custom');
   });
 
   it('launch resolution matches validation for the colliding tool-use name', () => {
     const validated = getVisibleAgent('toolUse', 'assistant');
-    const launched = resolveAgentInCategory('toolUse', 'assistant');
+    const launched = launchAs(validated);
     expect(launched?.entry.source).toBe(validated?.source);
     expect(launched?.entry.name).toBe(validated?.name);
   });
@@ -114,18 +126,17 @@ describe('cross-category agent resolution', () => {
     expect(getCategoryAgent('workflow', 'assistant')?.source).toBe('custom');
   });
 
-  it('returns undefined for a name absent from the requested category', () => {
-    // `correct` is a workflow agent; it must not resolve as a tool-use launch.
-    expect(resolveAgentInCategory('toolUse', 'correct')).toBeUndefined();
+  it('keeps a wrong-category name out of category-scoped resolution', () => {
+    // `correct` is a workflow agent; getCategoryAgent (used by the legacy-alias
+    // migration) must not resolve it as tool-use.
+    expect(getCategoryAgent('toolUse', 'correct')).toBeUndefined();
   });
 
-  it('hides internal agents from dropdowns but keeps them launchable', () => {
+  it('hides internal agents from dropdowns but keeps them launchable by name', () => {
     // Internal agents are excluded from the visible/dropdown set…
     expect(getVisibleAgent('toolUse', 'secretAgent')).toBeUndefined();
-    // …but the launch resolver must still reach them (launchable by commands).
-    expect(resolveAgentInCategory('toolUse', 'secretAgent')?.entry.name).toBe(
-      'secretAgent',
-    );
+    // …but a command launch (no pinned source) still reaches them by name.
+    expect(resolveAgent('secretAgent')?.entry.name).toBe('secretAgent');
     expect(getCategoryAgent('toolUse', 'secretAgent')?.internal).toBe(true);
   });
 });

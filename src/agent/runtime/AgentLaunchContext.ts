@@ -4,12 +4,7 @@ import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { createRunTrace, type RunTrace } from '@transcript';
-import {
-  isRemoteAgent,
-  resolveAgent,
-  resolveAgentInCategory,
-  type ResolvedAgent,
-} from '@agent/index';
+import { isRemoteAgent, resolveAgent, type ResolvedAgent } from '@agent/index';
 import {
   logSdkError,
   logUserMessage,
@@ -41,6 +36,11 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
+import {
+  agentKey,
+  agentName,
+  type AgentSource,
+} from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';
@@ -165,14 +165,16 @@ export async function withExecutionRunContext<T>(
 export async function getAgentPath(
   agentIdentifier: string,
   runtimeHost: AgentRuntimeHost,
-  category?: AgentCategory,
+  source?: AgentSource | null,
 ): Promise<ResolvedAgent> {
-  // When the caller authoritatively knows the category, resolve within it so a
-  // same-name agent in another category/source can't be picked — the launch
-  // must land on the exact entry validation chose. Without a category, fall
-  // back to the source-priority resolver for callers that don't track one.
-  const result = category
-    ? resolveAgentInCategory(category, agentIdentifier)
+  // The delegation pipeline captures the agent's source when it first validates
+  // the agent (getVisibleAgent), so launch resolves the exact (source, name)
+  // entry by key — landing on the identical entry validation chose instead of
+  // re-resolving an ambiguous bare name through source priority. Callers that
+  // don't pin a source (legacy records, direct launches) fall back to the
+  // name-based resolver.
+  const result = source
+    ? resolveAgent(agentKey(source, agentName(agentIdentifier)))
     : resolveAgent(agentIdentifier);
   if (result) return result;
 
@@ -230,13 +232,14 @@ async function assembleAgentLaunchContext(
 ): Promise<AgentLaunchContext> {
   const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
-  // Resolve within the category the caller vouches for (enforceCategory), so the
-  // launched agent is the same entry validation/display resolved. Without that
-  // opt-in, agentCategory may be a schema prefault, so stay category-agnostic.
+  // Resolve by the source the delegation captured at validation time, so launch
+  // lands on the exact entry validation/display resolved. When no source is
+  // pinned (legacy records, direct launches), getAgentPath falls back to
+  // name-based resolution.
   const resolution = await getAgentPath(
     fullConfig.agent,
     runtimeHost,
-    input.enforceCategory ? configPayload.agentCategory : undefined,
+    fullConfig.agentSource,
   );
   // `loadAgentSettingAndPrompts` already applies `ensureAgentCategoryForSource`
   // before parsing, and `AgentSettingSchema` prefaults `agentCategory` (to
@@ -245,7 +248,12 @@ async function assembleAgentLaunchContext(
   const [setting, prompt] = await loadAgentSettingAndPrompts(resolution);
 
   // Block category mismatch: prevent launching a tool-use agent as a workflow
-  // (or vice versa). Only enforced when the caller opts in via enforceCategory,
+  // (or vice versa). Source-pinned resolution already guarantees launch lands on
+  // the entry validation chose, so this catches only the residual case the
+  // registry's pre-merge category can't see: a child agent that `inherits` a
+  // parent of the other category resolves with the scanner's pre-merge category
+  // (used by getVisibleAgent) but loads a post-merge `setting.agentCategory`
+  // that differs. Only enforced when the caller opts in via enforceCategory,
   // because many code paths pass pre-parsed configs where agentCategory was
   // prefaulted to Workflow by the schema (not explicitly chosen by the caller).
   if (
