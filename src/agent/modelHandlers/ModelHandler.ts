@@ -224,10 +224,6 @@ export abstract class ModelHandler<
     this.outputStreaming = enabled;
   }
 
-  public isOutputStreamingEnabled(): boolean {
-    return this.outputStreaming;
-  }
-
   /**
    * Indicates whether background mode is active for this handler.
    * Background mode runs requests asynchronously and polls for completion.
