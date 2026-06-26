@@ -193,11 +193,26 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
+  // Classification flags + diagnostics carried by BOTH the SDK-matched and the
+  // unrecognized returns below. The abort / disk-full early returns above
+  // deliberately opt out (always non-relay, no credential flags). Single source
+  // for these fields so adding a future flag touches one place, not two.
+  const classification = {
+    isRelayError: isRelay,
+    isCredentialExhausted: isCredentialExhausted || undefined,
+    isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
+    isChatGptSubscriptionLimited: isChatGptSubscriptionLimited || undefined,
+    rawErrorBody,
+    streamDiagnostics,
+    partialText,
+  };
+
   // Try matching a known SDK error type (connection, abort, HTTP errors)
   const sdkMatch = matchSdkError(err, rawErrorBody);
   if (sdkMatch) {
     return {
       ...sdkMatch,
+      ...classification,
       // Prefer the actionable subscription-limit message over the raw
       // `HTTP 429 – The usage limit has been reached`.
       message: chatgptSubscriptionMessage ?? sdkMatch.message,
@@ -206,13 +221,6 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       // shouldAutoRetry separately suppresses auto-retry for them — a
       // fresh attempt with the same depleted credential would just fail.
       userRetryable: isRelay || sdkMatch.userRetryable || isCredentialExhausted,
-      isRelayError: isRelay,
-      isCredentialExhausted: isCredentialExhausted || undefined,
-      isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
-      isChatGptSubscriptionLimited: isChatGptSubscriptionLimited || undefined,
-      rawErrorBody,
-      streamDiagnostics,
-      partialText,
     };
   }
 
@@ -234,19 +242,13 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     (statusCode ? isRetryableStatusCode(statusCode) : true);
 
   return {
+    ...classification,
     message: chatgptSubscriptionMessage ?? message,
     statusCode,
     statusText,
     provider,
     userRetryable,
-    isRelayError: isRelay,
-    isCredentialExhausted: isCredentialExhausted || undefined,
-    isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
-    isChatGptSubscriptionLimited: isChatGptSubscriptionLimited || undefined,
     requestId,
-    rawErrorBody,
-    streamDiagnostics,
-    partialText,
   };
 }
 
