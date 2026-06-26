@@ -22,6 +22,7 @@ import {
   commonViewStyles,
 } from '@shared/styles';
 import { TODO_STATUS, STATUS_ICONS, type TodoItem } from '@shared/schemas';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 import { ELEMENT_IDS } from '../constants';
 
@@ -167,7 +168,7 @@ export class TodoList extends LitElement {
         ${isInProgress
           ? html`<wa-spinner class="todo-item__icon"></wa-spinner>`
           : html`<wa-icon
-              library="texra"
+              library=${TEXRA_ICON_LIBRARY}
               name=${icon}
               class="todo-item__icon"
               aria-hidden="true"

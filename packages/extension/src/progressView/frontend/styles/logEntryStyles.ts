@@ -180,6 +180,13 @@ export const logEntryStyles = css`
     font-weight: var(--font-weight-medium);
   }
 
+  /* Per-file +added/-removed line-change counts in tool detail rows. The
+     inline-flex gap spaces the two counts without a per-span inline style. */
+  .file-stats {
+    display: inline-flex;
+    gap: var(--wa-space-2xs);
+  }
+
   /* Note: .toggle-icon and .details-summary base styles are in commonViewStyles */
 
   /* File list details styling */

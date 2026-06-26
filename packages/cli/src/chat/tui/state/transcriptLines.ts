@@ -7,7 +7,11 @@ import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { completedProcessDisplayLines } from './completedProcessTranscript';
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { toolUseDisplayLines } from '../panes/toolRenderers';
+import { TOOL_OUTPUT_CORNER } from '../ui/glyphs';
 import type { ConversationEntry, StreamSlice } from './cliState';
+
+/** Gutter that opens a wrapped tool-output line (corner glyph + space). */
+const CORNER_PREFIX = `${TOOL_OUTPUT_CORNER} `;
 
 function wrap(text: string, cols: number, prefix = ''): string[] {
   const width = Math.max(1, cols - prefix.length);
@@ -24,11 +28,14 @@ function leadingWhitespacePrefix(line: string): string {
 }
 
 function wrapDisplayLine(line: string, cols: number): string[] {
-  if (line.startsWith('⎿ ')) {
-    const width = Math.max(1, cols - 2);
-    return wrapAnsiToWidth(line.slice(2), width)
+  if (line.startsWith(CORNER_PREFIX)) {
+    const width = Math.max(1, cols - CORNER_PREFIX.length);
+    return wrapAnsiToWidth(line.slice(CORNER_PREFIX.length), width)
       .split('\n')
-      .map((part, index) => `${index === 0 ? '⎿ ' : '  '}${part}`);
+      .map(
+        (part, index) =>
+          `${index === 0 ? CORNER_PREFIX : ' '.repeat(CORNER_PREFIX.length)}${part}`,
+      );
   }
 
   const prefix = leadingWhitespacePrefix(line);

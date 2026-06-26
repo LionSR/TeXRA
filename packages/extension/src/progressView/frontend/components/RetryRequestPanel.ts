@@ -20,6 +20,7 @@ import {
 // Local imports - shared schemas
 import type { ProviderErrorPartial, RetryPermission } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - base class
@@ -54,11 +55,11 @@ export class RetryRequestPanel extends BaseRequestPanel {
     const isCredentialExhausted =
       data.errorDetails?.isCredentialExhausted === true;
     const userRetryable = data.errorDetails?.userRetryable !== false;
-    const metaParts = [
-      data.model ? `Model: ${data.model}` : null,
-      isRelay ? 'Source: Relay' : null,
+    const metaParts: MetaPart[] = [
+      ...(data.model ? [`Model: ${data.model}`] : []),
+      ...(isRelay ? ['Source: Relay'] : []),
       `Can retry: ${userRetryable ? 'Yes' : 'No'}`,
-    ].filter(Boolean);
+    ];
 
     const detailsText = this.formatRetryDetails(data.errorDetails);
 
@@ -74,7 +75,7 @@ export class RetryRequestPanel extends BaseRequestPanel {
             ${isRelay ? '[Relay] ' : ''}
             ${data.operation ? `Failed: ${data.operation}` : 'Request failed'}
           </div>
-          <div class="retry-request__meta">${metaParts.join(' \u2022 ')}</div>
+          <div class="retry-request__meta">${renderDotMeta(metaParts)}</div>
           ${when(
             data.errorMessage,
             () =>

@@ -9,6 +9,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -126,7 +127,7 @@ export class QueuedFollowUps extends LitElement {
               return html`
                 <div class="queued-follow-up-item" title=${ifDefined(full)}>
                   <wa-icon
-                    library="texra"
+                    library=${TEXRA_ICON_LIBRARY}
                     name="comment"
                     class="queued-follow-up-icon"
                     aria-hidden="true"

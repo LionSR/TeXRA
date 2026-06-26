@@ -24,6 +24,7 @@ import type {
 } from '@shared/schemas';
 import { tryParseUrl } from '@utils/core';
 import { buildBannerContent, joinWithSeparator } from './helpers';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 // Web search provider display names
 const PROVIDER_LABELS: Record<string, string> = {
@@ -70,7 +71,7 @@ export function formatWebSearchTemplate(
   if (resultCount > 0) {
     // prettier-ignore
     const resultItems = (results ?? []).map(
-      (r) => html`<li class="detail-item"><wa-icon library="texra" name="link" aria-hidden="true"></wa-icon> <a href=${r.url ?? ''} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
+      (r) => html`<li class="detail-item"><wa-icon library=${TEXRA_ICON_LIBRARY} name="link" aria-hidden="true"></wa-icon> <a href=${r.url ?? ''} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
     );
     // prettier-ignore
     const resultsTemplate = html`<span class="file-list-summary">Results (${resultCount})</span><ul class="detail-list">${resultItems}</ul>`;

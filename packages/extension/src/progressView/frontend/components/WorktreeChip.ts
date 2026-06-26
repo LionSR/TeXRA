@@ -10,7 +10,7 @@ import {
   type WorktreeCIState,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
@@ -238,7 +238,7 @@ export class WorktreeChip extends LitElement {
         : nothing}
       ${pr.ciState
         ? html`<wa-icon
-            library="texra"
+            library=${TEXRA_ICON_LIBRARY}
             name=${CI_ICON[ci]}
             class=${classMap({ 'ci-icon': true, [`ci-${ci}`]: true })}
             title=${CI_LABEL[ci]}
