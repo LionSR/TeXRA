@@ -195,23 +195,21 @@ export const requestPanelStyles: CSSResult = css`
     max-width: 100%;
   }
 
-  /* The primary action buttons (which carry data-action) fill the row
-     equally; the diff dropdown's own buttons keep their bespoke sizing. */
-  :is(${ACTIONS}) wa-button[data-action] {
+  /* The primary action buttons hug their content and stay button-sized: they
+     never grow to fill a wide panel and are width-capped, so they group at the
+     start of the row instead of stretching, and the label centers within the
+     button's own padding. min-width: auto restores the flex min-content floor
+     (overriding the bounded-children min-width: 0 above), so a button never
+     shrinks below its own label and wraps to the next row instead of
+     clipping. Keyed off the semantic .action-button class the button helper
+     sets in its template (not the data-action behaviour hook) and sized on the
+     host element, so there is no shadow-part piercing and no source-order
+     tiebreak to keep in sync. Tool edit approvals override with their bespoke
+     sizing below, winning by specificity. */
+  :is(${ACTIONS}) .action-button {
+    flex: 0 1 auto;
     min-width: auto;
-    flex: 1 1 var(--action-button-basis, 8rem);
-  }
-
-  /* Per-panel basis tunes how many action buttons fit per row before wrapping.
-     Default 8rem (retry / inquiry / question); bash / plan want wider rows,
-     the workflow proposal narrower. Tool edit approvals stay compact below. */
-  .bash-approval-request__actions,
-  .plan-approval-request__actions {
-    --action-button-basis: 12rem;
-  }
-
-  .workflow-proposal__actions {
-    --action-button-basis: 6rem;
+    max-width: min(14rem, 100%);
   }
 
   .approval-request__actions wa-button[data-action] {
@@ -219,11 +217,6 @@ export const requestPanelStyles: CSSResult = css`
     width: auto;
     min-width: min(5.5rem, 100%);
     max-width: min(7rem, 100%);
-  }
-
-  :is(${ACTIONS}) wa-button[data-action]::part(base) {
-    justify-content: flex-start;
-    gap: ${sp.small};
   }
 
   .approval-request__actions wa-button[data-action]::part(base) {
