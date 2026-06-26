@@ -1,10 +1,5 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import {
-  LitElement,
-  html,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -13,24 +8,16 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { capitalize } from '@utils/text/stringUtils';
 import { bannerStyles } from '../styles/bannerStyles';
 import { renderWarningBanner } from './bannerFrame';
+import { StateVisibleBanner } from './StateVisibleBanner';
 import { MainViewEvents } from '../events';
 
 @customElement('api-key-banner')
-export class ApiKeyBanner extends LitElement {
+export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
   static override styles = [designTokens, commonViewStyles, bannerStyles];
 
   @property({ attribute: false }) state: ApiKeyBannerState = {
     visible: false,
   };
-
-  /** Reflected to the host so bannerStyles can hide the banner via CSS. */
-  @property({ type: Boolean, reflect: true }) visible = false;
-
-  override willUpdate(changed: PropertyValues<this>): void {
-    if (changed.has('state')) {
-      this.visible = this.state.visible;
-    }
-  }
 
   private handleAction(action: 'set' | 'guide'): void {
     const provider = this.state.provider ?? '';
