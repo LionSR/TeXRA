@@ -22,6 +22,7 @@ import type {
   AgentTraceSubscriber,
   LogEvent,
 } from '@agent/trace';
+import { isDebugModeEnabled } from '@logger/logUtils';
 import {
   END_GROUP_STATUS,
   MESSAGE_TYPES,
@@ -32,7 +33,6 @@ import {
   type StreamTabId,
   type ToolUseLog,
 } from '@shared/schemas';
-import { getConfig } from '@utils/config';
 
 import { type StreamLogStore } from './StreamLogStore';
 
@@ -55,11 +55,7 @@ function asMessageType(candidate: string | undefined): MessageType {
 function shouldEmit(level: LogLevel, messageType: MessageType): boolean {
   if (messageType === MESSAGE_TYPES.INTERNAL) return false;
   if (level !== 'debug') return true;
-  return getConfig<boolean>('texra.logger.debugMode', false);
-}
-
-function debugModeEnabled(): boolean {
-  return getConfig<boolean>('texra.logger.debugMode', false);
+  return isDebugModeEnabled();
 }
 
 /**
@@ -132,7 +128,7 @@ export function attachTranscriptRecorder(
         messageType: state.messageType,
         text: state.buffer,
         data: { status: state.ended ? 'completed' : 'running' },
-        verbose: debugModeEnabled(),
+        verbose: isDebugModeEnabled(),
       });
       state.created = !!appended;
       if (!state.created) state.enabled = false;
@@ -170,7 +166,7 @@ export function attachTranscriptRecorder(
       messageType,
       text: event.message,
       data: event.data,
-      verbose: event.verbose ?? debugModeEnabled(),
+      verbose: event.verbose ?? isDebugModeEnabled(),
     });
   };
 
@@ -190,7 +186,7 @@ export function attachTranscriptRecorder(
           messageType: MESSAGE_TYPES.DEFAULT,
           text: event.label,
           data: { status: 'running' },
-          verbose: debugModeEnabled(),
+          verbose: isDebugModeEnabled(),
         });
         return;
 
@@ -220,7 +216,7 @@ export function attachTranscriptRecorder(
             input: redactToolInputForLog(event.toolName, event.input),
             status: 'in_progress',
           } satisfies ToolUseLog,
-          verbose: debugModeEnabled(),
+          verbose: isDebugModeEnabled(),
         });
         return;
 
@@ -256,7 +252,7 @@ export function attachTranscriptRecorder(
           messageType: MESSAGE_TYPES.STATISTICS,
           text: `Usage - input: ${event.stats.inputTokens ?? 0}, output: ${event.stats.outputTokens ?? 0}`,
           data: event.stats,
-          verbose: debugModeEnabled(),
+          verbose: isDebugModeEnabled(),
         });
         return;
 
@@ -276,7 +272,7 @@ export function attachTranscriptRecorder(
             contextWindow: event.contextWindow,
             utilizationPercent,
           },
-          verbose: debugModeEnabled(),
+          verbose: isDebugModeEnabled(),
         });
         return;
       }
@@ -351,7 +347,7 @@ export function attachTranscriptRecorder(
             messageType: MESSAGE_TYPES.FILE_LIST,
             text: `Loading ${payload?.category ?? ''} (${okCount}/${entries.length})`,
             data: entries,
-            verbose: debugModeEnabled(),
+            verbose: isDebugModeEnabled(),
           });
           return;
         }
@@ -364,7 +360,7 @@ export function attachTranscriptRecorder(
           messageType: domainMessageType(event.key),
           text: event.text ?? event.key,
           data: event.data,
-          verbose: debugModeEnabled(),
+          verbose: isDebugModeEnabled(),
         });
         return;
       }
