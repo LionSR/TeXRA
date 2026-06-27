@@ -3,7 +3,9 @@ import { create } from 'mutative';
 // Local imports - shared webview
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { isChatGptSubscriptionLimitError } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
+import type { GettingStartedAction } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
@@ -30,7 +32,6 @@ import type {
   StreamEventDetail,
   ToolbarCommandDetail,
 } from './events';
-import type { GettingStartedAction } from '@shared/schemas';
 import type {
   FrontendEventHandlerContext,
   MessageHandlerContext,
@@ -288,8 +289,9 @@ export function handlePermissionAction(
         // Non-terminal: panel stays open. The extension handler will
         // trigger retry on success, or leave the panel for the user
         // to choose Retry/Dismiss if the user cancels the key picker.
-        const chatgptSubscription =
-          permission.data.errorDetails?.isChatGptSubscriptionLimited === true;
+        const chatgptSubscription = isChatGptSubscriptionLimitError(
+          permission.data.errorDetails,
+        );
         postMessage(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY, {
           stream: permission.data.streamId,
           // Subscription quota exhaustion always means the OpenAI key is the

@@ -138,6 +138,52 @@ interface ResponseFinalizeContext {
   readonly compactedMessages: ResponseInputItem[] | undefined;
 }
 
+type ServerToolContentBlock = ResponseFunctionWebSearch | ResponseReasoningItem;
+
+/**
+ * store:false (stateless) content blocks: every reasoning item that carries a
+ * non-empty `encrypted_content` blob (replayed next turn for reasoning
+ * continuity) plus each web_search_call, in output order — so a reasoning item
+ * still immediately precedes its following item. A summary-only reasoning item
+ * is skipped; replayed empty the stateless endpoint rejects it rather than
+ * chaining.
+ */
+function collectStatelessContentBlocks(
+  output: readonly ResponseOutputItem[],
+): ServerToolContentBlock[] {
+  const blocks: ServerToolContentBlock[] = [];
+  for (const item of output) {
+    if (isOpenAIReasoningItem(item)) {
+      const encrypted = item.encrypted_content;
+      if (typeof encrypted === 'string' && encrypted.length > 0) {
+        blocks.push(item);
+      }
+    } else if (isOpenAIWebSearchCall(item)) {
+      blocks.push(item);
+    }
+  }
+  return blocks;
+}
+
+/**
+ * store:true content blocks: only the reasoning item immediately preceding each
+ * web_search_call (the API pairing requirement) plus the web_search_call.
+ * `previous_response_id` retains everything else server-side.
+ */
+function collectWebSearchPairedBlocks(
+  output: readonly ResponseOutputItem[],
+): ServerToolContentBlock[] {
+  const blocks: ServerToolContentBlock[] = [];
+  for (const [i, item] of output.entries()) {
+    if (!isOpenAIWebSearchCall(item)) continue;
+    if (i > 0 && isOpenAIReasoningItem(output[i - 1])) {
+      blocks.push(output[i - 1] as ResponseReasoningItem);
+    }
+    blocks.push(item);
+  }
+  return blocks;
+}
+
 function responseOutputItemKey(item: ResponseOutputItem): string | undefined {
   if (typeof item.id === 'string') return `id:${item.id}`;
   if (item.type === 'function_call' && typeof item.call_id === 'string') {
@@ -2340,43 +2386,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return { webSearchResults: [], webFetchResults: [], contentBlocks: [] };
     }
 
-    // Extract content blocks that need to be preserved, in output order.
-    //
-    // store:true (default): only reasoning items immediately preceding a
-    //   web_search_call are kept — that pairing is required by the API, and
-    //   previous_response_id retains everything else server-side.
-    // store:false (Codex/stateless): keep every reasoning item that actually
-    //   carries a non-empty `encrypted_content` blob so the next turn can replay
-    //   it for reasoning continuity; web_search_call items are preserved
-    //   alongside. A summary-only reasoning item (no encrypted_content) is
-    //   skipped — replaying it empty would be rejected by the stateless endpoint
-    //   rather than chained.
-    // Preserving output order keeps the item-pairing invariant intact when the
-    // blocks are replayed before the function_call.
-    const preserveAllReasoning = !this.storesResponsesServerSide;
-    const contentBlocks: (ResponseFunctionWebSearch | ResponseReasoningItem)[] =
-      [];
-    for (const [i, item] of output.entries()) {
-      if (preserveAllReasoning && isOpenAIReasoningItem(item)) {
-        const encrypted = item.encrypted_content;
-        if (typeof encrypted === 'string' && encrypted.length > 0) {
-          contentBlocks.push(item);
-        }
-        continue;
-      }
-      if (isOpenAIWebSearchCall(item)) {
-        // store:true: pair the immediately-preceding reasoning with the
-        // web_search_call (store:false already captured it above).
-        if (
-          !preserveAllReasoning &&
-          i > 0 &&
-          isOpenAIReasoningItem(output[i - 1])
-        ) {
-          contentBlocks.push(output[i - 1] as ResponseReasoningItem);
-        }
-        contentBlocks.push(item);
-      }
-    }
+    // The two store modes preserve reasoning differently (see each helper);
+    // both keep output order so a reasoning item stays immediately before its
+    // following item when the blocks are replayed.
+    const contentBlocks = this.storesResponsesServerSide
+      ? collectWebSearchPairedBlocks(output)
+      : collectStatelessContentBlocks(output);
 
     // Extract normalized web search results for display
     const webSearchResults = extractOpenAIWebSearchResults(output);

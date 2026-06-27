@@ -110,6 +110,21 @@ export const ProviderErrorPartialSchema = z.preprocess(
 );
 export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
 
+/** Single source of truth for "this error is a ChatGPT-subscription (Codex)
+ *  usage-limit rejection". Both hosts (VS Code progress view, CLI approval
+ *  policy) branch on this to switch the retry from the relay/personal-key path
+ *  to disabling the subscription preference. Accepts any error shape carrying
+ *  the flag (full `ProviderError`, `ProviderErrorPartial`, or `RetryErrorInfo`)
+ *  so the predicate stays the one place that owns the verdict. */
+export function isChatGptSubscriptionLimitError(
+  errorDetails:
+    | Pick<ProviderError, 'isChatGptSubscriptionLimited'>
+    | undefined
+    | null,
+): boolean {
+  return errorDetails?.isChatGptSubscriptionLimited === true;
+}
+
 /**
  * Minimal error info for retry state tracking.
  *

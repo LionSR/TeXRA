@@ -1,6 +1,9 @@
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type { ApprovalDecision as SharedApprovalDecision } from '@shared/schemas';
+import {
+  isChatGptSubscriptionLimitError,
+  type ApprovalDecision as SharedApprovalDecision,
+} from '@shared/schemas';
 
 import { type CliDecisionApprovalEvent } from '../approvalEvents';
 import { type CliContext, type CliPromptRequest } from '../cliContext';
@@ -44,7 +47,7 @@ export function hasCliApprovalDenied(context: CliContext): boolean {
 export function isCliChatGptSubscriptionRetry(
   payload: ProgressEventPayloads['showRetryRequest'],
 ): boolean {
-  return payload.errorDetails?.isChatGptSubscriptionLimited === true;
+  return isChatGptSubscriptionLimitError(payload.errorDetails);
 }
 
 export function isCliApiSwitchableRetry(
@@ -52,7 +55,7 @@ export function isCliApiSwitchableRetry(
 ): boolean {
   const details = payload.errorDetails;
   if (!details) return false;
-  if (details.isChatGptSubscriptionLimited === true) return true;
+  if (isChatGptSubscriptionLimitError(details)) return true;
   return (
     details.isCredentialExhausted === true &&
     (details.isRelayError === true ||
