@@ -10,6 +10,10 @@ export interface PanelOptions {
   viewPath: string;
   column?: vscode.ViewColumn;
   retainContextWhenHidden?: boolean;
+  iconPath?:
+    | vscode.ThemeIcon
+    | vscode.Uri
+    | { light: vscode.Uri; dark: vscode.Uri };
 }
 
 /**
@@ -108,6 +112,9 @@ export abstract class BaseWebviewProvider {
       },
     );
 
+    if (options.iconPath) {
+      this._view.iconPath = options.iconPath;
+    }
     this.resolveWebviewViewInternal(this._view);
     return true;
   }

@@ -699,6 +699,7 @@ export class ProgressViewProvider
         ),
       },
     );
+    this._panelView.iconPath = new vscode.ThemeIcon('pulse');
     this._panelReady = false;
 
     this._panelDisposables.push(
