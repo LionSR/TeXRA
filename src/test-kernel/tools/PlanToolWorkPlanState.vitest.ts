@@ -12,7 +12,7 @@ import {
 } from '@agent/core/execution/AgentWorkspaceState';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { type RunCoordinators } from '@agent/runtime/RunContext';
-import { withToolEnvironment } from '@agent/toolUse/ToolFileInteractionContext';
+import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
 import { planSummaryLine, type Plan, type StreamTabId } from '@shared/schemas';
 import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas/goal';
 import {

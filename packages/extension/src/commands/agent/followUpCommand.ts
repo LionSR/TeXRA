@@ -7,8 +7,8 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   sendFollowUp,
   type SendFollowUpResult,
-} from '@agent/toolUse/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+} from '@agent/followUp/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';

@@ -18,7 +18,7 @@ Today the `external_inquiry` tool blocks the agent's tool-use cycle on an in-mem
 
 This PRD makes the tool — renamed `inquiry` — **non-blocking and durable**. The tool returns `dispatched` immediately. The user can paste the answer hours later — even after a reload. When the answer lands, a continuation message is injected into the originating stream's follow-up queue and the agent auto-resumes. Multiple inquiries dispatched in the same turn live independently; each resumes the agent on arrival.
 
-Mechanism rides on the existing follow-up pipeline (`src/agent/toolUse/ToolUseFollowUp.ts` → `sendFollowUp`) plus the host's `texra.resumeAgent` for the post-reload case — no new runtime, no polling, no background worker. (Goal writes to `ToolUseFollowUpQueue.enqueue` directly, which works for its always-in-process case but does **not** cover post-reload resume — see §6.5.)
+Mechanism rides on the existing follow-up pipeline (`src/agent/followUp/ToolUseFollowUp.ts` → `sendFollowUp`) plus the host's `texra.resumeAgent` for the post-reload case — no new runtime, no polling, no background worker. (Goal writes to `ToolUseFollowUpQueue.enqueue` directly, which works for its always-in-process case but does **not** cover post-reload resume — see §6.5.)
 
 ## 2. Goals
 
@@ -196,7 +196,7 @@ Webview-side handler in `ProgressViewMessageHandler.ts` is updated to route the 
 
 **Why not just call `texra.sendFollowUp`?** That command is registered as a void async handler (`packages/extension/src/commands/agent/followUpCommand.ts:160-169`) — `vscode.commands.executeCommand` resolves to `undefined` and an outer `handleFollowUpResult` surfaces `vscode.window.showWarningMessage` toasts on `no_session` and `queued+children_running`. Calling it from the inquiry path would (1) give us no usable return value and (2) fire user-visible toasts the inquiry flow shouldn't trigger (the panel already shows status).
 
-**Approach.** Bypass the host command. Call the core `sendFollowUp()` (`src/agent/toolUse/ToolUseFollowUp.ts`) directly to get the typed `SendFollowUpResult`. That covers cases 1 and 2 (live and queued). For the `WAITING` and `children_running` cases, invoke a small new platform port that wraps the snapshot-driven resume (currently the private `tryAutoResume` helper in `followUpCommand.ts`). We then map the combined result into one of four outcomes the UI can badge on. No toasts fire because we are not going through the void host command.
+**Approach.** Bypass the host command. Call the core `sendFollowUp()` (`src/agent/followUp/ToolUseFollowUp.ts`) directly to get the typed `SendFollowUpResult`. That covers cases 1 and 2 (live and queued). For the `WAITING` and `children_running` cases, invoke a small new platform port that wraps the snapshot-driven resume (currently the private `tryAutoResume` helper in `followUpCommand.ts`). We then map the combined result into one of four outcomes the UI can badge on. No toasts fire because we are not going through the void host command.
 
 **New platform port** in `src/platform/platform.ts`:
 

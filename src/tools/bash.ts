@@ -14,12 +14,12 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   getCurrentToolContexts,
   type ToolCallContext,
-} from '@agent/toolUse/ToolFileInteractionContext';
+} from '@agent/followUp/ToolFileInteractionContext';
 import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { toErrorMessage } from '@common/errors';
 import {
   deriveRunOutcome,

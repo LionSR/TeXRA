@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
 import { cleanupAllApprovals, releaseStreamResources } from '@tools/approval';

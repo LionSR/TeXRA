@@ -20,12 +20,12 @@ import {
   type AgentFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import {
   sendFollowUp,
   wakeOrReleaseQueuedStream,
-} from '@agent/toolUse/ToolUseFollowUp';
-import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
+} from '@agent/followUp/ToolUseFollowUp';
+import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 
 // Local imports - logger
 import { toErrorMessage } from '@common/errors';

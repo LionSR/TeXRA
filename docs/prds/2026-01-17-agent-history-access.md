@@ -210,7 +210,7 @@ src/tools/registry.ts  # Import + register ExecutionsTool
 | Utility                                | Location                                    | Usage                   |
 | -------------------------------------- | ------------------------------------------- | ----------------------- |
 | `getPathSegments`                      | `@utils/core/pathCore`                      | Parse virtual paths     |
-| `getCurrentToolFileInteractionContext` | `@agent/toolUse/ToolFileInteractionContext` | Get current executionId |
+| `getCurrentToolFileInteractionContext` | `@agent/followUp/ToolFileInteractionContext` | Get current executionId |
 | `getExecutionStore`                    | `@agent/storage/ExecutionKVStore`           | Read flow records       |
 | `AgentHistoryManager`                  | `@common/history`                           | List executions         |
 | `StorageFS`                            | `@utils/files`                              | Read task run files     |
