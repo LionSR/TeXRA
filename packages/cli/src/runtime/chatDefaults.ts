@@ -81,10 +81,11 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
         // sensible default for a plain single-agent chat session.
         !entry.agentConfig?.cliMultiAgentPresetId,
     )
-    .sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    );
+    // Schwartzian transform: parse each timestamp once into a sort key rather
+    // than re-parsing both sides on every comparison.
+    .map((item) => ({ item, key: new Date(item.timestamp).getTime() }))
+    .sort((a, b) => b.key - a.key)
+    .map(({ item }) => item);
   const mostRecent = candidates[0];
   if (!mostRecent?.agentConfig) return {};
   return {

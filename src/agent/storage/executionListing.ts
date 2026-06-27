@@ -150,12 +150,13 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     { concurrency: EXECUTION_STORAGE_CONCURRENCY },
   );
 
+  // Schwartzian transform: parse each timestamp once into a sort key rather
+  // than re-parsing both sides on every comparison.
   const listing = results
     .filter(filterNotNull)
-    .sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    );
+    .map((item) => ({ item, key: new Date(item.timestamp).getTime() }))
+    .sort((a, b) => b.key - a.key)
+    .map(({ item }) => item);
 
   cache = listing;
   return listing;
