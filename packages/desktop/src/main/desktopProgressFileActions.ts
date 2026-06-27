@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
-import type { DiffViewHost } from '@hosts/diffViewHost';
+import type { DiffViewHost } from '@hosts/uiHosts';
 import {
   buildAcceptConfirmMessage,
   buildAcceptSuccessMessage,

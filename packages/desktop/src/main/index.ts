@@ -23,7 +23,7 @@ import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import type { TerminalRunResult } from '@hosts/terminalHost';
+import type { TerminalRunResult } from '@hosts/uiHosts';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 import { AgentCategory, agentKeyOf } from '@shared/schemas/agent';

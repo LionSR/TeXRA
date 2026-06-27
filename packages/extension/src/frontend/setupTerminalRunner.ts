@@ -19,7 +19,7 @@ import {
   TERMINAL_OUTPUT_MAX_CHARS,
   type TerminalRunRequest,
   type TerminalRunResult,
-} from '@hosts/terminalHost';
+} from '@hosts/uiHosts';
 
 const SHELL_INTEGRATION_WAIT_MS = 2_000;
 const READER_DRAIN_MS = 250;
