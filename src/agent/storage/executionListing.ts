@@ -21,7 +21,7 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS, TASK_RUNS_DIR } from '@utils/files';
-import { filterNotNull } from '@utils/core';
+import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
@@ -150,13 +150,10 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     { concurrency: EXECUTION_STORAGE_CONCURRENCY },
   );
 
-  // Schwartzian transform: parse each timestamp once into a sort key rather
-  // than re-parsing both sides on every comparison.
-  const listing = results
-    .filter(filterNotNull)
-    .map((item) => ({ item, key: new Date(item.timestamp).getTime() }))
-    .sort((a, b) => b.key - a.key)
-    .map(({ item }) => item);
+  const listing = toNewestFirstByTimestamp(
+    results.filter(filterNotNull),
+    (item) => item.timestamp,
+  );
 
   cache = listing;
   return listing;
