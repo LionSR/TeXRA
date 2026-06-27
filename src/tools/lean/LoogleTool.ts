@@ -235,8 +235,9 @@ Useful for finding the right lemma when you know roughly what type it should hav
         },
       };
     } catch (error) {
-      // p-retry wraps non-transient errors in AbortError to stop retries;
-      // unwrap so the checks below (and the surfaced message) see the real error.
+      // Defensive: ensure the checks below (and the surfaced message) see the
+      // real error even if a p-retry AbortError wrapper reaches here (p-retry v8
+      // already unwraps it to .originalError, so this is normally a no-op).
       const err = unwrapAbortError(error);
       if (isTimeoutError(err)) {
         return {

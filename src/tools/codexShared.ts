@@ -1,5 +1,11 @@
 // Local imports - shared schemas
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
+import {
+  CODEX_FILE_CHANGE_TOOL,
+  CODEX_THREAD_TOOL,
+  CODEX_TODO_TOOL,
+  CODEX_TURN_TOOL,
+} from '@shared/schemas/codex';
 import type {
   CodexFileChangeToolInput,
   CodexMcpToolOutput,
@@ -21,10 +27,14 @@ import type {
 
 export const CODEX_AGENT_NAME = 'codex';
 export const CODEX_DISPLAY_MODEL = 'gpt55';
-export const CODEX_FILE_CHANGE_TOOL = 'codex_patch';
-export const CODEX_THREAD_TOOL = 'codex_thread';
-export const CODEX_TODO_TOOL = 'codex_todo';
-export const CODEX_TURN_TOOL = 'codex_turn';
+// Re-exported from the shared schema module (where the webview formatters also
+// read them) so backend callers can keep importing tool names from here.
+export {
+  CODEX_FILE_CHANGE_TOOL,
+  CODEX_THREAD_TOOL,
+  CODEX_TODO_TOOL,
+  CODEX_TURN_TOOL,
+};
 const CODEX_COMMAND_SUMMARY_MAX_LENGTH = 60;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 

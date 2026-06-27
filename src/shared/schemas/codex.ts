@@ -2,15 +2,21 @@
 import { z } from 'zod';
 
 /**
- * Zod schemas for Codex tool-log inputs/outputs.
+ * Codex tool-log identifiers and Zod schemas (pure data: no platform,
+ * `vscode`, or `node:*` dependencies).
  *
- * These are pure data validators (no platform, `vscode`, or `node:*`
- * dependencies) used both by the backend Codex tool-log builders
- * (`@tools/codexShared`) and by the progress-view webview formatters, which
- * `.safeParse()` them while rendering. They live in `@shared/schemas` so the
- * webview frontend never imports runtime values from the backend `src/tools/`
- * zone.
+ * Used both by the backend Codex tool-log builders (`@tools/codexShared`) and
+ * by the progress-view webview formatters, which key on the tool-name constants
+ * and `.safeParse()` the schemas while rendering. They live in
+ * `@shared/schemas` so the webview frontend never imports runtime values from
+ * the backend `src/tools/` zone.
  */
+
+/** Synthetic tool names for the native Codex tool-use cards. */
+export const CODEX_FILE_CHANGE_TOOL = 'codex_patch';
+export const CODEX_THREAD_TOOL = 'codex_thread';
+export const CODEX_TODO_TOOL = 'codex_todo';
+export const CODEX_TURN_TOOL = 'codex_turn';
 
 const CodexFileChangeItemSchema = z.object({
   path: z.string(),
