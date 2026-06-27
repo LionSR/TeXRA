@@ -43,7 +43,6 @@ export interface ConfirmCardProps {
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
-export { CONFIRM_CARD_HORIZONTAL_DECORATION };
 
 export function ConfirmCard({
   borderStyle,

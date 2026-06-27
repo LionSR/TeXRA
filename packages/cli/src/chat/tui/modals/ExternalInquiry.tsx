@@ -5,7 +5,7 @@ import { writeClipboardText } from '@cli/runtime/clipboardText';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 import { clamp } from '@utils/core';
 
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
+import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput } from '../input/inputKeys';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
