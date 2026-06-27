@@ -30,15 +30,6 @@ interface DesktopCommandPaletteModule {
   }): DesktopCommandPaletteController;
 }
 
-interface DesktopPaletteEntry {
-  id: string;
-  label: string;
-  category: string;
-  accelerator?: string;
-  enabled: boolean;
-  unavailableReason?: string;
-}
-
 interface DesktopPaletteStream {
   name: string;
   label: string;
