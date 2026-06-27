@@ -6,13 +6,13 @@
  *   raw messages → normalizeMessages() → ExportNode[] → FormatSpec → string
  */
 
+import { normalizeConversationForExport as normalizeMessages } from '@agent/export/normalizeConversation';
 import type {
   ChatExportInput,
   DocumentMeta,
   ExportConfig,
   ExportNode,
 } from '@agent/export/schemas';
-import { normalizeMessages } from './normalizeMessages';
 
 /** Compile-time guarantee: every node kind has a renderer. */
 export type NodeRenderers = {
