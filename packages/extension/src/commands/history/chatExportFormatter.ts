@@ -15,16 +15,16 @@
  * point so existing import paths keep working.
  */
 
+import type { ChatExportInput } from '@agent/export/schemas';
 import { renderDocument } from './chatExport/formatSpec';
 import { latexSpec } from './chatExport/latexSpec';
 import { markdownSpec } from './chatExport/markdownSpec';
-import type { ChatExportInput } from './chatExport/schemas';
 
 export type {
   ChatExportInput,
   DocumentMeta,
   ExportNode,
-} from './chatExport/schemas';
+} from '@agent/export/schemas';
 export type { FormatSpec } from './chatExport/formatSpec';
 export { extractMeta } from './chatExport/formatSpec';
 export { normalizeMessages } from './chatExport/normalizeMessages';

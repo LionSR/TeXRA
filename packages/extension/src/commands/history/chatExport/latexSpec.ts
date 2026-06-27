@@ -1,6 +1,7 @@
 /** LaTeX format spec for chat export. */
 
 import latexPreamble from '@resources/templates/chatExport.tex';
+import type { DocumentMeta } from '@agent/export/schemas';
 import { filterNotNullish } from '@utils/core';
 
 import { escapeLatex, escapeLatexUrl, latexListing } from './escapeUtils';
@@ -9,7 +10,6 @@ import {
   type FormatSpec,
   type NodeRenderers,
 } from './formatSpec';
-import type { DocumentMeta } from './schemas';
 
 function latexHeader(meta: DocumentMeta): string {
   const esc = escapeLatex;
