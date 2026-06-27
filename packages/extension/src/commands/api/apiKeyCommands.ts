@@ -28,33 +28,9 @@ async function refreshApiKeyUI(): Promise<void> {
 
 async function setApiKeyForProvider(
   provider: ApiProvider,
-  skipDialog = false,
+  showNavigationFallback = false,
 ): Promise<void> {
-  if (!skipDialog) {
-    const actions: Array<vscode.MessageItem & { id: 'enter' | 'getApiKey' }> = [
-      { title: 'Enter Key', id: 'enter' },
-      { title: 'Get API Key', id: 'getApiKey' },
-    ];
-    const action = await vscode.window.showInformationMessage(
-      `Set your ${provider} API key`,
-      ...actions,
-    );
-
-    if (!action) {
-      return;
-    }
-
-    if (action.id === 'getApiKey') {
-      await vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
-      return;
-    }
-  }
-
-  const apiKey = await vscode.window.showInputBox({
-    prompt: `Enter ${provider} API key`,
-    password: true,
-    placeHolder: '************************************',
-  });
+  const apiKey = await promptForApiKey(provider, showNavigationFallback);
 
   if (!apiKey) {
     return;
@@ -81,25 +57,137 @@ async function setApiKeyForProvider(
 }
 
 /**
+ * Prompt for an API key. When the host exposes InputBox title buttons, add a
+ * "Get API Key" action that opens the provider's key portal without closing the
+ * input box, so the user can paste straight away. Older hosts use the previous
+ * message-button fallback when the provider-picker path asks for it.
+ */
+async function promptForApiKey(
+  provider: ApiProvider,
+  showNavigationFallback: boolean,
+): Promise<string | undefined> {
+  const ib = vscode.window.createInputBox();
+  const supportsTitleButtons = Reflect.has(ib, 'buttons');
+
+  if (!supportsTitleButtons && showNavigationFallback) {
+    const actions: Array<vscode.MessageItem & { id: 'enter' | 'getApiKey' }> = [
+      { title: 'Enter Key', id: 'enter' },
+      { title: 'Get API Key', id: 'getApiKey' },
+    ];
+    const action = await vscode.window.showInformationMessage(
+      `Set your ${provider} API key`,
+      ...actions,
+    );
+
+    if (action == null) {
+      ib.dispose();
+      return undefined;
+    }
+
+    if (action.id === 'getApiKey') {
+      ib.dispose();
+      await vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
+      return undefined;
+    }
+  }
+
+  return await new Promise<string | undefined>((resolve) => {
+    let settled = false;
+    const finish = (value: string | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      ib.dispose();
+    };
+    ib.title = `Set ${provider} API key`;
+    ib.prompt = `Enter ${provider} API key`;
+    ib.password = true;
+    ib.placeholder = '************************************';
+    const getKeyButton: vscode.QuickInputButton = {
+      iconPath: new vscode.ThemeIcon('link-external'),
+      tooltip: `Get ${provider} API key`,
+    };
+    if (supportsTitleButtons) {
+      ib.buttons = [getKeyButton];
+      ib.onDidTriggerButton((button) => {
+        if (button === getKeyButton) {
+          void vscode.env.openExternal(
+            vscode.Uri.parse(PROVIDER_URLS[provider]),
+          );
+        }
+      });
+    }
+    ib.onDidAccept(() => {
+      finish(ib.value);
+    });
+    ib.onDidHide(() => {
+      finish(undefined);
+    });
+    ib.show();
+  });
+}
+
+/**
  * Set an API key. Migrated to the shared command registry in
  * #3781 batch 4. The registry forwards a single typed argument so the
  * optional `provider` is parsed at the dispatch boundary.
  */
 export async function setApiKey(provider?: ApiProvider): Promise<void> {
   if (provider) {
-    await setApiKeyForProvider(provider, true);
+    await setApiKeyForProvider(provider);
     return;
   }
 
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
-  const providerPick = await vscode.window.showQuickPick(providerItems, {
-    placeHolder: 'Select API provider',
-    prompt: 'Choose the AI provider to configure an API key for',
-  });
+  const providerPick = await pickProvider(
+    providerItems,
+    'Select API provider',
+    "Keys are stored in VS Code's encrypted secret store, never on disk.",
+  );
 
   if (providerPick?.provider) {
-    await setApiKeyForProvider(providerPick.provider);
+    await setApiKeyForProvider(providerPick.provider, true);
   }
+}
+
+type ProviderQuickPickItem = Awaited<
+  ReturnType<typeof SecretManager.getApiProviderQuickPickItems>
+>[number];
+
+/** Shared provider picker with a persistent prompt hint (VS Code 1.108+). */
+async function pickProvider(
+  items: ProviderQuickPickItem[],
+  placeholder: string,
+  promptHint: string,
+): Promise<ProviderQuickPickItem | undefined> {
+  return await new Promise<ProviderQuickPickItem | undefined>((resolve) => {
+    const qp = vscode.window.createQuickPick<ProviderQuickPickItem>();
+    let settled = false;
+    const finish = (value: ProviderQuickPickItem | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      qp.dispose();
+    };
+    qp.placeholder = placeholder;
+    qp.items = items;
+    const defaultItem = items[0];
+    if (defaultItem) {
+      qp.activeItems = [defaultItem];
+    }
+    if ('prompt' in qp) {
+      (
+        qp as vscode.QuickPick<ProviderQuickPickItem> & { prompt: string }
+      ).prompt = promptHint;
+    }
+    qp.onDidAccept(() => {
+      finish(qp.activeItems[0] ?? qp.selectedItems[0]);
+    });
+    qp.onDidHide(() => {
+      finish(undefined);
+    });
+    qp.show();
+  });
 }
 
 /**
@@ -108,10 +196,11 @@ export async function setApiKey(provider?: ApiProvider): Promise<void> {
  */
 export async function removeApiKey(): Promise<void> {
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
-  const providerPick = await vscode.window.showQuickPick(providerItems, {
-    placeHolder: 'Select API provider to remove key',
-    prompt: 'Choose the AI provider whose API key you want to remove',
-  });
+  const providerPick = await pickProvider(
+    providerItems,
+    'Select API provider to remove key',
+    'Only removes the key from TeXRA — does not delete it from the provider.',
+  );
 
   const provider = providerPick?.provider;
   if (!provider) {
