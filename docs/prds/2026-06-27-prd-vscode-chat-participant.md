@@ -304,19 +304,19 @@ Model selection follows the same `ModelFactory.createModelHandler()` routing as 
 
 The `ChatStreamAgentRuntimeHost` translates `AgentRuntimeHost.emit()` events:
 
-| `ProgressEventPayloads` event                  | `ChatResponseStream` call                                                                          |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `setActiveStream`                              | `stream.progress('TeXRA agent started')`                                                           |
-| `updateStreamStatus` payload `INITIALIZING`    | `stream.progress('Initializing model handler...')`                                                 |
-| `updateStreamStatus` payload `RUNNING`         | `stream.progress('Agent running...')`                                                              |
-| `updateStreamStatus` payload `COMPLETED`       | (triggers post-run anchor/button/summary emission)                                                 |
-| `updateStreamStatus` payload `FAILED`          | `stream.markdown('**Error:** ' + status.error)`                                                    |
-| `updateStreamStatus` payload `CANCELLED`       | `stream.markdown('Agent cancelled.')`                                                              |
+| `ProgressEventPayloads` event                  | `ChatResponseStream` call                                                                                                                                                                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setActiveStream`                              | `stream.progress('TeXRA agent started')`                                                                                                                                                                                     |
+| `updateStreamStatus` payload `INITIALIZING`    | `stream.progress('Initializing model handler...')`                                                                                                                                                                           |
+| `updateStreamStatus` payload `RUNNING`         | `stream.progress('Agent running...')`                                                                                                                                                                                        |
+| `updateStreamStatus` payload `COMPLETED`       | (triggers post-run anchor/button/summary emission)                                                                                                                                                                           |
+| `updateStreamStatus` payload `FAILED`          | `stream.markdown('**Error:** ' + status.error)`                                                                                                                                                                              |
+| `updateStreamStatus` payload `CANCELLED`       | `stream.markdown('Agent cancelled.')`                                                                                                                                                                                        |
 | `requestShowError`                             | `stream.markdown('**Error:** ' + payload.message)` — launch failures and terminal result errors route through this event (`AgentLaunchContext.ts:558`, `terminalResultToast.ts:30`), not through `updateStreamStatus FAILED` |
-| `addOutputFiles`                               | stored in local callback for post-run emission                                                     |
-| `requestEnsureProgressView`                    | `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })` |
-| All `show*Permission` / `show*Approval` events | no-op (blocked upstream by `approvalPromptsUnavailable: true`)                                     |
-| All frontend-bound ignorable events            | no-op                                                                                              |
+| `addOutputFiles`                               | stored in local callback for post-run emission                                                                                                                                                                               |
+| `requestEnsureProgressView`                    | `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })`                                                                                                                           |
+| All `show*Permission` / `show*Approval` events | no-op (blocked upstream by `approvalPromptsUnavailable: true`)                                                                                                                                                               |
+| All frontend-bound ignorable events            | no-op                                                                                                                                                                                                                        |
 
 Events in the "frontend-bound, ignorable" group as documented in `AgentRuntimeHost.ts` (`requestOpenFile`, `requestShowInstruction`, `showAgentConfigBanner`, `*SubscriptionsChanged`, `toolAvailabilityChanged`) are silently dropped. Note: `requestShowError` is **not** ignorable — it carries user-facing error messages for launch failures.
 
