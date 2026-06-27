@@ -1,6 +1,7 @@
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { listExecutions } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { toNewestFirstByTimestamp } from '@utils/core';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
@@ -73,19 +74,16 @@ async function loadUserDefaults(): Promise<PartialDefaults> {
 async function loadHistoryDefaults(): Promise<PartialDefaults> {
   // An unreadable history listing means no history defaults.
   const entries = await listExecutions().catch(() => []);
-  const candidates = entries
-    .filter(
+  const candidates = toNewestFirstByTimestamp(
+    entries.filter(
       (entry) =>
         entry.agentConfig?.agentCategory === AgentCategory.ToolUse &&
         // A multi-agent team run's root is an orchestrator agent, not a
         // sensible default for a plain single-agent chat session.
         !entry.agentConfig?.cliMultiAgentPresetId,
-    )
-    // Schwartzian transform: parse each timestamp once into a sort key rather
-    // than re-parsing both sides on every comparison.
-    .map((item) => ({ item, key: new Date(item.timestamp).getTime() }))
-    .sort((a, b) => b.key - a.key)
-    .map(({ item }) => item);
+    ),
+    (item) => item.timestamp,
+  );
   const mostRecent = candidates[0];
   if (!mostRecent?.agentConfig) return {};
   return {

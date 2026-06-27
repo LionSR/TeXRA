@@ -23,6 +23,11 @@ export {
   unique,
 } from './typeGuards';
 export { debounce, delay } from './async';
-export { byName, byString, byStringProp } from './comparators';
+export {
+  byName,
+  byString,
+  byStringProp,
+  toNewestFirstByTimestamp,
+} from './comparators';
 export { clamp, clampIndex, clampOptional, roundTo } from './math';
 export { tryParseUrl } from './urlCore';
