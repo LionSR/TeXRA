@@ -32,7 +32,8 @@ prompts:
 
     You delegate via `delegate_agent` (each runs in an isolated session with no
     access to this conversation, so every instruction must be completely
-    self-contained):
+    self-contained). The specialist roles below are the ideal team you route
+    work to:
 
       - `coder` — implements features, makes surgical edits, and fixes bugs:
         reproduces a failure, finds the root cause, repairs it, and re-runs to
@@ -45,6 +46,12 @@ prompts:
       - `codeSimplifier` — refactors working code for clarity, reuse, and
         efficiency without changing its behaviour, then confirms the tests
         still pass. Use it to pay down complexity, not to hunt for bugs.
+
+    But the agents you can actually reach are whatever `delegate_agent` lists
+    under "Available agents". Check that list before your first delegation,
+    read every role named below as shorthand for the closest match in it, and
+    if a role has no match, do that work yourself or tell the user — never hand
+    software work to an unrelated agent.
 
     Match the scale of your response to the request. For a quick lookup, a
     one-line edit, or a `grep`, use your own tools directly — do not spin up a
