@@ -3,9 +3,6 @@
 import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
 import {
   createCommandPalette,
-  executeCommandPaletteEntry,
-  filterCommandPaletteEntries,
-  isCommandPaletteShortcut,
   type CommandPaletteController,
   type CommandPaletteEntry,
 } from '@shared/wa/commandPalette';
@@ -29,29 +26,7 @@ export interface DesktopCommandPaletteOptions {
 
 export type DesktopCommandPaletteController = CommandPaletteController;
 
-export const DESKTOP_SWITCH_STREAM_COMMAND_PREFIX =
-  'texra.desktop.switchStream:';
-
-export function filterDesktopCommandPaletteEntries(
-  entries: readonly DesktopCommandMenuEntry[],
-  query: string,
-): DesktopCommandMenuEntry[] {
-  // Desktop entries carry `category` (used in the haystack alongside id and
-  // label). The shared helper consults `category` first, then `meta`, so the
-  // existing search behaviour (label + category + id) is preserved.
-  return filterCommandPaletteEntries(entries, query);
-}
-
-export function executeDesktopCommandPaletteEntry(
-  entry: DesktopCommandMenuEntry | undefined,
-  actions: DesktopCommandActions,
-): boolean {
-  return executeCommandPaletteEntry(toPaletteEntry(entry), (id) =>
-    dispatchDesktopCommand(id as DesktopCommandMenuEntry['id'], actions),
-  );
-}
-
-export { isCommandPaletteShortcut };
+const DESKTOP_SWITCH_STREAM_COMMAND_PREFIX = 'texra.desktop.switchStream:';
 
 export function createDesktopCommandPalette({
   document,
