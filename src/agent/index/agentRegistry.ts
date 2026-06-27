@@ -56,11 +56,18 @@ function isLegacyBuiltInKey(k: string): boolean {
   );
 }
 
+/**
+ * Single source for which visibility state key owns each category's
+ * enabled-agents list. `getVisibleAgents` reads it forward (category → key); the
+ * key migrations iterate it so the relationship isn't re-encoded per function.
+ */
+const ENABLED_AGENTS_STATE_KEY: Record<AgentCategory, WorkspaceStateKey> = {
+  [AgentCategory.Workflow]: WorkspaceStateKey.ENABLED_AGENTS,
+  [AgentCategory.ToolUse]: WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+};
+
 function migrateLegacySourceKeys(): void {
-  for (const stateKey of [
-    WorkspaceStateKey.ENABLED_AGENTS,
-    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-  ] as const) {
+  for (const stateKey of Object.values(ENABLED_AGENTS_STATE_KEY)) {
     const stored = platform().workspaceState.get<string[]>(stateKey, []);
     if (!stored?.length) continue;
     if (!stored.some(isLegacyBuiltInKey)) continue;
@@ -179,8 +186,7 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
       entry.category = AgentCategory.ToolUse;
       entry.rounds = undefined;
     }
-    const key = `${entry.source}:${entry.name}`;
-    nextCache.set(key, entry);
+    nextCache.set(agentKeyOf(entry), entry);
   }
 
   cache.clear();
@@ -209,14 +215,11 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
  * the legacy name (e.g. a custom `chat`) keeps its key untouched.
  */
 function migrateLegacyAgentNameKeys(): void {
-  for (const stateKey of [
-    WorkspaceStateKey.ENABLED_AGENTS,
-    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+  for (const category of [
+    AgentCategory.Workflow,
+    AgentCategory.ToolUse,
   ] as const) {
-    const category =
-      stateKey === WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
-        ? AgentCategory.ToolUse
-        : AgentCategory.Workflow;
+    const stateKey = ENABLED_AGENTS_STATE_KEY[category];
     const stored = platform().workspaceState.get<string[]>(stateKey, []);
     if (!stored?.length) continue;
 
@@ -280,10 +283,7 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
 
   if (qualified.size === 0 && bare.size === 0) return;
 
-  for (const stateKey of [
-    WorkspaceStateKey.ENABLED_AGENTS,
-    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-  ] as const) {
+  for (const stateKey of Object.values(ENABLED_AGENTS_STATE_KEY)) {
     const stored = platform().workspaceState.get<string[]>(stateKey, []);
     if (!stored?.length) continue;
 
@@ -337,7 +337,7 @@ export function getAgent(
       ? TOOL_USE_LOOKUP_PRIORITY
       : LOOKUP_PRIORITY;
   for (const source of priority) {
-    const entry = cache.get(`${source}:${identifier}`);
+    const entry = cache.get(createKey(source, identifier));
     if (entry) return entry;
   }
 
@@ -398,6 +398,10 @@ export function updateAgentMeta(
  * "resolution" shape (definition path + resolved name) without dereferencing
  * the entry themselves. Returns `undefined` when the identifier doesn't
  * match any cached agent.
+ *
+ * Category-blind: a bare name resolves by source priority, so this is for
+ * display/diagnostic/inheritance lookups, NOT launch. Launch must use
+ * {@link resolveAgentForLaunch} so it lands on the exact entry validation chose.
  */
 export function resolveAgent(identifier: string): ResolvedAgent | undefined {
   const entry = getAgent(identifier);
@@ -488,11 +492,9 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  */
 export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
   const entries = getAgentsByCategory(category);
-  const stateKey =
-    category === 'toolUse'
-      ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
-      : WorkspaceStateKey.ENABLED_AGENTS;
-  const raw = platform().workspaceState.get<string[]>(stateKey);
+  const raw = platform().workspaceState.get<string[]>(
+    ENABLED_AGENTS_STATE_KEY[category],
+  );
   return filterVisible(entries, raw, category);
 }
 

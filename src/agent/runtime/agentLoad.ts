@@ -18,6 +18,7 @@ import {
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import * as logger from '@logger/logUtils';
+import { agentKey } from '@shared/schemas/agent';
 import { resolveToolDefinitions } from '@tools/registry';
 import { AbsoluteFS } from '@utils/files';
 
@@ -102,7 +103,9 @@ export async function loadAgentSettingAndPrompts(
 
   // Merge with parent if inheritance is specified
   if (config.inherits) {
-    const parentResolution = resolveAgent(`${entry.source}:${config.inherits}`);
+    const parentResolution = resolveAgent(
+      agentKey(entry.source, config.inherits),
+    );
     if (!parentResolution) {
       throw new Error(
         `Unable to locate parent agent "${config.inherits}" in source "${entry.source}".`,
