@@ -1046,13 +1046,13 @@ Google's handler uses `requiresBatchedParallelToolResults`, the Interactions API
 
 ### Feature flags and default values
 
-| Configuration key                               | Default | Purpose                                                                        |
-| ----------------------------------------------- | ------- | ------------------------------------------------------------------------------ |
-| `texra.model.useVsCodeLmForProvider.openai`     | `false` | Enable vscode.lm path for OpenAI models                                        |
-| `texra.model.useVsCodeLmForProvider.openrouter` | `false` | Enable vscode.lm path for OpenRouter models                                    |
-| `texra.model.useVsCodeLmForProvider.ollama`     | `false` | Enable vscode.lm path for Ollama/local models                                  |
-| `texra.model.useVsCodeLmForProvider.custom`     | `false` | Enable vscode.lm path for custom endpoints                                     |
-| `texra.vscodeLm.registerProvider`               | `false` | Register TeXRA as a `LanguageModelChatProvider` in VS Code                     |
+| Configuration key                               | Default | Purpose                                                                                                           |
+| ----------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
+| `texra.model.useVsCodeLmForProvider.openai`     | `false` | Enable vscode.lm path for OpenAI models                                                                           |
+| `texra.model.useVsCodeLmForProvider.openrouter` | `false` | Enable vscode.lm path for OpenRouter models                                                                       |
+| `texra.model.useVsCodeLmForProvider.ollama`     | `false` | Enable vscode.lm path for Ollama/local models                                                                     |
+| `texra.model.useVsCodeLmForProvider.custom`     | `false` | Enable vscode.lm path for custom endpoints                                                                        |
+| `texra.vscodeLm.registerProvider`               | `false` | Register TeXRA as a `LanguageModelChatProvider` in VS Code                                                        |
 | `texra.vscodeLm.shownDegradationNotice`         | `false` | Tracks whether the one-time degradation warning has been permanently dismissed (persists across VS Code restarts) |
 
 All flags are VS Code configuration settings scoped to `ConfigurationTarget.Global`. They are not stored in `platform().secrets` or `globalState`.
