@@ -1036,7 +1036,7 @@ TeXRA's `SdkToolCall` is a discriminated union on `provider` with six variants, 
 
 TeXRA's `llm-zoo` `ModelConfig` encodes `contextWindow`, `maxOutputTokens`, `inputPrice`, `outputPrice`, and fine-grained `ModelCapabilities`. `vscode.lm` exposes only `maxInputTokens` and `capabilities: {imageInput?, toolCalling?}`.
 
-**Mitigation:** The synthetic `ModelConfig` for `vscode.lm` models sets `maxOutputTokens = Math.floor(info.maxInputTokens / 4)` as a rough estimate, `inputPrice = 0`, `outputPrice = 0`, and `contextWindow = info.maxInputTokens`. This is documented as an estimate in the model picker tooltip: "Max output tokens: estimated (VS Code LM reports input tokens only)". Features gated on missing capability fields (e.g., per-model reasoning effort tiers) default to disabled.
+**Mitigation:** The synthetic `ModelConfig` for `vscode.lm` models sets `maxOutputTokens = Math.floor(info.maxInputTokens / 4)` as a rough estimate (error range: 2–6× across model families — e.g. GPT-4o with 128K input and 16K max output yields 32K, a 2× overestimate; downstream output-size guards should treat this value as a ceiling hint, not a precise limit), `inputPrice = 0`, `outputPrice = 0`, and `contextWindow = info.maxInputTokens`. This is documented as an estimate in the model picker tooltip: "Max output tokens: estimated (VS Code LM reports input tokens only)". Features gated on missing capability fields (e.g., per-model reasoning effort tiers) default to disabled.
 
 ### Blocker 10: Google hard-blocked
 
