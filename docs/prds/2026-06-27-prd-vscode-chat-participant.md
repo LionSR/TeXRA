@@ -312,12 +312,13 @@ The `ChatStreamAgentRuntimeHost` translates `AgentRuntimeHost.emit()` events:
 | `updateStreamStatus` payload `COMPLETED`       | (triggers post-run anchor/button/summary emission)                                                 |
 | `updateStreamStatus` payload `FAILED`          | `stream.markdown('**Error:** ' + status.error)`                                                    |
 | `updateStreamStatus` payload `CANCELLED`       | `stream.markdown('Agent cancelled.')`                                                              |
+| `requestShowError`                             | `stream.markdown('**Error:** ' + payload.message)` — launch failures and terminal result errors route through this event (`AgentLaunchContext.ts:558`, `terminalResultToast.ts:30`), not through `updateStreamStatus FAILED` |
 | `addOutputFiles`                               | stored in local callback for post-run emission                                                     |
 | `requestEnsureProgressView`                    | `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })` |
 | All `show*Permission` / `show*Approval` events | no-op (blocked upstream by `approvalPromptsUnavailable: true`)                                     |
 | All frontend-bound ignorable events            | no-op                                                                                              |
 
-Events in the "frontend-bound, ignorable" group as documented in `AgentRuntimeHost.ts` (`requestOpenFile`, `requestShowInstruction`, `showAgentConfigBanner`, `requestShowError`, `*SubscriptionsChanged`, `toolAvailabilityChanged`) are silently dropped.
+Events in the "frontend-bound, ignorable" group as documented in `AgentRuntimeHost.ts` (`requestOpenFile`, `requestShowInstruction`, `showAgentConfigBanner`, `*SubscriptionsChanged`, `toolAvailabilityChanged`) are silently dropped. Note: `requestShowError` is **not** ignorable — it carries user-facing error messages for launch failures.
 
 ### Output File Handling
 
@@ -495,6 +496,13 @@ export class ChatStreamAgentRuntimeHost implements AgentRuntimeHost {
         } else if (s.status === 'CANCELLED') {
           this.stream.markdown('Agent cancelled.');
         }
+        break;
+      }
+      case 'requestShowError': {
+        // Launch failures (AgentLaunchContext) and terminal result errors route
+        // here, not through updateStreamStatus FAILED.
+        const e = payload as ProgressEventPayloads['requestShowError'];
+        this.stream.markdown(`**Error:** ${e.message}`);
         break;
       }
       case 'addOutputFiles': {
