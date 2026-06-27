@@ -5,6 +5,7 @@
  * these and persists the result. Kept separate so the state machine
  * (refresh thresholds, single-flight) is unit-testable without the network.
  */
+import { toErrorMessage } from '@common/errors';
 import {
   CODEX_CLIENT_ID,
   CODEX_DEVICE_REDIRECT_URI,
@@ -51,7 +52,7 @@ async function postForm(url: string, body: URLSearchParams): Promise<Response> {
     });
   } catch (cause) {
     throw new CodexAuthError(
-      `Network error contacting ${url}: ${(cause as Error).message}`,
+      `Network error contacting ${url}: ${toErrorMessage(cause)}`,
       'transient',
     );
   }
@@ -126,7 +127,7 @@ export async function requestDeviceUserCode(): Promise<CodexDeviceUserCode> {
     });
   } catch (cause) {
     throw new CodexAuthError(
-      `Network error requesting device code: ${(cause as Error).message}`,
+      `Network error requesting device code: ${toErrorMessage(cause)}`,
       'transient',
     );
   }
@@ -184,7 +185,7 @@ export async function pollDeviceToken(params: {
   } catch (cause) {
     // Network blip mid-poll: treat as pending so the loop keeps trying.
     throw new CodexAuthError(
-      `Network error polling device authorization: ${(cause as Error).message}`,
+      `Network error polling device authorization: ${toErrorMessage(cause)}`,
       'pending',
     );
   }
