@@ -1191,6 +1191,123 @@
           "when": "texra.activated"
         }
       ],
+      "languageModelTools": [
+        {
+          "canBeReferencedInPrompt": true,
+          "displayName": "arXiv Search",
+          "icon": "$(search)",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "categories": {
+                "description": "Optional arXiv category filters such as \"math.NT\" or \"cs.AI\".",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "field": {
+                "description": "Search field: \"author\" for author names, \"title\" for paper titles, \"abstract\" for abstracts, \"all\" (default) for all fields.",
+                "enum": ["all", "author", "title", "abstract"],
+                "type": "string"
+              },
+              "maxResults": {
+                "description": "Maximum number of papers to return.",
+                "type": "integer"
+              },
+              "query": {
+                "description": "Search query terms, title text, or author names.",
+                "type": "string"
+              },
+              "sortBy": {
+                "description": "arXiv sort field to use.",
+                "enum": ["relevance", "lastUpdatedDate", "submittedDate"],
+                "type": "string"
+              },
+              "sortOrder": {
+                "description": "Sort direction for results.",
+                "enum": ["ascending", "descending"],
+                "type": "string"
+              },
+              "start": {
+                "description": "Zero-based result offset for pagination.",
+                "type": "integer"
+              }
+            },
+            "required": ["query"],
+            "type": "object"
+          },
+          "modelDescription": "Search arXiv for papers and return basic metadata for each hit. Use field=\"author\" for author name searches.",
+          "name": "texra_arxiv_search",
+          "tags": ["texra", "research", "arxiv"],
+          "toolReferenceName": "texra_arxiv_search"
+        },
+        {
+          "canBeReferencedInPrompt": true,
+          "displayName": "Web Fetch",
+          "icon": "$(globe)",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "prompt": {
+                "description": "Optional instruction describing what to extract from the page.",
+                "type": "string"
+              },
+              "url": {
+                "description": "Public HTTP or HTTPS URL to fetch.",
+                "type": "string"
+              }
+            },
+            "required": ["url"],
+            "type": "object"
+          },
+          "modelDescription": "Fetch content from a URL and return it as clean text. Include an optional prompt to explain what context you need so the fetched content can be interpreted correctly.",
+          "name": "texra_web_fetch",
+          "tags": ["texra", "research", "web"],
+          "toolReferenceName": "texra_web_fetch"
+        },
+        {
+          "canBeReferencedInPrompt": true,
+          "displayName": "Crossref Search",
+          "icon": "$(book)",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "filter": {
+                "description": "Crossref filter string, e.g. \"from-pub-date:2023\".",
+                "type": "string"
+              },
+              "offset": {
+                "description": "Zero-based result offset for pagination.",
+                "type": "integer"
+              },
+              "order": {
+                "description": "Crossref sort order.",
+                "enum": ["asc", "desc"],
+                "type": "string"
+              },
+              "query": {
+                "description": "Bibliographic search query for Crossref works.",
+                "type": "string"
+              },
+              "rows": {
+                "description": "Maximum number of works to return.",
+                "type": "integer"
+              },
+              "sort": {
+                "description": "Crossref sort field to apply.",
+                "type": "string"
+              }
+            },
+            "required": ["query"],
+            "type": "object"
+          },
+          "modelDescription": "Search Crossref works (journal articles, books, conference papers) and return top matches with bibliographic metadata.",
+          "name": "texra_crossref_search",
+          "tags": ["texra", "research", "citation"],
+          "toolReferenceName": "texra_crossref_search"
+        }
+      ],
       "menus": {
         "commandPalette": [
           {

@@ -83,19 +83,51 @@ async function promptForLatexdiffMathMarkup(): Promise<
       picked: mode === configuredMode,
       value: mode,
     }));
+  // Keep the configured mode first so Enter accepts it immediately.
   const prioritizedItems = [
     ...items.filter((item) => item.value === configuredMode),
     ...items.filter((item) => item.value !== configuredMode),
   ];
 
-  const selection = await vscode.window.showQuickPick(prioritizedItems, {
-    title: 'Latexdiff math markup',
-    placeHolder: 'Select math markup granularity for this diff run',
-    ignoreFocusOut: true,
+  type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
+  return await new Promise<MathMarkupOption | undefined>((resolve) => {
+    const qp = vscode.window.createQuickPick<MarkupItem>();
+    let settled = false;
+    const finish = (value: MathMarkupOption | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      qp.dispose();
+    };
+    qp.title = 'Latexdiff math markup';
+    qp.placeholder = 'Select math markup granularity for this diff run';
+    qp.ignoreFocusOut = true;
+    qp.items = prioritizedItems;
+    const defaultItem = prioritizedItems.at(0);
+    if (defaultItem) {
+      qp.activeItems = [defaultItem];
+    }
+    // VS Code 1.108+: show the saved default as a persistent hint below the
+    // input box so users know why one item is listed first. Older hosts
+    // (incl. Cursor 1.105) silently ignore the property.
+    if ('prompt' in qp) {
+      (qp as MarkupQuickPick).prompt =
+        `Saved default: ${configuredMode} — press Enter to accept, or pick another`;
+    }
+    qp.onDidAccept(() => {
+      const picked = qp.activeItems[0] ?? qp.selectedItems[0];
+      finish(picked?.value);
+    });
+    qp.onDidHide(() => {
+      finish(undefined);
+    });
+    qp.show();
   });
-
-  return selection?.value;
 }
+
+type MarkupQuickPick = vscode.QuickPick<
+  vscode.QuickPickItem & { value: MathMarkupOption }
+> & { prompt: string };
 
 async function openLatexdiffResult(
   base: FileLocation,
