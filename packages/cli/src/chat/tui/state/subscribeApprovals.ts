@@ -14,6 +14,7 @@
 // event).
 
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   approvalPromptAllowed,
   humanInputDenialFeedback,
@@ -21,7 +22,6 @@ import {
   immediateDecisionForApproval,
   markApprovalDenied,
 } from '@cli/runtime/approvalAdapter';
-import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   cliApprovalEventKind,
   isCliApprovalEvent,
@@ -42,6 +42,7 @@ import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool'
 import { assertNever } from '../assertNever';
 import { notify } from '../notifications/terminalNotifier';
 import { cliState } from './cliState';
+import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,
   enqueueApproval,
@@ -280,6 +281,9 @@ async function applyRetryDecision(
       ...cliState.sessionMeta.get(),
       apiMode: decision.apiMode,
     });
+  }
+  if (decision.disableChatGptSubscription) {
+    await setCliCodexSubscription(false);
   }
   runCoordinatorBridge.triggerRetry(payload.streamId, decision.userMessage);
 }

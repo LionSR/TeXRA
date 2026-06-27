@@ -1,0 +1,71 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  describeChatGptSubscriptionLimit,
+  formatProviderHttpError,
+  parseChatGptSubscriptionLimit,
+} from '@common/errors/sdkErrorUtils';
+
+const USAGE_LIMIT_BODY = {
+  type: 'usage_limit_reached',
+  message: 'The usage limit has been reached',
+  plan_type: 'pro',
+  resets_at: 1782634869,
+  eligible_promo: null,
+  resets_in_seconds: 159728,
+} as const;
+
+describe('parseChatGptSubscriptionLimit', () => {
+  it('parses a direct Codex usage-limit body', () => {
+    const limit = parseChatGptSubscriptionLimit(USAGE_LIMIT_BODY);
+    expect(limit).toEqual({
+      planType: 'pro',
+      resetsInSeconds: 159728,
+    });
+  });
+
+  it('parses the SDK-enveloped { error } form', () => {
+    expect(
+      parseChatGptSubscriptionLimit({ error: USAGE_LIMIT_BODY })?.planType,
+    ).toBe('pro');
+  });
+
+  it('ignores unrelated bodies', () => {
+    expect(parseChatGptSubscriptionLimit({ type: 'rate_limit_exceeded' })).toBe(
+      null,
+    );
+    expect(parseChatGptSubscriptionLimit(undefined)).toBe(null);
+    expect(parseChatGptSubscriptionLimit({ message: 'nope' })).toBe(null);
+  });
+
+  it('formats a human-readable reset hint', () => {
+    const text = describeChatGptSubscriptionLimit({
+      planType: 'pro',
+      resetsInSeconds: 159728,
+    });
+    expect(text).toContain('Pro plan');
+    expect(text).toContain('Resets in 1d 20h');
+    expect(text).toContain('OpenAI API key');
+  });
+});
+
+describe('formatProviderHttpError for ChatGPT subscription limits', () => {
+  it('classifies a usage-limit error as a switchable credential exhaustion', () => {
+    const error = new Error('codex backend rejected the request') as Error & {
+      error: unknown;
+      provider?: string;
+    };
+    error.error = USAGE_LIMIT_BODY;
+    error.provider = 'openai';
+
+    const providerError = formatProviderHttpError(error);
+
+    expect(providerError.isChatGptSubscriptionLimited).toBe(true);
+    expect(providerError.isCredentialExhausted).toBe(true);
+    // The stored OpenAI key is NOT the broken credential, so no key change is
+    // forced (that flag is reserved for upstream credit depletion).
+    expect(providerError.isUpstreamCreditDepleted).toBeUndefined();
+    expect(providerError.userRetryable).toBe(true);
+    expect(providerError.message).toContain('ChatGPT subscription usage limit');
+  });
+});

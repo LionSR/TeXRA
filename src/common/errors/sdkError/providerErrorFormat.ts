@@ -28,6 +28,10 @@ import {
   isUpstreamCreditDepletedBody,
 } from './relayDetection';
 import {
+  describeChatGptSubscriptionLimit,
+  parseChatGptSubscriptionLimit,
+} from './chatgptSubscriptionDetection';
+import {
   type SdkErrorEntry,
   SDK_ERRORS,
   SDK_ERRORS_BY_KIND,
@@ -150,10 +154,20 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // Anthropic 400 "credit balance is too low" still wants the "Use your
   // own API key" affordance so the user can switch credentials.
   const isUpstreamCreditDepleted = isUpstreamCreditDepletedBody(rawErrorBody);
+  // ChatGPT-subscription (Codex) quota exhaustion. Treated as a credential
+  // exhaustion so auto-retry is suppressed (the quota won't return mid-run) and
+  // the retry UI offers a switch to the user's own API key — but it disables
+  // the subscription preference, not relay, on accept.
+  const chatgptSubscriptionLimit = parseChatGptSubscriptionLimit(rawErrorBody);
+  const isChatGptSubscriptionLimited = chatgptSubscriptionLimit !== null;
+  const chatgptSubscriptionMessage = chatgptSubscriptionLimit
+    ? describeChatGptSubscriptionLimit(chatgptSubscriptionLimit)
+    : undefined;
   const isCredentialExhausted =
     isRelayMonthlyLimitBody(rawErrorBody) ||
     isRelayMonthlyLimitByMessage ||
-    isUpstreamCreditDepleted;
+    isUpstreamCreditDepleted ||
+    isChatGptSubscriptionLimited;
 
   // Handle DOMException AbortError (from AbortController.abort())
   if (err instanceof DOMException && err.name === 'AbortError') {
@@ -179,22 +193,34 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
+  // Classification flags + diagnostics carried by BOTH the SDK-matched and the
+  // unrecognized returns below. The abort / disk-full early returns above
+  // deliberately opt out (always non-relay, no credential flags). Single source
+  // for these fields so adding a future flag touches one place, not two.
+  const classification = {
+    isRelayError: isRelay,
+    isCredentialExhausted: isCredentialExhausted || undefined,
+    isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
+    isChatGptSubscriptionLimited: isChatGptSubscriptionLimited || undefined,
+    rawErrorBody,
+    streamDiagnostics,
+    partialText,
+  };
+
   // Try matching a known SDK error type (connection, abort, HTTP errors)
   const sdkMatch = matchSdkError(err, rawErrorBody);
   if (sdkMatch) {
     return {
       ...sdkMatch,
+      ...classification,
+      // Prefer the actionable subscription-limit message over the raw
+      // `HTTP 429 – The usage limit has been reached`.
+      message: chatgptSubscriptionMessage ?? sdkMatch.message,
       // Credential-exhausted errors keep userRetryable=true so the retry
       // panel surfaces with the "Use your own API key" affordance, but
       // shouldAutoRetry separately suppresses auto-retry for them — a
       // fresh attempt with the same depleted credential would just fail.
       userRetryable: isRelay || sdkMatch.userRetryable || isCredentialExhausted,
-      isRelayError: isRelay,
-      isCredentialExhausted: isCredentialExhausted || undefined,
-      isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
-      rawErrorBody,
-      streamDiagnostics,
-      partialText,
     };
   }
 
@@ -216,18 +242,13 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     (statusCode ? isRetryableStatusCode(statusCode) : true);
 
   return {
-    message,
+    ...classification,
+    message: chatgptSubscriptionMessage ?? message,
     statusCode,
     statusText,
     provider,
     userRetryable,
-    isRelayError: isRelay,
-    isCredentialExhausted: isCredentialExhausted || undefined,
-    isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
     requestId,
-    rawErrorBody,
-    streamDiagnostics,
-    partialText,
   };
 }
 

@@ -5,6 +5,10 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - catalog + accessor
+import {
+  isStored,
+  makeFakeSettingsStores,
+} from '@test/support/settingsStoresFake';
 import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
 import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
 import {
@@ -31,13 +35,9 @@ import {
   DEFAULT_GIT_WORKTREE_SUPPORT,
 } from '@shared/constants/git';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - shared store fakes
-import {
-  isStored,
-  makeFakeSettingsStores,
-} from '@test/support/settingsStoresFake';
 
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'config',
@@ -70,6 +70,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY]:
     LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
   [WorkspaceStateKey.LATEX_FORMATTER]: LATEX_CONFIG_DEFAULTS.latexFormatter,
+  [GlobalStateKey.WEBSOCKET_OPENAI]: false,
 };
 
 describe('state settings catalog', () => {
@@ -190,6 +191,8 @@ describe('state settings catalog', () => {
     //    drives worktree delegation (DelegationTools);
     //  - the workflow compile settings run in `texra workflow` / `texra run`
     //    (the reflection flow, via OutputNode/runCompileCheck).
+    //  - the OpenAI WebSocket toggle is read by the Responses handler the CLI
+    //    runs (and lets the Codex backend attempt WebSocket).
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `hosts`.
@@ -203,6 +206,7 @@ describe('state settings catalog', () => {
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
         WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+        GlobalStateKey.WEBSOCKET_OPENAI,
       ].sort(),
     );
   });

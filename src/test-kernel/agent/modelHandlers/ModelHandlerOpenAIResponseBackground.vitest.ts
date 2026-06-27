@@ -95,9 +95,20 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
     assert.equal(handler.getStreamingConfig(), true);
   });
 
-  it('keeps Codex subscription handlers out of background mode', () => {
+  it('lets Codex subscription handlers follow the shared background toggle', () => {
+    // Codex no longer vetoes background mode; it uses the same
+    // useBackgroundResponses toggle (default on) + workflow/GPT eligibility, so
+    // the behavior can be tested against the backend in practice.
     const handler = new ModelHandlerCodex(createOpenAIConfig('gpt-5'));
     handler.setAgentCategory(AgentCategory.Workflow);
+
+    assert.equal(handler.isBackgroundModeActive(), true);
+    assert.equal(handler.getStreamingConfig(), false);
+  });
+
+  it('keeps Codex tool-use agents on streaming requests by default', () => {
+    const handler = new ModelHandlerCodex(createOpenAIConfig('gpt-5'));
+    handler.setAgentCategory(AgentCategory.ToolUse);
 
     assert.equal(handler.isBackgroundModeActive(), false);
     assert.equal(handler.getStreamingConfig(), true);
