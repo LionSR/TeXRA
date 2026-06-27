@@ -1,7 +1,7 @@
 import type {
   FollowUpQueueBatch,
   FollowUpQueueInput,
-} from '@agent/toolUse/FollowUpQueue';
+} from '@agent/followUp/FollowUpQueue';
 
 /** Contract for injecting queued user messages into an active tool-use cycle. */
 export interface IToolUseSession {

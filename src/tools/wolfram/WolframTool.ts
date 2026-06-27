@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - agent
-import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 
 // Local imports - tools
 import { ToolResult, ToolError } from '@shared/schemas/toolResult';

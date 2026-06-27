@@ -1,5 +1,5 @@
 // Local imports - agent
-import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 
 // Local imports - tools
 import { type ToolResult } from '@shared/schemas/toolResult';

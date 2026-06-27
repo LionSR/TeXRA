@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { executionRegistry } from '@agent/runtime/executionRegistry';
-import { notifyFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
+import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';

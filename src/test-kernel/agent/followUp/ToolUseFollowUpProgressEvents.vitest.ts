@@ -12,8 +12,8 @@ import {
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { onFollowUpSent, sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { onFollowUpSent, sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { createRecordingHost } from '../progressTestUtils';
 

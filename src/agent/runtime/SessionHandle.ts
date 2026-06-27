@@ -29,7 +29,7 @@
 
 import { getActiveFlushers, unregisterFlushers } from '@transcript';
 import type { AgentTrace, ResultEvent } from '@agent/trace';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { toErrorMessage } from '@common/errors';
 import { createChannelTrace } from '@logger';
 
