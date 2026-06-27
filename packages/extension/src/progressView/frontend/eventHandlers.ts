@@ -4,8 +4,7 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { isChatGptSubscriptionLimitError } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
-import type { GettingStartedAction } from '@shared/schemas';
+import type { GettingStartedActionDetail, StreamTabId } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
@@ -93,10 +92,6 @@ export function handleDeleteAll(): void {
   postMessage(PROGRESS_VIEW_COMMANDS.DELETE_ALL, {});
 }
 
-export function handleGettingStartedAction(action: GettingStartedAction): void {
-  postMessage(PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION, { action });
-}
-
 export function handleToolbarCommand(
   event: CustomEvent<ToolbarCommandDetail>,
   ctx: FrontendEventHandlerContext,
@@ -115,6 +110,14 @@ export function handleFileAction(
     file,
     ...(base && { base }),
     ...(prev && { prev }),
+  });
+}
+
+export function handleGettingStartedAction(
+  event: CustomEvent<GettingStartedActionDetail>,
+): void {
+  postMessage(PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION, {
+    action: event.detail.action,
   });
 }
 
