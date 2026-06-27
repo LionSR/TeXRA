@@ -129,7 +129,7 @@ This feature complements, not replaces, the existing webview. The full TeXRA pan
 
 - `ChatResponseStream.progress()` is called within 500 ms of handler invocation with the text "TeXRA agent started".
 - `ChatResponseStream.button()` is called within 500 ms of handler invocation with `{ title: 'View live progress', command: 'texra.showProgressView', arguments: [] }`.
-- `ChatResponseStream.progress()` is called again when `AgentRuntimeHost.emit('updateStreamStatus', ...)` fires with a `RUNNING` status.
+- `ChatResponseStream.progress()` is called again when `AgentRuntimeHost.emit('updateStreamStatus', ...)` fires with `status === 'running'`.
 - If `CancellationToken.isCancellationRequested` becomes `true`, the `AbortController` passed via `RunAgentOptions` (if exposed — see Open Question 5) is aborted, and the handler returns `{ errorDetails: { message: 'Run cancelled by user.' } }`.
 
 ### US-7: Follow-up suggestions after completion
@@ -261,7 +261,7 @@ Entries marked "must be confirmed in audit" are blocked on Open Question 1. Unti
 
 The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` in this order:
 
-1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under one of `vscode.workspace.workspaceFolders[].uri.fsPath`. The first qualifying URI becomes `AgentConfig.inputFiles[0]`. After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }`without calling`runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
+1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under one of `vscode.workspace.workspaceFolders[].uri.fsPath`. The first qualifying URI becomes `AgentConfig.inputFiles[0]`. After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }` without calling `runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
 
 2. **Resolve agent name.** If `request.command` is set and present in `CHAT_COMMAND_TO_AGENT`, use the mapped YAML identifier. If `request.command` is set but absent from the map, emit the unrecognized-command error and return without calling `runAgent()`. If `request.command` is `undefined`, use `DEFAULT_CHAT_AGENT`.
 
@@ -306,13 +306,13 @@ The `ChatStreamAgentRuntimeHost` translates `AgentRuntimeHost.emit()` events:
 
 | `ProgressEventPayloads` event                  | `ChatResponseStream` call                                                                                                                                                                                                    |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `setActiveStream`                              | no-op — initial progress is emitted in Step 7 before `runAgent()` to satisfy the US-6 500 ms deadline; re-emitting here would produce a duplicate                                                                            |
-| `updateStreamStatus` payload `INITIALIZING`    | `stream.progress('Initializing model handler...')`                                                                                                                                                                           |
-| `updateStreamStatus` payload `RUNNING`         | `stream.progress('Agent running...')`                                                                                                                                                                                        |
-| `updateStreamStatus` payload `COMPLETED`       | (triggers post-run anchor/button/summary emission)                                                                                                                                                                           |
-| `updateStreamStatus` payload `FAILED`          | `stream.markdown('**Error:** ' + status.error)`                                                                                                                                                                              |
-| `updateStreamStatus` payload `CANCELLED`       | `stream.markdown('Agent cancelled.')`                                                                                                                                                                                        |
-| `requestShowError`                             | `stream.markdown('**Error:** ' + payload.message)` — launch failures and terminal result errors route through this event (`AgentLaunchContext.ts:558`, `terminalResultToast.ts:30`), not through `updateStreamStatus FAILED` |
+| `setActiveStream`                                       | no-op — initial progress is emitted in Step 7 before `runAgent()` to satisfy the US-6 500 ms deadline; re-emitting here would produce a duplicate                                                                    |
+| `updateStreamStatus` `status === 'initializing'`        | `stream.progress('Initializing model handler...')`                                                                                                                                                                    |
+| `updateStreamStatus` `status === 'running'`             | `stream.progress('Agent running...')`                                                                                                                                                                                 |
+| `updateStreamStatus` `terminalStatus === 'completed'`   | triggers post-run anchor/button/summary emission (Step 10 / Output File Handling)                                                                                                                                     |
+| `updateStreamStatus` `terminalStatus === 'error'`       | no-op — error already surfaced via `requestShowError` (see row below); payload has no `.error` field                                                                                                                  |
+| `updateStreamStatus` `terminalStatus === 'interrupted'` | `stream.markdown('Agent cancelled.')`                                                                                                                                                                                 |
+| `requestShowError`                             | `stream.markdown('**Error:** ' + payload.message)` — launch failures and terminal result errors route through this event (`AgentLaunchContext.ts:558`, `terminalResultToast.ts:30`), not through `updateStreamStatus terminalStatus='error'` |
 | `addOutputFiles`                               | stored in local callback for post-run emission                                                                                                                                                                               |
 | `requestEnsureProgressView`                    | `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })`                                                                                                                           |
 | All `show*Permission` / `show*Approval` events | no-op (blocked upstream by `approvalPromptsUnavailable: true`)                                                                                                                                                               |
@@ -491,13 +491,15 @@ export class ChatStreamAgentRuntimeHost implements AgentRuntimeHost {
         break;
       case 'updateStreamStatus': {
         const s = payload as ProgressEventPayloads['updateStreamStatus'];
-        if (s.status === 'INITIALIZING') {
+        if (s.status === 'initializing') {
           this.stream.progress('Initializing model handler...');
-        } else if (s.status === 'RUNNING') {
+        } else if (s.status === 'running') {
           this.stream.progress('Agent running...');
-        } else if (s.status === 'FAILED' && s.error) {
-          this.stream.markdown(`**Error:** ${s.error}`);
-        } else if (s.status === 'CANCELLED') {
+        } else if (s.terminalStatus === 'completed') {
+          this.postRunEmission(); // emit anchors, diff button, markdown summary
+        } else if (s.terminalStatus === 'error') {
+          // no-op: error already surfaced via requestShowError above
+        } else if (s.terminalStatus === 'interrupted') {
           this.stream.markdown('Agent cancelled.');
         }
         break;
@@ -719,7 +721,7 @@ Not applicable to v1 (TeXRA's own model handlers handle token budgeting). Deferr
 **Deliverables:**
 
 - `packages/extension/src/commands/chat/ChatStreamAgentRuntimeHost.ts` implementing `AgentRuntimeHost`.
-- Maps lifecycle events (`setActiveStream`, `updateStreamStatus` statuses `INITIALIZING`/`RUNNING`/`COMPLETED`/`FAILED`/`CANCELLED`, `addOutputFiles`, `requestEnsureProgressView`) to `vscode.ChatResponseStream` calls per the table in "Streaming Response Through `ChatResponseStream`".
+- Maps lifecycle events (`setActiveStream`, `updateStreamStatus` `status === 'initializing'`/`'running'` and `terminalStatus === 'completed'`/`'error'`/`'interrupted'`, `addOutputFiles`, `requestEnsureProgressView`) to `vscode.ChatResponseStream` calls per the table in "Streaming Response Through `ChatResponseStream`".
 - All approval events and frontend-bound ignorable events are explicit no-op cases in the `switch` statement with comments explaining why.
 - Unit tests using a mock `vscode.ChatResponseStream` (interface-compatible stub) verifying the correct `progress()`, `button()`, and `markdown()` calls for each mapped event type.
 - Verification that the class satisfies the `AgentRuntimeHost` contract by importing `noopAgentRuntimeHost` from `src/agent/runtime/AgentRuntimeHost.ts` and asserting structural compatibility in a compile-time `satisfies` check.
