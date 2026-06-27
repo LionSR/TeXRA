@@ -11,7 +11,11 @@ import { z } from 'zod';
 import { ensureError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { ToolResult } from '@shared/schemas/toolResult';
-import { isTimeoutError, isTransientHttpError } from '@tools/timeouts';
+import {
+  isTimeoutError,
+  isTransientHttpError,
+  unwrapAbortError,
+} from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { ensureArray } from '@utils/core';
 
@@ -231,7 +235,10 @@ Useful for finding the right lemma when you know roughly what type it should hav
         },
       };
     } catch (error) {
-      if (isTimeoutError(error)) {
+      // p-retry wraps non-transient errors in AbortError to stop retries;
+      // unwrap so the checks below (and the surfaced message) see the real error.
+      const err = unwrapAbortError(error);
+      if (isTimeoutError(err)) {
         return {
           query,
           result: {
@@ -248,7 +255,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
         query,
         result: {
           summary: 'Loogle search failed',
-          output: `Error: ${toErrorMessage(error)}`,
+          output: `Error: ${toErrorMessage(err)}`,
           isError: true,
         },
       };

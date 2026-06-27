@@ -1,8 +1,13 @@
-// Third-party imports
-import { z } from 'zod';
-
 // Local imports - shared schemas
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
+import type {
+  CodexFileChangeToolInput,
+  CodexMcpToolOutput,
+  CodexThreadToolInput,
+  CodexTodoToolInput,
+  CodexTurnState,
+  CodexTurnToolInput,
+} from '@shared/schemas/codex';
 import { getBasename } from '@shared/utils/path';
 import { truncateSummary } from '@utils/text/stringUtils';
 import type {
@@ -32,61 +37,6 @@ export type CodexTodoItem = TodoListItem['items'][number];
 export type CodexMcpContentBlock = NonNullable<
   NonNullable<McpToolCallItem['result']>['content']
 >[number];
-
-// ---------------------------------------------------------------------------
-// Zod schemas for codex tool-log inputs (used for safe parsing in renderers)
-// ---------------------------------------------------------------------------
-
-const CodexFileChangeItemSchema = z.object({
-  path: z.string(),
-  kind: z.string(),
-});
-
-export const CodexFileChangeToolInputSchema = z.object({
-  changes: z.array(CodexFileChangeItemSchema),
-  patchStatus: z.string().nullish(),
-});
-
-export type CodexFileChangeToolInput = z.infer<
-  typeof CodexFileChangeToolInputSchema
->;
-
-export const CodexMcpToolOutputSchema = z.object({
-  status: z.string().optional(),
-  structuredContent: z.unknown().optional(),
-  contentBlocks: z.array(z.record(z.string(), z.unknown())).optional(),
-});
-
-export type CodexMcpToolOutput = z.infer<typeof CodexMcpToolOutputSchema>;
-
-export const CodexThreadToolInputSchema = z.object({
-  threadId: z.string(),
-});
-
-export type CodexThreadToolInput = z.infer<typeof CodexThreadToolInputSchema>;
-
-const CodexTodoItemSchema = z.object({
-  text: z.string(),
-  completed: z.boolean(),
-});
-
-export const CodexTodoToolInputSchema = z.object({
-  items: z.array(CodexTodoItemSchema),
-  completedCount: z.number(),
-  totalCount: z.number(),
-});
-
-export type CodexTodoToolInput = z.infer<typeof CodexTodoToolInputSchema>;
-
-const CodexTurnStateSchema = z.enum(['running', 'completed', 'failed']);
-type CodexTurnState = z.infer<typeof CodexTurnStateSchema>;
-
-export const CodexTurnToolInputSchema = z.object({
-  state: CodexTurnStateSchema,
-  wallTimeMs: z.number().nullish(),
-});
-
-export type CodexTurnToolInput = z.infer<typeof CodexTurnToolInputSchema>;
 
 /** Normalize Codex command execution events for the native bash tool card. */
 export function buildCodexCommandToolLog(

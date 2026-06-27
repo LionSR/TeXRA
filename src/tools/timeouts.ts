@@ -7,6 +7,20 @@
  */
 
 import { HTTPError, TimeoutError } from 'ky';
+import { AbortError } from 'p-retry';
+
+/**
+ * Unwrap a p-retry {@link AbortError} to the original error it carried.
+ *
+ * Non-transient HTTP errors are wrapped in `new AbortError(error)` inside a
+ * retry callback to stop retries; p-retry stores the wrapped error on
+ * `.originalError`. Outer `catch` blocks must unwrap before any `instanceof`
+ * check, or every specific type test silently fails against the wrapper and
+ * falls through to the generic handler.
+ */
+export function unwrapAbortError(error: unknown): unknown {
+  return (error instanceof AbortError && error.originalError) || error;
+}
 
 /**
  * Whether an error is a request timeout.

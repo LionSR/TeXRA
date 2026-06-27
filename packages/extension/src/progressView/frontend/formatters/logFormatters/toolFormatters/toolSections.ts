@@ -51,7 +51,7 @@ import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
 import {
   CodexMcpToolOutputSchema,
   type CodexMcpToolOutput,
-} from '@tools/codexShared';
+} from '@shared/schemas/codex';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 import { isObject } from '@utils/core';
 
