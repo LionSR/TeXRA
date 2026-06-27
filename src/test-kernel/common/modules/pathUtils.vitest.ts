@@ -1,5 +1,7 @@
+// Standard library imports
+import * as assert from 'node:assert';
+
 // Third-party imports
-import * as assert from 'assert';
 import { describe, it } from 'vitest';
 
 import { getBasename } from '@shared/utils/path';
