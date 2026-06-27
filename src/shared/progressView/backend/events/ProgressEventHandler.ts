@@ -1,7 +1,7 @@
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import type {
   ProgressEventBusLike,

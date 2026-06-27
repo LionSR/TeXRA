@@ -5,8 +5,8 @@ import { z } from 'zod';
 // Local imports - agent
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';

@@ -7,7 +7,7 @@ const getThreadSummaryMock = vi.hoisted(() => vi.fn());
 const listOpenThreadsForStreamMock = vi.hoisted(() => vi.fn(async () => []));
 const readExternalInquiryThreadMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@agent/toolUse/ToolUseFollowUp', () => ({
+vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   sendFollowUp: sendFollowUpMock,
 }));
 
