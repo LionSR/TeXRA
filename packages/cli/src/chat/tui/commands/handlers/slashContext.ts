@@ -1,8 +1,12 @@
 import { type CliContext } from '@cli/runtime/cliContext';
 import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAccess';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import type {
+  ChatCompactionRequestResult,
+  ChatModelSwitchResult,
+} from '@cli/chat/chatSessionController';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { type ExecutionId } from '@shared/schemas';
+import { type ExecutionId, type StreamTabId } from '@shared/schemas';
 
 import {
   openCliSlashCommandForm,
@@ -24,6 +28,10 @@ export interface SlashCommandContext {
   readonly getApprovalPolicy: () => CliApprovalPolicy;
   readonly setApprovalPolicy: (policy: CliApprovalPolicy) => void;
   readonly canSelectModel: () => boolean;
+  readonly switchActiveModel: (model: string) => Promise<ChatModelSwitchResult>;
+  readonly requestCompaction: (
+    streamId: StreamTabId | undefined,
+  ) => ChatCompactionRequestResult;
   readonly resetSession: () => void;
   readonly resumeExecution: (id: ExecutionId) => Promise<void>;
 }

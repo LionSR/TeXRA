@@ -1,9 +1,7 @@
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { assertCliAgentLaunch } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
-import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { formatCliNoAvailableModelsRecovery } from '@cli/runtime/modelAccess';
 import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
 
@@ -101,34 +99,25 @@ export async function applyCliModelSelection(
     return;
   }
 
-  const activeFlow = context.session.streamId
-    ? executionRegistry.getToolUseFlowContext(context.session.streamId)
-    : undefined;
-  if (!activeFlow) {
-    appendLocalAssistantTranscript(
-      'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
-    );
-    return;
-  }
-
   try {
-    await activeFlow.switchModel(nextModel);
-    setCliSessionModelOverride(nextModel);
+    const result = await context.switchActiveModel(nextModel);
+    if (result.status === 'no_active_tool_use') {
+      appendLocalAssistantTranscript(
+        'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
+      );
+      return;
+    }
+    setCliSessionModelOverride(result.model);
+    if (result.status === 'switched_default_update_failed') {
+      appendLocalAssistantTranscript(
+        `Model switched to ${result.model}. Could not persist it as the default helper model: ${result.error}`,
+      );
+      return;
+    }
+    appendLocalAssistantTranscript(
+      `Model switched to ${result.model}. Future turns will use it.`,
+    );
   } catch (error: unknown) {
     appendLocalAssistantTranscript(toErrorMessage(error));
-    return;
   }
-
-  try {
-    await setCliHelperModel(nextModel);
-  } catch (error: unknown) {
-    appendLocalAssistantTranscript(
-      `Model switched to ${nextModel}. Could not persist it as the default helper model: ${toErrorMessage(error)}`,
-    );
-    return;
-  }
-
-  appendLocalAssistantTranscript(
-    `Model switched to ${nextModel}. Future turns will use it.`,
-  );
 }

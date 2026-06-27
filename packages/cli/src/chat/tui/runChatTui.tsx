@@ -8,10 +8,7 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
-import { setTimeout as sleep } from 'node:timers/promises';
-
 import { render, type Instance as InkInstance } from 'ink';
-import PQueue from 'p-queue';
 
 import {
   flushPendingRunTraces,
@@ -21,8 +18,6 @@ import {
 import { platform, tryPlatform } from '@platform/platform';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { loadAgents } from '@agent/index';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
@@ -54,7 +49,6 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { assertNever } from '@utils/core';
 
@@ -116,7 +110,6 @@ import {
 } from './terminalCleanup';
 import {
   chatTuiCanInterruptActiveRun,
-  chatTuiCanSelectModel,
   chatTuiCanStartRootRun,
   chatTuiCanStopVisibleRun,
   chatTuiIsResumableIdleOnExit,
@@ -342,9 +335,12 @@ export async function runChat(
     requestInputExit,
     getApprovalPolicy,
     setApprovalPolicy,
-    canSelectModel: canSelectCurrentModel,
+    canSelectModel: () => chatController.canSelectModel(),
     resetSession: resetSessionForClear,
     resumeExecution: (id: ExecutionId) => chatController.resume(id),
+    switchActiveModel: (nextModel) =>
+      chatController.switchActiveModel(nextModel),
+    requestCompaction: (streamId) => chatController.requestCompaction(streamId),
   });
   cliState.sessionMeta.set({
     agent,
@@ -414,36 +410,13 @@ export async function runChat(
     stopRequested: false,
   };
 
-  const followUpQueue = new PQueue({ concurrency: 1 });
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
   const rootStreamStatus = (): StreamStatus | undefined =>
     session.streamId
       ? cliState.streams.get().get(session.streamId)?.status
       : undefined;
-  const hasActiveToolUseFlow = (): boolean =>
-    Boolean(
-      session.streamId &&
-      executionRegistry.getToolUseFlowContext(session.streamId),
-    );
-  const canSelectCurrentModel = (): boolean =>
-    chatTuiCanSelectModel({
-      canStartRootRun: chatTuiCanStartRootRun(session),
-      streamId: session.streamId,
-      status: rootStreamStatus(),
-      hasActiveToolUseFlow: hasActiveToolUseFlow(),
-    });
-  const getModelSwitchDisabledReason = (
-    candidateModel: string,
-  ): string | undefined => {
-    if (chatTuiCanStartRootRun(session) || !canSelectCurrentModel()) {
-      return undefined;
-    }
-    const activeFlow = session.streamId
-      ? executionRegistry.getToolUseFlowContext(session.streamId)
-      : undefined;
-    return activeFlow?.modelSwitchDisabledReason(candidateModel);
-  };
+  const canSelectCurrentModel = (): boolean => chatController.canSelectModel();
   const activateSkillForNextMessage = (selection: SkillActivation): void => {
     const wasPending = pendingSkillActivations.has(selection.name);
     pendingSkillActivations.set(selection.name, selection.activationPrompt);
@@ -467,7 +440,6 @@ export async function runChat(
     session,
     getSessionContext: currentSessionContext,
     disposers,
-    followUpQueue,
     snapshotStore,
   });
 
@@ -495,7 +467,7 @@ export async function runChat(
     const meta = cliState.sessionMeta.get();
     if (isRunPending) chatController.stop();
     clearApprovals();
-    followUpQueue.clear();
+    chatController.clearPendingFollowUps();
     pendingSkillActivationClearEpoch += 1;
     pendingSkillActivations.clear();
     clearTuiSessionRunState(session);
@@ -526,7 +498,8 @@ export async function runChat(
       );
     },
     canSelectModel: canSelectCurrentModel,
-    getModelSwitchDisabledReason,
+    getModelSwitchDisabledReason: (candidateModel) =>
+      chatController.getModelSwitchDisabledReason(candidateModel),
     onModelSelect: (nextModel) =>
       applyCliModelSelection(nextModel, slashCommandContext()),
     onApiModeSelect: (nextMode) =>
@@ -546,7 +519,7 @@ export async function runChat(
     mediaFiles?: readonly string[],
     displayInstruction?: string,
   ): Promise<boolean> => {
-    followUpQueue.clear();
+    chatController.clearPendingFollowUps();
     session.executionId = undefined;
     let started = false;
     // Queue the async startup body after the reservation below so a second
@@ -652,29 +625,20 @@ export async function runChat(
     }
     // PRD success criterion: follow-ups must not be silently dropped when the
     // user submits before `onStreamResolved` populates `session.streamId`.
-    // p-queue serializes work but doesn't have an "await predicate" primitive,
-    // so the task itself waits for the stream id via a tiny poll loop.
-    void followUpQueue.add(async () => {
-      let delivered = false;
-      let followUpTarget = childFollowUpTarget;
-      try {
-        while (
-          !followUpTarget &&
-          !session.stopRequested &&
-          !session.runCompleted
-        ) {
-          await sleep(25);
-          followUpTarget = session.streamId;
-        }
-        if (!followUpTarget || session.stopRequested) return;
-        const result = await sendFollowUp(
-          followUpTarget,
-          prepared.instruction,
-          mediaFiles,
-          prepared.displayInstruction,
-        );
+    // The controller serializes follow-up delivery and waits for the root
+    // stream id when the user submits before stream resolution.
+    let delivered = false;
+    void chatController
+      .submitFollowUp({
+        targetStreamId: childFollowUpTarget,
+        followUp: prepared.instruction,
+        mediaFiles,
+        displayText: prepared.displayInstruction,
+      })
+      .then((result) => {
+        const followUpTarget = childFollowUpTarget ?? session.streamId;
         delivered = result.status === 'sent' || result.status === 'queued';
-        if (result.status === 'no_session') {
+        if (result.status === 'no_session' && followUpTarget) {
           // Child stream ids are keys in parentStream; the root session id is not.
           if (followUpTarget === session.streamId) {
             session.stopRequested = true;
@@ -685,12 +649,15 @@ export async function runChat(
             );
           }
         }
-      } finally {
+      })
+      .catch((error: unknown) => {
+        appendLocalErrorTranscript(toErrorMessage(error));
+      })
+      .finally(() => {
         if (!delivered) {
           restoreReservedSkillActivations();
         }
-      }
-    });
+      });
   };
 
   const stdoutColorEnabled = context.stdoutColorEnabled ?? context.colorEnabled;
@@ -710,16 +677,9 @@ export async function runChat(
       }
       onCtrlC={() => handleSigint()}
       onSuspend={() => handleSigtstp()}
-      onKillExecution={(executionId) => {
-        clearApprovals();
-        executionRegistry.kill(executionId, {
-          detachActiveChildren:
-            tryPlatform()?.workspaceState.get<boolean>(
-              WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-              false,
-            ) === true,
-        });
-      }}
+      onKillExecution={(executionId) =>
+        chatController.killExecution(executionId)
+      }
       history={inputHistory}
     />,
     {
@@ -963,7 +923,7 @@ export async function runChat(
       removeProcessHandlers();
       clearPendingExit();
       for (const dispose of disposers) dispose();
-      await followUpQueue.onIdle();
+      await chatController.awaitFollowUpsIdle();
       // A suspended (idle/WAITING) root session is resumable: its flow record
       // survives only if we DON'T interrupt the flow (interrupt clears it). See
       // chatTuiIsResumableIdleOnExit for why "interruptible but not stoppable"
