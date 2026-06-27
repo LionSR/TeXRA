@@ -37,6 +37,7 @@ import {
   cliTerminalStatus,
   terminalStatusExitCode,
 } from '@cli/runtime/terminalStatus';
+import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   EXECUTION_STATUS,
@@ -235,6 +236,7 @@ export function createChatSessionController(
           runtimeHost: wrapped,
           enforceCategory: true,
           approvalPromptsUnavailable: approvalsUnavailable,
+          runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
           onStreamResolved: (resolvedStreamId) => {
             session.streamId = resolvedStreamId;
             cliState.rootStreamId.set(resolvedStreamId);
@@ -369,6 +371,7 @@ export function createChatSessionController(
       .then(() =>
         resumeToolUseFromSnapshot(resolution.snapshot, wrapped, {
           approvalPromptsUnavailable: approvalsUnavailable,
+          runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
         }),
       )
       .then(() => {
