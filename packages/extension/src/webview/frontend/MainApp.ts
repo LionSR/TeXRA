@@ -132,6 +132,15 @@ type SetMultipleFilesMessage =
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILES>
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES>;
 
+type MainActionPlan =
+  | { readonly valid: false; readonly message: string }
+  | {
+      readonly valid: true;
+      readonly command: string;
+      readonly payload: Record<string, unknown>;
+      readonly infoText?: string;
+    };
+
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because MainApp implements all abstract members below.
 const MainAppBase = SignalWatcher(
@@ -351,6 +360,205 @@ export class MainApp extends MainAppBase {
     },
   };
 
+  private readonly onLatexdiffGetCurrentFile =
+    this.detailHandler<FileActionDetail>(({ type }) =>
+      this.handleGetCurrentFile(type),
+    );
+
+  private readonly onLatexdiffEmptyFile = this.detailHandler<FileActionDetail>(
+    ({ type }) => this.handleEmptyFile(type),
+  );
+
+  private readonly onAddOpenedFiles =
+    this.detailHandler<MultipleFilesTypeActionDetail>(({ type }) => {
+      if (type !== 'output') {
+        this.handleAddOpenedFiles(type as DocumentFileType);
+      }
+    });
+
+  private readonly onEmptyFiles =
+    this.detailHandler<MultipleFilesTypeActionDetail>(({ type }) =>
+      this.handleEmptyFiles(type),
+    );
+
+  private readonly onSelectMultipleFiles =
+    this.detailHandler<MultipleFilesActionDetail>(({ listId }) =>
+      this.handleSelectMultipleFiles(listId),
+    );
+
+  private readonly onRemoveFile = this.detailHandler<RemoveFileDetail>(
+    ({ listId, file }) =>
+      this.handleRemoveFile(listId as keyof MultiFiles, file),
+  );
+
+  private readonly onFilesReordered = this.detailHandler<ReorderFilesDetail>(
+    ({ listId, files }) =>
+      this.updateMultiFiles(listId as keyof MultiFiles, files),
+  );
+
+  private readonly onCheckboxChange = this.detailHandler<CheckboxChangeDetail>(
+    ({ id, checked }) => this.updateCheckboxValue(id, checked),
+  );
+
+  private readonly onFocusInstruction =
+    this.detailCommandHandler<FocusInstructionDetail>(
+      MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
+      ({ key, text }) => ({ key, text }),
+    );
+
+  private readonly onApiKeyAction = this.detailHandler<BannerActionDetail>(
+    ({ action }) => this.handleApiKeyBannerAction(action as 'set' | 'guide'),
+  );
+
+  private readonly onAgentConfigAction = this.detailHandler<BannerActionDetail>(
+    ({ action }) =>
+      this.handleAgentConfigAction(action as 'edit' | 'dir' | 'docs'),
+  );
+
+  private readonly onDependencyDismiss = (): void => {
+    this.dependencyBanner.set({ visible: false });
+  };
+
+  private readonly onRecheckDependencies = this.commandHandler(
+    MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES,
+  );
+
+  private readonly onOpenInstallGuide =
+    this.detailCommandHandler<InstallGuideDetail>(
+      MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE,
+      ({ tool }) => ({ tool }),
+    );
+
+  private readonly onSignInFromBanner = this.commandHandler(
+    MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER,
+  );
+
+  private readonly onWelcomeChatGpt = this.commandHandler(
+    MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT,
+  );
+
+  private readonly onWelcomeApiKey = this.commandHandler(
+    MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY,
+  );
+
+  private readonly onWelcomeSkip = this.commandHandler(
+    MAIN_VIEW_COMMANDS.ONBOARDING_SKIP,
+  );
+
+  private readonly onOnboardingRunSetup = this.commandHandler(
+    MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP,
+  );
+
+  private readonly onOnboardingOpenGettingStarted = this.commandHandler(
+    MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED,
+  );
+
+  private readonly onOnboardingSkipSetup = this.commandHandler(
+    MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP,
+  );
+
+  private readonly onDismissLogin = (): void => {
+    postMessage(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER);
+    this.loginBannerVisible.set(false);
+  };
+
+  private readonly onDismissGettingStarted = (): void => {
+    // Session-only dismissal; the host setting still gates whether FileManager
+    // shows the empty-folder banner in the first place.
+    this.gettingStartedDismissed.set(true);
+  };
+
+  private readonly onGettingStartedAction =
+    this.detailCommandHandler<GettingStartedActionDetail>(
+      MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION,
+      ({ action }) => ({ action }),
+    );
+
+  private readonly onDismissSessionHint = (): void => {
+    postMessage(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER);
+    this.sessionHintDismissed.set(true);
+  };
+
+  private readonly onLatexDiffsToggle =
+    this.detailHandler<LatexDiffsToggleDetail>(({ visible }) => {
+      this.latexdiffsVisible.set(visible);
+      this.saveState();
+    });
+
+  private readonly onLatexDiffsAction =
+    this.detailHandler<LatexDiffsActionDetail>(({ action }) =>
+      this.runLatexDiffsAction(action),
+    );
+
+  private readonly onBaseFileChange = this.detailHandler<BaseFileChangeDetail>(
+    ({ value }) => this.handleBaseFileChange(value),
+  );
+
+  private readonly onEditedFileChange =
+    this.detailHandler<EditedFileChangeDetail>(({ value }) => {
+      this.singleFiles.set({
+        ...this.singleFiles.get(),
+        editedFile: value,
+      });
+      this.saveState();
+    });
+
+  private readonly onCommitChange = this.detailHandler<CommitChangeDetail>(
+    ({ value }) => {
+      this.commit.set(value);
+      this.saveState();
+    },
+  );
+
+  private readonly onRefreshEditedFiles = (): void => {
+    this.handleRefreshEditedFiles();
+  };
+
+  private readonly onRefreshCommits = this.commandHandler(
+    MAIN_VIEW_COMMANDS.REFRESH_COMMITS,
+  );
+
+  private readonly onSessionTypeChange =
+    this.detailHandler<SessionTypeChangeDetail>(({ value }) =>
+      this.handleSessionTypeChange(value),
+    );
+
+  private readonly onAgentChange = this.detailHandler<AgentChangeDetail>(
+    ({ sessionType, value }) => this.handleAgentChange(sessionType, value),
+  );
+
+  private readonly onModelChange = this.detailHandler<ModelChangeDetail>(
+    ({ value }) => this.handleModelChange(value),
+  );
+
+  private readonly onInstructionInput =
+    this.detailHandler<InstructionChangeDetail>(({ value }) => {
+      this.setInstruction(value);
+      this.scheduleInstructionSave();
+    });
+
+  private readonly onPanelAction = this.detailHandler<ActionDetail>(
+    ({ action }) => this.runPanelAction(action),
+  );
+
+  private readonly onExecute = (): void => {
+    this.executeAgent();
+  };
+
+  private readonly onAgentSettings = (): void => {
+    this.handleAgentConfigAction('edit');
+  };
+
+  private readonly onBrowseAllAgents = (): void => {
+    postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS, {
+      sessionType: this.sessionType.get(),
+    });
+  };
+
+  private readonly onModelSettings = this.commandHandler(
+    MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS,
+  );
+
   override connectedCallback(): void {
     super.connectedCallback();
     if (ENABLE_MOCKS_GALLERY && localStorage.getItem('texra-mocks') === '1') {
@@ -483,6 +691,55 @@ export class MainApp extends MainAppBase {
       MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     ];
     commands.forEach((command) => postMessage(command));
+  }
+
+  private showInformation(text: string): void {
+    postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
+      text,
+    });
+  }
+
+  private postActionPlan(plan: MainActionPlan): boolean {
+    if (!plan.valid) {
+      this.showInformation(plan.message);
+      return false;
+    }
+
+    postMessage(plan.command, plan.payload);
+    if (plan.infoText) {
+      this.showInformation(plan.infoText);
+    }
+    return true;
+  }
+
+  private commandHandler(
+    command: string,
+    payload?: Record<string, unknown>,
+  ): () => void {
+    return () => postMessage(command, payload);
+  }
+
+  private detailHandler<TDetail>(
+    handler: (detail: TDetail) => void,
+  ): (event: CustomEvent<TDetail>) => void {
+    return (event) => handler(event.detail);
+  }
+
+  private detailCommandHandler<TDetail>(
+    command: string,
+    getPayload: (detail: TDetail) => Record<string, unknown> | undefined,
+  ): (event: CustomEvent<TDetail>) => void {
+    return (event) => postMessage(command, getPayload(event.detail));
+  }
+
+  private updateCheckboxValue(id: string, checked: boolean): void {
+    const cv = this.checkboxValues.get();
+    if (!(id in cv)) return;
+    this.checkboxValues.set({
+      ...cv,
+      [id]: checked,
+    });
+    this.saveState();
   }
 
   private updateMultiFiles(listId: keyof MultiFiles, files: string[]): void {
@@ -742,9 +999,9 @@ export class MainApp extends MainAppBase {
     if (!(key in sf)) return;
     const options = this.fileOptions.get()[key] ?? [];
     if (!options.includes(filePath)) {
-      postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-        text: `The current file is not in the ${fileType} file list: ${filePath}`,
-      });
+      this.showInformation(
+        `The current file is not in the ${fileType} file list: ${filePath}`,
+      );
       return;
     }
     this.singleFiles.set({ ...sf, [key]: filePath });
@@ -796,9 +1053,7 @@ export class MainApp extends MainAppBase {
     this.isPolishing.set(false);
     if (message.text.trim()) {
       this.setInstruction(message.text);
-      postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-        text: 'Instruction text has been polished!',
-      });
+      this.showInformation('Instruction text has been polished!');
       this.saveState();
     }
   }
@@ -810,9 +1065,9 @@ export class MainApp extends MainAppBase {
   ): void {
     this.isPolishing.set(false);
     const errorText = message.error ?? '';
-    postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: `Error polishing text: ${errorText || 'Unknown error'}`,
-    });
+    this.showInformation(
+      `Error polishing text: ${errorText || 'Unknown error'}`,
+    );
   }
 
   private handleInstructionTextTranscribed(
@@ -829,9 +1084,7 @@ export class MainApp extends MainAppBase {
     const updated = current ? `${current} ${message.text}` : message.text;
     this.setInstruction(updated);
     this.isRecording.set(false);
-    postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: 'Instruction text transcribed!',
-    });
+    this.showInformation('Instruction text transcribed!');
     this.saveState();
   }
 
@@ -958,7 +1211,9 @@ export class MainApp extends MainAppBase {
   }
 
   private handleAddOpenedFiles(type: DocumentFileType): void {
-    postMessage(MAIN_VIEW_COMMANDS.ADD_OPENED_FILES, { fileType: type });
+    postMessage(MAIN_VIEW_COMMANDS.ADD_OPENED_FILES, {
+      fileType: type,
+    });
   }
 
   private handleGetCurrentFile(
@@ -1002,7 +1257,9 @@ export class MainApp extends MainAppBase {
   private handleBaseFileChange(value: string): void {
     this.singleFiles.set({ ...this.singleFiles.get(), baseFile: value });
     this.saveState();
-    postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, { baseFile: value });
+    postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, {
+      baseFile: value,
+    });
   }
 
   private handleSessionTypeChange(value: string): void {
@@ -1096,10 +1353,6 @@ export class MainApp extends MainAppBase {
     this.saveState();
   }
 
-  private handleComponentInstructionPaste(): void {
-    this.saveState();
-  }
-
   private scheduleInstructionSave(): void {
     if (this.instructionSaveTimer) {
       window.clearTimeout(this.instructionSaveTimer);
@@ -1175,118 +1428,12 @@ export class MainApp extends MainAppBase {
     });
   }
 
-  private handleMerge(): void {
-    const plan = planMerge({
-      primaryInput: this.primaryInputFile,
-      editedFile: this.singleFiles.get().editedFile,
-    });
-
-    if (!plan.valid) {
-      postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-        text: plan.message,
-      });
-      return;
-    }
-
-    postMessage(plan.command, plan.payload);
-    postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: plan.infoText,
-    });
-  }
-
-  private handlePackClean(action: 'pack' | 'clean'): void {
-    const isToolUse = this.sessionType.get() === SESSION_TYPES.TOOL_USE;
-    const plan = planPackClean(
-      {
-        primaryInput: this.primaryInputFile,
-        model: this.model.get(),
-        inputFiles: this.multiFiles.get().inputFiles,
-        agent: isToolUse ? this.toolUseAgent.get() : this.workflowAgent.get(),
-      },
-      action,
-    );
-
-    if (!plan.valid) {
-      postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-        text: plan.message,
-      });
-      return;
-    }
-
-    postMessage(plan.command, plan.payload);
-    postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: plan.infoText,
-    });
-  }
-
-  private handleLatexdiff(): void {
-    const sf = this.singleFiles.get();
-    const plan = planLatexdiff({
-      inputFile: this.primaryInputFile,
-      baseFile: sf.baseFile,
-      editedFile: sf.editedFile,
-    });
-
-    postMessage(plan.command, plan.payload);
-    postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: plan.infoText,
-    });
-  }
-
-  private handleLatexdiffVC(): void {
-    const sf = this.singleFiles.get();
-    const plan = planLatexdiffVC({
-      inputFile: this.primaryInputFile,
-      baseFile: sf.baseFile,
-      commitHash: this.commit.get(),
-    });
-
-    postMessage(plan.command, plan.payload);
-    postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: plan.infoText,
-    });
-  }
-
-  private handleLatexdiffVCPack(action: 'pack' | 'clean'): void {
-    const sf = this.singleFiles.get();
-    const plan = planLatexdiffVCPack(
-      {
-        inputFile: this.primaryInputFile,
-        baseFile: sf.baseFile,
-        commitHash: this.commit.get(),
-      },
-      action,
-    );
-
-    postMessage(plan.command, plan.payload);
-    postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: plan.infoText,
-    });
-  }
-
-  private handleCompare(command: string): void {
-    const sf = this.singleFiles.get();
-    const plan = planCompare(
-      { baseFile: sf.baseFile, editedFile: sf.editedFile },
-      command,
-    );
-
-    if (!plan.valid) {
-      postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-        text: plan.message,
-      });
-      return;
-    }
-
-    postMessage(plan.command, plan.payload);
-  }
-
   private handleRecordingToggle(): void {
-    if (this.isRecording.get()) {
-      postMessage(MAIN_VIEW_COMMANDS.STOP_RECORDING);
-    } else {
-      postMessage(MAIN_VIEW_COMMANDS.START_RECORDING);
-    }
+    postMessage(
+      this.isRecording.get()
+        ? MAIN_VIEW_COMMANDS.STOP_RECORDING
+        : MAIN_VIEW_COMMANDS.START_RECORDING,
+    );
   }
 
   private handleApiKeyBannerAction(action: 'set' | 'guide'): void {
@@ -1322,236 +1469,76 @@ export class MainApp extends MainAppBase {
     }
   }
 
-  // =========================================================================
-  // Component Event Handlers
-  // These handlers receive custom events from child Lit components and
-  // delegate to the existing handler methods.
-  // =========================================================================
-
-  private handleLatexdiffGetCurrentFile(
-    e: CustomEvent<FileActionDetail>,
-  ): void {
-    this.handleGetCurrentFile(e.detail.type);
-  }
-
-  private handleLatexdiffEmptyFile(e: CustomEvent<FileActionDetail>): void {
-    this.handleEmptyFile(e.detail.type);
-  }
-
-  private handleComponentAddOpenedFiles(
-    e: CustomEvent<MultipleFilesTypeActionDetail>,
-  ): void {
-    if (e.detail.type !== 'output') {
-      this.handleAddOpenedFiles(e.detail.type as DocumentFileType);
-    }
-  }
-
-  private handleComponentEmptyFiles(
-    e: CustomEvent<MultipleFilesTypeActionDetail>,
-  ): void {
-    this.handleEmptyFiles(e.detail.type as MultipleDocumentFileType);
-  }
-
-  private handleComponentSelectMultipleFiles(
-    e: CustomEvent<MultipleFilesActionDetail>,
-  ): void {
-    this.handleSelectMultipleFiles(e.detail.listId);
-  }
-
-  private handleComponentRemoveFile(e: CustomEvent<RemoveFileDetail>): void {
-    this.handleRemoveFile(e.detail.listId as keyof MultiFiles, e.detail.file);
-  }
-
-  private handleComponentFilesReordered(
-    e: CustomEvent<ReorderFilesDetail>,
-  ): void {
-    this.updateMultiFiles(e.detail.listId as keyof MultiFiles, e.detail.files);
-  }
-
-  private handleComponentCheckboxChange(
-    e: CustomEvent<CheckboxChangeDetail>,
-  ): void {
-    const { id, checked } = e.detail;
-    const cv = this.checkboxValues.get();
-    if (id in cv) {
-      this.checkboxValues.set({
-        ...cv,
-        [id]: checked,
-      });
-      this.saveState();
-    }
-  }
-
-  private handleComponentFocusInstruction(
-    e: CustomEvent<FocusInstructionDetail>,
-  ): void {
-    postMessage(MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION, {
-      key: e.detail.key,
-      text: e.detail.text,
-    });
-  }
-
-  private handleComponentApiKeyAction(
-    e: CustomEvent<BannerActionDetail>,
-  ): void {
-    this.handleApiKeyBannerAction(e.detail.action as 'set' | 'guide');
-  }
-
-  private handleComponentAgentConfigAction(
-    e: CustomEvent<BannerActionDetail>,
-  ): void {
-    this.handleAgentConfigAction(e.detail.action as 'edit' | 'dir' | 'docs');
-  }
-
-  private handleComponentDependencyDismiss(): void {
-    this.handleDependencyDismiss();
-  }
-
-  private handleComponentRecheckDependencies(): void {
-    postMessage(MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES);
-  }
-
-  private handleComponentOpenInstallGuide(
-    e: CustomEvent<InstallGuideDetail>,
-  ): void {
-    postMessage(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE, { tool: e.detail.tool });
-  }
-
-  private handleComponentSignIn(): void {
-    postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER);
-  }
-
-  // Welcome-card choices reuse the existing host flows where possible: sign-in
-  // reuses handleComponentSignIn (SIGN_IN_FROM_BANNER -> texra.auth.signIn),
-  // API key invokes texra.setApiKey, and ChatGPT uses the extension-host
-  // subscription sign-in helper directly so onboarding can continue in place.
-  private handleWelcomeChatGpt(): void {
-    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT);
-  }
-
-  private handleWelcomeApiKey(): void {
-    postMessage(MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY);
-  }
-
-  private handleWelcomeSkip(): void {
-    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SKIP);
-  }
-
-  private handleOnboardingRunSetup(): void {
-    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP);
-  }
-
-  private handleOnboardingOpenGettingStarted(): void {
-    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED);
-  }
-
-  private handleOnboardingSkipSetup(): void {
-    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP);
-  }
-
-  private handleComponentDismissLogin(): void {
-    postMessage(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER);
-    this.loginBannerVisible.set(false);
-  }
-
-  private handleComponentDismissGettingStarted(): void {
-    // Session-only dismissal; the host setting still gates whether FileManager
-    // shows the empty-folder banner in the first place.
-    this.gettingStartedDismissed.set(true);
-  }
-
-  private handleComponentGettingStartedAction(
-    e: CustomEvent<GettingStartedActionDetail>,
-  ): void {
-    postMessage(MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION, {
-      action: e.detail.action,
-    });
-  }
-
-  private handleComponentDismissSessionHint(): void {
-    postMessage(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER);
-    this.sessionHintDismissed.set(true);
-  }
-
-  private handleComponentLatexDiffsToggle(
-    e: CustomEvent<LatexDiffsToggleDetail>,
-  ): void {
-    this.latexdiffsVisible.set(e.detail.visible);
-    this.saveState();
-  }
-
-  private handleComponentLatexDiffsAction(
-    e: CustomEvent<LatexDiffsActionDetail>,
-  ): void {
-    switch (e.detail.action) {
+  private runLatexDiffsAction(action: LatexDiffsActionDetail['action']): void {
+    const sf = this.singleFiles.get();
+    switch (action) {
       case 'latexdiff':
-        this.handleLatexdiff();
+        this.postActionPlan(
+          planLatexdiff({
+            inputFile: this.primaryInputFile,
+            baseFile: sf.baseFile,
+            editedFile: sf.editedFile,
+          }),
+        );
         break;
       case 'latexdiffvc':
-        this.handleLatexdiffVC();
+        this.postActionPlan(
+          planLatexdiffVC({
+            inputFile: this.primaryInputFile,
+            baseFile: sf.baseFile,
+            commitHash: this.commit.get(),
+          }),
+        );
         break;
       case 'packLatexdiffvc':
-        this.handleLatexdiffVCPack('pack');
+        this.postActionPlan(
+          planLatexdiffVCPack(
+            {
+              inputFile: this.primaryInputFile,
+              baseFile: sf.baseFile,
+              commitHash: this.commit.get(),
+            },
+            'pack',
+          ),
+        );
         break;
       case 'cleanLatexdiffvc':
-        this.handleLatexdiffVCPack('clean');
+        this.postActionPlan(
+          planLatexdiffVCPack(
+            {
+              inputFile: this.primaryInputFile,
+              baseFile: sf.baseFile,
+              commitHash: this.commit.get(),
+            },
+            'clean',
+          ),
+        );
         break;
       case 'merge':
-        this.handleMerge();
+        this.postActionPlan(
+          planMerge({
+            primaryInput: this.primaryInputFile,
+            editedFile: sf.editedFile,
+          }),
+        );
         break;
       case 'compare':
-        this.handleCompare(MAIN_VIEW_COMMANDS.COMPARE);
+        this.postActionPlan(
+          planCompare(
+            { baseFile: sf.baseFile, editedFile: sf.editedFile },
+            MAIN_VIEW_COMMANDS.COMPARE,
+          ),
+        );
         break;
       case 'accept':
-        this.handleCompare(MAIN_VIEW_COMMANDS.ACCEPT_EDITED);
+        this.postActionPlan(
+          planCompare(
+            { baseFile: sf.baseFile, editedFile: sf.editedFile },
+            MAIN_VIEW_COMMANDS.ACCEPT_EDITED,
+          ),
+        );
         break;
     }
-  }
-
-  private handleComponentBaseFileChange(
-    e: CustomEvent<BaseFileChangeDetail>,
-  ): void {
-    this.handleBaseFileChange(e.detail.value);
-  }
-
-  private handleComponentEditedFileChange(
-    e: CustomEvent<EditedFileChangeDetail>,
-  ): void {
-    this.singleFiles.set({
-      ...this.singleFiles.get(),
-      editedFile: e.detail.value,
-    });
-    this.saveState();
-  }
-
-  private handleComponentCommitChange(
-    e: CustomEvent<CommitChangeDetail>,
-  ): void {
-    this.commit.set(e.detail.value);
-    this.saveState();
-  }
-
-  private handleComponentRefreshEditedFiles(): void {
-    this.handleRefreshEditedFiles();
-  }
-
-  private handleComponentRefreshCommits(): void {
-    postMessage(MAIN_VIEW_COMMANDS.REFRESH_COMMITS);
-  }
-
-  // InstructionPanel component handlers
-  private handleComponentSessionTypeChange(
-    e: CustomEvent<SessionTypeChangeDetail>,
-  ): void {
-    this.handleSessionTypeChange(e.detail.value);
-  }
-
-  private handleComponentAgentChange(e: CustomEvent<AgentChangeDetail>): void {
-    this.handleAgentChange(e.detail.sessionType, e.detail.value);
-  }
-
-  private handleComponentModelChange(e: CustomEvent<ModelChangeDetail>): void {
-    this.handleModelChange(e.detail.value);
   }
 
   private shouldForceApiKeyBanner(): boolean {
@@ -1564,21 +1551,26 @@ export class MainApp extends MainAppBase {
     return option?.requiresKey ?? false;
   }
 
-  private handleComponentInstructionInput(
-    e: CustomEvent<InstructionChangeDetail>,
-  ): void {
-    this.setInstruction(e.detail.value);
-    this.scheduleInstructionSave();
-  }
-
-  private handleComponentPanelAction(e: CustomEvent<ActionDetail>): void {
-    switch (e.detail.action) {
+  private runPanelAction(action: ActionDetail['action']): void {
+    switch (action) {
       case 'pack':
-        this.handlePackClean('pack');
+      case 'clean': {
+        const isToolUse = this.sessionType.get() === SESSION_TYPES.TOOL_USE;
+        this.postActionPlan(
+          planPackClean(
+            {
+              primaryInput: this.primaryInputFile,
+              model: this.model.get(),
+              inputFiles: this.multiFiles.get().inputFiles,
+              agent: isToolUse
+                ? this.toolUseAgent.get()
+                : this.workflowAgent.get(),
+            },
+            action,
+          ),
+        );
         break;
-      case 'clean':
-        this.handlePackClean('clean');
-        break;
+      }
       case 'polish':
         this.handlePolishInstruction();
         break;
@@ -1590,24 +1582,6 @@ export class MainApp extends MainAppBase {
         this.saveState();
         break;
     }
-  }
-
-  private handleComponentExecute(): void {
-    this.executeAgent();
-  }
-
-  private handleComponentAgentSettings(): void {
-    this.handleAgentConfigAction('edit');
-  }
-
-  private handleComponentBrowseAllAgents(): void {
-    postMessage(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS, {
-      sessionType: this.sessionType.get(),
-    });
-  }
-
-  private handleComponentModelSettings(): void {
-    postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS);
   }
 
   private onViewTabShow = (event: WaTabShowEvent): void => {
@@ -1629,14 +1603,6 @@ export class MainApp extends MainAppBase {
       openInEditor: true,
     });
   };
-
-  // =========================================================================
-  // Existing Handler Methods
-  // =========================================================================
-
-  private handleDependencyDismiss(): void {
-    this.dependencyBanner.set({ visible: false });
-  }
 
   /** Check if a commit hash exists in the options array. */
   private hasCommitValue(value: string): boolean {
@@ -1736,12 +1702,12 @@ export class MainApp extends MainAppBase {
           ${this.renderViewHeader()}
           <div class="main-content">
             <onboarding-welcome-card
-              @welcome-sign-in=${this.handleComponentSignIn}
-              @welcome-chatgpt=${this.handleWelcomeChatGpt}
-              @welcome-api-key=${this.handleWelcomeApiKey}
-              @welcome-skip=${this.handleWelcomeSkip}
+              @welcome-sign-in=${this.onSignInFromBanner}
+              @welcome-chatgpt=${this.onWelcomeChatGpt}
+              @welcome-api-key=${this.onWelcomeApiKey}
+              @welcome-skip=${this.onWelcomeSkip}
               @onboarding-open-getting-started=${this
-                .handleOnboardingOpenGettingStarted}
+                .onOnboardingOpenGettingStarted}
             ></onboarding-welcome-card>
           </div>
         </div>
@@ -1771,27 +1737,27 @@ export class MainApp extends MainAppBase {
         <div class="main-content">
           ${onboardingState === 'setup'
             ? html`<onboarding-setup-card
-                @onboarding-run-setup=${this.handleOnboardingRunSetup}
+                @onboarding-run-setup=${this.onOnboardingRunSetup}
                 @onboarding-open-getting-started=${this
-                  .handleOnboardingOpenGettingStarted}
-                @onboarding-skip-setup=${this.handleOnboardingSkipSetup}
+                  .onOnboardingOpenGettingStarted}
+                @onboarding-skip-setup=${this.onOnboardingSkipSetup}
               ></onboarding-setup-card>`
             : nothing}
 
           <instruction-panel
             .showSessionHint=${!this.sessionHintDismissed.get()}
-            @session-type-change=${this.handleComponentSessionTypeChange}
-            @agent-change=${this.handleComponentAgentChange}
-            @model-change=${this.handleComponentModelChange}
-            @instruction-input=${this.handleComponentInstructionInput}
-            @instruction-paste=${this.handleComponentInstructionPaste}
-            @panel-action=${this.handleComponentPanelAction}
-            @execute=${this.handleComponentExecute}
-            @agent-settings=${this.handleComponentAgentSettings}
-            @browse-all-agents=${this.handleComponentBrowseAllAgents}
-            @model-settings=${this.handleComponentModelSettings}
-            @focus-instruction=${this.handleComponentFocusInstruction}
-            @dismiss-session-hint=${this.handleComponentDismissSessionHint}
+            @session-type-change=${this.onSessionTypeChange}
+            @agent-change=${this.onAgentChange}
+            @model-change=${this.onModelChange}
+            @instruction-input=${this.onInstructionInput}
+            @instruction-paste=${this.saveState}
+            @panel-action=${this.onPanelAction}
+            @execute=${this.onExecute}
+            @agent-settings=${this.onAgentSettings}
+            @browse-all-agents=${this.onBrowseAllAgents}
+            @model-settings=${this.onModelSettings}
+            @focus-instruction=${this.onFocusInstruction}
+            @dismiss-session-hint=${this.onDismissSessionHint}
           ></instruction-panel>
 
           <banner-group
@@ -1812,16 +1778,15 @@ export class MainApp extends MainAppBase {
             .gettingStartedVisible=${this.gettingStartedVisible.get() &&
             !this.gettingStartedDismissed.get()}
             .loginBannerVisible=${this.loginBannerVisible.get()}
-            @api-key-action=${this.handleComponentApiKeyAction}
-            @agent-config-action=${this.handleComponentAgentConfigAction}
-            @dependency-dismiss=${this.handleComponentDependencyDismiss}
-            @recheck-dependencies=${this.handleComponentRecheckDependencies}
-            @open-install-guide=${this.handleComponentOpenInstallGuide}
-            @sign-in=${this.handleComponentSignIn}
-            @dismiss-login=${this.handleComponentDismissLogin}
-            @dismiss-getting-started=${this
-              .handleComponentDismissGettingStarted}
-            @getting-started-action=${this.handleComponentGettingStartedAction}
+            @api-key-action=${this.onApiKeyAction}
+            @agent-config-action=${this.onAgentConfigAction}
+            @dependency-dismiss=${this.onDependencyDismiss}
+            @recheck-dependencies=${this.onRecheckDependencies}
+            @open-install-guide=${this.onOpenInstallGuide}
+            @sign-in=${this.onSignInFromBanner}
+            @dismiss-login=${this.onDismissLogin}
+            @dismiss-getting-started=${this.onDismissGettingStarted}
+            @getting-started-action=${this.onGettingStartedAction}
           ></banner-group>
 
           <wa-divider></wa-divider>
@@ -1854,13 +1819,12 @@ export class MainApp extends MainAppBase {
                 (config) => html`
                   <file-select-group
                     .config=${config}
-                    @add-opened-files=${this.handleComponentAddOpenedFiles}
-                    @empty-files=${this.handleComponentEmptyFiles}
-                    @select-multiple-files=${this
-                      .handleComponentSelectMultipleFiles}
-                    @remove-file=${this.handleComponentRemoveFile}
-                    @files-reordered=${this.handleComponentFilesReordered}
-                    @checkbox-change=${this.handleComponentCheckboxChange}
+                    @add-opened-files=${this.onAddOpenedFiles}
+                    @empty-files=${this.onEmptyFiles}
+                    @select-multiple-files=${this.onSelectMultipleFiles}
+                    @remove-file=${this.onRemoveFile}
+                    @files-reordered=${this.onFilesReordered}
+                    @checkbox-change=${this.onCheckboxChange}
                   ></file-select-group>
                 `,
               )}
@@ -1880,15 +1844,15 @@ export class MainApp extends MainAppBase {
                 .commit=${this.commit.get()}
                 .commitOptions=${fo.commit ?? []}
                 .isGitRepo=${this.isGitRepo.get()}
-                @latexdiffs-toggle=${this.handleComponentLatexDiffsToggle}
-                @latexdiffs-action=${this.handleComponentLatexDiffsAction}
-                @base-file-change=${this.handleComponentBaseFileChange}
-                @edited-file-change=${this.handleComponentEditedFileChange}
-                @get-current-file=${this.handleLatexdiffGetCurrentFile}
-                @empty-file=${this.handleLatexdiffEmptyFile}
-                @refresh-edited-files=${this.handleComponentRefreshEditedFiles}
-                @commit-change=${this.handleComponentCommitChange}
-                @refresh-commits=${this.handleComponentRefreshCommits}
+                @latexdiffs-toggle=${this.onLatexDiffsToggle}
+                @latexdiffs-action=${this.onLatexDiffsAction}
+                @base-file-change=${this.onBaseFileChange}
+                @edited-file-change=${this.onEditedFileChange}
+                @get-current-file=${this.onLatexdiffGetCurrentFile}
+                @empty-file=${this.onLatexdiffEmptyFile}
+                @refresh-edited-files=${this.onRefreshEditedFiles}
+                @commit-change=${this.onCommitChange}
+                @refresh-commits=${this.onRefreshCommits}
               ></latexdiffs-section>
             `}
       </div>

@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import type { ExternalOpener } from '@hosts/externalOpener';
+import type { ExternalOpener } from '@hosts/uiHosts';
 
 export class VscodeExternalOpener implements ExternalOpener {
   async openExternal(url: string): Promise<void> {

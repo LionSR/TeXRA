@@ -7,7 +7,7 @@ import {
   type DiffSession,
   type DiffSource,
   type DiffViewHost,
-} from '@hosts/diffViewHost';
+} from '@hosts/uiHosts';
 import { REVEAL_TIMEOUT_MS } from '@tools/approval/toolEditApproval';
 
 export class VscodeDiffViewHost implements DiffViewHost {

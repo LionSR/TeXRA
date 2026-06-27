@@ -1,24 +1,20 @@
 // Local imports - hosts
-import type { ClipboardHost } from '@hosts/clipboardHost';
 import type {
+  ClipboardHost,
   DiffOptions,
   DiffSession,
   DiffSource,
   DiffViewHost,
-} from '@hosts/diffViewHost';
-import type { ExternalOpener } from '@hosts/externalOpener';
-import type {
+  ExternalOpener,
   PromptConfirmOptions,
   PromptHost,
   PromptInputOptions,
   PromptMessageOptions,
-} from '@hosts/promptHost';
-import type {
   TerminalHandle,
   TerminalHost,
   TerminalOptions,
-} from '@hosts/terminalHost';
-import type { UIHosts } from '@hosts/uiHosts';
+  UIHosts,
+} from '@hosts/uiHosts';
 
 export type PromptEventKind = 'info' | 'warning' | 'error';
 

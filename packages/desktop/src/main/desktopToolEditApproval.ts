@@ -7,7 +7,8 @@ import { nanoid } from 'nanoid';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import type { DiffViewHost } from '@hosts/diffViewHost';
+import type { DiffViewHost } from '@hosts/uiHosts';
+import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
   previewProposedLatex,
@@ -15,7 +16,6 @@ import {
   type LatexPreviewEntry,
 } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
-import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import {
   computeLineChangeSummary,
   computeUserPatch,

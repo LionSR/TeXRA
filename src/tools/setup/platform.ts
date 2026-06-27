@@ -12,7 +12,7 @@ import type {
   TerminalRunRequest,
   TerminalRunResult,
   TerminalRunner,
-} from '@hosts/terminalHost';
+} from '@hosts/uiHosts';
 import type { ApiProvider } from '@model/apiProviders';
 
 /** Per-provider API key surface. */

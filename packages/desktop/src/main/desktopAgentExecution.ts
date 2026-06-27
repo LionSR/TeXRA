@@ -37,8 +37,7 @@ import {
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { KVStore } from '@common/storage/KVStore';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type { DiffViewHost } from '@hosts/diffViewHost';
-import type { ExternalOpener } from '@hosts/externalOpener';
+import type { DiffViewHost, ExternalOpener } from '@hosts/uiHosts';
 import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {

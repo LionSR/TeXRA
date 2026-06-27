@@ -8,7 +8,7 @@ import type {
   PromptInputOptions,
   PromptMessageItem,
   PromptMessageOptions,
-} from '@hosts/promptHost';
+} from '@hosts/uiHosts';
 
 export class VscodePromptHost implements PromptHost {
   async info<T extends string = string>(

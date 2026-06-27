@@ -1,5 +1,5 @@
 // Local imports - hosts
-import type { PromptHost } from '@hosts/promptHost';
+import type { PromptHost } from '@hosts/uiHosts';
 
 // Local imports - shared
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
