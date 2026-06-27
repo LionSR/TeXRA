@@ -14,7 +14,7 @@ import type {
   DiffSession,
   DiffSource,
   DiffViewHost,
-} from '@hosts/diffViewHost';
+} from '@hosts/uiHosts';
 import { delay } from '@utils/core/async';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';

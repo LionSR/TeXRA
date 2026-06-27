@@ -6,7 +6,7 @@ import {
   TERMINAL_OUTPUT_MAX_CHARS,
   type TerminalRunner,
   type TerminalRunRequest,
-} from '@hosts/terminalHost';
+} from '@hosts/uiHosts';
 
 // Local imports - system
 import { executeCommand } from '@utils/system/execUtils';

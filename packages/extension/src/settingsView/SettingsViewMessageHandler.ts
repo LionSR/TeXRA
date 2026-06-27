@@ -39,6 +39,7 @@ import {
 } from '@frontend/git/gitAuthorSetup';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isInlineCriticismEnabled,
   setInlineCriticismEnabled,
@@ -50,7 +51,6 @@ import {
 } from '@model/apiProviders';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { StreamTabId } from '@shared/schemas';
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
@@ -231,7 +231,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // Navigation handlers
       [SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS]: () =>
-        this.handleOpenVscodeSettings(),
+        this.openVscodeSettings(),
 
       // Memory handlers
       [SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA]: () =>
@@ -274,43 +274,73 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       // Profile handlers
       [SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA]: () =>
         this.withActiveWebview((w) => this.sendProfileData(w)),
-      [SETTINGS_VIEW_COMMANDS.SELECT_AGENT]: (data) =>
-        this.handleSelectAgent(data),
-      [SETTINGS_VIEW_COMMANDS.SIGN_IN]: async () =>
-        vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN),
-      [SETTINGS_VIEW_COMMANDS.SIGN_OUT]: async () =>
-        vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_OUT),
+      [SETTINGS_VIEW_COMMANDS.SELECT_AGENT]: async (data) => {
+        await selectAgentInMainView(data.agentName, {
+          showSuccessMessage: true,
+          copyToClipboardOnFailure: false,
+        });
+      },
+      [SETTINGS_VIEW_COMMANDS.SIGN_IN]: async () => {
+        await safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName);
+      },
+      [SETTINGS_VIEW_COMMANDS.SIGN_OUT]: async () => {
+        await safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName);
+      },
       [SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE]: (data) =>
         this.handleSetApiAccessMode(data),
       [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY]: (data) =>
-        this.handleSetProviderKey(data),
+        this.runProviderKeyAction(data.provider, 'set', (provider) =>
+          this.profileKeyController.setProviderKey(provider),
+        ),
       [SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY]: (data) =>
-        this.handleRemoveProviderKey(data),
+        this.runProviderKeyAction(data.provider, 'remove', (provider) =>
+          this.profileKeyController.removeProviderKey(provider),
+        ),
       [SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL]: (data) =>
-        this.handleOpenProviderKeyUrl(data),
+        this.profileKeyController.openProviderKeyUrl(data.provider),
       [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING]: (data) =>
-        this.handleSetProviderStreaming(data),
+        this.updateProfileSetting(() =>
+          setProviderStreaming(data.provider, data.enabled),
+        ),
       [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT]: (data) =>
-        this.handleSetProviderEndpoint(data),
+        this.updateProfileSetting(() =>
+          setProviderEndpoint(data.provider, data.endpoint),
+        ),
       [SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING]: (data) =>
-        this.handleSetGlobalStreaming(data),
+        this.updateProfileSetting(() => setGlobalStreaming(data.enabled)),
       [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING]: (data) =>
         this.handleSetProviderVscodeSetting(data),
       [SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL]: async (data) => {
-        await vscode.env.openExternal(vscode.Uri.parse(data.url));
+        await this.openExternalUrl(data.url);
       },
 
       // Model selection handlers
       [SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION]: () =>
         this.withActiveWebview((w) => this.sendModelSelectionData(w)),
       [SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED]: (data) =>
-        this.handleSetModelEnabled(data),
+        this.updateModelSelection(
+          () =>
+            this.modelSelectionController.setModelEnabled({
+              modelName: data.modelName,
+              enabled: data.enabled,
+            }),
+          { invalidateCache: true, refreshMainOptions: true },
+        ),
       [SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL]: (data) =>
-        this.handleSetHelperModel(data),
+        this.updateModelSelection(() =>
+          this.modelSelectionController.setHelperModel(data.modelName),
+        ),
       [SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL]: (data) =>
-        this.handleSetModelReasoningLevel(data),
+        this.updateModelSelection(() =>
+          this.modelSelectionController.setReasoningLevel({
+            modelName: data.modelName,
+            level: data.level,
+          }),
+        ),
       [SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES]: (data) =>
-        this.handleSetPreferShortModelNames(data),
+        this.updateModelSelection(() =>
+          this.modelSelectionController.setPreferShortModelNames(data.enabled),
+        ),
 
       // Multi-agent coordination handlers
       [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () =>
@@ -494,10 +524,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
         this.withActiveWebview((w) => this.sendToolDashboardData(w)),
       [SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL]: async (data) => {
-        await vscode.env.openExternal(vscode.Uri.parse(data.url));
+        await this.openExternalUrl(data.url);
       },
       [SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION]: (data) =>
-        this.handleInstallToolExtension(data),
+        this.latexHandlers.installExtension(data.extensionId),
       [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
         refreshToolAvailability(extensionAgentRuntimeHost),
       [SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL]: async (data) => {
@@ -513,17 +543,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       [SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST]: () =>
         this.withActiveWebview((w) => this.sendGoalList(w)),
-      [SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_STREAM]: (data) =>
-        this.handleRevealGoalStream(data.streamId),
+      [SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_STREAM]: async (data) => {
+        await revealProgressStream(data.streamId);
+      },
     };
   }
 
   public async sendGoalList(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(this.goalController.getGoalListMessage());
-  }
-
-  private async handleRevealGoalStream(streamId: StreamTabId): Promise<void> {
-    await revealProgressStream(streamId);
   }
 
   private handleRunToolCommand(
@@ -764,10 +791,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Navigation handler implementations
   // ============================================================
 
-  private async handleOpenVscodeSettings(): Promise<void> {
-    await vscode.commands.executeCommand(
+  private async openVscodeSettings(): Promise<void> {
+    await safeExecuteCommand(
       'workbench.action.openSettings',
-      '@ext:texra-ai.texra',
+      ['@ext:texra-ai.texra'],
+      this.viewName,
     );
   }
 
@@ -785,7 +813,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // Open markdown files in preview mode (read-only rendered view)
       if (hasExtension(absolutePath, '.md')) {
-        await vscode.commands.executeCommand('markdown.showPreview', fileUri);
+        await safeExecuteCommand(
+          'markdown.showPreview',
+          [fileUri],
+          this.viewName,
+        );
       } else {
         const doc = await vscode.workspace.openTextDocument(fileUri);
         await vscode.window.showTextDocument(doc, { preview: false });
@@ -803,9 +835,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     try {
       await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
       const absolutePath = StorageFS.fullPath(MEMORY_STORAGE_ROOT);
-      await vscode.commands.executeCommand(
+      await safeExecuteCommand(
         'revealFileInOS',
-        vscode.Uri.file(absolutePath),
+        [vscode.Uri.file(absolutePath)],
+        this.viewName,
       );
     } catch (error) {
       await showLoggedErrorMessage(
@@ -821,11 +854,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     try {
       const message = await this.memoryController.deleteMemory(data);
-      if (message) {
-        await this.withActiveWebview(async (w) => {
-          await w.postMessage(message);
-        });
-      }
+      await this.postMessageToActiveWebview(message);
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -840,11 +869,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
   ): Promise<void> {
     const message = await this.memoryController.setMemoryEnabled(data.enabled);
-    if (message) {
-      await this.withActiveWebview(async (w) => {
-        await w.postMessage(message);
-      });
-    }
+    await this.postMessageToActiveWebview(message);
   }
 
   private async setMemoryPinned(
@@ -855,11 +880,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       const message = pinned
         ? await this.memoryController.pinMemory(storagePath)
         : await this.memoryController.unpinMemory(storagePath);
-      if (message) {
-        await this.withActiveWebview(async (w) => {
-          await w.postMessage(message);
-        });
-      }
+      await this.postMessageToActiveWebview(message);
     } catch (error) {
       const action = pinned ? 'pin' : 'unpin';
       await showLoggedErrorMessage(
@@ -873,15 +894,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
   // Profile handler implementations
   // ============================================================
-
-  private async handleSelectAgent(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SELECT_AGENT>,
-  ): Promise<void> {
-    await selectAgentInMainView(data.agentName, {
-      showSuccessMessage: true,
-      copyToClipboardOnFailure: false,
-    });
-  }
 
   private async handleSetApiAccessMode(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_API_ACCESS_MODE>,
@@ -897,22 +909,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       : '';
     void vscode.window.showInformationMessage(
       `Model access changed to: ${modeLabel}.${suffix}`,
-    );
-  }
-
-  private async handleSetProviderKey(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_KEY>,
-  ): Promise<void> {
-    await this.runProviderKeyAction(data.provider, 'set', (provider) =>
-      this.profileKeyController.setProviderKey(provider),
-    );
-  }
-
-  private async handleRemoveProviderKey(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.REMOVE_PROVIDER_KEY>,
-  ): Promise<void> {
-    await this.runProviderKeyAction(data.provider, 'remove', (provider) =>
-      this.profileKeyController.removeProviderKey(provider),
     );
   }
 
@@ -945,9 +941,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // Invalidate caches so downstream refreshes see fresh key state.
     invalidateModelOptionsCache();
     invalidateApiKeyCache();
-    await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
+    await safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName);
     await Promise.all([
-      vscode.commands.executeCommand('texra.refreshAllOptions'),
+      safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((w) => this.sendProfileAndModelSelectionData(w)),
     ]);
   }
@@ -957,15 +953,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await Promise.all([
       // ChatGPT subscription is now a setup credential, so reuse the same
       // host refresh path as API-key changes to update the welcome card.
-      vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
-      vscode.commands.executeCommand('texra.refreshAllOptions'),
+      safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName),
+      safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((w) => this.sendModelSelectionData(w)),
     ]);
-  }
-
-  /** Re-send settings-view profile data to the active webview. */
-  private async refreshProfile(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
   /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
@@ -974,35 +965,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.withActiveWebview((w) =>
         this.agentHandlers.sendAgentSelectionData(w),
       ),
-      vscode.commands.executeCommand('texra.refreshAllOptions'),
+      safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
     ]);
-  }
-
-  private async handleOpenProviderKeyUrl(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_PROVIDER_KEY_URL>,
-  ): Promise<void> {
-    await this.profileKeyController.openProviderKeyUrl(data.provider);
-  }
-
-  private async handleSetProviderStreaming(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_STREAMING>,
-  ): Promise<void> {
-    await setProviderStreaming(data.provider, data.enabled);
-    await this.refreshProfile();
-  }
-
-  private async handleSetProviderEndpoint(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_ENDPOINT>,
-  ): Promise<void> {
-    await setProviderEndpoint(data.provider, data.endpoint);
-    await this.refreshProfile();
-  }
-
-  private async handleSetGlobalStreaming(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GLOBAL_STREAMING>,
-  ): Promise<void> {
-    await setGlobalStreaming(data.enabled);
-    await this.refreshProfile();
   }
 
   private async handleSetProviderVscodeSetting(
@@ -1028,51 +992,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     });
 
     if (result.affectsModelAvailability) {
-      await vscode.commands.executeCommand('texra.refreshAllOptions');
+      await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
     }
   }
 
   // ============================================================
   // Model selection handler implementations
   // ============================================================
-
-  private async handleSetModelEnabled(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_ENABLED>,
-  ): Promise<void> {
-    await this.modelSelectionController.setModelEnabled({
-      modelName: data.modelName,
-      enabled: data.enabled,
-    });
-    invalidateModelOptionsCache();
-    await Promise.all([
-      vscode.commands.executeCommand('texra.refreshAllOptions'),
-      this.withActiveWebview((w) => this.sendModelSelectionData(w)),
-    ]);
-  }
-
-  private async handleSetHelperModel(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_HELPER_MODEL>,
-  ): Promise<void> {
-    await this.modelSelectionController.setHelperModel(data.modelName);
-    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
-  }
-
-  private async handleSetModelReasoningLevel(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_REASONING_LEVEL>,
-  ): Promise<void> {
-    await this.modelSelectionController.setReasoningLevel({
-      modelName: data.modelName,
-      level: data.level,
-    });
-    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
-  }
-
-  private async handleSetPreferShortModelNames(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PREFER_SHORT_MODEL_NAMES>,
-  ): Promise<void> {
-    await this.modelSelectionController.setPreferShortModelNames(data.enabled);
-    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
-  }
 
   // ============================================================
   // Tool dashboard handler implementations
@@ -1092,9 +1018,46 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private async handleInstallToolExtension(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.INSTALL_TOOL_EXTENSION>,
+  private async openExternalUrl(url: string): Promise<void> {
+    await vscode.env.openExternal(vscode.Uri.parse(url));
+  }
+
+  private async postMessageToActiveWebview(
+    message: unknown | null | undefined,
   ): Promise<void> {
-    await this.latexHandlers.installExtension(data.extensionId);
+    if (message == null) return;
+    await this.withActiveWebview(async (webview) => {
+      await webview.postMessage(message);
+    });
+  }
+
+  private async updateProfileSetting(
+    update: () => Promise<void>,
+  ): Promise<void> {
+    await update();
+    await this.withActiveWebview((w) => this.sendProfileData(w));
+  }
+
+  private async updateModelSelection(
+    update: () => Promise<void>,
+    options: { invalidateCache?: boolean; refreshMainOptions?: boolean } = {},
+  ): Promise<void> {
+    await update();
+    if (options.invalidateCache) {
+      invalidateModelOptionsCache();
+    }
+
+    const refreshSettings = this.withActiveWebview((w) =>
+      this.sendModelSelectionData(w),
+    );
+    if (!options.refreshMainOptions) {
+      await refreshSettings;
+      return;
+    }
+
+    await Promise.all([
+      safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+      refreshSettings,
+    ]);
   }
 }

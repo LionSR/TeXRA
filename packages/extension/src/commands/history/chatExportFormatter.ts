@@ -27,7 +27,7 @@ export type {
 } from '@agent/export/schemas';
 export type { FormatSpec } from './chatExport/formatSpec';
 export { extractMeta } from './chatExport/formatSpec';
-export { normalizeMessages } from './chatExport/normalizeMessages';
+export { normalizeConversationForExport as normalizeMessages } from '@agent/export/normalizeConversation';
 export {
   generateExportFilename,
   generateExportFolderName,
