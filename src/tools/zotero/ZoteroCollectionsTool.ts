@@ -178,9 +178,10 @@ export class ZoteroCollectionsTool extends defineTool({
     }
 
     // Filter by library name if specified
-    const targetLibraries = library
+    const normalizedLibrary = library?.toLowerCase();
+    const targetLibraries = normalizedLibrary
       ? libraries.filter(
-          (lib) => lib.name.toLowerCase() === library.toLowerCase(),
+          (lib) => lib.name.toLowerCase() === normalizedLibrary,
         )
       : libraries;
 
