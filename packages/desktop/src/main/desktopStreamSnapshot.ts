@@ -24,7 +24,6 @@ import { z } from 'zod';
 
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
-  emptyRestoredStreamsFile,
   RestoredStreamsFileSchema,
   STREAM_STATUS,
   type RestoredStreamSnapshot,
@@ -136,7 +135,7 @@ function parseHydrated(
       '[texra-desktop] Discarding malformed stream snapshot file',
       z.prettifyError(parsed.error),
     );
-    return emptyRestoredStreamsFile().streams;
+    return [];
   }
   // Normalise status to "stopped" — we don't know if the agent
   // actually finished, and we explicitly never want the rail to claim
