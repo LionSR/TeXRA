@@ -14,7 +14,7 @@ import { postMessage } from '@shared/hostBridge';
 import { SignalWatcher, signal } from '@shared/signals';
 
 // Local imports - shared styles
-import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas and constants
 import {
@@ -132,12 +132,7 @@ const SettingsAppBase = SignalWatcher(
 @customElement('settings-app')
 export class SettingsApp extends SettingsAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
-  static styles = [
-    designTokens,
-    commonViewStyles,
-    ...badgeStyles,
-    settingsViewStyles,
-  ];
+  static styles = [designTokens, commonViewStyles, settingsViewStyles];
 
   // Tab refs
   @query('history-tab') private historyTab?: HistoryTab;
