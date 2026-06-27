@@ -261,7 +261,7 @@ Entries marked "must be confirmed in audit" are blocked on Open Question 1. Unti
 
 The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` in this order:
 
-1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under one of `vscode.workspace.workspaceFolders[].uri.fsPath`. The first qualifying URI becomes `AgentConfig.inputFiles[0]`. After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }` without calling `runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
+1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under one of `vscode.workspace.workspaceFolders[].uri.fsPath`. The first qualifying URI becomes `AgentConfig.inputFiles[0]`. After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }`without calling`runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
 
 2. **Resolve agent name.** If `request.command` is set and present in `CHAT_COMMAND_TO_AGENT`, use the mapped YAML identifier. If `request.command` is set but absent from the map, emit the unrecognized-command error and return without calling `runAgent()`. If `request.command` is `undefined`, use `DEFAULT_CHAT_AGENT`.
 
@@ -283,14 +283,14 @@ The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` i
 
 ### Mapping Chat Context to `AgentConfig`
 
-| Chat API field                                               | `AgentConfig` field | Notes                                                       |
-| ------------------------------------------------------------ | ------------------- | ----------------------------------------------------------- |
-| `request.references[i].value` (Uri or Location)              | `inputFiles[0]`     | First qualifying URI only; others ignored in v1             |
-| Stripped instruction text                                    | `instruction`       | After removing reference ranges from `request.prompt`       |
-| `request.command` → `CHAT_COMMAND_TO_AGENT`                  | `agent`             | Falls back to `DEFAULT_CHAT_AGENT` when no command given    |
-| `platform().state` model key, fallback `DEFAULT_AGENT_MODEL` | `model`             | Never `request.model`                                       |
+| Chat API field                                               | `AgentConfig` field | Notes                                                                                                |
+| ------------------------------------------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------- |
+| `request.references[i].value` (Uri or Location)              | `inputFiles[0]`     | First qualifying URI only; others ignored in v1                                                      |
+| Stripped instruction text                                    | `instruction`       | After removing reference ranges from `request.prompt`                                                |
+| `request.command` → `CHAT_COMMAND_TO_AGENT`                  | `agent`             | Falls back to `DEFAULT_CHAT_AGENT` when no command given                                             |
+| `platform().state` model key, fallback `DEFAULT_AGENT_MODEL` | `model`             | Never `request.model`                                                                                |
 | `vscode.workspace.workspaceFolders[0].uri.fsPath`            | `workingDirectory`  | Guard: if `workspaceFolders` is `undefined` or empty, return error before accessing index 0 (Step 6) |
-| —                                                            | `outputFiles`       | Empty; agent YAML `defaultOutputFiles` governs output paths |
+| —                                                            | `outputFiles`       | Empty; agent YAML `defaultOutputFiles` governs output paths                                          |
 
 Conversation history from `context.history` is not forwarded to the agent's LLM call in v1. Each invocation is stateless from TeXRA's perspective. `ChatResult.metadata` stores `{ inputFile, outputFiles, agentName }` for use by `ChatFollowupProvider`.
 
