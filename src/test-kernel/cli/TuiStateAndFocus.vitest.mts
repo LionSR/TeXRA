@@ -11,7 +11,7 @@ import {
   StreamLogStore,
 } from '@transcript';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   cliState,
   patchStream,

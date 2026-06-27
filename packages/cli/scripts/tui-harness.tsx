@@ -10,7 +10,7 @@ import { render } from 'ink';
 import React from 'react';
 
 import { getAgentsByCategory, loadAgents } from '@agent/index';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@common/errors';
 import { DEFAULT_STARTUP_TEAM_ID } from '@controllers/onboarding/defaultTeamSeeding';
