@@ -8,6 +8,7 @@ import { toFile } from '@anthropic-ai/sdk';
 
 // Local imports
 import { FILES_API_BETA } from './anthropicContextManagement';
+import { wipeBuffer } from '../utils/toolAttachmentUtils';
 
 // Type imports - Anthropic SDK
 import type { Anthropic } from '@anthropic-ai/sdk';
@@ -189,10 +190,7 @@ export async function replaceDocumentDataWithUploads(
           uploadedPdfPageCounts.set(uploadedFile.id, pageCount);
         }
       } finally {
-        if (buffer) {
-          buffer.fill(0);
-          buffer = undefined;
-        }
+        buffer = wipeBuffer(buffer);
       }
 
       if (uploadedSource) {
