@@ -1,4 +1,5 @@
 import pluralizeWord from 'pluralize';
+import safeStringify from 'safe-stable-stringify';
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: 'grapheme',
@@ -44,14 +45,16 @@ export function objectToLogString(
   obj: unknown,
   maxLength: number = 1000,
 ): string {
-  try {
-    const json = JSON.stringify(obj);
-    return json.length > maxLength
-      ? `${json.slice(0, maxLength)}... (${json.length} chars)`
-      : json;
-  } catch (_err) {
-    return String(obj);
-  }
+  // `safe-stable-stringify` never throws on the inputs `JSON.stringify` chokes
+  // on: circular references become `"[Circular]"` and BigInt is handled, so a
+  // log line keeps its diagnostic value instead of collapsing to the useless
+  // `"[object Object]"` that the old `catch (_err) { return String(obj) }`
+  // produced. Returns `undefined` only for inputs with no JSON representation
+  // (e.g. a bare `undefined`), which we render as the string `"undefined"`.
+  const json = safeStringify(obj) ?? String(obj);
+  return json.length > maxLength
+    ? `${json.slice(0, maxLength)}... (${json.length} chars)`
+    : json;
 }
 
 /**
