@@ -8,7 +8,11 @@ import Mark from 'mark.js';
 
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
-import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
+import {
+  commonViewStyles,
+  designTokens,
+  searchHighlightStyles,
+} from '@shared/styles';
 import { AgentCategory } from '@shared/schemas/agent';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
@@ -36,7 +40,7 @@ export class HistoryItemElement extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    ...badgeStyles,
+    searchHighlightStyles,
     historyStyles,
     metaStripStyles,
     markdownStyles,

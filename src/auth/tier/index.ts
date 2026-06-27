@@ -39,10 +39,3 @@ export function getTierService(logger?: AuthServiceLogger): TierService {
   }
   return _instance;
 }
-
-/**
- * Set a custom TierService instance (for testing).
- */
-export function setTierService(service: TierService): void {
-  _instance = service;
-}
