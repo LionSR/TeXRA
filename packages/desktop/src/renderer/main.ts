@@ -48,7 +48,7 @@ import { COMMON_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
 import { postMessage } from '@shared/hostBridge';
-import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { Signal } from '@shared/signals';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import {
@@ -804,7 +804,7 @@ function wireRailTabs(): void {
     handleStreamDelete(e, getEventHandlerContext())) as EventListener);
   railTabs.addEventListener('filter-change', ((e: CustomEvent) =>
     handleFilterChange(e, getEventHandlerContext())) as EventListener);
-  railTabs.addEventListener('delete-all', () => handleDeleteAll());
+  railTabs.addEventListener('delete-all', handleDeleteAll as EventListener);
 }
 
 function wireConversation(): void {
@@ -816,17 +816,17 @@ function wireConversation(): void {
     handleToolbarCommand(e, ctx())) as EventListener);
   conversationView.addEventListener('permission-action', ((e: CustomEvent) =>
     handlePermissionAction(e, getMessageHandlerContext())) as EventListener);
-  conversationView.addEventListener('file-action', ((e: CustomEvent) =>
-    handleFileAction(e)) as EventListener);
+  conversationView.addEventListener(
+    'file-action',
+    handleFileAction as EventListener,
+  );
   conversationView.addEventListener('compile-fixer-run', () =>
     runCompileFixer(ctx()),
   );
-  conversationView.addEventListener('getting-started-action', ((
-    e: CustomEvent,
-  ) =>
-    handleGettingStartedAction(
-      e.detail.action as GettingStartedAction,
-    )) as EventListener);
+  conversationView.addEventListener(
+    'getting-started-action',
+    handleGettingStartedAction as EventListener,
+  );
   conversationView.addEventListener('followup-request-options', () =>
     handleFollowupRequestOptions(ctx()),
   );

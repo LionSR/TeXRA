@@ -21,7 +21,6 @@ import { PersistedState } from '@shared/state';
 // Local imports - shared schemas
 import {
   AgentCategoryFilterSchema,
-  type GettingStartedActionDetail,
   type ProgressViewOutboundMessage,
   type StreamTabId,
 } from '@shared/schemas';
@@ -80,9 +79,10 @@ import {
   sendFollowupCommand,
 } from './eventHandlers';
 import { dispatchMessage } from './messageDispatcher';
-import type { MessageHandlerContext } from './messageHandlerTypes';
-
-import type { FrontendEventHandlerContext } from './messageHandlerTypes';
+import type {
+  FrontendEventHandlerContext,
+  MessageHandlerContext,
+} from './messageHandlerTypes';
 // Local imports - progress view components
 import './components/StreamTabs';
 import './components/StreamConversation';
@@ -246,9 +246,9 @@ export class ProgressApp extends ProgressAppBase {
                     @stream-switch=${this.onStreamSwitch}
                     @toolbar-command=${this.onToolbarCommand}
                     @permission-action=${this.onPermissionAction}
-                    @file-action=${this.onFileAction}
+                    @file-action=${handleFileAction}
                     @compile-fixer-run=${this.onCompileFixerRun}
-                    @getting-started-action=${this.onGettingStartedAction}
+                    @getting-started-action=${handleGettingStartedAction}
                     @followup-request-options=${this.onFollowupRequestOptions}
                     @followup-setup=${this.onFollowupSetup}
                     @followup-run=${this.onFollowupRun}
@@ -272,7 +272,7 @@ export class ProgressApp extends ProgressAppBase {
                     @stream-switch=${this.onStreamSwitch}
                     @stream-delete=${this.onStreamDelete}
                     @filter-change=${this.onFilterChange}
-                    @delete-all=${this.onDeleteAll}
+                    @delete-all=${handleDeleteAll}
                   ></stream-tabs>
                 </wa-split-panel>
               </div>
@@ -461,8 +461,6 @@ export class ProgressApp extends ProgressAppBase {
     handleStreamSwitch(e, this.getEventHandlerContext());
   private onStreamDelete = (e: CustomEvent): void =>
     handleStreamDelete(e, this.getEventHandlerContext());
-  private onDeleteAll = (): void => handleDeleteAll();
-  private onFileAction = (e: CustomEvent): void => handleFileAction(e);
   private onPermissionAction = (e: CustomEvent): void =>
     handlePermissionAction(e, this.createMessageHandlerContext());
 
@@ -487,10 +485,6 @@ export class ProgressApp extends ProgressAppBase {
 
   private onCompileFixerRun = (): void =>
     runCompileFixer(this.getEventHandlerContext());
-
-  private onGettingStartedAction = (
-    e: CustomEvent<GettingStartedActionDetail>,
-  ): void => handleGettingStartedAction(e.detail.action);
 
   private onFollowupRequestOptions = (): void =>
     handleFollowupRequestOptions(this.getEventHandlerContext());
