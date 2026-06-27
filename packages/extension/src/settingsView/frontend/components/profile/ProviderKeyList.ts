@@ -6,7 +6,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
-import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import {
@@ -43,7 +43,6 @@ export class ProviderKeyList extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    ...badgeStyles,
     statusCheckIconStyles,
     profileViewStyles,
   ];
