@@ -32,18 +32,6 @@ interface DesktopCommandPaletteModule {
     streams?: DesktopPaletteStream[];
     platform?: NodeJS.Platform;
   }): DesktopPaletteEntry[];
-  filterDesktopCommandPaletteEntries(
-    entries: DesktopPaletteEntry[],
-    query: string,
-  ): DesktopPaletteEntry[];
-  executeDesktopCommandPaletteEntry(
-    entry: DesktopPaletteEntry | undefined,
-    actions: {
-      showRoute(route: string): void;
-      showSettings(tabIndex?: number): void;
-    },
-  ): boolean;
-  isCommandPaletteShortcut(event: KeyboardEvent): boolean;
 }
 
 interface DesktopPaletteEntry {
@@ -69,6 +57,10 @@ async function loadDesktopCommandPalette(): Promise<DesktopCommandPaletteModule>
   return import(
     moduleFileUrl(desktopSourcePath('renderer', 'desktopCommandPalette.ts'))
   ) as Promise<DesktopCommandPaletteModule>;
+}
+
+async function loadSharedCommandPalette() {
+  return import('@shared/wa/commandPalette');
 }
 
 // wa-dialog's show/hide flow chains a few requestAnimationFrame and
@@ -111,21 +103,18 @@ describe('desktop command palette', () => {
   ];
 
   it('filters command entries by label, category, and id tokens', async () => {
-    const { filterDesktopCommandPaletteEntries } =
-      await loadDesktopCommandPalette();
+    const { filterCommandPaletteEntries } = await loadSharedCommandPalette();
 
     expect(
-      filterDesktopCommandPaletteEntries(entries, 'progress').map(
-        (entry) => entry.id,
-      ),
+      filterCommandPaletteEntries(entries, 'progress').map((entry) => entry.id),
     ).toEqual(['texra.showProgressView']);
     expect(
-      filterDesktopCommandPaletteEntries(entries, 'texra models').map(
+      filterCommandPaletteEntries(entries, 'texra models').map(
         (entry) => entry.id,
       ),
     ).toEqual(['texra.showModels']);
     expect(
-      filterDesktopCommandPaletteEntries(entries, '').map((entry) => entry.id),
+      filterCommandPaletteEntries(entries, '').map((entry) => entry.id),
     ).toEqual(entries.map((entry) => entry.id));
   });
 
@@ -140,29 +129,29 @@ describe('desktop command palette', () => {
   });
 
   it('does not dispatch disabled command palette entries', async () => {
-    const { executeDesktopCommandPaletteEntry } =
-      await loadDesktopCommandPalette();
+    const { executeCommandPaletteEntry } = await loadSharedCommandPalette();
     const actions = {
-      showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
 
     expect(
-      executeDesktopCommandPaletteEntry(
+      executeCommandPaletteEntry(
         {
           id: 'texra.showModels',
           label: 'Show Models',
-          category: 'TeXRA',
           enabled: false,
         },
-        actions,
+        () => {
+          actions.showSettings();
+          return true;
+        },
       ),
     ).toBe(false);
     expect(actions.showSettings).not.toHaveBeenCalled();
   });
 
   it('uses the native command palette shortcut shape', async () => {
-    const { isCommandPaletteShortcut } = await loadDesktopCommandPalette();
+    const { isCommandPaletteShortcut } = await loadSharedCommandPalette();
 
     expect(
       isCommandPaletteShortcut({ key: 'k', metaKey: true } as KeyboardEvent),
