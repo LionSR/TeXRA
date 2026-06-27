@@ -173,6 +173,7 @@ async function nativeRequestApproval(
   const title = `Tool edit (${sourceTool}): ${description}${changeSuffix}`;
   let result: ToolEditApprovalResult = { accepted: false };
   let diffSession: DiffSession | undefined;
+  let tabCloseDisposable: vscode.Disposable | undefined;
   try {
     const openedSession = await diffViewHost.openDiff(
       originalSource,
@@ -182,20 +183,13 @@ async function nativeRequestApproval(
     );
     diffSession = openedSession;
 
-    await revealFirstChangedLine(
-      openedSession,
-      originalContent,
-      proposedContent,
-    );
-
-    result = await new Promise<ToolEditApprovalResult>((resolve) => {
-      let settled = false;
-
+    let approvalSettled = false;
+    const approvalPromise = new Promise<ToolEditApprovalResult>((resolve) => {
       const settle = (value: ToolEditApprovalResult) => {
-        if (settled) {
+        if (approvalSettled) {
           return;
         }
-        settled = true;
+        approvalSettled = true;
         // Note: Don't delete from pendingApprovals here - finally block handles cleanup
         resolve(value);
       };
@@ -210,7 +204,7 @@ async function nativeRequestApproval(
         title,
         streamId: streamId ?? undefined,
         lineChanges,
-        isSettled: () => settled,
+        isSettled: () => approvalSettled,
         settle,
         workspaceTempCleanup: [],
         latexOperationInProgress: false,
@@ -222,16 +216,68 @@ async function nativeRequestApproval(
       registerPendingApproval(requestId, {
         streamId: streamId ?? undefined,
         runtimeHost: getRuntimeHost(),
-        isSettled: () => settled,
+        isSettled: () => approvalSettled,
         settle,
       });
+
+      // Closing the proposed diff tab (e.g. Ctrl+W) must resolve the approval
+      // as a rejection. Without this the approval Promise would never settle
+      // and the agent would hang indefinitely. The listener is self-cleaning:
+      // it disposes once the approval settles (including the programmatic
+      // close in the `finally` block below).
+      const proposedUriStr = vscode.Uri.file(
+        proposedSource.filePath,
+      ).toString();
+      tabCloseDisposable = vscode.window.tabGroups.onDidChangeTabs((event) => {
+        if (approvalSettled) {
+          tabCloseDisposable?.dispose();
+          return;
+        }
+        const wasClosed = event.closed.some((tab) => {
+          const input = tab.input;
+          if (
+            typeof vscode.TabInputTextDiff !== 'undefined' &&
+            input instanceof vscode.TabInputTextDiff
+          ) {
+            return input.modified.toString() === proposedUriStr;
+          }
+          if (
+            typeof vscode.TabInputText !== 'undefined' &&
+            input instanceof vscode.TabInputText
+          ) {
+            return input.uri.toString() === proposedUriStr;
+          }
+          return false;
+        });
+        if (wasClosed) {
+          tabCloseDisposable?.dispose();
+          settle({ accepted: false });
+        }
+      });
+    });
+
+    try {
+      await revealFirstChangedLine(
+        openedSession,
+        originalContent,
+        proposedContent,
+      );
+    } catch (err) {
+      if (!approvalSettled) {
+        throw err;
+      }
+    }
+
+    if (!approvalSettled) {
       void showProgressViewApprovalPrompt(
         requestId,
         request,
         description,
         lineChanges,
       );
-    });
+    }
+
+    result = await approvalPromise;
 
     if (result.accepted) {
       // Normalize here: these reads bypass BaseFS so may contain CRLF.
@@ -251,6 +297,8 @@ async function nativeRequestApproval(
       lineChanges: result.lineChanges ?? lineChanges,
     };
   } finally {
+    // Stop listening for tab closes before we programmatically close the diff.
+    tabCloseDisposable?.dispose();
     // Get entry before deleting to access workspace temp cleanup functions
     const entry = pendingApprovals.get(requestId);
     pendingApprovals.delete(requestId);

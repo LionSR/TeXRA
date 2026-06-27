@@ -35,6 +35,11 @@ interface BranchItem extends vscode.QuickPickItem {
   ref: string | undefined;
 }
 
+const APPROACH_PROMPT_HINT =
+  'Quick checks key suspicions (fast); Thorough reads all changed files (deeper)';
+const BRANCH_PROMPT_HINT =
+  'The review will diff the current branch against the selected branch';
+
 /**
  * Drive the three-step QuickPick flow. Each step honors Escape: returning
  * `undefined` from any prompt cancels the whole run, so a half-configured
@@ -73,13 +78,39 @@ export async function promptReviewOptions(
     currentApproach === 'thorough'
       ? [thoroughItem, quickItem]
       : [quickItem, thoroughItem];
-  const approachPick = await vscode.window.showQuickPick(approachItems, {
-    title: 'Agent Review — Approach',
-    placeHolder: 'Choose review depth',
-    prompt:
-      'Quick checks key suspicions (fast); Thorough reads all changed files (deeper)',
-    ignoreFocusOut: true,
-  });
+  const trimmedInstructions = userInstructions.trim();
+  const approachPick = await new Promise<ApproachItem | undefined>(
+    (resolve) => {
+      const qp = vscode.window.createQuickPick<ApproachItem>();
+      let settled = false;
+      const finish = (value: ApproachItem | undefined): void => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+        qp.dispose();
+      };
+      qp.title = 'Agent Review — Approach';
+      qp.placeholder = 'Choose review depth';
+      qp.ignoreFocusOut = true;
+      qp.items = approachItems;
+      qp.activeItems = [approachItems[0]];
+      // VS Code 1.108+: echo the step-1 focus text when present; otherwise
+      // keep the original approach explanation visible.
+      if ('prompt' in qp) {
+        (qp as vscode.QuickPick<ApproachItem> & { prompt: string }).prompt =
+          trimmedInstructions
+            ? `Focus: ${trimmedInstructions}`
+            : APPROACH_PROMPT_HINT;
+      }
+      qp.onDidAccept(() => {
+        finish(qp.activeItems[0] ?? qp.selectedItems[0]);
+      });
+      qp.onDidHide(() => {
+        finish(undefined);
+      });
+      qp.show();
+    },
+  );
   if (!approachPick) return undefined;
 
   const candidates = await listBaseBranchCandidates(cwd);
@@ -97,12 +128,45 @@ export async function promptReviewOptions(
       }),
     ),
   ];
-  const branchPick = await vscode.window.showQuickPick(branchItems, {
-    title: 'Agent Review — Diff Against',
-    placeHolder: 'Choose the branch to compare against',
-    prompt:
-      'The review will diff the current branch against the selected branch',
-    ignoreFocusOut: true,
+  // VS Code 1.109+ can place a button in the QuickPick title area; offer a
+  // one-click "use auto-detect" since most runs take the default.
+  const useDefaultButton: vscode.QuickInputButton = {
+    iconPath: new vscode.ThemeIcon('check'),
+    tooltip: 'Use auto-detect (skip)',
+  };
+  const branchPick = await new Promise<BranchItem | undefined>((resolve) => {
+    const qp = vscode.window.createQuickPick<BranchItem>();
+    let settled = false;
+    const finish = (value: BranchItem | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      qp.dispose();
+    };
+    qp.title = 'Agent Review — Diff Against';
+    qp.placeholder = 'Choose the branch to compare against';
+    qp.ignoreFocusOut = true;
+    qp.items = branchItems;
+    qp.activeItems = [branchItems[0]];
+    if ('prompt' in qp) {
+      (qp as vscode.QuickPick<BranchItem> & { prompt: string }).prompt =
+        BRANCH_PROMPT_HINT;
+    }
+    if ('buttons' in qp) {
+      qp.buttons = [useDefaultButton];
+    }
+    qp.onDidTriggerButton((button) => {
+      if (button === useDefaultButton) {
+        finish(branchItems[0]);
+      }
+    });
+    qp.onDidAccept(() => {
+      finish(qp.activeItems[0] ?? qp.selectedItems[0]);
+    });
+    qp.onDidHide(() => {
+      finish(undefined);
+    });
+    qp.show();
   });
   if (!branchPick) return undefined;
 
