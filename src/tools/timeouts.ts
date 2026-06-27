@@ -6,6 +6,7 @@
  * policy across tools (built around the `ky` HTTP client).
  */
 
+import isNetworkError from 'is-network-error';
 import { HTTPError, TimeoutError } from 'ky';
 
 /**
@@ -46,10 +47,12 @@ export function isTransientHttpError(error: unknown): boolean {
   if (error instanceof HTTPError) {
     return error.response.status === 429 || error.response.status >= 500;
   }
-  // Network-level TypeError from the underlying fetch — connection reset, DNS
-  // hiccup, socket hang-up. Only safe because callers must wrap only the
-  // ky/fetch call itself in the try block; programmer TypeErrors must not be
-  // caught by the same handler.
-  if (error instanceof TypeError) return true;
+  // Network-level failure from the underlying fetch — connection reset, DNS
+  // hiccup, socket hang-up. `fetch` surfaces these as a `TypeError`, but a bare
+  // `instanceof TypeError` also swallows programmer errors (e.g. reading a
+  // property of `undefined`) and silently retries them. `is-network-error`
+  // matches only the known fetch/undici network-failure messages, so genuine
+  // bugs in the wrapped call surface instead of being masked as transient.
+  if (isNetworkError(error)) return true;
   return false;
 }
