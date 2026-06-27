@@ -22,12 +22,10 @@ vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData: mocks.computeModelOptionsData,
 }));
 
-const { withDelegationWorktreeAvailability } = await import(
-  '@tools/delegationWorktreeAvailability'
-);
-const { resolveAgentTools } = await import(
-  '@agent/runtime/agentToolResolution'
-);
+const { withDelegationWorktreeAvailability } =
+  await import('@tools/delegationWorktreeAvailability');
+const { resolveAgentTools } =
+  await import('@agent/runtime/agentToolResolution');
 const { MapToolRegistry } = await import('@agent/core/tools/ToolTypes');
 const { ToolInjectionRegistry } = await import('@agent/runtime/toolInjection');
 
