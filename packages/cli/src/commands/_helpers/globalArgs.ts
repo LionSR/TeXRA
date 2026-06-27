@@ -195,6 +195,30 @@ export function optString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+export interface CommonAgentRunFlags {
+  inputFiles: string[];
+  contextFiles: string[];
+  instruction: string;
+  instructionFile: string | undefined;
+}
+
+/**
+ * The `--input/-i`, `--context/-c`, `--instruction`, and `--instruction-file`
+ * flags shared by the `agents run`, `multi-agent`, and `workflow run` commands.
+ * Spread the result into the command's run options.
+ */
+export function collectCommonAgentRunFlags(
+  rawArgs: readonly string[],
+  instruction: unknown,
+): CommonAgentRunFlags {
+  return {
+    inputFiles: collectStringFlagValues(rawArgs, 'input', 'i'),
+    contextFiles: collectStringFlagValues(rawArgs, 'context', 'c'),
+    instruction: optString(instruction) ?? '',
+    instructionFile: optionalStringFlagValue(rawArgs, 'instruction-file'),
+  };
+}
+
 function headlessOnlyFlagLabel(arg: string): string | undefined {
   for (const name of HEADLESS_ONLY_GLOBAL_ARG_NAMES) {
     for (const spelling of flagSpellings(name, GLOBAL_ARGS[name])) {

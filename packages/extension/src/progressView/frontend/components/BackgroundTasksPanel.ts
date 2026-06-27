@@ -290,13 +290,14 @@ export class BackgroundTasksPanel extends LitElement {
   private renderInquirySection(): TemplateResult | typeof nothing {
     if (this.inquiries.length === 0) return nothing;
 
-    const openCount = this.inquiries.filter((t) => t.status === 'open').length;
-    const answeredCount = this.inquiries.filter(
-      (t) => t.status === 'answered',
-    ).length;
-    const droppedCount = this.inquiries.filter(
-      (t) => t.status === 'dropped',
-    ).length;
+    let openCount = 0;
+    let answeredCount = 0;
+    let droppedCount = 0;
+    for (const t of this.inquiries) {
+      if (t.status === 'open') openCount += 1;
+      else if (t.status === 'answered') answeredCount += 1;
+      else if (t.status === 'dropped') droppedCount += 1;
+    }
 
     return html`
       <wa-details class="collapsible-quiet" open>

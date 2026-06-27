@@ -255,8 +255,12 @@ function migrateLegacyAgentNameKeys(): void {
  * persisted visibility selections alive after switching identity to `name:`.
  */
 function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
-  const currentKeys = new Set(entries.map((entry) => agentKeyOf(entry)));
-  const currentNames = new Set(entries.map((entry) => entry.name));
+  const currentKeys = new Set<string>();
+  const currentNames = new Set<string>();
+  for (const entry of entries) {
+    currentKeys.add(agentKeyOf(entry));
+    currentNames.add(entry.name);
+  }
   const qualifiedCandidates = new Map<string, Set<string>>();
   const bareCandidates = new Map<string, Set<string>>();
 
@@ -329,7 +333,8 @@ export function getAgent(
   lookupCategory?: AgentCategoryType,
 ): AgentEntry | undefined {
   // Direct lookup for source:name format (already resolved)
-  if (cache.has(identifier)) return cache.get(identifier);
+  const direct = cache.get(identifier);
+  if (direct) return direct;
 
   // Find first match using session-appropriate priority
   const priority =

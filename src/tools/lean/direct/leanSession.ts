@@ -121,15 +121,13 @@ export class LeanSession {
   async restartFile(filePath: string): Promise<void> {
     const absolute = path.resolve(filePath);
     if (!this.rpc) return;
-    if (this.openFiles.has(absolute)) {
+    const state = this.openFiles.get(absolute);
+    if (state) {
       this.rpc.notify('textDocument/didClose', {
         textDocument: { uri: pathToUri(absolute) },
       });
-      const state = this.openFiles.get(absolute);
-      if (state) {
-        this.releaseDiagnosticsWaiters(state);
-        this.openFiles.delete(absolute);
-      }
+      this.releaseDiagnosticsWaiters(state);
+      this.openFiles.delete(absolute);
     }
     await this.ensureFileOpen(absolute, { forceReload: true });
   }
