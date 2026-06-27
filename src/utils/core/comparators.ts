@@ -19,3 +19,17 @@ export function byString(a: string, b: string): number {
 export function byStringProp<T>(fn: (t: T) => string): (a: T, b: T) => number {
   return (a, b) => fn(a).localeCompare(fn(b));
 }
+
+/**
+ * Return a new array ordered by newest timestamp first.
+ * Each timestamp is parsed once before sorting.
+ */
+export function toNewestFirstByTimestamp<T>(
+  items: readonly T[],
+  timestampOf: (item: T) => string,
+): T[] {
+  return items
+    .map((item) => ({ item, key: Date.parse(timestampOf(item)) }))
+    .sort((a, b) => b.key - a.key)
+    .map(({ item }) => item);
+}

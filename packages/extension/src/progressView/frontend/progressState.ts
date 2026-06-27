@@ -25,6 +25,7 @@ import {
   type TaskGroup,
 } from '@shared/schemas';
 import { isProcessAgent } from '@shared/streams/agentKind';
+import { toNewestFirstByTimestamp } from '@utils/core';
 
 import { setsEqual } from './utils';
 import {
@@ -240,11 +241,12 @@ export const activeTaskGroups$ = new Signal.Computed(
 export const activeInquiries$ = new Signal.Computed(() => {
   const activeStreamId = activeStreamId$.get();
   if (!activeStreamId) return EMPTY_INQUIRIES;
-  const threads = [...inquiries$.get().values()]
-    .filter((thread) => thread.parentStreamId === activeStreamId)
-    .sort(
-      (a, b) => Date.parse(b.lastActivityIso) - Date.parse(a.lastActivityIso),
-    );
+  const threads = toNewestFirstByTimestamp(
+    [...inquiries$.get().values()].filter(
+      (thread) => thread.parentStreamId === activeStreamId,
+    ),
+    (thread) => thread.lastActivityIso,
+  );
   return threads.length > 0 ? threads : EMPTY_INQUIRIES;
 });
 
