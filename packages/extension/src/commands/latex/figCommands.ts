@@ -55,6 +55,7 @@ export async function handleExtractFigurePaths(): Promise<void> {
       if (figurePaths.length > 0) {
         const selected = await vscode.window.showQuickPick(figurePaths, {
           placeHolder: 'Found figures (select to copy path)',
+          prompt: 'Select a figure path to copy to the clipboard',
           canPickMany: false,
         });
 
@@ -100,6 +101,7 @@ export async function handleExtractTikzFigures(): Promise<void> {
 
         const selected = await vscode.window.showQuickPick(items, {
           placeHolder: 'Found TikZ figures (select to copy label)',
+          prompt: 'Select a TikZ figure label to copy to the clipboard',
           canPickMany: false,
         });
 
@@ -152,6 +154,7 @@ export async function handleCompileTikzFigures(): Promise<void> {
 
             const selected = await vscode.window.showQuickPick(items, {
               placeHolder: 'Compiled TikZ figures (select to open)',
+              prompt: 'Select a compiled TikZ figure to open in the editor',
               canPickMany: false,
             });
 

@@ -94,6 +94,7 @@ export async function setApiKey(provider?: ApiProvider): Promise<void> {
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
   const providerPick = await vscode.window.showQuickPick(providerItems, {
     placeHolder: 'Select API provider',
+    prompt: 'Choose the AI provider to configure an API key for',
   });
 
   if (providerPick?.provider) {
@@ -109,6 +110,7 @@ export async function removeApiKey(): Promise<void> {
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
   const providerPick = await vscode.window.showQuickPick(providerItems, {
     placeHolder: 'Select API provider to remove key',
+    prompt: 'Choose the AI provider whose API key you want to remove',
   });
 
   const provider = providerPick?.provider;
