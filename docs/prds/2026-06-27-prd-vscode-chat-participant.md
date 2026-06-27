@@ -283,14 +283,14 @@ The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` i
 
 ### Mapping Chat Context to `AgentConfig`
 
-| Chat API field                                               | `AgentConfig` field | Notes                                                                                                |
-| ------------------------------------------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------- |
-| `request.references[i].value` (Uri or Location)              | `inputFiles[0]`     | First qualifying URI only; others ignored in v1                                                      |
-| Stripped instruction text                                    | `instruction`       | After removing reference ranges from `request.prompt`                                                |
-| `request.command` → `CHAT_COMMAND_TO_AGENT`                  | `agent`             | Falls back to `DEFAULT_CHAT_AGENT` when no command given                                             |
-| `platform().globalState` model key, fallback `DEFAULT_AGENT_MODEL` | `model`        | Never `request.model`                                                                                |
-| `vscode.workspace.workspaceFolders[0].uri.fsPath`            | `workingDirectory`  | Guard: if `workspaceFolders` is `undefined` or empty, return error before accessing index 0 (Step 6) |
-| —                                                            | `outputFiles`       | Empty; agent YAML `defaultOutputFiles` governs output paths                                          |
+| Chat API field                                                     | `AgentConfig` field | Notes                                                                                                |
+| ------------------------------------------------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------- |
+| `request.references[i].value` (Uri or Location)                    | `inputFiles[0]`     | First qualifying URI only; others ignored in v1                                                      |
+| Stripped instruction text                                          | `instruction`       | After removing reference ranges from `request.prompt`                                                |
+| `request.command` → `CHAT_COMMAND_TO_AGENT`                        | `agent`             | Falls back to `DEFAULT_CHAT_AGENT` when no command given                                             |
+| `platform().globalState` model key, fallback `DEFAULT_AGENT_MODEL` | `model`             | Never `request.model`                                                                                |
+| `vscode.workspace.workspaceFolders[0].uri.fsPath`                  | `workingDirectory`  | Guard: if `workspaceFolders` is `undefined` or empty, return error before accessing index 0 (Step 6) |
+| —                                                                  | `outputFiles`       | Empty; agent YAML `defaultOutputFiles` governs output paths                                          |
 
 Conversation history from `context.history` is not forwarded to the agent's LLM call in v1. Each invocation is stateless from TeXRA's perspective. `ChatResult.metadata` stores `{ inputFile, outputFiles, agentName }` for use by `ChatFollowupProvider`.
 
