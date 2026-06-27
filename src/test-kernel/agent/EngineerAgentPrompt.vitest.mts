@@ -40,11 +40,10 @@ describe('engineer agent prompt', () => {
     // The fix for #6655: the engineer must defer to the agents the delegate_agent
     // tool currently lists, not assume its hardcoded specialists are reachable.
     expect(systemPrompt).toContain('Available agents');
-    expect(systemPrompt).toContain('delegate only to');
-    expect(systemPrompt).toMatch(/closest available specialist/i);
+    expect(systemPrompt).toMatch(/before your first delegation/i);
     // Later steps still name coder/codeReviewer/etc.; the prompt tells the model
-    // to read those as roles, not as a guarantee the agent is in the roster.
-    expect(systemPrompt).toMatch(/closest match\s+in Available agents/i);
+    // to read those as roles resolved against the live list, not a guarantee.
+    expect(systemPrompt).toMatch(/closest match\s+in it/i);
   });
 
   it('handles a specialist that is absent from the active roster', () => {
@@ -52,8 +51,9 @@ describe('engineer agent prompt', () => {
 
     // No silent capability degradation: a missing specialist is done in-house or
     // surfaced to the user, never handed to an unrelated agent.
-    expect(systemPrompt).toMatch(/no match in the active\s+roster/i);
-    expect(systemPrompt).toMatch(/never silently hand/i);
+    expect(systemPrompt).toMatch(/no match/i);
+    expect(systemPrompt).toMatch(/yourself or tell the user/i);
+    expect(systemPrompt).toMatch(/never hand\s+software work to an unrelated agent/i);
   });
 
   it('still documents its ideal software specialist roles', () => {
