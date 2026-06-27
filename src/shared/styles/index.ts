@@ -11,8 +11,8 @@ export { selectStyles, compactFormControlStyles } from './selectStyles';
 export { requestPanelStyles } from './requestPanelStyles';
 export { viewTabStyles, waTabThemeTokenStyles } from './viewTabStyles';
 
-// Shared list-view styles: search highlighting + empty states
-export { badgeStyles } from './badgeStyles';
+// Shared list-view styles: search highlighting
+export { searchHighlightStyles } from './badgeStyles';
 
 // History/search styles
 export {
