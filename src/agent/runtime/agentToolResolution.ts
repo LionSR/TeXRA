@@ -186,10 +186,13 @@ export async function resolveAgentTools({
 
 /**
  * Refresh a delegation tool's "Available models:", "Available agents:", and
- * "Git worktree support:" lines from current state. Non-delegation tools are
- * returned untouched. The model line is skipped when no delegation tool is
- * present (`availableModelNames === undefined`); in that case `category` is also
- * undefined, so nothing runs.
+ * "Git worktree support:" lines from current state. A tool with no
+ * `DELEGATION_TOOL_CATEGORY` entry returns untouched at the early guard.
+ * `availableModelNames` is `undefined` only when the resolved list held no
+ * delegation tool at all, so in that case every tool reaching this function is a
+ * non-delegation tool that returns early — `category` and `availableModelNames`
+ * are independent (one keys off the tool name, the other off the whole list),
+ * not causally linked.
  */
 function annotateDelegationTool(
   tool: ToolDefinition,

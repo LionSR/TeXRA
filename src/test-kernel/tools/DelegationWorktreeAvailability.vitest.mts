@@ -149,4 +149,33 @@ describe('resolveAgentTools worktree annotation', () => {
       'resolved from the active workspace at runtime',
     );
   });
+
+  it('resolves the DISABLED worktree line at the resolveAgentTools boundary', async () => {
+    mocks.isWorktreeSupportEnabled.mockReturnValue(false);
+
+    const registry = new MapToolRegistry({
+      delegate_agent: {
+        definition: { name: 'delegate_agent' },
+        call: async () => ({ summary: '', output: '' }),
+      },
+    });
+
+    const { tools } = await resolveAgentTools({
+      tools: [
+        { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
+      ],
+      registry,
+      logger: { warn: () => {} },
+      delegationBlocked: false,
+      toolInjections: new ToolInjectionRegistry(),
+    });
+
+    const delegateAgent = tools.find((t) => t.name === 'delegate_agent');
+    expect(delegateAgent?.description).toContain(
+      'Git worktree support: DISABLED in this workspace.',
+    );
+    expect(delegateAgent?.description).not.toContain(
+      'resolved from the active workspace at runtime',
+    );
+  });
 });
