@@ -15,10 +15,12 @@ All notable changes to this project will be documented in this file.
 - **Delegation launches the agent it validated** — when a custom or remote agent shares a name with a built-in agent of the other type (e.g. a custom workflow `assistant` next to the built-in tool-use `assistant`), delegating no longer resolves a different agent at launch than the one shown and validated, which previously failed with a spurious "is a workflow agent but was launched as tool-use" error. The agent's identity is now resolved once when the delegation is validated and carried through to launch, so the same agent runs even when you swap the agent during approval.
 - **Unavailable model overrides fail fast** — approving a delegation after switching the model to one that isn't available in the active API mode now reports it immediately, instead of reporting the subagent as launched and then failing asynchronously. The approve path uses the same availability check as the initial delegation.
 - **Windows: cancelling or timing out a shell command now stops its child processes** — when a `bash`-tool command was stopped or hit its timeout on Windows, only the top-level shell was terminated and any piped or background child processes (e.g. `find | head`) were left running. They are now torn down with the rest of the command tree.
+- **Programmer errors in network tools no longer hide as transient failures** — the HTTP retry classifier treated every `TypeError` as a network error and retried it. A genuine bug in a web/citation tool (e.g. reading a property of `undefined`) was silently retried and masked instead of surfacing. Only real fetch/undici network failures are now classified as transient.
 
 #### Improvements
 
 - **Clearer validation error messages** — when a configuration value, stored session, or API response fails schema validation, the error now reads as a concise human-readable summary of what was wrong instead of a raw JSON dump of the validation internals.
+- **Diagnostic logs survive circular references** — object-to-log formatting no longer collapses to an opaque `[object Object]` when a value contains a circular reference; the structure is preserved with `[Circular]` markers so log lines stay useful.
 
 ### CLI
 

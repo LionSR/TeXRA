@@ -41,6 +41,17 @@ describe('isTransientHttpError', () => {
   it('treats network failures (no response) as transient', () => {
     // fetch throws TypeError for connection reset, DNS failure, socket hang-up
     expect(isTransientHttpError(new TypeError('Failed to fetch'))).toBe(true);
+    expect(isTransientHttpError(new TypeError('fetch failed'))).toBe(true);
+  });
+
+  it('treats programmer TypeErrors as permanent (not every TypeError is a network error)', () => {
+    // A bug in the wrapped call (reading a property of undefined) must surface,
+    // not be silently retried as if it were a transient network failure.
+    expect(
+      isTransientHttpError(
+        new TypeError("Cannot read properties of undefined (reading 'x')"),
+      ),
+    ).toBe(false);
   });
 
   it('treats rate limits and 5xx server errors as transient', () => {
