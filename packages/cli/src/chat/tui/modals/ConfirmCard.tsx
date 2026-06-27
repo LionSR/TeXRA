@@ -43,7 +43,6 @@ export interface ConfirmCardProps {
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
-
 export function ConfirmCard({
   borderStyle,
   color,
