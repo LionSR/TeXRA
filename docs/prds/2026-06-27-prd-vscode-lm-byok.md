@@ -47,7 +47,7 @@ However, TeXRA's inference pipeline is significantly more sophisticated than a g
 
 - After installing TeXRA with no keys set in its own settings, at least one OpenAI model appears in the TeXRA model picker labelled with a "Via VS Code LM" badge if a compatible `vscode.lm` model is available and the user has toggled `texra.model.useVsCodeLmForProvider.openai` to ON.
 - Selecting the model and running an agent request completes without a "missing key" error.
-- If the user later adds an OpenAI key directly to TeXRA settings, the direct-API path takes precedence automatically; the `vscode.lm` path is used only when no direct key is present and the toggle is ON.
+- If the user later adds an OpenAI key directly to TeXRA settings, both the direct-API model and the "Via VS Code LM" model continue to appear as separate entries in the TeXRA model picker (when `texra.model.useVsCodeLmForProvider.openai` is ON). The user selects explicitly which entry to use; there is no automatic precedence. To stop seeing the `vscode.lm` entry, the user turns the toggle OFF.
 
 ### US-2: TeXRA models in the VS Code model picker
 
