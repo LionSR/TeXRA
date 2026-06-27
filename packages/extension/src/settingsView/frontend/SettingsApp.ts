@@ -273,11 +273,13 @@ export class SettingsApp extends SettingsAppBase {
       );
     },
     [SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY]: (data) => {
+      // Schwartzian transform: parse each timestamp once into a sort key
+      // rather than re-parsing both sides on every comparison.
       this.historyItems.set(
-        [...data.historyItems].sort(
-          (a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-        ),
+        data.historyItems
+          .map((item) => ({ item, key: new Date(item.timestamp).getTime() }))
+          .sort((a, b) => b.key - a.key)
+          .map(({ item }) => item),
       );
     },
     [SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]: () => {
