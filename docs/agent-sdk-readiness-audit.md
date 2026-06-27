@@ -2761,7 +2761,7 @@ already-tracked:
 - **06-26 backlog `RetryState` (HIGH, behavior-touching)** — still present: `interface RetryState`
   (`RetryState.ts:29`) is a one-field bag (`lastError?`, `:30`) already on `BaseCycleFields`, and the sole
   non-test caller passes the same object for both params: `handleInvocationResult(execRes, shared,
-  shared, …)` (`ModelInvocationNode.ts:123`). Collapse-to-one-`state`-param candidate; a function-signature
+shared, …)` (`ModelInvocationNode.ts:123`). Collapse-to-one-`state`-param candidate; a function-signature
   change, deferred to review.
 - **§2.6** — `modelHandlers/modelHandlerValidation.ts` still in the production handler dir; the
   `ModelFactory.ts` CI override was **extracted** to `src/agent/runtime/internalValidationOverride.ts`
@@ -2806,10 +2806,11 @@ material development since §23 is **cross-doc**: the parallel `proposals/` chec
 `withModelClient` DRY, the `isOutputStreamingEnabled` port member, the dead `PersistedFlow.step()`
 wrapper, the `agentRegistry` re-exports) and collapsed the two `AgentCreator` nodes — the team is
 executing the plan, all moving _with_ the audit. The seven post-checkpoint commits continue the SSOT/DRY
-+ maintained-library-adoption wave, none adding a layer. Three independent fresh-eyes agents re-reached
-the standing verdict and re-surfaced the recurring traps (`IModelHandler` width for the twelfth time;
-the `buildAgentLaunchContext` two-layer split — verified false first-hand and re-rebutted as documented
-saga-compensation; config-only OpenAI subclasses) — all re-rebutted or already-tracked. The remaining
-backlog (`RetryState` collapse, the port-narrowing/visibility track, §2.6 handler relocation, the §21
-remainder, the typed `delegateTo`) is unchanged and behavior-touching. Guardrails intact; no dead
-shim/barrel remains, so no refactor was applied.
+
+- maintained-library-adoption wave, none adding a layer. Three independent fresh-eyes agents re-reached
+  the standing verdict and re-surfaced the recurring traps (`IModelHandler` width for the twelfth time;
+  the `buildAgentLaunchContext` two-layer split — verified false first-hand and re-rebutted as documented
+  saga-compensation; config-only OpenAI subclasses) — all re-rebutted or already-tracked. The remaining
+  backlog (`RetryState` collapse, the port-narrowing/visibility track, §2.6 handler relocation, the §21
+  remainder, the typed `delegateTo`) is unchanged and behavior-touching. Guardrails intact; no dead
+  shim/barrel remains, so no refactor was applied.
