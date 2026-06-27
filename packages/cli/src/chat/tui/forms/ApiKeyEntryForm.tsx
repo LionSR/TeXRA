@@ -14,6 +14,7 @@ import {
 import { BaseTextInput } from '../input/BaseTextInput';
 import { KeyHints } from '../ui/KeyHints';
 import { POINTER } from '../ui/glyphs';
+import { FormFrame } from './_shared/FormFrame';
 
 export interface ApiKeyEntryFormProps {
   readonly provider: ApiProvider;
@@ -42,15 +43,7 @@ export function ApiKeyEntryForm(
   });
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
-    >
-      <Text bold color="cyan">
-        Use my own provider API key
-      </Text>
+    <FormFrame color="cyan" title="Use my own provider API key" showCloseHint={false}>
       <Text dimColor>Provider: {label}</Text>
       {keyUrl ? <Text dimColor>Get a key: {keyUrl}</Text> : null}
       <Box marginTop={1}>
@@ -86,6 +79,6 @@ export function ApiKeyEntryForm(
           confirmCancel={false}
         />
       </Box>
-    </Box>
+    </FormFrame>
   );
 }

@@ -88,7 +88,7 @@ export class MultiAgentTab extends LitElement {
 
       .preset-card:focus-visible {
         outline: var(--border-thin) solid var(--wa-color-focus);
-        outline-offset: 1px;
+        outline-offset: var(--border-thin);
       }
 
       .preset-card.active {
@@ -191,7 +191,7 @@ export class MultiAgentTab extends LitElement {
 
       .preset-delete-btn:focus-visible {
         outline: var(--border-thin) solid var(--wa-color-focus);
-        outline-offset: 1px;
+        outline-offset: var(--border-thin);
         border-radius: var(--border-radius-small);
       }
 

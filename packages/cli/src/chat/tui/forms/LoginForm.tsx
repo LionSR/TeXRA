@@ -60,15 +60,7 @@ export function LoginForm(props: LoginFormProps): React.JSX.Element {
   }
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
-    >
-      <Text bold color="cyan">
-        /login
-      </Text>
+    <FormFrame color="cyan" title="/login" showCloseHint={false}>
       <Text dimColor>Choose how TeXRA should authenticate model calls.</Text>
       <Box marginTop={1} flexDirection="column">
         <Select
@@ -88,6 +80,6 @@ export function LoginForm(props: LoginFormProps): React.JSX.Element {
           confirmCancel={false}
         />
       </Box>
-    </Box>
+    </FormFrame>
   );
 }

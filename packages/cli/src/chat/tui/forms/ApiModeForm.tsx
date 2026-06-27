@@ -64,15 +64,7 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
   }
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
-    >
-      <Text bold color="cyan">
-        /api
-      </Text>
+    <FormFrame color="cyan" title="/api" showCloseHint={false}>
       <Text dimColor>
         Choose which credentials model calls should use. Press 1 for API keys.
       </Text>
@@ -99,6 +91,6 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
           ]}
         />
       </Box>
-    </Box>
+    </FormFrame>
   );
 }

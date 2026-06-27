@@ -55,7 +55,7 @@ export const compactIconActionButtonStyles: CSSResult = css`
 
   .action-icon-button:focus-visible::part(base) {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
+    outline-offset: var(--border-thin);
   }
 
   .action-icon-button[disabled]::part(base) {
@@ -283,7 +283,7 @@ export const commonViewStyles: CSSResult = css`
 
   .clickable-link:focus-visible {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
+    outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
   }
 
@@ -310,7 +310,7 @@ export const commonViewStyles: CSSResult = css`
 
   .details-summary:focus-visible {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
+    outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
   }
 
@@ -471,5 +471,63 @@ export const commonViewStyles: CSSResult = css`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+`;
+
+/**
+ * Shared filled primary button styles.
+ *
+ * Canonical look mirroring `vscode-button` for use cases that need a
+ * regular `<button>` (e.g. inside templated lists or modals). Prefer this
+ * over reinventing padding/background/focus per component.
+ *
+ * Apply via Lit's static styles array:
+ *   static override styles = [designTokens, filledButtonStyles, css`...`];
+ *
+ * Then add the `.filled-button` class to any `<button>`. Add
+ * `.filled-button--secondary` for the secondary tone.
+ */
+export const filledButtonStyles: CSSResult = css`
+  .filled-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    font-size: var(--font-size);
+    font-family: inherit;
+    color: var(--wa-color-brand-on-loud);
+    background: var(--wa-color-brand-fill-loud);
+    border: var(--border-thin) solid var(--wa-color-button-border, transparent);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition:
+      background-color var(--transition-fast),
+      opacity var(--transition-fast);
+  }
+
+  .filled-button:hover {
+    background: var(--wa-color-button-hover);
+  }
+
+  .filled-button:active {
+    opacity: var(--opacity-normal);
+  }
+
+  .filled-button:focus-visible {
+    outline: var(--border-thin) solid var(--wa-color-focus);
+    outline-offset: var(--border-thin);
+  }
+
+  .filled-button--secondary {
+    color: var(--wa-color-neutral-on-quiet, inherit);
+    background: var(--wa-color-neutral-fill-quiet, transparent);
+  }
+
+  /* Specificity-only override: pins hover to the same value as the base
+     state so the base .filled-button:hover doesn't flash secondary buttons
+     to the brand color. Intentionally produces no visual hover feedback —
+     secondary actions are quiet by design. */
+  .filled-button--secondary:hover {
+    background: var(--wa-color-neutral-fill-quiet, transparent);
   }
 `;

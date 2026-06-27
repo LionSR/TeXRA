@@ -109,7 +109,7 @@ export const selectStyles: CSSResult = css`
 
   .clickable:focus-visible {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
+    outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
   }
 

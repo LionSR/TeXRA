@@ -31,6 +31,10 @@ import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
 import { STATUS_DIAMOND } from '../ui/glyphs';
 import {
+  STATUS_BAR_HORIZONTAL_PADDING,
+  STATUS_BAR_RIGHT_PREVIEW_GAP,
+} from '../ui/theme';
+import {
   approvalQueueStatus,
   type ApprovalQueueStatusKind,
 } from '../state/approvalQueue';
@@ -178,10 +182,7 @@ const QUEUED_FOLLOW_UP_PREVIEW_ITEMS = 2;
 const QUEUED_FOLLOW_UP_MIN_ITEM_PREVIEW = 8;
 const QUEUED_FOLLOW_UP_SEPARATOR = ' · ';
 const PENDING_EXIT_HINT_TEXT = 'Press Ctrl-C again to exit';
-const STATUS_BAR_HORIZONTAL_PADDING = 2;
 const STATUS_BAR_MIN_RIGHT_PREVIEW = 12;
-// Preserve a readable separator between the left status group and right preview.
-const STATUS_BAR_RIGHT_PREVIEW_GAP = 2;
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {

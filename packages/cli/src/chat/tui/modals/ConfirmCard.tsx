@@ -11,6 +11,7 @@ import {
   confirmCardKeyAction,
   confirmCardKeyHintsForWidth,
 } from './ConfirmCardState';
+import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput } from '../input/inputKeys';
 import { KEY_HINT_SEPARATOR, KeyHints } from '../ui/KeyHints';
@@ -42,7 +43,7 @@ export interface ConfirmCardProps {
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
-export const CONFIRM_CARD_HORIZONTAL_DECORATION = 4;
+export { CONFIRM_CARD_HORIZONTAL_DECORATION };
 
 export function ConfirmCard({
   borderStyle,
