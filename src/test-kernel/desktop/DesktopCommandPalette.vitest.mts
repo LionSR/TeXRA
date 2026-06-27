@@ -28,10 +28,6 @@ interface DesktopCommandPaletteModule {
     platform?: NodeJS.Platform;
     canOpen?: () => boolean;
   }): DesktopCommandPaletteController;
-  getDesktopCommandPaletteEntries(options?: {
-    streams?: DesktopPaletteStream[];
-    platform?: NodeJS.Platform;
-  }): DesktopPaletteEntry[];
 }
 
 interface DesktopPaletteEntry {

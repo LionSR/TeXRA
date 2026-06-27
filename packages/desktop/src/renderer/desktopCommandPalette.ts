@@ -56,7 +56,7 @@ export function createDesktopCommandPalette({
   });
 }
 
-export function getDesktopCommandPaletteEntries({
+function getDesktopCommandPaletteEntries({
   streams = [],
   platform = getDefaultPlatform(),
 }: {
