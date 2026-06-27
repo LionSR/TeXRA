@@ -1,23 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentEntry } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { RuntimeAgentEntry } from '@agent/runtime/agentResolution';
+import { AgentCategory } from '@shared/schemas/agent';
 
 const mocks = vi.hoisted(() => ({
   authProvider: {
     isAuthenticated: vi.fn(),
   },
-  getAgent: vi.fn(),
-  getAgentsByCategory: vi.fn(),
-  getVisibleAgents: vi.fn(),
-  loadAgents: vi.fn(),
+  getRuntimeAgent: vi.fn(),
+  listRuntimeAgentsByCategory: vi.fn(),
+  listRuntimeVisibleAgents: vi.fn(),
+  loadRuntimeAgents: vi.fn(),
 }));
 
-vi.mock('@agent/index', () => ({
-  getAgent: mocks.getAgent,
-  getAgentsByCategory: mocks.getAgentsByCategory,
-  getVisibleAgents: mocks.getVisibleAgents,
-  loadAgents: mocks.loadAgents,
+vi.mock('@agent/runtime/agentResolution', () => ({
+  getRuntimeAgent: mocks.getRuntimeAgent,
+  listRuntimeAgentsByCategory: mocks.listRuntimeAgentsByCategory,
+  listRuntimeVisibleAgents: mocks.listRuntimeVisibleAgents,
+  loadRuntimeAgents: mocks.loadRuntimeAgents,
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', () => ({
@@ -26,9 +26,9 @@ vi.mock('@cli/runtime/supabaseAuth', () => ({
 
 function agent(
   name: string,
-  source: AgentEntry['source'] = 'builtInToolUse',
-  category: AgentEntry['category'] = AgentCategory.ToolUse,
-): AgentEntry {
+  source: RuntimeAgentEntry['source'] = 'builtInToolUse',
+  category: RuntimeAgentEntry['category'] = AgentCategory.ToolUse,
+): RuntimeAgentEntry {
   return {
     name,
     source,
@@ -41,35 +41,39 @@ describe('CLI agent resolution', () => {
   beforeEach(() => {
     mocks.authProvider.isAuthenticated.mockReset();
     mocks.authProvider.isAuthenticated.mockResolvedValue(false);
-    mocks.getAgent.mockReset();
-    mocks.getAgentsByCategory.mockReset();
-    mocks.getVisibleAgents.mockReset();
-    mocks.loadAgents.mockReset();
+    mocks.getRuntimeAgent.mockReset();
+    mocks.listRuntimeAgentsByCategory.mockReset();
+    mocks.listRuntimeVisibleAgents.mockReset();
+    mocks.loadRuntimeAgents.mockReset();
   });
 
   it('loads the local registry and returns a local agent for signed-out users', async () => {
     const local = agent('lean');
-    mocks.getAgent.mockReturnValue(local);
+    mocks.getRuntimeAgent.mockReturnValue(local);
     const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('lean')).resolves.toBe(local);
 
-    expect(mocks.loadAgents).toHaveBeenCalledOnce();
-    expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
+    expect(mocks.loadRuntimeAgents).toHaveBeenCalledOnce();
+    expect(mocks.loadRuntimeAgents).toHaveBeenCalledWith({
+      includeRemote: false,
+    });
     expect(mocks.authProvider.isAuthenticated).toHaveBeenCalledOnce();
   });
 
   it('does a full registry load when the local registry misses', async () => {
     const remote = agent('orchestrator', 'remote');
-    mocks.getAgent.mockReturnValueOnce(undefined).mockReturnValueOnce(remote);
+    mocks.getRuntimeAgent
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(remote);
     const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('orchestrator')).resolves.toBe(remote);
 
-    expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
+    expect(mocks.loadRuntimeAgents).toHaveBeenNthCalledWith(1, {
       includeRemote: false,
     });
-    expect(mocks.loadAgents).toHaveBeenNthCalledWith(2);
+    expect(mocks.loadRuntimeAgents).toHaveBeenNthCalledWith(2);
     expect(mocks.authProvider.isAuthenticated).not.toHaveBeenCalled();
   });
 
@@ -77,15 +81,17 @@ describe('CLI agent resolution', () => {
     const local = agent('lean');
     const remote = agent('lean', 'remote');
     mocks.authProvider.isAuthenticated.mockResolvedValue(true);
-    mocks.getAgent.mockReturnValueOnce(local).mockReturnValueOnce(remote);
+    mocks.getRuntimeAgent
+      .mockReturnValueOnce(local)
+      .mockReturnValueOnce(remote);
     const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('lean')).resolves.toBe(remote);
 
-    expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
+    expect(mocks.loadRuntimeAgents).toHaveBeenNthCalledWith(1, {
       includeRemote: false,
     });
-    expect(mocks.loadAgents).toHaveBeenNthCalledWith(2);
+    expect(mocks.loadRuntimeAgents).toHaveBeenNthCalledWith(2);
     expect(mocks.authProvider.isAuthenticated).toHaveBeenCalledOnce();
   });
 
@@ -93,55 +99,61 @@ describe('CLI agent resolution', () => {
     const local = agent('lean');
     const remote = agent('lean', 'remote');
     mocks.authProvider.isAuthenticated.mockResolvedValue(true);
-    mocks.getAgent.mockReturnValueOnce(local).mockReturnValueOnce(remote);
+    mocks.getRuntimeAgent
+      .mockReturnValueOnce(local)
+      .mockReturnValueOnce(remote);
     const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('lean', 'chat')).resolves.toBe(remote);
 
-    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+    expect(mocks.getRuntimeAgent).toHaveBeenNthCalledWith(
       1,
       'lean',
       AgentCategory.ToolUse,
     );
-    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+    expect(mocks.getRuntimeAgent).toHaveBeenNthCalledWith(
       2,
       'lean',
       AgentCategory.ToolUse,
     );
-    expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
+    expect(mocks.loadRuntimeAgents).toHaveBeenNthCalledWith(1, {
       includeRemote: false,
     });
-    expect(mocks.loadAgents).toHaveBeenNthCalledWith(2);
+    expect(mocks.loadRuntimeAgents).toHaveBeenNthCalledWith(2);
   });
 
   it('does not apply remote priority to source-qualified agent names', async () => {
     const local = agent('local:lean');
     mocks.authProvider.isAuthenticated.mockResolvedValue(true);
-    mocks.getAgent.mockReturnValue(local);
+    mocks.getRuntimeAgent.mockReturnValue(local);
     const { resolveCliAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliAgent('local:lean')).resolves.toBe(local);
 
-    expect(mocks.loadAgents).toHaveBeenCalledOnce();
-    expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
+    expect(mocks.loadRuntimeAgents).toHaveBeenCalledOnce();
+    expect(mocks.loadRuntimeAgents).toHaveBeenCalledWith({
+      includeRemote: false,
+    });
     expect(mocks.authProvider.isAuthenticated).not.toHaveBeenCalled();
   });
 
   it('uses launch target category for local and remote-fallback lookups', async () => {
     const remote = agent('assistant', 'remote');
-    mocks.getAgent.mockReturnValueOnce(undefined).mockReturnValueOnce(remote);
+    mocks.getRuntimeAgent
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(remote);
     const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('assistant', 'agentsRun')).resolves.toBe(
       remote,
     );
 
-    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+    expect(mocks.getRuntimeAgent).toHaveBeenNthCalledWith(
       1,
       'assistant',
       AgentCategory.ToolUse,
     );
-    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+    expect(mocks.getRuntimeAgent).toHaveBeenNthCalledWith(
       2,
       'assistant',
       AgentCategory.ToolUse,
@@ -149,7 +161,7 @@ describe('CLI agent resolution', () => {
   });
 
   it('reports launch-specific missing-agent messages', async () => {
-    mocks.getAgent.mockReturnValue(undefined);
+    mocks.getRuntimeAgent.mockReturnValue(undefined);
     const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('missing', 'agentsRun')).rejects.toThrow(

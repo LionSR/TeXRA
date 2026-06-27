@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import type { RuntimeToolEditApprovalRequest } from '@agent/runtime/approvalCommands';
 
 import { ConfirmCard } from './ConfirmCard';
 import {
@@ -33,7 +33,7 @@ const EDIT_APPROVAL_FEEDBACK_PLACEHOLDER = 'Why reject?';
 
 export interface EditApprovalProps {
   readonly availableRows?: number;
-  readonly request: ToolEditApprovalRequest;
+  readonly request: RuntimeToolEditApprovalRequest;
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 

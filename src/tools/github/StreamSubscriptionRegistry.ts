@@ -14,6 +14,7 @@
 import type { AgentTrace } from '@agent/trace';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { emitQueuedFollowUps } from '@agent/runtime/queuedFollowUps';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   currentSession,
@@ -136,7 +137,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
         subscription.session,
       ).then((result) => {
         if (result.status === 'sent' || result.status === 'queued') {
-          subscription.runtimeHost.emit('updateQueuedFollowUps', { streamId });
+          emitQueuedFollowUps(subscription.runtimeHost, streamId);
         }
       });
     };

@@ -3,10 +3,10 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import {
-  BundledAgentDirectorySync,
-  GlobalStorageAgentDirectoryStorage,
-  PathAgentDirectoryBundleSource,
-} from '@agent/index/AgentDirectorySync';
+  RuntimeBundledAgentDirectorySync,
+  RuntimeGlobalStorageAgentDirectoryStorage,
+  RuntimePathAgentDirectoryBundleSource,
+} from '@agent/runtime/agentDirectories';
 import { toErrorMessage } from '@common/errors';
 import {
   GlobalStateKey,
@@ -77,11 +77,11 @@ export async function copyDefaultAgents(
 ): Promise<void> {
   const currentVersion = vscode.extensions.getExtension(context.extension.id)
     ?.packageJSON.version;
-  const sync = new BundledAgentDirectorySync({
-    bundleSource: new PathAgentDirectoryBundleSource(
+  const sync = new RuntimeBundledAgentDirectorySync({
+    bundleSource: new RuntimePathAgentDirectoryBundleSource(
       path.join(context.extensionPath, 'resources'),
     ),
-    storage: new GlobalStorageAgentDirectoryStorage(),
+    storage: new RuntimeGlobalStorageAgentDirectoryStorage(),
     versionStore: {
       get: () => globalSM.get<string>(GlobalStateKey.LAST_KNOWN_VERSION),
       update: (version) =>

@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { z, ZodError } from 'zod';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { parseRuntimeAgentConfig } from '@agent/runtime/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -38,7 +38,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       input !== null && typeof input === 'object' && 'config' in input
         ? (input as { config: unknown; executionId?: ExecutionId })
         : null;
-    const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
+    const config = parseRuntimeAgentConfig(wrapped ? wrapped.config : input);
 
     await runAgent(
       { config, executionId: wrapped?.executionId },

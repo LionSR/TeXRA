@@ -1,5 +1,5 @@
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { RuntimeAgentConfigPayload } from '@agent/runtime/executionRequests';
+import { AgentCategory } from '@shared/schemas/agent';
 
 import {
   CliUsageError,
@@ -69,7 +69,7 @@ export async function runToolUseAgent(
       readStdinText: readCliStdinText,
     },
     async ({ inputFiles, contextFiles }) => {
-      const config: AgentConfigPayload = {
+      const config: RuntimeAgentConfigPayload = {
         agent: init.agent,
         model,
         inputFiles,

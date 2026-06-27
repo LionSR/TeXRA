@@ -1,16 +1,13 @@
 // Third-party imports
-import { z } from 'zod';
 import * as vscode from 'vscode';
 
 // Local imports - controllers
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 
 // Local imports
-import {
-  TaskStateSchema,
-  type TaskState,
-} from '@agent/core/execution/TaskState';
+import { parseRuntimeTaskState } from '@agent/runtime/executionRequests';
 import { registerCommands } from '@commands/_shared/registerCommands';
+import { toErrorMessage } from '@common/errors';
 import { setPendingState } from '@common/state';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
@@ -39,17 +36,19 @@ async function restoreState(
     data: { executeImmediately },
   });
 
-  const parsed = TaskStateSchema.safeParse(state);
-  if (!parsed.success) {
+  let parsedState: ReturnType<typeof parseRuntimeTaskState>;
+  try {
+    parsedState = parseRuntimeTaskState(state);
+  } catch (error) {
     logger.info(CHANNEL, RESTORE_MALFORMED_MESSAGE, {
-      data: { validationError: z.prettifyError(parsed.error) },
+      data: { validationError: toErrorMessage(error) },
     });
     await vscode.window.showErrorMessage(RESTORE_MALFORMED_MESSAGE);
     return false;
   }
 
   try {
-    const nextState = buildMainViewState(parsed.data as TaskState);
+    const nextState = buildMainViewState(parsedState);
 
     await vscode.commands.executeCommand('texra.showMainView');
 

@@ -22,6 +22,14 @@ function readProgressViewProvider(): string {
 }
 
 describe('ProgressViewProvider pending permissions', () => {
+  it('does not type its local logger as agent trace internals', () => {
+    const source = readProgressViewProvider();
+
+    expect(source).not.toContain("from '@agent/trace'");
+    expect(source).toContain('interface ProgressViewLogger');
+    expect(source).toContain('private readonly logger: ProgressViewLogger');
+  });
+
   it('keeps streams with pending user questions active', () => {
     const source = readProgressViewProvider();
     const methodStart = source.indexOf('hasPendingPermissionsForStream');

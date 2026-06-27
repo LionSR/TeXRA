@@ -6,8 +6,7 @@ import {
   getDefaultTeamId,
   getFirstRunDone,
 } from '@controllers/onboarding/onboardingFunnel';
-import { getVisibleAgents } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { AgentCategory } from '@shared/schemas/agent';
 
 import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -40,6 +39,7 @@ import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
+import { loadCliAgentList } from '../runtime/agents';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch/usage';
@@ -136,10 +136,13 @@ async function runOrchestration(context: CliContext): Promise<number> {
     : DEFAULT_STARTUP_TEAM_ID;
   const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
   await seedCliRosterFromDefaultTeam();
+  const { agents: toolUseAgents } = await loadCliAgentList({
+    category: AgentCategory.ToolUse,
+  });
   const items = buildCliOrchestrationItems({
     presetPlans: presetPlanSet.plans,
     history,
-    toolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
+    toolUseAgents,
     preferredPresetId,
     includeMultiAgentLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
   });

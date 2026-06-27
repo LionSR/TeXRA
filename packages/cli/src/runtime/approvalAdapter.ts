@@ -2,13 +2,12 @@
 // import the focused modules under ./approval/ directly; this barrel keeps the
 // stable surface for command modules, the TUI, and tests.
 
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-
 import {
-  setToolEditApprovalHandler,
-  type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
-} from '@tools/approval/toolEditApproval';
+  setRuntimeToolEditApprovalHandler,
+  type RuntimeToolEditApprovalRequest,
+  type RuntimeToolEditApprovalResult,
+} from '@agent/runtime/approvalCommands';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 import { isCliDecisionApprovalEvent } from './approvalEvents';
 import { type CliContext } from './cliContext';
@@ -54,10 +53,10 @@ export {
 } from './approval/approvalSummaries';
 
 async function decideToolEdit(
-  request: ToolEditApprovalRequest,
+  request: RuntimeToolEditApprovalRequest,
   context: CliContext,
   hooks: CliApprovalPromptHooks,
-): Promise<ToolEditApprovalResult> {
+): Promise<RuntimeToolEditApprovalResult> {
   const immediate = immediateDecision(context);
   if (immediate) {
     return immediate.accepted
@@ -79,11 +78,11 @@ export function installCliApprovalHandlers(
   context: CliContext,
   hooks: CliApprovalPromptHooks = {},
 ): () => void {
-  setToolEditApprovalHandler((request) =>
+  setRuntimeToolEditApprovalHandler((request) =>
     decideToolEdit(request, context, hooks),
   );
   return () => {
-    setToolEditApprovalHandler();
+    setRuntimeToolEditApprovalHandler();
   };
 }
 

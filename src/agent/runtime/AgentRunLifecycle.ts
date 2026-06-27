@@ -5,7 +5,6 @@ import {
 import { platform } from '@platform/platform';
 import { writeTerminalStatus } from '@agent/storage';
 import { logSdkError, type ResultEvent } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -21,6 +20,7 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 

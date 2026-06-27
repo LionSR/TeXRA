@@ -1,7 +1,8 @@
+import {
+  resolveRuntimeExternalInquiry,
+  resolveRuntimeUserQuestion,
+} from '@agent/runtime/humanInputCommands';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-
-import { handleUserQuestionAction } from '@tools/userQuestion';
-import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 import { type CliContext } from '../cliContext';
 import { parseUserQuestionAnswer } from '../userQuestionAnswer';
@@ -37,11 +38,11 @@ export function handleExternalInquiry(
       context,
       'External inquiry requires human input; yolo mode cannot synthesize an external answer.',
     );
-    void handleExternalInquiryAction({ action: 'drop', threadId, feedback });
+    void resolveRuntimeExternalInquiry({ action: 'drop', threadId, feedback });
     return;
   }
 
-  void handleExternalInquiryAction({
+  void resolveRuntimeExternalInquiry({
     action: 'drop',
     threadId,
     feedback: NON_TUI_EXTERNAL_INQUIRY_FEEDBACK,
@@ -58,7 +59,7 @@ export function handleUserQuestion(
       context,
       'User question requires human input; yolo mode cannot synthesize an answer.',
     );
-    void handleUserQuestionAction({
+    void resolveRuntimeUserQuestion({
       requestId: payload.requestId,
       action: 'skip',
       feedback,
@@ -86,7 +87,7 @@ export function handleUserQuestion(
       }
     } catch {
       markApprovalDenied(context);
-      await handleUserQuestionAction({
+      await resolveRuntimeUserQuestion({
         requestId: payload.requestId,
         action: 'skip',
         feedback: 'CLI user question prompt failed.',
@@ -95,7 +96,7 @@ export function handleUserQuestion(
     }
 
     const submitted = Object.keys(answers).length > 0;
-    await handleUserQuestionAction({
+    await resolveRuntimeUserQuestion({
       requestId: payload.requestId,
       action: submitted ? 'submit' : 'skip',
       answers: submitted ? answers : undefined,

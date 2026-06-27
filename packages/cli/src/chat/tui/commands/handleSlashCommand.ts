@@ -1,10 +1,10 @@
+import { getRuntimeGoalForStream } from '@agent/runtime/goalCommands';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { formatCliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { toErrorMessage } from '@common/errors/errorMessage';
-import { GoalStore } from '@tools/goal';
 
 import { formatCliSessionStatus } from '../sessionStatus';
 import { cliState } from '../state/cliState';
@@ -159,7 +159,7 @@ export async function handleTuiSlashCommand(
           approvalBypasses: slice?.bypass,
           status: slice?.status ?? 'not started',
           goal: activeStreamId
-            ? GoalStore.getForStream(activeStreamId)
+            ? getRuntimeGoalForStream(activeStreamId)
             : undefined,
           // Only surface the resume id once a stream exists — never next to
           // a "not started" status.
@@ -168,8 +168,7 @@ export async function handleTuiSlashCommand(
           cwd: context.cwd,
           processCwd: context.processCwd,
           approvalPolicy: context.getApprovalPolicy(),
-          queuedFollowUpMessages:
-            context.getQueuedFollowUpMessages(activeStreamId),
+          queuedFollowUpMessages: slice?.queuedFollowUpMessages ?? [],
         }),
       );
       return true;
@@ -205,27 +204,7 @@ export async function handleTuiSlashCommand(
       return true;
     }
     case 'compact':
-      const compactStreamId = cliState.activeStreamId.get();
-      switch (context.requestCompaction(compactStreamId).status) {
-        case 'requested':
-          appendLocalAssistantTranscript(
-            'Context compaction requested. The agent will process it on the next model call.',
-            compactStreamId,
-          );
-          break;
-        case 'no_active_tool_use':
-          appendLocalAssistantTranscript(
-            'No active tool-use session found for context compaction.',
-            compactStreamId,
-          );
-          break;
-        case 'unsupported':
-          appendLocalAssistantTranscript(
-            'Manual context compaction is not available for the current model.',
-            compactStreamId,
-          );
-          break;
-      }
+      context.requestCompaction();
       return true;
     default: {
       if (registered) {

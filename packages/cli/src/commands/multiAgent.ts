@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty';
 
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { RuntimeAgentConfigPayload } from '@agent/runtime/executionRequests';
+import { AgentCategory } from '@shared/schemas/agent';
 
 import { approvalPromptsUnavailable } from '../runtime/approvalPolicyAvailability';
 import {
@@ -223,7 +223,7 @@ export async function runMultiAgentPreset(
         );
       }
 
-      const config: AgentConfigPayload = {
+      const config: RuntimeAgentConfigPayload = {
         agent: rootAgent.name,
         model,
         inputFiles,

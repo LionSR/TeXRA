@@ -8,7 +8,7 @@
  */
 import * as vscode from 'vscode';
 
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { isRuntimeStreamActiveOrResuming } from '@agent/runtime/streamControl';
 import {
   retrieveSessionResumeData,
   type SessionResumeData,
@@ -24,7 +24,7 @@ const logger = createChannelTrace('resumeFromSnapshot');
 export async function tryResumeFromSnapshot(
   streamId: StreamTabId,
 ): Promise<boolean> {
-  if (StreamStatusService.isActiveOrResuming(streamId)) {
+  if (isRuntimeStreamActiveOrResuming(streamId)) {
     logger.debug(`Stream ${streamId} is active/resuming, skipping auto-resume`);
     return false;
   }

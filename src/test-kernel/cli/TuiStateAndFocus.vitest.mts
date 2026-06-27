@@ -11,7 +11,6 @@ import {
   StreamLogStore,
 } from '@transcript';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   cliState,
   patchStream,
@@ -2715,32 +2714,26 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     });
   });
 
-  it('refreshes queued follow-up display when an active follow-up is sent', () => {
-    const wrapped = wrapRuntimeHost(makeHost(), {
-      getQueuedFollowUps: (streamId) => ToolUseFollowUpQueue.getAll(streamId),
-    });
+  it('uses queued follow-up messages from runtime event payloads', () => {
+    const wrapped = wrapRuntimeHost(makeHost());
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
-    const queue = ToolUseFollowUpQueue.acquire(root);
 
-    try {
-      queue.enqueue({ text: 'Keep the proof under one page.' });
-      wrapped.emit('followUpSent', { streamId: root });
+    wrapped.emit('followUpSent', {
+      streamId: root,
+      messages: ['Keep the proof under one page.'],
+    });
 
-      let slice = cliState.streams.get().get(root);
-      expect(slice?.queuedFollowUps).toBe(1);
-      expect(slice?.queuedFollowUpMessages).toEqual([
-        'Keep the proof under one page.',
-      ]);
+    let slice = cliState.streams.get().get(root);
+    expect(slice?.queuedFollowUps).toBe(1);
+    expect(slice?.queuedFollowUpMessages).toEqual([
+      'Keep the proof under one page.',
+    ]);
 
-      queue.drain();
-      wrapped.emit('updateQueuedFollowUps', { streamId: root });
+    wrapped.emit('updateQueuedFollowUps', { streamId: root, messages: [] });
 
-      slice = cliState.streams.get().get(root);
-      expect(slice?.queuedFollowUps).toBe(0);
-      expect(slice?.queuedFollowUpMessages).toEqual([]);
-    } finally {
-      ToolUseFollowUpQueue.release(root);
-    }
+    slice = cliState.streams.get().get(root);
+    expect(slice?.queuedFollowUps).toBe(0);
+    expect(slice?.queuedFollowUpMessages).toEqual([]);
   });
 
   it('keeps latest usage separate from cumulative resume usage', () => {

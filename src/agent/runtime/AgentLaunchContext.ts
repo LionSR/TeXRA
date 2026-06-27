@@ -21,7 +21,6 @@ import {
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import {
   AttachedMemoryMissesSchema,
@@ -40,7 +39,7 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
-import type { AgentSource } from '@shared/schemas/agent';
+import { AgentCategory, type AgentSource } from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';

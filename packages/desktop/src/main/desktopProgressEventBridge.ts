@@ -11,7 +11,10 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import {
+  getRuntimeStreamStatus,
+  setRuntimeStreamStatusSilently,
+} from '@agent/runtime/streamControl';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   STREAM_STATUS,
@@ -132,9 +135,10 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
         parentStreamId: snapshot.parentStreamId,
         description: snapshot.description,
       });
-      StreamStatusService.set(snapshot.streamId, snapshot.lastKnownStatus, {
-        emit: false,
-      });
+      setRuntimeStreamStatusSilently(
+        snapshot.streamId,
+        snapshot.lastKnownStatus,
+      );
     }
 
     // Subscribe to progress-relevant event-bus channels.
@@ -357,7 +361,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       inputFile: info?.inputFile || restored?.inputFile,
       instruction: taskState?.agentConfig.instruction || restored?.instruction,
       lastKnownStatus:
-        StreamStatusService.get(streamId) ??
+        getRuntimeStreamStatus(streamId) ??
         restored?.lastKnownStatus ??
         STREAM_STATUS.STOPPED,
       description: info?.description ?? restored?.description,

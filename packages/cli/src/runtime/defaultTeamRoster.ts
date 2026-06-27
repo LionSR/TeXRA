@@ -1,13 +1,13 @@
 import { platform } from '@platform/platform';
 import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
-import { loadAgents } from '@agent/index';
+import { loadRuntimeAgents } from '@agent/runtime/agentResolution';
 import { toErrorMessage } from '@common/errors/errorMessage';
 
 import { writeTextStderr } from './logSinks';
 
 export async function seedCliRosterFromDefaultTeam(): Promise<boolean> {
   try {
-    await loadAgents({ includeRemote: false });
+    await loadRuntimeAgents({ includeRemote: false });
     return await seedRosterFromDefaultTeam({
       globalState: platform().globalState,
       workspaceState: platform().workspaceState,

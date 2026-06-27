@@ -9,8 +9,7 @@
 import * as vscode from 'vscode';
 
 import { getProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import { attachDefaultTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { toErrorMessage } from '@common/errors';
 import { bus, INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import type {
@@ -157,8 +156,7 @@ export function registerAgentEventListeners(): vscode.Disposable {
   // no longer emits them directly). The same shared helper every host uses
   // re-emits `requestShow*` through `extensionAgentRuntimeHost` (= `bus.emit`),
   // reaching the `bus.on` handlers registered above exactly once.
-  const detachResult = attachTerminalResultToast(
-    defaultSession(),
+  const detachResult = attachDefaultTerminalResultToast(
     extensionAgentRuntimeHost,
   );
   signal.addEventListener('abort', detachResult, { once: true });

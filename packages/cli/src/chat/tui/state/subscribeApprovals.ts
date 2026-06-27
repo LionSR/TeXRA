@@ -9,12 +9,26 @@
 // `never` auto-rejects with `denyMessage(...)`. Only `ask` (or interactive
 // non-print) reaches the queue.
 //
-// Tool-edit goes through `setToolEditApprovalHandler` (separate API since
-// it returns a typed Promise<ToolEditApprovalResult>, not a fire-and-forget
-// event).
+// Tool-edit goes through the runtime approval handler boundary (separate API
+// since it returns a typed Promise<RuntimeToolEditApprovalResult>, not a
+// fire-and-forget event).
 
-import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
-import { setCliApiMode } from '@cli/runtime/apiAccessMode';
+import {
+  resolveRuntimeBashApproval,
+  setRuntimeBashApprovalSessionBypass,
+  setRuntimeToolEditApprovalHandler,
+  setRuntimeToolEditApprovalSessionBypass,
+} from '@agent/runtime/approvalCommands';
+import {
+  resolveRuntimeExternalInquiry,
+  resolveRuntimeUserQuestion,
+} from '@agent/runtime/humanInputCommands';
+import {
+  cancelRuntimeRetry,
+  resolveRuntimePlanApproval,
+  resolveRuntimeProposal,
+  triggerRuntimeRetry,
+} from '@agent/runtime/runCoordinatorCommands';
 import {
   approvalPromptAllowed,
   humanInputDenialFeedback,
@@ -22,6 +36,7 @@ import {
   immediateDecisionForApproval,
   markApprovalDenied,
 } from '@cli/runtime/approvalAdapter';
+import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   cliApprovalEventKind,
   isCliApprovalEvent,
@@ -30,30 +45,16 @@ import {
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import {
-  handleProgressViewBashApprovalAction,
-  setBashApprovalSessionBypass,
-  setToolEditApprovalSessionBypass,
-  setToolEditApprovalHandler,
-} from '@tools/approval';
-import { handleUserQuestionAction } from '@tools/userQuestion';
-import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 import { assertNever } from '@utils/core';
 import { notify } from '../notifications/terminalNotifier';
 import { cliState } from './cliState';
-import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,
   enqueueApproval,
   type ApprovalDecision,
   type ApprovalPayload,
 } from './approvalQueue';
-
-type ApprovalCoordinatorBridge = Pick<
-  RunCoordinatorBridge,
-  'cancelRetry' | 'resolvePlanApproval' | 'resolveProposal' | 'triggerRetry'
->;
 
 /**
  * Install the typed approval pipeline. Returns an `unbind` callback that
@@ -62,7 +63,6 @@ type ApprovalCoordinatorBridge = Pick<
 export function installTuiApprovals(
   host: CliRuntimeHost,
   context: CliContext,
-  coordinators: ApprovalCoordinatorBridge,
 ): () => void {
   const originalEmit = host.emit;
   host.emit = ((event, payload) => {
@@ -78,14 +78,13 @@ export function installTuiApprovals(
         payload as ProgressEventPayloads[CliApprovalEvent],
         context,
         host,
-        coordinators,
       );
       return;
     }
     originalEmit(event, payload);
   }) as CliRuntimeHost['emit'];
 
-  setToolEditApprovalHandler(async (request) => {
+  setRuntimeToolEditApprovalHandler(async (request) => {
     let decision: ApprovalDecision | undefined = immediateDecision(context);
     if (!decision) {
       decision = await enqueueTuiApproval({ kind: 'toolEdit', request }, host);
@@ -96,7 +95,11 @@ export function installTuiApprovals(
       decision.bypass === 'toolEdit' &&
       request.streamId
     ) {
-      setToolEditApprovalSessionBypass(request.streamId, true, host);
+      setRuntimeToolEditApprovalSessionBypass({
+        streamId: request.streamId,
+        enabled: true,
+        runtimeHost: host,
+      });
     }
     return decision.accepted
       ? { accepted: true, appliedContent: request.proposedContent }
@@ -105,7 +108,7 @@ export function installTuiApprovals(
 
   return () => {
     host.emit = originalEmit;
-    setToolEditApprovalHandler();
+    setRuntimeToolEditApprovalHandler();
   };
 }
 
@@ -114,7 +117,6 @@ function routeApproval(
   payload: ProgressEventPayloads[CliApprovalEvent],
   context: CliContext,
   host: CliRuntimeHost,
-  coordinators: ApprovalCoordinatorBridge,
 ): void {
   switch (event) {
     case 'showBashPermission':
@@ -129,7 +131,11 @@ function routeApproval(
             decision.bypass === 'bash' &&
             bashPayload.streamId
           ) {
-            setBashApprovalSessionBypass(bashPayload.streamId, true, host);
+            setRuntimeBashApprovalSessionBypass({
+              streamId: bashPayload.streamId,
+              enabled: true,
+              runtimeHost: host,
+            });
           }
           dispatchBash(bashPayload, decision);
         },
@@ -141,8 +147,7 @@ function routeApproval(
         host,
         cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showPlanApproval'],
-        (planPayload, decision) =>
-          dispatchPlan(coordinators, planPayload, decision),
+        dispatchPlan,
       );
       return;
     case 'showAgentProposal':
@@ -151,8 +156,7 @@ function routeApproval(
         host,
         cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showAgentProposal'],
-        (proposalPayload, decision) =>
-          dispatchProposal(coordinators, proposalPayload, decision),
+        dispatchProposal,
       );
       return;
     case 'showRetryRequest':
@@ -161,8 +165,7 @@ function routeApproval(
         host,
         cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showRetryRequest'],
-        (retryPayload, decision) =>
-          dispatchRetry(coordinators, retryPayload, decision),
+        dispatchRetry,
       );
       return;
     case 'showExternalInquiry':
@@ -242,7 +245,7 @@ function dispatchBash(
   payload: ProgressEventPayloads['showBashPermission'],
   decision: ApprovalDecision,
 ): void {
-  void handleProgressViewBashApprovalAction({
+  void resolveRuntimeBashApproval({
     requestId: payload.requestId,
     action: decision.accepted ? 'approve' : 'reject',
     feedback: feedbackOnReject(decision),
@@ -250,43 +253,45 @@ function dispatchBash(
 }
 
 function dispatchPlan(
-  coordinators: ApprovalCoordinatorBridge,
   payload: ProgressEventPayloads['showPlanApproval'],
   decision: ApprovalDecision,
 ): void {
   const feedback = feedbackOnReject(decision);
-  coordinators.resolvePlanApproval(payload.approvalId, {
-    action: decision.accepted ? (decision.planAction ?? 'approve') : 'reject',
-    ...(feedback ? { feedback } : {}),
+  resolveRuntimePlanApproval({
+    approvalId: payload.approvalId,
+    result: {
+      action: decision.accepted ? (decision.planAction ?? 'approve') : 'reject',
+      ...(feedback ? { feedback } : {}),
+    },
   });
 }
 
 function dispatchProposal(
-  coordinators: ApprovalCoordinatorBridge,
   payload: ProgressEventPayloads['showAgentProposal'],
   decision: ApprovalDecision,
 ): void {
   const feedback = feedbackOnReject(decision);
-  coordinators.resolveProposal(payload.proposalId, {
-    action: decision.accepted ? 'approve' : 'reject',
-    ...(feedback ? { feedback } : {}),
+  resolveRuntimeProposal({
+    proposalId: payload.proposalId,
+    result: {
+      action: decision.accepted ? 'approve' : 'reject',
+      ...(feedback ? { feedback } : {}),
+    },
   });
 }
 
 function dispatchRetry(
-  coordinators: ApprovalCoordinatorBridge,
   payload: ProgressEventPayloads['showRetryRequest'],
   decision: ApprovalDecision,
 ): void {
   if (decision.accepted) {
-    void applyRetryDecision(coordinators, payload, decision);
+    void applyRetryDecision(payload, decision);
   } else {
-    coordinators.cancelRetry(payload.streamId);
+    cancelRuntimeRetry({ streamId: payload.streamId });
   }
 }
 
 async function applyRetryDecision(
-  coordinators: ApprovalCoordinatorBridge,
   payload: ProgressEventPayloads['showRetryRequest'],
   decision: ApprovalDecision,
 ): Promise<void> {
@@ -297,10 +302,10 @@ async function applyRetryDecision(
       apiMode: decision.apiMode,
     });
   }
-  if (decision.disableChatGptSubscription) {
-    await setCliCodexSubscription(false);
-  }
-  coordinators.triggerRetry(payload.streamId, decision.userMessage);
+  triggerRuntimeRetry({
+    streamId: payload.streamId,
+    feedback: decision.userMessage,
+  });
 }
 
 function handleExternalInquiry(
@@ -316,7 +321,7 @@ function handleExternalInquiry(
       context,
       'External inquiry requires human input; yolo mode cannot synthesize an external answer.',
     );
-    void handleExternalInquiryAction({ action: 'drop', threadId, feedback });
+    void resolveRuntimeExternalInquiry({ action: 'drop', threadId, feedback });
     return;
   }
   void enqueueTuiApproval({ kind: 'externalInquiry', payload }, host).then(
@@ -325,14 +330,14 @@ function handleExternalInquiry(
       // User-accept with text submits an answer; empty text, reject, and
       // modal-cancel all drop the durable inquiry thread.
       if (decision.accepted && decision.userMessage) {
-        void handleExternalInquiryAction({
+        void resolveRuntimeExternalInquiry({
           action: 'submit',
           threadId,
           answer: decision.userMessage,
         });
         return;
       }
-      void handleExternalInquiryAction({
+      void resolveRuntimeExternalInquiry({
         action: 'drop',
         threadId,
         feedback: decision.userMessage || 'No answer provided.',
@@ -351,7 +356,7 @@ function handleUserQuestion(
       context,
       'User question requires human input; yolo mode cannot synthesize an answer.',
     );
-    void handleUserQuestionAction({
+    void resolveRuntimeUserQuestion({
       requestId: payload.requestId,
       action: 'skip',
       feedback,
@@ -363,14 +368,14 @@ function handleUserQuestion(
     (decision) => {
       markIfRejected(context, decision);
       if (decision.accepted && decision.userQuestionAnswers) {
-        void handleUserQuestionAction({
+        void resolveRuntimeUserQuestion({
           requestId: payload.requestId,
           action: 'submit',
           answers: decision.userQuestionAnswers,
         });
         return;
       }
-      void handleUserQuestionAction({
+      void resolveRuntimeUserQuestion({
         requestId: payload.requestId,
         action: 'skip',
         feedback: decision.userMessage || 'User question skipped by user.',

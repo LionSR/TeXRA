@@ -14,8 +14,8 @@
  */
 import { terminalResultToast } from '@shared/agent/terminalResultPresentation';
 
+import { defaultSession, type SessionHandle } from './SessionHandle';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
-import type { SessionHandle } from './SessionHandle';
 
 /** Returns a detach disposer; callers detach when the run/host tears down. */
 export function attachTerminalResultToast(
@@ -30,4 +30,11 @@ export function attachTerminalResultToast(
       runtimeHost.emit('requestShowError', toast.payload);
     }
   });
+}
+
+/** Attach terminal-result presentation for the process-wide runtime session. */
+export function attachDefaultTerminalResultToast(
+  runtimeHost: AgentRuntimeHost,
+): () => void {
+  return attachTerminalResultToast(defaultSession(), runtimeHost);
 }

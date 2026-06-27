@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
-
-vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
-  handleExternalInquiryAction: handleExternalInquiryActionMock,
+const humanInputCommandsMock = vi.hoisted(() => ({
+  resolveRuntimeExternalInquiry: vi.fn(),
+  resolveRuntimeUserQuestion: vi.fn(),
 }));
 
+vi.mock('@agent/runtime/humanInputCommands', () => humanInputCommandsMock);
+
+import { setRuntimeToolEditApprovalHandler } from '@agent/runtime/approvalCommands';
 import {
   appendCliApiSwitchHint,
   approvalPromptAllowed,
@@ -22,10 +24,7 @@ import {
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentCategory, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
-import {
-  requestToolEditApproval,
-  setToolEditApprovalHandler,
-} from '@tools/approval/toolEditApproval';
+import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   return {
@@ -55,8 +54,9 @@ const credentialExhaustedRetry: ProgressEventPayloads['showRetryRequest'] = {
 };
 
 afterEach(() => {
-  setToolEditApprovalHandler();
-  handleExternalInquiryActionMock.mockClear();
+  setRuntimeToolEditApprovalHandler();
+  humanInputCommandsMock.resolveRuntimeExternalInquiry.mockClear();
+  humanInputCommandsMock.resolveRuntimeUserQuestion.mockClear();
 });
 
 describe('immediateDecisionForApproval', () => {
@@ -205,7 +205,9 @@ describe('approval prompt hooks', () => {
 
     expect(handled).toBe(true);
     expect(events).toEqual([]);
-    expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
+    expect(
+      humanInputCommandsMock.resolveRuntimeExternalInquiry,
+    ).toHaveBeenCalledWith({
       action: 'drop',
       threadId: 'ei_aabbccdd0011',
       feedback: expect.stringContaining('non-TUI CLI runs'),

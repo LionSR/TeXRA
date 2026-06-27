@@ -8,9 +8,11 @@ import {
   setOnboardingDeclined,
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
-import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { agentKeyOf } from '@shared/schemas/agent';
+import {
+  computeRuntimeAgentOptionsData,
+  getRuntimeAgent,
+  refreshRuntimeAgentCatalog,
+} from '@agent/runtime/agentResolution';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - common
@@ -33,6 +35,7 @@ import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessions
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
+import { AgentCategory, agentKeyOf } from '@shared/schemas/agent';
 import { watchConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 
@@ -140,7 +143,7 @@ export class MainViewProvider
    * Called when auth state changes (login/logout affects both).
    */
   async refreshOptionsAndView() {
-    await refresh();
+    await refreshRuntimeAgentCatalog();
     const view = this.getMainModeView();
     if (view) {
       await this.messageHandler.handleMessage(
@@ -200,7 +203,7 @@ export class MainViewProvider
       this.pendingSetupAgentSelection = false;
       // Resolve the qualified registry key so the dropdown matches by value;
       // the plain name still resolves by label if the registry isn't loaded.
-      const entry = getAgent('setup', AgentCategory.ToolUse);
+      const entry = getRuntimeAgent('setup', AgentCategory.ToolUse);
       view.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
         agentId: entry ? agentKeyOf(entry) : 'setup',
@@ -228,8 +231,8 @@ export class MainViewProvider
     const view = this.getMainModeView();
     if (!view) return;
 
-    await refresh();
-    const optionsData = await computeAgentOptionsData();
+    await refreshRuntimeAgentCatalog();
+    const optionsData = await computeRuntimeAgentOptionsData();
     view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       optionsData,

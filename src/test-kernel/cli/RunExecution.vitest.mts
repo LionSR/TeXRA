@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   prepareInteractivePrompt: vi.fn(),
   readCliTerminalStatus: vi.fn(),
   runAgent: vi.fn(),
+  attachDefaultTerminalResultToast: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTerminalStatus: vi.fn(),
 }));
@@ -19,8 +20,12 @@ vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: mocks.runAgent,
 }));
 
-vi.mock('@agent/storage', () => ({
-  writeTerminalStatus: mocks.writeTerminalStatus,
+vi.mock('@agent/runtime/historyCommands', () => ({
+  writeRuntimeTerminalStatus: mocks.writeTerminalStatus,
+}));
+
+vi.mock('@agent/runtime/terminalResultToast', () => ({
+  attachDefaultTerminalResultToast: mocks.attachDefaultTerminalResultToast,
 }));
 
 vi.mock('@cli/runtime/runtimeHost', () => ({
@@ -65,6 +70,7 @@ describe('executeCliRequest', () => {
       prepareInteractivePrompt: mocks.prepareInteractivePrompt,
       close: mocks.close,
     });
+    mocks.attachDefaultTerminalResultToast.mockReturnValue(vi.fn());
     mocks.readCliTerminalStatus.mockResolvedValue('completed');
     mocks.runAgent.mockResolvedValue({
       category: 'toolUse',

@@ -3,7 +3,7 @@
 
 import { Box, Text } from 'ink';
 
-import { computeAgentOptionsData } from '@agent/index';
+import { computeRuntimeAgentOptionsData } from '@agent/runtime/agentResolution';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
 
@@ -148,7 +148,7 @@ export function agentSelectWindow({
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const { data, loading, error } = useAsyncListForm<AgentGroups>({
     load: async () => {
-      const options = await computeAgentOptionsData();
+      const options = await computeRuntimeAgentOptionsData();
       return { toolUse: options.toolUse, workflow: options.workflow };
     },
     onClose: props.onClose,

@@ -1,10 +1,12 @@
 import {
-  StreamStatusService,
-  type StreamStatusChange,
-} from '@agent/runtime/StreamStatusService';
+  onRuntimeStreamStatusChange,
+  type RuntimeStreamStatusChange,
+} from '@agent/runtime/streamControl';
 import { cliState, setStreamStatusInCliState } from './cliState';
 
-export function applyStreamStatusChange(change: StreamStatusChange): void {
+export function applyStreamStatusChange(
+  change: RuntimeStreamStatusChange,
+): void {
   setStreamStatusInCliState({
     streamId: change.streamId,
     status: change.status,
@@ -12,7 +14,7 @@ export function applyStreamStatusChange(change: StreamStatusChange): void {
 }
 
 export function onStreamStatusChange(
-  listener: (change: StreamStatusChange) => void,
+  listener: (change: RuntimeStreamStatusChange) => void,
 ): () => void {
-  return StreamStatusService.onDidChange(listener);
+  return onRuntimeStreamStatusChange(listener);
 }

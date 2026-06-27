@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { AgentCategory } from '@shared/schemas';
 import type {
   ActiveChildInfo,
@@ -130,7 +131,14 @@ describe('progress view snapshot hydration', () => {
       finishedSubagentCount: 2,
     }));
 
-    handler.syncStreamContent(stream, { includeActiveState: true });
+    const queue = ToolUseFollowUpQueue.acquire(stream);
+    queue.enqueue({ text: 'Check the compactness lemma first.' });
+
+    try {
+      handler.syncStreamContent(stream, { includeActiveState: true });
+    } finally {
+      ToolUseFollowUpQueue.release(stream);
+    }
 
     expect(bridge.syncStream).toHaveBeenCalledWith(stream);
     expect(messages.at(-1)).toMatchObject({
@@ -150,7 +158,7 @@ describe('progress view snapshot hydration', () => {
       },
       todos: [todo],
       plan,
-      queuedFollowUps: [],
+      queuedFollowUps: ['Check the compactness lemma first.'],
       agentCategory: AgentCategory.ToolUse,
       conversationProgress: { conversationTurns: 3, toolCallCount: 5 },
       badges: {

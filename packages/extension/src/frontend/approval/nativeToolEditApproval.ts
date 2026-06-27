@@ -1,8 +1,8 @@
 /**
  * VS Code native implementation of the tool edit approval UI.
  *
- * This module contains all VS Code-coupled code that was extracted from
- * `@tools/approval/toolEditApproval` to keep that module platform-agnostic.
+ * This module contains the VS Code-coupled approval surface. The runtime
+ * boundary keeps the core tool-edit approval module platform-agnostic.
  *
  * The native handler opens a diff editor, manages temp files, and handles
  * approval/rejection via the progress view.
@@ -14,6 +14,17 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  computeRuntimeToolEditLineChangeSummary,
+  computeRuntimeToolEditUserPatch,
+  emitRuntimeToolEditApprovalPrompt,
+  findRuntimeToolEditFirstChangedLine,
+  registerRuntimePendingToolEditApproval,
+  setRuntimeToolEditApprovalHandler,
+  type RuntimeToolEditApprovalRequest,
+  type RuntimeToolEditApprovalResult,
+  unregisterRuntimePendingToolEditApproval,
+} from '@agent/runtime/approvalCommands';
 import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
 import {
   type DiffSession,
@@ -29,27 +40,16 @@ import {
   runLatexdiff,
 } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
-import {
-  computeLineChangeSummary,
-  computeUserPatch,
-  emitToolEditApprovalPrompt,
-  firstChangedLine,
-  registerPendingApproval,
-  setToolEditApprovalHandler,
-  unregisterPendingApproval,
-  type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
-} from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 interface PendingApprovalEntry extends LatexPreviewEntry {
-  request: ToolEditApprovalRequest;
+  request: RuntimeToolEditApprovalRequest;
   diffSession: DiffSession;
   title: string;
   streamId?: StreamTabId;
   lineChanges: LineChanges;
-  settle: (result: ToolEditApprovalResult) => void;
+  settle: (result: RuntimeToolEditApprovalResult) => void;
 }
 
 interface ToolEditApprovalActionPayload {
@@ -91,7 +91,10 @@ async function revealFirstChangedLine(
   originalContent: string,
   proposedContent: string,
 ): Promise<void> {
-  const line = firstChangedLine(originalContent, proposedContent);
+  const line = findRuntimeToolEditFirstChangedLine(
+    originalContent,
+    proposedContent,
+  );
   if (line === null) {
     return;
   }
@@ -101,7 +104,7 @@ async function revealFirstChangedLine(
 
 async function showProgressViewApprovalPrompt(
   requestId: string,
-  request: ToolEditApprovalRequest,
+  request: RuntimeToolEditApprovalRequest,
   relativePath: string,
   lineChanges: LineChanges,
 ): Promise<void> {
@@ -112,7 +115,7 @@ async function showProgressViewApprovalPrompt(
 
   // Activate the stream that needs approval and post the prompt (shared with
   // the desktop host); VS Code computes the relative path via the workspace.
-  emitToolEditApprovalPrompt(getRuntimeHost(), {
+  emitRuntimeToolEditApprovalPrompt(getRuntimeHost(), {
     requestId,
     request,
     relativePath,
@@ -125,8 +128,8 @@ function resolveProgressViewApprovalPrompt(requestId: string): void {
 }
 
 async function nativeRequestApproval(
-  request: ToolEditApprovalRequest,
-): Promise<ToolEditApprovalResult> {
+  request: RuntimeToolEditApprovalRequest,
+): Promise<RuntimeToolEditApprovalResult> {
   getStorageDir(); // Validates initialization
 
   const {
@@ -156,7 +159,7 @@ async function nativeRequestApproval(
   const description = vscode.workspace.asRelativePath(
     WorkspaceFS.fullPath(filePath),
   );
-  const lineChanges = computeLineChangeSummary(
+  const lineChanges = computeRuntimeToolEditLineChangeSummary(
     originalContent,
     proposedContent,
   );
@@ -171,7 +174,7 @@ async function nativeRequestApproval(
     ? ` · ${changeParts.join(' / ')} ${lineWord}`
     : '';
   const title = `Tool edit (${sourceTool}): ${description}${changeSuffix}`;
-  let result: ToolEditApprovalResult = { accepted: false };
+  let result: RuntimeToolEditApprovalResult = { accepted: false };
   let diffSession: DiffSession | undefined;
   let tabCloseDisposable: vscode.Disposable | undefined;
   try {
@@ -184,77 +187,80 @@ async function nativeRequestApproval(
     diffSession = openedSession;
 
     let approvalSettled = false;
-    const approvalPromise = new Promise<ToolEditApprovalResult>((resolve) => {
-      const settle = (value: ToolEditApprovalResult) => {
-        if (approvalSettled) {
-          return;
-        }
-        approvalSettled = true;
-        // Note: Don't delete from pendingApprovals here - finally block handles cleanup
-        resolve(value);
-      };
-
-      const entry: PendingApprovalEntry = {
-        request,
-        diffSession: openedSession,
-        originalUri: { fsPath: originalSource.filePath },
-        proposedUri: { fsPath: proposedSource.filePath },
-        originalContent,
-        proposedContent,
-        title,
-        streamId: streamId ?? undefined,
-        lineChanges,
-        isSettled: () => approvalSettled,
-        settle,
-        workspaceTempCleanup: [],
-        latexOperationInProgress: false,
-        onError: (msg) => vscode.window.showErrorMessage(msg),
-      };
-
-      pendingApprovals.set(requestId, entry);
-      // Register with the pure module for rejection tracking
-      registerPendingApproval(requestId, {
-        streamId: streamId ?? undefined,
-        runtimeHost: getRuntimeHost(),
-        isSettled: () => approvalSettled,
-        settle,
-      });
-
-      // Closing the proposed diff tab (e.g. Ctrl+W) must resolve the approval
-      // as a rejection. Without this the approval Promise would never settle
-      // and the agent would hang indefinitely. The listener is self-cleaning:
-      // it disposes once the approval settles (including the programmatic
-      // close in the `finally` block below).
-      const proposedUriStr = vscode.Uri.file(
-        proposedSource.filePath,
-      ).toString();
-      tabCloseDisposable = vscode.window.tabGroups.onDidChangeTabs((event) => {
-        if (approvalSettled) {
-          tabCloseDisposable?.dispose();
-          return;
-        }
-        const wasClosed = event.closed.some((tab) => {
-          const input = tab.input;
-          if (
-            typeof vscode.TabInputTextDiff !== 'undefined' &&
-            input instanceof vscode.TabInputTextDiff
-          ) {
-            return input.modified.toString() === proposedUriStr;
+    const approvalPromise = new Promise<RuntimeToolEditApprovalResult>(
+      (resolve) => {
+        const settle = (value: RuntimeToolEditApprovalResult) => {
+          if (approvalSettled) {
+            return;
           }
-          if (
-            typeof vscode.TabInputText !== 'undefined' &&
-            input instanceof vscode.TabInputText
-          ) {
-            return input.uri.toString() === proposedUriStr;
-          }
-          return false;
+          approvalSettled = true;
+          // Note: Don't delete from pendingApprovals here - finally block handles cleanup
+          resolve(value);
+        };
+
+        const entry: PendingApprovalEntry = {
+          request,
+          diffSession: openedSession,
+          originalUri: { fsPath: originalSource.filePath },
+          proposedUri: { fsPath: proposedSource.filePath },
+          originalContent,
+          proposedContent,
+          title,
+          streamId: streamId ?? undefined,
+          lineChanges,
+          isSettled: () => approvalSettled,
+          settle,
+          workspaceTempCleanup: [],
+          latexOperationInProgress: false,
+          onError: (msg) => vscode.window.showErrorMessage(msg),
+        };
+
+        pendingApprovals.set(requestId, entry);
+        registerRuntimePendingToolEditApproval(requestId, {
+          streamId: streamId ?? undefined,
+          runtimeHost: getRuntimeHost(),
+          isSettled: () => approvalSettled,
+          settle,
         });
-        if (wasClosed) {
-          tabCloseDisposable?.dispose();
-          settle({ accepted: false });
-        }
-      });
-    });
+
+        // Closing the proposed diff tab (e.g. Ctrl+W) must resolve the approval
+        // as a rejection. Without this the approval Promise would never settle
+        // and the agent would hang indefinitely. The listener is self-cleaning:
+        // it disposes once the approval settles (including the programmatic
+        // close in the `finally` block below).
+        const proposedUriStr = vscode.Uri.file(
+          proposedSource.filePath,
+        ).toString();
+        tabCloseDisposable = vscode.window.tabGroups.onDidChangeTabs(
+          (event) => {
+            if (approvalSettled) {
+              tabCloseDisposable?.dispose();
+              return;
+            }
+            const wasClosed = event.closed.some((tab) => {
+              const input = tab.input;
+              if (
+                typeof vscode.TabInputTextDiff !== 'undefined' &&
+                input instanceof vscode.TabInputTextDiff
+              ) {
+                return input.modified.toString() === proposedUriStr;
+              }
+              if (
+                typeof vscode.TabInputText !== 'undefined' &&
+                input instanceof vscode.TabInputText
+              ) {
+                return input.uri.toString() === proposedUriStr;
+              }
+              return false;
+            });
+            if (wasClosed) {
+              tabCloseDisposable?.dispose();
+              settle({ accepted: false });
+            }
+          },
+        );
+      },
+    );
 
     try {
       await revealFirstChangedLine(
@@ -284,7 +290,10 @@ async function nativeRequestApproval(
       const appliedContent = normalizeLineEndings(
         await diffViewHost.readProposedContent(openedSession, proposedContent),
       );
-      const userPatch = computeUserPatch(proposedContent, appliedContent);
+      const userPatch = computeRuntimeToolEditUserPatch(
+        proposedContent,
+        appliedContent,
+      );
       result = {
         ...result,
         appliedContent,
@@ -302,7 +311,7 @@ async function nativeRequestApproval(
     // Get entry before deleting to access workspace temp cleanup functions
     const entry = pendingApprovals.get(requestId);
     pendingApprovals.delete(requestId);
-    unregisterPendingApproval(requestId);
+    unregisterRuntimePendingToolEditApproval(requestId);
     if (diffSession) {
       await diffViewHost.closeDiff(diffSession);
     }
@@ -384,5 +393,5 @@ export function initializeNativeToolEditApproval(
   const baseDir = context.storageUri ?? context.globalStorageUri;
   storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
   runtimeHost = host;
-  setToolEditApprovalHandler(nativeRequestApproval);
+  setRuntimeToolEditApprovalHandler(nativeRequestApproval);
 }

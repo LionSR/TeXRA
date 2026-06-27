@@ -7,13 +7,16 @@ import {
 } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import {
+  clearAllRuntimeStreamStatuses,
+  clearRuntimeStreamStatus,
+  isRuntimeStreamInFlight,
+} from '@agent/runtime/streamControl';
 import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { toErrorMessage } from '@common/errors';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   AgentCategoryFilterSchema,
@@ -187,7 +190,7 @@ export class ProgressViewState {
    * call this on the stream being moved away from to close the loop.
    */
   releasePreviousActive(streamId: StreamTabId): void {
-    if (!isInFlightStatus(StreamStatusService.get(streamId))) {
+    if (!isRuntimeStreamInFlight(streamId)) {
       this.streamLogs.releaseEntries(streamId);
     }
   }
@@ -315,7 +318,7 @@ export class ProgressViewState {
 
   async clearStream(stream: StreamTabId): Promise<void> {
     // Clear in-memory state
-    StreamStatusService.clear(stream, { emit: false });
+    clearRuntimeStreamStatus(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
@@ -346,7 +349,7 @@ export class ProgressViewState {
     );
 
     // Clear in-memory state
-    StreamStatusService.clearAll({ emit: false });
+    clearAllRuntimeStreamStatuses();
     this._sessionState.clear();
     this._streamStates.clear();
     this._prefs.reset();

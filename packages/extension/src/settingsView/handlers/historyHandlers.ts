@@ -14,15 +14,12 @@ import {
   type ExportInputStatus,
 } from '@controllers/settingsView/ChatExportController';
 import {
-  getExecutionStore,
-  deleteExecution,
-  deleteAllExecutions,
-} from '@agent/storage';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+  deleteAllRuntimeHistoryExecutions,
+  deleteRuntimeHistoryExecution,
+  readRuntimeHistoryConfig,
+  type RuntimeHistoryAgentConfig,
+} from '@agent/runtime/historyCommands';
+import { getRuntimeActiveExecutionIds } from '@agent/runtime/executionQueries';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -88,14 +85,16 @@ export class HistoryHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT>,
   ): Promise<void> {
     try {
-      const activeIds = executionRegistry.getActiveIds();
+      const activeIds = getRuntimeActiveExecutionIds();
       if (activeIds.includes(data.historyId)) {
         await vscode.window.showWarningMessage(
           'Cannot delete a running execution',
         );
         return;
       }
-      const deleted = await deleteExecution(data.historyId as ExecutionId);
+      const deleted = await deleteRuntimeHistoryExecution(
+        data.historyId as ExecutionId,
+      );
       if (deleted) {
         await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
       } else {
@@ -114,7 +113,9 @@ export class HistoryHandlers {
 
   async handleClearHistory(): Promise<void> {
     try {
-      await deleteAllExecutions(new Set(executionRegistry.getActiveIds()));
+      await deleteAllRuntimeHistoryExecutions(
+        new Set(getRuntimeActiveExecutionIds()),
+      );
       await vscode.window.showInformationMessage('Agent history cleared');
       await this.ctx.withActiveWebview(async (w) => {
         await w.postMessage({
@@ -245,17 +246,14 @@ export class HistoryHandlers {
   private async withHistoryConfig(
     historyId: string,
     errorPrefix: string,
-    action: (config: AgentConfig) => Promise<void>,
+    action: (config: RuntimeHistoryAgentConfig) => Promise<void>,
   ): Promise<void> {
     try {
-      const raw = await getExecutionStore(
-        historyId as ExecutionId,
-      ).readConfig();
-      if (!raw) {
+      const config = await readRuntimeHistoryConfig(historyId as ExecutionId);
+      if (!config) {
         await vscode.window.showErrorMessage('History item not found');
         return;
       }
-      const config = AgentConfigSchema.parse(raw);
       await action(config);
     } catch (error) {
       await showLoggedErrorMessage(this.ctx.channel, errorPrefix, error);

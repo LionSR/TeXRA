@@ -4,12 +4,13 @@ import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
 import {
-  type AgentCategory,
-  type AgentCreatorUI,
-  type CreatorConfig,
-  TOOL_GROUPS,
-  createAgentCreatorFlow,
-} from '@agent/implementations/flows/agentCreator/agentCreatorFlow';
+  getRuntimeAgentCreatorToolGroupOptions,
+  resolveRuntimeAgentCreatorToolGroups,
+  runRuntimeAgentCreator,
+  type RuntimeAgentCreatorCategory,
+  type RuntimeAgentCreatorConfig,
+  type RuntimeAgentCreatorUI,
+} from '@agent/runtime/agentCreatorCommands';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
 import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -28,11 +29,11 @@ type QuickInputToggleButton = vscode.QuickInputButton & {
 };
 
 /** Cached after first load. Templates are bundled resources — stable for the session. */
-let creatorConfig: CreatorConfig | null = null;
+let creatorConfig: RuntimeAgentCreatorConfig | null = null;
 
 async function loadCreatorConfig(
   context: vscode.ExtensionContext,
-): Promise<CreatorConfig> {
+): Promise<RuntimeAgentCreatorConfig> {
   if (creatorConfig) return creatorConfig;
   const templatesDir = path.join(
     context.extensionPath,
@@ -143,7 +144,7 @@ async function pickToolGroups(
   );
 }
 
-function buildVSCodeUI(): AgentCreatorUI {
+function buildVSCodeUI(): RuntimeAgentCreatorUI {
   return {
     async promptAgentName(categoryLabel) {
       return vscode.window.showInputBox({
@@ -161,33 +162,13 @@ function buildVSCodeUI(): AgentCreatorUI {
     },
 
     async pickTools(agentName, description) {
-      const lower = description.toLowerCase();
-      const suggested = new Set<string>(['File Operations']);
-      for (const [name, group] of Object.entries(TOOL_GROUPS)) {
-        if (group.keywords.some((kw) => lower.includes(kw)))
-          suggested.add(name);
-      }
-      const items: vscode.QuickPickItem[] = Object.entries(TOOL_GROUPS).map(
-        ([label, group]) => ({
-          label,
-          description: group.description,
-          detail: group.tools.join(', '),
-          picked: suggested.has(label),
-        }),
-      );
-
+      const items: vscode.QuickPickItem[] =
+        getRuntimeAgentCreatorToolGroupOptions(description);
       const selected = await pickToolGroups(agentName, items);
       if (!selected || selected.length === 0) return undefined;
-      const tools: string[] = [];
-      const groups: string[] = [];
-      for (const item of selected) {
-        const group = TOOL_GROUPS[item.label];
-        if (group) {
-          tools.push(...group.tools);
-          groups.push(item.label);
-        }
-      }
-      return { tools, groups };
+      return resolveRuntimeAgentCreatorToolGroups(
+        selected.map((item) => item.label),
+      );
     },
 
     async getCustomAgentDir() {
@@ -217,12 +198,15 @@ function buildVSCodeUI(): AgentCreatorUI {
 
 export async function handleCreateAgentWithAI(
   context: vscode.ExtensionContext,
-  category: AgentCategory,
+  category: RuntimeAgentCreatorCategory,
 ) {
   try {
     const config = await loadCreatorConfig(context);
-    const flow = createAgentCreatorFlow(buildVSCodeUI());
-    await flow.run({ config, category });
+    await runRuntimeAgentCreator({
+      ui: buildVSCodeUI(),
+      config,
+      category,
+    });
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to create agent', err);
   }

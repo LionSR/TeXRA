@@ -330,10 +330,10 @@ function withMirroredChildStreamStatus(
 /**
  * Apply a stream-status event once to the CLI state mirror.
  *
- * Runtime status still originates in StreamStatusService, but TUI renderers
+ * Runtime status still originates in the agent runtime, but TUI renderers
  * should read only StreamSlice data. Updating retained parent child rows here
  * keeps side panels, tab labels, focus routing, and follow-up targeting on the
- * same state snapshot instead of re-querying the runtime service at render time.
+ * same state snapshot instead of re-querying runtime state at render time.
  */
 export function setStreamStatusInCliState({
   nowMs = Date.now(),

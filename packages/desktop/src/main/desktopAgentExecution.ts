@@ -21,12 +21,18 @@ import {
 } from '@agent/core/execution/TaskState';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
+import { emitQueuedFollowUps } from '@agent/runtime/queuedFollowUps';
+import { requestRuntimeFollowUp } from '@agent/runtime/followUpCommands';
+import { requestRuntimeToolUseSnapshotResume } from '@agent/runtime/resumeCommands';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { clearRuntimeRetryRequest } from '@agent/runtime/runCoordinatorCommands';
+import {
+  getRuntimeStreamStatus,
+  isRuntimeStreamActiveOrResuming,
+  requestStopStream,
+  setRuntimeStreamStatus,
+} from '@agent/runtime/streamControl';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { toErrorMessage } from '@common/errors';
 import {
@@ -828,8 +834,9 @@ export class DesktopProgressBridge {
   }
 
   private stopStream(streamId: StreamTabId): void {
-    this.session.coordinators.clearRetryRequest(streamId);
-    this.session.executions.stopAgentStream(streamId, {
+    clearRuntimeRetryRequest({ streamId, session: this.session });
+    requestStopStream({
+      streamId,
       // Read the live workspace-state value (written by the desktop settings
       // view) at stop time, matching the extension and CLI hosts.
       detachActiveChildren:
@@ -838,12 +845,13 @@ export class DesktopProgressBridge {
           false,
         ) === true,
       runtimeHost: this.runtimeHost,
+      session: this.session,
     });
   }
 
   async tryResumeStream(streamId: StreamTabId): Promise<boolean> {
     if (
-      StreamStatusService.isActiveOrResuming(streamId) ||
+      isRuntimeStreamActiveOrResuming(streamId) ||
       this.resumeAttempts.has(streamId) ||
       this.deletedStreams.has(streamId)
     ) {
@@ -885,36 +893,17 @@ export class DesktopProgressBridge {
       }
 
       if (resume.type === 'toolUse') {
-        ToolUseFollowUpQueue.acquire(streamId);
-        ownsResumingStatus = true;
-        StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, {
+        return await requestRuntimeToolUseSnapshotResume({
+          snapshot: resume.snapshot,
           runtimeHost: this.runtimeHost,
+          session: this.session,
         });
-        const queuedFollowUps = ToolUseFollowUpQueue.drainItems(streamId);
-        this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
-        try {
-          await resumeToolUseFromSnapshot(resume.snapshot, this.runtimeHost, {
-            session: this.session,
-            setupSession: (session) => {
-              for (const item of queuedFollowUps) {
-                session.appendFollowUp(item);
-              }
-            },
-          });
-        } catch (error) {
-          for (const item of queuedFollowUps) {
-            ToolUseFollowUpQueue.enqueue(streamId, item, { force: true });
-          }
-          if (queuedFollowUps.length > 0) {
-            this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
-          }
-          throw error;
-        }
-        return true;
       }
 
       ownsResumingStatus = true;
-      StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, {
+      setRuntimeStreamStatus({
+        streamId,
+        status: STREAM_STATUS.RESUMING,
         runtimeHost: this.runtimeHost,
       });
       await this.runExecution({
@@ -928,9 +917,11 @@ export class DesktopProgressBridge {
       });
       if (
         ownsResumingStatus &&
-        StreamStatusService.get(streamId) === STREAM_STATUS.RESUMING
+        getRuntimeStreamStatus(streamId) === STREAM_STATUS.RESUMING
       ) {
-        StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+        setRuntimeStreamStatus({
+          streamId,
+          status: STREAM_STATUS.WAITING,
           runtimeHost: this.runtimeHost,
         });
       }
@@ -1084,15 +1075,14 @@ export class DesktopProgressBridge {
     // handle is tracked in `this.session`, but this IPC path runs outside the
     // run ALS, so the module default (currentSession ⇒ defaultSession) would
     // look in the wrong registry and report `no_session` for a live run.
-    const result = await sendFollowUp(
+    const result = await requestRuntimeFollowUp({
       streamId,
       text,
       mediaFiles,
-      undefined,
-      this.session,
-    );
+      session: this.session,
+    });
     if (result.status === 'sent' || result.status === 'queued') {
-      this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
+      emitQueuedFollowUps(this.runtimeHost, streamId);
       return;
     }
 

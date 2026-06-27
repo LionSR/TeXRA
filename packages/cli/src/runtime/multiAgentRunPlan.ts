@@ -1,5 +1,8 @@
-import { getAgentsByCategory, loadAgents } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  listRuntimeAgentsByCategory,
+  loadRuntimeAgents,
+} from '@agent/runtime/agentResolution';
+import { AgentCategory } from '@shared/schemas/agent';
 
 import { missingMultiAgentPresetMessage } from './agents';
 import { CliUsageError } from './cliContext';
@@ -47,8 +50,8 @@ function planCurrentMultiAgentRun(
     throw new CliUsageError(missingMultiAgentPresetMessage(init.preset));
   }
   return planCliMultiAgentPresetRun(preset, {
-    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
+    workflowAgents: listRuntimeAgentsByCategory(AgentCategory.Workflow),
+    toolUseAgents: listRuntimeAgentsByCategory(AgentCategory.ToolUse),
     agentOverride: init.agent,
   });
 }
@@ -57,8 +60,8 @@ function planLoadedCliMultiAgentPresets(
   presets: readonly CliMultiAgentPreset[],
 ): CliMultiAgentPresetRunPlan[] {
   return planCliMultiAgentPresets(presets, {
-    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
+    workflowAgents: listRuntimeAgentsByCategory(AgentCategory.Workflow),
+    toolUseAgents: listRuntimeAgentsByCategory(AgentCategory.ToolUse),
   });
 }
 
@@ -72,7 +75,7 @@ function planLoadedCliMultiAgentPresets(
 export async function loadCliMultiAgentRunPlan(
   init: MultiAgentRunPlanInit,
 ): Promise<MultiAgentRunPlanLoadResult> {
-  await loadAgents({ includeRemote: false });
+  await loadRuntimeAgents({ includeRemote: false });
   const result = await reloadRemoteAgentsForGaps(
     planCurrentMultiAgentRun(init),
     cliMultiAgentPlanHasGaps,
@@ -87,7 +90,7 @@ export async function loadCliMultiAgentRunPlan(
 export async function loadCliMultiAgentPresetPlanSet(
   presets: readonly CliMultiAgentPreset[],
 ): Promise<MultiAgentPresetPlansLoadResult> {
-  await loadAgents({ includeRemote: false });
+  await loadRuntimeAgents({ includeRemote: false });
   const result = await reloadRemoteAgentsForGaps(
     planLoadedCliMultiAgentPresets(presets),
     (plans) => plans.some(cliMultiAgentPlanHasGaps),
@@ -105,7 +108,7 @@ async function reloadRemoteAgentsForGaps<T>(
   replan: () => T,
 ): Promise<RemoteAgentPlanReloadResult<T>> {
   if (hasGaps(value) && (await getCliAuthProvider().isAuthenticated())) {
-    await loadAgents();
+    await loadRuntimeAgents();
     return { value: replan(), remoteAgentLoadAttempted: true };
   }
   return { value, remoteAgentLoadAttempted: false };

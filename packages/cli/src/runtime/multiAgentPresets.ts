@@ -1,9 +1,9 @@
 import { platform } from '@platform/platform';
 import {
-  BUILTIN_TEAM_ROOT_AGENT_NAMES,
-  findAgentByIdentifier,
-  type AgentEntry,
-} from '@agent/index';
+  findRuntimeAgentByIdentifier,
+  RUNTIME_BUILTIN_TEAM_ROOT_AGENT_NAMES,
+  type RuntimeAgentEntry as AgentEntry,
+} from '@agent/runtime/agentResolution';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
@@ -372,7 +372,7 @@ export function cliMultiAgentPresetAvailability(
     ),
     rootAgent: plan.rootAgent
       ? {
-          key: agentKeyOf(plan.rootAgent),
+          key: toAgentKey(plan.rootAgent),
           name: plan.rootAgent.name,
           source: plan.rootAgent.source,
         }
@@ -430,8 +430,8 @@ export function planCliMultiAgentPresetRun(
     preset,
     rootAgent,
     missingAgentOverride: override.missing,
-    workflowAgentKeys: workflow.resolved.map(agentKeyOf),
-    toolUseAgentKeys: toolUseAgents.map(agentKeyOf),
+    workflowAgentKeys: workflow.resolved.map(toAgentKey),
+    toolUseAgentKeys: toolUseAgents.map(toAgentKey),
     missingWorkflowAgents: workflow.missing,
     missingToolUseAgents: toolUse.missing,
   };
@@ -477,7 +477,7 @@ function resolvePresetAgents(
   const resolved: AgentEntry[] = [];
   const missing: string[] = [];
   for (const name of names) {
-    const entry = findAgentByIdentifier(agents, name);
+    const entry = findRuntimeAgentByIdentifier(agents, name);
     if (entry) {
       resolved.push(entry);
     } else {
@@ -493,9 +493,7 @@ function resolveAgentOverride(
 ): { agent?: AgentEntry; missing?: string } {
   const query = override?.trim();
   if (!query) return {};
-  // Accepts a bare name or a source-qualified key via the registry's canonical
-  // identity matcher, instead of re-implementing the name-or-key rule here.
-  const agent = findAgentByIdentifier(agents, query);
+  const agent = findRuntimeAgentByIdentifier(agents, query);
   return agent ? { agent } : { missing: query };
 }
 
@@ -511,8 +509,8 @@ function selectPresetRootAgent(
   );
   const searchOrder =
     options.presetSource === 'built-in'
-      ? BUILTIN_TEAM_ROOT_AGENT_NAMES
-      : [...options.presetOrder, ...BUILTIN_TEAM_ROOT_AGENT_NAMES];
+      ? RUNTIME_BUILTIN_TEAM_ROOT_AGENT_NAMES
+      : [...options.presetOrder, ...RUNTIME_BUILTIN_TEAM_ROOT_AGENT_NAMES];
   for (const name of searchOrder) {
     const preferredRoot = delegatingAgents.find((agent) => agent.name === name);
     if (preferredRoot) return preferredRoot;
@@ -531,8 +529,8 @@ function includeAgent(
   agents: readonly AgentEntry[],
   rootAgent: AgentEntry,
 ): AgentEntry[] {
-  const rootKey = agentKeyOf(rootAgent);
-  return agents.some((agent) => agentKeyOf(agent) === rootKey)
+  const rootKey = toAgentKey(rootAgent);
+  return agents.some((agent) => toAgentKey(agent) === rootKey)
     ? [...agents]
     : [...agents, rootAgent];
 }
@@ -540,7 +538,7 @@ function includeAgent(
 function availablePresetTeamMemberCount(
   plan: CliMultiAgentPresetRunPlan,
 ): number {
-  const rootKey = plan.rootAgent ? agentKeyOf(plan.rootAgent) : undefined;
+  const rootKey = plan.rootAgent ? toAgentKey(plan.rootAgent) : undefined;
   const memberKeys = [
     ...plan.workflowAgentKeys,
     ...plan.toolUseAgentKeys.filter((key) => key !== rootKey),
@@ -602,6 +600,10 @@ function launcherAgentKindLabel(
 
 function agentHasDelegationTools(agent: AgentEntry): boolean {
   return hasDelegationTool(agent.tools);
+}
+
+function toAgentKey(agent: AgentEntry): string {
+  return agentKeyOf(agent);
 }
 
 function availablePresetAgents(

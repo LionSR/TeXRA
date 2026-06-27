@@ -1,9 +1,9 @@
-import { computeAgentOptionsData } from '@agent/index';
+import { computeRuntimeAgentOptionsData } from '@agent/runtime/agentResolution';
 import { getHelperModelName } from '@agent/runtime/helperModelName';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 
 export interface OptionsPayload {
-  agentOptions: Awaited<ReturnType<typeof computeAgentOptionsData>>;
+  agentOptions: Awaited<ReturnType<typeof computeRuntimeAgentOptionsData>>;
   modelOptions: Awaited<ReturnType<typeof computeModelOptionsData>>;
   defaultMergeModel: string;
 }
@@ -11,7 +11,7 @@ export interface OptionsPayload {
 export async function loadOptions(): Promise<OptionsPayload> {
   const [modelOptions, agentOptions] = await Promise.all([
     computeModelOptionsData(),
-    computeAgentOptionsData(),
+    computeRuntimeAgentOptionsData(),
   ]);
 
   const defaultMergeModel = getHelperModelName();

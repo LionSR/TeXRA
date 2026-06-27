@@ -10,6 +10,7 @@
 import { signal, type Signal } from '@lit-labs/signals';
 import PQueue from 'p-queue';
 
+import type { RuntimeToolEditApprovalRequest } from '@agent/runtime/approvalCommands';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { StreamTabId } from '@shared/schemas';
 import type {
@@ -22,7 +23,6 @@ import type {
   RetryPermission,
   UserQuestionPermission,
 } from '@shared/schemas';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 import { assertNever } from '@utils/core';
 
@@ -31,7 +31,7 @@ export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 export type ApprovalPayload =
   | { kind: 'bash'; payload: BashPermission }
-  | { kind: 'toolEdit'; request: ToolEditApprovalRequest }
+  | { kind: 'toolEdit'; request: RuntimeToolEditApprovalRequest }
   | { kind: 'plan'; payload: PlanApprovalPermission }
   | { kind: 'proposal'; payload: AgentProposalPermission }
   | { kind: 'retry'; payload: RetryPermission }

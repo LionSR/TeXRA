@@ -1,12 +1,12 @@
 import { structuredPatch } from 'diff';
 
+import type { RuntimeToolEditApprovalRequest } from '@agent/runtime/approvalCommands';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
 } from '@shared/schemas';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 import {
   CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT,
@@ -156,7 +156,7 @@ function formatDiffRange(start: number, lineCount: number): string {
 }
 
 function toolEditDiffLines(
-  request: ToolEditApprovalRequest,
+  request: RuntimeToolEditApprovalRequest,
 ): readonly string[] {
   const patch = structuredPatch(
     request.path,
@@ -195,7 +195,7 @@ function boundedToolEditDiffLines(
 }
 
 export function formatToolEditApprovalSummary(
-  request: ToolEditApprovalRequest,
+  request: RuntimeToolEditApprovalRequest,
 ): string {
   const header = `Tool edit requested by ${request.sourceTool}: ${request.path}`;
   const diffLines = toolEditDiffLines(request);

@@ -1,7 +1,9 @@
 import * as path from 'node:path';
 
-import { listExecutionWorkspaceFiles } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  listRuntimeHistoryWorkspaceFiles,
+  type RuntimeHistoryAgentConfig,
+} from '@agent/runtime/historyCommands';
 import { isFileNotFoundError } from '@common/errors';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
@@ -72,7 +74,7 @@ async function walkStorageDirectory(
 }
 
 export async function listWorkspaceToolFiles(
-  config: AgentConfig | null,
+  config: RuntimeHistoryAgentConfig | null,
   persistedPaths: readonly string[],
   conversation: readonly unknown[] | null,
 ): Promise<CliHistoryFile[]> {
@@ -81,7 +83,10 @@ export async function listWorkspaceToolFiles(
     : conversation?.length
       ? extractWorkspaceFileToolPaths(conversation)
       : [];
-  const workspaceFiles = await listExecutionWorkspaceFiles(config, filePaths);
+  const workspaceFiles = await listRuntimeHistoryWorkspaceFiles(
+    config,
+    filePaths,
+  );
   return workspaceFiles.map((file) => ({
     path: file.displayPath,
     size: file.size,

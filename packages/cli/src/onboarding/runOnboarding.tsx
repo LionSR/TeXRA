@@ -23,7 +23,7 @@ import {
   getOnboardingDeclined,
   setOnboardingDeclined,
 } from '@controllers/onboarding/onboardingFunnel';
-import { listExecutions } from '@agent/storage';
+import { hasRuntimeExecutionHistory } from '@agent/runtime/historyCommands';
 import { setPreferCodexSubscription, type CodexSession } from '@auth/codex';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { type OAuthProvider } from '@auth/sharedConfig';
@@ -139,10 +139,7 @@ export async function maybeRunCliOnboarding(
       GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
     ) === undefined;
   const hasRunHistory = needsFirstRunBackfill
-    ? await listExecutions().then(
-        (entries) => entries.length > 0,
-        () => false,
-      )
+    ? await hasRuntimeExecutionHistory().catch(() => false)
     : false;
   // LAST_KNOWN_VERSION is stamped by desktop/extension startup. The CLI's
   // API-mode preference is written during platform init, including first launch,

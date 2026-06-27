@@ -81,7 +81,7 @@ describe('tool-use follow-up progress events', () => {
     expect(events).toEqual([
       {
         event: 'followUpSent',
-        payload: { streamId },
+        payload: { streamId, messages: [] },
       },
     ]);
   });

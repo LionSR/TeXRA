@@ -8,11 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * warning instead of a confusing "no credential" picker.
  */
 
-const agentHandles = vi.fn<() => { agentName: string }[]>();
-
 const mocks = vi.hoisted(() => ({
+  getRuntimeActiveAgentNames: vi.fn<() => string[]>(),
   getUseOpenRouter: vi.fn<() => boolean>(),
   hasUsableApiKey: vi.fn<(provider: string) => Promise<boolean>>(),
+  runAgent: vi.fn<() => Promise<unknown>>(),
   showWarningMessage: vi.fn<() => Promise<string | undefined>>(),
   showQuickPick: vi.fn<() => Promise<unknown>>(),
   createQuickPick: vi.fn<(qp: unknown) => void>(),
@@ -34,10 +34,12 @@ vi.mock('@frontend/secretManager', () => ({
   },
 }));
 
-vi.mock('@agent/runtime/executionRegistry', () => ({
-  executionRegistry: {
-    getAgentHandles: () => agentHandles(),
-  },
+vi.mock('@agent/runtime/executionQueries', () => ({
+  getRuntimeActiveAgentNames: mocks.getRuntimeActiveAgentNames,
+}));
+
+vi.mock('@agent/runtime/runAgent', () => ({
+  runAgent: mocks.runAgent,
 }));
 
 vi.mock('@auth/codex', () => ({
@@ -134,20 +136,13 @@ vi.mock('@agent/index', () => ({
   loadAgents: () => Promise.resolve(),
 }));
 
-vi.mock('@agent/storage', () => ({
-  registerExecution: () => Promise.resolve(),
-}));
-
-vi.mock('@agent/runtime/executeAgent', () => ({
-  executeAgent: () => Promise.resolve(),
-}));
-
 vi.mock('@frontend/agentRuntime/extensionAgentRuntimeHost', () => ({
   extensionAgentRuntimeHost: {},
 }));
 
 vi.mock('@logger/logUtils', () => ({
   initialize: () => {},
+  attachChannelSubscriber: () => {},
   error: mocks.logError,
   warn: () => {},
   info: () => {},
@@ -160,7 +155,8 @@ vi.mock('@logger/logUtils', () => ({
 await import('vscode');
 await import('@utils/config/providerConfig');
 await import('@frontend/secretManager');
-await import('@agent/runtime/executionRegistry');
+await import('@agent/runtime/executionQueries');
+await import('@agent/runtime/runAgent');
 await import('@auth/codex');
 await import('@auth/serverKeys');
 await import('@common/state');
@@ -171,9 +167,11 @@ const { launchSetupAssistant } =
 
 describe('setup assistant routing check ordering', () => {
   beforeEach(() => {
-    agentHandles.mockReturnValue([]);
+    mocks.getRuntimeActiveAgentNames.mockReturnValue([]);
     mocks.getUseOpenRouter.mockReset();
     mocks.hasUsableApiKey.mockReset();
+    mocks.runAgent.mockReset();
+    mocks.runAgent.mockResolvedValue(undefined);
     mocks.showWarningMessage.mockReset();
     mocks.showQuickPick.mockReset();
     mocks.createQuickPick.mockReset();
@@ -243,5 +241,15 @@ describe('setup assistant routing check ordering', () => {
     expect(mocks.createQuickPick).not.toHaveBeenCalled();
     expect(mocks.showErrorMessage).not.toHaveBeenCalled();
     expect(result).toBe('launched');
+  });
+
+  it('does not launch a second setup assistant while one is active', async () => {
+    mocks.getRuntimeActiveAgentNames.mockReturnValue(['setup']);
+
+    const result = await launchSetupAssistant();
+
+    expect(result).toBe('already-running');
+    expect(mocks.runAgent).not.toHaveBeenCalled();
+    expect(mocks.executeCommand).toHaveBeenCalledWith('texra.showProgressView');
   });
 });

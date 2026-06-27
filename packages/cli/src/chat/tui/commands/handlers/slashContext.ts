@@ -1,12 +1,8 @@
 import { type CliContext } from '@cli/runtime/cliContext';
-import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAccess';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import type {
-  ChatCompactionRequestResult,
-  ChatModelSwitchResult,
-} from '@cli/chat/chatSessionController';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { type ExecutionId, type StreamTabId } from '@shared/schemas';
+import { type ExecutionId } from '@shared/schemas';
+export { CHAT_API_MODE_MODEL_RECOVERY } from '@cli/chat/chatModelRecovery';
 
 import {
   openCliSlashCommandForm,
@@ -28,23 +24,11 @@ export interface SlashCommandContext {
   readonly getApprovalPolicy: () => CliApprovalPolicy;
   readonly setApprovalPolicy: (policy: CliApprovalPolicy) => void;
   readonly canSelectModel: () => boolean;
-  readonly switchActiveModel: (model: string) => Promise<ChatModelSwitchResult>;
-  readonly requestCompaction: (
-    streamId: StreamTabId | undefined,
-  ) => ChatCompactionRequestResult;
-  readonly getQueuedFollowUpMessages: (
-    streamId: StreamTabId | undefined,
-  ) => readonly string[];
+  readonly switchModel: (model: string) => Promise<void>;
+  readonly requestCompaction: () => void;
   readonly resetSession: () => void;
   readonly resumeExecution: (id: ExecutionId) => Promise<void>;
 }
-
-export const CHAT_API_MODE_MODEL_RECOVERY = {
-  includedModeAction: 'switch to included relay with `/api included`',
-  loginAction: 'run `/login`',
-  personalModeAction: 'switch to personal API keys with `/api personal`',
-  configureKeyAction: 'configure a provider API key',
-} satisfies CliNoAvailableModelsRecoveryOptions;
 
 /** Open a command's registered inline form, falling back to the generic form. */
 export function openCanonicalSlashForm(

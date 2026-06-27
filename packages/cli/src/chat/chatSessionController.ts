@@ -1,4 +1,4 @@
-// Chat-session controller: owns run start/resume/stop/follow-up state-transition
+// Chat-session controller: owns run start/resume/stop state-transition
 // orchestration for the CLI chat session. Host-neutral (no Ink/TUI rendering
 // dependencies) — the Ink component consumes narrow commands exposed here.
 //
@@ -11,34 +11,32 @@ import PQueue from 'p-queue';
 
 import { tryPlatform } from '@platform/platform';
 import { getDefaultStreamLogStore, StreamSnapshotStore } from '@transcript';
-import { registerExecution, writeTerminalStatus } from '@agent/storage';
 import {
-  AgentConfigSchema,
-  type AgentConfig,
-  type AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+  parseRuntimeAgentConfig,
+  type RuntimeAgentConfigPayload,
+} from '@agent/runtime/executionRequests';
+import { requestRuntimeFollowUp } from '@agent/runtime/followUpCommands';
+import { requestManualCompaction } from '@agent/runtime/manualCompaction';
 import {
-  executeAgent,
-  resumeToolUseFromSnapshot,
-} from '@agent/runtime/executeAgent';
+  getRuntimeModelSwitchDisabledReason,
+  hasRuntimeToolUseModelSwitchTarget,
+  requestRuntimeModelSwitch,
+} from '@agent/runtime/modelSwitch';
+import { requestRuntimeToolUseSnapshotResume } from '@agent/runtime/resumeCommands';
+import { runAgent } from '@agent/runtime/runAgent';
+import { writeRuntimeTerminalStatus } from '@agent/runtime/historyCommands';
 import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import {
-  notifyFollowUpSent,
-  sendFollowUp,
-  type SendFollowUpResult,
-} from '@agent/followUp/ToolUseFollowUp';
-import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+  requestKillExecution,
+  requestStopStream,
+} from '@agent/runtime/streamControl';
+import { attachDefaultTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
+import { formatCliNoAvailableModelsRecovery } from '@cli/runtime/modelAccess';
+import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
 import {
   explainNonResumable,
   resolveCliResumeSnapshot,
@@ -48,7 +46,6 @@ import {
   cliTerminalStatus,
   terminalStatusExitCode,
 } from '@cli/runtime/terminalStatus';
-import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   EXECUTION_STATUS,
@@ -57,12 +54,18 @@ import {
   type StreamTabId,
   sumUsageStats,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { generateExecutionId } from '@utils/core/executionId';
 
+import { CHAT_API_MODE_MODEL_RECOVERY } from './chatModelRecovery';
 import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
 import { clearApprovals } from './tui/state/approvalQueue';
-import { cliState, patchStream } from './tui/state/cliState';
+import {
+  cliState,
+  patchStream,
+  setCliSessionModelOverride,
+} from './tui/state/cliState';
+import { stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage } from './tui/state/focusedChildFollowUp';
 import {
   chatTuiCanSelectModel,
   chatTuiCanStartRootRun,
@@ -105,7 +108,7 @@ export function buildInitialChatAgentConfig({
   workingDirectory,
   mediaFiles,
   cliMultiAgentPresetId,
-}: BuildInitialChatAgentConfigInput): AgentConfigPayload {
+}: BuildInitialChatAgentConfigInput): RuntimeAgentConfigPayload {
   return {
     agent,
     model,
@@ -116,26 +119,6 @@ export function buildInitialChatAgentConfig({
     ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
     ...(cliMultiAgentPresetId ? { cliMultiAgentPresetId } : {}),
   };
-}
-
-export async function registerFreshChatExecution(
-  executionId: ExecutionId,
-  configPayload: AgentConfigPayload,
-): Promise<AgentConfig> {
-  const config = AgentConfigSchema.parse(configPayload);
-  await registerExecution(executionId, config, config.agent);
-  return config;
-}
-
-export async function markRegisteredChatExecutionError(
-  executionId: ExecutionId,
-  options: {
-    readonly executionRegistered: boolean;
-    readonly agentSettled: boolean;
-  },
-): Promise<void> {
-  if (!options.executionRegistered || options.agentSettled) return;
-  await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
 }
 
 // ---------------------------------------------------------------------------
@@ -149,7 +132,7 @@ export async function markRegisteredChatExecutionError(
  */
 export interface ChatSessionController {
   /** Start a new root agent run from a fresh config. */
-  startRootRun(config: AgentConfigPayload): void;
+  startRootRun(config: RuntimeAgentConfigPayload): void;
 
   /**
    * Resume a suspended tool-use session by execution id.
@@ -166,39 +149,33 @@ export interface ChatSessionController {
   /** Request stop of the active run (idempotent). */
   stop(): void;
 
-  /** Request termination of a child execution shown by the TUI. */
-  killExecution(executionId: string): void;
-
   /** Whether a new root run can be started right now. */
   canStartRootRun(): boolean;
 
-  /** Whether the active model can be changed in the current run state. */
+  /** Whether the current chat state accepts a model selection. */
   canSelectModel(): boolean;
 
-  /** Explain why a model is unavailable for the active tool-use flow. */
+  /** Runtime-provided reason a candidate model cannot be selected now. */
   getModelSwitchDisabledReason(candidateModel: string): string | undefined;
 
-  /** Switch the active tool-use flow to a different model. */
-  switchActiveModel(model: string): Promise<ChatModelSwitchResult>;
+  /** Select the initial root model or switch the active tool-use model. */
+  switchModel(model: string): Promise<void>;
 
-  /** Request manual compaction of the active tool-use flow. */
-  requestCompaction(
-    streamId: StreamTabId | undefined,
-  ): ChatCompactionRequestResult;
+  /** Send a follow-up to the active root stream or an explicitly focused child. */
+  sendFollowUp(request: ChatFollowUpRequest): Promise<boolean>;
 
-  /** Return the current queued follow-up messages for a stream. */
-  getQueuedFollowUpMessages(
-    streamId: StreamTabId | undefined,
-  ): readonly string[];
+  /** Request context compaction for the active stream, if available. */
+  requestCompaction(): void;
 
-  /** Clear queued follow-up deliveries that have not started yet. */
-  clearPendingFollowUps(): void;
+  /** Kill a visible child execution from the session controller boundary. */
+  killExecution(executionId: ExecutionId): void;
+}
 
-  /** Queue a follow-up for serialized delivery to the active stream. */
-  submitFollowUp(input: ChatFollowUpInput): Promise<ChatFollowUpDeliveryResult>;
-
-  /** Resolve once the queued follow-up delivery path is idle. */
-  awaitFollowUpsIdle(): Promise<void>;
+export interface ChatFollowUpRequest {
+  readonly targetStreamId?: StreamTabId | undefined;
+  readonly text: string;
+  readonly mediaFiles?: readonly string[] | undefined;
+  readonly displayText?: string | undefined;
 }
 
 export interface ChatSessionControllerInit {
@@ -211,44 +188,23 @@ export interface ChatSessionControllerInit {
   /** Disposer list shared with the TUI lifecycle. */
   readonly disposers: Array<() => void>;
 
+  /** Serial queue for follow-up message delivery (cleared on resume). */
+  readonly followUpQueue: PQueue;
+
   /** Per-stream sidecar persistence store. */
   readonly snapshotStore: StreamSnapshotStore;
-
-  /** Runtime session that owns executions, coordinators, and subscriptions. */
-  readonly runtimeSession?: SessionHandle;
 }
-
-export type ChatModelSwitchResult =
-  | { readonly status: 'switched'; readonly model: string }
-  | {
-      readonly status: 'switched_default_update_failed';
-      readonly model: string;
-      readonly error: string;
-    }
-  | { readonly status: 'no_active_tool_use' };
-
-export type ChatCompactionRequestResult =
-  | { readonly status: 'requested' }
-  | { readonly status: 'no_active_tool_use' }
-  | { readonly status: 'unsupported' };
-
-export interface ChatFollowUpInput {
-  readonly targetStreamId?: StreamTabId;
-  readonly followUp: string | FollowUpQueueInput;
-  readonly mediaFiles?: readonly string[];
-  readonly displayText?: string;
-}
-
-export type ChatFollowUpDeliveryResult =
-  | SendFollowUpResult
-  | { readonly status: 'not_delivered' };
 
 export function createChatSessionController(
   init: ChatSessionControllerInit,
 ): ChatSessionController {
-  const { session, getSessionContext, disposers, snapshotStore } = init;
-  const followUpQueue = new PQueue({ concurrency: 1 });
-  const runtimeSession = init.runtimeSession ?? defaultSession();
+  const {
+    session,
+    getSessionContext,
+    disposers,
+    followUpQueue,
+    snapshotStore,
+  } = init;
 
   // -----------------------------------------------------------------------
   // Internal helpers
@@ -257,7 +213,8 @@ export function createChatSessionController(
   const interruptActiveRun = (): void => {
     clearApprovals();
     if (!session.streamId) return;
-    runtimeSession.executions.stopAgentStream(session.streamId, {
+    requestStopStream({
+      streamId: session.streamId,
       detachActiveChildren:
         tryPlatform()?.workspaceState.get<boolean>(
           WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
@@ -267,17 +224,34 @@ export function createChatSessionController(
     });
   };
 
-  const activeToolUseFlow = () =>
-    session.streamId
-      ? runtimeSession.executions.getToolUseFlowContext(session.streamId)
-      : undefined;
+  const killExecution = (executionId: ExecutionId): void => {
+    clearApprovals();
+    requestKillExecution({
+      executionId,
+      detachActiveChildren:
+        tryPlatform()?.workspaceState.get<boolean>(
+          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+          false,
+        ) === true,
+    });
+  };
 
   const rootStreamStatus = (): StreamStatus | undefined =>
     session.streamId
       ? cliState.streams.get().get(session.streamId)?.status
       : undefined;
 
-  const hasActiveToolUseFlow = (): boolean => Boolean(activeToolUseFlow());
+  const hasActiveToolUseFlow = (): boolean =>
+    session.streamId
+      ? hasRuntimeToolUseModelSwitchTarget({ streamId: session.streamId })
+      : false;
+
+  const stoppedFocusedChildFollowUpMessage = (streamId: StreamTabId): string =>
+    focusedChildStoppedMessage({
+      parentStream: cliState.parentStream.get(),
+      streamId,
+      streams: cliState.streams.get(),
+    });
 
   const canSelectModel = (): boolean =>
     chatTuiCanSelectModel({
@@ -293,76 +267,91 @@ export function createChatSessionController(
     if (chatTuiCanStartRootRun(session) || !canSelectModel()) {
       return undefined;
     }
-    return activeToolUseFlow()?.modelSwitchDisabledReason(candidateModel);
+    if (!session.streamId) return undefined;
+    return getRuntimeModelSwitchDisabledReason({
+      streamId: session.streamId,
+      candidateModel,
+    });
   };
 
-  const switchActiveModel = async (
-    nextModel: string,
-  ): Promise<ChatModelSwitchResult> => {
-    const activeFlow = activeToolUseFlow();
-    if (!activeFlow) return { status: 'no_active_tool_use' };
+  const switchModel = async (model: string): Promise<void> => {
+    const nextModel = model.trim();
+    if (chatTuiCanStartRootRun(session)) {
+      try {
+        const { apiMode } = cliState.sessionMeta.get();
+        const selection = await selectCliRootModel({
+          model: nextModel,
+          modelSource: 'override',
+          apiMode,
+          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+            apiMode,
+            CHAT_API_MODE_MODEL_RECOVERY,
+          ),
+        });
+        setCliSessionModelOverride(selection.model);
+        appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
+      } catch (error: unknown) {
+        appendLocalAssistantTranscript(toErrorMessage(error));
+      }
+      return;
+    }
 
-    await activeFlow.switchModel(nextModel);
+    if (!canSelectModel()) {
+      appendLocalAssistantTranscript(
+        'Finish the active response before switching models.',
+      );
+      return;
+    }
+
+    if (!session.streamId) {
+      appendLocalAssistantTranscript(
+        'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
+      );
+      return;
+    }
+
+    try {
+      const switched = await requestRuntimeModelSwitch({
+        streamId: session.streamId,
+        model: nextModel,
+      });
+      if (!switched) {
+        appendLocalAssistantTranscript(
+          'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
+        );
+        return;
+      }
+      setCliSessionModelOverride(nextModel);
+    } catch (error: unknown) {
+      appendLocalAssistantTranscript(toErrorMessage(error));
+      return;
+    }
+
     try {
       await setCliHelperModel(nextModel);
     } catch (error: unknown) {
-      return {
-        status: 'switched_default_update_failed',
-        model: nextModel,
-        error: toErrorMessage(error),
-      };
-    }
-    return { status: 'switched', model: nextModel };
-  };
-
-  const requestCompaction = (
-    streamId: StreamTabId | undefined,
-  ): ChatCompactionRequestResult => {
-    const flowContext = streamId
-      ? runtimeSession.executions.getToolUseFlowContext(streamId)
-      : undefined;
-    if (!streamId || !flowContext) return { status: 'no_active_tool_use' };
-    if (!flowContext.modelHandler.supportsManualCompaction) {
-      return { status: 'unsupported' };
-    }
-
-    flowContext.requestImmediateCompaction();
-    notifyFollowUpSent(streamId, flowContext.runtimeHost);
-    return { status: 'requested' };
-  };
-
-  const getQueuedFollowUpMessages = (
-    streamId: StreamTabId | undefined,
-  ): readonly string[] =>
-    streamId ? ToolUseFollowUpQueue.getAll(streamId) : [];
-
-  const deliverFollowUp = async (
-    targetStreamId: StreamTabId,
-    input: ChatFollowUpInput,
-  ): Promise<SendFollowUpResult> => {
-    if (typeof input.followUp === 'string') {
-      return await sendFollowUp(
-        targetStreamId,
-        input.followUp,
-        input.mediaFiles,
-        input.displayText,
-        runtimeSession,
+      appendLocalAssistantTranscript(
+        `Model switched to ${nextModel}. Could not persist it as the default helper model: ${toErrorMessage(error)}`,
       );
+      return;
     }
-    return await sendFollowUp(
-      targetStreamId,
-      input.followUp,
-      undefined,
-      undefined,
-      runtimeSession,
+
+    appendLocalAssistantTranscript(
+      `Model switched to ${nextModel}. Future turns will use it.`,
     );
   };
 
-  const submitFollowUp = async (
-    input: ChatFollowUpInput,
-  ): Promise<ChatFollowUpDeliveryResult> => {
-    return await followUpQueue.add(async () => {
-      let followUpTarget = input.targetStreamId;
+  const sendFollowUp = async ({
+    targetStreamId,
+    text,
+    mediaFiles,
+    displayText,
+  }: ChatFollowUpRequest): Promise<boolean> =>
+    followUpQueue.add(async () => {
+      // Follow-ups must not be silently dropped when the user submits before
+      // onStreamResolved has populated session.streamId. PQueue serializes
+      // delivery; the queue task waits for the missing stream id.
+      let followUpTarget = targetStreamId;
       while (
         !followUpTarget &&
         !session.stopRequested &&
@@ -371,18 +360,61 @@ export function createChatSessionController(
         await sleep(25);
         followUpTarget = session.streamId;
       }
-      if (!followUpTarget || session.stopRequested) {
-        return { status: 'not_delivered' };
+      if (!followUpTarget || session.stopRequested) return false;
+
+      const result = await requestRuntimeFollowUp({
+        streamId: followUpTarget,
+        text,
+        ...(mediaFiles !== undefined ? { mediaFiles } : {}),
+        ...(displayText !== undefined ? { displayText } : {}),
+      });
+      if (result.status === 'sent' || result.status === 'queued') {
+        return true;
       }
-      return await deliverFollowUp(followUpTarget, input);
+
+      // Child stream ids are keys in parentStream; the root session id is not.
+      if (followUpTarget === session.streamId) {
+        session.stopRequested = true;
+      } else {
+        appendLocalAssistantTranscript(
+          stoppedFocusedChildFollowUpMessage(followUpTarget),
+          followUpTarget,
+        );
+      }
+      return false;
     });
+
+  const requestCompaction = (): void => {
+    const streamId = cliState.activeStreamId.get();
+    const result = requestManualCompaction(streamId);
+
+    switch (result.status) {
+      case 'no_session':
+        appendLocalAssistantTranscript(
+          'No active tool-use session found for context compaction.',
+          streamId,
+        );
+        return;
+      case 'unsupported_model':
+        appendLocalAssistantTranscript(
+          'Manual context compaction is not available for the current model.',
+          streamId,
+        );
+        return;
+      case 'requested':
+        appendLocalAssistantTranscript(
+          'Context compaction requested. The agent will process it on the next model call.',
+          streamId,
+        );
+        return;
+    }
   };
 
   // -----------------------------------------------------------------------
   // startRootRun
   // -----------------------------------------------------------------------
 
-  const startRootRun = (config: AgentConfigPayload): void => {
+  const startRootRun = (config: RuntimeAgentConfigPayload): void => {
     const currentModel = config.model;
     const sessionContext = getSessionContext(currentModel);
     cliState.sessionMeta.set({
@@ -392,56 +424,48 @@ export function createChatSessionController(
       canDelegate: chatAgentSupportsDelegation(config.agent),
     });
     const runtimeHost = createCliRuntimeHost(sessionContext);
-    const wrapped = wrapRuntimeHost(runtimeHost, {
-      getQueuedFollowUps: (streamId) => ToolUseFollowUpQueue.getAll(streamId),
-    });
-    const detachResultToast = attachTerminalResultToast(
-      runtimeSession,
-      wrapped,
-    );
-    const unbindApprovals = installTuiApprovals(
-      wrapped,
-      sessionContext,
-      runtimeSession.coordinators,
-    );
+    const wrapped = wrapRuntimeHost(runtimeHost);
+    const detachResultToast = attachDefaultTerminalResultToast(wrapped);
+    const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
-    const executionId = generateExecutionId();
+    let executionId: ExecutionId | undefined;
     let waitingTurn = 0;
-    let executionRegistered = false;
-    let agentSettled = false;
-    session.executionId = executionId;
     const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
 
-    const runPromise = registerFreshChatExecution(executionId, config)
-      .then((registeredConfig) => {
-        executionRegistered = true;
-        return executeAgent(registeredConfig, executionId, {
-          runtimeHost: wrapped,
-          enforceCategory: true,
-          approvalPromptsUnavailable: approvalsUnavailable,
-          runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
-          session: runtimeSession,
-          onStreamResolved: (resolvedStreamId) => {
-            session.streamId = resolvedStreamId;
-            cliState.rootStreamId.set(resolvedStreamId);
-            moveLocalTranscriptToStream(resolvedStreamId);
-            cliState.activeStreamId.set(resolvedStreamId);
-            if (session.stopRequested) interruptActiveRun();
+    const runPromise = Promise.resolve()
+      .then(() => {
+        const registeredConfig = parseRuntimeAgentConfig(config);
+        return runAgent(
+          { config: registeredConfig },
+          {
+            runtimeHost: wrapped,
+            enforceCategory: true,
+            approvalPromptsUnavailable: approvalsUnavailable,
+            onExecutionIdAllocated: (allocatedExecutionId) => {
+              executionId = allocatedExecutionId;
+              session.executionId = allocatedExecutionId;
+            },
+            onStreamResolved: (resolvedStreamId) => {
+              session.streamId = resolvedStreamId;
+              cliState.rootStreamId.set(resolvedStreamId);
+              moveLocalTranscriptToStream(resolvedStreamId);
+              cliState.activeStreamId.set(resolvedStreamId);
+              if (session.stopRequested) interruptActiveRun();
+            },
+            onBeforeWaiting: (lastResponse) => {
+              if (!session.streamId) return;
+              projectStreamTranscript(session.streamId, {
+                fallbackAssistant: {
+                  text: lastResponse,
+                  idPrefix: `waiting:${executionId ?? 'pending'}:${waitingTurn++}`,
+                },
+                finalize: true,
+              });
+            },
           },
-          onBeforeWaiting: (lastResponse) => {
-            if (!session.streamId) return;
-            projectStreamTranscript(session.streamId, {
-              fallbackAssistant: {
-                text: lastResponse,
-                idPrefix: `waiting:${executionId}:${waitingTurn++}`,
-              },
-              finalize: true,
-            });
-          },
-        });
+        );
       })
       .then((result) => {
-        agentSettled = true;
         session.runExitCode = terminalStatusExitCode(
           cliTerminalStatus(result),
           sessionContext,
@@ -462,11 +486,13 @@ export function createChatSessionController(
         notify({ kind: 'agentFinished' });
       })
       .catch(async (error: unknown) => {
-        await markRegisteredChatExecutionError(executionId, {
-          executionRegistered,
-          agentSettled,
-        });
         if (!session.stopRequested) {
+          if (executionId) {
+            await writeRuntimeTerminalStatus(
+              executionId,
+              EXECUTION_STATUS.ERROR,
+            );
+          }
           appendLocalErrorTranscript(toErrorMessage(error));
         }
         session.runExitCode = session.stopRequested
@@ -541,30 +567,26 @@ export function createChatSessionController(
     cliState.activeStreamId.set(resolution.streamId);
 
     const runtimeHost = createCliRuntimeHost(sessionContext);
-    const wrapped = wrapRuntimeHost(runtimeHost, {
-      getQueuedFollowUps: (streamId) => ToolUseFollowUpQueue.getAll(streamId),
-    });
+    const wrapped = wrapRuntimeHost(runtimeHost);
     session.runtimeHost = wrapped;
-    const detachResultToast = attachTerminalResultToast(
-      runtimeSession,
-      wrapped,
-    );
-    const unbindApprovals = installTuiApprovals(
-      wrapped,
-      sessionContext,
-      runtimeSession.coordinators,
-    );
+    const detachResultToast = attachDefaultTerminalResultToast(wrapped);
+    const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
     const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
 
     session.runPromise = setCliHelperModel(currentModel)
-      .then(() =>
-        resumeToolUseFromSnapshot(resolution.snapshot, wrapped, {
+      .then(async () => {
+        const resumed = await requestRuntimeToolUseSnapshotResume({
+          snapshot: resolution.snapshot,
+          runtimeHost: wrapped,
           approvalPromptsUnavailable: approvalsUnavailable,
-          runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
-          session: runtimeSession,
-        }),
-      )
+        });
+        if (!resumed) {
+          throw new Error(
+            'The selected session is already active or resuming.',
+          );
+        }
+      })
       .then(() => {
         if (session.streamId) {
           projectStreamTranscript(session.streamId, { finalize: true });
@@ -598,30 +620,16 @@ export function createChatSessionController(
     interruptActiveRun();
   };
 
-  const killExecution = (executionId: string): void => {
-    clearApprovals();
-    runtimeSession.executions.kill(executionId, {
-      detachActiveChildren:
-        tryPlatform()?.workspaceState.get<boolean>(
-          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-          false,
-        ) === true,
-    });
-  };
-
   return {
     startRootRun,
     resume,
     stop,
-    killExecution,
     canStartRootRun: () => chatTuiCanStartRootRun(session),
     canSelectModel,
     getModelSwitchDisabledReason,
-    switchActiveModel,
+    switchModel,
+    sendFollowUp,
     requestCompaction,
-    getQueuedFollowUpMessages,
-    clearPendingFollowUps: () => followUpQueue.clear(),
-    submitFollowUp,
-    awaitFollowUpsIdle: () => followUpQueue.onIdle(),
+    killExecution,
   };
 }

@@ -1,10 +1,14 @@
 import * as vscode from 'vscode';
 
-import { createKey, getAgent, type AgentSource } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { getRuntimeAgentByIdentifier } from '@agent/runtime/agentResolution';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  agentKey as createKey,
+  AgentCategory,
+  type AgentSource,
+} from '@shared/schemas/agent';
 import { delay } from '@utils/core';
 
 const CHANNEL = 'RemoteAgentUtils';
@@ -53,7 +57,7 @@ export async function selectAgentInMainView(
       );
     }
 
-    const entry = getAgent(agentValue);
+    const entry = getRuntimeAgentByIdentifier(agentValue);
     const sessionType =
       entry?.category === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
 

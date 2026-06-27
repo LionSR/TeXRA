@@ -1,7 +1,8 @@
 import { registerExecution } from '@agent/storage';
 
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
-import type { ExecutionId } from '@shared/schemas';
+import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 import { executeAgent } from './executeAgent';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -17,6 +18,12 @@ export interface RunAgentOptions {
   stopAfterCycle?: boolean;
   approvalPromptsUnavailable?: boolean;
   runtimeUnavailableTools?: readonly string[];
+  /** Fires once the runtime has allocated the execution id for this run. */
+  onExecutionIdAllocated?: (executionId: ExecutionId) => void;
+  /** Fires with the real stream id before the stream is activated. */
+  onStreamResolved?: (streamId: StreamTabId) => void;
+  /** Fires before a tool-use run enters WAITING, delivering the interim text. */
+  onBeforeWaiting?: ToolUseBeforeWaitingCallback;
   /** Session owning this run's coordination state. Defaults to the process session. */
   session?: SessionHandle;
   /**
@@ -47,6 +54,7 @@ export async function runAgent(
 ): Promise<AgentFlowResult> {
   const executionId =
     request.executionId ?? (generateExecutionId() as ExecutionId);
+  options.onExecutionIdAllocated?.(executionId);
   const shouldRegister =
     options.registerExecution ?? request.executionId === undefined;
 
@@ -66,6 +74,8 @@ export async function runAgent(
     stopAfterCycle: options.stopAfterCycle,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
+    onStreamResolved: options.onStreamResolved,
+    onBeforeWaiting: options.onBeforeWaiting,
     session: options.session,
     onRun: options.onRun,
   });

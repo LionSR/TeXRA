@@ -35,6 +35,13 @@ vi.mock('@agent/index', () => ({
   loadAgents: mocks.loadAgents,
 }));
 
+vi.mock('@agent/runtime/agentResolution', () => ({
+  getRuntimeAgent: mocks.getAgent,
+  listRuntimeAgentsByCategory: mocks.getAgentsByCategory,
+  listRuntimeVisibleAgents: mocks.getVisibleAgents,
+  loadRuntimeAgents: mocks.loadAgents,
+}));
+
 vi.mock('@agent/storage', () => ({
   writeTerminalStatus: vi.fn(),
 }));

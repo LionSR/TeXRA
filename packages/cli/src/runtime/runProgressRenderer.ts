@@ -1,8 +1,7 @@
 import path from 'node:path';
 
 // Local imports - agent metadata
-import { getAgent } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { getRuntimeAgent } from '@agent/runtime/agentResolution';
 
 // Local imports - progress events
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -14,6 +13,7 @@ import {
   type ExecutionStatus,
   type StreamStatus,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 
 // Local imports - CLI runtime
 import { writeRawStderr } from './logSinks';
@@ -195,7 +195,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.state.inputLabel = formatInputLabel(config.inputFiles);
     this.state.plannedRounds =
       config.agentCategory === AgentCategory.Workflow
-        ? getAgent(config.agent, AgentCategory.Workflow)?.rounds
+        ? getRuntimeAgent(config.agent, AgentCategory.Workflow)?.rounds
         : undefined;
     this.state.phase ??= 'running';
     return true;

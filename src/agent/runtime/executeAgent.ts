@@ -50,6 +50,7 @@ import { currentSession, type SessionHandle } from './SessionHandle';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
+import { emitQueuedFollowUps } from './queuedFollowUps';
 import {
   AgentFlowError,
   buildOptionalFlowResultFields,
@@ -232,9 +233,7 @@ async function runToolUseAgent(
           options.onProgress?.(update);
         },
         onFollowUpConsumed: () => {
-          ctx.runtimeHost.emit('updateQueuedFollowUps', {
-            streamId: ctx.streamId,
-          });
+          emitQueuedFollowUps(ctx.runtimeHost, ctx.streamId);
           options.onFollowUpConsumed?.();
         },
         onModelChanged: (modelHandler) => {
@@ -519,9 +518,7 @@ export async function resumeToolUseFromSnapshot(
             // /memories protocol) that the fresh run had included.
             isSubagent,
             onFollowUpConsumed: () =>
-              ctx.runtimeHost.emit('updateQueuedFollowUps', {
-                streamId: ctx.streamId,
-              }),
+              emitQueuedFollowUps(ctx.runtimeHost, ctx.streamId),
           },
           undefined,
           (flowContext) => {

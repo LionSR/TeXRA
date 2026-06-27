@@ -1,29 +1,19 @@
-import { getAgent } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  getRuntimeAgent,
+  runtimeToolUseAgentHasAnyTool,
+} from '@agent/runtime/agentResolution';
 import { assertCliAgentLaunch } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
-import { formatCliNoAvailableModelsRecovery } from '@cli/runtime/modelAccess';
-import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
 
-import {
-  cliState,
-  setCliSessionModelOverride,
-} from '@cli/chat/tui/state/cliState';
+import { cliState } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
-import {
-  CHAT_API_MODE_MODEL_RECOVERY,
-  type SlashCommandContext,
-} from './slashContext';
+import { AgentCategory } from '@shared/schemas/agent';
+import { type SlashCommandContext } from './slashContext';
 
 export function chatAgentSupportsDelegation(agentName: string): boolean {
-  return (
-    getAgent(agentName, AgentCategory.ToolUse)?.tools?.some((toolName) =>
-      DELEGATION_TOOLS.has(toolName),
-    ) ?? false
-  );
+  return runtimeToolUseAgentHasAnyTool(agentName, DELEGATION_TOOLS);
 }
 
 export function chatToolUseAgentUsageError(
@@ -32,7 +22,7 @@ export function chatToolUseAgentUsageError(
   try {
     assertCliAgentLaunch(
       agentName,
-      getAgent(agentName, AgentCategory.ToolUse),
+      getRuntimeAgent(agentName, AgentCategory.ToolUse),
       'chat',
     );
     return undefined;
@@ -71,53 +61,5 @@ export async function applyCliModelSelection(
   model: string,
   context: SlashCommandContext,
 ): Promise<void> {
-  const nextModel = model.trim();
-  if (chatTuiCanStartRootRun(context.session)) {
-    try {
-      const { apiMode } = cliState.sessionMeta.get();
-      const selection = await selectCliRootModel({
-        model: nextModel,
-        modelSource: 'override',
-        apiMode,
-        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-          apiMode,
-          CHAT_API_MODE_MODEL_RECOVERY,
-        ),
-      });
-      setCliSessionModelOverride(selection.model);
-      appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
-    } catch (error: unknown) {
-      appendLocalAssistantTranscript(toErrorMessage(error));
-    }
-    return;
-  }
-
-  if (!context.canSelectModel()) {
-    appendLocalAssistantTranscript(
-      'Finish the active response before switching models.',
-    );
-    return;
-  }
-
-  try {
-    const result = await context.switchActiveModel(nextModel);
-    if (result.status === 'no_active_tool_use') {
-      appendLocalAssistantTranscript(
-        'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
-      );
-      return;
-    }
-    setCliSessionModelOverride(result.model);
-    if (result.status === 'switched_default_update_failed') {
-      appendLocalAssistantTranscript(
-        `Model switched to ${result.model}. Could not persist it as the default helper model: ${result.error}`,
-      );
-      return;
-    }
-    appendLocalAssistantTranscript(
-      `Model switched to ${result.model}. Future turns will use it.`,
-    );
-  } catch (error: unknown) {
-    appendLocalAssistantTranscript(toErrorMessage(error));
-  }
+  await context.switchModel(model);
 }

@@ -5,26 +5,58 @@
 // contract, and the stop/idle state mutations that are safe to verify
 // without a full agent harness.
 
+import PQueue from 'p-queue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  getToolUseFlowContext: vi.fn(),
-  kill: vi.fn(),
-  notifyFollowUpSent: vi.fn(),
-  sendFollowUp: vi.fn(),
-  stopAgentStream: vi.fn(),
+  getRuntimeModelSwitchDisabledReason: vi.fn(),
+  hasRuntimeToolUseModelSwitchTarget: vi.fn(),
+  requestRuntimeModelSwitch: vi.fn(),
+  attachDefaultTerminalResultToast: vi.fn(),
+  installTuiApprovals: vi.fn(),
+  requestKillExecution: vi.fn(),
+  requestStopStream: vi.fn(),
+  requestRuntimeFollowUp: vi.fn(),
+  runAgent: vi.fn(),
+  writeRuntimeTerminalStatus: vi.fn(),
+  setCliHelperModel: vi.fn(),
   workspaceGet: vi.fn(),
 }));
 
-vi.mock('@agent/runtime/executionRegistry', () => ({
-  executionRegistry: {
-    stopAgentStream: mocks.stopAgentStream,
-  },
+vi.mock('@agent/runtime/modelSwitch', () => ({
+  getRuntimeModelSwitchDisabledReason:
+    mocks.getRuntimeModelSwitchDisabledReason,
+  hasRuntimeToolUseModelSwitchTarget: mocks.hasRuntimeToolUseModelSwitchTarget,
+  requestRuntimeModelSwitch: mocks.requestRuntimeModelSwitch,
 }));
 
-vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
-  notifyFollowUpSent: mocks.notifyFollowUpSent,
-  sendFollowUp: mocks.sendFollowUp,
+vi.mock('@agent/runtime/streamControl', () => ({
+  requestKillExecution: mocks.requestKillExecution,
+  requestStopStream: mocks.requestStopStream,
+}));
+
+vi.mock('@agent/runtime/followUpCommands', () => ({
+  requestRuntimeFollowUp: mocks.requestRuntimeFollowUp,
+}));
+
+vi.mock('@agent/runtime/runAgent', () => ({
+  runAgent: mocks.runAgent,
+}));
+
+vi.mock('@agent/runtime/historyCommands', () => ({
+  writeRuntimeTerminalStatus: mocks.writeRuntimeTerminalStatus,
+}));
+
+vi.mock('@agent/runtime/terminalResultToast', () => ({
+  attachDefaultTerminalResultToast: mocks.attachDefaultTerminalResultToast,
+}));
+
+vi.mock('@cli/chat/tui/state/subscribeApprovals', () => ({
+  installTuiApprovals: mocks.installTuiApprovals,
+}));
+
+vi.mock('@cli/runtime/initPlatform', () => ({
+  setCliHelperModel: mocks.setCliHelperModel,
 }));
 
 vi.mock('@platform/platform', () => ({
@@ -37,8 +69,6 @@ vi.mock('@platform/platform', () => ({
 
 import { StreamSnapshotStore } from '@transcript';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
@@ -46,10 +76,17 @@ import {
   buildInitialChatAgentConfig,
   createChatSessionController,
 } from '@cli/chat/chatSessionController';
+import { patchStream, resetCliState } from '@cli/chat/tui/state/cliState';
 import {
   chatTuiCanStartRootRun,
   type TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
+import {
+  EXECUTION_STATUS,
+  RUN_OUTCOME,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ---------------------------------------------------------------------------
@@ -86,16 +123,6 @@ function makeSessionContext(): CliContext {
   } as CliContext;
 }
 
-function makeRuntimeSession(): SessionHandle {
-  return {
-    executions: {
-      getToolUseFlowContext: mocks.getToolUseFlowContext,
-      kill: mocks.kill,
-      stopAgentStream: mocks.stopAgentStream,
-    },
-  } as unknown as SessionHandle;
-}
-
 function makeInit(
   overrides: Partial<ChatSessionControllerInit> = {},
 ): ChatSessionControllerInit {
@@ -103,10 +130,17 @@ function makeInit(
     session: makeSession(),
     getSessionContext: () => makeSessionContext(),
     disposers: [],
+    followUpQueue: new PQueue({ concurrency: 1 }),
     snapshotStore: new StreamSnapshotStore(),
-    runtimeSession: makeRuntimeSession(),
     ...overrides,
   };
+}
+
+function markWaitingStream(streamId: StreamTabId): void {
+  patchStream(streamId, (slice) => ({
+    ...slice,
+    status: STREAM_STATUS.WAITING,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -147,11 +181,38 @@ describe('chatTuiCanStartRootRun', () => {
 
 describe('createChatSessionController', () => {
   beforeEach(() => {
-    mocks.getToolUseFlowContext.mockReset();
-    mocks.kill.mockReset();
-    mocks.notifyFollowUpSent.mockReset();
-    mocks.sendFollowUp.mockReset();
-    mocks.stopAgentStream.mockReset();
+    resetCliState();
+    mocks.getRuntimeModelSwitchDisabledReason.mockReset();
+    mocks.hasRuntimeToolUseModelSwitchTarget.mockReset();
+    mocks.hasRuntimeToolUseModelSwitchTarget.mockReturnValue(false);
+    mocks.requestRuntimeModelSwitch.mockReset();
+    mocks.requestRuntimeModelSwitch.mockResolvedValue(false);
+    mocks.attachDefaultTerminalResultToast.mockReset();
+    mocks.attachDefaultTerminalResultToast.mockReturnValue(vi.fn());
+    mocks.installTuiApprovals.mockReset();
+    mocks.installTuiApprovals.mockReturnValue(vi.fn());
+    mocks.requestKillExecution.mockReset();
+    mocks.requestStopStream.mockReset();
+    mocks.requestRuntimeFollowUp.mockReset();
+    mocks.requestRuntimeFollowUp.mockResolvedValue({ status: 'sent' });
+    mocks.runAgent.mockReset();
+    mocks.writeRuntimeTerminalStatus.mockReset();
+    mocks.writeRuntimeTerminalStatus.mockResolvedValue(undefined);
+    mocks.runAgent.mockImplementation(async (_request, options) => {
+      const executionId = 'exec-chat-controller-run-agent';
+      const streamId = 'stream-chat-controller-run-agent' as StreamTabId;
+      options.onExecutionIdAllocated?.(executionId);
+      options.onStreamResolved?.(streamId);
+      return {
+        category: AgentCategory.ToolUse,
+        executionId,
+        streamId,
+        outcome: RUN_OUTCOME.COMPLETED,
+        lastResponse: 'Done.',
+      };
+    });
+    mocks.setCliHelperModel.mockReset();
+    mocks.setCliHelperModel.mockResolvedValue(undefined);
     mocks.workspaceGet.mockReset();
     mocks.workspaceGet.mockReturnValue(false);
   });
@@ -162,33 +223,13 @@ describe('createChatSessionController', () => {
     expect(typeof ctrl.startRootRun).toBe('function');
     expect(typeof ctrl.resume).toBe('function');
     expect(typeof ctrl.stop).toBe('function');
-    expect(typeof ctrl.killExecution).toBe('function');
     expect(typeof ctrl.canStartRootRun).toBe('function');
     expect(typeof ctrl.canSelectModel).toBe('function');
     expect(typeof ctrl.getModelSwitchDisabledReason).toBe('function');
-    expect(typeof ctrl.switchActiveModel).toBe('function');
+    expect(typeof ctrl.switchModel).toBe('function');
+    expect(typeof ctrl.sendFollowUp).toBe('function');
     expect(typeof ctrl.requestCompaction).toBe('function');
-    expect(typeof ctrl.getQueuedFollowUpMessages).toBe('function');
-    expect(typeof ctrl.clearPendingFollowUps).toBe('function');
-    expect(typeof ctrl.submitFollowUp).toBe('function');
-    expect(typeof ctrl.awaitFollowUpsIdle).toBe('function');
-  });
-
-  it('projects current queued follow-up messages for a stream', () => {
-    const streamId = 'stream-queued-follow-ups' as const;
-    const ctrl = createChatSessionController(makeInit());
-    const queue = ToolUseFollowUpQueue.acquire(streamId);
-
-    try {
-      queue.enqueue({ text: 'Fresh controller queue message' });
-
-      expect(ctrl.getQueuedFollowUpMessages(streamId)).toEqual([
-        'Fresh controller queue message',
-      ]);
-      expect(ctrl.getQueuedFollowUpMessages(undefined)).toEqual([]);
-    } finally {
-      ToolUseFollowUpQueue.release(streamId);
-    }
+    expect(typeof ctrl.killExecution).toBe('function');
   });
 
   it('canStartRootRun() delegates to chatTuiCanStartRootRun(session)', () => {
@@ -251,69 +292,187 @@ describe('createChatSessionController', () => {
       WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     );
-    expect(mocks.stopAgentStream).toHaveBeenCalledWith('stream-1', {
+    expect(mocks.requestStopStream).toHaveBeenCalledWith({
+      streamId: 'stream-1',
       detachActiveChildren: true,
       runtimeHost,
     });
   });
 
-  it('killExecution delegates child termination to the session execution owner', () => {
+  it('starts root chat runs through the runtime run boundary', async () => {
+    const session = makeSession();
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    ctrl.startRootRun({
+      agent: 'chat',
+      model: 'demo-model',
+      instruction: 'Prove the lemma.',
+      agentCategory: AgentCategory.ToolUse,
+      workingDirectory: '/tmp/test',
+    });
+
+    await session.runPromise;
+
+    expect(mocks.runAgent).toHaveBeenCalledWith(
+      {
+        config: expect.objectContaining({
+          agent: 'chat',
+          model: 'demo-model',
+          instruction: 'Prove the lemma.',
+        }),
+      },
+      expect.objectContaining({
+        enforceCategory: true,
+        approvalPromptsUnavailable: false,
+        runtimeHost: expect.any(Object),
+        onExecutionIdAllocated: expect.any(Function),
+        onStreamResolved: expect.any(Function),
+        onBeforeWaiting: expect.any(Function),
+      }),
+    );
+    expect(session.executionId).toBe('exec-chat-controller-run-agent');
+    expect(session.streamId).toBe('stream-chat-controller-run-agent');
+    expect(session.runExitCode).toBe(CliExitCode.Success);
+  });
+
+  it('marks an allocated chat execution ERROR when launch fails', async () => {
+    const session = makeSession();
+    const ctrl = createChatSessionController(makeInit({ session }));
+    mocks.runAgent.mockImplementation(async (_request, options) => {
+      options.onExecutionIdAllocated?.('exec-chat-controller-failed');
+      throw new Error('launch failed');
+    });
+
+    ctrl.startRootRun({
+      agent: 'chat',
+      model: 'demo-model',
+      instruction: 'Prove the lemma.',
+      agentCategory: AgentCategory.ToolUse,
+      workingDirectory: '/tmp/test',
+    });
+
+    await session.runPromise;
+
+    expect(mocks.writeRuntimeTerminalStatus).toHaveBeenCalledWith(
+      'exec-chat-controller-failed',
+      EXECUTION_STATUS.ERROR,
+    );
+    expect(session.runExitCode).toBe(CliExitCode.AgentError);
+  });
+
+  it('projects model-switch availability from waiting stream state and live tool-use flow', () => {
+    const streamId = 'stream-model-switch' as StreamTabId;
+    const session = makeSession({
+      streamId,
+      runPromise: new Promise(() => {}),
+      runCompleted: false,
+    });
+    markWaitingStream(streamId);
+    mocks.hasRuntimeToolUseModelSwitchTarget.mockReturnValue(true);
+    mocks.getRuntimeModelSwitchDisabledReason.mockReturnValue(
+      'Provider format differs.',
+    );
+
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    expect(ctrl.canSelectModel()).toBe(true);
+    expect(ctrl.getModelSwitchDisabledReason('blocked-model')).toBe(
+      'Provider format differs.',
+    );
+    expect(mocks.hasRuntimeToolUseModelSwitchTarget).toHaveBeenCalledWith({
+      streamId,
+    });
+    expect(mocks.getRuntimeModelSwitchDisabledReason).toHaveBeenCalledWith({
+      streamId,
+      candidateModel: 'blocked-model',
+    });
+  });
+
+  it('switchModel sends the active tool-use model switch through the controller boundary', async () => {
+    const streamId = 'stream-switch-model' as StreamTabId;
+    const session = makeSession({
+      streamId,
+      runPromise: new Promise(() => {}),
+      runCompleted: false,
+    });
+    markWaitingStream(streamId);
+    mocks.hasRuntimeToolUseModelSwitchTarget.mockReturnValue(true);
+    mocks.requestRuntimeModelSwitch.mockResolvedValue(true);
+
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    await ctrl.switchModel('  next-model  ');
+
+    expect(mocks.requestRuntimeModelSwitch).toHaveBeenCalledWith({
+      streamId,
+      model: 'next-model',
+    });
+    expect(mocks.setCliHelperModel).toHaveBeenCalledWith('next-model');
+  });
+
+  it('sends follow-ups through the runtime boundary from the controller', async () => {
+    const streamId = 'stream-follow-up-controller' as StreamTabId;
+    const session = makeSession({
+      streamId,
+      runPromise: new Promise(() => {}),
+      runCompleted: false,
+    });
+    mocks.requestRuntimeFollowUp.mockResolvedValue({
+      status: 'queued',
+      reason: 'waiting',
+    });
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    const delivered = await ctrl.sendFollowUp({
+      text: 'Can you expand the compactness step?',
+      mediaFiles: ['diagram.png'],
+      displayText: 'visible request',
+    });
+
+    expect(delivered).toBe(true);
+    expect(mocks.requestRuntimeFollowUp).toHaveBeenCalledWith({
+      streamId,
+      text: 'Can you expand the compactness step?',
+      mediaFiles: ['diagram.png'],
+      displayText: 'visible request',
+    });
+  });
+
+  it('marks the root session stopped when a runtime follow-up has no session', async () => {
+    const streamId = 'stream-follow-up-missing' as StreamTabId;
+    const session = makeSession({
+      streamId,
+      runPromise: new Promise(() => {}),
+      runCompleted: false,
+    });
+    mocks.requestRuntimeFollowUp.mockResolvedValue({
+      status: 'no_session',
+      streamStatus: undefined,
+    });
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    const delivered = await ctrl.sendFollowUp({
+      text: 'Are you still running?',
+    });
+
+    expect(delivered).toBe(false);
+    expect(session.stopRequested).toBe(true);
+  });
+
+  it('killExecution routes kill requests through the controller boundary', () => {
     const ctrl = createChatSessionController(makeInit());
 
     mocks.workspaceGet.mockReturnValue(true);
-    ctrl.killExecution('execution-1');
+    ctrl.killExecution('exec-kill-model-test');
 
     expect(mocks.workspaceGet).toHaveBeenCalledWith(
       WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     );
-    expect(mocks.kill).toHaveBeenCalledWith('execution-1', {
+    expect(mocks.requestKillExecution).toHaveBeenCalledWith({
+      executionId: 'exec-kill-model-test',
       detachActiveChildren: true,
     });
-  });
-
-  it('requestCompaction reports a missing active flow', () => {
-    const ctrl = createChatSessionController(makeInit());
-
-    expect(ctrl.requestCompaction('stream-1')).toEqual({
-      status: 'no_active_tool_use',
-    });
-    expect(mocks.notifyFollowUpSent).not.toHaveBeenCalled();
-  });
-
-  it('requestCompaction reports models that cannot compact manually', () => {
-    const flowContext = {
-      modelHandler: { supportsManualCompaction: false },
-      runtimeHost: undefined,
-      requestImmediateCompaction: vi.fn(),
-    };
-    mocks.getToolUseFlowContext.mockReturnValue(flowContext);
-    const ctrl = createChatSessionController(makeInit());
-
-    expect(ctrl.requestCompaction('stream-1')).toEqual({
-      status: 'unsupported',
-    });
-    expect(flowContext.requestImmediateCompaction).not.toHaveBeenCalled();
-    expect(mocks.notifyFollowUpSent).not.toHaveBeenCalled();
-  });
-
-  it('requestCompaction wakes the active tool-use flow', () => {
-    const flowContext = {
-      modelHandler: { supportsManualCompaction: true },
-      runtimeHost: { emit: vi.fn() },
-      requestImmediateCompaction: vi.fn(),
-    };
-    mocks.getToolUseFlowContext.mockReturnValue(flowContext);
-    const ctrl = createChatSessionController(makeInit());
-
-    expect(ctrl.requestCompaction('stream-1')).toEqual({
-      status: 'requested',
-    });
-    expect(flowContext.requestImmediateCompaction).toHaveBeenCalledOnce();
-    expect(mocks.notifyFollowUpSent).toHaveBeenCalledExactlyOnceWith(
-      'stream-1',
-      flowContext.runtimeHost,
-    );
   });
 });
 

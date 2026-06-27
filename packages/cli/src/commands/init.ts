@@ -1,6 +1,5 @@
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
-import { getVisibleAgents, loadAgents } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { AgentCategory } from '@shared/schemas/agent';
 
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
 import {
@@ -16,6 +15,7 @@ import {
   getCliModelAccessList,
   type CliModelAccess,
 } from '../runtime/modelAccess';
+import { loadCliAgentList } from '../runtime/agents';
 import {
   buildInitConfig,
   configFileExists,
@@ -44,10 +44,10 @@ async function gatherOptions(apiMode: CliApiMode): Promise<{
   agents: InitAgentOption[];
   models: CliModelAccess[];
 }> {
-  await loadAgents({ includeRemote: false });
-  const agents = defaultInitAgentOptions(
-    getVisibleAgents(AgentCategory.ToolUse),
-  );
+  const { agents: visibleAgents } = await loadCliAgentList({
+    category: AgentCategory.ToolUse,
+  });
+  const agents = defaultInitAgentOptions(visibleAgents);
   const models = await getCliModelAccessList({ apiMode });
   return { agents, models };
 }

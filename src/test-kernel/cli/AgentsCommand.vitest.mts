@@ -383,7 +383,7 @@ describe('CLI agents command', () => {
 
     expect(exitCode).toBe(0);
     expect(mocks.seedCliRosterFromDefaultTeam).not.toHaveBeenCalled();
-    expect(mocks.loadAgents).toHaveBeenCalledWith(undefined);
+    expect(mocks.loadAgents).toHaveBeenCalledWith();
     expect(mocks.getVisibleAgents).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).not.toHaveBeenCalled();
     expect(mocks.emitCliResult).toHaveBeenCalledWith(

@@ -1,5 +1,5 @@
-import { getExecutionStore } from '@agent/storage';
 import { runAgent } from '@agent/runtime/runAgent';
+import { readRuntimeHistoryTerminalStatus } from '@agent/runtime/historyCommands';
 
 import { projectRunOutcome } from '@common/constants/streamStatus';
 import {
@@ -99,8 +99,8 @@ export function terminalStatusExitCode(
 export async function readCliTerminalStatus(
   result: ExecuteAgentResult,
 ): Promise<ExecutionStatus> {
-  const meta = await getExecutionStore(result.executionId)
-    .readMeta()
-    .catch(() => undefined);
-  return cliTerminalStatus(result, meta?.terminalStatus);
+  const terminalStatus = await readRuntimeHistoryTerminalStatus(
+    result.executionId,
+  ).catch(() => undefined);
+  return cliTerminalStatus(result, terminalStatus);
 }

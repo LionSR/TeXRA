@@ -16,11 +16,15 @@ import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { backfillFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
-import { loadAgents, setAgentDirectories } from '@agent/index';
-import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
+import { setRuntimeAgentDirectories } from '@agent/runtime/agentDirectories';
+import { loadRuntimeAgents } from '@agent/runtime/agentResolution';
+import {
+  clearRuntimeHistoryStoreCache,
+  hasRuntimeExecutionHistory,
+} from '@agent/runtime/historyCommands';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
   getServerSideKeyService,
@@ -176,7 +180,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   SecretManager.initialize(context);
   agentDirectories.initialize(context);
-  setAgentDirectories(agentDirectories);
+  setRuntimeAgentDirectories(agentDirectories);
   logger.setOutputChannelFactory((name) =>
     vscode.window.createOutputChannel(name),
   );
@@ -227,7 +231,9 @@ export async function activate(context: vscode.ExtensionContext) {
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     progressViewProviderInstance?.flushState(),
   );
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
+    clearRuntimeHistoryStoreCache(),
+  );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => prPollingSource.disposeAll());
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => repoPollingSource.disposeAll());
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
@@ -274,12 +280,10 @@ export async function activate(context: vscode.ExtensionContext) {
         // Same non-blank provider-key/server-side-key check used by the
         // funnel and setup launch preflight.
         hasAnyUsableSetupCredential().catch(() => false),
-        // listExecutions() owns legacy migration and filters invalid storage
-        // entries, so extension and CLI backfill classify history identically.
-        listExecutions().then(
-          (entries) => entries.length > 0,
-          () => false,
-        ),
+        // The runtime history query owns legacy migration and filters invalid
+        // storage entries, so extension and CLI backfill classify history
+        // identically.
+        hasRuntimeExecutionHistory().catch(() => false),
       ]);
       await backfillFirstRunDone(context.globalState, {
         hasCredential,
@@ -307,7 +311,7 @@ export async function activate(context: vscode.ExtensionContext) {
       await copyDefaultAgents(context);
       await registerAgentDirectoryRoots(context);
       try {
-        await loadAgents({ includeRemote: false });
+        await loadRuntimeAgents({ includeRemote: false });
         // Seed a never-configured workspace's roster from the user-level
         // default team, falling back to the built-in Physicist team. Needs
         // the local registry, hence sequenced after the bundled-agent scan
@@ -324,7 +328,7 @@ export async function activate(context: vscode.ExtensionContext) {
             `Default-team roster seeding failed: ${toErrorMessage(err)}`,
           );
         }
-        void loadAgents().catch((err) => {
+        void loadRuntimeAgents().catch((err) => {
           logger.warn(
             'extension',
             `Remote agent refresh failed: ${toErrorMessage(err)}`,

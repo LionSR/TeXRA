@@ -1,11 +1,11 @@
 import {
-  getAgent,
-  getAgentsByCategory,
-  getVisibleAgents,
-  loadAgents,
-} from '@agent/index';
-import type { AgentEntry } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+  getRuntimeAgent,
+  listRuntimeAgentsByCategory,
+  listRuntimeVisibleAgents,
+  loadRuntimeAgents,
+  type RuntimeAgentEntry,
+} from '@agent/runtime/agentResolution';
+import { AgentCategory } from '@shared/schemas/agent';
 
 import { CliUsageError } from './cliContext';
 import { getCliAuthProvider } from './supabaseAuth';
@@ -16,7 +16,7 @@ export interface CliAgentListOptions {
 }
 
 export interface CliAgentListResult {
-  readonly agents: readonly AgentEntry[];
+  readonly agents: readonly RuntimeAgentEntry[];
   readonly hiddenCount: number;
 }
 
@@ -31,19 +31,19 @@ const CLI_AGENT_LAUNCH_TARGETS = {
   chat: {
     requiredCategory: AgentCategory.ToolUse,
     missing: missingToolUseAgentMessage,
-    mismatch: (name: string, actual: AgentEntry['category']) =>
+    mismatch: (name: string, actual: RuntimeAgentEntry['category']) =>
       `Agent "${name}" is a ${actual} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents, or \`texra multi-agent run <preset>\` for teams.`,
   },
   run: {
     requiredCategory: AgentCategory.Workflow,
     missing: missingAgentMessage,
-    mismatch: (name: string, actual: AgentEntry['category']) =>
+    mismatch: (name: string, actual: RuntimeAgentEntry['category']) =>
       `Agent "${name}" is a ${actual} agent; \`texra run\` only handles workflow agents. Start it interactively with \`texra chat --agent ${name}\`, or run a headless team with \`texra multi-agent run\`.`,
   },
   agentsRun: {
     requiredCategory: AgentCategory.ToolUse,
     missing: missingToolUseAgentMessage,
-    mismatch: (name: string, actual: AgentEntry['category']) =>
+    mismatch: (name: string, actual: RuntimeAgentEntry['category']) =>
       `Agent "${name}" is a ${actual} agent; \`texra agents run\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents.`,
   },
 } as const;
@@ -101,9 +101,9 @@ export function missingMultiAgentPresetMessage(name: string): string {
 
 export function assertCliAgentLaunch(
   name: string,
-  agent: AgentEntry | undefined,
+  agent: RuntimeAgentEntry | undefined,
   mode: CliAgentLaunchMode,
-): AgentEntry {
+): RuntimeAgentEntry {
   const target = CLI_AGENT_LAUNCH_TARGETS[mode];
   if (!agent) throw new CliUsageError(target.missing(name));
   if (agent.category !== target.requiredCategory) {
@@ -122,7 +122,7 @@ export function assertCliAgentLaunch(
  */
 export async function resolveCliAgent(
   name: string,
-): Promise<AgentEntry | undefined> {
+): Promise<RuntimeAgentEntry | undefined> {
   return resolveCliAgentEntry(name);
 }
 
@@ -132,7 +132,7 @@ export async function resolveCliAgent(
 export async function resolveCliLaunchAgent(
   name: string,
   mode: CliAgentLaunchMode,
-): Promise<AgentEntry> {
+): Promise<RuntimeAgentEntry> {
   const target = CLI_AGENT_LAUNCH_TARGETS[mode];
   return assertCliAgentLaunch(
     name,
@@ -144,28 +144,32 @@ export async function resolveCliLaunchAgent(
 async function resolveCliAgentEntry(
   name: string,
   lookupCategory?: AgentCategory,
-): Promise<AgentEntry | undefined> {
-  await loadAgents({ includeRemote: false });
-  const agent = getAgent(name, lookupCategory);
+): Promise<RuntimeAgentEntry | undefined> {
+  await loadRuntimeAgents({ includeRemote: false });
+  const agent = getRuntimeAgent(name, lookupCategory);
 
   if (!agent) {
-    await loadAgents();
-    return getAgent(name, lookupCategory);
+    await loadRuntimeAgents();
+    return getRuntimeAgent(name, lookupCategory);
   }
 
   if (name.includes(':') || !(await getCliAuthProvider().isAuthenticated())) {
     return agent;
   }
 
-  await loadAgents();
-  return getAgent(name, lookupCategory);
+  await loadRuntimeAgents();
+  return getRuntimeAgent(name, lookupCategory);
 }
 
 export async function loadCliAgentList(
   options: CliAgentListOptions = {},
 ): Promise<CliAgentListResult> {
   const includeHidden = options.includeHidden === true;
-  await loadAgents(includeHidden ? undefined : { includeRemote: false });
+  if (includeHidden) {
+    await loadRuntimeAgents();
+  } else {
+    await loadRuntimeAgents({ includeRemote: false });
+  }
 
   const agents = collectCliAgents(
     includeHidden ? 'all' : 'visible',
@@ -179,7 +183,7 @@ export async function loadCliAgentList(
 }
 
 export function formatCliAgentList(
-  agents: readonly AgentEntry[],
+  agents: readonly RuntimeAgentEntry[],
   options: {
     readonly category?: AgentCategory;
     readonly showEmptyState?: boolean;
@@ -200,7 +204,7 @@ export function formatCliAgentList(
     .join('\n');
 }
 
-export function formatCliAgentDetails(entry: AgentEntry): string {
+export function formatCliAgentDetails(entry: RuntimeAgentEntry): string {
   const lines: string[] = [];
   lines.push(`name: ${entry.name}`);
   lines.push(`category: ${entry.category}`);
@@ -255,11 +259,11 @@ function cliAgentCatalogHint(category?: AgentCategory): {
 function collectCliAgents(
   source: 'all' | 'visible',
   categoryFilter?: AgentCategory,
-): AgentEntry[] {
+): RuntimeAgentEntry[] {
   const categories = categoryFilter ? [categoryFilter] : AGENT_CATEGORIES;
   return categories.flatMap((category) =>
     source === 'visible'
-      ? getVisibleAgents(category)
-      : getAgentsByCategory(category),
+      ? listRuntimeVisibleAgents(category)
+      : listRuntimeAgentsByCategory(category),
   );
 }

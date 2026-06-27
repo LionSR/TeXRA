@@ -20,6 +20,7 @@ import {
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { emitQueuedFollowUps } from '@agent/runtime/queuedFollowUps';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
@@ -175,9 +176,7 @@ class ExecutionSubscription implements Disposable {
       this.session,
     ).then((result) => {
       if (result.status === 'sent' || result.status === 'queued') {
-        this.runtimeHost.emit('updateQueuedFollowUps', {
-          streamId: this.streamId,
-        });
+        emitQueuedFollowUps(this.runtimeHost, this.streamId);
       }
     });
   }

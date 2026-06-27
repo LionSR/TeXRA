@@ -6,9 +6,12 @@ import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
 // Local imports - utilities
-import { getAgentsByCategory, resolveAgent } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import {
+  listRuntimeAgentsByCategory,
+  resolveRuntimeAgentPath,
+} from '@agent/runtime/agentResolution';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
@@ -16,6 +19,7 @@ import {
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
+import { AgentCategory } from '@shared/schemas/agent';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
@@ -25,7 +29,7 @@ export async function handleTestAgentLoading(): Promise<void> {
     logger.info(CHANNEL, 'Testing agent loading from registry:');
 
     // Get first two workflow agents from registry to test loading
-    const agents = getAgentsByCategory(AgentCategory.Workflow);
+    const agents = listRuntimeAgentsByCategory(AgentCategory.Workflow);
     if (agents.length === 0) {
       throw new Error('No workflow agents found in registry');
     }
@@ -34,10 +38,10 @@ export async function handleTestAgentLoading(): Promise<void> {
     logger.info(CHANNEL, `\nTesting agent: ${testAgent.name}`);
 
     // Resolve the agent
-    const resolution = resolveAgent(testAgent.name);
-    if (!resolution) {
-      throw new Error(`Agent "${testAgent.name}" not found in registry`);
-    }
+    const resolution = await resolveRuntimeAgentPath(
+      testAgent.name,
+      extensionAgentRuntimeHost,
+    );
 
     // Load the YAML directly
     logger.info(CHANNEL, `Loading from: ${resolution.definitionPath}`);
@@ -86,13 +90,10 @@ export async function handleLoadSpecificAgent(): Promise<void> {
 
     logger.info(CHANNEL, `Testing loading of agent: ${agentName}`);
 
-    // Diagnostic loader: resolve the free-form name to its definition. Unlike a
-    // launch, there's no category context here, so use the plain name resolver.
-    const agentPath = resolveAgent(agentName);
-    if (!agentPath) {
-      void showLoggedErrorMessage(CHANNEL, 'Could not find agent', agentName);
-      return;
-    }
+    const agentPath = await resolveRuntimeAgentPath(
+      agentName,
+      extensionAgentRuntimeHost,
+    );
     logger.info(
       CHANNEL,
       `Loading from path: ${path.dirname(agentPath.definitionPath)}`,

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageLogService } from '@telemetry/UsageLogService';
-import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
+import { RuntimePathAgentDirectoryBundleSource } from '@agent/runtime/agentDirectories';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SkillSource } from '@skills/loadSkills';
@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   authProvider: {
     isAuthenticated: vi.fn(),
   },
-  bootstrapPlatformAgentDirectories: vi.fn(),
+  bootstrapRuntimeAgentDirectories: vi.fn(),
   initializeCliSupabaseAuth: vi.fn(),
   initializeServerSideKeyAccess: vi.fn(),
   serverSideKeyService: {
@@ -25,9 +25,16 @@ const mocks = vi.hoisted(() => ({
   shutdownHandlers: [] as Array<() => unknown>,
 }));
 
-vi.mock('@agent/index/platformAgentDirectories', () => ({
-  bootstrapPlatformAgentDirectories: mocks.bootstrapPlatformAgentDirectories,
-}));
+vi.mock('@agent/runtime/agentDirectories', () => {
+  class RuntimePathAgentDirectoryBundleSource {
+    constructor(readonly resourcesBasePath: string) {}
+  }
+
+  return {
+    bootstrapRuntimeAgentDirectories: mocks.bootstrapRuntimeAgentDirectories,
+    RuntimePathAgentDirectoryBundleSource,
+  };
+});
 
 vi.mock('@auth/serverKeys', () => ({
   getServerSideKeyService: () => mocks.serverSideKeyService,
@@ -125,7 +132,7 @@ describe('CLI platform init', () => {
         update: vi.fn(),
       },
     });
-    mocks.bootstrapPlatformAgentDirectories.mockResolvedValue(undefined);
+    mocks.bootstrapRuntimeAgentDirectories.mockResolvedValue(undefined);
     mocks.serverSideKeyService.setUseIncludedModelAccess.mockResolvedValue(
       undefined,
     );
@@ -190,7 +197,7 @@ describe('CLI platform init', () => {
       }),
     );
 
-    expect(mocks.bootstrapPlatformAgentDirectories).toHaveBeenCalledWith(
+    expect(mocks.bootstrapRuntimeAgentDirectories).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: 'cli',
         currentVersion: '1.2.3',
@@ -198,13 +205,12 @@ describe('CLI platform init', () => {
     );
 
     const options =
-      mocks.bootstrapPlatformAgentDirectories.mock.calls.at(-1)?.[0];
+      mocks.bootstrapRuntimeAgentDirectories.mock.calls.at(-1)?.[0];
 
     // Verify the bundle source is the right class AND was constructed with the
-    // forwarded resourcesPath — not just that some PathAgentDirectoryBundleSource
-    // was passed.
+    // forwarded resourcesPath — not just that some bundle source was passed.
     expect(options?.bundleSource).toBeInstanceOf(
-      PathAgentDirectoryBundleSource,
+      RuntimePathAgentDirectoryBundleSource,
     );
     expect(
       (options?.bundleSource as { resourcesBasePath?: string })

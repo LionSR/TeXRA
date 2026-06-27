@@ -1,7 +1,12 @@
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { getQueuedFollowUpsProjection } from '@agent/runtime/queuedFollowUps';
+import {
+  getRuntimeStreamStatusSnapshot,
+  markRuntimeRunningStreamsStopped,
+  recoverRuntimeRunningStreamsAfterRestart,
+  setRuntimeStreamStatusSilently,
+} from '@agent/runtime/streamControl';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import type {
   ProgressEventBusLike,
@@ -9,7 +14,6 @@ import type {
 } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
-  STREAM_STATUS,
   type ConversationProgress,
   type GoalStatus,
   type StreamStatus,
@@ -237,9 +241,8 @@ export class ProgressEventHandler {
           }
         },
         // Follow-up events
-        updateQueuedFollowUps: (ctx, { streamId }) => {
+        updateQueuedFollowUps: (ctx, { streamId, messages }) => {
           this.sendIfActive(streamId, () => {
-            const messages = ToolUseFollowUpQueue.getAll(streamId);
             ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
           });
         },
@@ -345,7 +348,7 @@ export class ProgressEventHandler {
     if (!wasKnownStream || filterChanged) {
       this.webviewUpdater.sendStreamMetadata(
         this.state,
-        StreamStatusService.getAll(),
+        getRuntimeStreamStatusSnapshot(),
       );
     } else if (shouldSwitch) {
       this.webviewUpdater.setActiveStream(streamId);
@@ -385,7 +388,7 @@ export class ProgressEventHandler {
       // including for background subagents that are not the active stream.
       this.webviewUpdater.sendStreamMetadata(
         this.state,
-        StreamStatusService.getAll(),
+        getRuntimeStreamStatusSnapshot(),
       );
     }
   }
@@ -469,11 +472,7 @@ export class ProgressEventHandler {
   }
 
   private markAllRunningTasksAsCancelled(): void {
-    for (const [stream, status] of StreamStatusService.entries()) {
-      if (status === STREAM_STATUS.RUNNING) {
-        StreamStatusService.set(stream, STREAM_STATUS.STOPPED, { emit: false });
-      }
-    }
+    markRuntimeRunningStreamsStopped();
   }
 
   public syncStreamContent(
@@ -503,7 +502,7 @@ export class ProgressEventHandler {
 
     const extras = this.buildStreamSyncExtras(stream);
     const { todos, plan } = this.state.snapshots.getWorkPlan(stream);
-    const queuedFollowUps = ToolUseFollowUpQueue.getAll(stream);
+    const queuedFollowUps = getQueuedFollowUpsProjection(stream).messages;
     const agentCategory = this.getStreamCategory(stream);
 
     // Optionally include active-stream state (replaces syncActiveStreamState).
@@ -570,7 +569,7 @@ export class ProgressEventHandler {
     previousStatus?: StreamStatus,
   ): void {
     if (previousStatus === undefined) {
-      StreamStatusService.set(streamId, status, { emit: false });
+      setRuntimeStreamStatusSilently(streamId, status);
     }
 
     // Keep memory bounded by stream status:
@@ -597,7 +596,7 @@ export class ProgressEventHandler {
 
     if (isNewStream) {
       this.maybeUpdateFilterForCategory(this.getStreamCategory(streamId));
-      const statusesForRefresh = StreamStatusService.getAll();
+      const statusesForRefresh = getRuntimeStreamStatusSnapshot();
       statusesForRefresh.set(streamId, status);
       this.webviewUpdater.sendStreamMetadata(this.state, statusesForRefresh);
     } else {
@@ -615,34 +614,21 @@ export class ProgressEventHandler {
   }
 
   getAllStreamStatuses(): Map<StreamTabId, StreamStatus> {
-    return StreamStatusService.getAll();
+    return getRuntimeStreamStatusSnapshot();
   }
 
   resetRunningTasksToError(waitingStreams: Set<StreamTabId>): StreamTabId[] {
-    const affectedStreams: StreamTabId[] = [];
+    const recovery = recoverRuntimeRunningStreamsAfterRestart(waitingStreams);
 
-    for (const [streamId, status] of StreamStatusService.entries()) {
-      if (status !== STREAM_STATUS.RUNNING) continue;
-
-      if (waitingStreams.has(streamId)) {
-        StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
-          emit: false,
-        });
-        this.logger.debug(
-          `Stream ${streamId} restored to WAITING after reload`,
-        );
-        continue;
-      }
-
-      StreamStatusService.set(streamId, STREAM_STATUS.ERROR, {
-        emit: false,
-      });
-      affectedStreams.push(streamId);
+    for (const streamId of recovery.waitingStreams) {
+      this.logger.debug(`Stream ${streamId} restored to WAITING after reload`);
+    }
+    for (const streamId of recovery.erroredStreams) {
       this.logger.debug(
         `Stream ${streamId} set to ERROR during restart recovery`,
       );
     }
 
-    return affectedStreams;
+    return recovery.erroredStreams;
   }
 }

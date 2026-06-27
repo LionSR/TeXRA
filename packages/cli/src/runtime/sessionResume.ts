@@ -6,9 +6,11 @@
 // a full snapshot (messages + state slices) from it. Only tool-use agents
 // resume this way — workflows are not continuable here.
 
-import { isToolUseTaskState } from '@agent/core/execution/TaskState';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import {
+  isRuntimeToolUseTaskState,
+  type RuntimeAgentConfig,
+} from '@agent/runtime/executionRequests';
+import type { RuntimeToolUseSessionSnapshot } from '@agent/runtime/resumeCommands';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { toErrorMessage } from '@common/errors';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -22,9 +24,9 @@ import {
 export type CliResumeResolution =
   | {
       readonly kind: 'toolUse';
-      readonly snapshot: ToolUseSessionSnapshot;
+      readonly snapshot: RuntimeToolUseSessionSnapshot;
       readonly streamId: StreamTabId;
-      readonly config: AgentConfig;
+      readonly config: RuntimeAgentConfig;
     }
   /** A workflow execution — not continuable via the tool-use snapshot path. */
   | { readonly kind: 'workflow' }
@@ -43,7 +45,7 @@ export type CliToolUseResumeResolution = Extract<
 export async function resolveCliResumeSnapshot(
   id: ExecutionId,
 ): Promise<CliResumeResolution> {
-  let config: AgentConfig | null;
+  let config: RuntimeAgentConfig | null;
   try {
     config = await readCliHistoryConfig(id);
   } catch (error) {
@@ -52,7 +54,7 @@ export async function resolveCliResumeSnapshot(
   if (!config) return { kind: 'not-found' };
 
   const taskState = agentConfigToTaskState(config);
-  if (!isToolUseTaskState(taskState)) return { kind: 'workflow' };
+  if (!isRuntimeToolUseTaskState(taskState)) return { kind: 'workflow' };
 
   let resume: CliToolUseResumeData | null;
   try {

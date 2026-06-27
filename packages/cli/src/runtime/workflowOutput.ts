@@ -1,12 +1,12 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import type { AgentEntry } from '@agent/index';
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { RuntimeAgentEntry } from '@agent/runtime/agentResolution';
+import type { RuntimeAgentConfigPayload } from '@agent/runtime/executionRequests';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import { getRunDir } from '@utils/files';
 
@@ -173,7 +173,7 @@ function expectedInputOutputFiles(
 }
 
 export function expectedOutputFilesForOutputDir(
-  agent: AgentEntry | undefined,
+  agent: RuntimeAgentEntry | undefined,
   inputFiles: readonly string[],
 ): readonly string[] {
   const defaultOutputFiles = (agent?.defaultOutputFiles ?? []).filter(Boolean);
@@ -309,7 +309,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
 }
 
 export function resumeWorkflowOutputFile(
-  config: AgentConfigPayload,
+  config: RuntimeAgentConfigPayload,
 ): string | undefined {
   if (config.agentCategory !== AgentCategory.Workflow) return undefined;
 

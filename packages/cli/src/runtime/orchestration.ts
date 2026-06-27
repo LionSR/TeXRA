@@ -1,6 +1,6 @@
-import type { AgentEntry } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { RuntimeAgentEntry as AgentEntry } from '@agent/runtime/agentResolution';
 import type { ExecutionId } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 
 import {
   cliMultiAgentPresetCanLaunchTeam,

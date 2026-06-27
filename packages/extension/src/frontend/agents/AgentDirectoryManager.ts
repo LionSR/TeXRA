@@ -9,15 +9,15 @@ import pDefer from 'p-defer';
 
 // Local imports
 import {
-  AgentDirectoryService,
-  GlobalStorageAgentDirectoryStorage,
-} from '@agent/index';
-import type { AgentSource } from '@agent/index';
+  RuntimeAgentDirectoryService,
+  RuntimeGlobalStorageAgentDirectoryStorage,
+  type RuntimeAgentDirectoryServiceInstance,
+} from '@agent/runtime/agentDirectories';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
-import { AGENT_SOURCE } from '@shared/schemas/agent';
+import { AGENT_SOURCE, type AgentSource } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'AgentLoad';
@@ -45,7 +45,7 @@ interface AgentDirectoryWatcherSubscription {
 
 export class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
-  private directoryService: AgentDirectoryService | undefined;
+  private directoryService: RuntimeAgentDirectoryServiceInstance | undefined;
   private watcherDisposables: vscode.Disposable[] = [];
   private watcherSubscriptions = new Set<AgentDirectoryWatcherSubscription>();
   private externalWatcherDirectoryPaths = new Set<string>();
@@ -58,8 +58,8 @@ export class AgentDirectoryManager {
 
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
-    this.directoryService = new AgentDirectoryService({
-      storage: new GlobalStorageAgentDirectoryStorage(),
+    this.directoryService = new RuntimeAgentDirectoryService({
+      storage: new RuntimeGlobalStorageAgentDirectoryStorage(),
       customDirectoryStore: {
         get: () => globalSM?.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
       },
@@ -78,7 +78,7 @@ export class AgentDirectoryManager {
     });
   }
 
-  private getDirectoryService(): AgentDirectoryService {
+  private getDirectoryService(): RuntimeAgentDirectoryServiceInstance {
     if (!this.context || !this.directoryService) {
       throw new Error(
         'Agent directories not initialized. Call agentDirectories.initialize(context) first.',

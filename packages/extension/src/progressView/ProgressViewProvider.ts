@@ -1,11 +1,14 @@
 import * as vscode from 'vscode';
 
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
-import { computeAgentOptionsData } from '@agent/index';
-import type { AgentTrace } from '@agent/trace';
+import { computeRuntimeAgentOptionsData } from '@agent/runtime/agentResolution';
+import {
+  listRuntimeExternalInquiryThreads,
+  listRuntimeOpenExternalInquiryPermissions,
+} from '@agent/runtime/externalInquiryQueries';
 import type { IProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
-import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
+import { detectRuntimeWaitingStreams } from '@agent/runtime/streamControl';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -39,14 +42,6 @@ import { agentName } from '@shared/schemas/agent';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
-import {
-  getOpenTurnDraft,
-  listThreadsByStatus,
-  listOpenThreads,
-  manifestToTranscript,
-  readExternalInquiryThread,
-} from '@tools/inquiry/externalInquiryStorage';
 
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 
@@ -55,6 +50,10 @@ import type { MainViewProvider } from '../MainViewProvider';
 const MAX_INQUIRY_THREAD_HYDRATION = 100;
 
 export type ProgressStreamRevealResult = 'revealed' | 'missing';
+
+interface ProgressViewLogger {
+  debug(message: string): void;
+}
 
 /**
  * Orchestrates the progress view webview with exclusive rendering:
@@ -89,7 +88,7 @@ export class ProgressViewProvider
   /** Set by disposePanelResources so showInSidebar knows replay is needed. */
   private _panelJustDisposed = false;
   private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
-  private readonly logger: AgentTrace;
+  private readonly logger: ProgressViewLogger;
 
   private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
   private _mainViewProvider?: MainViewProvider;
@@ -323,7 +322,7 @@ export class ProgressViewProvider
     // dropdown is omitted when the registry fetch fails.
     const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
     const loadAgentOptions = async () => {
-      const all = await computeAgentOptionsData();
+      const all = await computeRuntimeAgentOptionsData();
       const raw = isWorkflow ? all.workflow : all.toolUse;
       // proposal.agent is a plain name, so keep identity separate from label.
       return raw.map((opt) => ({ ...opt, value: agentName(opt.value) }));
@@ -429,7 +428,7 @@ export class ProgressViewProvider
     if (!this.webviewUpdater.isAvailable()) return;
 
     try {
-      const threads = await listThreadsByStatus({
+      const threads = await listRuntimeExternalInquiryThreads({
         status: 'any',
         scope: 'all',
         limit: MAX_INQUIRY_THREAD_HYDRATION,
@@ -442,21 +441,19 @@ export class ProgressViewProvider
   }
 
   /**
-   * Read every open inquiry thread from durable storage and re-emit
-   * its `showExternalInquiry` payload so the panel reappears after an
-   * extension reload. No-op when the webview can't accept messages or
-   * when in-memory `pending` already covers everything (a sidebar
-   * toggle, not a fresh reload). `show()` itself is idempotent on
-   * `requestId` via `delivered`, so this gate is a perf optimization,
-   * not a correctness fix.
+   * Re-emit view-ready open inquiry payloads so panels reappear after an
+   * extension reload. No-op when the webview can't accept messages or when
+   * in-memory `pending` already covers everything (a sidebar toggle, not a
+   * fresh reload). `show()` itself is idempotent on `requestId` via
+   * `delivered`, so this gate is a perf optimization, not a correctness fix.
    */
   private async hydrateOpenInquiries(): Promise<void> {
     if (!this.webviewUpdater.isAvailable()) return;
     if (this.externalInquiryHandler.pendingSize > 0) return;
 
-    let open;
+    let permissions: ExternalInquiryPermission[];
     try {
-      open = await listOpenThreads();
+      permissions = await listRuntimeOpenExternalInquiryPermissions();
     } catch (error) {
       // A storage read failure here silently skips inquiry hydration; log
       // it so the missing panel reappearance is diagnosable.
@@ -464,30 +461,11 @@ export class ProgressViewProvider
       return;
     }
 
-    for (const summary of open) {
+    for (const permission of permissions) {
       try {
-        const manifest = await readExternalInquiryThread(summary.threadId, {
-          hydrate: true,
-        });
-        if (!manifest || manifest.status !== 'open') continue;
-        if (!manifest.parentStreamId) continue;
-        const lastTurn = manifest.turns.at(-1);
-        if (!lastTurn || lastTurn.answer) continue;
-        this.externalInquiryHandler.show({
-          requestId: manifest.threadId,
-          threadId: manifest.threadId,
-          question: lastTurn.question,
-          context: lastTurn.context ?? undefined,
-          suggestSearch: lastTurn.suggestSearch ?? undefined,
-          attachFiles: lastTurn.attachFiles ?? undefined,
-          sessionLinks: collectKnownSessionLinks(manifest),
-          draft: getOpenTurnDraft(manifest),
-          transcript: manifestToTranscript(manifest),
-          allowBypass: false,
-          streamId: manifest.parentStreamId,
-        });
+        this.externalInquiryHandler.show(permission);
       } catch {
-        // Skip threads whose manifest can't be read; surface logs elsewhere.
+        // Skip permissions that become stale while the webview is hydrating.
       }
     }
   }
@@ -535,7 +513,7 @@ export class ProgressViewProvider
   }
 
   public async cleanupTasksAfterRestart(): Promise<void> {
-    const waitingStreams = await detectWaitingStreams(
+    const waitingStreams = await detectRuntimeWaitingStreams(
       this.state.snapshots.getExecutionIdMap(),
     );
     await this.resetRunningStreamStatuses(waitingStreams);

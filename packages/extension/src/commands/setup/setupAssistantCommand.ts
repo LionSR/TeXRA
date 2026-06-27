@@ -2,11 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { loadAgents } from '@agent/index';
-import { registerExecution } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { executeAgent } from '@agent/runtime/executeAgent';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { loadRuntimeAgents } from '@agent/runtime/agentResolution';
+import { getRuntimeActiveAgentNames } from '@agent/runtime/executionQueries';
+import { parseRuntimeAgentConfig } from '@agent/runtime/executionRequests';
+import { runAgent } from '@agent/runtime/runAgent';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -29,7 +28,6 @@ import {
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
-import { generateExecutionId } from '@utils/core/executionId';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const CHANNEL = 'SetupAssistant';
@@ -42,8 +40,8 @@ const SETUP_INSTRUCTION =
  * Result of launch-model resolution. `requiresOpenRouter` signals that the
  * chosen model needs the global `useOpenRouter` routing flag flipped on;
  * the actual flip/restore is handled by the caller via `withOpenRouterFlag`
- * so that any failure — even in pre-execution setup like `registerExecution`
- * — still restores the prior value.
+ * so that any failure before or during `runAgent` still restores the prior
+ * value.
  */
 interface LaunchModelResolution {
   model: string;
@@ -329,9 +327,9 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     // installs and config writes. The launcher's manual Execute path is
     // deliberately not gated — an explicit user action wins.
     if (
-      executionRegistry
-        .getAgentHandles()
-        .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
+      getRuntimeActiveAgentNames().some(
+        (activeAgentName) => agentName(activeAgentName) === SETUP_AGENT_NAME,
+      )
     ) {
       void vscode.window.showInformationMessage(
         'The setup assistant is already running — follow it in the Progress view.',
@@ -379,7 +377,7 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
       return 'not-started';
     }
 
-    const config = AgentConfigSchema.parse({
+    const config = parseRuntimeAgentConfig({
       agent: 'setup',
       agentCategory: 'toolUse',
       model: resolution.model,
@@ -387,18 +385,19 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     });
 
     // Activation initializes the registry, but this command can also be
-    // invoked directly in tests or unusual startup paths. `loadAgents()` is
-    // idempotent: it returns the in-flight promise if loading is still
-    // running, resolves immediately if already initialized, or kicks off a
-    // fresh load.
-    await loadAgents();
+    // invoked directly in tests or unusual startup paths. Runtime catalog
+    // loading is idempotent: it returns the in-flight promise if loading is
+    // still running, resolves immediately if already initialized, or kicks off
+    // a fresh load.
+    await loadRuntimeAgents();
 
     const launch = async () => {
-      const executionId = generateExecutionId();
-      await registerExecution(executionId, config, config.agent);
-      await executeAgent(config, executionId, {
-        runtimeHost: extensionAgentRuntimeHost,
-      });
+      await runAgent(
+        { config },
+        {
+          runtimeHost: extensionAgentRuntimeHost,
+        },
+      );
     };
 
     if (resolution.requiresOpenRouter) {

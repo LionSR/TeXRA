@@ -9,6 +9,7 @@
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
 import { render, type Instance as InkInstance } from 'ink';
+import PQueue from 'p-queue';
 
 import {
   flushPendingRunTraces,
@@ -17,7 +18,7 @@ import {
 } from '@transcript';
 import { platform, tryPlatform } from '@platform/platform';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
-import { loadAgents } from '@agent/index';
+import { loadRuntimeAgents } from '@agent/runtime/agentResolution';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
@@ -265,7 +266,7 @@ export async function runChat(
     firstRunDone: getFirstRunDone(platform().globalState),
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
-  await loadAgents();
+  await loadRuntimeAgents();
   await seedCliRosterFromDefaultTeam();
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
@@ -335,14 +336,11 @@ export async function runChat(
     requestInputExit,
     getApprovalPolicy,
     setApprovalPolicy,
-    canSelectModel: () => chatController.canSelectModel(),
+    canSelectModel: canSelectCurrentModel,
+    switchModel: (nextModel: string) => chatController.switchModel(nextModel),
+    requestCompaction: () => chatController.requestCompaction(),
     resetSession: resetSessionForClear,
     resumeExecution: (id: ExecutionId) => chatController.resume(id),
-    switchActiveModel: (nextModel) =>
-      chatController.switchActiveModel(nextModel),
-    requestCompaction: (streamId) => chatController.requestCompaction(streamId),
-    getQueuedFollowUpMessages: (streamId) =>
-      chatController.getQueuedFollowUpMessages(streamId),
   });
   cliState.sessionMeta.set({
     agent,
@@ -412,12 +410,18 @@ export async function runChat(
     stopRequested: false,
   };
 
+  const followUpQueue = new PQueue({ concurrency: 1 });
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
   const rootStreamStatus = (): StreamStatus | undefined =>
     session.streamId
       ? cliState.streams.get().get(session.streamId)?.status
       : undefined;
+  const canSelectCurrentModel = (): boolean => chatController.canSelectModel();
+  const getModelSwitchDisabledReason = (
+    candidateModel: string,
+  ): string | undefined =>
+    chatController.getModelSwitchDisabledReason(candidateModel);
   const activateSkillForNextMessage = (selection: SkillActivation): void => {
     const wasPending = pendingSkillActivations.has(selection.name);
     pendingSkillActivations.set(selection.name, selection.activationPrompt);
@@ -441,6 +445,7 @@ export async function runChat(
     session,
     getSessionContext: currentSessionContext,
     disposers,
+    followUpQueue,
     snapshotStore,
   });
 
@@ -468,7 +473,7 @@ export async function runChat(
     const meta = cliState.sessionMeta.get();
     if (isRunPending) chatController.stop();
     clearApprovals();
-    chatController.clearPendingFollowUps();
+    followUpQueue.clear();
     pendingSkillActivationClearEpoch += 1;
     pendingSkillActivations.clear();
     clearTuiSessionRunState(session);
@@ -498,9 +503,8 @@ export async function runChat(
         `Approval mode set to ${formatCliApprovalPolicy(policy)}.`,
       );
     },
-    canSelectModel: () => chatController.canSelectModel(),
-    getModelSwitchDisabledReason: (candidateModel) =>
-      chatController.getModelSwitchDisabledReason(candidateModel),
+    canSelectModel: canSelectCurrentModel,
+    getModelSwitchDisabledReason,
     onModelSelect: (nextModel) =>
       applyCliModelSelection(nextModel, slashCommandContext()),
     onApiModeSelect: (nextMode) =>
@@ -520,7 +524,7 @@ export async function runChat(
     mediaFiles?: readonly string[],
     displayInstruction?: string,
   ): Promise<boolean> => {
-    chatController.clearPendingFollowUps();
+    followUpQueue.clear();
     session.executionId = undefined;
     let started = false;
     // Queue the async startup body after the reservation below so a second
@@ -624,40 +628,21 @@ export async function runChat(
       }
       return;
     }
-    // PRD success criterion: follow-ups must not be silently dropped when the
-    // user submits before `onStreamResolved` populates `session.streamId`.
-    // The controller serializes follow-up delivery and waits for the root
-    // stream id when the user submits before stream resolution.
-    let delivered = false;
     void chatController
-      .submitFollowUp({
+      .sendFollowUp({
         targetStreamId: childFollowUpTarget,
-        followUp: prepared.instruction,
+        text: prepared.instruction,
         mediaFiles,
         displayText: prepared.displayInstruction,
       })
-      .then((result) => {
-        const followUpTarget = childFollowUpTarget ?? session.streamId;
-        delivered = result.status === 'sent' || result.status === 'queued';
-        if (result.status === 'no_session' && followUpTarget) {
-          // Child stream ids are keys in parentStream; the root session id is not.
-          if (followUpTarget === session.streamId) {
-            session.stopRequested = true;
-          } else {
-            appendLocalAssistantTranscript(
-              stoppedFocusedChildFollowUpMessage(followUpTarget),
-              followUpTarget,
-            );
-          }
+      .then((delivered) => {
+        if (!delivered) {
+          restoreReservedSkillActivations();
         }
       })
       .catch((error: unknown) => {
         appendLocalErrorTranscript(toErrorMessage(error));
-      })
-      .finally(() => {
-        if (!delivered) {
-          restoreReservedSkillActivations();
-        }
+        restoreReservedSkillActivations();
       });
   };
 
@@ -924,7 +909,7 @@ export async function runChat(
       removeProcessHandlers();
       clearPendingExit();
       for (const dispose of disposers) dispose();
-      await chatController.awaitFollowUpsIdle();
+      await followUpQueue.onIdle();
       // A suspended (idle/WAITING) root session is resumable: its flow record
       // survives only if we DON'T interrupt the flow (interrupt clears it). See
       // chatTuiIsResumableIdleOnExit for why "interruptible but not stoppable"

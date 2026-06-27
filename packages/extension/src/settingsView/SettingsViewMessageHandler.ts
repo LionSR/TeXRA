@@ -24,6 +24,7 @@ import {
   buildModelSelectionMessage,
   createModelSelectionController,
 } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
+import { listRuntimeGoals } from '@agent/runtime/goalCommands';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { BaseViewMessageHandler } from '@common/webview';
@@ -72,7 +73,6 @@ import {
   PROVIDER_URLS,
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
-import { GoalStore } from '@tools/goal';
 import {
   getLastCheckResults,
   refreshToolAvailability,
@@ -196,7 +196,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.refreshAfterChatGptAuthChange(),
     );
     this.goalController = new SettingsGoalController({
-      listGoals: () => GoalStore.list(),
+      listGoals: listRuntimeGoals,
     });
 
     this.handlerRegistry = this.createHandlerRegistry();

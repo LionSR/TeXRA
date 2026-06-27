@@ -1,12 +1,12 @@
+import type { RuntimeAgentConfigPayload } from '@agent/runtime/executionRequests';
 import {
-  getExecutionStore,
-  writeTerminalStatus,
-  type ResultMeta,
-} from '@agent/storage';
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+  writeRuntimeHistoryResultMeta,
+  writeRuntimeTerminalStatus,
+  type RuntimeHistoryResultMeta,
+} from '@agent/runtime/historyCommands';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 
 import {
   CliUsageError,
@@ -100,7 +100,7 @@ export async function runWorkflowAgent(
 
       const model = await resolveCliRunModel(context, init.model, 'run');
       const runContext = buildHeadlessRunContext(context, model);
-      const config: AgentConfigPayload = {
+      const config: RuntimeAgentConfigPayload = {
         agent: init.agent,
         model,
         inputFiles,
@@ -143,7 +143,7 @@ export async function runWorkflowAgent(
           return CliExitCode.Interrupted;
         }
 
-        await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+        await writeRuntimeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
         writeErrorStderr(error);
         return CliExitCode.AgentError;
       }
@@ -164,7 +164,7 @@ async function persistWorkflowResultMeta(
   result: CliWorkflowRunResult,
 ): Promise<void> {
   try {
-    const resultMeta: ResultMeta = {
+    const resultMeta: RuntimeHistoryResultMeta = {
       outputs: [...result.outputs],
       compileFailures: [...result.compileFailures],
     };
@@ -174,7 +174,7 @@ async function persistWorkflowResultMeta(
     if (result.copiedOutputs?.length) {
       resultMeta.copiedOutputs = [...result.copiedOutputs];
     }
-    await getExecutionStore(executionId).writeResultMeta(resultMeta);
+    await writeRuntimeHistoryResultMeta(executionId, resultMeta);
   } catch (error) {
     writeTextStderr(
       `Warning: could not persist workflow result metadata: ${toErrorMessage(error)}`,

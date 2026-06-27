@@ -14,13 +14,27 @@ import { ProgressAgentProposalController } from '@controllers/progressView/Progr
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { getAgent } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { getRuntimeToolUseAgentCategory } from '@agent/runtime/agentResolution';
+import { resolveRuntimeBashApproval } from '@agent/runtime/approvalCommands';
 import {
-  validateExecutionRequest,
-  type ExecutionRequest,
-} from '@agent/core/execution/executionRequests';
+  validateRuntimeExecutionRequest,
+  type RuntimeExecutionRequest,
+} from '@agent/runtime/executionRequests';
+import {
+  forgetRuntimeGoal,
+  getRuntimeGoalForStream,
+} from '@agent/runtime/goalCommands';
+import {
+  persistRuntimeExternalInquiryDraft,
+  resolveRuntimeExternalInquiry,
+  resolveRuntimeUserQuestion,
+} from '@agent/runtime/humanInputCommands';
+import {
+  cancelRuntimeRetry,
+  resolveRuntimePlanApproval,
+  resolveRuntimeProposal,
+  triggerRuntimeRetry,
+} from '@agent/runtime/runCoordinatorCommands';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { setPreferCodexSubscription } from '@auth/codex';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
@@ -44,11 +58,6 @@ import {
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
-import { handleExternalInquiryAction } from '@tools/inquiry';
-import { handleUserQuestionAction } from '@tools/userQuestion';
-import { handleProgressViewBashApprovalAction } from '@tools/approval';
-import { GoalStore } from '@tools/goal';
-import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import {
   createExternalLocation,
   flexibleFS,
@@ -121,12 +130,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
       void this.streamLifecycleController.deleteStream(streamId);
-      void GoalStore.forget(streamId);
+      void forgetRuntimeGoal(streamId);
     });
     context.subscriptions.push({ dispose: unsubscribeRemoveStream });
 
     const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
-      const goal = GoalStore.getForStream(streamId);
+      const goal = getRuntimeGoalForStream(streamId);
       this.provider.webviewUpdater.updateGoalActive(
         streamId,
         isGoalInFlight(goal),
@@ -254,11 +263,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             return true;
           },
           handleBashApprovalAction: (message) =>
-            handleProgressViewBashApprovalAction(message),
+            resolveRuntimeBashApproval(message),
           handlePlanApprovalAction: (message) =>
             this.handlePlanApprovalAction(message),
           handleUserQuestionAction: (message) =>
-            handleUserQuestionAction(message),
+            resolveRuntimeUserQuestion(message),
           handleAgentProposalAction: (message) =>
             this.agentProposalController.handleAction(message),
         },
@@ -281,7 +290,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]: (data) =>
         this.handleRetryStreamRequest(data),
       [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]: (data) => {
-        runCoordinatorBridge.cancelRetry(data.stream);
+        cancelRuntimeRetry({ streamId: data.stream });
       },
       [PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY]: (data) =>
         this.handleUseOwnApiKey(data),
@@ -330,7 +339,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: async (data) => {
         if (data.action === 'draft') {
-          await persistOpenTurnDraft({
+          await persistRuntimeExternalInquiryDraft({
             threadId: data.threadId,
             draft: data.draft ?? null,
           });
@@ -345,7 +354,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             );
             return;
           }
-          await handleExternalInquiryAction({
+          await resolveRuntimeExternalInquiry({
             action: 'submit',
             threadId: data.threadId,
             answer: data.answer,
@@ -353,7 +362,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           });
           return;
         }
-        await handleExternalInquiryAction({
+        await resolveRuntimeExternalInquiry({
           action: 'drop',
           threadId: data.threadId,
           feedback: data.feedback,
@@ -598,7 +607,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         );
       },
       resolveProposal: (proposalId, result) => {
-        runCoordinatorBridge.resolveProposal(proposalId, result);
+        resolveRuntimeProposal({ proposalId, result });
       },
       onMissingProposal: (proposalId) => {
         this.logger.warn(
@@ -642,14 +651,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await setPreferCodexSubscription(false);
       },
       invalidateModelOptionsCache,
-      triggerRetry: (stream) => runCoordinatorBridge.triggerRetry(stream),
+      triggerRetry: (stream) => triggerRuntimeRetry({ streamId: stream }),
     });
   }
 
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
-      getAgentCategory: (agent) =>
-        getAgent(agent, AgentCategory.ToolUse)?.category,
+      getAgentCategory: (agent) => getRuntimeToolUseAgentCategory(agent),
       loadModelOptions: async () => {
         const { modelOptions } = await loadOptions();
         return modelOptions;
@@ -695,10 +703,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleRetryStreamRequest(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST>,
   ): Promise<void> {
-    const success = runCoordinatorBridge.triggerRetry(
-      data.stream,
-      data.feedback,
-    );
+    const success = triggerRuntimeRetry({
+      streamId: data.stream,
+      feedback: data.feedback,
+    });
     if (!success) {
       await this.host.info(
         'No retryable request is available for this stream yet.',
@@ -807,19 +815,28 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const { approvalId, action } = data;
     switch (action) {
       case 'approve':
-        runCoordinatorBridge.resolvePlanApproval(approvalId, {
-          action: 'approve',
+        resolveRuntimePlanApproval({
+          approvalId,
+          result: {
+            action: 'approve',
+          },
         });
         break;
       case 'approve_and_goal':
-        runCoordinatorBridge.resolvePlanApproval(approvalId, {
-          action: 'approve_and_goal',
+        resolveRuntimePlanApproval({
+          approvalId,
+          result: {
+            action: 'approve_and_goal',
+          },
         });
         break;
       case 'reject':
-        runCoordinatorBridge.resolvePlanApproval(approvalId, {
-          action: 'reject',
-          feedback: data.feedback,
+        resolveRuntimePlanApproval({
+          approvalId,
+          result: {
+            action: 'reject',
+            feedback: data.feedback,
+          },
         });
         break;
     }
@@ -833,8 +850,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    * Validate and execute an agent request.
    * Returns true if execution started, false if validation failed.
    */
-  private async executeValidated(request: ExecutionRequest): Promise<boolean> {
-    const validation = validateExecutionRequest(request);
+  private async executeValidated(
+    request: RuntimeExecutionRequest,
+  ): Promise<boolean> {
+    const validation = validateRuntimeExecutionRequest(request);
     if (!validation.valid) {
       this.logger.error(this.channel, validation.message);
       return false;

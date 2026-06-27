@@ -1,16 +1,15 @@
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { tryPlatform } from '@platform/platform';
-import { writeTerminalStatus } from '@agent/storage';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
-  validateExecutionRequest,
-  type ValidatedExecutionRequest,
-} from '@agent/core/execution/executionRequests';
+  validateRuntimeExecutionRequest,
+  type RuntimeAgentConfigPayload,
+  type RuntimeValidatedExecutionRequest,
+} from '@agent/runtime/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import { attachDefaultTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import { writeRuntimeTerminalStatus } from '@agent/runtime/historyCommands';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
@@ -80,14 +79,14 @@ export type CliConfigExecuteResult<C extends AgentCategory | undefined> =
 export async function executeCliConfig<
   C extends AgentCategory | undefined = undefined,
 >(
-  config: AgentConfigPayload,
+  config: RuntimeAgentConfigPayload,
   runContext: CliContext,
   options: CliConfigExecuteOptions<C> = {},
 ): Promise<CliConfigExecuteResult<C>> {
   const { expectedCategory, categoryMismatchMessage, ...executeOptions } =
     options;
   const executionId = generateExecutionId();
-  const validation = validateExecutionRequest({ config, executionId });
+  const validation = validateRuntimeExecutionRequest({ config, executionId });
   if (!validation.valid) {
     writeTextStderr(validation.message);
     return { ok: false, exitCode: CliExitCode.Usage };
@@ -100,7 +99,7 @@ export async function executeCliConfig<
   );
 
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+    await writeRuntimeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
     writeTextStderr(
       categoryMismatchMessage ??
         `Agent resolved to a non ${expectedCategory} run.`,
@@ -124,7 +123,7 @@ export async function executeCliConfig<
  * lifecycle and status handling, which is how their behavior diverged before.
  */
 export async function executeCliRequest(
-  request: ValidatedExecutionRequest,
+  request: RuntimeValidatedExecutionRequest,
   runContext: CliContext,
   options: CliExecuteOptions = {},
 ): Promise<{ result: ExecuteAgentResult; terminalStatus: ExecutionStatus }> {
@@ -132,10 +131,7 @@ export async function executeCliRequest(
   // Present terminal-error toasts from the run's `result` event through the same
   // runtimeHost path the lifecycle used before (so ndjson / logger output is
   // unchanged); the lifecycle no longer emits them directly.
-  const detachResultToast = attachTerminalResultToast(
-    defaultSession(),
-    runtimeHost,
-  );
+  const detachResultToast = attachDefaultTerminalResultToast(runtimeHost);
   const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
     beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
   });
@@ -146,7 +142,7 @@ export async function executeCliRequest(
   const disposeShutdownStatus = ownedExecutionId
     ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
         shutdownInterrupted = true;
-        await writeTerminalStatus(
+        await writeRuntimeTerminalStatus(
           ownedExecutionId,
           EXECUTION_STATUS.INTERRUPTED,
         );
@@ -170,7 +166,10 @@ export async function executeCliRequest(
     result = await (options.wrap ? options.wrap(invoke) : invoke());
   } catch (error) {
     if (options.markErrorOnThrow && request.executionId) {
-      await writeTerminalStatus(request.executionId, EXECUTION_STATUS.ERROR);
+      await writeRuntimeTerminalStatus(
+        request.executionId,
+        EXECUTION_STATUS.ERROR,
+      );
     }
     throw error;
   } finally {
@@ -178,7 +177,10 @@ export async function executeCliRequest(
     // If the run settles while shutdown is in progress, keep the
     // signal-owned interrupted status as the final write.
     if (shutdownInterrupted && ownedExecutionId) {
-      await writeTerminalStatus(ownedExecutionId, EXECUTION_STATUS.INTERRUPTED);
+      await writeRuntimeTerminalStatus(
+        ownedExecutionId,
+        EXECUTION_STATUS.INTERRUPTED,
+      );
     }
     detachResultToast();
     uninstallApprovalHandlers();

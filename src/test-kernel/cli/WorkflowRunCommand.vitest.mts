@@ -17,15 +17,16 @@ const mocks = vi.hoisted(() => {
     isAuthenticated: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
     resolveCliRunModel: vi.fn(),
+    readRuntimeHistoryTerminalStatus: vi.fn(),
     writeResultMeta: vi.fn(),
+    writeTerminalStatus: vi.fn(),
   };
 });
 
-vi.mock('@agent/storage', () => ({
-  getExecutionStore: vi.fn(() => ({
-    writeResultMeta: mocks.writeResultMeta,
-  })),
-  writeTerminalStatus: vi.fn(),
+vi.mock('@agent/runtime/historyCommands', () => ({
+  readRuntimeHistoryTerminalStatus: mocks.readRuntimeHistoryTerminalStatus,
+  writeRuntimeHistoryResultMeta: mocks.writeResultMeta,
+  writeRuntimeTerminalStatus: mocks.writeTerminalStatus,
 }));
 
 vi.mock('@agent/index', () => ({
@@ -35,7 +36,8 @@ vi.mock('@agent/index', () => ({
   loadAgents: vi.fn(),
 }));
 
-vi.mock('@utils/files', () => ({
+vi.mock('@utils/files', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/files')>()),
   getRunDir: vi.fn((executionId: string) => `/tmp/runs/${executionId}`),
 }));
 
@@ -63,9 +65,9 @@ vi.mock('@cli/commands/_helpers/output', () => ({
   emitCliResult: mocks.emitCliResult,
 }));
 
-vi.mock('@cli/runtime/agents', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
+vi.mock('@cli/runtime/agents', () => ({
   resolveCliLaunchAgent: mocks.resolveCliLaunchAgent,
+  WORKFLOW_AGENT_NAME_DESCRIPTION: 'Workflow agent',
 }));
 
 vi.mock('@cli/runtime/runExecution', () => ({
@@ -377,7 +379,7 @@ describe('CLI workflow run command', () => {
       await expect(
         fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
       ).resolves.toBe('polished');
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith({
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith('exec-output', {
         copiedOutput: path.join(root, 'polished.tex'),
         outputs: [outputSummary],
         compileFailures: [compileFailure],
@@ -430,7 +432,7 @@ describe('CLI workflow run command', () => {
       await expect(
         fs.readFile(path.join(root, 'out', 'paper.tex'), 'utf8'),
       ).resolves.toBe('polished');
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith({
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith('exec-output-dir', {
         copiedOutputs: [path.join(root, 'out', 'paper.tex')],
         outputs: [outputSummary],
         compileFailures: [],

@@ -150,7 +150,7 @@ export interface ProgressEventPayloads {
     streamId: StreamTabId;
     progress: ConversationProgress;
   };
-  updateQueuedFollowUps: { streamId: StreamTabId };
+  updateQueuedFollowUps: { streamId: StreamTabId; messages: string[] };
   /**
    * An autonomous goal auto-paused after a failed cycle ended the
    * autonomous leg. Hosts surface this so a paused goal is
@@ -181,7 +181,7 @@ export interface ProgressEventPayloads {
   };
   /** A follow-up message was sent to an active tool-use session.
    *  Listened by blocking tools (e.g. ExecutionsTool wait) to abort early. */
-  followUpSent: { streamId: StreamTabId };
+  followUpSent: { streamId: StreamTabId; messages: string[] };
 
   /** Request the progress view to remove a stream tab (used by short-lived
    *  child streams that should auto-close once their work is done). */

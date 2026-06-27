@@ -12,6 +12,7 @@
 
 import { platform } from '@platform';
 import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
+import { getQueuedFollowUpsProjection } from '@agent/runtime/queuedFollowUps';
 import {
   currentSession,
   type SessionHandle,
@@ -109,7 +110,7 @@ export function notifyFollowUpSent(
       );
     }
   }
-  runtimeHost?.emit('followUpSent', { streamId });
+  runtimeHost?.emit('followUpSent', getQueuedFollowUpsProjection(streamId));
 }
 
 /**

@@ -1,7 +1,11 @@
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { resolveRuntimeBashApproval } from '@agent/runtime/approvalCommands';
+import {
+  cancelRuntimeRetry,
+  resolveRuntimePlanApproval,
+  resolveRuntimeProposal,
+  triggerRuntimeRetry,
+} from '@agent/runtime/runCoordinatorCommands';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-
-import { handleProgressViewBashApprovalAction } from '@tools/approval/bashApproval';
 
 import { type CliDecisionApprovalEvent } from '../approvalEvents';
 import { writeTextStderr } from '../logSinks';
@@ -48,7 +52,7 @@ export function dispatchApprovalDecision<K extends CliDecisionApprovalEvent>(
   switch (event) {
     case 'showBashPermission': {
       const data = payload as ProgressEventPayloads['showBashPermission'];
-      void handleProgressViewBashApprovalAction({
+      void resolveRuntimeBashApproval({
         requestId: data.requestId,
         action,
         feedback: decision.userMessage,
@@ -57,24 +61,30 @@ export function dispatchApprovalDecision<K extends CliDecisionApprovalEvent>(
     }
     case 'showPlanApproval': {
       const data = payload as ProgressEventPayloads['showPlanApproval'];
-      runCoordinatorBridge.resolvePlanApproval(data.approvalId, {
-        action,
-        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+      resolveRuntimePlanApproval({
+        approvalId: data.approvalId,
+        result: {
+          action,
+          ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+        },
       });
       return;
     }
     case 'showAgentProposal': {
       const data = payload as ProgressEventPayloads['showAgentProposal'];
-      runCoordinatorBridge.resolveProposal(data.proposalId, {
-        action,
-        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+      resolveRuntimeProposal({
+        proposalId: data.proposalId,
+        result: {
+          action,
+          ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+        },
       });
       return;
     }
     case 'showRetryRequest': {
       const data = payload as ProgressEventPayloads['showRetryRequest'];
       if (decision.accepted) {
-        runCoordinatorBridge.triggerRetry(data.streamId);
+        triggerRuntimeRetry({ streamId: data.streamId });
         return;
       }
       if (options.writeRejectionToStderr) {
@@ -85,7 +95,7 @@ export function dispatchApprovalDecision<K extends CliDecisionApprovalEvent>(
             : summary,
         );
       }
-      runCoordinatorBridge.cancelRetry(data.streamId);
+      cancelRuntimeRetry({ streamId: data.streamId });
       return;
     }
     default: {

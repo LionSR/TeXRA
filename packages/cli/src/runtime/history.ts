@@ -1,22 +1,24 @@
 import * as path from 'node:path';
 
 import {
-  deleteAllExecutions,
-  deleteExecution,
-  getExecutionStore,
-  listExecutions,
-  type ExecutionListingEntry,
-  type ExecutionMeta,
-  type ResultMeta,
-} from '@agent/storage';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+  countRuntimeHistoryExecutions,
+  deleteAllRuntimeHistoryExecutions,
+  deleteRuntimeHistoryExecution,
+  listRuntimeHistoryExecutions,
+  readRuntimeHistoryConfig,
+  readRuntimeHistoryExecutionRecord,
+  type RuntimeHistoryAgentConfig,
+  type RuntimeHistoryExecutionEntry,
+  type RuntimeHistoryExecutionMeta,
+  type RuntimeHistoryResultMeta,
+} from '@agent/runtime/historyCommands';
+import { forgetRuntimeGoalsByExecutionIds } from '@agent/runtime/goalCommands';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   EXECUTION_STATUS,
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
-import { GoalStore } from '@tools/goal';
 
 import { readCliToolUseResumeDataForListing } from './toolUseResumeData';
 import { formatCliHistoryAgentLabel } from './historyLabels';
@@ -49,9 +51,9 @@ export interface CliHistoryEntry {
 export interface CliHistoryDetails {
   readonly id: ExecutionId;
   readonly status: string;
-  readonly meta: ExecutionMeta | null;
-  readonly config: AgentConfig | null;
-  readonly resultMeta: ResultMeta | null;
+  readonly meta: RuntimeHistoryExecutionMeta | null;
+  readonly config: RuntimeHistoryAgentConfig | null;
+  readonly resultMeta: RuntimeHistoryResultMeta | null;
   readonly report: string | null;
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly conversation?: CliHistoryConversationPreview | null;
@@ -120,7 +122,7 @@ export function parseCliHistoryId(raw: string): ExecutionId | undefined {
 }
 
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
-  const entries = await listExecutions();
+  const entries = await listRuntimeHistoryExecutions();
   const history: CliHistoryEntry[] = [];
   for (const entry of entries) {
     history.push(await toCliHistoryEntry(entry));
@@ -132,24 +134,12 @@ export async function readCliHistoryDetails(
   id: ExecutionId,
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
-  const store = getExecutionStore(id);
-  const [
-    meta,
-    config,
-    resultMeta,
-    report,
-    conversation,
-    persistedWorkspaceFilePaths,
-    generatedFiles,
-  ] = await Promise.all([
-    store.readMeta(),
-    store.readConfig(),
-    store.readResultMeta(),
-    store.readReport(),
-    store.readConversation(),
-    store.readWorkspaceFiles(),
+  const [record, generatedFiles] = await Promise.all([
+    readRuntimeHistoryExecutionRecord(id),
     listGeneratedFiles(id),
   ]);
+  const { meta, config, resultMeta, report, conversation, workspaceFilePaths } =
+    record;
   const resumeData = config
     ? await readCliToolUseResumeDataForListing(id, config)
     : undefined;
@@ -159,7 +149,7 @@ export async function readCliHistoryDetails(
     : undefined;
   const workspaceFiles = await listWorkspaceToolFiles(
     config,
-    persistedWorkspaceFilePaths,
+    workspaceFilePaths,
     conversation,
   );
   const files = mergeHistoryFiles(generatedFiles, workspaceFiles);
@@ -195,8 +185,8 @@ export async function readCliHistoryDetails(
 
 export async function readCliHistoryConfig(
   id: ExecutionId,
-): Promise<AgentConfig | null> {
-  return getExecutionStore(id).readConfig();
+): Promise<RuntimeHistoryAgentConfig | null> {
+  return readRuntimeHistoryConfig(id);
 }
 
 export async function deleteCliHistory(options: {
@@ -207,17 +197,17 @@ export async function deleteCliHistory(options: {
   preCountForAll?: number;
 }): Promise<CliHistoryDeleteResult> {
   if (options.all) {
-    const deletedExecutionIds = await deleteAllExecutions();
-    await GoalStore.forgetByExecutionIds(deletedExecutionIds);
+    const deletedExecutionIds = await deleteAllRuntimeHistoryExecutions();
+    await forgetRuntimeGoalsByExecutionIds(deletedExecutionIds);
     const count = options.preCountForAll ?? deletedExecutionIds.length;
     return { deleted: 'all', count };
   }
   if (!options.id) {
     throw new Error('Expected an execution id, or --all.');
   }
-  const found = await deleteExecution(options.id);
+  const found = await deleteRuntimeHistoryExecution(options.id);
   if (found) {
-    await GoalStore.forgetByExecutionIds([options.id]);
+    await forgetRuntimeGoalsByExecutionIds([options.id]);
   }
   return {
     deleted: 'one',
@@ -242,7 +232,7 @@ export async function preflightCliHistoryDeleteAll(options: {
   yes?: boolean;
 }): Promise<CliHistoryDeleteAllPreflight> {
   if (!options.all) return { proceed: false, count: 0 };
-  const count = (await listExecutions()).length;
+  const count = await countRuntimeHistoryExecutions();
   return { proceed: options.yes === true, count };
 }
 
@@ -355,7 +345,7 @@ export function formatCliHistoryDetailsText(
 }
 
 async function toCliHistoryEntry(
-  entry: ExecutionListingEntry,
+  entry: RuntimeHistoryExecutionEntry,
 ): Promise<CliHistoryEntry> {
   const inputBasename = firstInputBasename(entry.agentConfig);
   // Cancelled sessions persist 'interrupted' and may keep a resumable flow
@@ -385,12 +375,14 @@ async function toCliHistoryEntry(
   };
 }
 
-function teamPresetId(config: AgentConfig | null): string | undefined {
+function teamPresetId(
+  config: RuntimeHistoryAgentConfig | null,
+): string | undefined {
   const preset = config?.cliMultiAgentPresetId?.trim();
   return preset ? preset : undefined;
 }
 
-function firstInputBasename(config: AgentConfig | null): string {
+function firstInputBasename(config: RuntimeHistoryAgentConfig | null): string {
   const first = config?.inputFiles.at(0) ?? '';
   return first ? path.basename(first) : '-';
 }
