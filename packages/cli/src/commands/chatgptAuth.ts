@@ -172,8 +172,6 @@ const CHATGPT_SUBCOMMANDS = {
   status: chatgptStatusCommand,
 } as const;
 
-export const CHATGPT_SUBCOMMAND_NAMES = Object.keys(CHATGPT_SUBCOMMANDS);
-
 export const chatgptAuthCommand = defineCommand({
   meta: {
     name: 'chatgpt',

@@ -75,11 +75,10 @@ export const compactIconActionButtonStyles: CSSResult = css`
  * hidden under the spinner. Emitted by `renderIconActionButton({ busy })` —
  * the helper owns the markup, this sheet styles the class hooks.
  *
- * Exported as a focused subset and interpolated into `commonViewStyles` below
- * so the selectors have a single source of truth (mirrors
- * `compactIconActionButtonStyles`).
+ * Interpolated into `commonViewStyles` below so the selectors have a single
+ * source of truth.
  */
-export const busyIconButtonStyles: CSSResult = css`
+const busyIconButtonStyles: CSSResult = css`
   .action-icon-busy {
     position: relative;
     display: inline-flex;

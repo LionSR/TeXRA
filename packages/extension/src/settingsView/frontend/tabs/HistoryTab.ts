@@ -4,12 +4,7 @@ import { LitElement, html, type TemplateResult, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import {
-  badgeStyles,
-  commonViewStyles,
-  designTokens,
-  historyStyles,
-} from '@shared/styles';
+import { commonViewStyles, designTokens, historyStyles } from '@shared/styles';
 
 // Local imports - shared schemas
 import type { HistoryItem } from '@shared/schemas';
@@ -25,7 +20,6 @@ export class HistoryTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    ...badgeStyles,
     ...historyStyles,
     css`
       :host {
