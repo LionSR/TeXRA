@@ -2834,13 +2834,14 @@ material development since §23 is **cross-doc**: the parallel `proposals/` chec
 `withModelClient` DRY, the `isOutputStreamingEnabled` port member, the dead `PersistedFlow.step()`
 wrapper, the `agentRegistry` re-exports) and collapsed the two `AgentCreator` nodes — the team is
 executing the plan, all moving _with_ the audit. The seven post-checkpoint commits continue the SSOT/DRY
-+ maintained-library-adoption wave, none adding a layer. Three independent fresh-eyes agents re-reached
-the standing verdict and re-surfaced the recurring traps (`IModelHandler` width for the twelfth time;
-the `buildAgentLaunchContext` two-layer split — verified false first-hand and re-rebutted as documented
-saga-compensation; config-only OpenAI subclasses) — all re-rebutted or already-tracked. **Post-write, #6671
-landed on `main` and closed three documented-open items** (the `RetryState` HIGH collapse — applied exactly as
-proposed — plus the four-member `IModelHandler` port narrowing and the `createResponse` template dedup);
-reconciled in the open ledger and the post-write-drift note above. The remaining backlog (the `public`→
-`protected` visibility track, §2.6 handler relocation, the §21 remainder, the `@agent/index` barrel curation,
-the typed `delegateTo`) is behavior-touching. Guardrails intact; no dead shim/barrel remains, so no refactor
-was applied to the codebase this pass — only the §24 ledger correction recording #6671's closures.
+
+- maintained-library-adoption wave, none adding a layer. Three independent fresh-eyes agents re-reached
+  the standing verdict and re-surfaced the recurring traps (`IModelHandler` width for the twelfth time;
+  the `buildAgentLaunchContext` two-layer split — verified false first-hand and re-rebutted as documented
+  saga-compensation; config-only OpenAI subclasses) — all re-rebutted or already-tracked. **Post-write, #6671
+  landed on `main` and closed three documented-open items** (the `RetryState` HIGH collapse — applied exactly as
+  proposed — plus the four-member `IModelHandler` port narrowing and the `createResponse` template dedup);
+  reconciled in the open ledger and the post-write-drift note above. The remaining backlog (the `public`→
+  `protected` visibility track, §2.6 handler relocation, the §21 remainder, the `@agent/index` barrel curation,
+  the typed `delegateTo`) is behavior-touching. Guardrails intact; no dead shim/barrel remains, so no refactor
+  was applied to the codebase this pass — only the §24 ledger correction recording #6671's closures.
