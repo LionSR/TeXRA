@@ -48,6 +48,7 @@ import {
   visibleDelegationAgentsBlock,
   withDelegationAgentAvailability,
 } from '@tools/delegationAgentAvailability';
+import { withDelegationWorktreeAvailability } from '@tools/delegationWorktreeAvailability';
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import {
   toolInjectionRegistry,
@@ -184,10 +185,11 @@ export async function resolveAgentTools({
 }
 
 /**
- * Refresh a delegation tool's "Available models:" and "Available agents:" lines
- * from the current roster. Non-delegation tools are returned untouched. The
- * model line is skipped when no delegation tool is present (`availableModelNames
- * === undefined`); in that case `category` is also undefined, so nothing runs.
+ * Refresh a delegation tool's "Available models:", "Available agents:", and
+ * "Git worktree support:" lines from current state. Non-delegation tools are
+ * returned untouched. The model line is skipped when no delegation tool is
+ * present (`availableModelNames === undefined`); in that case `category` is also
+ * undefined, so nothing runs.
  */
 function annotateDelegationTool(
   tool: ToolDefinition,
@@ -199,12 +201,13 @@ function annotateDelegationTool(
     availableModelNames === undefined
       ? tool
       : withDelegationModelAvailability(tool, availableModelNames);
-  // Both annotators no-op without a description, and resolving the visible
-  // roster reaches platform state — skip that lookup when there is nothing to
-  // annotate (e.g. a tool config that carries only a name).
+  // The annotators no-op without a description, and resolving the roster /
+  // worktree state reaches platform state — skip those lookups when there is
+  // nothing to annotate (e.g. a tool config that carries only a name).
   if (!withModels.description) return withModels;
-  return withDelegationAgentAvailability(
+  const withAgents = withDelegationAgentAvailability(
     withModels,
     visibleDelegationAgentsBlock(category),
   );
+  return withDelegationWorktreeAvailability(withAgents);
 }

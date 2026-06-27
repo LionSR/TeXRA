@@ -41,7 +41,7 @@ export function formatAgentList(
 ): string {
   return agents
     .map((agent) => {
-      const desc = (agent.description || 'No description').replace(
+      const desc = (agent.description || 'No description').replaceAll(
         /\s*\n\s*/g,
         ' ',
       );

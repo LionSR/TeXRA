@@ -30,7 +30,6 @@ import {
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { formatFollowUpInstruction } from '@tools/subagentResults';
 import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
-import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - delegation
@@ -76,8 +75,9 @@ function getRequiredContext(): RunContext & {
 /** Tool for delegating tasks to workflow agents (document processing). */
 export class WorkflowAgentTool extends defineTool({
   name: 'delegate_workflow',
-  description:
-    () => `Delegate to a workflow agent. The agent rewrites every file you list in inputFiles, emitting one revised <document> per input. Use for whole-document operations: proofreading, polishing, applying reviews, adding derivations, merging revisions. For interactive tool use or selective edits, use delegate_agent instead.
+  // Static base text; the "Available agents:" line is resolved per run at the
+  // resolveAgentTools boundary.
+  description: `Delegate to a workflow agent. The agent rewrites every file you list in inputFiles, emitting one revised <document> per input. Use for whole-document operations: proofreading, polishing, applying reviews, adding derivations, merging revisions. For interactive tool use or selective edits, use delegate_agent instead.
 
 Available agents: loaded from the active roster at runtime.
 
@@ -192,8 +192,10 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 /** Tool for delegating tasks to tool-use agents (interactive assistants). */
 export class DelegateAgentTool extends defineTool({
   name: 'delegate_agent',
-  description:
-    () => `Delegate a task to a tool-use agent, or queue follow-up instructions for a tool-use subagent.
+  // Static base text; the "Available agents:", "Available models:", and "Git
+  // worktree support:" lines are resolved per run at the resolveAgentTools
+  // boundary.
+  description: `Delegate a task to a tool-use agent, or queue follow-up instructions for a tool-use subagent.
 
 **New delegation** (no execution_id): Launches a new tool-use agent with its own tools (file reading, editing, search, bash). Tool-use agents are versatile—they can create entire documents, make targeted edits, perform research, or run multi-step investigations.
 
@@ -212,11 +214,7 @@ Example (new, specialized): agent=research, instruction="Derive the asymptotic e
 Example (new, targeted LaTeX repair): agent=latexFixer, instruction="Fix the unresolved citation commands on slides 3 and 7 in slides/talk.tex using refs.bib."
 Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."
 
-Git worktree support: ${
-      isWorktreeSupportEnabled()
-        ? 'ENABLED. Pass `working_directory` (absolute path) to run a subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.'
-        : 'DISABLED in this workspace. Do not pass `working_directory` — it will be rejected at schema validation. Ask the user to enable "Allow agents to work in git worktrees" on the Multi-Agent settings tab if worktree operation is needed.'
-    }`,
+Git worktree support: resolved from the active workspace at runtime.`,
   schema: DelegateAgentInputSchema,
 }) {
   protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
