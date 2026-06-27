@@ -17,6 +17,7 @@ import {
 } from '@shared/schemas';
 import { normalizeFilePath } from '@shared/utils/path';
 import { ToolError } from '@shared/schemas/toolResult';
+import { toNewestFirstByTimestamp } from '@utils/core';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 import { hexId12 } from '@utils/core/executionId';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
@@ -669,12 +670,10 @@ export async function listThreadsByStatus(params: {
     return true;
   });
 
-  // Schwartzian transform: parse each updatedAt once into a sort key rather
-  // than re-parsing both sides on every comparison.
-  const sorted = filtered
-    .map((manifest) => ({ manifest, key: Date.parse(manifest.updatedAt) }))
-    .sort((a, b) => b.key - a.key)
-    .map(({ manifest }) => manifest);
+  const sorted = toNewestFirstByTimestamp(
+    filtered,
+    (manifest) => manifest.updatedAt,
+  );
 
   const trimmed = params.limit != null ? sorted.slice(0, params.limit) : sorted;
   return trimmed.map(manifestToSummary);
