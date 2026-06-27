@@ -29,7 +29,7 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
 import {
   AGENT_RUN_GLOBAL_ARGS,
-  collectStringFlagValues,
+  collectCommonAgentRunFlags,
   optionalStringFlagValue,
   optString,
 } from './_helpers/globalArgs';
@@ -236,12 +236,9 @@ export const runWorkflowCommand = defineCliCommand({
   run: (context, ctx) =>
     runWorkflowAgent(context, {
       agent: ctx.args.agent,
-      inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
-      contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
+      ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
       output: optionalStringFlagValue(ctx.rawArgs, 'output'),
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
       model: optString(ctx.args.model),
-      instruction: optString(ctx.args.instruction) ?? '',
-      instructionFile: optionalStringFlagValue(ctx.rawArgs, 'instruction-file'),
     }),
 });

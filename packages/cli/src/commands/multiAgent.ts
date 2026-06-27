@@ -49,8 +49,7 @@ import { emitCliResult } from './_helpers/output';
 import {
   AGENT_RUN_GLOBAL_ARGS,
   GLOBAL_ARGS,
-  collectStringFlagValues,
-  optionalStringFlagValue,
+  collectCommonAgentRunFlags,
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
@@ -343,15 +342,9 @@ const multiAgentRunCommand = withUsageSections(
     run: (context, ctx) =>
       runMultiAgentPreset(context, {
         preset: ctx.args.preset,
-        inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
-        contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
+        ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
         agent: optString(ctx.args.agent),
         model: optString(ctx.args.model),
-        instruction: optString(ctx.args.instruction) ?? '',
-        instructionFile: optionalStringFlagValue(
-          ctx.rawArgs,
-          'instruction-file',
-        ),
       }),
   }),
   [

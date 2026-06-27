@@ -20,8 +20,7 @@ import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
   AGENT_RUN_GLOBAL_ARGS,
-  collectStringFlagValues,
-  optionalStringFlagValue,
+  collectCommonAgentRunFlags,
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
@@ -157,10 +156,7 @@ export const agentsRunCommand = defineCliCommand({
   run: (context, ctx) =>
     runToolUseAgent(context, {
       agent: ctx.args.name,
-      inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
-      contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
+      ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
       model: optString(ctx.args.model),
-      instruction: optString(ctx.args.instruction) ?? '',
-      instructionFile: optionalStringFlagValue(ctx.rawArgs, 'instruction-file'),
     }),
 });

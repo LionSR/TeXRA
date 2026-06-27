@@ -221,6 +221,16 @@ export function formatAttachmentSummaryFromNotes(
   return `${header}\n${notes}${hint}`;
 }
 
+/**
+ * Securely zero a sensitive attachment buffer and drop the reference. Returns
+ * `undefined` so callers can wipe and release in a single expression:
+ * `buffer = wipeBuffer(buffer);`
+ */
+export function wipeBuffer(buffer: Buffer | undefined): undefined {
+  buffer?.fill(0);
+  return undefined;
+}
+
 export async function loadAttachmentBuffer(
   attachment: ToolFileAttachment,
 ): Promise<Buffer> {

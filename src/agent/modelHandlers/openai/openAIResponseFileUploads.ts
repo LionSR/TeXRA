@@ -23,7 +23,10 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 
-import { loadAttachmentBuffer } from '../utils/toolAttachmentUtils';
+import {
+  loadAttachmentBuffer,
+  wipeBuffer,
+} from '../utils/toolAttachmentUtils';
 import { isInputFileContent, isMessageItem } from './openAIResponseContent';
 import type {
   ResponseFunctionCallOutputItemList,
@@ -147,10 +150,7 @@ async function replaceFileDataWithUpload(
     );
     throw err;
   } finally {
-    if (buffer) {
-      buffer.fill(0);
-      buffer = undefined;
-    }
+    buffer = wipeBuffer(buffer);
   }
 }
 
@@ -201,10 +201,7 @@ export async function uploadToolAttachments(
         `Failed to upload attachment to OpenAI: ${getSdkErrorMessage(err)}`,
       );
     } finally {
-      if (buffer) {
-        buffer.fill(0);
-        buffer = undefined;
-      }
+      buffer = wipeBuffer(buffer);
     }
   }
 
@@ -277,10 +274,7 @@ export async function buildInlineAttachmentParts(
       );
       skipped.push(attachment);
     } finally {
-      if (buffer) {
-        buffer.fill(0);
-        buffer = undefined;
-      }
+      buffer = wipeBuffer(buffer);
     }
   }
 
