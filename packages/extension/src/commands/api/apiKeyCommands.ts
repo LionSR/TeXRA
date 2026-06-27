@@ -26,16 +26,23 @@ async function refreshApiKeyUI(): Promise<void> {
   await vscode.commands.executeCommand('texra.refreshAllOptions');
 }
 
+function supportsInputBoxTitleButtons(): boolean {
+  const inputBox = vscode.window.createInputBox();
+  try {
+    return 'buttons' in inputBox;
+  } finally {
+    inputBox.dispose();
+  }
+}
+
 async function setApiKeyForProvider(
   provider: ApiProvider,
   skipDialog = false,
 ): Promise<void> {
-  // VS Code 1.109+ supports placing a QuickInputButton in the input box's
-  // title area, so we can offer "Get API Key" inline and skip the extra
-  // info-message step. On older hosts (incl. Cursor 1.105) we keep the
-  // legacy two-step dialog.
-  const vsMinor = Number.parseInt(vscode.version.split('.')[1] ?? '0', 10);
-  const supportsTitleButton = vsMinor >= 109;
+  // Newer VS Code hosts support placing a QuickInputButton in the input box's
+  // title area. Feature detection keeps this correct for older Cursor builds
+  // and any future major VS Code version.
+  const supportsTitleButton = supportsInputBoxTitleButtons();
 
   if (!skipDialog && !supportsTitleButton) {
     const actions: Array<vscode.MessageItem & { id: 'enter' | 'getApiKey' }> = [
