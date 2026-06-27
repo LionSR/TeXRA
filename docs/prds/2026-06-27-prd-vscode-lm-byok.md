@@ -216,14 +216,17 @@ The `value` field prefix `vscodelm:` is parsed by `createModelHandler()` in `Mod
 
 ### How vscode.lm.selectChatModels() is called and model matched
 
-When an agent run begins with a model value prefixed `vscodelm:`, `VscodeLmModelHandler.getClient()` is called. Because `src/agent/` is a VS Code-free zone, `VscodeLmModelHandler` receives a `VscodeLmClientPort` interface injected at construction. The concrete implementation of this port lives in `packages/extension/src/frontend/vscodeLm/VscodeLmClientAdapter.ts` (VS Code-allowed zone), which calls:
+When an agent run begins with a model value prefixed `vscodelm:`, `VscodeLmModelHandler.getClient()` is called. Because `src/agent/` is a VS Code-free zone, `VscodeLmModelHandler` receives a `VscodeLmClientPort` interface injected at construction. The concrete implementation of this port lives in `packages/extension/src/frontend/vscodeLm/VscodeLmClientAdapter.ts` (VS Code-allowed zone). Both `ensureModelAvailable` (which returns `Promise<void>`) and `sendRequest` use the same model-selection snippet internally:
 
 ```typescript
+// Inside VscodeLmClientAdapter — used by both ensureModelAvailable and sendRequest.
+// ensureModelAvailable: verifies reachability, returns void (no return statement).
+// sendRequest: retrieves the LanguageModelChat handle to call .sendRequest() on.
 const models = await vscode.lm.selectChatModels({ id: this.vscodeLmId });
 if (models.length === 0) {
   throw new VscodeLmModelUnavailableError(this.vscodeLmId);
 }
-return models[0];
+// sendRequest proceeds: const modelChat = models[0]; ...
 ```
 
 The `justification` string passed to `sendRequest()` is always `'TeXRA agent inference request'`.

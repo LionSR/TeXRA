@@ -160,7 +160,7 @@ This feature complements, not replaces, the existing webview. The full TeXRA pan
 
 ### Chat Participant Registration (`packages/extension/package.json`)
 
-Add the following to `contributes` in `packages/extension/package.json`. Commands are restricted to agents that satisfy both the **structural** constraint (`agentCategory: workflow` and `rounds: 1` explicitly set in their YAML) and the **semantic** constraint (single-file input). Among current root-level YAMLs: `correct.yaml` satisfies both; `merge.yaml` passes the structural constraint (`rounds: 1`, `agentCategory: workflow`) but is excluded on semantic grounds — it is designed for two-document merging and requires two input files, which is incompatible with the single-file `#file:` reference in the chat handler; the remaining YAMLs (`polish.yaml`, `ocr.yaml`, `transcribe_audio.yaml`, `paper2poster.yaml`, `paper2slide.yaml`) do not declare `rounds: 1` and are excluded from v1.
+Add the following to `contributes` in `packages/extension/package.json`. Commands are restricted to agents that satisfy both the **structural** constraint (`agentCategory: workflow` and `rounds: 1` explicitly set in their YAML) and the **semantic** constraint (single-file input). Among all current agent YAMLs (root-level and subdirectories): `correct.yaml` satisfies both; `merge.yaml` passes the structural constraint (`rounds: 1`, `agentCategory: workflow`) but is excluded on semantic grounds — it is designed for two-document merging and requires two input files, which is incompatible with the single-file `#file:` reference in the chat handler; the remaining YAMLs (`polish.yaml`, `ocr.yaml`, `transcribe_audio.yaml` at root; `write/paper2poster.yaml`, `write/paper2slide.yaml` in the subdirectory) do not declare `rounds: 1` and are excluded from v1.
 
 **Phase 1 manifest (ships in v1):**
 
@@ -261,7 +261,7 @@ Entries marked "must be confirmed in audit" are blocked on Open Question 1. Unti
 
 The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` in this order:
 
-1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under one of `vscode.workspace.workspaceFolders[].uri.fsPath`. The first qualifying URI becomes `AgentConfig.inputFiles[0]`. After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }`without calling`runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
+1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under one of `vscode.workspace.workspaceFolders[].uri.fsPath`. The first qualifying URI becomes `AgentConfig.inputFiles[0]`. After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }` without calling `runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
 
 2. **Resolve agent name.** If `request.command` is set and present in `CHAT_COMMAND_TO_AGENT`, use the mapped YAML identifier. If `request.command` is set but absent from the map, emit the unrecognized-command error and return without calling `runAgent()`. If `request.command` is `undefined`, use `DEFAULT_CHAT_AGENT`.
 
@@ -269,9 +269,9 @@ The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` i
 
 4. **Resolve model.** Read the persisted model ID from `platform().globalState` using the same key used by the main webview (exact key confirmed when Open Question 2 is resolved). Fall back to `DEFAULT_AGENT_MODEL` (`'gemini35f'`) from `src/shared/constants/providers.ts` if the state value is absent or unparseable.
 
-5. **Validate resolved agent category and rounds.** Load the agent YAML via `loadAgentDefinition(agentName)`. Confirm `agentCategory === AgentCategory.Workflow` and `rounds === 1`. If either check fails, emit: "The agent `[name]` requires the TeXRA panel for interactive approval or multi-round workflows. [Open TeXRA button invoking `texra.showMainView`]" and return.
+5. **Validate resolved agent category and rounds.** Load the agent YAML via `loadAgentSettingAndPrompts(agentName)`. Confirm `agentCategory === AgentCategory.Workflow` and `rounds === 1`. If either check fails, emit: "The agent `[name]` requires the TeXRA panel for interactive approval or multi-round workflows. [Open TeXRA button invoking `texra.showMainView`]" and return.
 
-6. **Guard workspace, then build `AgentConfig`.** First check: if `vscode.workspace.workspaceFolders` is `undefined` or empty, emit "TeXRA requires an open workspace folder. Please open a folder (File > Open Folder) before running `@texra`." and return without calling `runAgent()`. Then call `buildChatAgentConfig()` with `inputFiles: [resolvedFilePath]`, `contextFiles: []`, `outputFiles: []`, `agent: resolvedAgentName`, `model: resolvedModelId`, `instruction: extractedInstruction`, `agentCategory: AgentCategory.Workflow`, `workingDirectory: vscode.workspace.workspaceFolders[0].uri.fsPath`. Call `validateExecutionRequest({ config })` and surface any `ZodIssue` as a user-facing error if validation fails.
+6. **Guard workspace, then build `AgentConfig`.** First check: if `vscode.workspace.workspaceFolders` is `undefined` or empty, emit "TeXRA requires an open workspace folder. Please open a folder (File > Open Folder) before running `@texra`." and return without calling `runAgent()`. Then call `buildChatAgentConfig({ filePath: resolvedFilePath, agentName: resolvedAgentName, instruction: extractedInstruction, modelId: resolvedModelId, workspaceRoot: vscode.workspace.workspaceFolders[0].uri.fsPath })`. Call `validateExecutionRequest({ config })` and surface any `ZodIssue` as a user-facing error if validation fails.
 
 7. **Emit initial buttons.** Call `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })` and `stream.progress('TeXRA agent started')` before awaiting `runAgent()`.
 
@@ -296,7 +296,7 @@ Conversation history from `context.history` is not forwarded to the agent's LLM 
 
 ### Agent YAML and Model Selection
 
-The participant does not construct its own system prompt. It uses the existing agent YAML loaded by `loadAgentDefinition()` (called inside `buildAgentLaunchContext()`). The full `systemPrompt`, `userPrefix`, `userRequest`, `documentTag`, `endTag`, `temperature`, and all other YAML fields are respected exactly as in the webview flow.
+The participant does not construct its own system prompt. It uses the existing agent YAML loaded by `loadAgentSettingAndPrompts()` (called inside `buildAgentLaunchContext()`). The full `systemPrompt`, `userPrefix`, `userRequest`, `documentTag`, `endTag`, `temperature`, and all other YAML fields are respected exactly as in the webview flow.
 
 Model selection follows the same `ModelFactory.createModelHandler()` routing as the webview: Anthropic, OpenAI, Google, or OpenRouter depending on the resolved model ID. The participant never calls `vscode.lm.selectChatModels()`.
 
@@ -330,7 +330,7 @@ After `runAgent()` resolves with a `WorkflowFlowResult`:
 
 Output files are written to disk by the existing agent pipeline (`XmlOutputManager`, `AgentOutputHandler`) — the participant does not call `platform().fs` directly for output.
 
-**UX note on in-place writes.** Some Workflow agents are configured to write output back to the same path as the input file. In the TeXRA webview this is explicit because the user selects files through a picker. In chat mode the user may not realize `@texra /proofread #file:intro.tex` will overwrite `intro.tex`. To address this: before calling `runAgent()`, if the agent YAML's `defaultOutputFiles` would resolve to the same path as the input file, emit `stream.markdown('Note: this agent will overwrite the input file in place. Use the "View LaTeX diff" button after completion to review changes.')`. A confirmation step via `stream.button()` is out of scope for v1 (the chat API does not support awaiting button clicks mid-stream); this note serves as the only pre-run warning.
+**UX note on in-place writes.** Some Workflow agents are configured to write output back to the same path as the input file. In the TeXRA webview this is explicit because the user selects files through a picker. In chat mode the user may not realize `@texra /proofread #file:intro.tex` will overwrite `intro.tex`. To address this: before calling `runAgent()`, if the agent YAML's `defaultOutputFiles` would resolve to the same path as the input file, emit `stream.markdown('⚠️ Note: this agent will overwrite the input file in place. The original content will be replaced.')`. No diff button is shown in this case (comparing a file against itself yields an empty diff). A confirmation step via `stream.button()` is out of scope for v1 (the chat API does not support awaiting button clicks mid-stream); this note serves as the only pre-run warning.
 
 ### Fallback for Users Without Copilot Chat
 
@@ -436,7 +436,7 @@ Parse request.references  Parse request.command
      })
        → executeAgent()
          → buildAgentLaunchContext()
-           → loadAgentDefinition()     (reads YAML from resources/)
+           → loadAgentSettingAndPrompts()     (reads YAML from resources/)
            → ModelFactory.createModelHandler()  (TeXRA API keys — not request.model)
          → runFlowWithLifecycle()
            → runReflectionFlow()       (rounds:1 Workflow agents only)
@@ -501,7 +501,7 @@ export class ChatStreamAgentRuntimeHost implements AgentRuntimeHost {
         const p = payload as ProgressEventPayloads['addOutputFiles'];
         const allFiles = Object.values(p.filesByRound)
           .flat()
-          .map((f) => f.absolutePath);
+          .map((f) => f.location.absolutePath);
         this.onOutputFiles(allFiles);
         break;
       }
