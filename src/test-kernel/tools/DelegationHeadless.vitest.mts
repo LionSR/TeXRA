@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
@@ -13,7 +13,7 @@ import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
 import { DelegateAgentTool } from '@tools/DelegationTools';
 

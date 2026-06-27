@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   formatCliStatusLabel,
   formatCliSessionStatus,
