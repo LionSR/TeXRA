@@ -18,9 +18,9 @@ import {
 import {
   sendFollowUp,
   wakeOrReleaseQueuedStream,
-} from '@agent/toolUse/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
+} from '@agent/followUp/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { StreamTabId } from '@shared/schemas';
 

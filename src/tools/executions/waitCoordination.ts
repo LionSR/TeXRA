@@ -10,7 +10,7 @@ import {
   AgentExecutionHandle,
 } from '@agent/runtime/executionRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { onFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
+import { onFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { STREAM_STATUS } from '@shared/schemas';
 
 /**

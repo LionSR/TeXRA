@@ -2,7 +2,7 @@
 // still flowing through the original emitter. Approvals are intentionally
 // not handled here — `subscribeApprovals.ts` owns the typed-modal pipeline.
 
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type {
   ProgressEvent,

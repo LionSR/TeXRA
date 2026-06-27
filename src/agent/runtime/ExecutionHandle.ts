@@ -9,7 +9,7 @@ import pDefer from 'p-defer';
 
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
+import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import {
   STREAM_STATUS,
   streamStatusesWithTrait,

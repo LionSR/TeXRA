@@ -5,7 +5,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   appendFollowUpAsUserMessage,
   followUpDisplayText,
-} from '@agent/toolUse/followUpMessages';
+} from '@agent/followUp/followUpMessages';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { STREAM_STATUS } from '@shared/schemas';
 import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';

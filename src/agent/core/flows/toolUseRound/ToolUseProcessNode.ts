@@ -3,7 +3,7 @@ import { BaseNode } from '@agent/node';
 import { logWebFetch, logWebSearch } from '@agent/trace';
 import { recordCycleMetrics } from '@agent/core/execution/AgentState';
 import { extractModelResponse } from '@agent/core/flows/CommonCycleTypes';
-import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
+import { appendFollowUpAsUserMessage } from '@agent/followUp/followUpMessages';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
