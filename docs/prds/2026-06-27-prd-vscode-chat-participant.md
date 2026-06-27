@@ -506,7 +506,7 @@ export class ChatStreamAgentRuntimeHost implements AgentRuntimeHost {
       }
       case 'requestShowError': {
         // Launch failures (AgentLaunchContext) and terminal result errors route
-        // here, not through updateStreamStatus FAILED.
+        // here, not through updateStreamStatus terminalStatus='error'.
         const e = payload as ProgressEventPayloads['requestShowError'];
         this.stream.markdown(`**Error:** ${e.message}`);
         break;
