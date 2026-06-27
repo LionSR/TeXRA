@@ -2758,11 +2758,13 @@ already-tracked:
 
 ### Open ledger at HEAD `d594ed3` (line numbers refreshed; all still present unless noted)
 
-- **06-26 backlog `RetryState` (HIGH, behavior-touching)** — still present: `interface RetryState`
-  (`RetryState.ts:29`) is a one-field bag (`lastError?`, `:30`) already on `BaseCycleFields`, and the sole
-  non-test caller passes the same object for both params: `handleInvocationResult(execRes, shared,
-shared, …)` (`ModelInvocationNode.ts:123`). Collapse-to-one-`state`-param candidate; a function-signature
-  change, deferred to review.
+- **06-26 backlog `RetryState` (HIGH) — CLOSED by #6671** (see the post-write-drift note below). As pinned
+  at `d594ed3` (this branch's base, before #6671) it was still present: `interface RetryState`
+  (`RetryState.ts:29`) a one-field bag (`lastError?`, `:30`), with the sole non-test caller passing the same
+  object for both params: `handleInvocationResult(execRes, shared, shared, …)` (`ModelInvocationNode.ts:123`).
+  #6671 (`357182d`) applied **exactly the proposed collapse** — deleted the `interface RetryState`, widened the
+  inline `state` param to carry `lastError?`, and dropped the duplicate `retryState` arg (the call is now the
+  single-`shared` `handleInvocationResult(execRes, shared, { logger, operationName })`).
 - **§2.6** — `modelHandlers/modelHandlerValidation.ts` still in the production handler dir; the
   `ModelFactory.ts` CI override was **extracted** to `src/agent/runtime/internalValidationOverride.ts`
   (`eb4ff93`) — cite drift, finding survives (the handler itself still ships in the dispatch tree;
@@ -2781,12 +2783,38 @@ shared, …)` (`ModelInvocationNode.ts:123`). Collapse-to-one-`state`-param cand
 - **§21 remainder** — `ToolSessionState` empty schema (`TaskState.ts:11`/`:33`/`:55`/`:63`), the
   `TaskState` refine-vs-discriminated split, and the `AgentState.recordRound` 3-field forwarder
   (`AgentState.ts:48`) — all unchanged.
-- **06-26 design-track backlog** (four leaking port members — `getAgentCategory`,
-  `canProcessToolResultAttachments`, `createMediaContent`, `createAssistantMessage`; three `public`→
-  `protected` base methods; the duplicated `createResponse` template body in the two override handlers;
-  the over-wide `@agent/index` barrel; `PlatformAgentDirectoryBootstrapOptions`) — recorded in the
-  proposals checkpoint, all deferred as deliberate surface decisions; carried here for ledger unity.
+- **06-26 design-track backlog — partly CLOSED by #6671.** The **four leaking `IModelHandler` port members**
+  (`getAgentCategory`, `canProcessToolResultAttachments`, `createMediaContent`, `createAssistantMessage`) were
+  **all removed from the port** by #6671 (`357182d`, `IModelHandler.ts` −11), and the **duplicated
+  `createResponse` template body** in the two override handlers (`modelHandlerOpenAIResponse`,
+  `modelHandlerGoogleInteractions`) was **deduped** in the same commit. Still open: the three `public`→
+  `protected` base-method visibility tightenings, the over-wide `@agent/index` barrel, and
+  `PlatformAgentDirectoryBootstrapOptions` — deliberate surface decisions, deferred.
+- **Carried from §23 (ledger unity — unchanged, neither closed nor newly drifted at `d594ed3`):**
+  `platform().agentResume` near-single-use required port (§21; two call sites, every host implements it);
+  §13 finding #1 (`AgentRuntimeHost.emit` mixes UI + essential events); §3.1 (no `@agent/runtime/index.ts` —
+  also noted in this pass's guardrails). Listed explicitly so none is silently dropped from the open ledger.
 - **SDK-008** — CLOSED and deepened (§19); unchanged.
+
+### Post-write drift — #6671 landed on `main` during PR #6677's review window and closed three documented-open items
+
+§24 was written and pinned to `d594ed3` (this branch's fork point). While PR #6677 (the §24 docs change) was in
+review, **#6671 `357182d` "refactor(agent): collapse RetryState, narrow IModelHandler port, dedup createResponse
+template"** merged to `main` (2026-06-27 12:49, between this branch's base at 01:22 and `main` HEAD `07f522d`).
+It applies **three items §24 records as open**, so the audited-code claims above are accurate against the
+`d594ed3` pin but describe code the merge target has since refactored. The automated PR reviewers correctly
+flagged the mismatch (they review against the PR-merge preview / `main`, which contains #6671; this branch's
+working tree does not). Reconciled in the open ledger above; the three closures are:
+
+1. **`RetryState` collapse (the §24 HIGH item)** — `interface RetryState` deleted; `lastError?` folded into the
+   inline `handleInvocationResult` `state` param; the duplicate `retryState`/double-`shared` arg removed. The
+   team applied the audit's proposed shape verbatim.
+2. **`IModelHandler` port narrowing** — the four leaking members (`getAgentCategory`,
+   `canProcessToolResultAttachments`, `createMediaContent`, `createAssistantMessage`) removed from the port.
+3. **`createResponse` template dedup** — the copied error-tag wrap in the two override handlers consolidated.
+
+This is the audit's thesis in motion (the team executing the documented backlog), not a contradiction of it; the
+next §-pass should re-pin to a HEAD containing #6671 and move these from "open" to the closed-items reconciliation.
 
 **Subagent split points — unchanged and reconfirmed** (§5 + 06-26 checkpoint ranking): config-driven
 YAML agents over the two flows + the `delegate_*` tools / `executeSubagent` remain the existing
@@ -2806,11 +2834,13 @@ material development since §23 is **cross-doc**: the parallel `proposals/` chec
 `withModelClient` DRY, the `isOutputStreamingEnabled` port member, the dead `PersistedFlow.step()`
 wrapper, the `agentRegistry` re-exports) and collapsed the two `AgentCreator` nodes — the team is
 executing the plan, all moving _with_ the audit. The seven post-checkpoint commits continue the SSOT/DRY
-
-- maintained-library-adoption wave, none adding a layer. Three independent fresh-eyes agents re-reached
-  the standing verdict and re-surfaced the recurring traps (`IModelHandler` width for the twelfth time;
-  the `buildAgentLaunchContext` two-layer split — verified false first-hand and re-rebutted as documented
-  saga-compensation; config-only OpenAI subclasses) — all re-rebutted or already-tracked. The remaining
-  backlog (`RetryState` collapse, the port-narrowing/visibility track, §2.6 handler relocation, the §21
-  remainder, the typed `delegateTo`) is unchanged and behavior-touching. Guardrails intact; no dead
-  shim/barrel remains, so no refactor was applied.
++ maintained-library-adoption wave, none adding a layer. Three independent fresh-eyes agents re-reached
+the standing verdict and re-surfaced the recurring traps (`IModelHandler` width for the twelfth time;
+the `buildAgentLaunchContext` two-layer split — verified false first-hand and re-rebutted as documented
+saga-compensation; config-only OpenAI subclasses) — all re-rebutted or already-tracked. **Post-write, #6671
+landed on `main` and closed three documented-open items** (the `RetryState` HIGH collapse — applied exactly as
+proposed — plus the four-member `IModelHandler` port narrowing and the `createResponse` template dedup);
+reconciled in the open ledger and the post-write-drift note above. The remaining backlog (the `public`→
+`protected` visibility track, §2.6 handler relocation, the §21 remainder, the `@agent/index` barrel curation,
+the typed `delegateTo`) is behavior-touching. Guardrails intact; no dead shim/barrel remains, so no refactor
+was applied to the codebase this pass — only the §24 ledger correction recording #6671's closures.
