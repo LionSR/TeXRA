@@ -67,15 +67,7 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
   }));
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
-    >
-      <Text bold color="cyan">
-        /memory
-      </Text>
+    <FormFrame color="cyan" title="/memory" showCloseHint={false}>
       <Text dimColor>Choose a memory to preview in the transcript.</Text>
       <Box marginTop={1}>
         <Select
@@ -96,6 +88,6 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
           confirmCancel={false}
         />
       </Box>
-    </Box>
+    </FormFrame>
   );
 }

@@ -56,15 +56,7 @@ export function ApprovalPolicyForm(
   }
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
-    >
-      <Text bold color="cyan">
-        /approval
-      </Text>
+    <FormFrame color="cyan" title="/approval" showCloseHint={false}>
       <Text dimColor>
         Choose when privileged actions prompt or auto-approve.
       </Text>
@@ -87,6 +79,6 @@ export function ApprovalPolicyForm(
           confirmCancel={false}
         />
       </Box>
-    </Box>
+    </FormFrame>
   );
 }

@@ -3,7 +3,11 @@ import { Box, Text, useWindowSize } from 'ink';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
-import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
+import { ConfirmCard } from './ConfirmCard';
+import {
+  CONFIRM_CARD_HORIZONTAL_DECORATION,
+  EDIT_DIFF_PADDING,
+} from '../ui/theme';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import {
   buildHunks,
@@ -18,7 +22,6 @@ import { KeyHints } from '../ui/KeyHints';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
-const EDIT_DIFF_PADDING = 6;
 const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
 const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 const EDIT_APPROVAL_FEEDBACK_MARGIN_ROWS = 1;

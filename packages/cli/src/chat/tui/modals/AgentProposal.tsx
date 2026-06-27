@@ -7,7 +7,8 @@ import {
   type AgentProposalPermission,
 } from '@shared/schemas';
 
-import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
+import { ConfirmCard } from './ConfirmCard';
+import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {

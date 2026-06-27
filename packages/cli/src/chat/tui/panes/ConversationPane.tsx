@@ -26,6 +26,7 @@ import {
 
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 const MIN_PENDING_ROWS = 1;
+const THINKING_DOTS = ['.', '..', '...'] as const;
 
 /**
  * Liveness row for the hidden reasoning phase: the model is working but
@@ -37,7 +38,7 @@ const MIN_PENDING_ROWS = 1;
  */
 function ThinkingRow(): React.JSX.Element {
   const now = useLiveNowMs(true);
-  const dots = '.'.repeat((Math.floor(now / 1000) % 3) + 1);
+  const dots = THINKING_DOTS[Math.floor(now / 1000) % THINKING_DOTS.length];
   return (
     <Box>
       <Text dimColor>
