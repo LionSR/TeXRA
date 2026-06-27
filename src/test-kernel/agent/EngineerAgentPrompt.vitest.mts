@@ -53,7 +53,9 @@ describe('engineer agent prompt', () => {
     // surfaced to the user, never handed to an unrelated agent.
     expect(systemPrompt).toMatch(/no match/i);
     expect(systemPrompt).toMatch(/yourself or tell the user/i);
-    expect(systemPrompt).toMatch(/never hand\s+software work to an unrelated agent/i);
+    expect(systemPrompt).toMatch(
+      /never hand\s+software work to an unrelated agent/i,
+    );
   });
 
   it('still documents its ideal software specialist roles', () => {
