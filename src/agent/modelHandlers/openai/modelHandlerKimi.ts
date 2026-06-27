@@ -141,7 +141,7 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
     );
     if (!parsed.success) {
       throw new Error(
-        `Kimi token estimation returned an unexpected response shape: ${parsed.error.message}`,
+        `Kimi token estimation returned an unexpected response shape: ${z.prettifyError(parsed.error)}`,
       );
     }
     return parsed.data.data.total_tokens;

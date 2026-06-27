@@ -10,7 +10,7 @@ import {
   extractToolAttachments,
   type ExtractedToolAttachments,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type {
   FileInteractionState,
   WorkPlanState,

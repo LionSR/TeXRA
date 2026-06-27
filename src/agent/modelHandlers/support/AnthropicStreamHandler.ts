@@ -453,7 +453,8 @@ export class AnthropicStreamHandler {
   private parseStreamField(input: string | undefined, field: string): string {
     if (!input) return '';
     const parsed = safeParseJson(input);
-    if (parsed.ok) return (parsed.value as Record<string, string>)[field] ?? '';
+    if (parsed.isOk())
+      return (parsed.value as Record<string, string>)[field] ?? '';
     const match = input.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`));
     return match?.[1] ?? '';
   }

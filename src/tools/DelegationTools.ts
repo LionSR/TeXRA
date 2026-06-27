@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 
 // Local imports - tools
 import {

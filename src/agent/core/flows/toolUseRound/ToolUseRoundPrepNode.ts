@@ -8,8 +8,8 @@ import {
 import {
   appendFollowUpAsUserMessage,
   followUpDisplayText,
-} from '@agent/toolUse/followUpMessages';
-import type { FollowUpQueueBatchItem } from '@agent/toolUse/FollowUpQueue';
+} from '@agent/followUp/followUpMessages';
+import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 
 // Local file imports
 import { FlowTransition } from '../FlowTransitions';

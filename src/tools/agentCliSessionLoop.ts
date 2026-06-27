@@ -19,9 +19,9 @@ import {
 import {
   sendFollowUp,
   wakeOrReleaseQueuedStream,
-} from '@agent/toolUse/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
+} from '@agent/followUp/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
 import {
   deriveRunOutcome,

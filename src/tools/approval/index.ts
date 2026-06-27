@@ -12,7 +12,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
 import {
   _rejectAllPendingUserQuestions,

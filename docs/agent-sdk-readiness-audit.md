@@ -173,7 +173,7 @@ The public barrels (`@agent/index`, `@agent/core`, `@agent/types`) are
 **intentionally narrow** — a real strength. The friction is at the edges:
 
 1. **Deep-import leakage.** ~44 files in `packages/extension/src` import directly
-   from `@agent/runtime/*`, `@agent/implementations/*`, `@agent/toolUse/*`,
+   from `@agent/runtime/*`, `@agent/implementations/*`, `@agent/followUp/*`,
    `@agent/storage/*` (e.g. `StreamStatusService`, `ToolUseFollowUpQueue`,
    `delegationPolicy`). Acceptable for internal command handlers, but there's no
    shielded "public runtime" subset.
@@ -2599,7 +2599,7 @@ none applied (each behavior-touching, per §21):
   (`CycleServices.ts:73`), `FlowParams` (`BaseFlowServices.ts:80`), re-aliased as
   `ToolUseFlowParams`/`ReflectionFlowParams`; never populated. Unchanged.
 - **`platform().agentResume` near-single-use required port** — two production call sites:
-  `agent/toolUse/ToolUseFollowUp.ts` and `tools/inquiry/inquiryContinuation.ts`; every host implements
+  `agent/followUp/ToolUseFollowUp.ts` and `tools/inquiry/inquiryContinuation.ts`; every host implements
   it (`extension.ts`, CLI `initPlatform.ts`, desktop `platform/index.ts`). Unchanged.
 - **`AgentState.recordRound` 3-field forwarding wrapper** over `recordCycleMetrics`
   (`AgentState.ts:48`; two callers — `ResponseCycleFlow.ts:447`, `ResponseCycleNode.ts:131`).

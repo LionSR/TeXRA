@@ -5,7 +5,7 @@ const sendFollowUpMock = vi.hoisted(() =>
   vi.fn(async () => ({ status: 'sent' as const })),
 );
 
-vi.mock('@agent/toolUse/ToolUseFollowUp', () => ({
+vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   sendFollowUp: sendFollowUpMock,
 }));
 

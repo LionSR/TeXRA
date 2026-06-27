@@ -153,9 +153,7 @@ Anything outside this list must be changed through the settings UI — invoke \`
     const parsed = entry.schema.safeParse(input.value);
     if (!parsed.success) {
       throw new ToolError(
-        `Value rejected for ${input.key}: ${parsed.error.issues
-          .map((i) => i.message)
-          .join('; ')}. ${entry.summary}`,
+        `Value rejected for ${input.key}: ${z.prettifyError(parsed.error)}. ${entry.summary}`,
       );
     }
 

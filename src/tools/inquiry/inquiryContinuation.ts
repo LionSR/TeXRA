@@ -14,7 +14,7 @@
 
 import { platform } from '@platform/platform';
 
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { createChannelTrace } from '@logger';
