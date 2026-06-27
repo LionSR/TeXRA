@@ -19,16 +19,16 @@ import {
   type DiffSession,
   type DiffSource,
   type DiffViewHost,
-} from '@hosts/diffViewHost';
+} from '@hosts/uiHosts';
 import type { StreamTabId } from '@shared/schemas';
 import type { LineChanges } from '@shared/schemas/lineChanges';
+import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import {
   type LatexPreviewEntry,
   previewProposedLatex,
   runLatexdiff,
 } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
-import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import {
   computeLineChangeSummary,
   computeUserPatch,

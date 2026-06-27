@@ -8,7 +8,7 @@ import {
   type DiffSession,
   type DiffSource,
   type DiffViewHost,
-} from '@hosts/diffViewHost';
+} from '@hosts/uiHosts';
 import { computeUserPatch } from '@tools/approval/toolEditApproval';
 
 import {
