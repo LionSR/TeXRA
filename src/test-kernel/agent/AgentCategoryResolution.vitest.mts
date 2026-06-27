@@ -126,27 +126,34 @@ describe('cross-category agent resolution', () => {
     expect(launched?.entry.name).toBe(validated?.name);
   });
 
-  it('falls back to category resolution, never blind name, when no source is pinned', () => {
-    // A direct launch without a pinned source (e.g. the webview "Run") must
-    // still resolve within its category — the same rule validation uses — so the
-    // colliding custom workflow `assistant` can never be picked for a tool-use
-    // launch. The old blind name fallback (source priority) would have returned
-    // the custom workflow entry here.
+  it('resolves an unpinned launch through the same visible set as validation', () => {
+    // A direct launch without a pinned source (e.g. the webview "Run") routes
+    // through getVisibleAgent — the identical call validation makes — so it
+    // resolves to exactly the entry validation would, never a same-name shadow.
     const toolUse = resolveAgentForLaunch(AgentCategory.ToolUse, 'assistant');
+    expect(toolUse?.entry).toBe(getVisibleAgent('toolUse', 'assistant'));
     expect(toolUse?.entry.source).toBe('builtInToolUse');
-    expect(toolUse?.entry.category).toBe('toolUse');
 
     const workflow = resolveAgentForLaunch(AgentCategory.Workflow, 'assistant');
-    expect(workflow?.entry.source).toBe('custom');
+    expect(workflow?.entry).toBe(getVisibleAgent('workflow', 'assistant'));
 
-    // A stale/missing source falls through to the category floor rather than
-    // failing or resolving blind.
+    // A stale/missing pinned source falls through to that same visible-set tier.
     const stale = resolveAgentForLaunch(
       AgentCategory.ToolUse,
       'assistant',
       'remote',
     );
     expect(stale?.entry.source).toBe('builtInToolUse');
+  });
+
+  it('reaches internal agents only via the full-category floor', () => {
+    // Internal agents are absent from the visible set (tier 2), so an unpinned
+    // launch resolves them through the full-category floor (tier 3) — still
+    // launchable by command, without ever shadowing a visible agent.
+    expect(getVisibleAgent('toolUse', 'secretAgent')).toBeUndefined();
+    expect(
+      resolveAgentForLaunch(AgentCategory.ToolUse, 'secretAgent')?.entry.name,
+    ).toBe('secretAgent');
   });
 
   it('still resolves a non-colliding name and legacy aliases within category', () => {

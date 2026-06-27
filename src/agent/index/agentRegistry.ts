@@ -580,14 +580,24 @@ export function getCategoryAgent(
 }
 
 /**
- * The single launch-time resolver. Prefers the exact `(source, name)` entry the
- * delegation pinned when it validated the agent, so launch lands on precisely
- * the entry validation chose. When no source is pinned (or it's stale), it
- * resolves within the launch `category` — the same rule validation uses — so a
- * same-name agent in another category can never be picked. It never falls back
- * to blind source-priority on a bare name, so launch cannot diverge from
- * validation: every caller either pins a source or supplies a trustworthy
- * category.
+ * The single launch-time resolver, in three tiers — each consulted only when the
+ * previous yields nothing, so launch resolves a name to the same entry
+ * validation would and never a different one:
+ *
+ *  1. The exact `(source, name)` entry the delegation pinned at validation, so
+ *     launch lands on precisely the entry validation chose — even if the agent's
+ *     visibility changed since.
+ *  2. `getVisibleAgent` — the identical call validation makes — so an unpinned
+ *     launch (the webview "Run", CLI, restored records) of a visible agent
+ *     resolves to exactly what validation resolved, not a same-name shadow the
+ *     full set would dedup to differently.
+ *  3. The full category set (`getCategoryAgent`), reached only for names the
+ *     visible set can't resolve — internal agents, launchable by command but
+ *     hidden from dropdowns/validation.
+ *
+ * It never falls back to blind source-priority on a bare name, so launch only
+ * ever extends resolution to internal agents — it cannot pick a different entry
+ * than validation for any name validation resolves.
  */
 export function resolveAgentForLaunch(
   category: AgentCategory,
@@ -596,6 +606,7 @@ export function resolveAgentForLaunch(
 ): ResolvedAgent | undefined {
   const entry =
     (source ? getAgent(createKey(source, agentName(identifier))) : undefined) ??
+    getVisibleAgent(category, identifier) ??
     getCategoryAgent(category, identifier);
   if (!entry) return undefined;
   return { entry, definitionPath: entry.path, resolvedName: entry.name };

@@ -168,10 +168,11 @@ export async function getAgentPath(
   category: AgentCategory,
   source?: AgentSource | null,
 ): Promise<ResolvedAgent> {
-  // Single launch resolution rule (resolveAgentForLaunch): the exact
-  // (source, name) entry the delegation pinned at validation, else the
-  // category-scoped resolver validation also uses. Never blind source-priority
-  // on a bare name, so launch can't diverge from what was validated.
+  // Single launch resolution rule (see resolveAgentForLaunch): exact
+  // (source, name) when the delegation pinned one, else the same visible-set
+  // resolver validation uses, else the full set for internal agents. Never
+  // blind source-priority on a bare name, so launch can't diverge from
+  // what was validated.
   const result = resolveAgentForLaunch(category, agentIdentifier, source);
   if (result) return result;
 
