@@ -66,7 +66,7 @@ function requestUrl(input: RequestInfo | URL): string {
 }
 
 /** True only for the generation endpoint (`…/responses`), not `…/responses/input_tokens`. */
-function isGenerationRequest(url: string): boolean {
+export function isGenerationRequest(url: string): boolean {
   try {
     return new URL(url).pathname.endsWith('/responses');
   } catch {
@@ -74,22 +74,88 @@ function isGenerationRequest(url: string): boolean {
   }
 }
 
+/** Default top-level `instructions` for the Codex backend when the request
+ *  carries none — it returns `400 {"detail":"Instructions are required"}`
+ *  otherwise. */
+export const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful assistant.';
+
 /**
- * Rewrite the outgoing Responses request for the Codex backend:
- *  - drop `max_output_tokens` (rejected as unsupported) and `background`
- *    (the backend has no polling mode);
- *  - force `store: false`;
- *  - guarantee a non-empty top-level `instructions` (the backend returns
- *    `400 {"detail":"Instructions are required"}` otherwise), hoisting
- *    system/developer items out of `input` into `instructions` (matching
- *    Zed/Codex) with a minimal fallback;
- *  - force `stream: true` (the backend returns `400 Stream must be set to true`
- *    otherwise).
+ * Rewrite a parsed Responses request body for the (unofficial) Codex backend.
+ * Pure: returns a new top-level object and never mutates `body`, so the
+ * reverse-engineered wire contract is unit-testable without a live request (see
+ * CodexRequestRewrite tests). Each adjustment prevents a specific backend 400:
+ *  - drop `max_output_tokens` (rejected as unsupported);
+ *  - force `store: false` (the backend keeps no server-side state) and
+ *    `stream: true` (`400 Stream must be set to true` otherwise);
+ *  - guarantee a non-empty top-level `instructions`, hoisting system/developer
+ *    items out of `input` into `instructions` (matching Zed/Codex), deduping
+ *    text already present, with {@link CODEX_DEFAULT_INSTRUCTIONS} as fallback.
  *
- * The handler forces the streaming path (`getStreamingConfig` → true), so the
- * SDK's own `ResponseStream` accumulates the deltas natively — no SSE parsing
- * here. Token-counting / compaction endpoints are disabled at the capability
- * level, so only the generation endpoint reaches this rewrite.
+ * Background mode is the one exception: when the handler set `background: true`
+ * (with store:true via `storesResponsesServerSide`), the transport fields are
+ * left untouched so the real backend verdict is observed rather than masked.
+ * `instructions` is still normalized — that requirement holds either way.
+ */
+export function rewriteCodexRequestBody(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  const rewritten: Record<string, unknown> = { ...body };
+  delete rewritten.max_output_tokens;
+
+  const testingBackground = rewritten.background === true;
+  if (!testingBackground) {
+    delete rewritten.background;
+    rewritten.store = false;
+  }
+
+  const instructions: string[] = [];
+  if (
+    typeof rewritten.instructions === 'string' &&
+    rewritten.instructions.trim()
+  ) {
+    instructions.push(rewritten.instructions.trim());
+  }
+  if (Array.isArray(rewritten.input)) {
+    const kept: unknown[] = [];
+    for (const item of rewritten.input) {
+      const role =
+        item && typeof item === 'object'
+          ? (item as { role?: unknown }).role
+          : undefined;
+      if (role === 'system' || role === 'developer') {
+        const text = partsToText(
+          (item as { content?: unknown }).content,
+        ).trim();
+        if (
+          text &&
+          !instructions.some((instruction) => instruction.includes(text))
+        ) {
+          instructions.push(text);
+        }
+      } else {
+        kept.push(item);
+      }
+    }
+    rewritten.input = kept;
+  }
+  rewritten.instructions =
+    instructions.join('\n\n') || CODEX_DEFAULT_INSTRUCTIONS;
+
+  if (!testingBackground) {
+    rewritten.stream = true;
+  }
+
+  return rewritten;
+}
+
+/**
+ * Custom `fetch` for the Codex client: a thin parse → {@link
+ * rewriteCodexRequestBody} → serialize adapter on the generation endpoint, so
+ * the large base request-builder is untouched. The handler forces the streaming
+ * path (`getStreamingConfig` → true), so the SDK's own `ResponseStream`
+ * accumulates the deltas natively — no SSE parsing here. Token-counting /
+ * compaction endpoints are disabled at the capability level, so only the
+ * generation endpoint reaches this rewrite.
  */
 const codexFetch = (async (input, init) => {
   const url = requestUrl(input);
@@ -104,51 +170,7 @@ const codexFetch = (async (input, init) => {
 
   try {
     const body = JSON.parse(init.body) as Record<string, unknown>;
-    delete body.max_output_tokens;
-    // When background mode is active the handler sets `background: true` (and
-    // store:true via storesResponsesServerSide). Leave the transport fields
-    // untouched then, so the real backend verdict is observed; otherwise enforce
-    // the streaming/stateless shape the backend requires.
-    const testingBackground = body.background === true;
-    if (!testingBackground) {
-      delete body.background;
-      body.store = false;
-    }
-
-    const instructions: string[] = [];
-    if (typeof body.instructions === 'string' && body.instructions.trim()) {
-      instructions.push(body.instructions.trim());
-    }
-    if (Array.isArray(body.input)) {
-      const kept: unknown[] = [];
-      for (const item of body.input) {
-        const role =
-          item && typeof item === 'object'
-            ? (item as { role?: unknown }).role
-            : undefined;
-        if (role === 'system' || role === 'developer') {
-          const text = partsToText(
-            (item as { content?: unknown }).content,
-          ).trim();
-          if (
-            text &&
-            !instructions.some((instruction) => instruction.includes(text))
-          ) {
-            instructions.push(text);
-          }
-        } else {
-          kept.push(item);
-        }
-      }
-      body.input = kept;
-    }
-    body.instructions =
-      instructions.join('\n\n') || 'You are a helpful assistant.';
-
-    if (!testingBackground) {
-      body.stream = true;
-    }
-    init = { ...init, body: JSON.stringify(body) };
+    init = { ...init, body: JSON.stringify(rewriteCodexRequestBody(body)) };
   } catch (error) {
     // Body isn't JSON we can edit — the backend will reject it (missing
     // stream/instructions). Log so the resulting 400 is diagnosable.
