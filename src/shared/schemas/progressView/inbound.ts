@@ -158,6 +158,10 @@ const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
    *  must not globally disable relay access — other providers may still
    *  be served successfully by relay. */
   viaRelay: z.boolean().optional(),
+  /** True when the failing request went through the ChatGPT subscription
+   *  (Codex) and hit its usage limit. The handler turns off the "prefer
+   *  ChatGPT subscription" preference so the retry uses the OpenAI key. */
+  chatgptSubscription: z.boolean().optional(),
 });
 
 const ToggleToolEditApprovalBypassMessageSchema = StreamScopedBaseSchema.extend(

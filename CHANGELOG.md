@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Improvements
+
+- **Switch from your ChatGPT subscription to an API key when the quota runs out** — when a Codex model driven through your ChatGPT subscription hits its plan usage limit, the error now says so clearly (plan and how long until it resets) and offers a one-click switch to your own OpenAI API key. Accepting turns off "prefer ChatGPT subscription" and retries the same request on your key. In the VS Code progress view press **Use your own API key** (or `k`); in the CLI press `k` on the retry prompt or run `/subscription off`. Auto-retry no longer hammers an exhausted subscription.
+
 #### Bug Fixes
 
 - **Delegation launches the agent it validated** — when a custom or remote agent shares a name with a built-in agent of the other type (e.g. a custom workflow `assistant` next to the built-in tool-use `assistant`), delegating no longer resolves a different agent at launch than the one shown and validated, which previously failed with a spurious "is a workflow agent but was launched as tool-use" error. Validation and launch now resolve the name through one category-aware rule.
