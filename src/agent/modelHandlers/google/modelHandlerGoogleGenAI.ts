@@ -688,7 +688,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return joinNonEmpty(message.parts.filter(isTextPart).map((p) => p.text));
   }
 
-  override async createMediaMessage(
+  protected override async createMediaMessage(
     mediaFiles: FileLocation[],
   ): Promise<Part[]> {
     if (!mediaFiles?.length || !this.supportsFileUploads()) {
