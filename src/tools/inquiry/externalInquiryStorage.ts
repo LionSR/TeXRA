@@ -669,10 +669,15 @@ export async function listThreadsByStatus(params: {
     return true;
   });
 
-  filtered.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  // Schwartzian transform: parse each updatedAt once into a sort key rather
+  // than re-parsing both sides on every comparison.
+  const sorted = filtered
+    .map((manifest) => ({ manifest, key: Date.parse(manifest.updatedAt) }))
+    .sort((a, b) => b.key - a.key)
+    .map(({ manifest }) => manifest);
 
   const trimmed =
-    params.limit != null ? filtered.slice(0, params.limit) : filtered;
+    params.limit != null ? sorted.slice(0, params.limit) : sorted;
   return trimmed.map(manifestToSummary);
 }
 
