@@ -32,6 +32,9 @@ export interface SlashCommandContext {
   readonly requestCompaction: (
     streamId: StreamTabId | undefined,
   ) => ChatCompactionRequestResult;
+  readonly getQueuedFollowUpMessages: (
+    streamId: StreamTabId | undefined,
+  ) => readonly string[];
   readonly resetSession: () => void;
   readonly resumeExecution: (id: ExecutionId) => Promise<void>;
 }

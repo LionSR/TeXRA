@@ -168,7 +168,8 @@ export async function handleTuiSlashCommand(
           cwd: context.cwd,
           processCwd: context.processCwd,
           approvalPolicy: context.getApprovalPolicy(),
-          queuedFollowUpMessages: slice?.queuedFollowUpMessages ?? [],
+          queuedFollowUpMessages:
+            context.getQueuedFollowUpMessages(activeStreamId),
         }),
       );
       return true;

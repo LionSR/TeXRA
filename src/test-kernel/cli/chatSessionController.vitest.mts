@@ -37,6 +37,7 @@ vi.mock('@platform/platform', () => ({
 
 import { StreamSnapshotStore } from '@transcript';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -167,9 +168,27 @@ describe('createChatSessionController', () => {
     expect(typeof ctrl.getModelSwitchDisabledReason).toBe('function');
     expect(typeof ctrl.switchActiveModel).toBe('function');
     expect(typeof ctrl.requestCompaction).toBe('function');
+    expect(typeof ctrl.getQueuedFollowUpMessages).toBe('function');
     expect(typeof ctrl.clearPendingFollowUps).toBe('function');
     expect(typeof ctrl.submitFollowUp).toBe('function');
     expect(typeof ctrl.awaitFollowUpsIdle).toBe('function');
+  });
+
+  it('projects current queued follow-up messages for a stream', () => {
+    const streamId = 'stream-queued-follow-ups' as const;
+    const ctrl = createChatSessionController(makeInit());
+    const queue = ToolUseFollowUpQueue.acquire(streamId);
+
+    try {
+      queue.enqueue({ text: 'Fresh controller queue message' });
+
+      expect(ctrl.getQueuedFollowUpMessages(streamId)).toEqual([
+        'Fresh controller queue message',
+      ]);
+      expect(ctrl.getQueuedFollowUpMessages(undefined)).toEqual([]);
+    } finally {
+      ToolUseFollowUpQueue.release(streamId);
+    }
   });
 
   it('canStartRootRun() delegates to chatTuiCanStartRootRun(session)', () => {

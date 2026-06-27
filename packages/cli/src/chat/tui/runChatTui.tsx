@@ -341,6 +341,8 @@ export async function runChat(
     switchActiveModel: (nextModel) =>
       chatController.switchActiveModel(nextModel),
     requestCompaction: (streamId) => chatController.requestCompaction(streamId),
+    getQueuedFollowUpMessages: (streamId) =>
+      chatController.getQueuedFollowUpMessages(streamId),
   });
   cliState.sessionMeta.set({
     agent,
@@ -416,7 +418,6 @@ export async function runChat(
     session.streamId
       ? cliState.streams.get().get(session.streamId)?.status
       : undefined;
-  const canSelectCurrentModel = (): boolean => chatController.canSelectModel();
   const activateSkillForNextMessage = (selection: SkillActivation): void => {
     const wasPending = pendingSkillActivations.has(selection.name);
     pendingSkillActivations.set(selection.name, selection.activationPrompt);
@@ -497,7 +498,7 @@ export async function runChat(
         `Approval mode set to ${formatCliApprovalPolicy(policy)}.`,
       );
     },
-    canSelectModel: canSelectCurrentModel,
+    canSelectModel: () => chatController.canSelectModel(),
     getModelSwitchDisabledReason: (candidateModel) =>
       chatController.getModelSwitchDisabledReason(candidateModel),
     onModelSelect: (nextModel) =>
