@@ -73,7 +73,7 @@ export const logEntryStyles = css`
 
   .log-reveal-button:focus-visible {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
+    outline-offset: var(--border-thin);
   }
 
   .render-error-icon {
@@ -143,7 +143,7 @@ export const logEntryStyles = css`
 
   :is(.file-link, .web-search-link):focus-visible {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
+    outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
   }
 
@@ -210,7 +210,7 @@ export const logEntryStyles = css`
 
   .banner-content-copy:focus-visible {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
+    outline-offset: var(--border-thin);
   }
 
   .banner-content-copy.copy-success {

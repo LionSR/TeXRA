@@ -55,7 +55,7 @@ export const compactIconActionButtonStyles: CSSResult = css`
 
   .action-icon-button:focus-visible::part(base) {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
+    outline-offset: var(--border-thin);
   }
 
   .action-icon-button[disabled]::part(base) {
@@ -283,7 +283,7 @@ export const commonViewStyles: CSSResult = css`
 
   .clickable-link:focus-visible {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
+    outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
   }
 
@@ -310,7 +310,7 @@ export const commonViewStyles: CSSResult = css`
 
   .details-summary:focus-visible {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
+    outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
   }
 

@@ -62,7 +62,7 @@ export class ModelsTab extends LitElement {
         letter-spacing: 0.04em;
         opacity: 0.65;
         border: 1px solid currentColor;
-        border-radius: 0.4em;
+        border-radius: var(--border-radius-small);
         padding: 0 0.4em;
       }
       .chatgpt-subscription__hint {
