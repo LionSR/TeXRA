@@ -1,3 +1,8 @@
+---
+created: 2026-06-27
+updated: 2026-06-27
+---
+
 # PRD: vscode.lm BYOK Integration for TeXRA
 
 ## Problem Statement
@@ -367,7 +372,9 @@ export class VscodeLmModelHandler extends ModelHandler<
   readonly supportsReasoningLevelOverride = false;
   readonly canProcessToolResultAttachments = false;
   readonly requiresBatchedParallelToolResults = false;
-  override get supportsTokenCounting(): boolean {
+  // NOTE: supportsTokenCounting does not exist in IModelHandler or ModelHandler yet.
+  // Implementation must add this getter to the base class/interface; `override` is not valid here.
+  get supportsTokenCounting(): boolean {
     return true;
   } // estimated only
 
@@ -686,10 +693,11 @@ export class VscodeLmModelHandler extends ModelHandler<
 
   extractAssistantText(message: VscodeLmMessage): string | undefined {
     if (message.role !== 'assistant') return undefined;
-    return message.content
+    const text = message.content
       .filter((c): c is { type: 'text'; value: string } => c.type === 'text')
       .map((c) => c.value)
       .join('');
+    return text.length > 0 ? text : undefined;
   }
 }
 ```

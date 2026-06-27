@@ -1,3 +1,8 @@
+---
+created: 2026-06-27
+updated: 2026-06-27
+---
+
 # PRD: @texra VS Code Chat Participant
 
 ## Problem Statement
@@ -272,13 +277,13 @@ The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` i
 
 5. **Validate resolved agent category and rounds.** Load the agent YAML via `loadAgentSettingAndPrompts(agentName)`. Confirm `agentCategory === AgentCategory.Workflow` and `rounds === 1`. If either check fails, emit: "The agent `[name]` requires the TeXRA panel for interactive approval or multi-round workflows. [Open TeXRA button invoking `texra.showMainView`]" and return.
 
-6. **Guard workspace, then build `AgentConfig`.** First check: if `vscode.workspace.workspaceFolders` is `undefined` or empty, emit "TeXRA requires an open workspace folder. Please open a folder (File > Open Folder) before running `@texra`." and return without calling `runAgent()`. Then call `const agentConfig = buildChatAgentConfig({ filePath: resolvedFilePath, agentName: resolvedAgentName, instruction: extractedInstruction, modelId: resolvedModelId, workspaceRoot: vscode.workspace.workspaceFolders[0].uri.fsPath })` to obtain an `AgentConfigInput`. Pass it to `validateExecutionRequest({ config: agentConfig })` — this runs `AgentConfigSchema.safeParse` and returns a `ValidatedExecutionRequest` on success; surface any `ZodIssue` as a user-facing error and return if `valid` is `false`. (`buildChatAgentConfig` is a plain object builder; validation is deliberately separate.)
+6. **Guard workspace, then build and validate `AgentConfig`.** First check: if `vscode.workspace.workspaceFolders` is `undefined` or empty, emit "TeXRA requires an open workspace folder. Please open a folder (File > Open Folder) before running `@texra`." and return without calling `runAgent()`. Then call `const chatConfig = buildChatAgentConfig({ filePath: resolvedFilePath, agentName: resolvedAgentName, instruction: extractedInstruction, modelId: resolvedModelId, workspaceRoot: vscode.workspace.workspaceFolders[0].uri.fsPath })`. `buildChatAgentConfig` constructs the `AgentConfigInput` and calls `validateExecutionRequest` internally, returning a `ChatAgentConfigResult` (`{ valid: true; request: ValidatedExecutionRequest } | { valid: false; message: string }`). If `chatConfig.valid` is `false`, surface `chatConfig.message` as a user-facing error and return. The validated request (`chatConfig.request`) is passed directly to `runAgent()` in Step 9.
 
 7. **Emit initial progress and buttons.** Call `stream.progress('TeXRA agent started')` and `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })` before awaiting `runAgent()`. This satisfies the US-6 requirement of a progress signal within 500 ms of handler entry (before any async I/O in the launch path). The `setActiveStream` event emitted at the start of `runAgent()` is a no-op in `ChatStreamAgentRuntimeHost` — it would otherwise produce a duplicate progress message.
 
 8. **Construct `ChatStreamAgentRuntimeHost`.** Create a new instance with `stream`. No `onOutputFiles` callback is needed — Step 10 reads output paths directly from `result.outputs`.
 
-9. **Call `runAgent(validatedRequest, { runtimeHost, approvalPromptsUnavailable: true })`.** Wire `token.onCancellationRequested` to abort the run (see Open Question 5 regarding `AbortController` in `RunAgentOptions`).
+9. **Call `runAgent(chatConfig.request, { runtimeHost, approvalPromptsUnavailable: true })`.** Wire `token.onCancellationRequested` to abort the run (see Open Question 5 regarding `AbortController` in `RunAgentOptions`).
 
 10. **On completion**, first check `token.isCancellationRequested`: if true, return `{ errorDetails: { message: 'Run cancelled by user.' } }` without emitting success content. Otherwise, narrow `result` to the workflow variant (see Output File Handling below), then emit `stream.anchor()` for each output file, a `stream.button()` for the LaTeX diff, and a markdown summary derived from `result.outputs[0].added` / `.removed`. Return `ChatResult` with `metadata: { inputFile, outputFiles, agentName }`.
 
@@ -419,8 +424,8 @@ Parse request.references  Parse request.command
      Validate agent YAML: agentCategory === Workflow && rounds === 1
                 |
                 v
-     buildChatAgentConfig() → validateExecutionRequest()
-     → ValidatedExecutionRequest { config: AgentConfig }
+     buildChatAgentConfig() → ChatAgentConfigResult
+     (validates internally; if valid: false → emit error and return)
                 |
                 v
      stream.button('View live progress', 'texra.showProgressView')
@@ -769,7 +774,7 @@ Not applicable to v1 (TeXRA's own model handlers handle token budgeting). Deferr
    The `CHAT_COMMAND_TO_AGENT` map in Phase 1 initially contains only `proofread: 'correct'` (the only confirmed eligible agent at the time of writing — `correct.yaml` has both `agentCategory: workflow` and `rounds: 1`). The other root-level agents (`merge.yaml` has `rounds: 1` but its single-file suitability is unclear; `polish.yaml`, `ocr.yaml`, `transcribe_audio.yaml` do not declare `rounds: 1` and default to `rounds: 2`). Before Phase 3, all agent YAMLs in `packages/extension/resources/agents/` (including subdirectories) must be audited. The `package.json` chat commands must reflect only the agents that pass the filter. **Owner: whoever writes the final `agentCommandMap.ts`; action required before Phase 3 is merged.**
 
 2. **What is the exact state key for the persisted model ID?**
-   The participant needs a model ID from `platform().globalState`. The main webview persists its model selection in state, but the specific key name used by `SettingsViewProvider` or `MainViewStateManager` was not confirmed during research. **Owner: check `packages/extension/src/settingsView/` and `src/shared/schemas/mainView/state.ts` for the state key. If no suitable key exists, the participant will hard-code `DEFAULT_AGENT_MODEL` for v1 and document this as a known limitation.**
+   The participant needs a model ID from `platform().globalState`. Automated review identified that the main webview's selected model lives in `MainViewPersistedState.model` (defined in `src/shared/schemas/mainView/state.ts`), which is managed via the webview's pending state store (`packages/extension/src/webview/frontend/store.ts`) — not directly in `platform().globalState`. The specific `globalState` key used to persist this value (if any) was not confirmed during research. **Owner: check whether `MainViewPersistedState` is ever serialized to `platform().globalState`, or whether the participant should read the key differently. If no suitable `globalState` key exists, the participant will hard-code `DEFAULT_AGENT_MODEL` for v1 and document this as a known limitation.**
 
 3. **Should output be written in-place or to a sibling file in chat mode?**
    For Workflow agents where `defaultOutputFiles` resolves to the same path as `inputFiles[0]`, the original file is overwritten. In chat mode, the user may not realize this. The in-place write warning (Phase 4) is the only safeguard in v1. An alternative — always writing to `<basename>-texra.<ext>` in chat mode — would require overriding the agent YAML's `defaultOutputFiles`, which adds complexity. **Owner: UX decision by TeXRA maintainers before Phase 3 is complete.**
