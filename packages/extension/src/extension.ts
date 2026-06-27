@@ -665,10 +665,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const statusBarUsageTracker = new StatusBarUsageTracker();
   const updateStatusBarTooltip = () => {
+    if (!statusBarItem) return;
     const { cost, inputTokens, outputTokens } =
       statusBarUsageTracker.totalUsage;
     if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
-      statusBarItem!.tooltip = 'Show TeXRA Tasks';
+      statusBarItem.tooltip = 'Show TeXRA Tasks';
       return;
     }
     const tip = new vscode.MarkdownString(
@@ -683,16 +684,17 @@ export async function activate(context: vscode.ExtensionContext) {
       ].join('\n'),
     );
     tip.isTrusted = false;
-    statusBarItem!.tooltip = tip;
+    statusBarItem.tooltip = tip;
   };
   const updateStatusBarText = () => {
+    if (!statusBarItem) return;
     const count = statusBarUsageTracker.activeStreamCount;
     if (count > 1) {
-      statusBarItem!.text = `$(loading) TeXRA: ${count} active`;
+      statusBarItem.text = `$(loading) TeXRA: ${count} active`;
     } else if (count === 1) {
-      statusBarItem!.text = '$(loading) TeXRA: Running';
+      statusBarItem.text = '$(loading) TeXRA: Running';
     } else {
-      statusBarItem!.text = '$(bracket-dot) TeXRA: Idle';
+      statusBarItem.text = '$(bracket-dot) TeXRA: Idle';
     }
   };
 

@@ -26,45 +26,8 @@ async function refreshApiKeyUI(): Promise<void> {
   await vscode.commands.executeCommand('texra.refreshAllOptions');
 }
 
-function supportsInputBoxTitleButtons(): boolean {
-  const inputBox = vscode.window.createInputBox();
-  try {
-    return 'buttons' in inputBox;
-  } finally {
-    inputBox.dispose();
-  }
-}
-
-async function setApiKeyForProvider(
-  provider: ApiProvider,
-  skipDialog = false,
-): Promise<void> {
-  // Newer VS Code hosts support placing a QuickInputButton in the input box's
-  // title area. Feature detection keeps this correct for older Cursor builds
-  // and any future major VS Code version.
-  const supportsTitleButton = supportsInputBoxTitleButtons();
-
-  if (!skipDialog && !supportsTitleButton) {
-    const actions: Array<vscode.MessageItem & { id: 'enter' | 'getApiKey' }> = [
-      { title: 'Enter Key', id: 'enter' },
-      { title: 'Get API Key', id: 'getApiKey' },
-    ];
-    const action = await vscode.window.showInformationMessage(
-      `Set your ${provider} API key`,
-      ...actions,
-    );
-
-    if (!action) {
-      return;
-    }
-
-    if (action.id === 'getApiKey') {
-      await vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
-      return;
-    }
-  }
-
-  const apiKey = await promptForApiKey(provider, supportsTitleButton);
+async function setApiKeyForProvider(provider: ApiProvider): Promise<void> {
+  const apiKey = await promptForApiKey(provider);
 
   if (!apiKey) {
     return;
@@ -91,23 +54,14 @@ async function setApiKeyForProvider(
 }
 
 /**
- * Prompt for an API key. When the host supports title-area input buttons
- * (VS Code 1.109+), attach a "Get API Key" button that opens the provider's
- * key portal without closing the input box, so the user can paste straight
- * away. Otherwise fall back to a plain input box.
+ * Prompt for an API key with an inline "Get API Key" button that opens the
+ * provider's key portal without closing the input box, so the user can paste
+ * straight away. InputBox title buttons are within the supported VS Code engine
+ * range for this extension.
  */
 async function promptForApiKey(
   provider: ApiProvider,
-  withGetKeyButton: boolean,
 ): Promise<string | undefined> {
-  if (!withGetKeyButton) {
-    return vscode.window.showInputBox({
-      prompt: `Enter ${provider} API key`,
-      password: true,
-      placeHolder: '************************************',
-    });
-  }
-
   return await new Promise<string | undefined>((resolve) => {
     const ib = vscode.window.createInputBox();
     let settled = false;
@@ -148,7 +102,7 @@ async function promptForApiKey(
  */
 export async function setApiKey(provider?: ApiProvider): Promise<void> {
   if (provider) {
-    await setApiKeyForProvider(provider, true);
+    await setApiKeyForProvider(provider);
     return;
   }
 

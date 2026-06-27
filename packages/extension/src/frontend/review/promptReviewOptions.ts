@@ -35,6 +35,9 @@ interface BranchItem extends vscode.QuickPickItem {
   ref: string | undefined;
 }
 
+const APPROACH_PROMPT_HINT =
+  'Quick checks key suspicions (fast); Thorough reads all changed files (deeper)';
+
 /**
  * Drive the three-step QuickPick flow. Each step honors Escape: returning
  * `undefined` from any prompt cancels the whole run, so a half-configured
@@ -89,11 +92,13 @@ export async function promptReviewOptions(
       qp.ignoreFocusOut = true;
       qp.items = approachItems;
       qp.activeItems = [approachItems[0]];
-      // VS Code 1.108+: echo the step-1 focus text so the user doesn't have
-      // to remember what they typed across the multi-step flow.
-      if (trimmedInstructions && 'prompt' in qp) {
+      // VS Code 1.108+: echo the step-1 focus text when present; otherwise
+      // keep the original approach explanation visible.
+      if ('prompt' in qp) {
         (qp as vscode.QuickPick<ApproachItem> & { prompt: string }).prompt =
-          `Focus: ${trimmedInstructions}`;
+          trimmedInstructions
+            ? `Focus: ${trimmedInstructions}`
+            : APPROACH_PROMPT_HINT;
       }
       qp.onDidAccept(() => {
         finish(qp.activeItems[0] ?? qp.selectedItems[0]);

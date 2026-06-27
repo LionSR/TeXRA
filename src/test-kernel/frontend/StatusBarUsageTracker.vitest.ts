@@ -6,6 +6,23 @@ import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker
 import { STREAM_STATUS } from '@shared/schemas/stream';
 
 describe('StatusBarUsageTracker', () => {
+  it('ignores usage for streams without a known in-flight status', () => {
+    const tracker = new StatusBarUsageTracker();
+
+    expect(
+      tracker.recordUsage('stream-a', {
+        cost: 0.01,
+        inputTokens: 10,
+        outputTokens: 20,
+      }),
+    ).toBe(false);
+    expect(tracker.totalUsage).toEqual({
+      cost: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+  });
+
   it('accumulates per-round usage deltas for an active stream', () => {
     const tracker = new StatusBarUsageTracker();
     tracker.updateStreamStatus('stream-a', STREAM_STATUS.RUNNING);

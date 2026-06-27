@@ -23,6 +23,10 @@ interface ParsedCreatorYaml {
   prompts: { systemPrompt: string; userRequest: string; retryPrompt?: string };
 }
 
+type QuickInputToggleButton = vscode.QuickInputButton & {
+  readonly toggle: { checked: boolean };
+};
+
 /** Cached after first load. Templates are bundled resources — stable for the session. */
 let creatorConfig: CreatorConfig | null = null;
 
@@ -104,9 +108,11 @@ async function pickToolGroups(
       };
       const refreshSelectAllButton = () => {
         if ('buttons' in qp) {
-          qp.buttons = [
-            { ...selectAllButton, toggle: { checked: allSelected } },
-          ];
+          const toggleButton: QuickInputToggleButton = {
+            ...selectAllButton,
+            toggle: { checked: allSelected },
+          };
+          qp.buttons = [toggleButton];
         }
       };
       refreshSelectAllButton();

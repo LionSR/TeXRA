@@ -19,13 +19,10 @@ const ZERO_USAGE: StatusBarUsageTotals = {
   outputTokens: 0,
 };
 
-const MAX_TERMINATED_STREAM_GUARDS = 200;
-
 /** Tracks active streams and usage totals for the extension status bar. */
 export class StatusBarUsageTracker {
   private readonly activeStreams = new Set<string>();
   private readonly streamStatuses = new Map<string, StreamStatus>();
-  private readonly terminatedStreams = new Set<string>();
   private readonly usageByStream = new Map<string, StatusBarUsageTotals>();
 
   public updateStreamStatus(streamId: string, status: StreamStatus): void {
@@ -37,23 +34,17 @@ export class StatusBarUsageTracker {
 
     if (isTerminalStatus(status) && !isInFlightStatus(status)) {
       this.streamStatuses.delete(streamId);
-      this.rememberTerminatedStream(streamId);
       this.usageByStream.delete(streamId);
       return;
     }
 
-    this.terminatedStreams.delete(streamId);
     this.streamStatuses.set(streamId, status);
   }
 
-  /** Records a per-round usage delta; returns false for already-finished streams. */
+  /** Records a per-round usage delta only for streams known to be in flight. */
   public recordUsage(streamId: string, usage: TokenUsageStats): boolean {
-    if (this.terminatedStreams.has(streamId)) {
-      return false;
-    }
-
     const status = this.streamStatuses.get(streamId);
-    if (status !== undefined && !isInFlightStatus(status)) {
+    if (status === undefined || !isInFlightStatus(status)) {
       return false;
     }
 
@@ -78,16 +69,5 @@ export class StatusBarUsageTracker {
       total.outputTokens += usage.outputTokens;
     }
     return total;
-  }
-
-  private rememberTerminatedStream(streamId: string): void {
-    this.terminatedStreams.delete(streamId);
-    this.terminatedStreams.add(streamId);
-
-    if (this.terminatedStreams.size <= MAX_TERMINATED_STREAM_GUARDS) return;
-    const oldest = this.terminatedStreams.values().next().value;
-    if (oldest !== undefined) {
-      this.terminatedStreams.delete(oldest);
-    }
   }
 }
