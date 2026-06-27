@@ -121,7 +121,7 @@ However, TeXRA's inference pipeline is significantly more sophisticated than a g
 - `LanguageModelToolCallPart` chunks arriving in `response.stream` are parsed and dispatched to the correct TeXRA tool implementation.
 - Tool results are re-submitted using `LanguageModelChatMessage.Assistant([toolCallPart])` + `LanguageModelChatMessage.User([toolResultPart])`.
 - The tool-calling loop continues until no `LanguageModelToolCallPart` appears in a round or a stop condition is met.
-- If the selected `vscode.lm` model reports `capabilities.toolCalling === false`, TeXRA disables tool-use for that model and shows a picker warning.
+- If the selected `vscode.lm` model reports `capabilities.toolCalling === false` or the field is absent, TeXRA disables tool-use for that model and shows a picker warning. Absent is treated conservatively as `false` (disabled).
 
 ### US-8: Enterprise/admin policy compliance
 
@@ -168,7 +168,7 @@ interface VscodeLmModelInfo {
   family: string; // LanguageModelChat.family
   version: string; // LanguageModelChat.version
   maxInputTokens: number; // LanguageModelChat.maxInputTokens
-  supportsToolCalling: boolean; // capabilities.toolCalling !== false (treat absent as true)
+  supportsToolCalling: boolean; // capabilities.toolCalling === true (absent treated as false/disabled — conservative)
   supportsImageInput: boolean; // capabilities.imageInput === true
 }
 ```
@@ -1059,7 +1059,7 @@ All flags are VS Code configuration settings scoped to `ConfigurationTarget.Glob
 
 ### VS Code version floor
 
-`vscode.lm.registerLanguageModelChatProvider` requires VS Code 1.104+. TeXRA's `engines.vscode` targets an earlier version. Phase 1 and Phase 3 each wrap their `vscode.lm` calls in a capability check:
+`vscode.lm.registerLanguageModelChatProvider` requires VS Code 1.104+. TeXRA's `engines.vscode` is `^1.105.0`, which already satisfies this requirement — no version bump is needed. The capability checks below are still warranted as defensive practice for environments where the `vscode.lm` API is absent despite the version floor (e.g. when Copilot is not installed):
 
 ```typescript
 if (typeof vscode.lm?.selectChatModels === 'function') {
@@ -1070,7 +1070,7 @@ if (typeof vscode.lm?.registerLanguageModelChatProvider === 'function') {
 }
 ```
 
-This keeps TeXRA installable on older VS Code versions; the VS Code LM section in the Settings Models tab shows "Requires VS Code 1.104 or later" when the API is absent.
+The VS Code LM section in the Settings Models tab shows "Requires GitHub Copilot" when `selectChatModels` is unavailable.
 
 ### Phased rollout
 
@@ -1109,7 +1109,7 @@ Any user who finds the `vscode.lm` path unsatisfactory can toggle it OFF at any 
 | Feature                                | Direct API (existing)                                             | Via vscode.lm                                                    | Mitigation                                                              |
 | -------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | Text streaming                         | Full, token-by-token                                              | Full, chunk-by-chunk                                             | None needed                                                             |
-| Tool calling                           | Full (all providers)                                              | Supported if model `capabilities.toolCalling !== false`          | Picker warning if tool calling unavailable; agent aborts gracefully     |
+| Tool calling                           | Full (all providers)                                              | Supported only if model `capabilities.toolCalling === true` (absent = disabled) | Picker warning if tool calling unavailable; agent aborts gracefully     |
 | Stop reasons                           | Per-provider typed enum                                           | Inferred from stream end / tool call presence                    | Treat stream end as `end_turn`; `shouldContinue()` uses heuristic       |
 | Token counts (input)                   | Exact from provider response                                      | Estimated via `countTokens()`                                    | Show "~N tokens (estimated)"; `isEstimatedUsage: true`                  |
 | Token counts (output)                  | Exact from provider response                                      | Unavailable                                                      | Show "N/A"                                                              |
@@ -1159,11 +1159,11 @@ Any user who finds the `vscode.lm` path unsatisfactory can toggle it OFF at any 
 
 ### Phase 3: VscodeLmClientPort and VscodeLmModelHandler (OpenAI-compatible path only)
 
-**Scope:** Define `VscodeLmClientPort.ts` interface. Implement `VscodeLmClientAdapter.ts`. Implement `VscodeLmModelHandler` with all `IModelHandler` abstract methods as specified in the class skeleton above. Extend `ModelFactory.ts` to handle `vscodelm:` prefix (hard-block Anthropic and Google vendor values at the factory). Add synthetic `ModelConfig` builder in `vscodeLmModelConfig.ts`. Extend `SdkToolCall` union with `VscodeLmToolCall`. Extend `NormalizedUsageSchema` with `isEstimatedUsage`. Add per-provider toggle in Settings UI. Add degradation warnings in model picker. Add `VscodeLmModelUnavailableError` and wire its catch in agent runtime.
+**Scope:** Define `VscodeLmClientPort.ts` interface. Implement `VscodeLmClientAdapter.ts`. Implement `VscodeLmModelHandler` with all `IModelHandler` abstract methods as specified in the class skeleton above. Extend `ModelFactory.ts` to handle `vscodelm:` prefix (hard-block Anthropic and Google vendor values at the factory). Add synthetic `ModelConfig` builder in `vscodeLmModelConfig.ts`. Extend `SdkToolCall` union with `VscodeLmToolCall`. Extend `NormalizedUsageSchema` with `isEstimatedUsage`. **Add `'vscode-lm'` to `UsageProviderSchema`** (required in this phase so `normalizeUsage`'s `provider: 'vscode-lm'` value passes schema validation at runtime). Add per-provider toggle in Settings UI. Add degradation warnings in model picker. Add `VscodeLmModelUnavailableError` and wire its catch in agent runtime.
 
 **Scope constraint:** Anthropic and Google vendor values are rejected at the factory with a clear error. No tool calling in this phase (Phase 4).
 
-**Files touched:** All new files in `src/agent/modelHandlers/vscodeLm/`, `packages/extension/src/frontend/vscodeLm/VscodeLmClientAdapter.ts`, `src/agent/runtime/ModelFactory.ts`, `src/agent/modelHandlers/types/IModelHandler.ts`, `src/agent/types/NormalizedUsage.ts`, `src/model/computeModelOptions.ts`, `src/model/vscodeLmModelConfig.ts`, `src/common/errors/VscodeLmModelUnavailableError.ts`, settings webview frontend and message handler, cost display components.
+**Files touched:** All new files in `src/agent/modelHandlers/vscodeLm/`, `packages/extension/src/frontend/vscodeLm/VscodeLmClientAdapter.ts`, `src/agent/runtime/ModelFactory.ts`, `src/agent/modelHandlers/types/IModelHandler.ts`, `src/agent/types/NormalizedUsage.ts` (both `isEstimatedUsage` addition and `'vscode-lm'` enum value), `src/model/computeModelOptions.ts`, `src/model/vscodeLmModelConfig.ts`, `src/common/errors/VscodeLmModelUnavailableError.ts`, settings webview frontend and message handler, cost display components.
 
 **Success gate:** A user with an OpenAI key in VS Code BYOK and `texra.model.useVsCodeLmForProvider.openai=true` can select "GPT-4o (VS Code LM)" in TeXRA and complete a text-only (non-tool-use) agent task. Cost display shows "N/A". System prompt prepended correctly as first user message. Attempting to select an Anthropic `vscode.lm` model shows an immediate error. Attempting to enable the Anthropic toggle in settings is blocked (no toggle rendered). Zero regressions on the direct-API path.
 
@@ -1173,13 +1173,13 @@ Any user who finds the `vscode.lm` path unsatisfactory can toggle it OFF at any 
 
 **Files touched:** `src/agent/modelHandlers/vscodeLm/vscodeLmTools.ts` (new), `VscodeLmClientAdapter.ts` (extend for tool call emission and image attachment), `src/agent/runtime/` (tool-use capability check for `vscode.lm` models).
 
-**Success gate:** A tool-use agent using a `vscode.lm` GPT-4o model completes a multi-turn tool call sequence. Tool result re-submission uses correct Assistant[toolCall] + User[toolResult] pattern. Models with `toolCalling === false` abort gracefully with a clear error. Vitest tests pass for the tool-use round-trip mock.
+**Success gate:** A tool-use agent using a `vscode.lm` GPT-4o model completes a multi-turn tool call sequence. Tool result re-submission uses correct Assistant[toolCall] + User[toolResult] pattern. Models with `toolCalling !== true` (i.e. `false` or absent) abort gracefully with a clear error. Vitest tests pass for the tool-use round-trip mock.
 
 ### Phase 5: Observability, hardening, and llm-zoo PR
 
-**Scope:** Add `onDidChangeChatModels` reactive refresh (picker updates within 2 seconds of catalog change). File a PR to `llm-zoo` to add `ModelProvider.VSCODE_LM` (and the `isVscodeLmBacked` capability flag), then remove the inline shim from `ModelFactory.ts` and the capability cast in `VscodeLmModelHandler`. Add the new `'vscode-lm'` value to `UsageProviderSchema`. Add integration tests using a mock `VscodeLmClientPort` for the full agent run cycle (text-only + tool-use). Publish documentation "Using VS Code Language Model API with TeXRA" covering setup, limitations, and comparison with direct API keys.
+**Scope:** Add `onDidChangeChatModels` reactive refresh (picker updates within 2 seconds of catalog change). File a PR to `llm-zoo` to add `ModelProvider.VSCODE_LM` (and the `isVscodeLmBacked` capability flag), then remove the inline shim from `ModelFactory.ts` and the capability cast in `VscodeLmModelHandler`. Add integration tests using a mock `VscodeLmClientPort` for the full agent run cycle (text-only + tool-use). Publish documentation "Using VS Code Language Model API with TeXRA" covering setup, limitations, and comparison with direct API keys. (Note: `'vscode-lm'` was added to `UsageProviderSchema` in Phase 3 to match `normalizeUsage`'s output; no schema change needed here.)
 
-**Files touched:** `packages/extension/src/extension.ts` (reactive catalog refresh), `src/agent/runtime/ModelFactory.ts` (remove shim once llm-zoo PR merged), `src/agent/types/NormalizedUsage.ts` (add `'vscode-lm'` to `UsageProviderSchema`), test files in `src/test-kernel/`.
+**Files touched:** `packages/extension/src/extension.ts` (reactive catalog refresh), `src/agent/runtime/ModelFactory.ts` (remove shim once llm-zoo PR merged), test files in `src/test-kernel/`.
 
 **Success gate:** `onDidChangeChatModels` causes the TeXRA model picker to reflect newly added/removed VS Code LM models within 2 seconds. The `llm-zoo` PR is merged and the shim is removed with TypeScript exhaustiveness checking re-validated. All Vitest tests pass. Zero regressions in the direct-API path for all existing providers.
 
@@ -1201,7 +1201,7 @@ Any user who finds the `vscode.lm` path unsatisfactory can toggle it OFF at any 
 
 7. **Headless CLI behavior when default model is a `vscodelm:` value.** `texra run` and `texra --print` paths in `packages/cli/` cannot call `vscode.lm` APIs (unavailable outside the VS Code extension host). If a user's default model is set to a `vscodelm:` prefixed value, the CLI will encounter an unroutable model. _Current proposal: CLI's `createModelHandler()` detects the `vscodelm:` prefix and throws immediately with "VS Code LM models are not available in the TeXRA CLI. Set a non-vscode-lm model as default or pass --model explicitly." No silent fallback._
 
-8. **VS Code version floor and `engines.vscode`.** Raising the `engines.vscode` minimum to 1.104 would exclude users on older VS Code versions. The capability-check guards (`typeof vscode.lm?.selectChatModels === 'function'`) already handle older versions gracefully. _Current proposal: do not raise the minimum VS Code version; rely on capability checks throughout._
+8. **VS Code version floor and `engines.vscode`.** _(Resolved.)_ This question is moot: `engines.vscode` is already `^1.105.0`, which satisfies the 1.104+ requirement. The capability-check guards remain in place for environments where the `vscode.lm` API may be absent despite the version floor (e.g. Copilot not installed). No minimum version bump is needed.
 
 9. **`extractResponse` streaming contract mismatch.** The `Resp` type parameter for `VscodeLmModelHandler` is `AsyncIterable<VscodeLmResponseChunk>`, but `extractResponse()` cannot re-iterate a consumed stream. The resolved design (accumulate in `createResponseImpl`, read accumulated data in `extractResponse`) deviates from the pattern used by other handlers. _This must be explicitly documented in the class and raised in code review. If the `ModelHandler` base class is ever refactored to separate streaming from extraction, this handler should be updated._
 
@@ -1225,7 +1225,7 @@ Any user who finds the `vscode.lm` path unsatisfactory can toggle it OFF at any 
 
 **Feature coverage:**
 
-- Tool-use agents complete successfully through `vscode.lm` for models reporting `capabilities.toolCalling !== false` at a at least 95% success rate (measured by Phase 4 telemetry).
+- Tool-use agents complete successfully through `vscode.lm` for models reporting `capabilities.toolCalling === true` at least 95% success rate (measured by Phase 4 telemetry).
 
 **Degradation awareness:**
 

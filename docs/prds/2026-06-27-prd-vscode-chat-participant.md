@@ -44,7 +44,7 @@ This feature complements, not replaces, the existing webview. The full TeXRA pan
 - Stream a markdown summary of the agent's output derived from `OutputFileSummary.added` and `OutputFileSummary.removed` line counts (available in `WorkflowFlowResult.outputs[]`).
 - Provide follow-up suggestions via `ChatFollowupProvider` pointing to related agents, re-attaching the file reference from the previous turn.
 - Gracefully handle the case where the user does not have Copilot Chat active by offering `texra.runFromChatPrompt`, a command palette command that opens a QuickPick + InputBox flow and calls the same underlying `buildChatAgentConfig()` and `runAgent()` path.
-- Gate the feature behind a `texra.chatParticipant.enabled` setting that defaults to `true`, allowing administrators or users on VS Code 1.90–1.104 to disable it.
+- Gate the feature behind a `texra.chatParticipant.enabled` setting that defaults to `true`, allowing administrators to disable it globally without uninstalling the extension.
 - Comply with Microsoft AI tools guidelines and GitHub Copilot extensibility policy before Marketplace submission.
 
 ### Non-Goals (v1)
@@ -62,7 +62,7 @@ This feature complements, not replaces, the existing webview. The full TeXRA pan
 - **Disambiguation auto-routing by Copilot** (present in manifest, best-effort only — Copilot's routing is non-contractual and may not fire).
 - **Internationalization** of participant description strings and command descriptions.
 - **Publishing compliance review** with Microsoft AI guidelines — required before Marketplace submission but not a code deliverable.
-- **A "default model" setting.** There is no `texra.model.default` config key in the current codebase. The participant reads the model ID from the persisted main view state via `platform().state` (same path used by the webview), or falls back to `DEFAULT_AGENT_MODEL` (`'gemini35f'`) from `src/shared/constants/providers.ts` if no model has been selected yet. It does not prompt the user to pick a model.
+- **A "default model" setting.** There is no `texra.model.default` config key in the current codebase. The participant reads the model ID from the persisted main view state via `platform().globalState` (same store used by the main webview; exact key confirmed when Open Question 2 is resolved), or falls back to `DEFAULT_AGENT_MODEL` (`'gemini35f'`) from `src/shared/constants/providers.ts` if no model has been selected yet. It does not prompt the user to pick a model.
 
 ---
 
@@ -85,7 +85,7 @@ This feature complements, not replaces, the existing webview. The full TeXRA pan
 
 **Acceptance criteria:**
 
-- The agent uses the model ID read from the persisted main view state (via `platform().state`), falling back to `DEFAULT_AGENT_MODEL` if no model has been saved. `request.model` is never consulted.
+- The agent uses the model ID read from the persisted main view state (via `platform().globalState`), falling back to `DEFAULT_AGENT_MODEL` if no model has been saved. `request.model` is never consulted.
 - If no TeXRA API key is configured for the resolved model provider, the chat response emits an error message with a "Configure API key" button that invokes `texra.openSettings` to open the TeXRA settings view at the API key tab.
 - GitHub Copilot is required only for the `@texra` mention surface to appear; the AI call goes through TeXRA's own infrastructure.
 
@@ -261,17 +261,17 @@ Entries marked "must be confirmed in audit" are blocked on Open Question 1. Unti
 
 The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` in this order:
 
-1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under one of `vscode.workspace.workspaceFolders[].uri.fsPath`. The first qualifying URI becomes `AgentConfig.inputFiles[0]`. After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }`without calling`runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
+1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under one of `vscode.workspace.workspaceFolders[].uri.fsPath`. The first qualifying URI becomes `AgentConfig.inputFiles[0]`. After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }` without calling `runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
 
 2. **Resolve agent name.** If `request.command` is set and present in `CHAT_COMMAND_TO_AGENT`, use the mapped YAML identifier. If `request.command` is set but absent from the map, emit the unrecognized-command error and return without calling `runAgent()`. If `request.command` is `undefined`, use `DEFAULT_CHAT_AGENT`.
 
-3. **Extract instruction text.** Remove `ChatPromptReference` tokens from `request.prompt` using the offsets in `request.references[i].range` (a `vscode.Range` within the prompt string). Trim the result. If the result is empty and a `/command` was given, substitute the command's description string from `CHAT_COMMAND_TO_AGENT`'s companion description map. If the result is empty and no command was given, return early with: "Please describe what you want TeXRA to do with the file."
+3. **Extract instruction text.** Remove `ChatPromptReference` tokens from `request.prompt` using the offsets in `request.references[i].range` (a `vscode.Range` within the prompt string). Trim the result. If the result is empty and a `/command` was given, pass an empty instruction string (`''`) to `AgentConfig.instruction` — the agent YAML's own `userPrefix`/`userRequest` template provides the necessary prompting context and the pipeline treats empty instruction as "run the agent's default behavior". If the result is empty and no command was given, return early with: "Please describe what you want TeXRA to do with the file."
 
-4. **Resolve model.** Read the persisted model ID from `platform().state` using the same key used by the main webview. Fall back to `DEFAULT_AGENT_MODEL` (`'gemini35f'`) from `src/shared/constants/providers.ts` if the state value is absent or unparseable.
+4. **Resolve model.** Read the persisted model ID from `platform().globalState` using the same key used by the main webview (exact key confirmed when Open Question 2 is resolved). Fall back to `DEFAULT_AGENT_MODEL` (`'gemini35f'`) from `src/shared/constants/providers.ts` if the state value is absent or unparseable.
 
-5. **Validate resolved agent category and rounds.** Load the agent YAML via `loadAgentDefinition(agentName)`. Confirm `agentCategory === AgentCategory.Workflow` and `rounds === 1`. If either check fails, emit: "The agent `[name]` requires the TeXRA panel for interactive approval or multi-round workflows. [Open TeXRA button]" and return.
+5. **Validate resolved agent category and rounds.** Load the agent YAML via `loadAgentDefinition(agentName)`. Confirm `agentCategory === AgentCategory.Workflow` and `rounds === 1`. If either check fails, emit: "The agent `[name]` requires the TeXRA panel for interactive approval or multi-round workflows. [Open TeXRA button invoking `texra.showMainView`]" and return.
 
-6. **Build `AgentConfig` via `buildChatAgentConfig()`.** Pass `inputFiles: [resolvedFilePath]`, `contextFiles: []`, `outputFiles: []`, `agent: resolvedAgentName`, `model: resolvedModelId`, `instruction: extractedInstruction`, `agentCategory: AgentCategory.Workflow`, `workingDirectory: vscode.workspace.workspaceFolders[0].uri.fsPath`. Call `validateExecutionRequest({ config })` and surface any `ZodIssue` as a user-facing error if validation fails.
+6. **Guard workspace, then build `AgentConfig`.** First check: if `vscode.workspace.workspaceFolders` is `undefined` or empty, emit "TeXRA requires an open workspace folder. Please open a folder (File > Open Folder) before running `@texra`." and return without calling `runAgent()`. Then call `buildChatAgentConfig()` with `inputFiles: [resolvedFilePath]`, `contextFiles: []`, `outputFiles: []`, `agent: resolvedAgentName`, `model: resolvedModelId`, `instruction: extractedInstruction`, `agentCategory: AgentCategory.Workflow`, `workingDirectory: vscode.workspace.workspaceFolders[0].uri.fsPath`. Call `validateExecutionRequest({ config })` and surface any `ZodIssue` as a user-facing error if validation fails.
 
 7. **Emit initial buttons.** Call `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })` and `stream.progress('TeXRA agent started')` before awaiting `runAgent()`.
 
@@ -289,7 +289,7 @@ The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` i
 | Stripped instruction text                                    | `instruction`       | After removing reference ranges from `request.prompt`       |
 | `request.command` → `CHAT_COMMAND_TO_AGENT`                  | `agent`             | Falls back to `DEFAULT_CHAT_AGENT` when no command given    |
 | `platform().state` model key, fallback `DEFAULT_AGENT_MODEL` | `model`             | Never `request.model`                                       |
-| `vscode.workspace.workspaceFolders[0].uri.fsPath`            | `workingDirectory`  | Validated non-null before `buildChatAgentConfig()` runs     |
+| `vscode.workspace.workspaceFolders[0].uri.fsPath`            | `workingDirectory`  | Guard: if `workspaceFolders` is `undefined` or empty, return error before accessing index 0 (Step 6) |
 | —                                                            | `outputFiles`       | Empty; agent YAML `defaultOutputFiles` governs output paths |
 
 Conversation history from `context.history` is not forwarded to the agent's LLM call in v1. Each invocation is stateless from TeXRA's perspective. `ChatResult.metadata` stores `{ inputFile, outputFiles, agentName }` for use by `ChatFollowupProvider`.
@@ -541,7 +541,7 @@ export interface ChatAgentConfigInput {
   filePath: string; // absolute path from #file: reference
   agentName: string; // resolved from CHAT_COMMAND_TO_AGENT or DEFAULT_CHAT_AGENT
   instruction: string; // stripped prompt text
-  modelId: string; // from platform().state or DEFAULT_AGENT_MODEL fallback
+  modelId: string; // from platform().globalState or DEFAULT_AGENT_MODEL fallback
   workspaceRoot: string; // vscode.workspace.workspaceFolders[0].uri.fsPath
 }
 
@@ -718,7 +718,7 @@ Not applicable to v1 (TeXRA's own model handlers handle token budgeting). Deferr
 
 **Deliverables:**
 
-- `packages/extension/src/commands/chat/TexraChatParticipant.ts` — main handler class implementing the 10-step `ChatRequest` processing described in "How the Handler Parses `ChatRequest`". Includes: `vscode.Uri` / `vscode.Location` reference resolution, agent YAML validation (`agentCategory === Workflow && rounds === 1`), instruction text extraction using `request.references[i].range`, `stream.button('View live progress')` emission within 500 ms, `ChatStreamAgentRuntimeHost` instantiation, and post-run anchor/button/summary emission.
+- `packages/extension/src/commands/chat/TexraChatParticipant.ts` — main handler class implementing the 10-step `ChatRequest` processing described in "How the Handler Parses `ChatRequest`". Includes: `vscode.Uri` / `vscode.Location` reference resolution, workspace null guard (if `workspaceFolders` is `undefined` or empty, return error), agent YAML validation (`agentCategory === AgentCategory.Workflow && rounds === 1`), instruction text extraction using `request.references[i].range`, `stream.button('View live progress')` emission within 500 ms, `ChatStreamAgentRuntimeHost` instantiation, and post-run anchor/button/summary emission.
 - `packages/extension/src/commands/chat/chatFollowupProvider.ts` implementing `vscode.ChatFollowupProvider`. Returns an empty array when `result.errorDetails` is set; returns 2–3 follow-up prompts with `inputFile` from `result.metadata` re-attached when successful.
 - Guarded participant registration in `packages/extension/src/extension.ts` (feature flag check + `typeof vscode.chat` guard).
 - `packages/extension/package.json` manifest update: `contributes.chatParticipants` entry with all fields from "Chat Participant Registration".
@@ -731,9 +731,8 @@ Not applicable to v1 (TeXRA's own model handlers handle token budgeting). Deferr
 **Deliverables:**
 
 - String-typed reference handling: when `ChatPromptReference.value` is a `string`, emit the "not recognized as a file" error and return without calling `runAgent()`.
-- Agent validation at config-build time: reject agents with `agentCategory !== 'Workflow'` or `rounds !== 1` with the "requires TeXRA panel" message and "Open TeXRA" button invoking `texra.showProgressView`.
+- Agent validation at config-build time: reject agents where `agentCategory !== AgentCategory.Workflow` (value: `'workflow'`) or `rounds !== 1` with the "requires TeXRA panel" message and "Open TeXRA" button invoking `texra.showMainView` (opens the main agent interaction view, not the progress board).
 - Cancellation wiring: `token.onCancellationRequested` wired to the abort mechanism in `RunAgentOptions` (implementation depends on resolution of Open Question 5; if `AbortSignal` is not yet in `RunAgentOptions`, wire to a local flag that checks `token.isCancellationRequested` in a `setInterval` and calls the registered `AgentRunHandle.interrupt()` if available via `RunAgentOptions.onRun`).
-- No-workspace guard: if `vscode.workspace.workspaceFolders` is `undefined` or empty, emit: "TeXRA requires an open workspace folder. Please open a folder (File > Open Folder) before running `@texra`." and return without calling `runAgent()`.
 - In-place write warning: if the agent YAML's `defaultOutputFiles` resolves to the same path as `inputFiles[0]`, emit a pre-run markdown note.
 - Telemetry: `chatParticipantInvoked`, `chatParticipantCompleted`, `chatParticipantFailed`, `chatParticipantCancelled` events added to `src/telemetry/`.
 - CHAT_COMMAND_TO_AGENT map finalized after Open Question 1 audit. `package.json` chat commands updated to match.
