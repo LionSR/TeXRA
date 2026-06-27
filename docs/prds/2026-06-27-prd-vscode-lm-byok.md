@@ -533,11 +533,11 @@ export class VscodeLmModelHandler extends ModelHandler<
    * on the handler instance during createResponseImpl().
    *
    * Note: NormalizedUsageSchema must be extended with `isEstimatedUsage: z.boolean().optional()`
-   * before this compiles. See Phase 5.
+   * before this compiles. See Phase 3.
    */
   normalizeUsage(_rawUsage: void, responseTimeMs: number): NormalizedUsage {
     return {
-      provider: 'vscode-lm', // added to UsageProviderSchema in Phase 5
+      provider: 'vscode-lm', // added to UsageProviderSchema in Phase 3
       inputTokens: this._estimatedInputTokens,
       outputTokens: 0,
       cost: 0,
@@ -954,7 +954,7 @@ handler.createResponse(messages, tools, agentTrace)
   ▼
 handler.extractResponse() → ExtractResponseResult {
   text: string,
-  usage: { provider: 'vscode-lm' },  // 'vscode-lm' added to UsageProviderSchema in Phase 5
+  usage: { provider: 'vscode-lm' },  // 'vscode-lm' added to UsageProviderSchema in Phase 3
   stopReason: 'end_turn' | 'tool_use',
 }
   │
