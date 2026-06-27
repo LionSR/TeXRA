@@ -204,7 +204,7 @@ export interface CommonAgentRunFlags {
 
 /**
  * The `--input/-i`, `--context/-c`, `--instruction`, and `--instruction-file`
- * flags shared by every agent-run command (`run`, `agents run`, `multi-agent`).
+ * flags shared by the `agents run`, `multi-agent`, and `workflow run` commands.
  * Spread the result into the command's run options.
  */
 export function collectCommonAgentRunFlags(
