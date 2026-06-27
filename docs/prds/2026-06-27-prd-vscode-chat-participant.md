@@ -592,7 +592,7 @@ This function is shared between `TexraChatParticipant` and `runFromChatPromptCom
 
 **Problem.** `AgentConfig` requires `inputFiles[]` as absolute workspace paths, and `AgentConfigSchema.superRefine` enforces that `outputFiles.length <= inputFiles.length`. TeXRA's typical usage involves 3–10 LaTeX files. The chat API delivers file references only via `ChatPromptReference.value` typed as `string | vscode.Uri | vscode.Location | unknown`, with no native multi-file picker.
 
-**Mitigation (v1 — implemented).** Restrict to single-file mode. Parse `request.references` for entries whose `.value` is a `vscode.Uri` or `vscode.Location`. Extract `uri.fsPath` and validate it is under a workspace folder. Only the first qualifying file is used as `inputFiles[0]`; if additional qualifying files are present, emit a markdown warning: "Multi-file workflows require the TeXRA panel — only the first file was used." This covers the primary academic use case of proofreading or reformulating a single `.tex` file.
+**Mitigation (v1 — implemented).** Restrict to single-file mode. Parse `request.references` for entries whose `.value` is a `vscode.Uri` or `vscode.Location`. Extract `uri.fsPath` and validate it is under a workspace folder. Only the first qualifying file is used as `inputFiles[0]`; if additional qualifying files are present, emit a markdown warning: "Multi-file workflows require the TeXRA panel — only [first-filename] will be used." This covers the primary academic use case of proofreading or reformulating a single `.tex` file.
 
 **v2 path.** Extend to accept multiple `#file:` references, populating `inputFiles[]`. No VS Code API changes needed; only the handler parsing logic changes.
 
