@@ -183,20 +183,13 @@ async function nativeRequestApproval(
     );
     diffSession = openedSession;
 
-    await revealFirstChangedLine(
-      openedSession,
-      originalContent,
-      proposedContent,
-    );
-
-    result = await new Promise<ToolEditApprovalResult>((resolve) => {
-      let settled = false;
-
+    let approvalSettled = false;
+    const approvalPromise = new Promise<ToolEditApprovalResult>((resolve) => {
       const settle = (value: ToolEditApprovalResult) => {
-        if (settled) {
+        if (approvalSettled) {
           return;
         }
-        settled = true;
+        approvalSettled = true;
         // Note: Don't delete from pendingApprovals here - finally block handles cleanup
         resolve(value);
       };
@@ -211,7 +204,7 @@ async function nativeRequestApproval(
         title,
         streamId: streamId ?? undefined,
         lineChanges,
-        isSettled: () => settled,
+        isSettled: () => approvalSettled,
         settle,
         workspaceTempCleanup: [],
         latexOperationInProgress: false,
@@ -223,7 +216,7 @@ async function nativeRequestApproval(
       registerPendingApproval(requestId, {
         streamId: streamId ?? undefined,
         runtimeHost: getRuntimeHost(),
-        isSettled: () => settled,
+        isSettled: () => approvalSettled,
         settle,
       });
 
@@ -236,7 +229,7 @@ async function nativeRequestApproval(
         proposedSource.filePath,
       ).toString();
       tabCloseDisposable = vscode.window.tabGroups.onDidChangeTabs((event) => {
-        if (settled) {
+        if (approvalSettled) {
           tabCloseDisposable?.dispose();
           return;
         }
@@ -261,14 +254,30 @@ async function nativeRequestApproval(
           settle({ accepted: false });
         }
       });
+    });
 
+    try {
+      await revealFirstChangedLine(
+        openedSession,
+        originalContent,
+        proposedContent,
+      );
+    } catch (err) {
+      if (!approvalSettled) {
+        throw err;
+      }
+    }
+
+    if (!approvalSettled) {
       void showProgressViewApprovalPrompt(
         requestId,
         request,
         description,
         lineChanges,
       );
-    });
+    }
+
+    result = await approvalPromise;
 
     if (result.accepted) {
       // Normalize here: these reads bypass BaseFS so may contain CRLF.

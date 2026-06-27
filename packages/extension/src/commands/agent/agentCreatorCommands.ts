@@ -106,12 +106,14 @@ async function pickToolGroups(
         iconPath: new vscode.ThemeIcon('check-all'),
         tooltip: 'Select all / clear',
       };
+      let activeSelectAllButton: vscode.QuickInputButton | undefined;
       const refreshSelectAllButton = () => {
         if ('buttons' in qp) {
           const toggleButton: QuickInputToggleButton = {
             ...selectAllButton,
             toggle: { checked: allSelected },
           };
+          activeSelectAllButton = toggleButton;
           qp.buttons = [toggleButton];
         }
       };
@@ -121,7 +123,10 @@ async function pickToolGroups(
           selected.length > 0 && selected.length === qp.items.length;
         refreshSelectAllButton();
       });
-      qp.onDidTriggerButton(() => {
+      qp.onDidTriggerButton((button) => {
+        if (button !== activeSelectAllButton) {
+          return;
+        }
         allSelected = qp.items.length > 0 && !allSelected;
         qp.selectedItems = allSelected ? [...qp.items] : [];
         refreshSelectAllButton();
