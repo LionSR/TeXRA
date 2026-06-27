@@ -6,6 +6,7 @@ import { Box, Text, useWindowSize } from 'ink';
 import { Spinner } from '@inkjs/ui';
 
 import { KeyHints, type KeyHint } from '@cli/chat/tui/ui/KeyHints';
+import { FORM_FRAME_MAX_WIDTH } from '@cli/chat/tui/ui/theme';
 import { clamp } from '@utils/core';
 
 export interface FormFrameProps {
@@ -18,8 +19,6 @@ export interface FormFrameProps {
    */
   readonly showCloseHint?: boolean;
 }
-
-const FORM_FRAME_MAX_WIDTH = 80;
 
 export function formFrameWidth(columns: number | undefined): number {
   const normalized =

@@ -75,15 +75,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
   }));
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
-    >
-      <Text bold color="cyan">
-        /resume
-      </Text>
+    <FormFrame color="cyan" title="/resume" showCloseHint={false}>
       <Text dimColor>Choose a previous session to continue.</Text>
       <Box marginTop={1}>
         <Select
@@ -104,6 +96,6 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
           confirmCancel={false}
         />
       </Box>
-    </Box>
+    </FormFrame>
   );
 }
