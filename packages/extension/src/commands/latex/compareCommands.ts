@@ -236,6 +236,10 @@ async function resolveAcceptTarget(
     qp.placeholder = `Accept '${path.basename(editedPath)}' into the workspace`;
     qp.ignoreFocusOut = true;
     qp.items = acceptItems;
+    const defaultItem = acceptItems[0];
+    if (defaultItem) {
+      qp.activeItems = [defaultItem];
+    }
     // VS Code 1.108+: keep the edited filename visible after the placeholder
     // is cleared by typing — this is a destructive replace-vs-copy choice.
     if ('prompt' in qp) {

@@ -222,6 +222,7 @@ describe('setup assistant routing check ordering', () => {
     expect(mocks.showWarningMessage).not.toHaveBeenCalled();
     expect(mocks.createQuickPick).toHaveBeenCalledWith(
       expect.objectContaining({
+        activeItems: [expect.objectContaining({ id: 'chatgpt' })],
         placeholder: expect.stringContaining('credential'),
       }),
     );

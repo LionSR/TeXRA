@@ -241,6 +241,10 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
     qp.placeholder =
       'TeXRA needs a credential before the setup assistant can run models.';
     qp.items = picks;
+    const defaultPick = picks[0];
+    if (defaultPick) {
+      qp.activeItems = [defaultPick];
+    }
     // VS Code 1.108+: the four choices are not self-explanatory in isolation,
     // and the placeholder vanishes on first keystroke. The prompt persists.
     if ('prompt' in qp) {

@@ -114,7 +114,12 @@ export async function signIn(): Promise<boolean> {
       };
       qp.title = 'TeXRA Sign In';
       qp.placeholder = 'Choose a sign-in method';
-      qp.items = getSignInOptions();
+      const options = getSignInOptions();
+      qp.items = options;
+      const defaultOption = options[0];
+      if (defaultOption) {
+        qp.activeItems = [defaultOption];
+      }
       // VS Code 1.108+: explain what signing in grants. Ignored on older hosts.
       if ('prompt' in qp) {
         (qp as vscode.QuickPick<SignInOption> & { prompt: string }).prompt =

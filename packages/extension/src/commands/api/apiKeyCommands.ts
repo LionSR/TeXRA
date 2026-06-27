@@ -171,6 +171,10 @@ async function pickProvider(
     };
     qp.placeholder = placeholder;
     qp.items = items;
+    const defaultItem = items[0];
+    if (defaultItem) {
+      qp.activeItems = [defaultItem];
+    }
     if ('prompt' in qp) {
       (
         qp as vscode.QuickPick<ProviderQuickPickItem> & { prompt: string }
