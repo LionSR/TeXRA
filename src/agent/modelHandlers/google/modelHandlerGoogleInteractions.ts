@@ -68,7 +68,6 @@ import {
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { convertToolSchema, toGoogleTools } from '../toolConversion';
-import type { GooglePricingConfig } from './googleUsage';
 
 // Type imports
 import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
@@ -651,15 +650,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // ===========================================================================
 
   computePrice(responseUsage: Usage | null): number {
-    return computeGoogleInteractionsPrice(responseUsage, this.pricingConfig());
-  }
-
-  private pricingConfig(): GooglePricingConfig {
-    return {
-      inputPrice: this.config.inputPrice,
-      outputPrice: this.config.outputPrice,
-      cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
-    };
+    return computeGoogleInteractionsPrice(
+      responseUsage,
+      this.standardPricingConfig(),
+    );
   }
 
   normalizeUsage(
@@ -669,7 +663,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return normalizeGoogleInteractionsUsage(
       rawUsage,
       responseTimeMs,
-      this.pricingConfig(),
+      this.standardPricingConfig(),
     );
   }
 
