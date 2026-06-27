@@ -261,11 +261,11 @@ Entries marked "must be confirmed in audit" are blocked on Open Question 1. Unti
 
 The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` in this order:
 
-1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under one of `vscode.workspace.workspaceFolders[].uri.fsPath`. The first qualifying URI becomes `AgentConfig.inputFiles[0]`. After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }`without calling`runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
+1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under a workspace folder: if `vscode.workspace.workspaceFolders` is `undefined` or empty, skip the workspace-membership check for this step (the workspace guard in Step 6 will catch and handle this before calling `runAgent()`). The first qualifying URI becomes `AgentConfig.inputFiles[0]`. If additional qualifying URIs were found after the first, emit a markdown warning before proceeding: `"Multi-file workflows require the TeXRA panel — only [first-filename] will be used."` After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }` without calling `runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
 
 2. **Resolve agent name.** If `request.command` is set and present in `CHAT_COMMAND_TO_AGENT`, use the mapped YAML identifier. If `request.command` is set but absent from the map, emit the unrecognized-command error and return without calling `runAgent()`. If `request.command` is `undefined`, use `DEFAULT_CHAT_AGENT`.
 
-3. **Extract instruction text.** Remove `ChatPromptReference` tokens from `request.prompt` using the offsets in `request.references[i].range` (a `vscode.Range` within the prompt string). Trim the result. If the result is empty and a `/command` was given, pass an empty instruction string (`''`) to `AgentConfig.instruction` — the agent YAML's own `userPrefix`/`userRequest` template provides the necessary prompting context and the pipeline treats empty instruction as "run the agent's default behavior". If the result is empty and no command was given, return early with: "Please describe what you want TeXRA to do with the file."
+3. **Extract instruction text.** Remove `ChatPromptReference` tokens from `request.prompt` using the character offsets in `request.references[i].range` (a `[start, end]` number tuple within the prompt string, not a `vscode.Range`). Trim the result. If the result is empty and a `/command` was given, pass an empty instruction string (`''`) to `AgentConfig.instruction` — the agent YAML's own `userPrefix`/`userRequest` template provides the necessary prompting context and the pipeline treats empty instruction as "run the agent's default behavior". If the result is empty and no command was given, return early with: "Please describe what you want TeXRA to do with the file."
 
 4. **Resolve model.** Read the persisted model ID from `platform().globalState` using the same key used by the main webview (exact key confirmed when Open Question 2 is resolved). Fall back to `DEFAULT_AGENT_MODEL` (`'gemini35f'`) from `src/shared/constants/providers.ts` if the state value is absent or unparseable.
 
@@ -275,11 +275,11 @@ The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` i
 
 7. **Emit initial progress and buttons.** Call `stream.progress('TeXRA agent started')` and `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })` before awaiting `runAgent()`. This satisfies the US-6 requirement of a progress signal within 500 ms of handler entry (before any async I/O in the launch path). The `setActiveStream` event emitted at the start of `runAgent()` is a no-op in `ChatStreamAgentRuntimeHost` — it would otherwise produce a duplicate progress message.
 
-8. **Construct `ChatStreamAgentRuntimeHost`.** Create a new instance with `stream` and an `onOutputFiles` callback that stores resolved output paths for post-run button emission.
+8. **Construct `ChatStreamAgentRuntimeHost`.** Create a new instance with `stream`. No `onOutputFiles` callback is needed — Step 10 reads output paths directly from `result.outputs`.
 
 9. **Call `runAgent(validatedRequest, { runtimeHost, approvalPromptsUnavailable: true })`.** Wire `token.onCancellationRequested` to abort the run (see Open Question 5 regarding `AbortController` in `RunAgentOptions`).
 
-10. **On completion**, narrow `result` to the workflow variant (see Output File Handling below), then emit `stream.anchor()` for each output file, a `stream.button()` for the LaTeX diff, and a markdown summary derived from `result.outputs[0].added` / `.removed`. Return `ChatResult` with `metadata: { inputFile, outputFiles, agentName }`.
+10. **On completion**, first check `token.isCancellationRequested`: if true, return `{ errorDetails: { message: 'Run cancelled by user.' } }` without emitting success content. Otherwise, narrow `result` to the workflow variant (see Output File Handling below), then emit `stream.anchor()` for each output file, a `stream.button()` for the LaTeX diff, and a markdown summary derived from `result.outputs[0].added` / `.removed`. Return `ChatResult` with `metadata: { inputFile, outputFiles, agentName }`.
 
 ### Mapping Chat Context to `AgentConfig`
 
@@ -309,11 +309,11 @@ The `ChatStreamAgentRuntimeHost` translates `AgentRuntimeHost.emit()` events:
 | `setActiveStream`                                       | no-op — initial progress is emitted in Step 7 before `runAgent()` to satisfy the US-6 500 ms deadline; re-emitting here would produce a duplicate                                                                                            |
 | `updateStreamStatus` `status === 'initializing'`        | `stream.progress('Initializing model handler...')`                                                                                                                                                                                           |
 | `updateStreamStatus` `status === 'running'`             | `stream.progress('Agent running...')`                                                                                                                                                                                                        |
-| `updateStreamStatus` `terminalStatus === 'completed'`   | triggers post-run anchor/button/summary emission (Step 10 / Output File Handling)                                                                                                                                                            |
+| `updateStreamStatus` `terminalStatus === 'completed'`   | no-op — post-run anchor/diff-button/summary emission is done by Step 10 in the handler after `runAgent()` resolves, where `result.outputs` (including `.added`/`.removed` line counts) is available                                          |
 | `updateStreamStatus` `terminalStatus === 'error'`       | no-op — error already surfaced via `requestShowError` (see row below); payload has no `.error` field                                                                                                                                         |
 | `updateStreamStatus` `terminalStatus === 'interrupted'` | `stream.markdown('Agent cancelled.')`                                                                                                                                                                                                        |
 | `requestShowError`                                      | `stream.markdown('**Error:** ' + payload.message)` — launch failures and terminal result errors route through this event (`AgentLaunchContext.ts:558`, `terminalResultToast.ts:30`), not through `updateStreamStatus terminalStatus='error'` |
-| `addOutputFiles`                                        | stored in local callback for post-run emission                                                                                                                                                                                               |
+| `addOutputFiles`                                        | no-op — Step 10 reads output paths directly from `result.outputs`; the host does not need to track them                                                                                                                                      |
 | `requestEnsureProgressView`                             | `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })`                                                                                                                                           |
 | All `show*Permission` / `show*Approval` events          | no-op (blocked upstream by `approvalPromptsUnavailable: true`)                                                                                                                                                                               |
 | All frontend-bound ignorable events                     | no-op                                                                                                                                                                                                                                        |
@@ -496,7 +496,8 @@ export class ChatStreamAgentRuntimeHost implements AgentRuntimeHost {
         } else if (s.status === 'running') {
           this.stream.progress('Agent running...');
         } else if (s.terminalStatus === 'completed') {
-          this.postRunEmission(); // emit anchors, diff button, markdown summary
+          // no-op: Step 10 in the handler emits anchors/diff-buttons/summaries
+          // after runAgent() resolves, where result.outputs is available.
         } else if (s.terminalStatus === 'error') {
           // no-op: error already surfaced via requestShowError above
         } else if (s.terminalStatus === 'interrupted') {
@@ -511,14 +512,9 @@ export class ChatStreamAgentRuntimeHost implements AgentRuntimeHost {
         this.stream.markdown(`**Error:** ${e.message}`);
         break;
       }
-      case 'addOutputFiles': {
-        const p = payload as ProgressEventPayloads['addOutputFiles'];
-        const allFiles = Object.values(p.filesByRound)
-          .flat()
-          .map((f) => f.location.absolutePath);
-        this.onOutputFiles(allFiles);
+      case 'addOutputFiles':
+        // no-op: Step 10 reads output paths directly from result.outputs.
         break;
-      }
       case 'requestEnsureProgressView':
         this.stream.button({
           title: 'View live progress',

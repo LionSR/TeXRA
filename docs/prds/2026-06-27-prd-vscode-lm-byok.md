@@ -546,7 +546,7 @@ export class VscodeLmModelHandler extends ModelHandler<
       cost: 0,
       cachedInputTokens: 0,
       cacheCreationTokens: 0,
-      cacheMissInputTokens: this._estimatedInputTokens,
+      cacheMissInputTokens: 0, // cache info unavailable via vscode.lm; 0 is more honest than asserting 100% miss
       percentageCached: 0,
       reasoningTokens: 0,
       serverToolRequests: 0,
@@ -1221,7 +1221,7 @@ Any user who finds the `vscode.lm` path unsatisfactory can toggle it OFF at any 
 **Stability:**
 
 - Zero crashes attributable to `VscodeLmModelHandler` in the 30 days post-release (measured from crash reporter).
-- `VscodeLmModelUnavailableError` surfaces a user-visible error notification in at least 99% of cases (no silent failures), verified by checking that the `kind: 'vscode-lm-model-unavailable'` progress event always results in a VS Code notification.
+- `VscodeLmModelUnavailableError` surfaces a user-visible error notification in at least 99% of cases (no silent failures), verified by checking that the `vscodeLmModelUnavailable` progress event always results in a VS Code notification.
 
 **Model exposure:**
 
