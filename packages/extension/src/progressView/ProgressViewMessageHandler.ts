@@ -22,6 +22,7 @@ import {
   type ExecutionRequest,
 } from '@agent/core/execution/executionRequests';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { setPreferCodexSubscription } from '@auth/codex';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler } from '@common/webview';
@@ -615,6 +616,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       setUseIncludedModelAccess: (enabled) =>
         getServerSideKeyService().setUseIncludedModelAccess(enabled),
+      disablePreferCodexSubscription: async () => {
+        await setPreferCodexSubscription(false);
+      },
       invalidateModelOptionsCache,
       triggerRetry: (stream) => runCoordinatorBridge.triggerRetry(stream),
     });
@@ -693,6 +697,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       provider: providerArg,
       upstreamCreditDepleted: data.upstreamCreditDepleted,
       viaRelay: data.viaRelay,
+      chatgptSubscription: data.chatgptSubscription,
     });
     if (result.proceeded && !result.retried) {
       await this.host.info(

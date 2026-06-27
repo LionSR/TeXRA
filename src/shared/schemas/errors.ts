@@ -64,6 +64,13 @@ const ProviderErrorObjectSchema = z.object({
    *  uses this to require a new key rather than reusing the depleted
    *  stored credential. */
   isUpstreamCreditDepleted: z.boolean().optional(),
+  /** True when a ChatGPT-subscription (Codex) request was rejected because the
+   *  plan's usage quota is exhausted. Like the relay monthly limit it is a
+   *  credential exhaustion (auto-retry suppressed, "Use your own API key"
+   *  offered), but accepting that switch disables the "prefer ChatGPT
+   *  subscription" preference and retries through the OpenAI API key rather
+   *  than disabling relay. */
+  isChatGptSubscriptionLimited: z.boolean().optional(),
   requestId: z.string().optional(),
   rawErrorBody: z.unknown().optional(),
   streamDiagnostics: StreamDiagnosticsSchema.optional(),
@@ -102,6 +109,21 @@ export const ProviderErrorPartialSchema = z.preprocess(
   ProviderErrorObjectSchema.partial(),
 );
 export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
+
+/** Single source of truth for "this error is a ChatGPT-subscription (Codex)
+ *  usage-limit rejection". Both hosts (VS Code progress view, CLI approval
+ *  policy) branch on this to switch the retry from the relay/personal-key path
+ *  to disabling the subscription preference. Accepts any error shape carrying
+ *  the flag (full `ProviderError`, `ProviderErrorPartial`, or `RetryErrorInfo`)
+ *  so the predicate stays the one place that owns the verdict. */
+export function isChatGptSubscriptionLimitError(
+  errorDetails:
+    | Pick<ProviderError, 'isChatGptSubscriptionLimited'>
+    | undefined
+    | null,
+): boolean {
+  return errorDetails?.isChatGptSubscriptionLimited === true;
+}
 
 /**
  * Minimal error info for retry state tracking.

@@ -138,6 +138,52 @@ interface ResponseFinalizeContext {
   readonly compactedMessages: ResponseInputItem[] | undefined;
 }
 
+type ServerToolContentBlock = ResponseFunctionWebSearch | ResponseReasoningItem;
+
+/**
+ * store:false (stateless) content blocks: every reasoning item that carries a
+ * non-empty `encrypted_content` blob (replayed next turn for reasoning
+ * continuity) plus each web_search_call, in output order — so a reasoning item
+ * still immediately precedes its following item. A summary-only reasoning item
+ * is skipped; replayed empty the stateless endpoint rejects it rather than
+ * chaining.
+ */
+function collectStatelessContentBlocks(
+  output: readonly ResponseOutputItem[],
+): ServerToolContentBlock[] {
+  const blocks: ServerToolContentBlock[] = [];
+  for (const item of output) {
+    if (isOpenAIReasoningItem(item)) {
+      const encrypted = item.encrypted_content;
+      if (typeof encrypted === 'string' && encrypted.length > 0) {
+        blocks.push(item);
+      }
+    } else if (isOpenAIWebSearchCall(item)) {
+      blocks.push(item);
+    }
+  }
+  return blocks;
+}
+
+/**
+ * store:true content blocks: only the reasoning item immediately preceding each
+ * web_search_call (the API pairing requirement) plus the web_search_call.
+ * `previous_response_id` retains everything else server-side.
+ */
+function collectWebSearchPairedBlocks(
+  output: readonly ResponseOutputItem[],
+): ServerToolContentBlock[] {
+  const blocks: ServerToolContentBlock[] = [];
+  for (const [i, item] of output.entries()) {
+    if (!isOpenAIWebSearchCall(item)) continue;
+    if (i > 0 && isOpenAIReasoningItem(output[i - 1])) {
+      blocks.push(output[i - 1] as ResponseReasoningItem);
+    }
+    blocks.push(item);
+  }
+  return blocks;
+}
+
 function responseOutputItemKey(item: ResponseOutputItem): string | undefined {
   if (typeof item.id === 'string') return `id:${item.id}`;
   if (item.type === 'function_call' && typeof item.call_id === 'string') {
@@ -211,6 +257,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /** Whether this backend can retain responses for `previous_response_id`. */
   protected get supportsResponseChaining(): boolean {
+    return true;
+  }
+
+  /**
+   * Whether the backend stores responses server-side (`store: true`). The base
+   * OpenAI Responses API does. A stateless backend (the Codex ChatGPT-subscription
+   * endpoint forces `store: false`) keeps no server-side reasoning, so it must
+   * (a) request `reasoning.encrypted_content` and (b) replay those blobs in the
+   * next turn's input for cross-turn reasoning continuity — the store:true path
+   * relies on `previous_response_id` instead and must NOT replay them (the items
+   * already live server-side, so resending throws "Duplicate item found").
+   *
+   * Single source for the `store` request field and the encrypted-reasoning gate.
+   */
+  protected get storesResponsesServerSide(): boolean {
     return true;
   }
 
@@ -346,8 +407,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    *
    * Also incompatible with background mode (polling-based, doesn't benefit
    * from persistent connection).
+   *
+   * `protected` so a subclass on a non-default endpoint (e.g. the Codex
+   * backend) can opt into trying WebSocket against its own base URL.
    */
-  private isWebSocketModeEnabled(): boolean {
+  protected isWebSocketModeEnabled(): boolean {
     return getWebSocketEnabled() && this.getBaseUrl() === null;
   }
 
@@ -1376,7 +1440,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const params: ResponseCreateParamsBase = {
       ...baseParams,
       max_output_tokens: maxOutputTokens,
-      store: true,
+      store: this.storesResponsesServerSide,
       ...(convertedTools?.length && {
         tool_choice: 'auto' as const,
         ...(!parallelToolCalls && { parallel_tool_calls: false }),
@@ -1405,6 +1469,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // native web search even when no explicit tools are passed.
     if (this.capabilities.supportsNativeWebSearch) {
       params.include = ['web_search_call.action.sources'];
+    }
+
+    // Stateless (store:false) backends keep no server-side reasoning, so request
+    // encrypted reasoning blobs to replay in the next turn's input for cross-turn
+    // reasoning continuity (matching the Codex CLI / OpenCode). The store:true
+    // path retains reasoning via previous_response_id and must not replay it.
+    if (
+      !this.storesResponsesServerSide &&
+      this.capabilities.supportsReasoning
+    ) {
+      params.include = [
+        ...(params.include ?? []),
+        'reasoning.encrypted_content',
+      ];
     }
 
     // Extend reasoning with summary option for API call (not needed for token counting)
@@ -2308,20 +2386,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return { webSearchResults: [], webFetchResults: [], contentBlocks: [] };
     }
 
-    // Extract content blocks that need to be preserved
-    // Only include reasoning items that are immediately followed by web_search_call
-    // to satisfy both API requirements (reasoning needs following item, web_search needs preceding reasoning)
-    const contentBlocks: (ResponseFunctionWebSearch | ResponseReasoningItem)[] =
-      [];
-    for (const [i, item] of output.entries()) {
-      if (isOpenAIWebSearchCall(item)) {
-        // Check if there's a reasoning item immediately before this web_search_call
-        if (i > 0 && isOpenAIReasoningItem(output[i - 1])) {
-          contentBlocks.push(output[i - 1] as ResponseReasoningItem);
-        }
-        contentBlocks.push(item);
-      }
-    }
+    // The two store modes preserve reasoning differently (see each helper);
+    // both keep output order so a reasoning item stays immediately before its
+    // following item when the blocks are replayed.
+    const contentBlocks = this.storesResponsesServerSide
+      ? collectWebSearchPairedBlocks(output)
+      : collectStatelessContentBlocks(output);
 
     // Extract normalized web search results for display
     const webSearchResults = extractOpenAIWebSearchResults(output);
