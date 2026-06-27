@@ -43,7 +43,11 @@ export function ApiKeyEntryForm(
   });
 
   return (
-    <FormFrame color="cyan" title="Use my own provider API key" showCloseHint={false}>
+    <FormFrame
+      color="cyan"
+      title="Use my own provider API key"
+      showCloseHint={false}
+    >
       <Text dimColor>Provider: {label}</Text>
       {keyUrl ? <Text dimColor>Get a key: {keyUrl}</Text> : null}
       <Box marginTop={1}>
