@@ -1,5 +1,5 @@
 // Standard library imports
-import { strict as assert } from 'assert';
+import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
