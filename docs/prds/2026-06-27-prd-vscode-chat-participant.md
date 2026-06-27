@@ -119,7 +119,7 @@ This feature complements, not replaces, the existing webview. The full TeXRA pan
 - `texra.runFromChatPrompt` is registered unconditionally in `packages/extension/src/extension.ts`, regardless of whether `vscode.chat` is defined.
 - It opens a `vscode.window.showQuickPick()` for agent selection (populated from `CHAT_COMMAND_TO_AGENT` keys), then a `vscode.window.showInputBox()` for the instruction, then resolves the active editor file (`vscode.window.activeTextEditor?.document.uri.fsPath`) as the default input file with a file-picker fallback if no editor is active.
 - The same `buildChatAgentConfig()` function is called as in the participant handler. The same `runAgent()` call path executes.
-- The command's VS Code contribution entry has `"description": "Run a TeXRA agent from the command palette (fallback for users without Copilot Chat)"`.
+- The command's VS Code contribution entry has `"title": "Run a TeXRA agent from the command palette (fallback for users without Copilot Chat)"`. (VS Code's `contributes.commands` schema uses `title`, not `description`.)
 
 ### US-6: Progress visibility during long-running agents
 
