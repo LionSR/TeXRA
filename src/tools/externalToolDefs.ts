@@ -422,6 +422,10 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'No local install required. Uses your own external chat subscription through a human-in-the-loop copy/paste flow.',
     authNote: 'Uses your premium chat subscription',
     toggleable: true,
+    // VS Code / desktop only — the async paste-the-answer-back flow depends on
+    // the long-lived progress-view panel. CLI runs hide the `inquiry` tool
+    // (see CLI_UNAVAILABLE_TOOLS), so it must not appear on CLI tools surfaces.
+    hideFromCli: true,
     check: async () => true,
   },
 

@@ -32,6 +32,7 @@ All notable changes to this project will be documented in this file.
 #### Improvements
 
 - **Leaner, non-overlapping CLI options** — trimmed redundant choices so the same thing has one spelling: `--api-mode` now accepts just `included`/`personal` (plus the `relay`/`byok` shorthands) instead of seven near-synonyms, the duplicate `texra agents inspect` is gone in favor of `texra agents show`, and `texra login` now rejects `--device` together with `--no-browser` (they are different sign-in transports) instead of silently ignoring one.
+- **External Inquiry is now VS Code / desktop only** — the human-in-the-loop "ask an external chat subscription" tool relies on the long-lived progress-view panel for pasting answers back, which the terminal does not provide, so it is hidden from every CLI run (interactive chat and headless commands alike) and no longer listed under `texra tools`. Agents running in the CLI will not attempt to dispatch external inquiries.
 
 ### Extension (VS Code)
 
