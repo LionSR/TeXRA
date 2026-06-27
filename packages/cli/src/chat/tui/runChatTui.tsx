@@ -22,7 +22,7 @@ import { platform, tryPlatform } from '@platform/platform';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { loadAgents } from '@agent/index';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
