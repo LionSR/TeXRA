@@ -27,10 +27,16 @@ export interface ProgressLogStore {
   clearDirtyUpdates(streamId: StreamTabId): void;
 }
 
+/** Per-stream cursor and pending-flush state, created by `syncStream`. */
+interface StreamEntry {
+  cursor: number;
+  dirty: boolean;
+}
+
 export class WebviewBridge {
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly changedStreams = new Set<StreamTabId>();
-  private readonly cursors = new Map<StreamTabId, number>();
+  /** Registered streams: presence means cursor is seeded; `dirty` means pending flush. */
+  private readonly streams = new Map<StreamTabId, StreamEntry>();
   private readonly unsubscribe: () => void;
   private flushInProgress = false;
   private flushRequested = false;
@@ -50,8 +56,9 @@ export class WebviewBridge {
       // streamState yet) while this bridge advances its cursor past them,
       // losing them until a manual reload. Until then the on-disk log is
       // authoritative and `syncStream` replays it in full.
-      if (!this.cursors.has(streamId)) return;
-      this.changedStreams.add(streamId);
+      const entry = this.streams.get(streamId);
+      if (!entry) return;
+      entry.dirty = true;
       this.scheduleFlush();
     });
   }
@@ -62,25 +69,21 @@ export class WebviewBridge {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
-    this.changedStreams.clear();
-    this.cursors.clear();
+    this.streams.clear();
   }
 
   syncStream(streamId: StreamTabId): void {
-    this.cursors.set(streamId, 0);
+    this.streams.set(streamId, { cursor: 0, dirty: true });
     this.store.clearDirtyUpdates(streamId);
-    this.changedStreams.add(streamId);
     this.scheduleFlush();
   }
 
   clearStream(streamId: StreamTabId): void {
-    this.changedStreams.delete(streamId);
-    this.cursors.delete(streamId);
+    this.streams.delete(streamId);
   }
 
   clearAll(): void {
-    this.changedStreams.clear();
-    this.cursors.clear();
+    this.streams.clear();
   }
 
   private scheduleFlush(): void {
@@ -114,26 +117,22 @@ export class WebviewBridge {
   private async flush(): Promise<boolean> {
     const activeStream = this.getActiveStream();
     if (!activeStream) return true;
-    if (!this.changedStreams.has(activeStream)) return true;
+    const entry = this.streams.get(activeStream);
+    if (!entry?.dirty) return true;
 
     const log = this.store.get(activeStream);
     if (!log) {
-      this.changedStreams.delete(activeStream);
+      entry.dirty = false;
       return true;
     }
 
-    // `changedStreams` is a subset of `cursors`: onChange only enqueues a
-    // stream whose cursor is already seeded (the `syncStream` handshake), and
-    // syncStream seeds it before enqueuing. Thus a stream present here has a
-    // cursor here. The `?? 0` is therefore unreachable, kept only to satisfy
-    // the type.
-    const cursor = this.cursors.get(activeStream) ?? 0;
+    const { cursor } = entry;
     const nextCursor = log.head;
     const entries = log.getRange(cursor, nextCursor);
     const updates = log.getDirtyUpdates(cursor);
 
     if (entries.length === 0 && updates.length === 0) {
-      this.changedStreams.delete(activeStream);
+      entry.dirty = false;
       return true;
     }
 
@@ -147,12 +146,8 @@ export class WebviewBridge {
     if (!(await this.deliver(payload))) return false;
 
     log.ackDirtyUpdates(updates);
-    this.cursors.set(activeStream, nextCursor);
-    if (this.flushRequested) {
-      this.changedStreams.add(activeStream);
-    } else {
-      this.changedStreams.delete(activeStream);
-    }
+    entry.cursor = nextCursor;
+    entry.dirty = this.flushRequested;
     return true;
   }
 
