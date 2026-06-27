@@ -273,7 +273,7 @@ The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` i
 
 6. **Guard workspace, then build `AgentConfig`.** First check: if `vscode.workspace.workspaceFolders` is `undefined` or empty, emit "TeXRA requires an open workspace folder. Please open a folder (File > Open Folder) before running `@texra`." and return without calling `runAgent()`. Then call `buildChatAgentConfig({ filePath: resolvedFilePath, agentName: resolvedAgentName, instruction: extractedInstruction, modelId: resolvedModelId, workspaceRoot: vscode.workspace.workspaceFolders[0].uri.fsPath })`. Call `validateExecutionRequest({ config })` and surface any `ZodIssue` as a user-facing error if validation fails.
 
-7. **Emit initial buttons.** Call `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })` before awaiting `runAgent()`. (The `setActiveStream` event emitted at the start of `runAgent()` triggers `stream.progress('TeXRA agent started')` via `ChatStreamAgentRuntimeHost`; no duplicate pre-call progress call is needed.)
+7. **Emit initial progress and buttons.** Call `stream.progress('TeXRA agent started')` and `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })` before awaiting `runAgent()`. This satisfies the US-6 requirement of a progress signal within 500 ms of handler entry (before any async I/O in the launch path). The `setActiveStream` event emitted at the start of `runAgent()` is a no-op in `ChatStreamAgentRuntimeHost` — it would otherwise produce a duplicate progress message.
 
 8. **Construct `ChatStreamAgentRuntimeHost`.** Create a new instance with `stream` and an `onOutputFiles` callback that stores resolved output paths for post-run button emission.
 
@@ -306,7 +306,7 @@ The `ChatStreamAgentRuntimeHost` translates `AgentRuntimeHost.emit()` events:
 
 | `ProgressEventPayloads` event                  | `ChatResponseStream` call                                                                                                                                                                                                    |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `setActiveStream`                              | `stream.progress('TeXRA agent started')`                                                                                                                                                                                     |
+| `setActiveStream`                              | no-op — initial progress is emitted in Step 7 before `runAgent()` to satisfy the US-6 500 ms deadline; re-emitting here would produce a duplicate                                                                           |
 | `updateStreamStatus` payload `INITIALIZING`    | `stream.progress('Initializing model handler...')`                                                                                                                                                                           |
 | `updateStreamStatus` payload `RUNNING`         | `stream.progress('Agent running...')`                                                                                                                                                                                        |
 | `updateStreamStatus` payload `COMPLETED`       | (triggers post-run anchor/button/summary emission)                                                                                                                                                                           |
@@ -486,7 +486,8 @@ export class ChatStreamAgentRuntimeHost implements AgentRuntimeHost {
   ): void {
     switch (event) {
       case 'setActiveStream':
-        this.stream.progress('TeXRA agent started');
+        // no-op: stream.progress('TeXRA agent started') was already called in
+        // Step 7 before runAgent() to satisfy US-6's 500 ms deadline.
         break;
       case 'updateStreamStatus': {
         const s = payload as ProgressEventPayloads['updateStreamStatus'];
