@@ -22,9 +22,8 @@ const {
   visibleDelegationAgentsBlock,
   withDelegationAgentAvailability,
 } = await import('@tools/delegationAgentAvailability');
-const { resolveAgentTools } = await import(
-  '@agent/runtime/agentToolResolution'
-);
+const { resolveAgentTools } =
+  await import('@agent/runtime/agentToolResolution');
 const { MapToolRegistry } = await import('@agent/core/tools/ToolTypes');
 const { ToolInjectionRegistry } = await import('@agent/runtime/toolInjection');
 
@@ -202,12 +201,13 @@ describe('delegation agent availability', () => {
   it('leaves non-delegation tools untouched', () => {
     const tool: ToolDefinition = {
       name: 'read_file',
-      description: 'Available agents: loaded from the active roster at runtime.',
+      description:
+        'Available agents: loaded from the active roster at runtime.',
     };
 
-    expect(withDelegationAgentAvailability(tool, 'Available agents:\n- x: y')).toBe(
-      tool,
-    );
+    expect(
+      withDelegationAgentAvailability(tool, 'Available agents:\n- x: y'),
+    ).toBe(tool);
   });
 });
 
@@ -246,7 +246,12 @@ describe('resolveAgentTools delegation roster annotation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.computeModelOptionsData.mockResolvedValue([
-      { value: 'deepseekT', label: 'DeepSeek', disabled: false, requiresKey: false },
+      {
+        value: 'deepseekT',
+        label: 'DeepSeek',
+        disabled: false,
+        requiresKey: false,
+      },
     ]);
   });
 
@@ -277,7 +282,9 @@ describe('resolveAgentTools delegation roster annotation', () => {
     expect(delegateAgent?.description).toContain(
       'Available agents:\n- research: Derive and verify.',
     );
-    expect(delegateAgent?.description).toContain('- numerics: Run simulations.');
+    expect(delegateAgent?.description).toContain(
+      '- numerics: Run simulations.',
+    );
     expect(delegateAgent?.description).not.toContain(
       'loaded from the active roster at runtime',
     );
@@ -378,7 +385,10 @@ describe('resolveAgentTools delegation roster annotation', () => {
     const { tools } = await resolveAgentTools(
       resolveAgentToolsInput([
         { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
-        { name: 'delegate_workflow', description: DELEGATE_WORKFLOW_DESCRIPTION },
+        {
+          name: 'delegate_workflow',
+          description: DELEGATE_WORKFLOW_DESCRIPTION,
+        },
       ]),
     );
 
@@ -408,6 +418,8 @@ describe('resolveAgentTools delegation roster annotation', () => {
     expect(delegateAgent?.description).toContain(
       '- prover: Prove $P=NP$ statements.',
     );
-    expect(delegateAgent?.description).toContain('- numerics: Run simulations.');
+    expect(delegateAgent?.description).toContain(
+      '- numerics: Run simulations.',
+    );
   });
 });
