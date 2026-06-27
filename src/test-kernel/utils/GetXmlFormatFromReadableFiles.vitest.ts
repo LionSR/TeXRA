@@ -21,24 +21,21 @@ vi.mock('@utils/files', async () => {
   };
 });
 
-import {
-  getXmlFormatFromFiles,
-  getXmlFormatFromReadableFiles,
-} from '@utils/prompt';
+import { getXmlFormatFromReadableFiles } from '@utils/prompt';
 
 beforeEach(() => {
   mocks.read.mockReset();
 });
 
-describe('getXmlFormatFromFiles', () => {
-  it('returns null when given no files', async () => {
-    expect(await getXmlFormatFromFiles([])).toBeNull();
+describe('getXmlFormatFromReadableFiles', () => {
+  it('returns null xml when given no files', async () => {
+    expect((await getXmlFormatFromReadableFiles([])).xml).toBeNull();
   });
 
   it('wraps every readable file in a <document> block', async () => {
     mocks.read.mockImplementation(async (file: string) => `body of ${file}`);
 
-    const xml = await getXmlFormatFromFiles(['a.tex', 'b.tex']);
+    const { xml } = await getXmlFormatFromReadableFiles(['a.tex', 'b.tex']);
 
     expect(xml).toBe(
       '<document name="a.tex">\nbody of a.tex\n</document>\n' +
@@ -56,7 +53,10 @@ describe('getXmlFormatFromFiles', () => {
       return `body of ${file}`;
     });
 
-    const xml = await getXmlFormatFromFiles(['missing.tex', 'present.tex']);
+    const { xml } = await getXmlFormatFromReadableFiles([
+      'missing.tex',
+      'present.tex',
+    ]);
 
     expect(xml).toBe(
       '<document name="present.tex">\nbody of present.tex\n</document>',
@@ -84,11 +84,11 @@ describe('getXmlFormatFromFiles', () => {
     });
   });
 
-  it('returns null when none of the files are readable', async () => {
+  it('returns null xml when none of the files are readable', async () => {
     mocks.read.mockRejectedValue(new Error('ENOENT'));
 
     expect(
-      await getXmlFormatFromFiles(['gone-1.tex', 'gone-2.tex']),
+      (await getXmlFormatFromReadableFiles(['gone-1.tex', 'gone-2.tex'])).xml,
     ).toBeNull();
   });
 });

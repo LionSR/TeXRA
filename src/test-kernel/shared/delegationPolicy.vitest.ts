@@ -6,7 +6,6 @@ import { describe, it } from 'vitest';
 
 // Local imports - shared constants
 import {
-  delegationAllowed,
   evaluateDelegationGate,
   UNKNOWN_DELEGATION_DEPTH,
 } from '@shared/constants/delegationPolicy';
@@ -15,7 +14,6 @@ describe('delegationPolicy', () => {
   it('allows root delegation at the default max depth', () => {
     const config = { maxDepth: 1 };
 
-    assert.strictEqual(delegationAllowed(0, config), true);
     assert.deepStrictEqual(evaluateDelegationGate(0, config), {
       depth: 0,
       maxDepth: 1,
