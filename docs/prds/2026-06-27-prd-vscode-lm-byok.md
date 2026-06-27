@@ -330,7 +330,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import type { ToolResultPayload } from '../utils/toolAttachmentUtils';
-import { VscodeLmToolCall } from './VscodeLmClientPort';
+import type { VscodeLmToolCall } from '../types/IModelHandler';
 import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type {
   ExtractResponseResult,
@@ -537,7 +537,7 @@ export class VscodeLmModelHandler extends ModelHandler<
    */
   normalizeUsage(_rawUsage: void, responseTimeMs: number): NormalizedUsage {
     return {
-      provider: 'unknown',
+      provider: 'vscode-lm', // added to UsageProviderSchema in Phase 5
       inputTokens: this._estimatedInputTokens,
       outputTokens: 0,
       cost: 0,
@@ -880,8 +880,8 @@ src/agent/modelHandlers/vscodeLm/
   vscodeLmUsage.ts               # normalizeUsage() implementation
   vscodeLmMessages.ts            # initializeMessages(), createRoundMessages()
   vscodeLmTools.ts               # extractToolUse(), createToolUseFollowUpMessages()
-  VscodeLmModelUnavailableError.ts  # re-export from @common/errors (no vscode import)
-
+  # Note: VscodeLmModelUnavailableError is defined at src/common/errors/ (see below).
+  # Do NOT add a re-export shim here; consumers import it directly via @common/errors.
 packages/extension/src/frontend/vscodeLm/
   VscodeLmClientAdapter.ts          # Concrete VscodeLmClientPort (imports vscode)
   VscodeLmProbe.ts                  # Model discovery, catalog refresh
@@ -954,7 +954,7 @@ handler.createResponse(messages, tools, agentTrace)
   ▼
 handler.extractResponse() → ExtractResponseResult {
   text: string,
-  usage: { provider: 'unknown' },  // thin ProviderUsage shim
+  usage: { provider: 'vscode-lm' },  // 'vscode-lm' added to UsageProviderSchema in Phase 5
   stopReason: 'end_turn' | 'tool_use',
 }
   │

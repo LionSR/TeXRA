@@ -75,7 +75,7 @@ This feature complements, not replaces, the existing webview. The full TeXRA pan
 **Acceptance criteria:**
 
 - The agent runs and writes the revised file to the path specified by the `correct` (or equivalent proofread) agent YAML's `defaultOutputFiles`.
-- A "View LaTeX diff" button appears in the chat response that invokes `texra.latexdiff` with the original and output file paths as arguments.
+- A "View LaTeX diff" button appears in the chat response invoking `texra.latexdiff` with three arguments `[inputPath, inputPath, outputPath]` (`handleLatexdiff(inputFile, baseFile, editedFile)` — `inputPath` doubles as both first and second argument; `outputPath` is the revised file). The button is omitted when the agent writes in place (`outputPath === inputPath`), since comparing a file against itself yields an empty diff.
 - The chat response includes a markdown summary showing the line delta: "Added N lines, removed M lines" derived from `WorkflowFlowResult.outputs[0].added` and `.removed`.
 - The total elapsed time from `ChatRequest` receipt to `ChatResult` return does not exceed the runtime of an equivalent run in the TeXRA webview by more than 2 seconds.
 
@@ -98,7 +98,7 @@ This feature complements, not replaces, the existing webview. The full TeXRA pan
 - Chat commands declared in `packages/extension/package.json` under `contributes.chatParticipants[0].commands` correspond only to agents that have `agentCategory: workflow` and `rounds: 1` explicitly set in their YAML.
 - Each command's `description` string is taken verbatim from the agent YAML's `description` field.
 - Selecting a command from the VS Code completion list populates the command name in the chat input box.
-- An unrecognized `/command` causes the handler to respond with: "Unknown command `/name`. Available commands: /proofread, /grammar, /summarize, /reformulate, /expand, /shorten." (list is derived from `CHAT_COMMAND_TO_AGENT` keys at runtime).
+- An unrecognized `/command` causes the handler to respond with: "Unknown command `/name`. Available commands: /proofread." (Phase 1 example — the list is always derived at runtime from `CHAT_COMMAND_TO_AGENT` keys, never hardcoded; in later phases the list grows as more agents are added.)
 
 ### US-4: Free-form instruction with `#file:` reference
 
@@ -160,7 +160,9 @@ This feature complements, not replaces, the existing webview. The full TeXRA pan
 
 ### Chat Participant Registration (`packages/extension/package.json`)
 
-Add the following to `contributes` in `packages/extension/package.json`. Commands are restricted to agents that have `agentCategory: workflow` and `rounds: 1` explicitly set in their YAML (the agents `correct.yaml` and `merge.yaml` already satisfy this; the others — `polish.yaml`, `ocr.yaml`, `transcribe_audio.yaml`, `paper2poster.yaml`, `paper2slide.yaml` — do not declare `rounds: 1` and are excluded from v1):
+Add the following to `contributes` in `packages/extension/package.json`. Commands are restricted to agents that satisfy both the **structural** constraint (`agentCategory: workflow` and `rounds: 1` explicitly set in their YAML) and the **semantic** constraint (single-file input). Among current root-level YAMLs: `correct.yaml` satisfies both; `merge.yaml` passes the structural constraint (`rounds: 1`, `agentCategory: workflow`) but is excluded on semantic grounds — it is designed for two-document merging and requires two input files, which is incompatible with the single-file `#file:` reference in the chat handler; the remaining YAMLs (`polish.yaml`, `ocr.yaml`, `transcribe_audio.yaml`, `paper2poster.yaml`, `paper2slide.yaml`) do not declare `rounds: 1` and are excluded from v1.
+
+**Phase 1 manifest (ships in v1):**
 
 ```json
 "chatParticipants": [
@@ -168,15 +170,10 @@ Add the following to `contributes` in `packages/extension/package.json`. Command
     "id": "texra.agent",
     "name": "texra",
     "fullName": "TeXRA Agent",
-    "description": "Run TeXRA AI agents on your LaTeX files. Attach a file with #file: and use /proofread, /grammar, /summarize, /reformulate, /expand, or /shorten. No Copilot model is used — TeXRA uses your configured API keys. Without Copilot, use the 'TeXRA: Run from Chat Prompt' command instead.",
+    "description": "Run TeXRA AI agents on your LaTeX files. Attach a file with #file: and use /proofread. No Copilot model is used — TeXRA uses your configured API keys. Without Copilot, use the 'TeXRA: Run from Chat Prompt' command instead.",
     "isSticky": false,
     "commands": [
-      { "name": "proofread", "description": "Proofread the attached file for clarity and style" },
-      { "name": "grammar", "description": "Check and correct grammar in the attached file" },
-      { "name": "summarize", "description": "Summarize the content of the attached file" },
-      { "name": "reformulate", "description": "Reformulate text for a specified audience or style" },
-      { "name": "expand", "description": "Expand and elaborate on the content of the attached file" },
-      { "name": "shorten", "description": "Shorten and condense the attached file" }
+      { "name": "proofread", "description": "Proofread the attached file for clarity and style" }
     ],
     "disambiguation": [
       {
@@ -193,7 +190,20 @@ Add the following to `contributes` in `packages/extension/package.json`. Command
 ]
 ```
 
-**Phase 1 note:** The manifest excerpt above shows the full target command set. Only `/proofread` (mapped to `correct.yaml`) ships in Phase 1; the remaining five commands are added incrementally as their agent YAMLs are created, audited for `rounds: 1, agentCategory: workflow`, and confirmed in the Open Question 1 audit. The manifest `description` field and the `CHAT_COMMAND_TO_AGENT` map must be updated together each time a command is added. Do not register a command in the manifest without a corresponding YAML entry in the map — it will appear in VS Code's command completions but return an "Unknown command" error at runtime.
+**Full target state (Phase 2+):** Commands are added to the manifest `commands` array and to `CHAT_COMMAND_TO_AGENT` together, one at a time, as each agent YAML is created and audited for `rounds: 1, agentCategory: workflow`. The full target `commands` array (reached incrementally, pending the Open Question 1 audit) is:
+
+```json
+[
+  { "name": "proofread",   "description": "Proofread the attached file for clarity and style" },
+  { "name": "grammar",     "description": "Check and correct grammar in the attached file" },
+  { "name": "summarize",   "description": "Summarize the content of the attached file" },
+  { "name": "reformulate", "description": "Reformulate text for a specified audience or style" },
+  { "name": "expand",      "description": "Expand and elaborate on the content of the attached file" },
+  { "name": "shorten",     "description": "Shorten and condense the attached file" }
+]
+```
+
+When all six commands are registered, the participant `description` field should also be updated to enumerate them. Never register a command in the manifest without a corresponding entry in `CHAT_COMMAND_TO_AGENT` — a registered command with no map entry will appear in VS Code's completion dropdown but return an "Unknown command" error at runtime.
 
 The `isSticky: false` setting is intentional. Each agent invocation is a self-contained run; keeping `@texra` sticky would suggest a conversational back-and-forth that v1 does not support — each turn independently calls `runAgent()` with no shared session state.
 
@@ -213,7 +223,7 @@ Note: The `disambiguation` block is best-effort. The VS Code Chat API does not g
 
 ### Chat Command to Agent YAML Mapping
 
-A static map in the new participant module maps `/command` names to TeXRA agent YAML identifiers. Only agents with `agentCategory: workflow` **and** `rounds: 1` explicitly set in their YAML are eligible. An audit of all current YAMLs in `packages/extension/resources/agents/` (including subdirectories) at the time of writing finds that only `correct.yaml` (`rounds: 1`) satisfies the constraint among the root-level files. The commands below are placeholders pending confirmation that the corresponding YAML files exist and pass the constraint; the pre-Phase-1 audit (Open Question 1) must populate the final map.
+A static map in the new participant module maps `/command` names to TeXRA agent YAML identifiers. Eligible agents must satisfy both the structural constraint (`agentCategory: workflow` and `rounds: 1` explicitly set in their YAML) and the semantic constraint (single-file input). An audit of all current root-level YAMLs in `packages/extension/resources/agents/` finds that `correct.yaml` satisfies both constraints. `merge.yaml` has `rounds: 1` and `agentCategory: workflow` (structural constraint met) but is excluded on semantic grounds — it requires two input documents and is incompatible with the single `#file:` reference model of the chat handler. The remaining root-level YAMLs do not satisfy the structural constraint. The commands below that reference non-`proofread` agents are placeholders for Phase 2+ and are blocked on Open Question 1 and new YAML creation; the pre-Phase-1 audit must populate the final map.
 
 ```typescript
 // packages/extension/src/commands/chat/agentCommandMap.ts
@@ -299,7 +309,7 @@ Events in the "frontend-bound, ignorable" group as documented in `AgentRuntimeHo
 After `runAgent()` resolves with a `WorkflowFlowResult`:
 
 1. For each `OutputFileSummary` in `result.outputs`, call `stream.anchor(vscode.Uri.file(summary.absolutePath), path.basename(summary.absolutePath))`.
-2. Emit: `stream.button({ title: 'View LaTeX diff', command: 'texra.latexdiff', arguments: [inputPath, inputPath, summary.absolutePath] })`. (`handleLatexdiff` takes three parameters: `inputFile`, `baseFile`, `editedFile` — `inputPath` doubles as both the first and second argument; `summary.absolutePath` is the revised file.)
+2. If `summary.absolutePath !== inputPath` (agent wrote to a separate output file): emit `stream.button({ title: 'View LaTeX diff', command: 'texra.latexdiff', arguments: [inputPath, inputPath, summary.absolutePath] })`. (`handleLatexdiff` takes `inputFile`, `baseFile`, `editedFile` — `inputPath` doubles as both the first and second argument; `summary.absolutePath` is the revised file.) If `summary.absolutePath === inputPath` (in-place overwrite): skip the diff button — comparing the file against itself yields an empty diff; the pre-run UX note below serves as the sole warning.
 3. Emit markdown: `**Changes:** +${summary.added ?? '?'} lines, −${summary.removed ?? '?'} lines`.
 4. Return `{ metadata: { inputFile: resolvedFilePath, outputFiles: result.outputs.map(o => o.absolutePath), agentName } }`.
 
@@ -424,7 +434,7 @@ Parse request.references  Parse request.command
                 |
                 v
      stream.anchor(vscode.Uri.file(output.absolutePath), basename)
-     stream.button('View LaTeX diff', 'texra.latexdiff', [inputPath, outputPath])
+     stream.button('View LaTeX diff', 'texra.latexdiff', [inputPath, inputPath, outputPath])  // omitted when outputPath === inputPath
      stream.markdown('+N lines, −M lines')
                 |
                 v
@@ -591,7 +601,7 @@ This function is shared between `TexraChatParticipant` and `runFromChatPromptCom
 
 **Problem.** TeXRA Workflow agents write LaTeX file edits by parsing structured XML output via `XmlOutputManager`. The output is written to disk. `ChatResponseStream.markdown()` can only stream text into the chat panel; it cannot write files or open diff views directly.
 
-**Mitigation (implemented).** Write files via the existing agent pipeline (unchanged). After completion, emit `stream.anchor(vscode.Uri.file(output.absolutePath), basename)` for each output file and `stream.button({ title: 'View LaTeX diff', command: 'texra.latexdiff', arguments: [inputPath, outputPath] })`. Emit a line-count summary from `OutputFileSummary.added` / `.removed`. The full diff view requires one user click and uses the existing `texra.latexdiff` command, which is already registered in `packages/extension/src/commands/latex/latexdiffCommands.ts` (line 145). No new diff infrastructure is needed.
+**Mitigation (implemented).** Write files via the existing agent pipeline (unchanged). After completion, emit `stream.anchor(vscode.Uri.file(output.absolutePath), basename)` for each output file; when `outputPath !== inputPath`, also emit `stream.button({ title: 'View LaTeX diff', command: 'texra.latexdiff', arguments: [inputPath, inputPath, outputPath] })` (three-argument form: `inputFile`, `baseFile`, `editedFile`). For in-place writes (`outputPath === inputPath`), the diff button is omitted — a pre-run warning already notifies the user. Emit a line-count summary from `OutputFileSummary.added` / `.removed`. The full diff view requires one user click and uses the existing `texra.latexdiff` command, already registered in `packages/extension/src/commands/latex/latexdiffCommands.ts` (line 145). No new diff infrastructure is needed.
 
 ### Risk (MAJOR): Long-running agents exceed chat handler UX expectations
 
