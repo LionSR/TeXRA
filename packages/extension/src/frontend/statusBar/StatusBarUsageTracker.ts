@@ -41,7 +41,12 @@ export class StatusBarUsageTracker {
     this.streamStatuses.set(streamId, status);
   }
 
-  /** Records a per-round usage delta only for streams known to be in flight. */
+  /**
+   * Records a per-round usage delta only for streams known to be in flight.
+   * The runtime emits the in-flight status before usage for a round; unknown or
+   * terminated stream ids are ignored so stale async events cannot recreate
+   * completed streams.
+   */
   public recordUsage(streamId: string, usage: TokenUsageStats): boolean {
     const status = this.streamStatuses.get(streamId);
     if (status === undefined || !isInFlightStatus(status)) {

@@ -26,8 +26,11 @@ async function refreshApiKeyUI(): Promise<void> {
   await vscode.commands.executeCommand('texra.refreshAllOptions');
 }
 
-async function setApiKeyForProvider(provider: ApiProvider): Promise<void> {
-  const apiKey = await promptForApiKey(provider);
+async function setApiKeyForProvider(
+  provider: ApiProvider,
+  showNavigationFallback = false,
+): Promise<void> {
+  const apiKey = await promptForApiKey(provider, showNavigationFallback);
 
   if (!apiKey) {
     return;
@@ -56,13 +59,39 @@ async function setApiKeyForProvider(provider: ApiProvider): Promise<void> {
 /**
  * Prompt for an API key. When the host exposes InputBox title buttons, add a
  * "Get API Key" action that opens the provider's key portal without closing the
- * input box, so the user can paste straight away.
+ * input box, so the user can paste straight away. Older hosts use the previous
+ * message-button fallback when the provider-picker path asks for it.
  */
 async function promptForApiKey(
   provider: ApiProvider,
+  showNavigationFallback: boolean,
 ): Promise<string | undefined> {
+  const ib = vscode.window.createInputBox();
+  const supportsTitleButtons = Reflect.has(ib, 'buttons');
+
+  if (!supportsTitleButtons && showNavigationFallback) {
+    const actions: Array<vscode.MessageItem & { id: 'enter' | 'getApiKey' }> = [
+      { title: 'Enter Key', id: 'enter' },
+      { title: 'Get API Key', id: 'getApiKey' },
+    ];
+    const action = await vscode.window.showInformationMessage(
+      `Set your ${provider} API key`,
+      ...actions,
+    );
+
+    if (action == null) {
+      ib.dispose();
+      return undefined;
+    }
+
+    if (action.id === 'getApiKey') {
+      ib.dispose();
+      await vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
+      return undefined;
+    }
+  }
+
   return await new Promise<string | undefined>((resolve) => {
-    const ib = vscode.window.createInputBox();
     let settled = false;
     const finish = (value: string | undefined): void => {
       if (settled) return;
@@ -78,7 +107,7 @@ async function promptForApiKey(
       iconPath: new vscode.ThemeIcon('link-external'),
       tooltip: `Get ${provider} API key`,
     };
-    if ('buttons' in ib) {
+    if (supportsTitleButtons) {
       ib.buttons = [getKeyButton];
       ib.onDidTriggerButton((button) => {
         if (button === getKeyButton) {
@@ -117,7 +146,7 @@ export async function setApiKey(provider?: ApiProvider): Promise<void> {
   );
 
   if (providerPick?.provider) {
-    await setApiKeyForProvider(providerPick.provider);
+    await setApiKeyForProvider(providerPick.provider, true);
   }
 }
 
