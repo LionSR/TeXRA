@@ -35,7 +35,7 @@ export class ModelHandlerDeepSeek extends ReasoningModelHandlerOpenAI<DeepSeekTo
   /**
    * DeepSeek models don't support vision/attachments in tool results.
    */
-  override get canProcessToolResultAttachments(): boolean {
+  protected override get canProcessToolResultAttachments(): boolean {
     return false;
   }
 

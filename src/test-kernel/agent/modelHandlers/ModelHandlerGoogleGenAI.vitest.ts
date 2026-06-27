@@ -309,7 +309,11 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     };
 
     const docLocation = pathToLocation('/tmp/doc.pdf');
-    const parts = await handler.createMediaMessage([docLocation]);
+    const parts = await (
+      handler as unknown as {
+        createMediaMessage: (files: FileLocation[]) => Promise<Part[]>;
+      }
+    ).createMediaMessage([docLocation]);
 
     assert.equal(loadCalls.length, 1, 'loadEntries should be called once');
     assert.equal(loadCalls[0].length, 1, 'should pass one media file');

@@ -336,34 +336,36 @@ function withShortModelName(config: ModelConfig): ModelConfig {
 /**
  * Creates a model handler instance based on provider and routing configuration.
  * Applies short model name preference and reasoning level overrides.
+ *
+ * The ordered routing precedence is owned solely by
+ * {@link modelHandlerCompatibilityKey}; this live path computes that key and
+ * `switch`es on it for instantiation, so the two can never drift on the key
+ * they produce. The only routing decision made here is the async
+ * Codex-subscription override, which the pure key predicate deliberately omits
+ * because it is key-neutral (same `ModelHandlerOpenAIResponse` key, different
+ * handler + backend model id).
  */
 export async function createModelHandler(
   originalConfig: ModelConfig,
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
-
-  if (shouldUseInternalValidationModelHandler()) {
-    // Package validation still enters the real CLI and executeAgent path.
-    // Only the provider boundary is deterministic, so this must not become
-    // a user-facing model selector or an injected command-layer substitute.
-    logger.warn(
-      CHANNEL,
-      `${internalValidationModelHandlerEnvName()}=1 is replacing provider handlers with the internal validation handler.`,
-    );
-    const { ModelHandlerValidation } =
-      await import('@agent/modelHandlers/modelHandlerValidation');
-    return withModelHandlerCompatibilityKey(
-      new ModelHandlerValidation(config),
-      'ModelHandlerValidation',
-    );
-  }
-
   const useOpenRouter = getUseOpenRouter();
+  const compatibilityKey = modelHandlerCompatibilityKey(
+    config,
+    useOpenRouter,
+    // Short-name preference was already applied by withShortModelName above;
+    // pass false so the key predicate routes on the same resolved config
+    // instead of re-resolving it.
+    false,
+  );
 
-  // ChatGPT subscription (Codex backend via the user's OAuth session). Must come
-  // before the normal Responses branch: these are OpenAI Responses-shaped models
-  // the user has opted to drive through their subscription instead of an API key.
+  // ChatGPT subscription (Codex backend via the user's OAuth session) — an
+  // async, key-neutral override of the Responses path: these are OpenAI
+  // Responses-shaped models the user has opted to drive through their
+  // subscription instead of an API key. Gated on the key not being the
+  // validation override so the package-validation gate still wins.
   if (
+    compatibilityKey !== 'ModelHandlerValidation' &&
     shouldUseCodexSubscription(config, useOpenRouter) &&
     (await isCodexSignedIn())
   ) {
@@ -384,55 +386,73 @@ export async function createModelHandler(
     );
   }
 
-  // OpenAI Responses API (required or optional)
-  if (shouldUseResponsesAPI(config, useOpenRouter)) {
-    logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
-    const { ModelHandlerOpenAIResponse } =
-      await import('@agent/modelHandlers/openai/modelHandlerOpenAIResponse');
-    return withModelHandlerCompatibilityKey(
-      withReasoningOverride(new ModelHandlerOpenAIResponse(config)),
-      'ModelHandlerOpenAIResponse',
-    );
-  }
+  switch (compatibilityKey) {
+    case 'ModelHandlerValidation': {
+      // Package validation still enters the real CLI and executeAgent path.
+      // Only the provider boundary is deterministic, so this must not become
+      // a user-facing model selector or an injected command-layer substitute.
+      logger.warn(
+        CHANNEL,
+        `${internalValidationModelHandlerEnvName()}=1 is replacing provider handlers with the internal validation handler.`,
+      );
+      const { ModelHandlerValidation } =
+        await import('@agent/modelHandlers/modelHandlerValidation');
+      return withModelHandlerCompatibilityKey(
+        new ModelHandlerValidation(config),
+        'ModelHandlerValidation',
+      );
+    }
 
-  // Google Interactions API (additive, flag-gated; never via OpenRouter)
-  if (shouldUseGoogleInteractionsAPI(config, useOpenRouter)) {
-    logger.debug(CHANNEL, 'Using Google Interactions API Handler');
-    const { ModelHandlerGoogleInteractions } =
-      await import('@agent/modelHandlers/google/modelHandlerGoogleInteractions');
-    return withModelHandlerCompatibilityKey(
-      withReasoningOverride(new ModelHandlerGoogleInteractions(config)),
-      'ModelHandlerGoogleInteractions',
-    );
-  }
+    case 'ModelHandlerOpenAIResponse': {
+      logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
+      const { ModelHandlerOpenAIResponse } =
+        await import('@agent/modelHandlers/openai/modelHandlerOpenAIResponse');
+      return withModelHandlerCompatibilityKey(
+        withReasoningOverride(new ModelHandlerOpenAIResponse(config)),
+        'ModelHandlerOpenAIResponse',
+      );
+    }
 
-  // An Interactions-only model cannot be served through OpenRouter — fail loudly
-  // here rather than silently routing it to the OpenRouter handler below.
-  assertGoogleInteractionsRoutable(config, useOpenRouter);
+    case 'ModelHandlerGoogleInteractions': {
+      logger.debug(CHANNEL, 'Using Google Interactions API Handler');
+      const { ModelHandlerGoogleInteractions } =
+        await import('@agent/modelHandlers/google/modelHandlerGoogleInteractions');
+      return withModelHandlerCompatibilityKey(
+        withReasoningOverride(new ModelHandlerGoogleInteractions(config)),
+        'ModelHandlerGoogleInteractions',
+      );
+    }
 
-  // Route through OpenRouter if configured
-  if (config.openRouterOnly || useOpenRouter) {
-    const openrouterFullName =
-      config.openrouterFullName ?? `${config.provider}/${config.fullName}`;
-    const { ModelHandlerOpenRouterNative } =
-      await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative');
-    return withModelHandlerCompatibilityKey(
-      withReasoningOverride(
-        new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
-      ),
-      'ModelHandlerOpenRouterNative',
-    );
-  }
+    case 'ModelHandlerOpenRouterNative': {
+      // An Interactions-only model cannot be served through OpenRouter — fail
+      // loudly rather than silently routing it to the OpenRouter handler.
+      assertGoogleInteractionsRoutable(config, useOpenRouter);
+      const openrouterFullName =
+        config.openrouterFullName ?? `${config.provider}/${config.fullName}`;
+      const { ModelHandlerOpenRouterNative } =
+        await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative');
+      return withModelHandlerCompatibilityKey(
+        withReasoningOverride(
+          new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
+        ),
+        'ModelHandlerOpenRouterNative',
+      );
+    }
 
-  // Direct provider handler
-  const route = PROVIDER_HANDLER_ROUTES[config.provider];
-  if (!route.load || !route.compatibilityKey) {
-    throw new Error(`Unsupported model provider: ${config.provider}`);
+    default: {
+      // Direct provider handler. The key is the provider's route key (or
+      // undefined for providers with no direct handler, e.g. Copilot).
+      assertGoogleInteractionsRoutable(config, useOpenRouter);
+      const route = PROVIDER_HANDLER_ROUTES[config.provider];
+      if (!route.load || !route.compatibilityKey) {
+        throw new Error(`Unsupported model provider: ${config.provider}`);
+      }
+      const HandlerClass = await route.load();
+      logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
+      return withModelHandlerCompatibilityKey(
+        withReasoningOverride(new HandlerClass(config)),
+        route.compatibilityKey,
+      );
+    }
   }
-  const HandlerClass = await route.load();
-  logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
-  return withModelHandlerCompatibilityKey(
-    withReasoningOverride(new HandlerClass(config)),
-    route.compatibilityKey,
-  );
 }

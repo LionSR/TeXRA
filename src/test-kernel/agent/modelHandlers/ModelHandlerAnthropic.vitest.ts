@@ -161,7 +161,7 @@ class PdfStubAnthropicHandler extends ModelHandlerAnthropic {
     this.mediaContent = content;
   }
 
-  override async createMediaMessage(): Promise<any[]> {
+  protected override async createMediaMessage(): Promise<any[]> {
     return this.mediaContent;
   }
 }
