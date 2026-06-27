@@ -24,8 +24,8 @@ import {
   getAllActiveExecutionIds,
 } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 import { cleanupAllApprovals } from '@tools/approval';
 

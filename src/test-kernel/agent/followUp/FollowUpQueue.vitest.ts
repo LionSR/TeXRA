@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { ToolUseSessionLifecycle } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
-import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
 
 describe('FollowUpQueue', () => {

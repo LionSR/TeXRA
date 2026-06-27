@@ -124,7 +124,7 @@ The following ambient state is still active:
 - `src/tools/approval/bashApproval.ts`: module-level bash approval controller.
 - `src/tools/approval/toolEditApproval.ts`: module-level edit approval handler and stream approval controller.
 - `src/tools/inquiry/ExternalInquiryTool.ts`: module-level pending inquiry map.
-- `src/agent/toolUse/ToolFileInteractionContext.ts`: async-scoped tool-call context frame with compatibility access to the combined context and split run/call views.
+- `src/agent/followUp/ToolFileInteractionContext.ts`: async-scoped tool-call context frame with compatibility access to the combined context and split run/call views.
 - `src/agent/index/agentDirectoriesRegistry.ts`: module-level agent directory provider.
 
 The CLI v1.0 does not need all of these retired, but it does need a clear ownership model.

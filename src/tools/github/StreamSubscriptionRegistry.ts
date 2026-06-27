@@ -12,8 +12,8 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   currentSession,

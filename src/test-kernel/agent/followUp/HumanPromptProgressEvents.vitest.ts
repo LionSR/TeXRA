@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { StreamTabId } from '@shared/schemas';
 import {
   AskUserQuestionTool,

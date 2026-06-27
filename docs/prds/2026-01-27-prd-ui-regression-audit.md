@@ -396,7 +396,7 @@ PR contains 685 files changed (+44829/-38366 lines) - major Lit migration effort
 src/shared/state/PersistedState.ts        ✅ Safe - Zod schema validation with fallbacks
 src/progressView/persistence/PersistentMapManager.ts  ✅ Safe - StorageRecordSchema handles null/invalid
 src/eventBus/ProgressEventBus.ts          ✅ Complete - All permission events renamed
-src/agent/toolUse/ToolUseFollowUpQueueManager.ts  ✅ Safe - Import path consolidation only
+src/agent/followUp/ToolUseFollowUpQueueManager.ts  ✅ Safe - Import path consolidation only
 src/progressView/ProgressViewMessageHandler.ts  ✅ Safe - Schema-driven typed dispatch
 ```
 
