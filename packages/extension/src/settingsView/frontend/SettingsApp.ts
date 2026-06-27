@@ -62,8 +62,6 @@ import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import '@shared/wa/tabs';
 import type { WaTabShowEvent } from '@shared/wa/tabs';
-
-// Local imports - shared utilities
 import { toNewestFirstByTimestamp } from '@utils/core';
 import { settingsViewStyles } from './styles';
 
