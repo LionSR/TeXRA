@@ -1,23 +1,36 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
+import { createFakePlatform } from '@test/support/FakePlatform';
 import { noopTrace } from '@agent/trace';
 import {
   getAgentPath,
   withExecutionRunContext,
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { useRunContext } from '@agent/runtime/RunContext';
 
 import { createRecordingHost } from '../progressTestUtils';
 
 describe('AgentLaunchContext', () => {
+  // Launch resolution consults visibility state (getVisibleAgent), so a platform
+  // must be present even for the missing-agent path.
+  beforeAll(async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({}));
+  });
+
   it('publishes missing-agent banners through the explicit runtime host', async () => {
     const explicit = createRecordingHost();
 
     await expect(
-      getAgentPath('__missing_agent_for_launch_context_test__', explicit.host),
+      getAgentPath(
+        '__missing_agent_for_launch_context_test__',
+        explicit.host,
+        AgentCategory.ToolUse,
+      ),
     ).rejects.toThrow('Could not find agent');
 
     expect(explicit.events).toEqual([

@@ -1606,7 +1606,7 @@ describe('DesktopProgressBridge', () => {
       resumeToolUseFromSnapshot,
     });
     const { ToolUseFollowUpQueue } =
-      await import('@agent/toolUse/ToolUseFollowUpQueueManager');
+      await import('@agent/followUp/ToolUseFollowUpQueueManager');
     const { StreamStatusService } =
       await import('@agent/runtime/StreamStatusService');
     const taskState = {
@@ -1692,7 +1692,7 @@ describe('DesktopProgressBridge', () => {
       resumeToolUseFromSnapshot,
     });
     const { ToolUseFollowUpQueue } =
-      await import('@agent/toolUse/ToolUseFollowUpQueueManager');
+      await import('@agent/followUp/ToolUseFollowUpQueueManager');
     const { StreamStatusService } =
       await import('@agent/runtime/StreamStatusService');
 
