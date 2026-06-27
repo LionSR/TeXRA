@@ -44,6 +44,7 @@ However, TeXRA's inference pipeline is significantly more sophisticated than a g
 **so that** I can start using TeXRA immediately after installing it.
 
 **Acceptance criteria:**
+
 - After installing TeXRA with no keys set in its own settings, at least one OpenAI model appears in the TeXRA model picker labelled with a "Via VS Code LM" badge if a compatible `vscode.lm` model is available and the user has toggled `texra.model.useVsCodeLmForProvider.openai` to ON.
 - Selecting the model and running an agent request completes without a "missing key" error.
 - If the user later adds an OpenAI key directly to TeXRA settings, the direct-API path takes precedence automatically; the `vscode.lm` path is used only when no direct key is present and the toggle is ON.
@@ -55,6 +56,7 @@ However, TeXRA's inference pipeline is significantly more sophisticated than a g
 **so that** I can use a single model selector for both Copilot Chat and TeXRA agent workflows.
 
 **Acceptance criteria:**
+
 - After logging into TeXRA, `vscode.lm.selectChatModels({vendor: 'texra'})` returns at least the set of models available under the user's relay tier.
 - The models are listed in the VS Code Chat "Model" dropdown with vendor label "TeXRA".
 - A `managementCommand` registered by TeXRA opens TeXRA's settings panel when the user clicks "Manage" next to a TeXRA model.
@@ -67,6 +69,7 @@ However, TeXRA's inference pipeline is significantly more sophisticated than a g
 **so that** I can make an informed decision about which path to use.
 
 **Acceptance criteria:**
+
 - The TeXRA model picker entry for any `vscode.lm`-routed model displays a warning icon and tooltip listing specific degraded features.
 - Before the first agent run with a `vscode.lm`-routed model in a VS Code session, TeXRA shows a one-time dismissible notification: "Cost display and prompt caching are not available for models accessed via VS Code LM. Switch to direct API keys in TeXRA Settings for full functionality."
 - The notification includes a "Open TeXRA Settings" action button.
@@ -78,6 +81,7 @@ However, TeXRA's inference pipeline is significantly more sophisticated than a g
 **so that** no data leaves my machine.
 
 **Acceptance criteria:**
+
 - A `vscode.lm` model with `vendor='ollama'` (or any locally-hosted model registered via VS Code BYOK custom endpoint) appears in the TeXRA model picker after the user enables `texra.model.useVsCodeLmForProvider.ollama`.
 - Selecting it and running a text-only agent task produces a response.
 - If the selected model's `capabilities.toolCalling` is `false` or the field is absent, TeXRA shows a picker warning: "Tool-use agents are not available for this model" and disables tool-use agents for that selection.
@@ -89,6 +93,7 @@ However, TeXRA's inference pipeline is significantly more sophisticated than a g
 **so that** I keep Anthropic's full feature set while avoiding key re-entry for OpenAI.
 
 **Acceptance criteria:**
+
 - The TeXRA Models settings tab shows a "Use VS Code LM" toggle per provider group (openai, openrouter, ollama, custom). No toggle exists for anthropic or google; attempting to add one via settings.json logs a warning and is ignored.
 - Toggling a provider group to "Use VS Code LM" causes all models from that provider to resolve through `vscode.lm` when a matching model is available.
 - The toggle defaults to OFF for all providers.
@@ -100,6 +105,7 @@ However, TeXRA's inference pipeline is significantly more sophisticated than a g
 **so that** I understand what happened and can fix it.
 
 **Acceptance criteria:**
+
 - If `vscode.lm.selectChatModels()` returns an empty array for a configured provider at agent-run time, TeXRA emits a user-visible error: "The VS Code LM model '[name]' is no longer available. Check 'Chat: Manage Language Models' or add a direct API key in TeXRA Settings."
 - The agent run is aborted before sending any messages; no partial output is written.
 - When `vscode.lm.onDidChangeChatModels` fires and the model reappears, it becomes selectable in the TeXRA picker without restarting VS Code.
@@ -111,6 +117,7 @@ However, TeXRA's inference pipeline is significantly more sophisticated than a g
 **so that** multi-turn tool-use workflows complete correctly.
 
 **Acceptance criteria:**
+
 - `LanguageModelToolCallPart` chunks arriving in `response.stream` are parsed and dispatched to the correct TeXRA tool implementation.
 - Tool results are re-submitted using `LanguageModelChatMessage.Assistant([toolCallPart])` + `LanguageModelChatMessage.User([toolResultPart])`.
 - The tool-calling loop continues until no `LanguageModelToolCallPart` appears in a round or a stop condition is met.
@@ -123,6 +130,7 @@ However, TeXRA's inference pipeline is significantly more sophisticated than a g
 **so that** TeXRA does not become a side channel around institutional AI governance.
 
 **Acceptance criteria:**
+
 - If `vscode.lm.selectChatModels()` returns an empty array or throws `LanguageModelError.NoPermissions` due to an admin policy, TeXRA logs the reason and disables the "Via VS Code LM" path gracefully.
 - TeXRA does not cache or retry around the policy check.
 - The direct-API SecretStorage path is unaffected by BYOK policy.
@@ -154,14 +162,14 @@ interface VscodeLmModelCatalog {
 }
 
 interface VscodeLmModelInfo {
-  vscodeLmId: string;          // LanguageModelChat.id
-  name: string;                 // LanguageModelChat.name
-  vendor: string;               // LanguageModelChat.vendor
-  family: string;               // LanguageModelChat.family
-  version: string;              // LanguageModelChat.version
-  maxInputTokens: number;       // LanguageModelChat.maxInputTokens
+  vscodeLmId: string; // LanguageModelChat.id
+  name: string; // LanguageModelChat.name
+  vendor: string; // LanguageModelChat.vendor
+  family: string; // LanguageModelChat.family
+  version: string; // LanguageModelChat.version
+  maxInputTokens: number; // LanguageModelChat.maxInputTokens
   supportsToolCalling: boolean; // capabilities.toolCalling !== false (treat absent as true)
-  supportsImageInput: boolean;  // capabilities.imageInput === true
+  supportsImageInput: boolean; // capabilities.imageInput === true
 }
 ```
 
@@ -170,6 +178,7 @@ This catalog is stored in `platform().globalState` under `'vscodeLm.modelCatalog
 ### The new model option type
 
 `computeModelOptions.ts` is extended to include an optional additional source: the `VscodeLmModelCatalog` read from `globalState`. For each `VscodeLmModelInfo` where:
+
 - the provider is not Anthropic or Google (hard block), and
 - the corresponding provider's `useVsCodeLmForProvider` toggle is enabled,
 
@@ -248,7 +257,9 @@ export interface VscodeLmClientPort {
 
 export interface VscodeLmMessage {
   role: 'user' | 'assistant';
-  content: Array<VscodeLmTextContent | VscodeLmToolCallContent | VscodeLmToolResultContent>;
+  content: Array<
+    VscodeLmTextContent | VscodeLmToolCallContent | VscodeLmToolResultContent
+  >;
 }
 
 export interface VscodeLmTextContent {
@@ -305,7 +316,11 @@ All abstract methods from `ModelHandler<M, U, R, T, C, Resp>` must be implemente
 // No 'vscode' import — VS Code-free zone
 
 import { ModelHandler } from '../ModelHandler';
-import type { VscodeLmClientPort, VscodeLmMessage, VscodeLmResponseChunk } from './VscodeLmClientPort';
+import type {
+  VscodeLmClientPort,
+  VscodeLmMessage,
+  VscodeLmResponseChunk,
+} from './VscodeLmClientPort';
 import type { ModelConfig } from 'llm-zoo';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
@@ -317,29 +332,41 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import type { ToolResultPayload } from '../utils/toolAttachmentUtils';
 import { VscodeLmToolCall } from './VscodeLmClientPort';
 import type { ProviderStopReason } from '../types/StopReasonTypes';
-import type { ExtractResponseResult, CreateResponseOptions, CreateResponseResult } from '../types/IModelHandler';
+import type {
+  ExtractResponseResult,
+  CreateResponseOptions,
+  CreateResponseResult,
+} from '../types/IModelHandler';
 
 const VSCODE_LM_STOP_REASON = 'end_turn' as const;
 
 export class VscodeLmModelHandler extends ModelHandler<
-  VscodeLmMessage,          // M
-  void,                     // U (no provider usage object)
-  NormalizedUsage,          // R
-  VscodeLmToolCall,         // T
-  VscodeLmClientPort,       // C
+  VscodeLmMessage, // M
+  void, // U (no provider usage object)
+  NormalizedUsage, // R
+  VscodeLmToolCall, // T
+  VscodeLmClientPort, // C
   AsyncIterable<VscodeLmResponseChunk> // Resp
 > {
   // Identity flags
-  override get isOpenai(): boolean { return false; }
-  override get isAnthropic(): boolean { return false; }
-  override get isGoogle(): boolean { return false; }
+  override get isOpenai(): boolean {
+    return false;
+  }
+  override get isAnthropic(): boolean {
+    return false;
+  }
+  override get isGoogle(): boolean {
+    return false;
+  }
 
   // Capability flags — all advanced features unavailable
   readonly supportsManualCompaction = false;
   readonly supportsReasoningLevelOverride = false;
   readonly canProcessToolResultAttachments = false;
   readonly requiresBatchedParallelToolResults = false;
-  override get supportsTokenCounting(): boolean { return true; } // estimated only
+  override get supportsTokenCounting(): boolean {
+    return true;
+  } // estimated only
 
   constructor(
     config: ModelConfig,
@@ -378,7 +405,9 @@ export class VscodeLmModelHandler extends ModelHandler<
    */
   protected override async createResponseImpl(
     options: CreateResponseOptions<VscodeLmMessage, VscodeLmClientPort>,
-  ): Promise<CreateResponseResult<AsyncIterable<VscodeLmResponseChunk>, VscodeLmMessage>> {
+  ): Promise<
+    CreateResponseResult<AsyncIterable<VscodeLmResponseChunk>, VscodeLmMessage>
+  > {
     // implementation: count tokens, open output stream, call clientPort.sendRequest,
     // iterate stream, accumulate toolCalls, emit text to logger, return stream object
     throw new Error('Not yet implemented');
@@ -422,7 +451,9 @@ export class VscodeLmModelHandler extends ModelHandler<
   }
 
   /** Returns empty array — vscode.lm passes media as LanguageModelDataPart inline. */
-  createMediaContent(_mediaMessage: MediaEntry[]): unknown[] { return []; }
+  createMediaContent(_mediaMessage: MediaEntry[]): unknown[] {
+    return [];
+  }
 
   /**
    * Extracts text from the accumulated response. The Resp type for this handler
@@ -491,7 +522,9 @@ export class VscodeLmModelHandler extends ModelHandler<
    * computePrice is never called for this handler (U=void), but must be implemented.
    * Always returns 0.
    */
-  computePrice(_responseUsage: void): number { return 0; }
+  computePrice(_responseUsage: void): number {
+    return 0;
+  }
 
   /**
    * Returns NormalizedUsage with isEstimatedUsage: true.
@@ -515,7 +548,7 @@ export class VscodeLmModelHandler extends ModelHandler<
       reasoningTokens: 0,
       serverToolRequests: 0,
       responseTimeMs,
-      isEstimatedUsage: true,  // new optional field — see NormalizedUsage extension
+      isEstimatedUsage: true, // new optional field — see NormalizedUsage extension
     } as NormalizedUsage;
   }
 
@@ -534,7 +567,10 @@ export class VscodeLmModelHandler extends ModelHandler<
     newResponse: string,
     _workspaceState: AgentWorkspaceState,
   ): void {
-    messages.push({ role: 'assistant', content: [{ type: 'text', value: newResponse }] });
+    messages.push({
+      role: 'assistant',
+      content: [{ type: 'text', value: newResponse }],
+    });
   }
 
   updateMessageContentWithoutPrefill(
@@ -543,7 +579,10 @@ export class VscodeLmModelHandler extends ModelHandler<
     newResponse: string,
     _workspaceState: AgentWorkspaceState,
   ): void {
-    messages.push({ role: 'assistant', content: [{ type: 'text', value: newResponse }] });
+    messages.push({
+      role: 'assistant',
+      content: [{ type: 'text', value: newResponse }],
+    });
   }
 
   // -----------------------------------------------------------------------
@@ -563,7 +602,9 @@ export class VscodeLmModelHandler extends ModelHandler<
   }
 
   /** Returns null — no thinking content available through vscode.lm. */
-  processThinkingBlock(_responseObject: unknown): null { return null; }
+  processThinkingBlock(_responseObject: unknown): null {
+    return null;
+  }
 
   // -----------------------------------------------------------------------
   // Tool use
@@ -605,7 +646,10 @@ export class VscodeLmModelHandler extends ModelHandler<
     messages: VscodeLmMessage[],
     userMessage: string,
   ): Promise<VscodeLmMessage[]> {
-    return [...messages, { role: 'user', content: [{ type: 'text', value: userMessage }] }];
+    return [
+      ...messages,
+      { role: 'user', content: [{ type: 'text', value: userMessage }] },
+    ];
   }
 
   createAssistantMessage(text: string): VscodeLmMessage {
@@ -685,7 +729,7 @@ export type SdkToolCall =
   | GoogleToolCall
   | AnthropicToolCall
   | OpenRouterToolCall
-  | VscodeLmToolCall;   // new
+  | VscodeLmToolCall; // new
 ```
 
 ### How token counting and usage are approximated
@@ -711,7 +755,7 @@ vscode.lm.registerLanguageModelChatProvider('texra', {
   async provideLanguageModelChatInformation(options, token) {
     if (options.silent && !isLoggedIn()) return [];
     const relayModels = await getRelayModelList();
-    return relayModels.map(m => ({
+    return relayModels.map((m) => ({
       id: m.value,
       name: m.label,
       family: m.provider,
@@ -721,8 +765,19 @@ vscode.lm.registerLanguageModelChatProvider('texra', {
       capabilities: { toolCalling: true, imageInput: false },
     }));
   },
-  async provideLanguageModelChatResponse(model, messages, options, progress, token) {
-    const response = await runRelayInference(model.id, messages, options, token);
+  async provideLanguageModelChatResponse(
+    model,
+    messages,
+    options,
+    progress,
+    token,
+  ) {
+    const response = await runRelayInference(
+      model.id,
+      messages,
+      options,
+      token,
+    );
     for await (const chunk of response) {
       progress.report(new vscode.LanguageModelTextPart(chunk.text));
     }
@@ -761,21 +816,21 @@ There is no automatic fallback to a different model. The user must explicitly re
 
 The following features are unavailable when a `vscode.lm`-routed model is selected. Each triggers a specific warning in the model picker tooltip and a one-time run-start notification:
 
-| Feature | Why unavailable |
-|---|---|
-| Extended thinking / adaptive thinking | `buildThinkingConfig()` parameters (`thinking.type`, `output_config.effort`) cannot be expressed in `LanguageModelChatRequestOptions`. The `modelOptions` bag has no documented schema at the VS Code or Anthropic provider level. |
-| Prompt caching (`cache_control` breakpoints) | `LanguageModelChatMessage` has no field for cache annotations. The VS Code Anthropic provider has no documented pass-through for `cache_control`. |
-| Anthropic beta headers | `files-api-2025-04-14`, `context-management-2025-06-27`, `compact-2026-01-12`, `extended-cache-ttl-2025-04-11` are assembled in `anthropicContextManagement.ts` and injected as HTTP headers via the Anthropic SDK client, with no equivalent in `LanguageModelChatRequestOptions`. |
-| Server-side context compaction | The `compaction_delta` stream event and `BetaUsage.iterations[]` are Anthropic SDK-specific streaming artifacts not representable in `vscode.lm`. |
-| Files API document upload | TeXRA uses `source: {type:'file', file_id}` in Anthropic `MessageParam` blocks. `LanguageModelDataPart` embeds raw bytes; it cannot reference a server-side `file_id` handle. PDF agents must be blocked for this path. |
-| System prompt (top-level) | `LanguageModelChatMessageRole` has only `User` and `Assistant`. System content is prepended as a user message wrapped in `<system>` tags; this loses Anthropic-side system-prompt caching and changes semantics for providers that treat the first user message differently. |
-| Accurate cost display | No usage object returned from `vscode.lm`. |
-| Cache savings display | `cachedInputTokens` / `cacheCreationTokens` unavailable. |
-| Output token count | Unavailable; displayed as N/A. |
-| Per-model reasoning effort tiers | `thinking.effort` (`low`/`medium`/`high`/`xhigh`/`max`) cannot be injected via `modelOptions` with any guarantee. The TeXRA effort slider is disabled for `vscode.lm` models. |
-| Relay quota enforcement | `ServerSideKeyService.canUseModelSync()` does not apply; the key is managed by VS Code. |
-| `requiresBatchedParallelToolResults` | Always false for this handler; providers that require batched parallel tool results (Google, DeepSeek, Kimi, MiniMax) are blocked. |
-| Context compaction eligibility | `isCompactionEligibleModel()` always returns false. A context-window warning fires at 75% estimated fill. |
+| Feature                                      | Why unavailable                                                                                                                                                                                                                                                                     |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extended thinking / adaptive thinking        | `buildThinkingConfig()` parameters (`thinking.type`, `output_config.effort`) cannot be expressed in `LanguageModelChatRequestOptions`. The `modelOptions` bag has no documented schema at the VS Code or Anthropic provider level.                                                  |
+| Prompt caching (`cache_control` breakpoints) | `LanguageModelChatMessage` has no field for cache annotations. The VS Code Anthropic provider has no documented pass-through for `cache_control`.                                                                                                                                   |
+| Anthropic beta headers                       | `files-api-2025-04-14`, `context-management-2025-06-27`, `compact-2026-01-12`, `extended-cache-ttl-2025-04-11` are assembled in `anthropicContextManagement.ts` and injected as HTTP headers via the Anthropic SDK client, with no equivalent in `LanguageModelChatRequestOptions`. |
+| Server-side context compaction               | The `compaction_delta` stream event and `BetaUsage.iterations[]` are Anthropic SDK-specific streaming artifacts not representable in `vscode.lm`.                                                                                                                                   |
+| Files API document upload                    | TeXRA uses `source: {type:'file', file_id}` in Anthropic `MessageParam` blocks. `LanguageModelDataPart` embeds raw bytes; it cannot reference a server-side `file_id` handle. PDF agents must be blocked for this path.                                                             |
+| System prompt (top-level)                    | `LanguageModelChatMessageRole` has only `User` and `Assistant`. System content is prepended as a user message wrapped in `<system>` tags; this loses Anthropic-side system-prompt caching and changes semantics for providers that treat the first user message differently.        |
+| Accurate cost display                        | No usage object returned from `vscode.lm`.                                                                                                                                                                                                                                          |
+| Cache savings display                        | `cachedInputTokens` / `cacheCreationTokens` unavailable.                                                                                                                                                                                                                            |
+| Output token count                           | Unavailable; displayed as N/A.                                                                                                                                                                                                                                                      |
+| Per-model reasoning effort tiers             | `thinking.effort` (`low`/`medium`/`high`/`xhigh`/`max`) cannot be injected via `modelOptions` with any guarantee. The TeXRA effort slider is disabled for `vscode.lm` models.                                                                                                       |
+| Relay quota enforcement                      | `ServerSideKeyService.canUseModelSync()` does not apply; the key is managed by VS Code.                                                                                                                                                                                             |
+| `requiresBatchedParallelToolResults`         | Always false for this handler; providers that require batched parallel tool results (Google, DeepSeek, Kimi, MiniMax) are blocked.                                                                                                                                                  |
+| Context compaction eligibility               | `isCompactionEligibleModel()` always returns false. A context-window warning fires at 75% estimated fill.                                                                                                                                                                           |
 
 ### Capability flags in TeXRA's model registry for vscode.lm-backed models
 
@@ -784,11 +839,11 @@ The synthetic `ModelConfig` for `vscode.lm` models carries:
 ```typescript
 const vscodeLmCapabilities: ModelCapabilities = {
   supportsPromptCaching: false,
-  supportsTokenCounting: true,   // via countTokens() — estimated only
+  supportsTokenCounting: true, // via countTokens() — estimated only
   supportsStreaming: true,
   supportsToolUse: info.supportsToolCalling,
   supportsImageInput: info.supportsImageInput,
-  supportsSystemPrompt: false,   // workaround applied in initializeMessages()
+  supportsSystemPrompt: false, // workaround applied in initializeMessages()
   supportsExtendedThinking: false,
   supportsServerCompaction: false,
   supportsReasoningEffort: false,
@@ -844,19 +899,19 @@ src/model/
 
 ### Modified files
 
-| File | Change |
-|---|---|
-| `src/agent/runtime/ModelFactory.ts` | Add `vscodelm:` prefix branch (before `PROVIDER_HANDLER_ROUTES` dispatch) in `createModelHandler()`; add `'ModelHandlerVscodeLm'` to `ModelHandlerCompatibilityKey` union; inject `VscodeLmClientPort` from Platform extension |
-| `src/model/computeModelOptions.ts` | Merge `VscodeLmModelCatalog` from globalState; add `'vscode-lm'` to `ModelAvailabilityKind` and `AVAILABILITY_STATUS` record |
-| `src/agent/modelHandlers/types/IModelHandler.ts` | Add `VscodeLmToolCall` to `SdkToolCall` union |
-| `src/agent/types/NormalizedUsage.ts` | Add `isEstimatedUsage: z.boolean().optional()` to `NormalizedUsageSchema` |
-| `packages/extension/src/extension.ts` | Register `VscodeLmProbe` listener on `onDidChangeChatModels`; construct `VscodeLmClientAdapter`; conditionally call `VscodeLmProviderRegistration` when `texra.vscodeLm.registerProvider` is true |
-| `packages/extension/package.json` | Add `contributes.languageModelChatProviders` entry; add `texra.model.useVsCodeLmForProvider` configuration object; add `texra.vscodeLm.registerProvider` boolean (default false); add `texra.vscodeLm.managementCommand` command |
-| `packages/extension/src/settingsView/SettingsViewMessageHandler.ts` | Add `SET_VSCODE_LM_PROVIDER_ENABLED` and `SET_VSCODE_LM_REGISTER_PROVIDER` handlers |
-| `src/shared/schemas/settingsView/inbound.ts` | Add `SetVscodeLmProviderEnabledMessageSchema` and `SetVscodeLmRegisterProviderMessageSchema` to `SettingsViewInboundMessageSchema` discriminated union |
-| `src/shared/constants/providers.ts` | Add `'vscode-lm'` to `ModelAvailabilityKind` if it is defined there |
-| `packages/extension/src/settingsView/frontend/tabs/ModelsTab.ts` | Add VS Code LM section |
-| Cost display components in settings and progress webviews | Check `isEstimatedUsage` flag and show "N/A" / "~N tokens (estimated)" |
+| File                                                                | Change                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/agent/runtime/ModelFactory.ts`                                 | Add `vscodelm:` prefix branch (before `PROVIDER_HANDLER_ROUTES` dispatch) in `createModelHandler()`; add `'ModelHandlerVscodeLm'` to `ModelHandlerCompatibilityKey` union; inject `VscodeLmClientPort` from Platform extension   |
+| `src/model/computeModelOptions.ts`                                  | Merge `VscodeLmModelCatalog` from globalState; add `'vscode-lm'` to `ModelAvailabilityKind` and `AVAILABILITY_STATUS` record                                                                                                     |
+| `src/agent/modelHandlers/types/IModelHandler.ts`                    | Add `VscodeLmToolCall` to `SdkToolCall` union                                                                                                                                                                                    |
+| `src/agent/types/NormalizedUsage.ts`                                | Add `isEstimatedUsage: z.boolean().optional()` to `NormalizedUsageSchema`                                                                                                                                                        |
+| `packages/extension/src/extension.ts`                               | Register `VscodeLmProbe` listener on `onDidChangeChatModels`; construct `VscodeLmClientAdapter`; conditionally call `VscodeLmProviderRegistration` when `texra.vscodeLm.registerProvider` is true                                |
+| `packages/extension/package.json`                                   | Add `contributes.languageModelChatProviders` entry; add `texra.model.useVsCodeLmForProvider` configuration object; add `texra.vscodeLm.registerProvider` boolean (default false); add `texra.vscodeLm.managementCommand` command |
+| `packages/extension/src/settingsView/SettingsViewMessageHandler.ts` | Add `SET_VSCODE_LM_PROVIDER_ENABLED` and `SET_VSCODE_LM_REGISTER_PROVIDER` handlers                                                                                                                                              |
+| `src/shared/schemas/settingsView/inbound.ts`                        | Add `SetVscodeLmProviderEnabledMessageSchema` and `SetVscodeLmRegisterProviderMessageSchema` to `SettingsViewInboundMessageSchema` discriminated union                                                                           |
+| `src/shared/constants/providers.ts`                                 | Add `'vscode-lm'` to `ModelAvailabilityKind` if it is defined there                                                                                                                                                              |
+| `packages/extension/src/settingsView/frontend/tabs/ModelsTab.ts`    | Add VS Code LM section                                                                                                                                                                                                           |
+| Cost display components in settings and progress webviews           | Check `isEstimatedUsage` flag and show "N/A" / "~N tokens (estimated)"                                                                                                                                                           |
 
 ### Data flow for a vscode.lm-routed agent run
 
@@ -991,14 +1046,14 @@ Google's handler uses `requiresBatchedParallelToolResults`, the Interactions API
 
 ### Feature flags and default values
 
-| Configuration key | Default | Purpose |
-|---|---|---|
-| `texra.model.useVsCodeLmForProvider.openai` | `false` | Enable vscode.lm path for OpenAI models |
-| `texra.model.useVsCodeLmForProvider.openrouter` | `false` | Enable vscode.lm path for OpenRouter models |
-| `texra.model.useVsCodeLmForProvider.ollama` | `false` | Enable vscode.lm path for Ollama/local models |
-| `texra.model.useVsCodeLmForProvider.custom` | `false` | Enable vscode.lm path for custom endpoints |
-| `texra.vscodeLm.registerProvider` | `false` | Register TeXRA as a `LanguageModelChatProvider` in VS Code |
-| `texra.vscodeLm.shownDegradationNotice` | `false` | Tracks whether the one-time degradation warning has been shown in this session |
+| Configuration key                               | Default | Purpose                                                                        |
+| ----------------------------------------------- | ------- | ------------------------------------------------------------------------------ |
+| `texra.model.useVsCodeLmForProvider.openai`     | `false` | Enable vscode.lm path for OpenAI models                                        |
+| `texra.model.useVsCodeLmForProvider.openrouter` | `false` | Enable vscode.lm path for OpenRouter models                                    |
+| `texra.model.useVsCodeLmForProvider.ollama`     | `false` | Enable vscode.lm path for Ollama/local models                                  |
+| `texra.model.useVsCodeLmForProvider.custom`     | `false` | Enable vscode.lm path for custom endpoints                                     |
+| `texra.vscodeLm.registerProvider`               | `false` | Register TeXRA as a `LanguageModelChatProvider` in VS Code                     |
+| `texra.vscodeLm.shownDegradationNotice`         | `false` | Tracks whether the one-time degradation warning has been shown in this session |
 
 All flags are VS Code configuration settings scoped to `ConfigurationTarget.Global`. They are not stored in `platform().secrets` or `globalState`.
 
@@ -1051,32 +1106,32 @@ Any user who finds the `vscode.lm` path unsatisfactory can toggle it OFF at any 
 
 ## Capability Degradation Matrix
 
-| Feature | Direct API (existing) | Via vscode.lm | Mitigation |
-|---|---|---|---|
-| Text streaming | Full, token-by-token | Full, chunk-by-chunk | None needed |
-| Tool calling | Full (all providers) | Supported if model `capabilities.toolCalling !== false` | Picker warning if tool calling unavailable; agent aborts gracefully |
-| Stop reasons | Per-provider typed enum | Inferred from stream end / tool call presence | Treat stream end as `end_turn`; `shouldContinue()` uses heuristic |
-| Token counts (input) | Exact from provider response | Estimated via `countTokens()` | Show "~N tokens (estimated)"; `isEstimatedUsage: true` |
-| Token counts (output) | Exact from provider response | Unavailable | Show "N/A" |
-| Cost display | Accurate (input+output+cache) | Unavailable | "Cost: N/A" label; run summary warning |
-| Prompt caching | Full (`cache_control`, 5-min and 1-hr TTL) | Not available | Warning in picker; inform user to use direct key for caching |
-| Cache savings display | Accurate (`cache_read_input_tokens`) | Unavailable | N/A shown |
-| Extended thinking | Full (adaptive, effort tiers per model) | Not available | Thinking slider disabled; warning in picker |
-| Anthropic beta headers | All four beta flags via `@anthropic-ai/sdk` | Not expressible | Hard block: Anthropic vendor rejected at factory |
-| Server-side compaction | Full (`compaction_delta` stream events, `BetaUsage.iterations[]`) | Not available | Compaction disabled; context-window warning at 75% |
-| System prompt | Top-level `system:` field with caching | Prepended as first user message in `<system>` tags | Documented workaround; system caching lost |
-| Media attachments (images) | Full (inline base64 or Files API) | `LanguageModelDataPart` raw bytes if model supports `imageInput` | Check `capabilities.imageInput`; pass raw bytes; no Files API |
-| PDF upload (Files API) | Anthropic Files API with `file_id` | Not available | Block PDF agents for vscode.lm path |
-| Reasoning tokens display | From provider usage (`reasoningTokens`) | Unavailable | Show N/A |
-| Per-model reasoning effort | `thinking.effort` or `reasoning_effort` param per model tier | Not injectable | Effort slider disabled for vscode.lm models |
-| Batched parallel tool results | Provider-specific batching (Google, DeepSeek, Kimi, MiniMax) | Not applicable (those providers hard-blocked) | `requiresBatchedParallelToolResults: false` |
-| Context compaction eligibility | `isCompactionEligibleModel()` + `COMPACTION_BETA` header | Always false | No compaction; warn at 75% estimated fill |
-| Relay tier quota enforcement | `ServerSideKeyService.canUseModelSync()` | Not applicable (key in VS Code) | N/A |
-| Model-specific max output tokens | `llm-zoo` registry (`maxOutputTokens`) | Estimated as `maxInputTokens / 4` | Shown as estimated in run summary |
-| `addContinueMessageWithPrefill` | Provider-specific prefill (Anthropic assistant role) | No prefill; always uses `addContinueMessageWithoutPrefill` | Standard continuation prompt used |
-| `processThinkingBlock` | Returns thinking text (Anthropic, Google, OpenAI o-series) | Always returns `null` | N/A |
-| `extractServerToolData` | Web search / web fetch results (Anthropic server tools) | Always returns empty | N/A |
-| `createBatchedToolUseFollowUpMessages` | Optional: Google thought-signature batching | Not implemented | `requiresBatchedParallelToolResults: false`; loop uses single-call path |
+| Feature                                | Direct API (existing)                                             | Via vscode.lm                                                    | Mitigation                                                              |
+| -------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Text streaming                         | Full, token-by-token                                              | Full, chunk-by-chunk                                             | None needed                                                             |
+| Tool calling                           | Full (all providers)                                              | Supported if model `capabilities.toolCalling !== false`          | Picker warning if tool calling unavailable; agent aborts gracefully     |
+| Stop reasons                           | Per-provider typed enum                                           | Inferred from stream end / tool call presence                    | Treat stream end as `end_turn`; `shouldContinue()` uses heuristic       |
+| Token counts (input)                   | Exact from provider response                                      | Estimated via `countTokens()`                                    | Show "~N tokens (estimated)"; `isEstimatedUsage: true`                  |
+| Token counts (output)                  | Exact from provider response                                      | Unavailable                                                      | Show "N/A"                                                              |
+| Cost display                           | Accurate (input+output+cache)                                     | Unavailable                                                      | "Cost: N/A" label; run summary warning                                  |
+| Prompt caching                         | Full (`cache_control`, 5-min and 1-hr TTL)                        | Not available                                                    | Warning in picker; inform user to use direct key for caching            |
+| Cache savings display                  | Accurate (`cache_read_input_tokens`)                              | Unavailable                                                      | N/A shown                                                               |
+| Extended thinking                      | Full (adaptive, effort tiers per model)                           | Not available                                                    | Thinking slider disabled; warning in picker                             |
+| Anthropic beta headers                 | All four beta flags via `@anthropic-ai/sdk`                       | Not expressible                                                  | Hard block: Anthropic vendor rejected at factory                        |
+| Server-side compaction                 | Full (`compaction_delta` stream events, `BetaUsage.iterations[]`) | Not available                                                    | Compaction disabled; context-window warning at 75%                      |
+| System prompt                          | Top-level `system:` field with caching                            | Prepended as first user message in `<system>` tags               | Documented workaround; system caching lost                              |
+| Media attachments (images)             | Full (inline base64 or Files API)                                 | `LanguageModelDataPart` raw bytes if model supports `imageInput` | Check `capabilities.imageInput`; pass raw bytes; no Files API           |
+| PDF upload (Files API)                 | Anthropic Files API with `file_id`                                | Not available                                                    | Block PDF agents for vscode.lm path                                     |
+| Reasoning tokens display               | From provider usage (`reasoningTokens`)                           | Unavailable                                                      | Show N/A                                                                |
+| Per-model reasoning effort             | `thinking.effort` or `reasoning_effort` param per model tier      | Not injectable                                                   | Effort slider disabled for vscode.lm models                             |
+| Batched parallel tool results          | Provider-specific batching (Google, DeepSeek, Kimi, MiniMax)      | Not applicable (those providers hard-blocked)                    | `requiresBatchedParallelToolResults: false`                             |
+| Context compaction eligibility         | `isCompactionEligibleModel()` + `COMPACTION_BETA` header          | Always false                                                     | No compaction; warn at 75% estimated fill                               |
+| Relay tier quota enforcement           | `ServerSideKeyService.canUseModelSync()`                          | Not applicable (key in VS Code)                                  | N/A                                                                     |
+| Model-specific max output tokens       | `llm-zoo` registry (`maxOutputTokens`)                            | Estimated as `maxInputTokens / 4`                                | Shown as estimated in run summary                                       |
+| `addContinueMessageWithPrefill`        | Provider-specific prefill (Anthropic assistant role)              | No prefill; always uses `addContinueMessageWithoutPrefill`       | Standard continuation prompt used                                       |
+| `processThinkingBlock`                 | Returns thinking text (Anthropic, Google, OpenAI o-series)        | Always returns `null`                                            | N/A                                                                     |
+| `extractServerToolData`                | Web search / web fetch results (Anthropic server tools)           | Always returns empty                                             | N/A                                                                     |
+| `createBatchedToolUseFollowUpMessages` | Optional: Google thought-signature batching                       | Not implemented                                                  | `requiresBatchedParallelToolResults: false`; loop uses single-call path |
 
 ---
 
@@ -1132,42 +1187,47 @@ Any user who finds the `vscode.lm` path unsatisfactory can toggle it OFF at any 
 
 ## Open Questions
 
-1. **Anthropic provider commitment to beta-header pass-through.** Has the VS Code built-in Anthropic BYOK provider extension committed to forwarding any fields from `LanguageModelChatRequestOptions.modelOptions` as HTTP request body fields or HTTP headers? Without this commitment from the Anthropic VS Code provider team, the Anthropic hard-block (Phase 3) cannot be lifted regardless of TeXRA engineering effort. *Action: file a question on the VS Code GitHub Discussions for the Anthropic BYOK provider extension before Phase 3 ships.*
+1. **Anthropic provider commitment to beta-header pass-through.** Has the VS Code built-in Anthropic BYOK provider extension committed to forwarding any fields from `LanguageModelChatRequestOptions.modelOptions` as HTTP request body fields or HTTP headers? Without this commitment from the Anthropic VS Code provider team, the Anthropic hard-block (Phase 3) cannot be lifted regardless of TeXRA engineering effort. _Action: file a question on the VS Code GitHub Discussions for the Anthropic BYOK provider extension before Phase 3 ships._
 
-2. **llm-zoo PR timeline.** The synthetic `ModelConfig` shim in `ModelFactory.ts` is a maintenance liability because `PROVIDER_HANDLER_ROUTES` is typed `Record<ModelProvider, ProviderHandlerRoute>` and a new enum value without an entry will cause a typecheck failure in that record. Should TeXRA temporarily fork `llm-zoo` to unblock Phase 3, or hold Phase 3 until the upstream merge? *Decision needed before Phase 3 starts.*
+2. **llm-zoo PR timeline.** The synthetic `ModelConfig` shim in `ModelFactory.ts` is a maintenance liability because `PROVIDER_HANDLER_ROUTES` is typed `Record<ModelProvider, ProviderHandlerRoute>` and a new enum value without an entry will cause a typecheck failure in that record. Should TeXRA temporarily fork `llm-zoo` to unblock Phase 3, or hold Phase 3 until the upstream merge? _Decision needed before Phase 3 starts._
 
-3. **Business/Enterprise user exclusion.** Microsoft's current documentation states that third-party `LanguageModelChatProvider` registrations are only visible to individual Copilot plan users (Free, Pro, Pro+). TeXRA's academic user base includes many institutional VS Code deployments. Should Phase 2 be held until Microsoft lifts this restriction, or ship as-is behind `texra.vscodeLm.registerProvider` (default OFF) with the tooltip caveat? *Current proposal: ship with default OFF and the caveat. Revisit when Microsoft documents a change.*
+3. **Business/Enterprise user exclusion.** Microsoft's current documentation states that third-party `LanguageModelChatProvider` registrations are only visible to individual Copilot plan users (Free, Pro, Pro+). TeXRA's academic user base includes many institutional VS Code deployments. Should Phase 2 be held until Microsoft lifts this restriction, or ship as-is behind `texra.vscodeLm.registerProvider` (default OFF) with the tooltip caveat? _Current proposal: ship with default OFF and the caveat. Revisit when Microsoft documents a change._
 
-4. **Copilot-vendor model consent dialog in background tasks.** If a user running a background TeXRA agent task has a Copilot-vendor model selected as their `vscode.lm` model, `selectChatModels({vendor:'copilot'})` may trigger a blocking consent dialog. The current design hard-blocks `vendor='copilot'` in all agent tasks. Should TeXRA allow Copilot-vendor models with a synchronous user confirmation gate at task-start time? *Current proposal: hard-block. Revisit in a follow-on PRD.*
+4. **Copilot-vendor model consent dialog in background tasks.** If a user running a background TeXRA agent task has a Copilot-vendor model selected as their `vscode.lm` model, `selectChatModels({vendor:'copilot'})` may trigger a blocking consent dialog. The current design hard-blocks `vendor='copilot'` in all agent tasks. Should TeXRA allow Copilot-vendor models with a synchronous user confirmation gate at task-start time? _Current proposal: hard-block. Revisit in a follow-on PRD._
 
-5. **Token estimation accuracy near context limits.** `LanguageModelChat.countTokens()` is documented as an estimate. For TeXRA agents that operate near context window limits (long-context PDF processing), estimation errors could lead to context overflow without warning. Should Phase 1 include a calibration study comparing `countTokens()` estimates to actual token counts across model families before the context-warning heuristic (75% of `maxInputTokens`) is shipped? *Recommendation: yes, validate on at least GPT-4o and one Ollama model before Phase 4 ships.*
+5. **Token estimation accuracy near context limits.** `LanguageModelChat.countTokens()` is documented as an estimate. For TeXRA agents that operate near context window limits (long-context PDF processing), estimation errors could lead to context overflow without warning. Should Phase 1 include a calibration study comparing `countTokens()` estimates to actual token counts across model families before the context-warning heuristic (75% of `maxInputTokens`) is shipped? _Recommendation: yes, validate on at least GPT-4o and one Ollama model before Phase 4 ships._
 
-6. **Relay path vs vscode.lm path priority.** If a user has both a TeXRA relay subscription and VS Code BYOK keys configured for the same provider, which path takes precedence? The current design makes `useVsCodeLmForProvider` the explicit switch, with relay being the TeXRA default when the switch is OFF. A user with the switch ON sees `vscode.lm`-routed models in the picker as distinct entries (labelled "Via VS Code LM"); relay models appear as separate entries. Both are available simultaneously. *No action needed; this is the intended behavior.*
+6. **Relay path vs vscode.lm path priority.** If a user has both a TeXRA relay subscription and VS Code BYOK keys configured for the same provider, which path takes precedence? The current design makes `useVsCodeLmForProvider` the explicit switch, with relay being the TeXRA default when the switch is OFF. A user with the switch ON sees `vscode.lm`-routed models in the picker as distinct entries (labelled "Via VS Code LM"); relay models appear as separate entries. Both are available simultaneously. _No action needed; this is the intended behavior._
 
-7. **Headless CLI behavior when default model is a `vscodelm:` value.** `texra run` and `texra --print` paths in `packages/cli/` cannot call `vscode.lm` APIs (unavailable outside the VS Code extension host). If a user's default model is set to a `vscodelm:` prefixed value, the CLI will encounter an unroutable model. *Current proposal: CLI's `createModelHandler()` detects the `vscodelm:` prefix and throws immediately with "VS Code LM models are not available in the TeXRA CLI. Set a non-vscode-lm model as default or pass --model explicitly." No silent fallback.*
+7. **Headless CLI behavior when default model is a `vscodelm:` value.** `texra run` and `texra --print` paths in `packages/cli/` cannot call `vscode.lm` APIs (unavailable outside the VS Code extension host). If a user's default model is set to a `vscodelm:` prefixed value, the CLI will encounter an unroutable model. _Current proposal: CLI's `createModelHandler()` detects the `vscodelm:` prefix and throws immediately with "VS Code LM models are not available in the TeXRA CLI. Set a non-vscode-lm model as default or pass --model explicitly." No silent fallback._
 
-8. **VS Code version floor and `engines.vscode`.** Raising the `engines.vscode` minimum to 1.104 would exclude users on older VS Code versions. The capability-check guards (`typeof vscode.lm?.selectChatModels === 'function'`) already handle older versions gracefully. *Current proposal: do not raise the minimum VS Code version; rely on capability checks throughout.*
+8. **VS Code version floor and `engines.vscode`.** Raising the `engines.vscode` minimum to 1.104 would exclude users on older VS Code versions. The capability-check guards (`typeof vscode.lm?.selectChatModels === 'function'`) already handle older versions gracefully. _Current proposal: do not raise the minimum VS Code version; rely on capability checks throughout._
 
-9. **`extractResponse` streaming contract mismatch.** The `Resp` type parameter for `VscodeLmModelHandler` is `AsyncIterable<VscodeLmResponseChunk>`, but `extractResponse()` cannot re-iterate a consumed stream. The resolved design (accumulate in `createResponseImpl`, read accumulated data in `extractResponse`) deviates from the pattern used by other handlers. *This must be explicitly documented in the class and raised in code review. If the `ModelHandler` base class is ever refactored to separate streaming from extraction, this handler should be updated.*
+9. **`extractResponse` streaming contract mismatch.** The `Resp` type parameter for `VscodeLmModelHandler` is `AsyncIterable<VscodeLmResponseChunk>`, but `extractResponse()` cannot re-iterate a consumed stream. The resolved design (accumulate in `createResponseImpl`, read accumulated data in `extractResponse`) deviates from the pattern used by other handlers. _This must be explicitly documented in the class and raised in code review. If the `ModelHandler` base class is ever refactored to separate streaming from extraction, this handler should be updated._
 
 ---
 
 ## Success Metrics
 
 **Adoption:**
+
 - 15% of active TeXRA extension users have at least one `vscode.lm`-routed model enabled within 60 days of release.
 - Median time from TeXRA install to first successful agent run decreases by at least 20% for users who have VS Code BYOK keys configured (measured via opt-in telemetry comparing cohorts).
 
 **Stability:**
+
 - Zero crashes attributable to `VscodeLmModelHandler` in the 30 days post-release (measured from crash reporter).
 - `VscodeLmModelUnavailableError` surfaces a user-visible error notification in at least 99% of cases (no silent failures), verified by checking that the `kind: 'vscode-lm-model-unavailable'` progress event always results in a VS Code notification.
 
 **Model exposure:**
+
 - TeXRA's `LanguageModelChatProvider` registration is confirmed working (models appear in VS Code model picker) for at least 95% of VS Code 1.104+ individual Copilot plan users with an active TeXRA relay session.
 
 **Feature coverage:**
+
 - Tool-use agents complete successfully through `vscode.lm` for models reporting `capabilities.toolCalling !== false` at a at least 95% success rate (measured by Phase 4 telemetry).
 
 **Degradation awareness:**
+
 - The capability degradation warning is explicitly dismissed (not just closed without reading) by at least 80% of users who encounter it, measured by dismiss-vs-close event telemetry.
 - Support tickets citing "unexpected $0.00 cost display" or "cost shows zero" reach zero after the "N/A" cost label and `isEstimatedUsage` warning banner are deployed.
