@@ -1,8 +1,7 @@
 /** Descriptive filename generation for chat exports. */
 
+import type { ChatExportInput } from '@agent/export/schemas';
 import { isoDateOnly } from '@utils/text/stringUtils';
-
-import type { ChatExportInput } from './schemas';
 
 /**
  * Generate a descriptive filename for the export.
