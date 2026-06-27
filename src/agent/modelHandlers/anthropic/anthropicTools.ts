@@ -17,7 +17,7 @@ import {
   countPdfPagesFromBuffer,
   sanitizeAnthropicFilename,
 } from './anthropicDocumentHandling';
-import { loadAttachmentBuffer } from '../utils/toolAttachmentUtils';
+import { loadAttachmentBuffer, wipeBuffer } from '../utils/toolAttachmentUtils';
 
 // Type imports - Anthropic SDK
 import type { Base64ImageSource } from '@anthropic-ai/sdk/resources/messages';
@@ -98,8 +98,7 @@ export async function uploadToolAttachments(
       pdfPageCount = await countPdfPagesFromBuffer(buffer);
       if (trackedPdfPageCount() + pdfPageCount > maxPdfPages) {
         pageLimitExceeded.push(attachment);
-        buffer.fill(0);
-        buffer = undefined;
+        buffer = wipeBuffer(buffer);
         continue;
       }
     }
@@ -137,10 +136,7 @@ export async function uploadToolAttachments(
       );
       unsupported.push(attachment);
     } finally {
-      if (buffer) {
-        buffer.fill(0);
-        buffer = undefined;
-      }
+      buffer = wipeBuffer(buffer);
     }
   }
 
