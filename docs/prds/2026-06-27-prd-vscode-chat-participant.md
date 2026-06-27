@@ -261,7 +261,7 @@ Entries marked "must be confirmed in audit" are blocked on Open Question 1. Unti
 
 The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` in this order:
 
-1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under one of `vscode.workspace.workspaceFolders[].uri.fsPath`. The first qualifying URI becomes `AgentConfig.inputFiles[0]`. After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }`without calling`runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
+1. **Extract file references.** Iterate `request.references`. For each entry, inspect `.value`: if it is a `vscode.Uri`, extract `uri.fsPath`; if it is a `vscode.Location`, extract `location.uri.fsPath`. Track any entries whose `.value` is a plain `string` (text references — these are not file URIs) in a `stringRefs` list. Validate that each resolved path is under one of `vscode.workspace.workspaceFolders[].uri.fsPath`. The first qualifying URI becomes `AgentConfig.inputFiles[0]`. After iterating all references, if no qualifying URI was found: if `stringRefs` is non-empty (the user attached a mention but not a file), emit the specific "not recognized as a file" error from US-8 for each string entry (`"The reference \`#mention\` was not recognized as a file. Use \`#file:intro.tex\` to attach a file."`) and return `{ errorDetails: { message: 'No file reference provided.' } }` without calling `runAgent()`; if `stringRefs` is empty (no references at all), emit the generic missing-file message from US-8 (`"Please attach a file using \`#file:\`..."`) and return.
 
 2. **Resolve agent name.** If `request.command` is set and present in `CHAT_COMMAND_TO_AGENT`, use the mapped YAML identifier. If `request.command` is set but absent from the map, emit the unrecognized-command error and return without calling `runAgent()`. If `request.command` is `undefined`, use `DEFAULT_CHAT_AGENT`.
 
@@ -279,7 +279,7 @@ The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` i
 
 9. **Call `runAgent(validatedRequest, { runtimeHost, approvalPromptsUnavailable: true })`.** Wire `token.onCancellationRequested` to abort the run (see Open Question 5 regarding `AbortController` in `RunAgentOptions`).
 
-10. **On completion**, emit `stream.anchor()` for each output file, a `stream.button()` for the LaTeX diff, and a markdown summary derived from `WorkflowFlowResult.outputs[0].added` / `.removed`. Return `ChatResult` with `metadata: { inputFile, outputFiles, agentName }`.
+10. **On completion**, narrow `result` to the workflow variant (see Output File Handling below), then emit `stream.anchor()` for each output file, a `stream.button()` for the LaTeX diff, and a markdown summary derived from `result.outputs[0].added` / `.removed`. Return `ChatResult` with `metadata: { inputFile, outputFiles, agentName }`.
 
 ### Mapping Chat Context to `AgentConfig`
 
@@ -322,7 +322,9 @@ Events in the "frontend-bound, ignorable" group as documented in `AgentRuntimeHo
 
 ### Output File Handling
 
-After `runAgent()` resolves with a `WorkflowFlowResult`:
+After `runAgent()` resolves with an `AgentFlowResult`, narrow to the workflow variant before reading `.outputs`:
+
+0. **Guard the category.** If `result.category !== 'workflow'`: emit `stream.markdown('**Error:** Unexpected agent result category.')` and return. (In practice this cannot happen since the participant only dispatches Workflow agents, but the narrowing is required by the type system and protects against future regressions.)
 
 1. For each `OutputFileSummary` in `result.outputs`, call `stream.anchor(vscode.Uri.file(summary.absolutePath), path.basename(summary.absolutePath))`.
 2. If `summary.absolutePath !== inputPath` (agent wrote to a separate output file): emit `stream.button({ title: 'View LaTeX diff', command: 'texra.latexdiff', arguments: [inputPath, inputPath, summary.absolutePath] })`. (`handleLatexdiff` takes `inputFile`, `baseFile`, `editedFile` — `inputPath` doubles as both the first and second argument; `summary.absolutePath` is the revised file.) If `summary.absolutePath === inputPath` (in-place overwrite): skip the diff button — comparing the file against itself yields an empty diff; the pre-run UX note below serves as the sole warning.
@@ -446,7 +448,8 @@ Parse request.references  Parse request.command
              → XmlOutputManager writes files to disk
                 |
                 v
-     WorkflowFlowResult { outputs: OutputFileSummary[], usage, ... }
+     AgentFlowResult (guard: result.category === 'workflow')
+       { outputs: OutputFileSummary[], usage, ... }
                 |
                 v
      stream.anchor(vscode.Uri.file(output.absolutePath), basename)
@@ -525,7 +528,7 @@ export class ChatStreamAgentRuntimeHost implements AgentRuntimeHost {
         // showPlanApproval, showAgentProposal, showRetryRequest) are no-ops.
         // approvalPromptsUnavailable: true prevents their emission upstream.
         // Frontend-bound ignorable events (requestOpenFile, requestShowInstruction,
-        // showAgentConfigBanner, requestShowError, *SubscriptionsChanged,
+        // showAgentConfigBanner, *SubscriptionsChanged,
         // toolAvailabilityChanged) are also no-ops here.
         break;
     }
