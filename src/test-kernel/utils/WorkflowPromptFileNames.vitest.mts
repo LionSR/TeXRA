@@ -17,7 +17,7 @@ import {
 import {
   getListOfFiles,
   getPromptFileName,
-  getXmlFormatFromFiles,
+  getXmlFormatFromReadableFiles,
 } from '@utils/prompt';
 
 describe('workflow prompt file names', () => {
@@ -45,7 +45,7 @@ describe('workflow prompt file names', () => {
       getListOfFiles(['/workspace/chapter/main.tex', '/outside/absolute.tex']),
     ).toBe('chapter/main.tex, absolute.tex');
 
-    const xml = await getXmlFormatFromFiles([
+    const { xml } = await getXmlFormatFromReadableFiles([
       '/workspace/chapter/main.tex',
       '/outside/absolute.tex',
     ]);

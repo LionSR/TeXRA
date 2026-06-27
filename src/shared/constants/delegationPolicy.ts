@@ -78,15 +78,3 @@ export function evaluateDelegationGate(
     ...(allowed ? {} : { blockReason: 'max_depth_reached' as const }),
   };
 }
-
-/**
- * Delegation gate. An agent at depth `d` may delegate iff `d < maxDepth`.
- * Root (depth 0) with the default (maxDepth 1) can always delegate;
- * subagents (depth ≥ 1) can only delegate when the user raises the cap.
- */
-export function delegationAllowed(
-  depth: number,
-  config: NestedDelegationConfig,
-): boolean {
-  return evaluateDelegationGate(depth, config).allowed;
-}
