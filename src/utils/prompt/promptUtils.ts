@@ -82,12 +82,6 @@ export async function getXmlFormatFromReadableFiles(
   };
 }
 
-export async function getXmlFormatFromFiles(
-  files: string[],
-): Promise<string | null> {
-  return (await getXmlFormatFromReadableFiles(files)).xml;
-}
-
 /**
  * Convert a list of files to a comma-separated string
  * @param files List of file paths
