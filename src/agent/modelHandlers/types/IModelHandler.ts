@@ -12,7 +12,6 @@ import type {
 import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { ToolResultPayload } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import type { ToolDefinition } from '@model';
 import type { FileLocation } from '@shared/schemas';
@@ -226,9 +225,6 @@ export interface IModelHandler<
 
   readonly isGoogle: boolean;
 
-  /** Whether the handler supports processing attachments in tool results. */
-  readonly canProcessToolResultAttachments: boolean;
-
   /**
    * Whether parallel tool calls in a single turn must be batched into one
    * follow-up message to preserve provider-side reasoning / thought signatures
@@ -245,7 +241,6 @@ export interface IModelHandler<
 
   setLogger(logger: AgentTrace): void;
   setAgentCategory(agentCategory?: AgentCategory | null): void;
-  getAgentCategory(): AgentCategory | undefined;
   getClient(): Promise<C>;
 
   /**
@@ -270,7 +265,6 @@ export interface IModelHandler<
     mediaFiles?: FileLocation[],
   ): Promise<M[]>;
 
-  createMediaContent(mediaMessage: MediaEntry[]): unknown[];
   extractResponse(responseObject: Resp, endTag: string): ExtractResponseResult;
 
   addContinueMessageWithPrefill(
@@ -401,11 +395,6 @@ export interface IModelHandler<
    * Appends the user's message to the existing conversation array.
    */
   createUserFollowUpMessages(messages: M[], userMessage: string): Promise<M[]>;
-
-  /**
-   * Build a simple assistant message from plain text.
-   */
-  createAssistantMessage(text: string): M;
 
   /**
    * Build an assistant message from a provider response.

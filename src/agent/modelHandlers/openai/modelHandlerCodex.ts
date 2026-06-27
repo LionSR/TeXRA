@@ -290,7 +290,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
 
   /** OAuth access token in place of an API key (becomes the Bearer header),
    *  or the user's OpenAI API key once the subscription preference is off. */
-  public override async getApiKey(): Promise<string> {
+  protected override async getApiKey(): Promise<string> {
     return this.usingSubscription()
       ? this.resolveAccessToken()
       : super.getApiKey();

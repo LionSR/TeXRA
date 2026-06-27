@@ -26,10 +26,6 @@ import { getConfig } from '@utils/config/configUtils';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
 
-export interface RetryState {
-  lastError?: RetryErrorInfo;
-}
-
 /** Returns maxRetries (1 initial + N auto-retries) and wait (seconds between retries). */
 function getNodeRetryConfig(): { maxRetries: number; wait: number } {
   const maxAutoAttempts = getConfig<number>('texra.model.retry.maxAttempts', 1);
@@ -345,8 +341,7 @@ interface InvocationResultHandlerOptions {
 /** Returns narrowed success result or null (flow stopped). Records error for failures. */
 export function handleInvocationResult<T extends { response: unknown }>(
   result: InvocationResult<T>,
-  state: { shouldStop: boolean; endTurn: boolean },
-  retryState: RetryState,
+  state: { shouldStop: boolean; endTurn: boolean; lastError?: RetryErrorInfo },
   options: InvocationResultHandlerOptions,
 ): (T & { kind: 'success' }) | null {
   const { logger, operationName } = options;
@@ -357,7 +352,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
   }
 
   if (result.kind === 'cancelled') {
-    retryState.lastError = undefined;
+    state.lastError = undefined;
     state.shouldStop = true;
     state.endTurn = false;
     return null;
@@ -365,7 +360,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
 
   if (result.kind === 'failed') {
     const { kind: _, ...errorInfo } = result;
-    retryState.lastError = errorInfo;
+    state.lastError = errorInfo;
     state.shouldStop = true;
     state.endTurn = false;
     return null;
@@ -373,7 +368,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
 
   if (!result.response) {
     logger.warn(EMPTY_RESPONSE_ERROR_MESSAGE);
-    retryState.lastError = {
+    state.lastError = {
       message: EMPTY_RESPONSE_ERROR_MESSAGE,
       userRetryable: false,
     };
@@ -382,6 +377,6 @@ export function handleInvocationResult<T extends { response: unknown }>(
     return null;
   }
 
-  retryState.lastError = undefined;
+  state.lastError = undefined;
   return result;
 }

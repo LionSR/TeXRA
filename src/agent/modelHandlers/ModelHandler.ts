@@ -137,7 +137,7 @@ export abstract class ModelHandler<
    * Whether the handler supports processing attachments in tool results.
    * Override in handlers that don't support attachments (e.g., DeepSeek).
    */
-  get canProcessToolResultAttachments(): boolean {
+  protected get canProcessToolResultAttachments(): boolean {
     return true;
   }
 
@@ -173,7 +173,7 @@ export abstract class ModelHandler<
     this.agentCategory = agentCategory ?? undefined;
   }
 
-  public getAgentCategory(): AgentCategory | undefined {
+  protected getAgentCategory(): AgentCategory | undefined {
     return this.agentCategory;
   }
 
@@ -354,7 +354,7 @@ export abstract class ModelHandler<
    *
    * @throws Error if required API key is missing from environment
    */
-  public async getApiKey(): Promise<string> {
+  protected async getApiKey(): Promise<string> {
     const serverSideKeyService = getServerSideKeyService();
     const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
 
@@ -588,7 +588,7 @@ export abstract class ModelHandler<
    * Individual providers can override if needed.
    * @returns Array of media content objects in provider-specific format
    */
-  public async createMediaMessage(
+  protected async createMediaMessage(
     mediaFiles: FileLocation[],
   ): Promise<ReturnType<typeof this.createMediaContent>> {
     const { entries, results } =
@@ -652,7 +652,7 @@ export abstract class ModelHandler<
     return { endTurn, shouldStop };
   }
 
-  public containCutOffMessage(
+  protected containCutOffMessage(
     content: Array<{ type: string; text?: string }> | string,
   ): boolean {
     const marker = 'Your response got cut off';
@@ -691,11 +691,12 @@ export abstract class ModelHandler<
   /**
    * Generates a model response using the provider's API.
    *
-   * Template method: installs SDK-boundary error tagging via
-   * {@link sdkErrorTagger}, then delegates to {@link createResponseImpl}.
-   * Subclasses normally override {@link createResponseImpl} (and
-   * {@link sdkErrorTagger}); only override this method when a guard must wrap
-   * the call (e.g. OpenAIResponse's single-turn `inFlight` assertion).
+   * Template method: runs under {@link withCreateResponseGuard}, installs
+   * SDK-boundary error tagging via {@link sdkErrorTagger}, then delegates to
+   * {@link createResponseImpl}. Subclasses normally override
+   * {@link createResponseImpl} (and {@link sdkErrorTagger}); a subclass that
+   * needs to bracket the whole call (e.g. a single-turn `inFlight` assertion)
+   * overrides only {@link withCreateResponseGuard}.
    *
    * @param options Options for creating the response
    * @returns Promise resolving to result containing response and optionally updated messages
@@ -703,9 +704,22 @@ export abstract class ModelHandler<
   createResponse(
     options: CreateResponseOptions<M, C>,
   ): Promise<CreateResponseResult<Resp, M>> {
-    return withSdkErrorTag(this.sdkErrorTagger, this.config.provider, () =>
-      this.createResponseImpl(options),
+    return this.withCreateResponseGuard(() =>
+      withSdkErrorTag(this.sdkErrorTagger, this.config.provider, () =>
+        this.createResponseImpl(options),
+      ),
     );
+  }
+
+  /**
+   * Hook to bracket a whole {@link createResponse} call (error tagging +
+   * {@link createResponseImpl}). Default: run directly. Override to add a guard
+   * such as the single-turn `inFlight` assertion that handlers chaining on a
+   * `previous_response_id` / conversation state need. Keeping the error-tag wrap
+   * in the base means subclasses supply only the guard, never re-copy the wrap.
+   */
+  protected withCreateResponseGuard<T>(run: () => Promise<T>): Promise<T> {
+    return run();
   }
 
   /**

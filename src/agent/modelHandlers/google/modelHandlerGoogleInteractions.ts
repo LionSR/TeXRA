@@ -58,7 +58,6 @@ import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
 } from '../contextManagementConstants';
-import { withSdkErrorTag } from '../support/sdkErrorTagging';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagGoogleSdkError } from './googleSdkError';
 import {
@@ -766,7 +765,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     );
   }
 
-  override async createMediaMessage(
+  protected override async createMediaMessage(
     mediaFiles: FileLocation[],
   ): Promise<Content[]> {
     if (!mediaFiles?.length || !this.supportsFileUploads()) {
@@ -1423,15 +1422,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // ===========================================================================
 
   /**
-   * Single-turn override. The base {@link ModelHandler.createResponse} already
-   * wraps {@link createResponseImpl} in {@link withSdkErrorTag}; we override only
-   * to add the in-flight guard (mirrors {@link ModelHandlerOpenAIResponse}).
-   * Concurrent callers would race chainedInteractionId / sentStepCount and
-   * corrupt the chain, so fail loudly instead of silently corrupting state.
+   * Single-turn guard (mirrors {@link ModelHandlerOpenAIResponse}). The base
+   * {@link ModelHandler.createResponse} owns the SDK error-tag wrap;
+   * we supply only the in-flight guard. Concurrent callers would race
+   * chainedInteractionId / sentStepCount and corrupt the chain, so fail loudly
+   * instead of silently corrupting state.
    */
-  override async createResponse(
-    options: CreateResponseOptions<Step, GoogleGenAI>,
-  ): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
+  protected override async withCreateResponseGuard<T>(
+    run: () => Promise<T>,
+  ): Promise<T> {
     if (this.inFlight) {
       throw new Error(
         'modelHandlerGoogleInteractions.createResponse invoked while a prior ' +
@@ -1440,11 +1439,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     }
     this.inFlight = true;
     try {
-      return await withSdkErrorTag(
-        this.sdkErrorTagger,
-        this.config.provider,
-        () => this.createResponseImpl(options),
-      );
+      return await run();
     } finally {
       this.inFlight = false;
     }
