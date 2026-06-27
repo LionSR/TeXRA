@@ -1,6 +1,6 @@
 import { clamp } from '@utils/core';
 
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
+import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 
 /**

@@ -117,7 +117,7 @@ export const markdownStyles = css`
 
   .markdown-content .latex-ref:focus-visible {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
+    outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
   }
 

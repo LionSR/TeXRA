@@ -84,7 +84,7 @@ export const codeBlockStyles = css`
 
     &:focus-visible {
       outline: var(--border-thin) solid var(--wa-color-focus);
-      outline-offset: 1px;
+      outline-offset: var(--border-thin);
     }
   }
 

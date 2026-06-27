@@ -3,7 +3,8 @@ import { Box, Text, useWindowSize } from 'ink';
 
 import type { PlanApprovalPermission } from '@shared/schemas';
 
-import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
+import { ConfirmCard } from './ConfirmCard';
+import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
 import { confirmCardCompactChromeRows } from './ConfirmCardState';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
