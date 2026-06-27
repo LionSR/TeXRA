@@ -273,7 +273,7 @@ The handler (`TexraChatParticipant.handle()`) processes a `vscode.ChatRequest` i
 
 6. **Guard workspace, then build `AgentConfig`.** First check: if `vscode.workspace.workspaceFolders` is `undefined` or empty, emit "TeXRA requires an open workspace folder. Please open a folder (File > Open Folder) before running `@texra`." and return without calling `runAgent()`. Then call `buildChatAgentConfig({ filePath: resolvedFilePath, agentName: resolvedAgentName, instruction: extractedInstruction, modelId: resolvedModelId, workspaceRoot: vscode.workspace.workspaceFolders[0].uri.fsPath })`. Call `validateExecutionRequest({ config })` and surface any `ZodIssue` as a user-facing error if validation fails.
 
-7. **Emit initial buttons.** Call `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })` and `stream.progress('TeXRA agent started')` before awaiting `runAgent()`.
+7. **Emit initial buttons.** Call `stream.button({ title: 'View live progress', command: 'texra.showProgressView', arguments: [] })` before awaiting `runAgent()`. (The `setActiveStream` event emitted at the start of `runAgent()` triggers `stream.progress('TeXRA agent started')` via `ChatStreamAgentRuntimeHost`; no duplicate pre-call progress call is needed.)
 
 8. **Construct `ChatStreamAgentRuntimeHost`.** Create a new instance with `stream` and an `onOutputFiles` callback that stores resolved output paths for post-run button emission.
 
