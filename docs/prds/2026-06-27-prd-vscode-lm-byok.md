@@ -71,7 +71,7 @@ However, TeXRA's inference pipeline is significantly more sophisticated than a g
 **Acceptance criteria:**
 
 - The TeXRA model picker entry for any `vscode.lm`-routed model displays a warning icon and tooltip listing specific degraded features.
-- Before the first agent run with a `vscode.lm`-routed model in a VS Code session, TeXRA shows a one-time dismissible notification: "Cost display and prompt caching are not available for models accessed via VS Code LM. Switch to direct API keys in TeXRA Settings for full functionality."
+- Before the first agent run with a `vscode.lm`-routed model (ever, not just this session), TeXRA shows a one-time dismissible notification: "Cost display and prompt caching are not available for models accessed via VS Code LM. Switch to direct API keys in TeXRA Settings for full functionality." Dismissed state is stored in VS Code's global configuration (`texra.vscodeLm.shownDegradationNotice: true`) so it does not reappear across VS Code restarts.
 - The notification includes a "Open TeXRA Settings" action button.
 
 ### US-4: Ollama / local model access
@@ -1053,7 +1053,7 @@ Google's handler uses `requiresBatchedParallelToolResults`, the Interactions API
 | `texra.model.useVsCodeLmForProvider.ollama`     | `false` | Enable vscode.lm path for Ollama/local models                                  |
 | `texra.model.useVsCodeLmForProvider.custom`     | `false` | Enable vscode.lm path for custom endpoints                                     |
 | `texra.vscodeLm.registerProvider`               | `false` | Register TeXRA as a `LanguageModelChatProvider` in VS Code                     |
-| `texra.vscodeLm.shownDegradationNotice`         | `false` | Tracks whether the one-time degradation warning has been shown in this session |
+| `texra.vscodeLm.shownDegradationNotice`         | `false` | Tracks whether the one-time degradation warning has been permanently dismissed (persists across VS Code restarts) |
 
 All flags are VS Code configuration settings scoped to `ConfigurationTarget.Global`. They are not stored in `platform().secrets` or `globalState`.
 

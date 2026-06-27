@@ -193,6 +193,8 @@ Add the following to `contributes` in `packages/extension/package.json`. Command
 ]
 ```
 
+**Phase 1 note:** The manifest excerpt above shows the full target command set. Only `/proofread` (mapped to `correct.yaml`) ships in Phase 1; the remaining five commands are added incrementally as their agent YAMLs are created, audited for `rounds: 1, agentCategory: workflow`, and confirmed in the Open Question 1 audit. The manifest `description` field and the `CHAT_COMMAND_TO_AGENT` map must be updated together each time a command is added. Do not register a command in the manifest without a corresponding YAML entry in the map — it will appear in VS Code's command completions but return an "Unknown command" error at runtime.
+
 The `isSticky: false` setting is intentional. Each agent invocation is a self-contained run; keeping `@texra` sticky would suggest a conversational back-and-forth that v1 does not support — each turn independently calls `runAgent()` with no shared session state.
 
 Note: The `disambiguation` block is best-effort. The VS Code Chat API does not guarantee that Copilot will auto-route ambiguous queries to `@texra`; this is treated as a discovery aid, not a functional guarantee.
@@ -297,7 +299,7 @@ Events in the "frontend-bound, ignorable" group as documented in `AgentRuntimeHo
 After `runAgent()` resolves with a `WorkflowFlowResult`:
 
 1. For each `OutputFileSummary` in `result.outputs`, call `stream.anchor(vscode.Uri.file(summary.absolutePath), path.basename(summary.absolutePath))`.
-2. Emit: `stream.button({ title: 'View LaTeX diff', command: 'texra.latexdiff', arguments: [inputPath, summary.absolutePath] })`.
+2. Emit: `stream.button({ title: 'View LaTeX diff', command: 'texra.latexdiff', arguments: [inputPath, inputPath, summary.absolutePath] })`. (`handleLatexdiff` takes three parameters: `inputFile`, `baseFile`, `editedFile` — `inputPath` doubles as both the first and second argument; `summary.absolutePath` is the revised file.)
 3. Emit markdown: `**Changes:** +${summary.added ?? '?'} lines, −${summary.removed ?? '?'} lines`.
 4. Return `{ metadata: { inputFile: resolvedFilePath, outputFiles: result.outputs.map(o => o.absolutePath), agentName } }`.
 
@@ -508,7 +510,7 @@ import { validateExecutionRequest } from '@agent/core/execution/executionRequest
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfigInput } from '@agent/core/definition/AgentConfig';
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
-import { defaultToolConfig } from '@shared/schemas/toolConfig';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 export interface ChatAgentConfigInput {
   filePath: string; // absolute path from #file: reference
@@ -535,7 +537,7 @@ export function buildChatAgentConfig(
     model: input.modelId,
     instruction: input.instruction,
     agentCategory: AgentCategory.Workflow,
-    toolConfig: defaultToolConfig(),
+    toolConfig: DEFAULT_TOOL_CONFIG,
     memories: [],
     workingDirectory: input.workspaceRoot,
   };
