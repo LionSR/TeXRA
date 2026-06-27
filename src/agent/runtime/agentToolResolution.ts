@@ -12,8 +12,10 @@
  *      injected tools are subject to delegation and approval gates but bypass
  *      the disabled/unavailable filters (they are runtime infrastructure, not
  *      user-selectable tools).
- *   7. Annotate delegation tools with the models currently available for
- *      delegation, so the model sees an accurate "Available models:" line.
+ *   7. Annotate delegation tools with the models and agents currently available
+ *      for delegation, so the model sees an accurate "Available models:" line
+ *      and an "Available agents:" roster instead of a snapshot frozen when the
+ *      tool registry was first constructed.
  *
  * Routine filtering outcomes (disabled, unavailable, not in registry) are
  * intentionally silent — YAML typos are surfaced once at load time by
@@ -29,6 +31,7 @@ import type { ToolDefinition } from '@model';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   DELEGATION_TOOLS,
+  DELEGATION_TOOL_CATEGORY,
   hasDelegationTool,
 } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -41,6 +44,11 @@ import {
   availableModelNamesFromOptions,
   withDelegationModelAvailability,
 } from '@tools/delegationModelAvailability';
+import {
+  visibleDelegationAgentsBlock,
+  withDelegationAgentAvailability,
+} from '@tools/delegationAgentAvailability';
+import { withDelegationWorktreeAvailability } from '@tools/delegationWorktreeAvailability';
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import {
   toolInjectionRegistry,
@@ -169,12 +177,40 @@ export async function resolveAgentTools({
   const availableModelNames =
     await availableDelegationModelNamesForTools(resolved);
   return {
-    tools:
-      availableModelNames === undefined
-        ? resolved
-        : resolved.map((tool) =>
-            withDelegationModelAvailability(tool, availableModelNames),
-          ),
+    tools: resolved.map((tool) =>
+      annotateDelegationTool(tool, availableModelNames),
+    ),
     delegationTrimmed,
   };
+}
+
+/**
+ * Refresh a delegation tool's "Available models:", "Available agents:", and
+ * "Git worktree support:" lines from current state. A tool with no
+ * `DELEGATION_TOOL_CATEGORY` entry returns untouched at the early guard.
+ * `availableModelNames` is `undefined` only when the resolved list held no
+ * delegation tool at all, so in that case every tool reaching this function is a
+ * non-delegation tool that returns early — `category` and `availableModelNames`
+ * are independent (one keys off the tool name, the other off the whole list),
+ * not causally linked.
+ */
+function annotateDelegationTool(
+  tool: ToolDefinition,
+  availableModelNames: readonly string[] | null | undefined,
+): ToolDefinition {
+  const category = DELEGATION_TOOL_CATEGORY[tool.name];
+  if (!category) return tool;
+  const withModels =
+    availableModelNames === undefined
+      ? tool
+      : withDelegationModelAvailability(tool, availableModelNames);
+  // The annotators no-op without a description, and resolving the roster /
+  // worktree state reaches platform state — skip those lookups when there is
+  // nothing to annotate (e.g. a tool config that carries only a name).
+  if (!withModels.description) return withModels;
+  const withAgents = withDelegationAgentAvailability(
+    withModels,
+    visibleDelegationAgentsBlock(category),
+  );
+  return withDelegationWorktreeAvailability(withAgents);
 }
