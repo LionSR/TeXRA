@@ -250,6 +250,16 @@ export async function discoverLatestExecutionOutputs(query: {
       if (rounds && rounds.size > 0) {
         return { executionId: candidate.id, rounds };
       }
+      // Stream-tab snapshots are a progress-view artifact that headless
+      // `texra run` executions never persist. Fall back to scanning the matched
+      // execution's run directory on disk — the same source the `--run-id` path
+      // uses — so a headless run's outputs are still discovered instead of
+      // dropping through to the cwd-based workspace scan (which only sees files
+      // copied back into the workspace, not the per-round execution outputs).
+      const scanned = await scanRunDirForOutputs(candidate.id, query.inputFile);
+      if (scanned && scanned.size > 0) {
+        return { executionId: candidate.id, rounds: scanned };
+      }
     }
   } catch (error) {
     logger.debug(
