@@ -103,9 +103,35 @@ export async function signIn(): Promise<boolean> {
       return true;
     }
 
-    const selected = await vscode.window.showQuickPick(getSignInOptions(), {
-      placeHolder: 'Choose a sign-in method',
-      title: 'TeXRA Sign In',
+    const selected = await new Promise<SignInOption | undefined>((resolve) => {
+      const qp = vscode.window.createQuickPick<SignInOption>();
+      let settled = false;
+      const finish = (value: SignInOption | undefined): void => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+        qp.dispose();
+      };
+      qp.title = 'TeXRA Sign In';
+      qp.placeholder = 'Choose a sign-in method';
+      const options = getSignInOptions();
+      qp.items = options;
+      const defaultOption = options[0];
+      if (defaultOption) {
+        qp.activeItems = [defaultOption];
+      }
+      // VS Code 1.108+: explain what signing in grants. Ignored on older hosts.
+      if ('prompt' in qp) {
+        (qp as vscode.QuickPick<SignInOption> & { prompt: string }).prompt =
+          'Sign in to access AI models, remote agents, and TeXRA Researcher features';
+      }
+      qp.onDidAccept(() => {
+        finish(qp.activeItems[0] ?? qp.selectedItems[0]);
+      });
+      qp.onDidHide(() => {
+        finish(undefined);
+      });
+      qp.show();
     });
     if (!selected) return false;
 

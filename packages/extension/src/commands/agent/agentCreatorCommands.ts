@@ -23,6 +23,10 @@ interface ParsedCreatorYaml {
   prompts: { systemPrompt: string; userRequest: string; retryPrompt?: string };
 }
 
+type QuickInputToggleButton = vscode.QuickInputButton & {
+  readonly toggle: { checked: boolean };
+};
+
 /** Cached after first load. Templates are bundled resources — stable for the session. */
 let creatorConfig: CreatorConfig | null = null;
 
@@ -60,6 +64,85 @@ async function loadCreatorConfig(
   return creatorConfig;
 }
 
+/**
+ * Multi-select tool-group picker. Adds a persistent prompt hint (VS Code
+ * 1.108+) and a "Select all / Clear" toggle button (VS Code 1.109+) on top
+ * of the stateful multi-select. Older hosts (incl. Cursor 1.105) silently
+ * ignore the unsupported properties and render a plain `canSelectMany` picker.
+ */
+async function pickToolGroups(
+  agentName: string,
+  items: vscode.QuickPickItem[],
+): Promise<readonly vscode.QuickPickItem[] | undefined> {
+  return await new Promise<readonly vscode.QuickPickItem[] | undefined>(
+    (resolve) => {
+      const qp = vscode.window.createQuickPick();
+      let settled = false;
+      const finish = (
+        value: readonly vscode.QuickPickItem[] | undefined,
+      ): void => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+        qp.dispose();
+      };
+      qp.title = `Tool Use Agent: ${agentName}`;
+      qp.placeholder = 'Select tool groups';
+      qp.canSelectMany = true;
+      qp.items = items;
+      const initiallySelected = items.filter((item) => item.picked);
+      qp.selectedItems = initiallySelected;
+      if ('prompt' in qp) {
+        (
+          qp as vscode.QuickPick<vscode.QuickPickItem> & { prompt: string }
+        ).prompt =
+          'Space / click to toggle. Pre-selected groups match your description.';
+      }
+
+      let allSelected =
+        initiallySelected.length > 0 &&
+        initiallySelected.length === items.length;
+      const selectAllButton: vscode.QuickInputButton = {
+        iconPath: new vscode.ThemeIcon('check-all'),
+        tooltip: 'Select all / clear',
+      };
+      let activeSelectAllButton: vscode.QuickInputButton | undefined;
+      const refreshSelectAllButton = () => {
+        if ('buttons' in qp) {
+          const toggleButton: QuickInputToggleButton = {
+            ...selectAllButton,
+            toggle: { checked: allSelected },
+          };
+          activeSelectAllButton = toggleButton;
+          qp.buttons = [toggleButton];
+        }
+      };
+      refreshSelectAllButton();
+      qp.onDidChangeSelection((selected) => {
+        allSelected =
+          selected.length > 0 && selected.length === qp.items.length;
+        refreshSelectAllButton();
+      });
+      qp.onDidTriggerButton((button) => {
+        if (button !== activeSelectAllButton) {
+          return;
+        }
+        allSelected = qp.items.length > 0 && !allSelected;
+        qp.selectedItems = allSelected ? [...qp.items] : [];
+        refreshSelectAllButton();
+      });
+
+      qp.onDidAccept(() => {
+        finish(qp.selectedItems);
+      });
+      qp.onDidHide(() => {
+        finish(undefined);
+      });
+      qp.show();
+    },
+  );
+}
+
 function buildVSCodeUI(): AgentCreatorUI {
   return {
     async promptAgentName(categoryLabel) {
@@ -84,21 +167,16 @@ function buildVSCodeUI(): AgentCreatorUI {
         if (group.keywords.some((kw) => lower.includes(kw)))
           suggested.add(name);
       }
-      const selected = await vscode.window.showQuickPick(
-        Object.entries(TOOL_GROUPS).map(([label, group]) => ({
+      const items: vscode.QuickPickItem[] = Object.entries(TOOL_GROUPS).map(
+        ([label, group]) => ({
           label,
           description: group.description,
           detail: group.tools.join(', '),
           picked: suggested.has(label),
-        })),
-        {
-          title: `Tool Use Agent: ${agentName}`,
-          placeHolder:
-            'Select tool groups (pre-selected based on your description)',
-          prompt: 'Choose which tool groups this agent should have access to',
-          canPickMany: true,
-        },
+        }),
       );
+
+      const selected = await pickToolGroups(agentName, items);
       if (!selected || selected.length === 0) return undefined;
       const tools: string[] = [];
       const groups: string[] = [];
