@@ -103,6 +103,10 @@ async function promptForLatexdiffMathMarkup(): Promise<
     qp.placeholder = 'Select math markup granularity for this diff run';
     qp.ignoreFocusOut = true;
     qp.items = prioritizedItems;
+    const defaultItem = prioritizedItems.at(0);
+    if (defaultItem) {
+      qp.activeItems = [defaultItem];
+    }
     // VS Code 1.108+: show the saved default as a persistent hint below the
     // input box so users know why one item is listed first. Older hosts
     // (incl. Cursor 1.105) silently ignore the property.

@@ -54,10 +54,9 @@ async function setApiKeyForProvider(provider: ApiProvider): Promise<void> {
 }
 
 /**
- * Prompt for an API key with an inline "Get API Key" button that opens the
- * provider's key portal without closing the input box, so the user can paste
- * straight away. InputBox title buttons are within the supported VS Code engine
- * range for this extension.
+ * Prompt for an API key. When the host exposes InputBox title buttons, add a
+ * "Get API Key" action that opens the provider's key portal without closing the
+ * input box, so the user can paste straight away.
  */
 async function promptForApiKey(
   provider: ApiProvider,
@@ -79,12 +78,16 @@ async function promptForApiKey(
       iconPath: new vscode.ThemeIcon('link-external'),
       tooltip: `Get ${provider} API key`,
     };
-    ib.buttons = [getKeyButton];
-    ib.onDidTriggerButton((button) => {
-      if (button === getKeyButton) {
-        void vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
-      }
-    });
+    if ('buttons' in ib) {
+      ib.buttons = [getKeyButton];
+      ib.onDidTriggerButton((button) => {
+        if (button === getKeyButton) {
+          void vscode.env.openExternal(
+            vscode.Uri.parse(PROVIDER_URLS[provider]),
+          );
+        }
+      });
+    }
     ib.onDidAccept(() => {
       finish(ib.value);
     });

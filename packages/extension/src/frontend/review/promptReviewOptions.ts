@@ -37,6 +37,8 @@ interface BranchItem extends vscode.QuickPickItem {
 
 const APPROACH_PROMPT_HINT =
   'Quick checks key suspicions (fast); Thorough reads all changed files (deeper)';
+const BRANCH_PROMPT_HINT =
+  'The review will diff the current branch against the selected branch';
 
 /**
  * Drive the three-step QuickPick flow. Each step honors Escape: returning
@@ -146,6 +148,10 @@ export async function promptReviewOptions(
     qp.ignoreFocusOut = true;
     qp.items = branchItems;
     qp.activeItems = [branchItems[0]];
+    if ('prompt' in qp) {
+      (qp as vscode.QuickPick<BranchItem> & { prompt: string }).prompt =
+        BRANCH_PROMPT_HINT;
+    }
     if ('buttons' in qp) {
       qp.buttons = [useDefaultButton];
     }
