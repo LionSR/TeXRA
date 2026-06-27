@@ -48,7 +48,6 @@ import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import { normalizeUsage } from '../support/UsageNormalizer';
 import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
 import { tagOpenAISdkError } from './openAISdkError';
-import { withSdkErrorTag } from '../support/sdkErrorTagging';
 import {
   classifyOpenAIBackgroundResumeError,
   createOpenAIBackgroundPollingError,
@@ -1207,12 +1206,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return tagOpenAISdkError;
   }
 
-  override async createResponse(
-    options: CreateResponseOptions<ResponseInputItem, OpenAI>,
-  ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
-    // Single-turn contract: concurrent callers would race on previousResponseId
-    // and conversationState. Fail loudly so the caller bug surfaces instead of
-    // corrupting the conversation silently.
+  /**
+   * Single-turn guard. The base {@link ModelHandler.createResponse} owns the
+   * SDK error-tag wrap; we supply only the in-flight guard. Concurrent
+   * callers would race on previousResponseId and conversationState, so fail
+   * loudly instead of corrupting the conversation silently.
+   */
+  protected override async withCreateResponseGuard<T>(
+    run: () => Promise<T>,
+  ): Promise<T> {
     if (this.inFlight) {
       throw new Error(
         'modelHandlerOpenAIResponse.createResponse invoked while a prior ' +
@@ -1221,11 +1223,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
     this.inFlight = true;
     try {
-      return await withSdkErrorTag(
-        this.sdkErrorTagger,
-        this.config.provider,
-        () => this.createResponseImpl(options),
-      );
+      return await run();
     } finally {
       this.inFlight = false;
     }

@@ -36,6 +36,10 @@ import {
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
+import {
+  CodexMcpToolOutputSchema,
+  type CodexMcpToolOutput,
+} from '@shared/schemas/codex';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
@@ -48,10 +52,6 @@ import type {
   WorkflowAgentInput,
 } from '@tools/DelegationTools';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
-import {
-  CodexMcpToolOutputSchema,
-  type CodexMcpToolOutput,
-} from '@tools/codexShared';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 import { isObject } from '@utils/core';
 

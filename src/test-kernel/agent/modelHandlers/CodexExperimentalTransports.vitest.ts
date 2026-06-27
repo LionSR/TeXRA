@@ -78,15 +78,35 @@ describe('Codex background/websocket transports follow the shared toggles', () =
     ).toBe(false);
   });
 
-  it('activates background mode (store:true, non-streaming) from the same useBackgroundResponses toggle', async () => {
+  it('stays on the streaming path while the subscription is active, even with the background toggle on', async () => {
+    // The Codex backend can't run background mode (store:false forced, no
+    // polling endpoint), so the subscription path never enters it — the default
+    // workflow request stays streaming regardless of the shared toggle.
     await initPlatformWith({
       config: { 'texra.model.useBackgroundResponses': true },
     });
     const handler = workflowHandler();
 
+    expect(handler.isBackgroundModeActive()).toBe(false);
+    expect(handler.getStreamingConfig()).toBe(true);
+    expect(
+      (handler as unknown as CodexInternals).storesResponsesServerSide,
+    ).toBe(false);
+  });
+
+  it('honors background mode on the fallback OpenAI-API-key path when the subscription is off', async () => {
+    // Once the subscription preference is off the request runs on the user's
+    // OpenAI API key with full base capabilities, so the shared toggle decides
+    // background mode normally.
+    await initPlatformWith({
+      config: {
+        'texra.chatgptCodex.preferSubscription': false,
+        'texra.model.useBackgroundResponses': true,
+      },
+    });
+    const handler = workflowHandler();
+
     expect(handler.isBackgroundModeActive()).toBe(true);
-    // Background polls, so streaming is off and the response is stored server-side
-    // (which also disables encrypted-reasoning replay — store:true path).
     expect(handler.getStreamingConfig()).toBe(false);
     expect(
       (handler as unknown as CodexInternals).storesResponsesServerSide,

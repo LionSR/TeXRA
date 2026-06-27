@@ -184,12 +184,20 @@ const codexFetch = (async (input, init) => {
 }) satisfies typeof fetch;
 
 export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
-  // Background mode is honored through the SAME `model.useBackgroundResponses`
-  // toggle every OpenAI Responses model uses (plus the usual workflow + GPT
-  // eligibility) — no Codex-specific flag. EXPERIMENTAL on this backend: it
-  // forces store:false and has no polling endpoint, so a background request
-  // very likely fails; the toggle exists so it can be tested in practice.
-  protected override backgroundModeSupported = true;
+  /**
+   * Background mode (polling) needs a stored response and a polling endpoint;
+   * the Codex backend has neither — it forces `store:false` and has no
+   * `/responses/{id}` GET route — so a background request very likely fails.
+   * While the subscription drives the request, never enter background mode and
+   * keep the working default streaming path (the shared
+   * `model.useBackgroundResponses` toggle stays default-on for the real OpenAI
+   * Responses models, just not for this backend). Once the subscription is off,
+   * the request runs on the user's OpenAI API key, where the base handler
+   * decides background mode normally.
+   */
+  public override isBackgroundModeActive(): boolean {
+    return this.usingSubscription() ? false : super.isBackgroundModeActive();
+  }
 
   /**
    * Whether this handler should still drive the ChatGPT subscription. Re-read
@@ -290,7 +298,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
 
   /** OAuth access token in place of an API key (becomes the Bearer header),
    *  or the user's OpenAI API key once the subscription preference is off. */
-  public override async getApiKey(): Promise<string> {
+  protected override async getApiKey(): Promise<string> {
     return this.usingSubscription()
       ? this.resolveAccessToken()
       : super.getApiKey();

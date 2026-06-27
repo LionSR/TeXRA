@@ -120,7 +120,7 @@ export class ModelInvocationNode<
     _prepRes: BaseInvocationPrepResult,
     execRes: InvocationResult<BaseInvocationSuccessData>,
   ): Promise<string | undefined> {
-    const successRes = handleInvocationResult(execRes, shared, shared, {
+    const successRes = handleInvocationResult(execRes, shared, {
       logger: this.services.logger,
       operationName: this._config.operationName,
     });
