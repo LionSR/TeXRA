@@ -1,10 +1,16 @@
 import { z } from 'zod';
 
-import { AgentCategory } from './agent';
+import { AgentCategory, AgentSourceSchema } from './agent';
 import { ToolConfigSchema } from './toolConfig';
 
 export const BaseProposalFieldsSchema = z.object({
   agent: z.string(),
+  /**
+   * Resolved source of `agent`, captured when the delegation is validated so
+   * launch pins the exact `(source, name)` entry rather than re-resolving an
+   * ambiguous bare name. Mirrors `agentSource` on the agent config payload.
+   */
+  agentSource: AgentSourceSchema.nullish(),
   model: z.string(),
   instruction: z.string(),
   /** Memory file paths (display paths like /memories/foo.md) attached to this delegation. */
