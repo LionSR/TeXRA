@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
@@ -13,7 +13,7 @@ import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
 import { DelegateAgentTool } from '@tools/DelegationTools';
 
@@ -84,7 +84,9 @@ describe('headless delegation', () => {
     ]);
     mocks.getVisibleAgent.mockImplementation(
       (_category: AgentCategory, name: string) =>
-        name === 'review' ? { name: 'review' } : undefined,
+        name === 'review'
+          ? { name: 'review', source: 'builtInToolUse' }
+          : undefined,
     );
     mocks.computeModelOptionsData.mockResolvedValue([
       {
@@ -158,6 +160,39 @@ describe('headless delegation', () => {
     expect(result.output).toContain('<response>');
     expect(result.output).toContain('The proof is correct.');
     expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
+  });
+
+  it('carries the validated agent source to executeAgent for source-pinned launch', async () => {
+    // The delegation validates via getVisibleAgent and must hand the resolved
+    // entry's source to executeAgent, so getAgentPath resolves the exact
+    // (source, name) key instead of re-resolving the ambiguous bare name.
+    await withRunContext(
+      createRunContext({
+        runtimeHost: runtimeHost(),
+        streamId: 'parent-stream',
+        executionId: 'parent-exec',
+        model: 'deepseekT',
+        stopAfterCycle: true,
+      }),
+      () =>
+        new DelegateAgentTool().call({
+          agent: 'review',
+          model: null,
+          instruction: 'Check the proof.',
+          memories: [],
+          working_directory: null,
+          execution_id: null,
+        }),
+    );
+
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'review',
+        agentSource: 'builtInToolUse',
+      }),
+      expect.any(String),
+      expect.anything(),
+    );
   });
 
   it('adds a substantive handoff requirement to tool-use subagent instructions', async () => {

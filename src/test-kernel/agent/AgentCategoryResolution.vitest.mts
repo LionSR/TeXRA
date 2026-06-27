@@ -17,7 +17,7 @@ import {
   getVisibleAgent,
   refresh,
   resolveAgent,
-  resolveAgentInCategory,
+  resolveAgentForLaunch,
 } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentEntry } from '@agent/index/agentEntry';
@@ -27,13 +27,22 @@ const REPO_ROOT = resolve(
   '../../..',
 );
 
+/** Resolve exactly as launch does: through the single launch resolver, by the
+ * source the delegation captured at validation time (see `getAgentPath`). */
+function launchAs(category: AgentCategory, entry: AgentEntry | undefined) {
+  return entry
+    ? resolveAgentForLaunch(category, entry.name, entry.source)
+    : undefined;
+}
+
 /**
  * Regression: a custom *workflow* agent named `assistant` collides with the
  * bundled *tool-use* `assistant`. Validation resolves through the category-aware
  * `getVisibleAgent`, but the launch historically re-resolved via the
  * category-blind `getAgent` (source priority: custom > … > builtInToolUse), so
  * it picked the wrong (workflow) entry and the run failed with a category
- * mismatch. The category-scoped resolver keeps validation and launch in lockstep.
+ * mismatch. The fix carries the validated entry's *source* to launch, which
+ * resolves the exact `(source, name)` key — so launch can never diverge.
  */
 describe('cross-category agent resolution', () => {
   beforeAll(async () => {
@@ -89,21 +98,62 @@ describe('cross-category agent resolution', () => {
     );
   });
 
-  it('resolves an identifier within the requested category at launch', () => {
-    const toolUse = resolveAgentInCategory('toolUse', 'assistant');
+  it('pins launch to the exact (source, name) entry validation captured', () => {
+    // The tool-use delegation validates via getVisibleAgent and carries the
+    // entry's source; launch resolves that exact key — the built-in tool-use
+    // entry, never the colliding custom workflow shadow.
+    const toolUse = launchAs(
+      'toolUse',
+      getVisibleAgent('toolUse', 'assistant'),
+    );
     expect(toolUse?.entry.category).toBe('toolUse');
     expect(toolUse?.entry.source).toBe('builtInToolUse');
 
-    const workflow = resolveAgentInCategory('workflow', 'assistant');
+    // The same mechanism reaches the custom workflow entry when that is what a
+    // workflow delegation validated.
+    const workflow = launchAs(
+      'workflow',
+      getVisibleAgent('workflow', 'assistant'),
+    );
     expect(workflow?.entry.category).toBe('workflow');
     expect(workflow?.entry.source).toBe('custom');
   });
 
   it('launch resolution matches validation for the colliding tool-use name', () => {
     const validated = getVisibleAgent('toolUse', 'assistant');
-    const launched = resolveAgentInCategory('toolUse', 'assistant');
+    const launched = launchAs('toolUse', validated);
     expect(launched?.entry.source).toBe(validated?.source);
     expect(launched?.entry.name).toBe(validated?.name);
+  });
+
+  it('resolves an unpinned launch through the same visible set as validation', () => {
+    // A direct launch without a pinned source (e.g. the webview "Run") routes
+    // through getVisibleAgent — the identical call validation makes — so it
+    // resolves to exactly the entry validation would, never a same-name shadow.
+    const toolUse = resolveAgentForLaunch(AgentCategory.ToolUse, 'assistant');
+    expect(toolUse?.entry).toBe(getVisibleAgent('toolUse', 'assistant'));
+    expect(toolUse?.entry.source).toBe('builtInToolUse');
+
+    const workflow = resolveAgentForLaunch(AgentCategory.Workflow, 'assistant');
+    expect(workflow?.entry).toBe(getVisibleAgent('workflow', 'assistant'));
+
+    // A stale/missing pinned source falls through to that same visible-set tier.
+    const stale = resolveAgentForLaunch(
+      AgentCategory.ToolUse,
+      'assistant',
+      'remote',
+    );
+    expect(stale?.entry.source).toBe('builtInToolUse');
+  });
+
+  it('reaches internal agents only via the full-category floor', () => {
+    // Internal agents are absent from the visible set (tier 2), so an unpinned
+    // launch resolves them through the full-category floor (tier 3) — still
+    // launchable by command, without ever shadowing a visible agent.
+    expect(getVisibleAgent('toolUse', 'secretAgent')).toBeUndefined();
+    expect(
+      resolveAgentForLaunch(AgentCategory.ToolUse, 'secretAgent')?.entry.name,
+    ).toBe('secretAgent');
   });
 
   it('still resolves a non-colliding name and legacy aliases within category', () => {
@@ -114,18 +164,17 @@ describe('cross-category agent resolution', () => {
     expect(getCategoryAgent('workflow', 'assistant')?.source).toBe('custom');
   });
 
-  it('returns undefined for a name absent from the requested category', () => {
-    // `correct` is a workflow agent; it must not resolve as a tool-use launch.
-    expect(resolveAgentInCategory('toolUse', 'correct')).toBeUndefined();
+  it('keeps a wrong-category name out of category-scoped resolution', () => {
+    // `correct` is a workflow agent; getCategoryAgent (used by the legacy-alias
+    // migration) must not resolve it as tool-use.
+    expect(getCategoryAgent('toolUse', 'correct')).toBeUndefined();
   });
 
-  it('hides internal agents from dropdowns but keeps them launchable', () => {
+  it('hides internal agents from dropdowns but keeps them launchable by name', () => {
     // Internal agents are excluded from the visible/dropdown set…
     expect(getVisibleAgent('toolUse', 'secretAgent')).toBeUndefined();
-    // …but the launch resolver must still reach them (launchable by commands).
-    expect(resolveAgentInCategory('toolUse', 'secretAgent')?.entry.name).toBe(
-      'secretAgent',
-    );
+    // …but a command launch (no pinned source) still reaches them by name.
+    expect(resolveAgent('secretAgent')?.entry.name).toBe('secretAgent');
     expect(getCategoryAgent('toolUse', 'secretAgent')?.internal).toBe(true);
   });
 });

@@ -5,6 +5,7 @@ import {
   NullableFileFieldsSchema,
   migrateLegacyContextFileFields,
 } from '@shared/schemas/fileFields';
+import { AgentSourceSchema } from '@shared/schemas/agent';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 import { AgentCategory } from './AgentDataclass';
 
@@ -14,6 +15,14 @@ const DEFAULT_AGENT_INSTRUCTION = '';
 /** Pure object schema without refinements for use with .partial(). */
 const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   agent: z.string().prefault(DEFAULT_AGENT_NAME),
+  /**
+   * Resolved source of `agent`, captured once when the delegation is validated
+   * (`getVisibleAgent`). Launch resolves the exact `(source, name)` entry by key
+   * instead of re-resolving the ambiguous bare name, so it lands on the same
+   * entry validation picked. Absent for legacy records and direct launches that
+   * don't pin a source — those fall back to name-based resolution.
+   */
+  agentSource: AgentSourceSchema.nullish(),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
   instruction: z.string().prefault(DEFAULT_AGENT_INSTRUCTION),
   /** Optional user-facing text for logs when instruction contains hidden context. */

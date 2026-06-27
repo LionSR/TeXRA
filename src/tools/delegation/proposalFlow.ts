@@ -9,7 +9,11 @@
 import { nanoid } from 'nanoid';
 
 // Local imports - agent
-import { getVisibleAgent, getVisibleAgents } from '@agent/index/agentRegistry';
+import {
+  getVisibleAgent,
+  getVisibleAgents,
+  type AgentEntry,
+} from '@agent/index/agentRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 
@@ -71,11 +75,15 @@ export async function resolveAvailableDelegationModel(input: {
   });
 }
 
-/** Return the visible current agent, or throw with the current visible list. */
+/**
+ * Return the visible agent entry, or throw with the current visible list. The
+ * caller carries the resolved `source` onto the proposal so launch pins the
+ * exact `(source, name)` entry instead of re-resolving the bare name.
+ */
 export function requireVisibleAgent(
   category: AgentCategory,
   name: string,
-): { name: string } {
+): AgentEntry {
   const agent = getVisibleAgent(category, name);
   if (agent) return agent;
   const available = getVisibleAgents(category)
@@ -200,7 +208,7 @@ export async function proposeAndExecute(
   const agentOverride =
     result.agent && result.agent !== proposal.agent ? result.agent : undefined;
   const resolvedAgentOverride = agentOverride
-    ? getVisibleAgent(proposal.agentCategory, agentOverride)?.name
+    ? getVisibleAgent(proposal.agentCategory, agentOverride)
     : undefined;
 
   // Re-validate against the current registry — between proposal display and
@@ -218,9 +226,14 @@ export async function proposeAndExecute(
   const effective = {
     ...proposal,
     ...(modelOverride && { model: modelOverride }),
-    ...(resolvedAgentOverride && { agent: resolvedAgentOverride }),
+    // Carry the override's resolved source alongside its name so launch pins
+    // the exact entry the re-validation just resolved.
+    ...(resolvedAgentOverride && {
+      agent: resolvedAgentOverride.name,
+      agentSource: resolvedAgentOverride.source,
+    }),
   };
-  const effectiveAgentName = resolvedAgentOverride ?? agentName;
+  const effectiveAgentName = resolvedAgentOverride?.name ?? agentName;
   return executeSubagent(effective, effectiveAgentName, streamId, {
     enableYoloOnChild: isApprovalBypassedForStream(streamId),
     approvalMeta: {
