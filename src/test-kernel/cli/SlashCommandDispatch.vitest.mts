@@ -83,6 +83,7 @@ function createContext(
     canSelectModel: () => true,
     switchActiveModel: async (model) => ({ status: 'switched', model }),
     requestCompaction: () => ({ status: 'no_active_tool_use' }),
+    getQueuedFollowUpMessages: () => [],
     resetSession: vi.fn(),
     resumeExecution: (_id: ExecutionId) => Promise.resolve(),
     ...overrides,
@@ -266,6 +267,37 @@ describe('handleTuiSlashCommand', () => {
       ?.entries.at(-1)?.text;
     expect(statusText).toContain('resume later with: texra resume exec-1');
     expect(statusText).not.toContain('--cwd');
+  });
+
+  it('formats /status from the controller queued-follow-up projection', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const streamId = 'stream-1' as StreamTabId;
+    session.streamId = streamId;
+    cliState.activeStreamId.set(streamId);
+    patchStream(streamId, (slice) => ({
+      ...slice,
+      queuedFollowUps: 1,
+      queuedFollowUpMessages: ['stale projected follow-up'],
+    }));
+    const getQueuedFollowUpMessages = vi
+      .fn()
+      .mockReturnValue(['current queued follow-up']);
+
+    const handled = await handleTuiSlashCommand(
+      '/status',
+      createContext(session, { getQueuedFollowUpMessages }),
+    );
+
+    expect(handled).toBe(true);
+    expect(getQueuedFollowUpMessages).toHaveBeenCalledExactlyOnceWith(streamId);
+    const statusText = cliState.streams
+      .get()
+      .get(streamId)
+      ?.entries.at(-1)?.text;
+    expect(statusText).toContain('queued follow-ups: 1');
+    expect(statusText).toContain('current queued follow-up');
+    expect(statusText).not.toContain('stale projected follow-up');
   });
 
   it('routes /compact through the controller operation', async () => {

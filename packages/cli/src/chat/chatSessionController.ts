@@ -186,6 +186,11 @@ export interface ChatSessionController {
     streamId: StreamTabId | undefined,
   ): ChatCompactionRequestResult;
 
+  /** Return the current queued follow-up messages for a stream. */
+  getQueuedFollowUpMessages(
+    streamId: StreamTabId | undefined,
+  ): readonly string[];
+
   /** Clear queued follow-up deliveries that have not started yet. */
   clearPendingFollowUps(): void;
 
@@ -325,6 +330,11 @@ export function createChatSessionController(
     notifyFollowUpSent(streamId, flowContext.runtimeHost);
     return { status: 'requested' };
   };
+
+  const getQueuedFollowUpMessages = (
+    streamId: StreamTabId | undefined,
+  ): readonly string[] =>
+    streamId ? ToolUseFollowUpQueue.getAll(streamId) : [];
 
   const deliverFollowUp = async (
     targetStreamId: StreamTabId,
@@ -609,6 +619,7 @@ export function createChatSessionController(
     getModelSwitchDisabledReason,
     switchActiveModel,
     requestCompaction,
+    getQueuedFollowUpMessages,
     clearPendingFollowUps: () => followUpQueue.clear(),
     submitFollowUp,
     awaitFollowUpsIdle: () => followUpQueue.onIdle(),
