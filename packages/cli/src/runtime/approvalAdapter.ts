@@ -37,12 +37,14 @@ export {
   type ApprovalDecision,
   appendCliApiSwitchHint,
   approvalPromptAllowed,
+  CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT,
   denyMessage,
   hasCliApprovalDenied,
   humanInputDenialFeedback,
   immediateDecision,
   immediateDecisionForApproval,
   isCliApiSwitchableRetry,
+  isCliChatGptSubscriptionRetry,
   markApprovalDenied,
 } from './approval/approvalPolicy';
 export {

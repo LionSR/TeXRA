@@ -38,3 +38,9 @@ export {
 } from './sdkError/providerErrorFormat';
 
 export { isRelayMonthlyLimitMessage } from './sdkError/relayDetection';
+
+export {
+  parseChatGptSubscriptionLimit,
+  describeChatGptSubscriptionLimit,
+  type ChatGptSubscriptionLimit,
+} from './sdkError/chatgptSubscriptionDetection';

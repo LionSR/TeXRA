@@ -9,12 +9,18 @@ export interface ProgressApiKeyRetryRequest {
   provider?: ApiProvider;
   upstreamCreditDepleted?: boolean;
   viaRelay?: boolean;
+  /** True when the failing request ran through the ChatGPT subscription
+   *  (Codex backend) and hit its usage limit. Accepting the switch turns off
+   *  the "prefer ChatGPT subscription" preference so the retry routes through
+   *  the user's OpenAI API key instead. Orthogonal to `viaRelay`. */
+  chatgptSubscription?: boolean;
 }
 
 export interface ProgressApiKeyRetryResult {
   proceeded: boolean;
   retried: boolean;
   disabledIncludedModelAccess: boolean;
+  disabledChatGptSubscription: boolean;
 }
 
 export interface ProgressApiKeyRetryControllerDeps {
@@ -23,6 +29,9 @@ export interface ProgressApiKeyRetryControllerDeps {
   hasUsableKey(provider: ApiProvider): Promise<boolean>;
   promptForApiKey(provider?: ApiProvider): Promise<void>;
   setUseIncludedModelAccess(enabled: boolean): Promise<void>;
+  /** Turn off the "prefer ChatGPT subscription" (Codex) preference so
+   *  Codex-eligible models fall back to the OpenAI API-key path. */
+  disablePreferCodexSubscription(): Promise<void>;
   invalidateModelOptionsCache(): void;
   triggerRetry(stream: StreamTabId): boolean;
 }
@@ -66,22 +75,38 @@ export class ProgressApiKeyRetryController {
         proceeded: false,
         retried: false,
         disabledIncludedModelAccess: false,
+        disabledChatGptSubscription: false,
       };
     }
 
+    // Disable relay (included access) so the retry uses the user's own key —
+    // not the relay JWT — whenever the switch promises "your own API key".
+    // Both relay exhaustion (viaRelay) and subscription exhaustion
+    // (chatgptSubscription) fall through to `super.getApiKey()`, which otherwise
+    // still prefers relay when included access is on, so the retry would never
+    // reach the stored OpenAI key the UI describes. A direct-key failure
+    // (neither flag) leaves relay untouched for other providers.
     let disabledIncludedModelAccess = false;
-    // Only disable relay access when the failing call actually went through
-    // relay. Direct-key failures should not revoke relay for other providers.
-    if (request.viaRelay === true) {
+    if (request.viaRelay === true || request.chatgptSubscription === true) {
       await this.deps.setUseIncludedModelAccess(false);
       this.deps.invalidateModelOptionsCache();
       disabledIncludedModelAccess = true;
+    }
+
+    // The subscription quota is exhausted, so turn off the preference and let
+    // Codex-eligible models route through the now-usable OpenAI key on retry.
+    let disabledChatGptSubscription = false;
+    if (request.chatgptSubscription === true) {
+      await this.deps.disablePreferCodexSubscription();
+      this.deps.invalidateModelOptionsCache();
+      disabledChatGptSubscription = true;
     }
 
     return {
       proceeded: true,
       retried: this.deps.triggerRetry(request.stream),
       disabledIncludedModelAccess,
+      disabledChatGptSubscription,
     };
   }
 

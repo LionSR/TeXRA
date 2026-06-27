@@ -1,6 +1,9 @@
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type { ApprovalDecision as SharedApprovalDecision } from '@shared/schemas';
+import {
+  isChatGptSubscriptionLimitError,
+  type ApprovalDecision as SharedApprovalDecision,
+} from '@shared/schemas';
 
 import { type CliDecisionApprovalEvent } from '../approvalEvents';
 import { type CliContext, type CliPromptRequest } from '../cliContext';
@@ -14,6 +17,9 @@ export type ApprovalDecision = SharedApprovalDecision;
 
 export const CLI_PERSONAL_API_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.';
+
+export const CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT =
+  'Use `/subscription off`, or press `k` on the retry prompt, to switch from your ChatGPT subscription to your OpenAI API key.';
 
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
@@ -36,12 +42,22 @@ export function hasCliApprovalDenied(context: CliContext): boolean {
   return deniedApprovalContexts.has(context);
 }
 
+/** Whether the failed retry was a ChatGPT-subscription (Codex) usage limit, so
+ *  the switch turns off the subscription preference rather than relay access. */
+export function isCliChatGptSubscriptionRetry(
+  payload: ProgressEventPayloads['showRetryRequest'],
+): boolean {
+  return isChatGptSubscriptionLimitError(payload.errorDetails);
+}
+
 export function isCliApiSwitchableRetry(
   payload: ProgressEventPayloads['showRetryRequest'],
 ): boolean {
   const details = payload.errorDetails;
+  if (!details) return false;
+  if (isChatGptSubscriptionLimitError(details)) return true;
   return (
-    details?.isCredentialExhausted === true &&
+    details.isCredentialExhausted === true &&
     (details.isRelayError === true ||
       isRelayMonthlyLimitMessage(payload.errorMessage))
   );

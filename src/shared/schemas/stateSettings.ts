@@ -14,7 +14,7 @@ import {
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latex';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /**
  * Host-neutral catalog for **state-backed** TeXRA settings.
@@ -262,6 +262,23 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Format with tex-fmt.',
       'Do not run any formatter.',
     ],
+  },
+
+  // --- OpenAI WebSocket transport (experimental) -----------------------------
+  // Read by `getWebSocketEnabled()` and consumed by the OpenAI Responses handler
+  // the CLI runs. Enables the persistent WebSocket transport for the direct
+  // OpenAI endpoint — and, experimentally, lets the ChatGPT-subscription Codex
+  // backend attempt WebSocket. Surfaced to the CLI so it can be toggled and
+  // tested there.
+  {
+    key: GlobalStateKey.WEBSOCKET_OPENAI,
+    schema: z.boolean().prefault(false),
+    description:
+      'EXPERIMENTAL: use the persistent WebSocket transport for OpenAI Responses requests (lower latency for tool-use loops), and let the ChatGPT-subscription Codex backend attempt WebSocket. Off by default.',
+    category: 'model',
+    store: 'globalState',
+    hosts: ['cli'],
+    cliConsumer: 'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
   },
 ] as const;
 
