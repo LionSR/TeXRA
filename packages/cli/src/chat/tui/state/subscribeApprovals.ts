@@ -13,7 +13,7 @@
 // it returns a typed Promise<ToolEditApprovalResult>, not a fire-and-forget
 // event).
 
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   approvalPromptAllowed,
@@ -50,6 +50,11 @@ import {
   type ApprovalPayload,
 } from './approvalQueue';
 
+type ApprovalCoordinatorBridge = Pick<
+  RunCoordinatorBridge,
+  'cancelRetry' | 'resolvePlanApproval' | 'resolveProposal' | 'triggerRetry'
+>;
+
 /**
  * Install the typed approval pipeline. Returns an `unbind` callback that
  * restores the original emit + clears the tool-edit handler.
@@ -57,6 +62,7 @@ import {
 export function installTuiApprovals(
   host: CliRuntimeHost,
   context: CliContext,
+  coordinators: ApprovalCoordinatorBridge,
 ): () => void {
   const originalEmit = host.emit;
   host.emit = ((event, payload) => {
@@ -72,6 +78,7 @@ export function installTuiApprovals(
         payload as ProgressEventPayloads[CliApprovalEvent],
         context,
         host,
+        coordinators,
       );
       return;
     }
@@ -107,6 +114,7 @@ function routeApproval(
   payload: ProgressEventPayloads[CliApprovalEvent],
   context: CliContext,
   host: CliRuntimeHost,
+  coordinators: ApprovalCoordinatorBridge,
 ): void {
   switch (event) {
     case 'showBashPermission':
@@ -133,7 +141,8 @@ function routeApproval(
         host,
         cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showPlanApproval'],
-        dispatchPlan,
+        (planPayload, decision) =>
+          dispatchPlan(coordinators, planPayload, decision),
       );
       return;
     case 'showAgentProposal':
@@ -142,7 +151,8 @@ function routeApproval(
         host,
         cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showAgentProposal'],
-        dispatchProposal,
+        (proposalPayload, decision) =>
+          dispatchProposal(coordinators, proposalPayload, decision),
       );
       return;
     case 'showRetryRequest':
@@ -151,7 +161,8 @@ function routeApproval(
         host,
         cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showRetryRequest'],
-        dispatchRetry,
+        (retryPayload, decision) =>
+          dispatchRetry(coordinators, retryPayload, decision),
       );
       return;
     case 'showExternalInquiry':
@@ -239,39 +250,43 @@ function dispatchBash(
 }
 
 function dispatchPlan(
+  coordinators: ApprovalCoordinatorBridge,
   payload: ProgressEventPayloads['showPlanApproval'],
   decision: ApprovalDecision,
 ): void {
   const feedback = feedbackOnReject(decision);
-  runCoordinatorBridge.resolvePlanApproval(payload.approvalId, {
+  coordinators.resolvePlanApproval(payload.approvalId, {
     action: decision.accepted ? (decision.planAction ?? 'approve') : 'reject',
     ...(feedback ? { feedback } : {}),
   });
 }
 
 function dispatchProposal(
+  coordinators: ApprovalCoordinatorBridge,
   payload: ProgressEventPayloads['showAgentProposal'],
   decision: ApprovalDecision,
 ): void {
   const feedback = feedbackOnReject(decision);
-  runCoordinatorBridge.resolveProposal(payload.proposalId, {
+  coordinators.resolveProposal(payload.proposalId, {
     action: decision.accepted ? 'approve' : 'reject',
     ...(feedback ? { feedback } : {}),
   });
 }
 
 function dispatchRetry(
+  coordinators: ApprovalCoordinatorBridge,
   payload: ProgressEventPayloads['showRetryRequest'],
   decision: ApprovalDecision,
 ): void {
   if (decision.accepted) {
-    void applyRetryDecision(payload, decision);
+    void applyRetryDecision(coordinators, payload, decision);
   } else {
-    runCoordinatorBridge.cancelRetry(payload.streamId);
+    coordinators.cancelRetry(payload.streamId);
   }
 }
 
 async function applyRetryDecision(
+  coordinators: ApprovalCoordinatorBridge,
   payload: ProgressEventPayloads['showRetryRequest'],
   decision: ApprovalDecision,
 ): Promise<void> {
@@ -285,7 +300,7 @@ async function applyRetryDecision(
   if (decision.disableChatGptSubscription) {
     await setCliCodexSubscription(false);
   }
-  runCoordinatorBridge.triggerRetry(payload.streamId, decision.userMessage);
+  coordinators.triggerRetry(payload.streamId, decision.userMessage);
 }
 
 function handleExternalInquiry(

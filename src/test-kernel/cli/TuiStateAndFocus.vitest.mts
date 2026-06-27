@@ -2716,7 +2716,9 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
   });
 
   it('refreshes queued follow-up display when an active follow-up is sent', () => {
-    const wrapped = wrapRuntimeHost(makeHost());
+    const wrapped = wrapRuntimeHost(makeHost(), {
+      getQueuedFollowUps: (streamId) => ToolUseFollowUpQueue.getAll(streamId),
+    });
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
     const queue = ToolUseFollowUpQueue.acquire(root);
 

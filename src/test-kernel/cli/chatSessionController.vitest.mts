@@ -5,10 +5,13 @@
 // contract, and the stop/idle state mutations that are safe to verify
 // without a full agent harness.
 
-import PQueue from 'p-queue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  getToolUseFlowContext: vi.fn(),
+  kill: vi.fn(),
+  notifyFollowUpSent: vi.fn(),
+  sendFollowUp: vi.fn(),
   stopAgentStream: vi.fn(),
   workspaceGet: vi.fn(),
 }));
@@ -17,6 +20,11 @@ vi.mock('@agent/runtime/executionRegistry', () => ({
   executionRegistry: {
     stopAgentStream: mocks.stopAgentStream,
   },
+}));
+
+vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
+  notifyFollowUpSent: mocks.notifyFollowUpSent,
+  sendFollowUp: mocks.sendFollowUp,
 }));
 
 vi.mock('@platform/platform', () => ({
@@ -29,6 +37,7 @@ vi.mock('@platform/platform', () => ({
 
 import { StreamSnapshotStore } from '@transcript';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
@@ -76,6 +85,16 @@ function makeSessionContext(): CliContext {
   } as CliContext;
 }
 
+function makeRuntimeSession(): SessionHandle {
+  return {
+    executions: {
+      getToolUseFlowContext: mocks.getToolUseFlowContext,
+      kill: mocks.kill,
+      stopAgentStream: mocks.stopAgentStream,
+    },
+  } as unknown as SessionHandle;
+}
+
 function makeInit(
   overrides: Partial<ChatSessionControllerInit> = {},
 ): ChatSessionControllerInit {
@@ -83,8 +102,8 @@ function makeInit(
     session: makeSession(),
     getSessionContext: () => makeSessionContext(),
     disposers: [],
-    followUpQueue: new PQueue({ concurrency: 1 }),
     snapshotStore: new StreamSnapshotStore(),
+    runtimeSession: makeRuntimeSession(),
     ...overrides,
   };
 }
@@ -127,6 +146,10 @@ describe('chatTuiCanStartRootRun', () => {
 
 describe('createChatSessionController', () => {
   beforeEach(() => {
+    mocks.getToolUseFlowContext.mockReset();
+    mocks.kill.mockReset();
+    mocks.notifyFollowUpSent.mockReset();
+    mocks.sendFollowUp.mockReset();
     mocks.stopAgentStream.mockReset();
     mocks.workspaceGet.mockReset();
     mocks.workspaceGet.mockReturnValue(false);
@@ -138,7 +161,15 @@ describe('createChatSessionController', () => {
     expect(typeof ctrl.startRootRun).toBe('function');
     expect(typeof ctrl.resume).toBe('function');
     expect(typeof ctrl.stop).toBe('function');
+    expect(typeof ctrl.killExecution).toBe('function');
     expect(typeof ctrl.canStartRootRun).toBe('function');
+    expect(typeof ctrl.canSelectModel).toBe('function');
+    expect(typeof ctrl.getModelSwitchDisabledReason).toBe('function');
+    expect(typeof ctrl.switchActiveModel).toBe('function');
+    expect(typeof ctrl.requestCompaction).toBe('function');
+    expect(typeof ctrl.clearPendingFollowUps).toBe('function');
+    expect(typeof ctrl.submitFollowUp).toBe('function');
+    expect(typeof ctrl.awaitFollowUpsIdle).toBe('function');
   });
 
   it('canStartRootRun() delegates to chatTuiCanStartRootRun(session)', () => {
@@ -205,6 +236,65 @@ describe('createChatSessionController', () => {
       detachActiveChildren: true,
       runtimeHost,
     });
+  });
+
+  it('killExecution delegates child termination to the session execution owner', () => {
+    const ctrl = createChatSessionController(makeInit());
+
+    mocks.workspaceGet.mockReturnValue(true);
+    ctrl.killExecution('execution-1');
+
+    expect(mocks.workspaceGet).toHaveBeenCalledWith(
+      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+      false,
+    );
+    expect(mocks.kill).toHaveBeenCalledWith('execution-1', {
+      detachActiveChildren: true,
+    });
+  });
+
+  it('requestCompaction reports a missing active flow', () => {
+    const ctrl = createChatSessionController(makeInit());
+
+    expect(ctrl.requestCompaction('stream-1')).toEqual({
+      status: 'no_active_tool_use',
+    });
+    expect(mocks.notifyFollowUpSent).not.toHaveBeenCalled();
+  });
+
+  it('requestCompaction reports models that cannot compact manually', () => {
+    const flowContext = {
+      modelHandler: { supportsManualCompaction: false },
+      runtimeHost: undefined,
+      requestImmediateCompaction: vi.fn(),
+    };
+    mocks.getToolUseFlowContext.mockReturnValue(flowContext);
+    const ctrl = createChatSessionController(makeInit());
+
+    expect(ctrl.requestCompaction('stream-1')).toEqual({
+      status: 'unsupported',
+    });
+    expect(flowContext.requestImmediateCompaction).not.toHaveBeenCalled();
+    expect(mocks.notifyFollowUpSent).not.toHaveBeenCalled();
+  });
+
+  it('requestCompaction wakes the active tool-use flow', () => {
+    const flowContext = {
+      modelHandler: { supportsManualCompaction: true },
+      runtimeHost: { emit: vi.fn() },
+      requestImmediateCompaction: vi.fn(),
+    };
+    mocks.getToolUseFlowContext.mockReturnValue(flowContext);
+    const ctrl = createChatSessionController(makeInit());
+
+    expect(ctrl.requestCompaction('stream-1')).toEqual({
+      status: 'requested',
+    });
+    expect(flowContext.requestImmediateCompaction).toHaveBeenCalledOnce();
+    expect(mocks.notifyFollowUpSent).toHaveBeenCalledExactlyOnceWith(
+      'stream-1',
+      flowContext.runtimeHost,
+    );
   });
 });
 

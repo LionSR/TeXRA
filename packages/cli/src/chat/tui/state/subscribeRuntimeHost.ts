@@ -1,8 +1,6 @@
 // Wrap a runtime host's `emit` so progress payloads patch `cliState` while
 // still flowing through the original emitter. Approvals are intentionally
 // not handled here — `subscribeApprovals.ts` owns the typed-modal pipeline.
-
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type {
   ProgressEvent,
@@ -29,6 +27,14 @@ type Emit = <K extends ProgressEvent>(
   payload: ProgressEventPayloads[K],
 ) => void;
 
+interface RuntimeHostProjectionOptions {
+  readonly getQueuedFollowUps?: (
+    streamId: ProgressEventPayloads['updateQueuedFollowUps']['streamId'],
+  ) => readonly string[];
+}
+
+const EMPTY_QUEUED_FOLLOW_UPS: readonly string[] = [];
+
 function sameQueuedFollowUps(
   left: readonly string[],
   right: readonly string[],
@@ -41,8 +47,10 @@ function sameQueuedFollowUps(
 
 function refreshQueuedFollowUps(
   streamId: ProgressEventPayloads['updateQueuedFollowUps']['streamId'],
+  options: RuntimeHostProjectionOptions,
 ): void {
-  const messages = ToolUseFollowUpQueue.getAll(streamId);
+  const messages =
+    options.getQueuedFollowUps?.(streamId) ?? EMPTY_QUEUED_FOLLOW_UPS;
   patchStream(streamId, (s) => {
     if (
       s.queuedFollowUps === messages.length &&
@@ -64,10 +72,13 @@ function refreshQueuedFollowUps(
  *  pane never grows unbounded. */
 const PROCESS_TAIL_CHARS_MAX = 8 * 1024;
 
-export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
+export function wrapRuntimeHost(
+  host: CliRuntimeHost,
+  options: RuntimeHostProjectionOptions = {},
+): CliRuntimeHost {
   const original = host.emit;
   const emit: Emit = (event, payload) => {
-    applyToState(event, payload);
+    applyToState(event, payload, options);
     bus.emit(event, payload);
     return original(event, payload);
   };
@@ -77,6 +88,7 @@ export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
 function applyToState<K extends ProgressEvent>(
   event: K,
   payload: ProgressEventPayloads[K],
+  options: RuntimeHostProjectionOptions,
 ): void {
   switch (event) {
     case 'setActiveStream': {
@@ -242,7 +254,7 @@ function applyToState<K extends ProgressEvent>(
     case 'updateQueuedFollowUps': {
       // The event itself has no delta payload, so re-read the queue directly.
       const p = payload as ProgressEventPayloads['updateQueuedFollowUps'];
-      refreshQueuedFollowUps(p.streamId);
+      refreshQueuedFollowUps(p.streamId, options);
       return;
     }
     case 'goalPaused': {
@@ -260,7 +272,7 @@ function applyToState<K extends ProgressEvent>(
       // consumes them; refresh immediately so the status bar shows the pending
       // message instead of only seeing the later drain event.
       const p = payload as ProgressEventPayloads['followUpSent'];
-      refreshQueuedFollowUps(p.streamId);
+      refreshQueuedFollowUps(p.streamId, options);
       return;
     }
     default:

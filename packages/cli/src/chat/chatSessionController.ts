@@ -1,9 +1,11 @@
-// Chat-session controller: owns run start/resume/stop state-transition
+// Chat-session controller: owns run start/resume/stop/follow-up state-transition
 // orchestration for the CLI chat session. Host-neutral (no Ink/TUI rendering
 // dependencies) — the Ink component consumes narrow commands exposed here.
 //
 // Extracted from runChatTui.tsx per #6328 so that UI rendering, command
 // parsing, runtime orchestration, and persistence rules evolve independently.
+
+import { setTimeout as sleep } from 'node:timers/promises';
 
 import PQueue from 'p-queue';
 
@@ -16,13 +18,22 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
 import {
   executeAgent,
   resumeToolUseFromSnapshot,
 } from '@agent/runtime/executeAgent';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import {
+  notifyFollowUpSent,
+  sendFollowUp,
+  type SendFollowUpResult,
+} from '@agent/followUp/ToolUseFollowUp';
+import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -42,6 +53,8 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   EXECUTION_STATUS,
   type ExecutionId,
+  type StreamStatus,
+  type StreamTabId,
   sumUsageStats,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -51,6 +64,7 @@ import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelC
 import { clearApprovals } from './tui/state/approvalQueue';
 import { cliState, patchStream } from './tui/state/cliState';
 import {
+  chatTuiCanSelectModel,
   chatTuiCanStartRootRun,
   markChatTuiRunCompleted,
   markChatTuiRunPending,
@@ -152,8 +166,34 @@ export interface ChatSessionController {
   /** Request stop of the active run (idempotent). */
   stop(): void;
 
+  /** Request termination of a child execution shown by the TUI. */
+  killExecution(executionId: string): void;
+
   /** Whether a new root run can be started right now. */
   canStartRootRun(): boolean;
+
+  /** Whether the active model can be changed in the current run state. */
+  canSelectModel(): boolean;
+
+  /** Explain why a model is unavailable for the active tool-use flow. */
+  getModelSwitchDisabledReason(candidateModel: string): string | undefined;
+
+  /** Switch the active tool-use flow to a different model. */
+  switchActiveModel(model: string): Promise<ChatModelSwitchResult>;
+
+  /** Request manual compaction of the active tool-use flow. */
+  requestCompaction(
+    streamId: StreamTabId | undefined,
+  ): ChatCompactionRequestResult;
+
+  /** Clear queued follow-up deliveries that have not started yet. */
+  clearPendingFollowUps(): void;
+
+  /** Queue a follow-up for serialized delivery to the active stream. */
+  submitFollowUp(input: ChatFollowUpInput): Promise<ChatFollowUpDeliveryResult>;
+
+  /** Resolve once the queued follow-up delivery path is idle. */
+  awaitFollowUpsIdle(): Promise<void>;
 }
 
 export interface ChatSessionControllerInit {
@@ -166,23 +206,44 @@ export interface ChatSessionControllerInit {
   /** Disposer list shared with the TUI lifecycle. */
   readonly disposers: Array<() => void>;
 
-  /** Serial queue for follow-up message delivery (cleared on resume). */
-  readonly followUpQueue: PQueue;
-
   /** Per-stream sidecar persistence store. */
   readonly snapshotStore: StreamSnapshotStore;
+
+  /** Runtime session that owns executions, coordinators, and subscriptions. */
+  readonly runtimeSession?: SessionHandle;
 }
+
+export type ChatModelSwitchResult =
+  | { readonly status: 'switched'; readonly model: string }
+  | {
+      readonly status: 'switched_default_update_failed';
+      readonly model: string;
+      readonly error: string;
+    }
+  | { readonly status: 'no_active_tool_use' };
+
+export type ChatCompactionRequestResult =
+  | { readonly status: 'requested' }
+  | { readonly status: 'no_active_tool_use' }
+  | { readonly status: 'unsupported' };
+
+export interface ChatFollowUpInput {
+  readonly targetStreamId?: StreamTabId;
+  readonly followUp: string | FollowUpQueueInput;
+  readonly mediaFiles?: readonly string[];
+  readonly displayText?: string;
+}
+
+export type ChatFollowUpDeliveryResult =
+  | SendFollowUpResult
+  | { readonly status: 'not_delivered' };
 
 export function createChatSessionController(
   init: ChatSessionControllerInit,
 ): ChatSessionController {
-  const {
-    session,
-    getSessionContext,
-    disposers,
-    followUpQueue,
-    snapshotStore,
-  } = init;
+  const { session, getSessionContext, disposers, snapshotStore } = init;
+  const followUpQueue = new PQueue({ concurrency: 1 });
+  const runtimeSession = init.runtimeSession ?? defaultSession();
 
   // -----------------------------------------------------------------------
   // Internal helpers
@@ -191,13 +252,119 @@ export function createChatSessionController(
   const interruptActiveRun = (): void => {
     clearApprovals();
     if (!session.streamId) return;
-    executionRegistry.stopAgentStream(session.streamId, {
+    runtimeSession.executions.stopAgentStream(session.streamId, {
       detachActiveChildren:
         tryPlatform()?.workspaceState.get<boolean>(
           WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
           false,
         ) === true,
       runtimeHost: session.runtimeHost,
+    });
+  };
+
+  const activeToolUseFlow = () =>
+    session.streamId
+      ? runtimeSession.executions.getToolUseFlowContext(session.streamId)
+      : undefined;
+
+  const rootStreamStatus = (): StreamStatus | undefined =>
+    session.streamId
+      ? cliState.streams.get().get(session.streamId)?.status
+      : undefined;
+
+  const hasActiveToolUseFlow = (): boolean => Boolean(activeToolUseFlow());
+
+  const canSelectModel = (): boolean =>
+    chatTuiCanSelectModel({
+      canStartRootRun: chatTuiCanStartRootRun(session),
+      streamId: session.streamId,
+      status: rootStreamStatus(),
+      hasActiveToolUseFlow: hasActiveToolUseFlow(),
+    });
+
+  const getModelSwitchDisabledReason = (
+    candidateModel: string,
+  ): string | undefined => {
+    if (chatTuiCanStartRootRun(session) || !canSelectModel()) {
+      return undefined;
+    }
+    return activeToolUseFlow()?.modelSwitchDisabledReason(candidateModel);
+  };
+
+  const switchActiveModel = async (
+    nextModel: string,
+  ): Promise<ChatModelSwitchResult> => {
+    const activeFlow = activeToolUseFlow();
+    if (!activeFlow) return { status: 'no_active_tool_use' };
+
+    await activeFlow.switchModel(nextModel);
+    try {
+      await setCliHelperModel(nextModel);
+    } catch (error: unknown) {
+      return {
+        status: 'switched_default_update_failed',
+        model: nextModel,
+        error: toErrorMessage(error),
+      };
+    }
+    return { status: 'switched', model: nextModel };
+  };
+
+  const requestCompaction = (
+    streamId: StreamTabId | undefined,
+  ): ChatCompactionRequestResult => {
+    const flowContext = streamId
+      ? runtimeSession.executions.getToolUseFlowContext(streamId)
+      : undefined;
+    if (!streamId || !flowContext) return { status: 'no_active_tool_use' };
+    if (!flowContext.modelHandler.supportsManualCompaction) {
+      return { status: 'unsupported' };
+    }
+
+    flowContext.requestImmediateCompaction();
+    notifyFollowUpSent(streamId, flowContext.runtimeHost);
+    return { status: 'requested' };
+  };
+
+  const deliverFollowUp = async (
+    targetStreamId: StreamTabId,
+    input: ChatFollowUpInput,
+  ): Promise<SendFollowUpResult> => {
+    if (typeof input.followUp === 'string') {
+      return await sendFollowUp(
+        targetStreamId,
+        input.followUp,
+        input.mediaFiles,
+        input.displayText,
+        runtimeSession,
+      );
+    }
+    return await sendFollowUp(
+      targetStreamId,
+      input.followUp,
+      undefined,
+      undefined,
+      runtimeSession,
+    );
+  };
+
+  const submitFollowUp = async (
+    input: ChatFollowUpInput,
+  ): Promise<ChatFollowUpDeliveryResult> => {
+    return await followUpQueue.add(async () => {
+      let followUpTarget = input.targetStreamId;
+      while (
+        !followUpTarget &&
+        !session.stopRequested &&
+        !session.runCompleted
+      ) {
+        await sleep(25);
+        followUpTarget = session.streamId;
+      }
+      if (!followUpTarget || session.stopRequested) {
+        return { status: 'not_delivered' };
+      }
+      return await deliverFollowUp(followUpTarget, input);
     });
   };
 
@@ -215,12 +382,18 @@ export function createChatSessionController(
       canDelegate: chatAgentSupportsDelegation(config.agent),
     });
     const runtimeHost = createCliRuntimeHost(sessionContext);
-    const wrapped = wrapRuntimeHost(runtimeHost);
+    const wrapped = wrapRuntimeHost(runtimeHost, {
+      getQueuedFollowUps: (streamId) => ToolUseFollowUpQueue.getAll(streamId),
+    });
     const detachResultToast = attachTerminalResultToast(
-      defaultSession(),
+      runtimeSession,
       wrapped,
     );
-    const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
+    const unbindApprovals = installTuiApprovals(
+      wrapped,
+      sessionContext,
+      runtimeSession.coordinators,
+    );
     disposers.push(unbindApprovals);
     const executionId = generateExecutionId();
     let waitingTurn = 0;
@@ -237,6 +410,7 @@ export function createChatSessionController(
           enforceCategory: true,
           approvalPromptsUnavailable: approvalsUnavailable,
           runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+          session: runtimeSession,
           onStreamResolved: (resolvedStreamId) => {
             session.streamId = resolvedStreamId;
             cliState.rootStreamId.set(resolvedStreamId);
@@ -357,13 +531,19 @@ export function createChatSessionController(
     cliState.activeStreamId.set(resolution.streamId);
 
     const runtimeHost = createCliRuntimeHost(sessionContext);
-    const wrapped = wrapRuntimeHost(runtimeHost);
+    const wrapped = wrapRuntimeHost(runtimeHost, {
+      getQueuedFollowUps: (streamId) => ToolUseFollowUpQueue.getAll(streamId),
+    });
     session.runtimeHost = wrapped;
     const detachResultToast = attachTerminalResultToast(
-      defaultSession(),
+      runtimeSession,
       wrapped,
     );
-    const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
+    const unbindApprovals = installTuiApprovals(
+      wrapped,
+      sessionContext,
+      runtimeSession.coordinators,
+    );
     disposers.push(unbindApprovals);
     const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
 
@@ -372,6 +552,7 @@ export function createChatSessionController(
         resumeToolUseFromSnapshot(resolution.snapshot, wrapped, {
           approvalPromptsUnavailable: approvalsUnavailable,
           runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+          session: runtimeSession,
         }),
       )
       .then(() => {
@@ -407,10 +588,29 @@ export function createChatSessionController(
     interruptActiveRun();
   };
 
+  const killExecution = (executionId: string): void => {
+    clearApprovals();
+    runtimeSession.executions.kill(executionId, {
+      detachActiveChildren:
+        tryPlatform()?.workspaceState.get<boolean>(
+          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+          false,
+        ) === true,
+    });
+  };
+
   return {
     startRootRun,
     resume,
     stop,
+    killExecution,
     canStartRootRun: () => chatTuiCanStartRootRun(session),
+    canSelectModel,
+    getModelSwitchDisabledReason,
+    switchActiveModel,
+    requestCompaction,
+    clearPendingFollowUps: () => followUpQueue.clear(),
+    submitFollowUp,
+    awaitFollowUpsIdle: () => followUpQueue.onIdle(),
   };
 }

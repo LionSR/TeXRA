@@ -81,6 +81,8 @@ function createContext(
       approvalPolicy = policy;
     },
     canSelectModel: () => true,
+    switchActiveModel: async (model) => ({ status: 'switched', model }),
+    requestCompaction: () => ({ status: 'no_active_tool_use' }),
     resetSession: vi.fn(),
     resumeExecution: (_id: ExecutionId) => Promise.resolve(),
     ...overrides,
@@ -264,5 +266,23 @@ describe('handleTuiSlashCommand', () => {
       ?.entries.at(-1)?.text;
     expect(statusText).toContain('resume later with: texra resume exec-1');
     expect(statusText).not.toContain('--cwd');
+  });
+
+  it('routes /compact through the controller operation', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const streamId = 'stream-1' as StreamTabId;
+    const requestCompaction = vi.fn().mockReturnValue({ status: 'requested' });
+    cliState.activeStreamId.set(streamId);
+
+    const handled = await handleTuiSlashCommand(
+      '/compact',
+      createContext(session, { requestCompaction }),
+    );
+
+    expect(handled).toBe(true);
+    expect(requestCompaction).toHaveBeenCalledExactlyOnceWith(streamId);
+    const entry = cliState.streams.get().get(streamId)?.entries.at(-1)?.text;
+    expect(entry).toContain('Context compaction requested.');
   });
 });
