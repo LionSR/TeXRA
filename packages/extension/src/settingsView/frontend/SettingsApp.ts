@@ -62,6 +62,7 @@ import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import '@shared/wa/tabs';
 import type { WaTabShowEvent } from '@shared/wa/tabs';
+import { toNewestFirstByTimestamp } from '@utils/core';
 import { settingsViewStyles } from './styles';
 
 // Side-effect: register tab components
@@ -268,13 +269,8 @@ export class SettingsApp extends SettingsAppBase {
       );
     },
     [SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY]: (data) => {
-      // Schwartzian transform: parse each timestamp once into a sort key
-      // rather than re-parsing both sides on every comparison.
       this.historyItems.set(
-        data.historyItems
-          .map((item) => ({ item, key: new Date(item.timestamp).getTime() }))
-          .sort((a, b) => b.key - a.key)
-          .map(({ item }) => item),
+        toNewestFirstByTimestamp(data.historyItems, (item) => item.timestamp),
       );
     },
     [SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]: () => {
