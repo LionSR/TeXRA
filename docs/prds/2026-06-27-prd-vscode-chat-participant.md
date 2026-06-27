@@ -194,12 +194,27 @@ Add the following to `contributes` in `packages/extension/package.json`. Command
 
 ```json
 [
-  { "name": "proofread",   "description": "Proofread the attached file for clarity and style" },
-  { "name": "grammar",     "description": "Check and correct grammar in the attached file" },
-  { "name": "summarize",   "description": "Summarize the content of the attached file" },
-  { "name": "reformulate", "description": "Reformulate text for a specified audience or style" },
-  { "name": "expand",      "description": "Expand and elaborate on the content of the attached file" },
-  { "name": "shorten",     "description": "Shorten and condense the attached file" }
+  {
+    "name": "proofread",
+    "description": "Proofread the attached file for clarity and style"
+  },
+  {
+    "name": "grammar",
+    "description": "Check and correct grammar in the attached file"
+  },
+  {
+    "name": "summarize",
+    "description": "Summarize the content of the attached file"
+  },
+  {
+    "name": "reformulate",
+    "description": "Reformulate text for a specified audience or style"
+  },
+  {
+    "name": "expand",
+    "description": "Expand and elaborate on the content of the attached file"
+  },
+  { "name": "shorten", "description": "Shorten and condense the attached file" }
 ]
 ```
 
