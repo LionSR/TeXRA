@@ -237,9 +237,7 @@ export async function handleGetTeXCount(): Promise<void> {
           const stats = patterns
             .map(([pattern, template]) => {
               const match = output.match(pattern);
-              return match
-                ? { label: template.replace('$1', match[1]) }
-                : null;
+              return match ? { label: template.replace('$1', match[1]) } : null;
             })
             .filter(filterNotNull);
 

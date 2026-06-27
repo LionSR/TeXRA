@@ -23,10 +23,7 @@ import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 
-import {
-  loadAttachmentBuffer,
-  wipeBuffer,
-} from '../utils/toolAttachmentUtils';
+import { loadAttachmentBuffer, wipeBuffer } from '../utils/toolAttachmentUtils';
 import { isInputFileContent, isMessageItem } from './openAIResponseContent';
 import type {
   ResponseFunctionCallOutputItemList,
