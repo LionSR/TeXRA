@@ -22,9 +22,8 @@ import {
   readCliTerminalStatus,
   type ExecuteAgentResult,
 } from './terminalStatus';
+import { CLI_UNAVAILABLE_TOOLS } from './unavailableTools';
 import type { CliContext } from './cliContext';
-
-const NON_TUI_CLI_UNAVAILABLE_TOOLS = ['inquiry'] as const;
 
 export interface CliExecuteOptions {
   /** Forwarded to `runAgent`. */
@@ -161,7 +160,7 @@ export async function executeCliRequest(
       stopAfterCycle: options.stopAfterCycle,
       approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
       runtimeUnavailableTools: [
-        ...NON_TUI_CLI_UNAVAILABLE_TOOLS,
+        ...CLI_UNAVAILABLE_TOOLS,
         ...(options.runtimeUnavailableTools ?? []),
       ],
     });
