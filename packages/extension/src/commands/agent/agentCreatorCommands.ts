@@ -95,6 +95,7 @@ function buildVSCodeUI(): AgentCreatorUI {
           title: `Tool Use Agent: ${agentName}`,
           placeHolder:
             'Select tool groups (pre-selected based on your description)',
+          prompt: 'Choose which tool groups this agent should have access to',
           canPickMany: true,
         },
       );
