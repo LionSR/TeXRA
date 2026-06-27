@@ -95,10 +95,12 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
     assert.equal(handler.getStreamingConfig(), true);
   });
 
-  it('lets Codex subscription handlers follow the shared background toggle', () => {
-    // Codex no longer vetoes background mode; it uses the same
-    // useBackgroundResponses toggle (default on) + workflow/GPT eligibility, so
-    // the behavior can be tested against the backend in practice.
+  it('runs the Codex fallback (subscription off) path through the shared background toggle', () => {
+    // With the subscription preference off (the default here — no platform
+    // override sets it), ModelHandlerCodex drops to the base OpenAI-API-key
+    // path, where background mode follows the shared useBackgroundResponses
+    // toggle (default on) + workflow/GPT eligibility. The subscription-ON veto
+    // (Codex backend can't poll) is covered in CodexExperimentalTransports.
     const handler = new ModelHandlerCodex(createOpenAIConfig('gpt-5'));
     handler.setAgentCategory(AgentCategory.Workflow);
 

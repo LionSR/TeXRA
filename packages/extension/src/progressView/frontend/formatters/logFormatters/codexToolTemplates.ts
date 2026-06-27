@@ -11,7 +11,7 @@ import {
   CodexThreadToolInputSchema,
   CodexTodoToolInputSchema,
   CodexTurnToolInputSchema,
-} from '@tools/codexShared';
+} from '@shared/schemas/codex';
 import { formatDuration } from '@utils/core';
 
 // Local imports - Lit template utilities
