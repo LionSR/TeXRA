@@ -41,7 +41,7 @@ This feature complements, not replaces, the existing webview. The full TeXRA pan
 - Execute agents through TeXRA's own model pipeline (`runAgent()`, `runReflectionFlow()`) using the user's existing TeXRA API keys. `request.model` (the Copilot language model) is never used.
 - Stream progress updates back through `ChatResponseStream.progress()` during the agent run, translated from `AgentRuntimeHost.emit()` lifecycle events.
 - Write output files to disk via the existing agent pipeline (`XmlOutputManager`, `AgentOutputHandler`). After completion, surface a clickable file link via `ChatResponseStream.anchor()` and a "View LaTeX diff" button via `ChatResponseStream.button()` that invokes `texra.latexdiff`.
-- Stream a markdown summary of the agent's output derived from `OutputFileSummary.added` and `OutputFileSummary.removed` line counts (available in `WorkflowFlowResult.outputs[]`).
+- Stream a markdown summary of the agent's output derived from `OutputFileSummary.added` and `OutputFileSummary.removed` line counts (when available; fields are optional and fall back to `'?'` if absent).
 - Provide follow-up suggestions via `ChatFollowupProvider` pointing to related agents, re-attaching the file reference from the previous turn.
 - Gracefully handle the case where the user does not have Copilot Chat active by offering `texra.runFromChatPrompt`, a command palette command that opens a QuickPick + InputBox flow and calls the same underlying `buildChatAgentConfig()` and `runAgent()` path.
 - Gate the feature behind a `texra.chatParticipant.enabled` setting that defaults to `true`, allowing administrators to disable it globally without uninstalling the extension.
@@ -475,10 +475,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 export class ChatStreamAgentRuntimeHost implements AgentRuntimeHost {
-  constructor(
-    private readonly stream: vscode.ChatResponseStream,
-    private readonly onOutputFiles: (files: string[]) => void,
-  ) {}
+  constructor(private readonly stream: vscode.ChatResponseStream) {}
 
   emit<K extends keyof ProgressEventPayloads>(
     event: K,
