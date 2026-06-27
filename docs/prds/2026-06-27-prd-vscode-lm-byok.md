@@ -871,7 +871,9 @@ type VscodeLmModelConfig = ModelConfig & {
   capabilities: ModelCapabilities & { isVscodeLmBacked?: boolean };
 };
 const cfg = this.config as VscodeLmModelConfig;
-if (cfg.capabilities.isVscodeLmBacked === true) { /* skip caching/compaction setup */ }
+if (cfg.capabilities.isVscodeLmBacked === true) {
+  /* skip caching/compaction setup */
+}
 ```
 
 This keeps the prefix-guard path type-checked and avoids the `as any` escape hatch that would otherwise bypass the repo's internal type-safety convention.
