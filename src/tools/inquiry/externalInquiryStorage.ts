@@ -676,8 +676,7 @@ export async function listThreadsByStatus(params: {
     .sort((a, b) => b.key - a.key)
     .map(({ manifest }) => manifest);
 
-  const trimmed =
-    params.limit != null ? sorted.slice(0, params.limit) : sorted;
+  const trimmed = params.limit != null ? sorted.slice(0, params.limit) : sorted;
   return trimmed.map(manifestToSummary);
 }
 
