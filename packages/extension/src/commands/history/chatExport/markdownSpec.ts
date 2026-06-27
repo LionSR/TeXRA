@@ -1,5 +1,6 @@
 /** Markdown format spec for chat export. */
 
+import type { DocumentMeta } from '@agent/export/schemas';
 import { filterNotNullish } from '@utils/core';
 
 import {
@@ -7,7 +8,6 @@ import {
   type FormatSpec,
   type NodeRenderers,
 } from './formatSpec';
-import type { DocumentMeta } from './schemas';
 
 /**
  * Wrap raw body text in a fenced code block whose delimiter is longer than the

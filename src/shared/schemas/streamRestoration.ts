@@ -72,7 +72,3 @@ export const RestoredStreamsFileSchema = z.object({
 });
 
 export type RestoredStreamsFile = z.infer<typeof RestoredStreamsFileSchema>;
-
-export function emptyRestoredStreamsFile(): RestoredStreamsFile {
-  return { version: RESTORED_STREAM_FILE_VERSION, streams: [] };
-}
