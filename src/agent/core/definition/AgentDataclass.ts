@@ -31,6 +31,9 @@ export const AgentSettingBaseSchema = z.strictObject({
   internal: z.boolean().optional(),
 });
 
+/** Tool reference that may be a raw name string (YAML) or a resolved definition. */
+const AgentToolInputSchema = z.union([z.string(), ToolDefinitionSchema]);
+
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   agentCategory: z
     .literal(AgentCategory.Workflow)
@@ -84,6 +87,35 @@ export type AgentToolUseSetting = Extract<
   { agentCategory: typeof AgentCategory.ToolUse }
 >;
 
+// ---------------------------------------------------------------------------
+// Input-friendly settings schemas — accept raw YAML values (string tool names)
+// before the tool-resolution step replaces them with full ToolDefinition objects.
+// ---------------------------------------------------------------------------
+
+/** Base settings as they appear in YAML: tools may be raw name strings. */
+const AgentSettingBaseInputSchema = AgentSettingBaseSchema.extend({
+  tools: z.array(AgentToolInputSchema).prefault([]),
+});
+
+const AgentWorkflowSettingInputSchema = AgentWorkflowSettingSchema.extend({
+  tools: z.array(AgentToolInputSchema).prefault([]),
+});
+
+const AgentToolUseSettingInputSchema = AgentToolUseSettingSchema.extend({
+  tools: z.array(AgentToolInputSchema).prefault([]),
+});
+
+/** Discriminated union matching AgentSettingSchema but accepting raw tool names. */
+export const AgentSettingInputSchema = z.preprocess(
+  (input) => deriveEndTag(stripLegacySettingFields(input)),
+  z.discriminatedUnion('agentCategory', [
+    AgentWorkflowSettingInputSchema,
+    AgentToolUseSettingInputSchema,
+  ]),
+);
+
+export type AgentSettingInput = z.infer<typeof AgentSettingInputSchema>;
+
 export function hasEndTag(
   settings: AgentSetting,
   fileContent: string,
@@ -104,8 +136,8 @@ export const AgentDefinitionSchema = z.strictObject({
   name: AgentNameSchema,
   description: z.string().optional(),
   inherits: z.string().optional(),
-  settings: z.record(z.string(), z.unknown()).prefault({}),
-  prompts: z.record(z.string(), z.unknown()).prefault({}),
+  settings: AgentSettingInputSchema,
+  prompts: AgentPromptSchema,
 });
 
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;

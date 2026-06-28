@@ -146,7 +146,10 @@ function inheritedDefinitionBlock(
   block: InheritedBlockName,
   seen: ReadonlySet<string> = new Set([entry.name]),
 ): InheritedDefinitionBlock {
-  const ownBlock = entry.definition[block];
+  // definition[block] is typed as AgentSettingInput | AgentPrompt; widen to
+  // Record<string, unknown> for the lightweight metadata extraction below.
+  const ownBlock: Record<string, unknown> =
+    entry.definition[block] as unknown as Record<string, unknown>;
   const parentName = entry.definition.inherits;
   if (!parentName) return { value: ownBlock, complete: true };
 

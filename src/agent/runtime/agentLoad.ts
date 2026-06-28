@@ -13,6 +13,7 @@ import {
   AgentDefinitionSchema,
   AgentSettingSchema,
   type AgentSetting,
+  type AgentSettingInput,
   type AgentPrompt,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
@@ -27,7 +28,7 @@ logger.initialize(CHANNEL);
 
 export interface ValidAgentDefinition {
   name: string;
-  settings: AgentSetting;
+  settings: AgentSettingInput;
 }
 
 export interface AgentYamlValidationResult extends ValidAgentDefinition {
@@ -45,8 +46,6 @@ export function validateAgentYamlContent(
 ): AgentYamlValidationResult {
   const raw = typeof content === 'string' ? yaml.parse(content) : content;
   const data = AgentDefinitionSchema.parse(raw);
-  const settingsBlock = AgentSettingSchema.parse(data.settings);
-  const promptsBlock = AgentPromptSchema.parse(data.prompts);
   const rootName = typeof data.name === 'string' ? data.name.trim() : '';
 
   if (!rootName) {
@@ -55,8 +54,8 @@ export function validateAgentYamlContent(
 
   return {
     name: rootName,
-    settings: settingsBlock,
-    prompts: promptsBlock,
+    settings: data.settings,
+    prompts: data.prompts,
   };
 }
 
@@ -97,9 +96,10 @@ export async function loadAgentSettingAndPrompts(
   const rawConfig = await loadYaml(resolution.definitionPath);
   const config = AgentDefinitionSchema.parse(rawConfig);
 
-  // Initialize with own settings/prompts (spread creates a mutable copy)
-  let settings: Partial<AgentSetting> = { ...config.settings };
-  let prompts: Partial<AgentPrompt> = { ...config.prompts };
+  // Initialize with own settings/prompts (spread creates a mutable copy).
+  // Tools may still be raw name strings at this point — they are resolved below.
+  let settings: AgentSettingInput = { ...config.settings };
+  let prompts: AgentPrompt = { ...config.prompts };
 
   // Merge with parent if inheritance is specified
   if (config.inherits) {
@@ -114,8 +114,14 @@ export async function loadAgentSettingAndPrompts(
     const [parentSettings, parentPrompts] =
       await loadAgentSettingAndPrompts(parentResolution);
 
-    // Parent provides defaults, child overrides
-    settings = mergeInheritedAgentObject(parentSettings, config.settings);
+    // Parent provides defaults, child overrides.
+    // parentSettings has resolved ToolDefinition objects while
+    // config.settings may still have raw strings; the merge produces a
+    // hybrid that we treat as input for the resolution step below.
+    settings = mergeInheritedAgentObject(
+      parentSettings as unknown as Record<string, unknown>,
+      config.settings as unknown as Record<string, unknown>,
+    ) as unknown as AgentSettingInput;
     prompts = mergeInheritedAgentObject(parentPrompts, config.prompts);
   }
 
@@ -123,10 +129,11 @@ export async function loadAgentSettingAndPrompts(
 
   // Resolve tool names to definitions using shared utility
   if (Array.isArray(settings.tools)) {
-    settings.tools = resolveToolDefinitions(
+    const resolvedTools = resolveToolDefinitions(
       settings.tools as (string | { name: string })[],
       (name) => logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
     );
+    settings = { ...settings, tools: resolvedTools } as AgentSettingInput;
   }
 
   // Apply defaults and validate the final settings and prompts

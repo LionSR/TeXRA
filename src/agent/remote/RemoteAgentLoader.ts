@@ -3,7 +3,7 @@ import yaml from 'yaml';
 import { z } from 'zod';
 
 import {
-  type AgentSetting,
+  type AgentSettingInput,
   AgentPromptSchema,
   AgentSettingSchema,
   AgentDefinitionSchema,
@@ -280,7 +280,7 @@ async function fetchAgentConfig(agentName: string): Promise<{
   const validated = AgentDefinitionSchema.parse(yaml.parse(configYaml));
 
   // Extract metadata before resolving tools to full definitions (for registry cache)
-  const settings: Partial<AgentSetting> = validated.settings;
+  const settings: AgentSettingInput = validated.settings;
   const rawTools = settings.tools as (string | { name: string })[] | undefined;
   const toolNames = extractToolNames(rawTools);
   const defaultOutputFiles = settings.defaultOutputFiles as
@@ -288,14 +288,16 @@ async function fetchAgentConfig(agentName: string): Promise<{
     | undefined;
 
   // Process tool definitions (remote agents are self-contained)
-  if (Array.isArray(settings.tools)) {
-    settings.tools = resolveToolDefinitions(rawTools!, (name) =>
+  let resolvedSettings = { ...settings };
+  if (Array.isArray(resolvedSettings.tools)) {
+    const tools = resolveToolDefinitions(rawTools!, (name) =>
       logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
     );
+    resolvedSettings = { ...resolvedSettings, tools } as typeof resolvedSettings;
   }
 
   return {
-    settings: AgentSettingSchema.parse(settings),
+    settings: AgentSettingSchema.parse(resolvedSettings),
     prompts: AgentPromptSchema.parse(validated.prompts),
     description: validated.description,
     tools: toolNames?.length ? toolNames : undefined,
