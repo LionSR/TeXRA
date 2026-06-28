@@ -29,7 +29,7 @@ durable-thread invariant can diverge per host.
 
 - Push the decision into `humanInputCommands` as one host-neutral command, e.g.
   `resolveRuntimeExternalInquiryDecision({ threadId, answerText, rejected,
-  draft, session })`, which owns the text/empty/reject branching, draft
+draft, session })`, which owns the text/empty/reject branching, draft
   persistence, and the drop-vs-submit transition on the durable thread.
 - The webview hosts route the `EXTERNAL_INQUIRY_ACTION` command through the
   shared progress factory (folding the special-case back in); the CLI calls the

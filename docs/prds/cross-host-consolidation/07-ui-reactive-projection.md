@@ -50,6 +50,7 @@ Be honest about the cost: `WebviewBridge` is a **cursor over an append-only log*
 ## Scope
 
 **In:**
+
 - Add `subscribe` / `getSnapshot` / `select` plus `ProgressViewProjection` and a `ProgressViewDelta` patch type to `ProgressViewState`; split per-field projection out of `ProgressEventHandler` (keep eviction, throttle, async persistence, permission-gated switch as explicit orchestration).
 - Fold status, pending approvals, and ephemeral counters into the projection; delete `replayPendingPrompts`, the two-writer `permissions$`, and `resolvedProposalIds`.
 - Unify backend `ProgressViewState` and frontend `ProgressState` shapes; replace `dispatchMessage` plus the ten slices with one `applySnapshot`/`applyDelta` in a shared Lit `ReactiveController` (extension and desktop renderer together).
@@ -57,6 +58,7 @@ Be honest about the cost: `WebviewBridge` is a **cursor over an append-only log*
 - Delete the desktop double-dispatch (`desktopAgentExecution.ts:745-751`), the ghost reduction, and the `streams.json` ghost store; desktop calls `backend.load()`.
 
 **Out (explicitly):**
+
 - The desktop inline delete / delete-all / `pendingPermissionStreams` deletions belong to **Sub-PRD 01**, not here. 07 does not double-count them.
 - `ProgressEventHandler` is NOT promised to become "pure." Re-scope to extracting the projection push; the orchestration stays.
 - `handlePermissionAction` does NOT collapse. Only the optimistic settle and out-of-order guard delete (~20 lines); the yolo decomposition, the `ENABLE_*_BYPASS`-before-approve FIFO ordering, and provider derivation are legitimate commands-out and stay.
@@ -68,14 +70,12 @@ Be honest about the cost: `WebviewBridge` is a **cursor over an append-only log*
 Incremental, each PR independently mergeable and subtractive. Drift-bug fixes (`00-overview.md:64-78`) and Sub-PRD 01 land first.
 
 **Phase A: every host becomes a subscriber of the one store (kill the forks).**
+
 1. Add store reactivity: `subscribe` / `getSnapshot` / `select` + the projection and delta types; split projection out of `ProgressEventHandler`. No renderer change yet (keep `WebviewUpdater` as a temporary delta subscriber).
 2. Fold status, pending approvals, and ephemeral counters into the projection; delete `replayPendingPrompts`, two-writer `permissions$`, `resolvedProposalIds`. This is the best ROI and fixes the real parity bug (desktop drops live prompts on renderer reload).
 3. **Desktop-as-subscriber:** once the store has a cold-launch snapshot, delete `desktopProgressEventBridge`, the double-dispatch, and the `streams.json` ghost store; desktop calls `backend.load()`. (Desktop delete/permission seams come from Sub-PRD 01.)
 
-**Phase B: pure-derive views (kill the optimistic handlers).**
-4. Replace `dispatchMessage` plus ten slices with the shared Lit `ReactiveController` `applyDelta`/`applySnapshot` (extension and desktop renderer, which already share the reducer). Move the four render-time stores onto the entry DTO.
-5. Emit-only intent: strip the optimistic settle and out-of-order guard from `eventHandlers.ts`; keep active-stream selection as local view state; keep the permission command dispatch.
-6. **Stretch:** if the store-plus-reducer extracts cleanly, make `cliState` a signal projection of the shared snapshot/deltas and delete `applyToState`; else leave the CLI as-is.
+**Phase B: pure-derive views (kill the optimistic handlers).** 4. Replace `dispatchMessage` plus ten slices with the shared Lit `ReactiveController` `applyDelta`/`applySnapshot` (extension and desktop renderer, which already share the reducer). Move the four render-time stores onto the entry DTO. 5. Emit-only intent: strip the optimistic settle and out-of-order guard from `eventHandlers.ts`; keep active-stream selection as local view state; keep the permission command dispatch. 6. **Stretch:** if the store-plus-reducer extracts cleanly, make `cliState` a signal projection of the shared snapshot/deltas and delete `applyToState`; else leave the CLI as-is.
 
 ## Acceptance
 

@@ -36,12 +36,12 @@ Add grouped sub-registry factories in `src/controllers/settingsView/`, mirroring
 one mega-interface):
 
 ```ts
-createSettingsMemoryHandlers(ports)
-createSettingsModelHandlers(ports)
-createSettingsAgentHandlers(ports)
-createSettingsProfileHandlers(ports)
-createSettingsGitHandlers(ports)
-createSettingsLatexHandlers(ports)
+createSettingsMemoryHandlers(ports);
+createSettingsModelHandlers(ports);
+createSettingsAgentHandlers(ports);
+createSettingsProfileHandlers(ports);
+createSettingsGitHandlers(ports);
+createSettingsLatexHandlers(ports);
 ```
 
 Each returns the `{ [command]: handler }` slice for its domain, built over the

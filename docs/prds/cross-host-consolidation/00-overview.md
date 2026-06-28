@@ -39,15 +39,15 @@ Ink delivery, CLI-only in-run controls).
 
 ## The sub-PRDs
 
-| # | Sub-PRD | Owner it lands in | Amp |
-| - | ------- | ----------------- | --- |
-| 01 | Desktop adopts the shared progressView controllers (delete, pending-permission) | `src/controllers/progressView/*` (existing) | High |
-| 02 | One `requestRuntimeStreamResume` command (snapshot/auto-resume) | `src/agent/runtime/resumeCommands.ts` | High |
-| 03 | `createSettingsViewCommandHandlers` grouped sub-registries | `src/controllers/settingsView/*` (new) | High |
-| 04 | Agent identity: resolve-once, carry the resolved name | `src/agent/runtime/AgentLaunchContext.ts` | Medium |
-| 05 | External-inquiry resolution policy into `humanInputCommands` | `src/agent/runtime/humanInputCommands.ts` | Medium |
-| 06 | Reduce the `resolve*` method surface (165 names, overloaded verb) | `runCoordinatorCommands` + naming convention | Low-Med |
-| 07 | UI as a pure reactive projection of the runtime (one store, hosts derive) | `src/shared/progressView/backend` (generalize) | Medium-High |
+| #   | Sub-PRD                                                                         | Owner it lands in                              | Amp         |
+| --- | ------------------------------------------------------------------------------- | ---------------------------------------------- | ----------- |
+| 01  | Desktop adopts the shared progressView controllers (delete, pending-permission) | `src/controllers/progressView/*` (existing)    | High        |
+| 02  | One `requestRuntimeStreamResume` command (snapshot/auto-resume)                 | `src/agent/runtime/resumeCommands.ts`          | High        |
+| 03  | `createSettingsViewCommandHandlers` grouped sub-registries                      | `src/controllers/settingsView/*` (new)         | High        |
+| 04  | Agent identity: resolve-once, carry the resolved name                           | `src/agent/runtime/AgentLaunchContext.ts`      | Medium      |
+| 05  | External-inquiry resolution policy into `humanInputCommands`                    | `src/agent/runtime/humanInputCommands.ts`      | Medium      |
+| 06  | Reduce the `resolve*` method surface (165 names, overloaded verb)               | `runCoordinatorCommands` + naming convention   | Low-Med     |
+| 07  | UI as a pure reactive projection of the runtime (one store, hosts derive)       | `src/shared/progressView/backend` (generalize) | Medium-High |
 
 ## Priority order
 

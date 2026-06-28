@@ -27,24 +27,24 @@ Base of the stack = current tip of `codex/decouple-ui-agent-core` (the approved
 decouple PR #6697). When #6697 merges to main, rebase the remaining stack onto
 main with `git rebase --onto main <old-base> <branch>`.
 
-- [ ] **P0  Drift-bug fixes** - the 3 bugs in `00-overview.md:64-78` (desktop
+- [ ] **P0 Drift-bug fixes** - the 3 bugs in `00-overview.md:64-78` (desktop
       delete-all stop+reselect, dropped `warning` severity, workflow auto-open
       output choice). Tiny, behavior-correcting, no PRD needed.
-- [ ] **P1  Sub-PRD 01** - desktop adopts the shared progressView controllers.
-- [ ] **S1  Simplifier pass** over P0+P1 changed files.
-- [ ] **P2  Sub-PRD 07 Phase A** - make `ProgressViewState` subscribable; fold
+- [ ] **P1 Sub-PRD 01** - desktop adopts the shared progressView controllers.
+- [ ] **S1 Simplifier pass** over P0+P1 changed files.
+- [ ] **P2 Sub-PRD 07 Phase A** - make `ProgressViewState` subscribable; fold
       status / pending approvals / ephemeral counters into the projection (fixes
       the renderer-reload prompt parity bug). NOT the full delta-patch rewrite.
-- [ ] **P3  Sub-PRD 03** - grouped settings command-handler registries.
-- [ ] **S2  Simplifier pass** over P2+P3.
-- [ ] **P4  Sub-PRD 02** - one `requestRuntimeStreamResume` command.
-- [ ] **P5  Sub-PRD 05** - external-inquiry resolution policy into runtime.
-- [ ] **S3  Simplifier pass** over P4+P5.
-- [ ] **P6  Sub-PRD 04** - agent-identity resolve-once (carry the resolved name).
-- [ ] **P7  Sub-PRD 06** - reduce the `resolve*` surface (coordinator family +
+- [ ] **P3 Sub-PRD 03** - grouped settings command-handler registries.
+- [ ] **S2 Simplifier pass** over P2+P3.
+- [ ] **P4 Sub-PRD 02** - one `requestRuntimeStreamResume` command.
+- [ ] **P5 Sub-PRD 05** - external-inquiry resolution policy into runtime.
+- [ ] **S3 Simplifier pass** over P4+P5.
+- [ ] **P6 Sub-PRD 04** - agent-identity resolve-once (carry the resolved name).
+- [ ] **P7 Sub-PRD 06** - reduce the `resolve*` surface (coordinator family +
       dead/synonym deletes + AGENTS.md convention).
-- [ ] **S4  Simplifier pass** over P6+P7.
-- [ ] **P8  Sub-PRD 07 Phase B** - the `ProgressViewDelta` patch type + delete
+- [ ] **S4 Simplifier pass** over P6+P7.
+- [ ] **P8 Sub-PRD 07 Phase B** - the `ProgressViewDelta` patch type + delete
       the frontend mirror reducer. Largest; gate on Phase A landing.
 
 Parallel track (maintainer-owned, coordinate, do not duplicate): the
