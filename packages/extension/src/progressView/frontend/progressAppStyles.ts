@@ -26,9 +26,18 @@ export const progressAppStyles = css`
     display: flex;
     align-items: center;
     gap: var(--wa-space-2xs);
-    padding: var(--wa-space-2xs) var(--wa-space-2xs) var(--wa-space-3xs);
+    padding: var(--wa-space-2xs) var(--wa-space-2xs) 0;
     border-bottom: var(--border-thin) solid var(--color-border);
     flex-shrink: 0;
+  }
+
+  /* The full-width view-header border is the single seam under the tab row.
+     Suppress the wa-tab-group's own track line and anchor the tabs flush on
+     that border (padding-bottom: 0 above) so the two no longer read as a
+     doubled rule with a gap between them. The active tab keeps its brand
+     indicator bar as the only accent. */
+  .view-header wa-tab-group.view-tabs {
+    --track-color: transparent;
   }
 
   .main-container.desktop .view-header {
