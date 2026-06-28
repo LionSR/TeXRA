@@ -65,7 +65,14 @@ function addFlagSpec(specs: CommandFlagSpecs, name: string, def: ArgDef): void {
     }
   }
 
-  if (def.type === 'boolean' && def.default === true) {
+  // Accept the negated `--no-<name>` form for booleans that document one:
+  // those defaulting to `true` (passed via the negative) and opt-in toggles
+  // that advertise a `negativeDescription` (e.g. `--no-websocket`). Otherwise
+  // `texra run --no-websocket` is rejected as an unknown flag.
+  if (
+    def.type === 'boolean' &&
+    (def.default === true || 'negativeDescription' in def)
+  ) {
     addLongFlag(specs, `no-${name}`, { takesValue: false });
   }
 }
