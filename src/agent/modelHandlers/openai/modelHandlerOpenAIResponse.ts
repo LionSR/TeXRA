@@ -2476,7 +2476,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         openRouterRouting: this.isOpenRouterRoutingEnabled(),
         logger: this.logger,
       });
-      if (uploadedAttachments.length > 0) {
+      if (
+        finalResult.status === 'executed' &&
+        uploadedAttachments.length > 0
+      ) {
         finalResult.files = uploadedAttachments.map(
           ({ attachment, fileId }) => ({
             path: attachment.path,

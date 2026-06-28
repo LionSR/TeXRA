@@ -248,7 +248,7 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       input: { q: 'x' },
     });
 
-    const result: ToolResultPayload = { output: 'found it' };
+    const result: ToolResultPayload = { status: 'executed', output: 'found it' };
     const followUp = await handler.createToolUseFollowUpMessages(
       undefined,
       call,
@@ -315,7 +315,7 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
         raw: { id: 'call_2', name: 'fetch', args: { u: 'y' } },
       },
     ];
-    const results: ToolResultPayload[] = [{ output: 'a' }, { output: 'b' }];
+    const results: ToolResultPayload[] = [{ status: 'executed', output: 'a' }, { status: 'executed', output: 'b' }];
 
     // Seed a signed thought + assistant text for this turn so the full
     // model-emitted ordering is exercised (thought -> text -> calls -> results).
@@ -541,7 +541,7 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
     const followUp = await handler.createToolUseFollowUpMessages(
       undefined,
       call,
-      { output: 'ok' },
+      { status: 'executed', output: 'ok' },
       [],
       workspace,
     );

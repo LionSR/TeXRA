@@ -1481,7 +1481,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       unsupportedAttachments.push(...uploadResult.unsupported);
       pageLimitExceeded.push(...uploadResult.pageLimitExceeded);
 
-      if (uploadedAttachments.length > 0) {
+      if (
+        sanitizedResult.status === 'executed' &&
+        uploadedAttachments.length > 0
+      ) {
         // Store uploaded file info with fileId (Anthropic-specific extension)
         // Type assertion needed because FileReference doesn't include fileId
         sanitizedResult.files = uploadedAttachments.map(
@@ -1583,7 +1586,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           type: 'tool_result',
           tool_use_id: call.callId,
           content: toolResultContent,
-          is_error: result.isError || undefined,
+          is_error: result.status === 'error' || undefined,
         },
       ],
     };

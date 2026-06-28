@@ -147,7 +147,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
         result: { error: DUPLICATE_CALL_ERROR, isError: true as const },
         parsedInput: call.input,
         extracted: {
-          sanitizedResult: { error: DUPLICATE_CALL_ERROR },
+          sanitizedResult: { status: 'error', error: DUPLICATE_CALL_ERROR },
           attachments: [],
         },
         editedFiles: [],

@@ -43,36 +43,52 @@ const EditedFileRecordSchema = z.object({
 });
 
 /**
- * Schema for strongly-typed tool result payloads sent to model handlers.
- * This is what gets passed to handlers - no binary data, properly typed fields.
- * Uses looseObject to allow additional properties for forward compatibility.
+ * Shared fields present in every tool result payload variant.
  */
-export const ToolResultPayloadSchema = z.looseObject({
-  /** Brief summary of the tool execution result */
-  summary: z.string().optional(),
-  /** Detailed output from the tool */
-  output: z.string().optional(),
-  /** Error message if tool execution failed */
-  error: z.string().optional(),
+const ToolResultPayloadSharedFields = {
   /** User instruction that was processed */
   userInstruction: z.string().optional(),
   /** User-provided patch content */
   userPatch: z.string().optional(),
-  /** Whether this result represents an error */
-  isError: z.boolean().optional(),
-  /** Statistics about line changes made */
-  lineChanges: LineChangesSchema.optional(),
   /** Additional diagnostic information (type varies by context) */
   diagnostics: z.unknown().optional(),
-  /** Records of edits made during tool execution */
-  edits: z.array(EditRecordSchema).optional(),
-  /** File references (binary data stripped) */
-  files: z.array(FileReferenceSchema).optional(),
-  /** Files edited during tool execution (for logging/tracking) */
-  editedFiles: z.array(EditedFileRecordSchema).optional(),
   /** Summary added by handlers when attachments are available */
   attachmentSummary: z.string().optional(),
-});
+};
+
+/**
+ * Schema for strongly-typed tool result payloads sent to model handlers.
+ * Uses a discriminated union on `status` so callers can narrow on
+ * `result.status === 'error'` vs `'executed'` and get the right fields.
+ * Each variant is a looseObject to preserve unknown keys for forward
+ * compatibility.
+ *
+ * This is what gets passed to handlers — no binary data, properly typed fields.
+ */
+export const ToolResultPayloadSchema = z.discriminatedUnion('status', [
+  z.looseObject({
+    status: z.literal('executed'),
+    /** Brief summary of the tool execution result */
+    summary: z.string().optional(),
+    /** Detailed output from the tool */
+    output: z.string().optional(),
+    /** Statistics about line changes made */
+    lineChanges: LineChangesSchema.optional(),
+    /** Records of edits made during tool execution */
+    edits: z.array(EditRecordSchema).optional(),
+    /** File references (binary data stripped) */
+    files: z.array(FileReferenceSchema).optional(),
+    /** Files edited during tool execution (for logging/tracking) */
+    editedFiles: z.array(EditedFileRecordSchema).optional(),
+    ...ToolResultPayloadSharedFields,
+  }),
+  z.looseObject({
+    status: z.literal('error'),
+    /** Error message if tool execution failed */
+    error: z.string(),
+    ...ToolResultPayloadSharedFields,
+  }),
+]);
 
 export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
 
@@ -114,12 +130,18 @@ export function extractToolAttachments(
     ? attachmentsCandidate.filter(isToolFileAttachment)
     : [];
 
-  // Parse with Zod - looseObject ensures this never fails
-  const parsed = ToolResultPayloadSchema.parse(result);
+  // Determine the discriminator before parsing.  Note: output takes priority
+  // over error for status (mirrors formatToolResultAsText priority).
+  const hasError = isNonEmptyString(result.error);
+  const hasOutput = isNonEmptyString(result.output);
+  const status = hasError && !hasOutput ? ('error' as const) : ('executed' as const);
 
-  // Build sanitized result, stripping binary data, undefined values, and redundant error fields
-  const sanitizedResult: ToolResultPayload = {};
-  const hasError = isNonEmptyString(parsed.error);
+  // Stamp the discriminator onto the raw result so the discriminated union
+  // schema validates the correct variant.
+  const parsed = ToolResultPayloadSchema.parse({ status, ...result });
+
+  // Build sanitized result, stripping binary data, undefined values, and redundant fields
+  const sanitizedResult: Record<string, unknown> = { status };
 
   for (const [key, value] of Object.entries(parsed)) {
     if (value === undefined) continue;
@@ -160,7 +182,7 @@ export function extractToolAttachments(
     delete sanitizedResult.files;
   }
 
-  return { attachments, sanitizedResult };
+  return { attachments, sanitizedResult: sanitizedResult as ToolResultPayload };
 }
 
 export function describeAttachments(
@@ -291,26 +313,37 @@ export function formatToolResultAsText(
 ): string {
   const textPieces: string[] = [];
 
-  if (isNonEmptyString(result.output)) {
-    textPieces.push(result.output);
-  }
-  // userPatch captures user modifications to tool proposals (distinct from userDiffNote
-  // which only shows merge conflicts). Include when user modified the proposed edit.
-  if (result.userPatch) {
-    textPieces.push(
-      `User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``,
-    );
-  }
-  if (result.userInstruction) {
-    textPieces.push(`User feedback: ${result.userInstruction}`);
-  }
-  // Include error when no meaningful output - check for non-empty error string
-  // rather than isError flag (which may be stripped by extractToolAttachments)
-  if (isNonEmptyString(result.error) && !isNonEmptyString(result.output)) {
+  if (result.status === 'executed') {
+    // Primary output text (the tool's result)
+    if (isNonEmptyString(result.output)) {
+      textPieces.push(result.output);
+    }
+    // userPatch captures user modifications to tool proposals (distinct from
+    // userDiffNote which only shows merge conflicts). Include when user modified
+    // the proposed edit.
+    if (result.userPatch) {
+      textPieces.push(
+        `User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``,
+      );
+    }
+    if (result.userInstruction) {
+      textPieces.push(`User feedback: ${result.userInstruction}`);
+    }
+    // Fallback to summary when no output text was produced
+    if (textPieces.length === 0 && result.summary) {
+      textPieces.push(result.summary);
+    }
+  } else {
+    // Error variant — error is required (z.string()), no output/summary
+    if (result.userPatch) {
+      textPieces.push(
+        `User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``,
+      );
+    }
+    if (result.userInstruction) {
+      textPieces.push(`User feedback: ${result.userInstruction}`);
+    }
     textPieces.push(result.error);
-  }
-  if (textPieces.length === 0 && result.summary) {
-    textPieces.push(result.summary);
   }
   if (attachmentSummary) {
     textPieces.push(attachmentSummary);

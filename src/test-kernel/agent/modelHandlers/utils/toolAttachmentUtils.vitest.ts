@@ -41,27 +41,31 @@ describe('checkToolResultTextLimit', () => {
 
 describe('formatToolResultAsText', () => {
   it('returns output when present', () => {
-    const result = formatToolResultAsText({ output: 'test output' });
+    const result = formatToolResultAsText({ status: 'executed', output: 'test output' });
     assert.equal(result, 'test output');
   });
 
   it('returns summary when no output', () => {
-    const result = formatToolResultAsText({ summary: 'test summary' });
+    const result = formatToolResultAsText({
+      status: 'executed',
+      summary: 'test summary',
+    });
     assert.equal(result, 'test summary');
   });
 
   it('returns error when no output', () => {
-    const result = formatToolResultAsText({ error: 'test error' });
+    const result = formatToolResultAsText({ status: 'error', error: 'test error' });
     assert.equal(result, 'test error');
   });
 
   it('returns OK when all fields empty', () => {
-    const result = formatToolResultAsText({});
+    const result = formatToolResultAsText({ status: 'executed' });
     assert.equal(result, 'OK');
   });
 
   it('includes user feedback', () => {
     const result = formatToolResultAsText({
+      status: 'executed',
       output: 'test',
       userInstruction: 'do this instead',
     });
@@ -70,6 +74,7 @@ describe('formatToolResultAsText', () => {
 
   it('includes user patch', () => {
     const result = formatToolResultAsText({
+      status: 'executed',
       output: 'test',
       userPatch: '+added line',
     });
@@ -79,7 +84,7 @@ describe('formatToolResultAsText', () => {
 
   it('appends attachment summary', () => {
     const result = formatToolResultAsText(
-      { output: 'test' },
+      { status: 'executed', output: 'test' },
       'Attachments: file.pdf',
     );
     assert.ok(result.includes('Attachments: file.pdf'));
@@ -87,14 +92,20 @@ describe('formatToolResultAsText', () => {
 
   it('returns error when result exceeds limit', () => {
     const largeOutput = 'a'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH + 100);
-    const result = formatToolResultAsText({ output: largeOutput });
+    const result = formatToolResultAsText({
+      status: 'executed',
+      output: largeOutput,
+    });
     assert.ok(result.includes('Tool result too large'));
     assert.ok(!result.includes('aaa')); // Should not contain original content
   });
 
   it('returns normal result when within limit', () => {
     const normalOutput = 'a'.repeat(1000);
-    const result = formatToolResultAsText({ output: normalOutput });
+    const result = formatToolResultAsText({
+      status: 'executed',
+      output: normalOutput,
+    });
     assert.equal(result, normalOutput);
   });
 });
