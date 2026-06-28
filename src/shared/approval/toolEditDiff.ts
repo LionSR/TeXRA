@@ -65,7 +65,7 @@ export function firstChangedLine(
       case DIFF_INSERT:
         return proposedLine;
       case DIFF_DELETE:
-        return Math.max(proposedLine - 1, 0);
+        return proposedLine;
     }
   }
 
