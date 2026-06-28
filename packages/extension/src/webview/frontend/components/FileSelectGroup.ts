@@ -242,8 +242,12 @@ export class FileSelectGroup extends LitElement {
       ${repeat(
         this.currentFiles,
         (file) => file,
-        (file) => {
+        (file, index) => {
           const display = this.formatFilePath(file);
+          // Per-row id so the sibling <wa-tooltip> anchors to the right row
+          // (this list renders in a single shadow root). The repeat index is
+          // unique and collision-proof, unlike a sanitized path.
+          const removeButtonId = `file-select-remove-${index}`;
           return html`
             <div class="file-item" data-path=${file} title=${file}>
               <span class="file-name">
@@ -255,6 +259,7 @@ export class FileSelectGroup extends LitElement {
                   : nothing}
               </span>
               <wa-button
+                id=${removeButtonId}
                 class="action-icon-button remove-button"
                 appearance="plain"
                 variant="neutral"
@@ -265,6 +270,7 @@ export class FileSelectGroup extends LitElement {
               >
                 ${waIcon('trash')}
               </wa-button>
+              <wa-tooltip for=${removeButtonId}>Remove file</wa-tooltip>
             </div>
           `;
         },

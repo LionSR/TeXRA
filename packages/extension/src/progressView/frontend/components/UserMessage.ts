@@ -251,17 +251,19 @@ export class UserMessage extends LitElement {
               >
             </span>
             ${renderIconActionButton({
+              id: 'user-message-copy-button',
               icon: 'copy',
               label: copyState.ariaLabel,
-              title: copyState.title,
+              tooltip: copyState.title,
               className: `user-message-copy ${copyState.copied ? copyState.successClass : ''}`,
               onClick: () => this.copyController.copy(displayText),
             })}
             ${hasRawMessage
               ? renderIconActionButton({
+                  id: 'user-message-raw-copy-button',
                   icon: 'code',
                   label: rawMessageCopyState.ariaLabel,
-                  title: rawMessageCopyState.title,
+                  tooltip: rawMessageCopyState.title,
                   className: `user-message-copy ${rawMessageCopyState.copied ? rawMessageCopyState.successClass : ''}`,
                   onClick: () => this.rawMessageCopyController.copy(this.text),
                 })
