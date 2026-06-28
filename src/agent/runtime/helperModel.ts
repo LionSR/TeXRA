@@ -43,3 +43,41 @@ export async function createHelperModelKit(): Promise<HelperModelResult> {
   const client = await handler.getClient();
   return { kit: { handler, client, modelName } };
 }
+
+/** A single non-streaming helper-model text completion. */
+export interface HelperModelCompletion {
+  /** User message content. */
+  userPrompt: string;
+  /** Optional system prompt. */
+  systemPrompt?: string;
+  /** Sampling temperature (defaults to 0 for deterministic helper calls). */
+  temperature?: number;
+}
+
+/**
+ * Run one non-streaming completion against a helper-model kit and return the
+ * extracted response text.
+ *
+ * Encapsulates the `initializeMessages → createResponse → extractResponse`
+ * handler protocol so callers (session descriptions, instruction polishing,
+ * agent creation, LaTeX text connection) share one call path instead of each
+ * reaching into the {@link ModelHandler} internals.
+ */
+export async function runHelperModelCompletion(
+  kit: HelperModelKit,
+  { userPrompt, systemPrompt, temperature = 0 }: HelperModelCompletion,
+): Promise<string> {
+  const messages = await kit.handler.initializeMessages(
+    '',
+    userPrompt,
+    undefined,
+    systemPrompt,
+  );
+  const result = await kit.handler.createResponse({
+    client: kit.client,
+    messages,
+    temperature,
+    systemPrompt,
+  });
+  return kit.handler.extractResponse(result.response, '').text;
+}
