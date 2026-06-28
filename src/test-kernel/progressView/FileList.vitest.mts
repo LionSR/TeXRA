@@ -101,10 +101,12 @@ function restoreDom(): void {
   globalThis.KeyboardEvent = originalGlobals.KeyboardEvent;
   globalThis.ResizeObserver = originalGlobals.ResizeObserver;
   globalThis.localStorage = originalGlobals.localStorage;
-  globalThis.HTMLSlotElement = originalGlobals.HTMLSlotElement;
-  globalThis.MouseEvent = originalGlobals.MouseEvent;
   globalThis.AbortController = originalGlobals.AbortController;
   globalThis.AbortSignal = originalGlobals.AbortSignal;
+  // HTMLSlotElement/MouseEvent aren't Node globals, so they captured undefined;
+  // route them through restoreOptionalGlobal to delete rather than set undefined.
+  restoreOptionalGlobal('HTMLSlotElement', originalGlobals.HTMLSlotElement);
+  restoreOptionalGlobal('MouseEvent', originalGlobals.MouseEvent);
   restoreOptionalGlobal(
     'requestAnimationFrame',
     originalGlobals.requestAnimationFrame,
