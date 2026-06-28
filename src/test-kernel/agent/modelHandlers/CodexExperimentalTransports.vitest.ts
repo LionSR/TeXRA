@@ -13,6 +13,12 @@ import { resetCodexCoordinator } from '@auth/codex';
 interface CodexInternals {
   storesResponsesServerSide: boolean;
   isWebSocketModeEnabled(): boolean;
+  prepareWireParams(p: Record<string, unknown>): Record<string, unknown>;
+  rebuildSparseResponseOutput(
+    response: { output: unknown[]; output_text?: string },
+    streamedItems: unknown[],
+    streamedText: string,
+  ): void;
 }
 
 function config(): ModelConfig {
@@ -94,6 +100,27 @@ describe('Codex background/websocket transports follow the shared toggles', () =
     ).toBe(false);
   });
 
+  it('keeps the background toggle from leaking into the request path on the subscription', async () => {
+    // Regression: the request path used to read the background decision from a
+    // separate predicate the Codex override couldn't reach, so background:true
+    // was sent to a backend that rejects it (HTTP 400, no body). Both the
+    // background toggle AND the websocket toggle on must still resolve to a
+    // plain streaming request, never background.
+    await initPlatformWith({
+      config: { 'texra.model.useBackgroundResponses': true },
+      globalState: { 'texra.websocket.openai': true },
+    });
+    const handler = workflowHandler();
+
+    // The single decision the request path now reads.
+    expect(handler.isBackgroundModeActive()).toBe(false);
+    // Streaming stays on, and websocket is only chosen because background is off.
+    expect(handler.getStreamingConfig()).toBe(true);
+    expect(
+      (handler as unknown as CodexInternals).isWebSocketModeEnabled(),
+    ).toBe(true);
+  });
+
   it('honors background mode on the fallback OpenAI-API-key path when the subscription is off', async () => {
     // Once the subscription preference is off the request runs on the user's
     // OpenAI API key with full base capabilities, so the shared toggle decides
@@ -123,5 +150,54 @@ describe('Codex background/websocket transports follow the shared toggles', () =
     expect(
       (handler as unknown as CodexInternals).isWebSocketModeEnabled(),
     ).toBe(true);
+  });
+
+  it('rebuilds the sparse Codex completed response from streamed items/text', async () => {
+    // The Codex backend's `response.completed` carries no output (verified
+    // against the official Rust client: its Completed event has only
+    // response_id/usage/end_turn, and it accumulates OutputItemDone). Both the
+    // HTTP and WebSocket transports must rebuild `output`/`output_text` from the
+    // streamed deltas — otherwise the whole turn, tool calls included, is lost.
+    await initPlatformWith({});
+    const handler = workflowHandler() as unknown as CodexInternals;
+
+    // A sparse completed response, as Codex returns it over WebSocket.
+    const response = { output: [] as unknown[], output_text: undefined };
+    const streamedItems = [
+      { type: 'reasoning', id: 'rs_1', summary: [] },
+      {
+        type: 'function_call',
+        id: 'fc_1',
+        call_id: 'call_1',
+        name: 'delegate',
+        arguments: '{"task":"review"}',
+      },
+    ];
+
+    handler.rebuildSparseResponseOutput(response, streamedItems, 'hello world');
+
+    // Tool call survives (this is what was being dropped on the WS path).
+    expect(response.output).toEqual(streamedItems);
+    expect(response.output_text).toBe('hello world');
+  });
+
+  it('applies the Codex wire rewrite on the WebSocket path (it bypasses codexFetch)', async () => {
+    // Regression: the WebSocket transport sends params directly via the SDK and
+    // never hits codexFetch, so without prepareWireParams the un-rewritten body
+    // (here `max_output_tokens`) reaches Codex → 400 Unsupported parameter.
+    await initPlatformWith({
+      globalState: { 'texra.websocket.openai': true },
+    });
+    const handler = workflowHandler();
+
+    const wire = (handler as unknown as CodexInternals).prepareWireParams({
+      model: 'gpt-5.5',
+      max_output_tokens: 1024,
+      input: [{ role: 'user', content: 'hi' }],
+    });
+
+    expect(wire).not.toHaveProperty('max_output_tokens');
+    expect(wire.store).toBe(false);
+    expect(wire.stream).toBe(true);
   });
 });

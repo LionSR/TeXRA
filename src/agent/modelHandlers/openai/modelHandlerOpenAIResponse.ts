@@ -286,24 +286,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Check if background mode is active for this handler.
    * Background mode is enabled when this handler supports it, the config
    * toggle is on, and this model/agent is eligible for background execution.
+   *
+   * Single source of truth for the background-mode decision: the request path
+   * (`createResponseImpl`), `getStreamingConfig`, and `storesResponsesServerSide`
+   * all route through this method, so a subclass override (e.g. the Codex
+   * subscription handler forcing it off) takes effect on the actual request —
+   * not just on this predicate.
    */
   public override isBackgroundModeActive(): boolean {
-    return this.shouldUseBackgroundResponses();
+    return (
+      this.backgroundModeSupported &&
+      this.isBackgroundModeToggleEnabled() &&
+      this.isBackgroundModeEligible()
+    );
   }
 
   private isBackgroundModeToggleEnabled(): boolean {
     return getConfig<boolean>('texra.model.useBackgroundResponses', true);
-  }
-
-  private shouldUseBackgroundResponses(
-    backgroundToggleEnabled = this.isBackgroundModeToggleEnabled(),
-    backgroundModeEligible = this.isBackgroundModeEligible(),
-  ): boolean {
-    return (
-      this.backgroundModeSupported &&
-      backgroundToggleEnabled &&
-      backgroundModeEligible
-    );
   }
 
   protected override backgroundModeSupported = true;
@@ -1237,12 +1236,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
-    const backgroundToggleEnabled = this.isBackgroundModeToggleEnabled();
-    const backgroundModeEligible = this.isBackgroundModeEligible();
-    const useBackgroundResponses = this.shouldUseBackgroundResponses(
-      backgroundToggleEnabled,
-      backgroundModeEligible,
-    );
+    // Route through isBackgroundModeActive() so subclass overrides (e.g. the
+    // Codex subscription handler) actually gate the request, not just the
+    // predicate.
+    const useBackgroundResponses = this.isBackgroundModeActive();
     const streamingToggleEnabled = useBackgroundResponses
       ? super.getStreamingConfig()
       : this.getStreamingConfig();
@@ -1251,9 +1248,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.isWebSocketModeEnabled() && !useBackgroundResponses;
 
     if (
-      backgroundToggleEnabled &&
-      backgroundModeEligible &&
-      !useBackgroundResponses
+      !useBackgroundResponses &&
+      this.isBackgroundModeToggleEnabled() &&
+      this.isBackgroundModeEligible()
     ) {
       this.logger.debug(
         'Background mode toggle is enabled but this handler does not support background execution. Proceeding without background mode.',
@@ -1582,6 +1579,46 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Last-chance adaptation of the request before it goes on the wire. The
+   * HTTP paths rewrite the serialized body in their custom `fetch`, but the
+   * WebSocket transport sends `params` directly via the SDK and never touches
+   * `fetch` — so backends needing request shaping (e.g. Codex) must apply it
+   * here too. Identity by default; overridden where a backend rewrites params.
+   */
+  protected prepareWireParams(
+    params: ResponseCreateParamsBase,
+  ): ResponseCreateParamsBase {
+    return params;
+  }
+
+  /**
+   * Some backends (the ChatGPT-subscription Codex endpoint) stream output items
+   * (text, tool calls, reasoning) but leave the completed response's `output` /
+   * `output_text` empty or partial. Fill the missing items from the streamed
+   * `output_item.done` events and text deltas so function calls and final text
+   * are not dropped. Shared by the HTTP streaming and WebSocket transports —
+   * both observe the same sparse completed response. `output` / `output_text`
+   * are mutable on the base `Response`, so this assigns through that view (the
+   * streaming path's value is a `ParsedResponse`) and mutates in place.
+   */
+  private rebuildSparseResponseOutput(
+    response: Response,
+    streamedItems: Response['output'],
+    streamedText: string,
+  ): void {
+    const mergedOutput = mergeMissingStreamedOutputItems(
+      response.output,
+      streamedItems,
+    );
+    if (mergedOutput !== response.output) {
+      response.output = mergedOutput;
+    }
+    if (streamedText && !hasResponseOutputText(response)) {
+      response.output_text = streamedText;
+    }
+  }
+
+  /**
    * WebSocket transport path: a persistent connection for lower-latency
    * tool-use loops. Polls to completion if the response comes back pending.
    */
@@ -1593,7 +1630,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     const wsResult = await this.getWebSocketTransport().execute(
       client,
-      params,
+      this.prepareWireParams(params),
       signal,
     );
     let response = wsResult.response;
@@ -1610,6 +1647,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal,
       );
     }
+
+    // The Codex backend leaves the completed response's output empty; rebuild
+    // it from the streamed items/text, mirroring the HTTP streaming path, so
+    // tool calls and final text survive. (No-op after a background poll, which
+    // returns a fully-populated response.)
+    this.rebuildSparseResponseOutput(
+      response,
+      wsResult.streamedItems,
+      wsResult.streamedText,
+    );
 
     // Finalize streams after background polling so the final text
     // reflects the completed response, not the pre-poll snapshot.
@@ -1677,23 +1724,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
-      // Some backends (the ChatGPT-subscription Codex endpoint) stream output
-      // items (text, tool calls, reasoning) but leave the completed response's
-      // `output` empty or partial. Fill missing items from streamed
-      // `output_item.done` events so function calls are not dropped.
-      // `finalResponse()` returns a `ParsedResponse`, but `output` /
-      // `output_text` are mutable fields on the base `Response`; assign
-      // through that view so no hand-rolled response shape is needed.
-      const mergedOutput = mergeMissingStreamedOutputItems(
-        response.output,
-        streamedItems,
-      );
-      if (mergedOutput !== response.output) {
-        (response as Response).output = mergedOutput;
-      }
-      if (streamedText && !hasResponseOutputText(response)) {
-        (response as Response).output_text = streamedText;
-      }
+      this.rebuildSparseResponseOutput(response, streamedItems, streamedText);
 
       processor.finalize(response);
 
