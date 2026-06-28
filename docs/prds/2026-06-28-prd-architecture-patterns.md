@@ -108,9 +108,10 @@ One unifying axis underneath all of these is **connascence** (Meilir Page-Jones,
 _What Every Programmer Should Know About Object-Oriented Design_, 1995;
 popularized by Jim Weirich): type-level leakage (Pattern 3) is connascence of
 type across the boundary; "the host must replay a runtime sequence" (Problems 1
-and 2) is connascence of timing or algorithm; the `Runtime`-prefix synonyms are
+and 2) is connascence of execution (order) or algorithm; the `Runtime`-prefix synonyms are
 connascence of name only. Naming the axis lets a reviewer say which kind of
-coupling a change removes rather than only that "it leaks".
+coupling a change removes rather than only that "it leaks"; a PR should state
+which connascence it removes.
 
 ## Pattern 1: One Core, Many Hosts Behind a Typed Protocol
 
@@ -144,7 +145,10 @@ direct analogue of an LSP/DAP message channel: adapters implement transport, the
 core owns semantics. `noopAgentRuntimeHost` (`AgentRuntimeHost.ts:35`) is the
 Null Object: a drop-everything host that tests and non-interactive paths run a
 full run against, which is the CLAUDE.md "headless parity is sacred" rule made
-structural. The port's doc comment (`AgentRuntimeHost.ts:8-27`) enumerates a
+structural. That same Null Object is the reference partial host for
+**Consumer-Driven Contract** testing (Martin Fowler, "ContractTest", 2011; Pact):
+each adapter is exercised against the `AgentRuntimeHost` event contract, and
+`ConversationPane.vitest.mts` is an existing host-side contract lock. The port's doc comment (`AgentRuntimeHost.ts:8-27`) enumerates a
 two-tier contract: an essential streaming surface a host handles to observe a
 run, and a frontend-bound group a thin client may ignore. That is the "render
 the typed result, do not replay the internal sequence" rule written into the
@@ -237,8 +241,8 @@ read projection per consumer is **read-model / CQRS** shaping (Bertrand Meyer's
 Command-Query Separation, 1988; CQRS framed by Greg Young and Udi Dahan around
 2010); this is read-model shaping, not event-sourced CQRS. And the failure mode
 where a host pulls the whole aggregate out and rebuilds it is the Ask half of
-**Tell, Don't Ask** (Fowler's "TellDontAsk", 2013, crediting Hunt and Thomas,
-_The Pragmatic Programmer_, 1999): tell the runtime to act, do not ask it for the
+**Tell, Don't Ask** (Fowler's "TellDontAsk", 2013, crediting Andy Hunt and Dave
+Thomas, the Pragmatic Programmers): tell the runtime to act, do not ask it for the
 aggregate and re-derive state in the host.
 
 **How it maps to TeXRA.** This is our least mature pattern, and the work is to
@@ -265,7 +269,11 @@ dishonest at the type level. And hosts then consume and reconstruct the full
 shape: `buildCompileFixerConfig` (`ProgressFollowUpController.ts:378-393`) takes
 a `RuntimeAgentConfig` and rebuilds a complete one via
 `parseRuntimeToolUseAgentConfig({ ...originalConfig, ... })`, which is the Ask
-anti-pattern in the flesh.
+anti-pattern in the flesh. When a published projection must change shape, evolve
+it with the Zod union-plus-transform backward-compatibility pattern (CLAUDE.md
+"Backward Compatibility with Zod"): new format first, legacy transforming to the
+canonical shape at one entry point, so the published language stays
+single-canonical for every host.
 
 **Rule.** A boundary type is a projection the host actually needs, not an alias
 of an internal type. If a host only reads three fields, publish those three
@@ -299,9 +307,10 @@ dead: the branch deleting them (commit "refactor: drop dead .catch around
 non-throwing writeTerminalStatus") removed wrappers around the contractually
 non-throwing call. Errors as values appear as hand-rolled discriminated unions:
 `RuntimeFollowUpOutcome` is `'sent' | 'queued' | 'dropped' | 'no_session'`
-(`followUpCommands.ts:25-44`), with the same shape in `RuntimeHistoryDeleteExecutionResult`,
-`RuntimeToolUseResumeDataResult`, `RuntimeModelSwitchResult`, and
-`RuntimeTextPolishResult`. These are deliberately not a `Result<T,E>` monad or
+(`followUpCommands.ts`), with the same discriminated-union outcome pattern in
+`RuntimeHistoryDeleteExecutionResult`, `RuntimeToolUseResumeDataResult`,
+`RuntimeModelSwitchResult`, and `RuntimeTextPolishResult`, though the first is a
+string-literal union and the rest are tagged object unions. These are deliberately not a `Result<T,E>` monad or
 `neverthrow`; do not "modernize" them into a library dependency. The single
 exception-aggregation boundary is `src/shared/progressView/backend/events/errorHandling.ts`:
 `withEventErrorHandling` catches both sync throws and async rejections from
@@ -378,7 +387,7 @@ executions are active. The run-scoped default `currentSession()`
 `runCoordinatorCommands.ts:32,41,50,58`; `streamResourceLifecycle.ts:40,63`;
 `modelSwitch.ts:34,53`; `manualCompaction.ts:45`; `executionQueries.ts:16`). The
 decoupling PRD's Runtime State Ownership audit (lines 1632-1655) classifies every
-long-lived registry as truly-global, session-scoped, run-scoped, or host-UI
+long-lived runtime registry as truly-global, session-scoped, run-scoped, or host-UI
 state.
 
 The remaining audited module-level mutable is `desktopAgentResume.ts`:
@@ -432,18 +441,18 @@ content-comparison dedup fallback; it is at ingestion, not render, so it is the
 milder case, but it is the "dedup comparing content" smell CLAUDE.md names and
 should be retired.
 
-The gap is the progressView Lit formatters, and it is broader than two stores.
-Four module-level stores hold render-time state that a reducer must garbage
-collect on delete: `copyContentStore` (`copyContentStore.ts:10`, with a
-render-time content-hash id at line 19), `proposalInputStore`
-(`proposalInputStore.ts:18,31`), `resolvedProposalIds` (`permissionSlice.ts:26`),
-and `pendingDescriptions` (`streamMetaSlice.ts:22`). The content-hash ids are
-minted as side effects of html formatters (`messageFormatters.ts:135`,
-`htmlBuilders.ts:112,267`, `toolFormatters.ts:197`), and `DELETE_STREAM` /
-`DELETE_ALL` must call `clearResolvedProposalIds()`, `clearCopyContentStore()`,
-and `clearProposalInputStore()` (`streamLifecycleSlice.ts:168-170,192-195`). A
-renderer that needs a reducer to clean up after it is the inversion this pattern
-forbids.
+The gap is the progressView Lit formatters. Three module-level stores must be
+garbage-collected by the delete reducer, `copyContentStore`, `proposalInputStore`,
+and `resolvedProposalIds`, which `DELETE_STREAM` / `DELETE_ALL` clear through
+`clearCopyContentStore()`, `clearProposalInputStore()`, and
+`clearResolvedProposalIds()` (`streamLifecycleSlice.ts`). Only the first two are
+render-minted: their content-hash ids are side effects of the html formatters
+(`messageFormatters.ts`, `htmlBuilders.ts`, `toolFormatters.ts`), while
+`resolvedProposalIds` is a permission out-of-order guard. A separate store,
+`pendingDescriptions` (`streamMetaSlice.ts`), is inter-slice plumbing consumed on
+read rather than cleared on delete; it too belongs on the entry DTO at ingestion.
+A renderer that needs a reducer to clean up after it is the inversion this
+pattern forbids.
 
 **Rule.** Renderers are props-in to view-out, with no `Date.now()`, synthetic
 ids, or dedup at render time. Carry the copy payload, the parsed proposal, and a
@@ -547,7 +556,7 @@ named removal milestone rather than leaving it permanent.
 | 4. Errors as values         | Good     | typed outcomes, `writeTerminalStatus` contract, central `errorHandling.ts`    | one diagnostic-dropping swallow (`ProgressViewState.ts:385`)                                                             |
 | 5. No premature abstraction | Good     | pass-through audit, deletion-or-invariant                                     | near mature; no surviving single-call controller factory found                                                           |
 | 6. Session ownership        | Good     | `SessionHandle`, ownership audit                                              | no known accidental session-global in this slice; desktop resume registry remains an intentional process router to watch |
-| 7. Declarative UI           | Partial  | CLI Ink TUI (test-locked)                                                     | four progressView render-time stores; CLI ingestion-time content dedup                                                   |
+| 7. Declarative UI           | Partial  | CLI Ink TUI (test-locked)                                                     | three progressView stores the delete reducer must clear; CLI ingestion-time content dedup                                |
 | 8. Fitness functions        | Good     | family of `check:*` scripts                                                   | type-blind regex; dead-code and CLI-boundary checks not in CI; `knip.json` `".*"`                                        |
 | 9. Strangler Fig            | Good     | deleted-export guards, Phase 0.5 plan                                         | temporary adapters need named removal milestones                                                                         |
 | Layer depth (objective)     | Good     | three-hop adapter / command / internals spine                                 | occasional pass-through controllers to collapse into the adapter or the command                                          |
@@ -576,8 +585,8 @@ vocabulary. In addition to the decoupling PRD's review checklist:
    into CI, in the same PR (Pattern 8).
 7. If it removes a pass-through, guard the deleted name or add an invariant test
    in the same PR (Pattern 9).
-8. Count the hops from the host event to the runtime internal it drives; if any
-   hop presents the same abstraction as its neighbor, delete it (fewest layers).
+8. Apply the hop-count reviewer test from The Overriding Objective: delete any
+   hop that presents its neighbor's abstraction.
 
 ## Non-Goals
 
