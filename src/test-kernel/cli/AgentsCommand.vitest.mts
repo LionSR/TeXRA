@@ -383,7 +383,9 @@ describe('CLI agents command', () => {
 
     expect(exitCode).toBe(0);
     expect(mocks.seedCliRosterFromDefaultTeam).not.toHaveBeenCalled();
-    expect(mocks.loadAgents).toHaveBeenCalledWith();
+    // loadRuntimeAgents is a pure pass-through, so the --all path forwards
+    // loadAgents(undefined), which is the no-filter default for the full catalog.
+    expect(mocks.loadAgents).toHaveBeenCalledWith(undefined);
     expect(mocks.getVisibleAgents).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).not.toHaveBeenCalled();
     expect(mocks.emitCliResult).toHaveBeenCalledWith(
