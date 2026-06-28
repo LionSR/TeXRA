@@ -23,7 +23,6 @@ import {
 } from '@agent/runtime/modelSwitch';
 import { requestRuntimeToolUseSnapshotResume } from '@agent/runtime/resumeCommands';
 import { runAgent } from '@agent/runtime/runAgent';
-import { repairRuntimeHistoryTerminalStatus } from '@agent/runtime/historyCommands';
 import {
   requestKillExecution,
   requestRuntimeStreamStop,
@@ -47,7 +46,6 @@ import {
 } from '@cli/runtime/terminalStatus';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
-  EXECUTION_STATUS,
   type ExecutionId,
   type StreamStatus,
   type StreamTabId,
@@ -493,12 +491,6 @@ export function createChatSessionController(
       })
       .catch(async (error: unknown) => {
         if (!session.stopRequested) {
-          if (executionId) {
-            await repairRuntimeHistoryTerminalStatus(
-              executionId,
-              EXECUTION_STATUS.ERROR,
-            );
-          }
           appendLocalErrorTranscript(toErrorMessage(error));
         }
         session.runExitCode = session.stopRequested

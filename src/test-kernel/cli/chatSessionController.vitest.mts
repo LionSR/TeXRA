@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   requestRuntimeFollowUp: vi.fn(),
   requestRuntimeToolUseSnapshotResume: vi.fn(),
   runAgent: vi.fn(),
-  repairRuntimeHistoryTerminalStatus: vi.fn(),
   setCliHelperModel: vi.fn(),
   ensureStreamLogLoaded: vi.fn(),
   getStreamLog: vi.fn(),
@@ -46,10 +45,6 @@ vi.mock('@agent/runtime/resumeCommands', () => ({
 
 vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: mocks.runAgent,
-}));
-
-vi.mock('@agent/runtime/historyCommands', () => ({
-  repairRuntimeHistoryTerminalStatus: mocks.repairRuntimeHistoryTerminalStatus,
 }));
 
 vi.mock('@agent/runtime/terminalResultToast', () => ({
@@ -104,12 +99,7 @@ import {
   type TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
-import {
-  EXECUTION_STATUS,
-  RUN_OUTCOME,
-  STREAM_STATUS,
-  type StreamTabId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ---------------------------------------------------------------------------
@@ -221,11 +211,6 @@ describe('createChatSessionController', () => {
       accepted: true,
     });
     mocks.runAgent.mockReset();
-    mocks.repairRuntimeHistoryTerminalStatus.mockReset();
-    mocks.repairRuntimeHistoryTerminalStatus.mockResolvedValue({
-      status: 'written',
-      terminalStatus: EXECUTION_STATUS.ERROR,
-    });
     mocks.runAgent.mockImplementation(async (_request, options) => {
       const executionId = 'exec-chat-controller-run-agent';
       const streamId = 'stream-chat-controller-run-agent' as StreamTabId;
@@ -371,7 +356,7 @@ describe('createChatSessionController', () => {
     expect(session.runExitCode).toBe(CliExitCode.Success);
   });
 
-  it('marks an allocated chat execution ERROR when launch fails', async () => {
+  it('leaves failed-launch history repair to the runtime run boundary', async () => {
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
     mocks.runAgent.mockImplementation(async (_request, options) => {
@@ -389,10 +374,6 @@ describe('createChatSessionController', () => {
 
     await session.runPromise;
 
-    expect(mocks.repairRuntimeHistoryTerminalStatus).toHaveBeenCalledWith(
-      'exec-chat-controller-failed',
-      EXECUTION_STATUS.ERROR,
-    );
     expect(session.runExitCode).toBe(CliExitCode.AgentError);
   });
 
