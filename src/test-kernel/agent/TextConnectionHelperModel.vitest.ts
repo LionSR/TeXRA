@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createHelperModelKit = vi.hoisted(() => vi.fn());
 
-vi.mock('@agent/runtime/helperModel', () => ({
+vi.mock('@agent/runtime/helperModel', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
   createHelperModelKit,
 }));
 

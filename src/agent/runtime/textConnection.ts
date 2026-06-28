@@ -5,7 +5,10 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
-import { createHelperModelKit } from '@agent/runtime/helperModel';
+import {
+  createHelperModelKit,
+  runHelperModelCompletion,
+} from '@agent/runtime/helperModel';
 import { classifyAgentError, getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
@@ -73,24 +76,14 @@ async function bestConnectionMethodWithHelperModel(
     return DEFAULT_RESULT;
   }
 
-  const { handler, client } = helperResult.kit;
   const prompt = buildPrompt(str1, str2);
   const choices: string[] = [];
 
   for (let i = 0; i < Math.max(1, n); i += 1) {
-    const messages = await handler.initializeMessages(
-      '',
-      prompt,
-      undefined,
-      SYSTEM_PROMPT,
-    );
-    const result = await handler.createResponse({
-      client,
-      messages,
-      temperature: 0,
+    const text = await runHelperModelCompletion(helperResult.kit, {
+      userPrompt: prompt,
       systemPrompt: SYSTEM_PROMPT,
     });
-    const { text } = handler.extractResponse(result.response, '');
     choices.push(text.trim());
   }
 
