@@ -41,7 +41,7 @@ import {
   ONBOARDING_CHOICE_SIGN_IN,
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
-import { assertNever } from '../chat/tui/assertNever';
+import { assertNever } from '@utils/core';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';

@@ -24,7 +24,7 @@ import type {
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
-import { assertNever } from '../assertNever';
+import { assertNever } from '@utils/core';
 
 export type ApprovalBypassKind = 'bash' | 'toolEdit' | 'superYolo';
 export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';

@@ -4,6 +4,7 @@
 // `useSignal(currentApproval)` subscription — avoids a second store read
 // every render.
 
+import { assertNever } from '@utils/core';
 import { AgentProposal } from './AgentProposal';
 import { BashApproval } from './BashApproval';
 import { EditApproval } from './EditApproval';
@@ -11,7 +12,6 @@ import { ExternalInquiry } from './ExternalInquiry';
 import { PlanApproval } from './PlanApproval';
 import { RetryRequest } from './RetryRequest';
 import { UserQuestion } from './UserQuestion';
-import { assertNever } from '../assertNever';
 import type { PendingApproval } from '../state/approvalQueue';
 
 export interface ApprovalModalProps {
