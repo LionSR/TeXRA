@@ -184,6 +184,12 @@ const FORBIDDEN_IMPORTS = [
       'use @agent/runtime/humanInputCommands for external-inquiry runtime queries and decisions',
   },
   {
+    source: '@controllers/settingsView/SettingsGoalControllerFactory',
+    includeSubpaths: true,
+    guidance:
+      'construct SettingsGoalController directly; the controller owns its default runtime projection',
+  },
+  {
     source: '@tools/approval',
     includeSubpaths: false,
     guidance:
@@ -352,6 +358,12 @@ const FORBIDDEN_PATTERNS = [
     label: 'ProgressViewBridge raw getter/setter',
     guidance:
       'use @agent/runtime/progressViewCommands from host/controller code',
+  },
+  {
+    pattern: /\bcreateSettingsGoalController\(/g,
+    label: 'deleted settings goal controller factory',
+    guidance:
+      'construct SettingsGoalController directly; the controller owns its default runtime projection',
   },
   {
     pattern:
