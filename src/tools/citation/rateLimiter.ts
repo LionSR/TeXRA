@@ -10,14 +10,15 @@ export async function waitForRateLimit(
   apiName: string,
   minDelayMs: number,
 ): Promise<void> {
-  const existing = limiters.get(apiName);
-  if (!existing || existing.minDelayMs !== minDelayMs) {
-    limiters.set(apiName, {
+  let limiter = limiters.get(apiName);
+  if (!limiter || limiter.minDelayMs !== minDelayMs) {
+    limiter = {
       minDelayMs,
       wait: pThrottle({ limit: 1, interval: minDelayMs })(() =>
         Promise.resolve(),
       ),
-    });
+    };
+    limiters.set(apiName, limiter);
   }
-  await limiters.get(apiName)!.wait();
+  await limiter.wait();
 }
