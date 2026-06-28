@@ -43,6 +43,14 @@ type CliGlobalArgsDef = {
     type: 'boolean';
     description: string;
   };
+  // Positively-named boolean with no default: when unset it stays `undefined`
+  // and falls through to the stored `texra.websocket.openai` toggle; `--no-
+  // websocket` arrives as `websocket: false` to force the HTTP path for the run.
+  websocket: {
+    type: 'boolean';
+    negativeDescription: string;
+    description: string;
+  };
 };
 
 type CliSkillSourceArgsDef = {
@@ -104,6 +112,12 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
     description:
       'For headless commands, disable prompts and default approvals to never',
   },
+  websocket: {
+    type: 'boolean',
+    description:
+      'Use the experimental OpenAI WebSocket transport for this run (overrides the stored setting)',
+    negativeDescription: 'Force the HTTP transport for this run',
+  },
 };
 
 export const SKILL_SOURCE_ARGS: CliSkillSourceArgsDef = {
@@ -153,6 +167,7 @@ export const INTERACTIVE_GLOBAL_ARGS: Omit<
   'api-mode': GLOBAL_ARGS['api-mode'],
   'approval-policy': GLOBAL_ARGS['approval-policy'],
   color: GLOBAL_ARGS.color,
+  websocket: GLOBAL_ARGS.websocket,
 };
 
 export const INTERACTIVE_AGENT_GLOBAL_ARGS = {
@@ -182,11 +197,19 @@ export const GLOBAL_BOOL_FLAGS = new Set<string>(
   Object.entries(ROOT_ROUTING_ARGS).flatMap(([name, def]) => {
     if (def.type !== 'boolean') return [];
     const flags = flagSpellings(name, def);
-    // Booleans defaulting to `true` are passed by their negated form
-    // (`--no-color`); citty rewrites those to `<name>: false`.
-    // Register the negated spelling so leading-flag reordering and unknown-
-    // command detection recognize `texra --no-color agents list`.
-    if ('default' in def && def.default === true) flags.push(`--no-${name}`);
+    // Register the negated `--no-<name>` spelling so leading-flag reordering and
+    // unknown-command detection recognize it (e.g. `texra --no-color agents
+    // list`, `texra --no-websocket run polish`). citty rewrites any
+    // `--no-<name>` to `<name>: false`; we register the spelling for booleans
+    // that document a negated form — those defaulting to `true` (passed via the
+    // negative, like `--no-color`) and opt-in toggles that advertise a
+    // `negativeDescription` (like `--no-websocket`, which has no default).
+    if (
+      ('default' in def && def.default === true) ||
+      'negativeDescription' in def
+    ) {
+      flags.push(`--no-${name}`);
+    }
     return flags;
   }),
 );

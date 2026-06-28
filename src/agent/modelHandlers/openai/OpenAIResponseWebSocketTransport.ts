@@ -62,6 +62,15 @@ export interface OpenAIResponseWebSocketTransportDeps {
 export interface WebSocketExecutionResult {
   response: Response;
   processor: ResponseStreamProcessor;
+  /**
+   * Output items collected from `response.output_item.done` events, and text
+   * from the deltas. Some backends (the Codex subscription endpoint) leave the
+   * completed response's `output`/`output_text` empty, so the caller rebuilds
+   * them from these — otherwise the whole turn, tool calls included, is dropped.
+   * Mirrors the HTTP streaming path.
+   */
+  streamedItems: Response['output'];
+  streamedText: string;
 }
 
 export class OpenAIResponseWebSocketTransport {
@@ -194,6 +203,10 @@ export class OpenAIResponseWebSocketTransport {
     // mirroring the HTTP streaming path. Without this, a WebSocket failure
     // mid-response would lose any text that had already been generated.
     let streamedText = '';
+    // Each `output_item.done` carries one complete output item (message, tool
+    // call, or reasoning). The Codex subscription endpoint leaves the completed
+    // response's `output` empty, so we keep these to rebuild it in the caller.
+    const streamedItems: Response['output'] = [];
 
     return new Promise<WebSocketExecutionResult>((resolve, reject) => {
       let settled = false;
@@ -248,6 +261,8 @@ export class OpenAIResponseWebSocketTransport {
         processor.process(e);
         if (isTextDeltaEvent(e)) {
           streamedText += e.delta;
+        } else if (e.type === 'response.output_item.done') {
+          streamedItems.push(e.item);
         }
       };
 
@@ -265,7 +280,7 @@ export class OpenAIResponseWebSocketTransport {
         cleanup();
         // Stream finalization is deferred to the caller so that background
         // polling (if needed) can replace the response before streams close.
-        resolve({ response, processor });
+        resolve({ response, processor, streamedItems, streamedText });
       };
 
       const onCompleted = (event: ResponseCompletedEvent): void =>
@@ -362,6 +377,16 @@ export class OpenAIResponseWebSocketTransport {
     const wsConnection = this.wsConnection;
     if (wsConnection) {
       closeQuietly(wsConnection);
+      // A graceful `close()` only sends the close frame and waits for the
+      // server's reply, so the underlying socket stays an active handle and
+      // keeps the Node event loop alive — a headless `--websocket` run would
+      // hang after finishing. We're done with this connection, so force the
+      // socket down to release the handle immediately.
+      try {
+        wsConnection.socket.platformSocket.terminate();
+      } catch {
+        /* already closed */
+      }
       this.wsConnection = null;
       this.wsConnectionCreatedAt = 0;
       this.logger.debug('WebSocket connection closed');
@@ -380,6 +405,12 @@ export class OpenAIResponseWebSocketTransport {
         // Ignore ping errors
       }
     }, WS_KEEPALIVE_INTERVAL_MS);
+    // A background ping timer must never, by itself, keep the Node event loop
+    // alive: a headless `texra ... --websocket` run would otherwise hang after
+    // finishing until the connection ages out. `unref` lets the process exit
+    // once the real work is done; an in-flight request is held by its own
+    // pending promise, and interactive sessions by the TUI's own handles.
+    this.wsKeepaliveInterval.unref?.();
   }
 
   /** Stop keepalive pings. */

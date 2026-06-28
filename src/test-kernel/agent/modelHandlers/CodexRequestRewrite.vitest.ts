@@ -107,7 +107,10 @@ describe('rewriteCodexRequestBody', () => {
     expect(out.instructions).toBe(CODEX_DEFAULT_INSTRUCTIONS);
   });
 
-  it('leaves transport fields untouched in background mode but still normalizes', () => {
+  it('strips background entirely — the Codex backend has no background mode', () => {
+    // Probed directly: background:true returns 400 "Unsupported parameter:
+    // background" even with store:false/stream:true satisfied. So the rewriter
+    // always strips it and forces the working stateless streaming shape.
     expect(
       rewriteCodexRequestBody({
         background: true,
@@ -119,10 +122,8 @@ describe('rewriteCodexRequestBody', () => {
         ],
       }),
     ).toEqual({
-      // background + store preserved, no stream forced, max_output_tokens gone,
-      // instructions still hoisted.
-      background: true,
-      store: true,
+      store: false,
+      stream: true,
       instructions: 'S',
       input: [{ role: 'user', content: 'u' }],
     });
