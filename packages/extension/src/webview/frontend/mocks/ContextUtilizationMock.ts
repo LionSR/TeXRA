@@ -2,6 +2,7 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { styleMap } from 'lit/directives/style-map.js';
 
 // Side-effect imports - Web Awesome components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -111,7 +112,7 @@ export class ContextUtilizationMock extends LitElement {
         <span class="ctx-chip__bar" aria-hidden="true">
           <span
             class="ctx-chip__fill"
-            style="transform: scaleX(${scale})"
+            style=${styleMap({ transform: `scaleX(${scale})` })}
           ></span>
         </span>
         <span class="ctx-chip__numeric">${clamped}%</span>
