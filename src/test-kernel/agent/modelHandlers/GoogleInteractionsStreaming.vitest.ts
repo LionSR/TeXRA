@@ -8,6 +8,7 @@ import {
 import type { AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import { GOOGLE_FINISH } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { Interactions } from '@google/genai';
 
 type StreamRecord = {
@@ -211,8 +212,10 @@ describe('ModelHandlerGoogleInteractions streaming', () => {
 
     // Truncation is surfaced as `incomplete`, not silently `completed`.
     expect(result.response.status).toBe('incomplete');
+    // extractResponse normalizes the 'incomplete' status to the canonical
+    // MAX_TOKENS finish reason the shared continuation logic keys on.
     expect(handler.extractResponse(result.response, '').stopReason).toBe(
-      'incomplete',
+      GOOGLE_FINISH.MAX_TOKENS,
     );
   });
 
