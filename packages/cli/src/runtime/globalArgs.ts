@@ -66,7 +66,8 @@ export function pickGlobalArgs(
     noColor: args.color === false,
     // Tri-state: true/false from --websocket/--no-websocket, else undefined to
     // defer to the stored `texra.websocket.openai` setting.
-    webSocketEnabled: typeof args.websocket === 'boolean' ? args.websocket : undefined,
+    webSocketEnabled:
+      typeof args.websocket === 'boolean' ? args.websocket : undefined,
     noInput: args['no-input'] === true || args.input === false,
     includeInteropSkills: args['include-interop'] === true,
     skillSourcePaths: options.skillSourcePaths ?? stringValues(args.source),

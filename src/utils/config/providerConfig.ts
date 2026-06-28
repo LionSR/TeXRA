@@ -215,7 +215,9 @@ export function setWebSocketEnabledOverride(value: boolean | undefined): void {
 }
 
 export function getWebSocketEnabled(): boolean {
-  return webSocketEnabledOverride ?? read(GlobalStateKey.WEBSOCKET_OPENAI, false);
+  return (
+    webSocketEnabledOverride ?? read(GlobalStateKey.WEBSOCKET_OPENAI, false)
+  );
 }
 
 /**
