@@ -73,6 +73,12 @@ export {
   type AgentFlowResult,
   AgentFlowResultSchema,
 } from '@agent/runtime/AgentFlowResult';
+/**
+ * @deprecated Prefer `AgentFlowResult` and narrow on `category === 'workflow'`.
+ * This named category type remains as a compatibility adapter for existing SDK
+ * consumers while the public result surface converges on the union.
+ */
+export type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
 // Per-run control handle (F-2): the run's live handle, exposed via `onRun`.
 // Its `.result` promise settles with the terminal `ResultEvent` (always
 // resolves), and `.trace` is the run's discriminated-event channel.

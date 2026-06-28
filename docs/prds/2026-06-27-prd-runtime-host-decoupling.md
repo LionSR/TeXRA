@@ -269,72 +269,72 @@ The Phase 0.5 audit should produce a table with this shape for every touched
 runtime module or host-facing boundary. The `Classification` column is a
 decision, not a list of possibilities.
 
-| Touched module or boundary                        | Classification | Intended outcome                                                                                  | Milestone |
-| ------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------- | --------- |
-| `followUpCommands`                                | Deepen         | Own queue projection, waiting reasons, and host-facing delivery result.                           | M1        |
-| queued follow-up projection                       | Deepen         | Expose host-safe queued messages through `followUpCommands`; keep publication runtime-internal.   | M1        |
-| `streamResourceLifecycle`                         | Deepen         | Own the complete stream deletion cleanup transaction.                                             | M1        |
-| stream-control queue helper                       | Delete/inline  | Fold queue release into follow-up/deletion commands.                                              | M1        |
-| `streamControl.requestStopStream`                 | Delete/inline  | Replace the old boolean stop alias with typed `requestRuntimeStreamStop` outcomes.                | M1        |
-| split restart stream-recovery exports             | Delete/inline  | Merge waiting-stream detection and RUNNING-status repair into one recovery command.               | M1        |
-| config-based tool-use resume lookup               | Deepen         | Own config-to-task-state projection, stream-id derivation, and persisted resume classification.   | M1        |
-| `toolUseResume` helper module                     | Delete/inline  | Keep snapshot-resume preparation, restoration, and finish laws private inside `resumeCommands`.   | M1        |
-| CLI active-resume data helper                     | Delete/inline  | Expose only the listing-safe CLI projection; keep failure propagation inside runtime commands.    | M1        |
-| `executionRequests` config/task-state surface     | Deepen         | Own runtime config parsing, task-state parsing, and workflow/tool-use task-state projection.      | M2        |
-| `agentResolution.getRuntimeToolUseAgentCategory`  | Delete/inline  | Use explicit tool-use lookup or predicate.                                                        | M1        |
-| `agentLoad.ensureAgentCategoryForSource`          | Delete/inline  | Keep source-based category normalization inside agent loading.                                    | M1        |
-| `agentLoad.loadYaml`                              | Delete/inline  | Replace raw YAML loading with one inspection-data helper for agent-definition inspection.         | M1        |
-| `agentDirectories`                                | Deepen         | Own source-to-directory resolution, bundled directory vocabulary, and bootstrap composition.      | M2        |
-| `agentDirectories.isRuntimeLocalAgentSource`      | Delete/inline  | Keep remote-vs-local branching inside directory resolution commands.                              | M1        |
-| bundled agent-directory constructor aliases       | Delete/inline  | Host composition passes `resourcesPath` to runtime sync/bootstrap requests.                       | M1        |
-| agent-directory service/storage aliases           | Delete/inline  | Hosts request a runtime directory provider instead of constructing service/storage internals.     | M1        |
-| merge execution request construction              | Deepen         | Own the merge-agent/helper-model/default-validation law.                                          | M2        |
-| `historyCommands`                                 | Deepen         | Normalize records and own delete-related goal cleanup.                                            | M1        |
-| `goalCommands.getRuntimeGoalForStream`            | Delete/inline  | Replace raw goal-record reads with host-safe goal status projections.                             | M1        |
-| `goalCommands.listRuntimeGoals`                   | Delete/inline  | Replace raw goal-record lists with settings-safe row projection.                                  | M1        |
-| goal cleanup forwarding commands                  | Delete/inline  | Keep goal cleanup inside stream-resource and history deletion transactions.                       | M1        |
-| `executionQueries.getRuntimeActiveExecutionIds`   | Delete/inline  | Fold active-execution deletion guards into `historyCommands`.                                     | M1        |
-| `executionQueries.getRuntimeActiveAgentNames`     | Delete/inline  | Replace array projection with `hasRuntimeActiveAgentName`.                                        | M1        |
-| split model-switch query exports                  | Delete/inline  | Replace target and disabled-reason queries with model-switch state/result commands.               | M1        |
-| `modelSwitch`                                     | Deepen         | Own live-flow target classification and disabled-candidate refusal before switching.              | M1        |
-| `manualCompaction`                                | Deepen         | Own live-flow lookup, capability checks, follow-up notification, and host-facing messages.        | M1        |
-| `agentCreatorCommands`                            | Deepen         | Own tool-group option projection and selected-option resolution without host label-key logic.     | M1        |
-| `approvalCommands`                                | Deepen         | Own bypass laws and pending-prompt lifecycle cleanup.                                             | M1        |
-| approval session bypass setter aliases            | Delete/inline  | Replace per-kind setter aliases with one decision-level bypass command.                           | M1        |
-| tool-edit approval pure helpers                   | Delete/inline  | Move diff math and temp-file staging to shared approval modules; keep tool paths as adapters.     | M5        |
-| `runCoordinatorCommands`                          | Deepen         | Own session-scoped approval/proposal/retry decisions.                                             | M1        |
-| `runCoordinatorCommands.clearRuntimeRetryRequest` | Delete/inline  | Keep retry cleanup inside intention-level stream stop/delete commands.                            | M1        |
-| `externalInquiryQueries`                          | Merge          | Fold durable inquiry listing and hydration into `humanInputCommands`.                             | M5        |
-| `humanInputCommands`                              | Deepen         | Own human-input resolution plus durable inquiry overview and permission projection.               | M5        |
-| `ProgressViewBridge`                              | Delete/inline  | Replace raw getter/setter bridge state.                                                           | M5        |
-| `progressViewCommands`                            | Deepen         | Own multi-host visibility provider registration and query.                                        | M5        |
-| progress runtime-status capability                | Deepen         | Inject runtime status operations into shared progress backend instead of importing owners.        | M1        |
-| progress runtime-session capability               | Deepen         | Inject interrupt-pruning and trace-flush operations instead of importing `SessionHandle`.         | M1        |
-| progress stream-tab metadata builder              | Deepen         | Build tabs from resolved display facts; do not query agent registry from shared UI code.          | M1        |
-| extension progress stream-info facade             | Deepen         | Keep label and visible-stream queries on `ProgressViewProvider`, not extension helper modules.    | M1        |
-| extension progress goal-state projection          | Deepen         | Keep goal active/status projection on `ProgressViewProvider`, not the message dispatcher.         | M1        |
-| extension progress agent-category projection      | Deepen         | Keep tool-use-agent classification on `ProgressViewProvider`, not the message dispatcher.         | M1        |
-| progress proposal options projection              | Deepen         | Build model fallback and proposal-local plain-name agent options in a controller.                 | M1        |
-| schema-driven view dispatcher                     | Deepen         | Await asynchronous handlers so typed command dispatch preserves completion semantics.             | M1        |
-| extension settings goal-list projection           | Deepen         | Build the Goal tab controller through a factory, not a runtime import in the message handler.     | M1        |
-| extension/desktop settings agent-catalogue wiring | Deepen         | Let shared settings controllers own catalogue freshness and agent-file lookup inputs.             | M1        |
-| extension/desktop settings history actions        | Deepen         | Let a shared history controller own config lookup, restore projection, and delete/clear calls.    | M1        |
-| main-view agent selection projection              | Deepen         | Project runtime agent identity into selector id/session type for selection and restore paths.     | M1        |
-| desktop main-view startup option loading          | Deepen         | Keep desktop IPC startup adapters out of model/agent option-loader pairing.                       | M1        |
-| main-view options refresh projection              | Deepen         | Build model/agent option refresh messages for extension and desktop through one controller.       | M1        |
-| desktop settings main-view refresh wiring         | Deepen         | Route settings-triggered main-view option refresh through the desktop startup-controller factory. | M1        |
-| desktop progress-event bridge runtime ports       | Deepen         | Let the bridge own ghost hydration and snapshot persistence through injected runtime ports.       | M1        |
-| desktop stream snapshot projection                | Deepen         | Project live/restored stream metadata into durable restored-stream snapshots in the backend.      | M1        |
-| terminal-result presentation mapper               | Deepen         | Format structural terminal-result data without importing agent trace event types.                 | M1        |
-| `textEnhancement`                                 | Delete/inline  | Replace generic helper exports with commands.                                                     | M5        |
-| `textPolishCommands`                              | Deepen         | Own prompt/model/error semantics for polishing.                                                   | M5        |
-| `textConnection`                                  | Delete/inline  | Keep provider-specific connection helpers private to a diagnostic command.                        | M5        |
-| `textConnectionCommands`                          | Deepen         | Own provider fan-out and host-loggable connection diagnostic rows.                                | M5        |
-| `runtime/AgentRuntimeHost`                        | Delete/inline  | Move the host event port to `src/hosts`.                                                          | M5        |
-| `hosts/AgentRuntimeHost`                          | Deepen         | Own the progress-event host contract.                                                             | M5        |
-| flow-result category schemas                      | Delete/inline  | Keep category schemas private; expose only the union schema and structural result types.          | M5        |
-| core package workflow result re-export            | Delete/inline  | Keep the SDK result surface at `AgentFlowResult` and `AgentFlowResultSchema`.                     | M5        |
-| host imports of `AgentFlowResult`                 | Delete/inline  | Replace runtime result-type coupling with host-local structural projections.                      | M5        |
+| Touched module or boundary                        | Classification    | Intended outcome                                                                                  | Milestone |
+| ------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------- | --------- |
+| `followUpCommands`                                | Deepen            | Own queue projection, waiting reasons, and host-facing delivery result.                           | M1        |
+| queued follow-up projection                       | Deepen            | Expose host-safe queued messages through `followUpCommands`; keep publication runtime-internal.   | M1        |
+| `streamResourceLifecycle`                         | Deepen            | Own the complete stream deletion cleanup transaction.                                             | M1        |
+| stream-control queue helper                       | Delete/inline     | Fold queue release into follow-up/deletion commands.                                              | M1        |
+| `streamControl.requestStopStream`                 | Delete/inline     | Replace the old boolean stop alias with typed `requestRuntimeStreamStop` outcomes.                | M1        |
+| split restart stream-recovery exports             | Delete/inline     | Merge waiting-stream detection and RUNNING-status repair into one recovery command.               | M1        |
+| config-based tool-use resume lookup               | Deepen            | Own config-to-task-state projection, stream-id derivation, and persisted resume classification.   | M1        |
+| `toolUseResume` helper module                     | Delete/inline     | Keep snapshot-resume preparation, restoration, and finish laws private inside `resumeCommands`.   | M1        |
+| CLI active-resume data helper                     | Delete/inline     | Expose only the listing-safe CLI projection; keep failure propagation inside runtime commands.    | M1        |
+| `executionRequests` config/task-state surface     | Deepen            | Own runtime config parsing, task-state parsing, and workflow/tool-use task-state projection.      | M2        |
+| `agentResolution.getRuntimeToolUseAgentCategory`  | Delete/inline     | Use explicit tool-use lookup or predicate.                                                        | M1        |
+| `agentLoad.ensureAgentCategoryForSource`          | Delete/inline     | Keep source-based category normalization inside agent loading.                                    | M1        |
+| `agentLoad.loadYaml`                              | Delete/inline     | Replace raw YAML loading with one inspection-data helper for agent-definition inspection.         | M1        |
+| `agentDirectories`                                | Deepen            | Own source-to-directory resolution, bundled directory vocabulary, and bootstrap composition.      | M2        |
+| `agentDirectories.isRuntimeLocalAgentSource`      | Delete/inline     | Keep remote-vs-local branching inside directory resolution commands.                              | M1        |
+| bundled agent-directory constructor aliases       | Delete/inline     | Host composition passes `resourcesPath` to runtime sync/bootstrap requests.                       | M1        |
+| agent-directory service/storage aliases           | Delete/inline     | Hosts request a runtime directory provider instead of constructing service/storage internals.     | M1        |
+| merge execution request construction              | Deepen            | Own the merge-agent/helper-model/default-validation law.                                          | M2        |
+| `historyCommands`                                 | Deepen            | Normalize records and own delete-related goal cleanup.                                            | M1        |
+| `goalCommands.getRuntimeGoalForStream`            | Delete/inline     | Replace raw goal-record reads with host-safe goal status projections.                             | M1        |
+| `goalCommands.listRuntimeGoals`                   | Delete/inline     | Replace raw goal-record lists with settings-safe row projection.                                  | M1        |
+| goal cleanup forwarding commands                  | Delete/inline     | Keep goal cleanup inside stream-resource and history deletion transactions.                       | M1        |
+| `executionQueries.getRuntimeActiveExecutionIds`   | Delete/inline     | Fold active-execution deletion guards into `historyCommands`.                                     | M1        |
+| `executionQueries.getRuntimeActiveAgentNames`     | Delete/inline     | Replace array projection with `hasRuntimeActiveAgentName`.                                        | M1        |
+| split model-switch query exports                  | Delete/inline     | Replace target and disabled-reason queries with model-switch state/result commands.               | M1        |
+| `modelSwitch`                                     | Deepen            | Own live-flow target classification and disabled-candidate refusal before switching.              | M1        |
+| `manualCompaction`                                | Deepen            | Own live-flow lookup, capability checks, follow-up notification, and host-facing messages.        | M1        |
+| `agentCreatorCommands`                            | Deepen            | Own tool-group option projection and selected-option resolution without host label-key logic.     | M1        |
+| `approvalCommands`                                | Deepen            | Own bypass laws and pending-prompt lifecycle cleanup.                                             | M1        |
+| approval session bypass setter aliases            | Delete/inline     | Replace per-kind setter aliases with one decision-level bypass command.                           | M1        |
+| tool-edit approval pure helpers                   | Delete/inline     | Move diff math and temp-file staging to shared approval modules; keep tool paths as adapters.     | M5        |
+| `runCoordinatorCommands`                          | Deepen            | Own session-scoped approval/proposal/retry decisions.                                             | M1        |
+| `runCoordinatorCommands.clearRuntimeRetryRequest` | Delete/inline     | Keep retry cleanup inside intention-level stream stop/delete commands.                            | M1        |
+| `externalInquiryQueries`                          | Merge             | Fold durable inquiry listing and hydration into `humanInputCommands`.                             | M5        |
+| `humanInputCommands`                              | Deepen            | Own human-input resolution plus durable inquiry overview and permission projection.               | M5        |
+| `ProgressViewBridge`                              | Delete/inline     | Replace raw getter/setter bridge state.                                                           | M5        |
+| `progressViewCommands`                            | Deepen            | Own multi-host visibility provider registration and query.                                        | M5        |
+| progress runtime-status capability                | Deepen            | Inject runtime status operations into shared progress backend instead of importing owners.        | M1        |
+| progress runtime-session capability               | Deepen            | Inject interrupt-pruning and trace-flush operations instead of importing `SessionHandle`.         | M1        |
+| progress stream-tab metadata builder              | Deepen            | Build tabs from resolved display facts; do not query agent registry from shared UI code.          | M1        |
+| extension progress stream-info facade             | Deepen            | Keep label and visible-stream queries on `ProgressViewProvider`, not extension helper modules.    | M1        |
+| extension progress goal-state projection          | Deepen            | Keep goal active/status projection on `ProgressViewProvider`, not the message dispatcher.         | M1        |
+| extension progress agent-category projection      | Deepen            | Keep tool-use-agent classification on `ProgressViewProvider`, not the message dispatcher.         | M1        |
+| progress proposal options projection              | Deepen            | Build model fallback and proposal-local plain-name agent options in a controller.                 | M1        |
+| schema-driven view dispatcher                     | Deepen            | Await asynchronous handlers so typed command dispatch preserves completion semantics.             | M1        |
+| extension settings goal-list projection           | Deepen            | Build the Goal tab controller through a factory, not a runtime import in the message handler.     | M1        |
+| extension/desktop settings agent-catalogue wiring | Deepen            | Let shared settings controllers own catalogue freshness and agent-file lookup inputs.             | M1        |
+| extension/desktop settings history actions        | Deepen            | Let a shared history controller own config lookup, restore projection, and delete/clear calls.    | M1        |
+| main-view agent selection projection              | Deepen            | Project runtime agent identity into selector id/session type for selection and restore paths.     | M1        |
+| desktop main-view startup option loading          | Deepen            | Keep desktop IPC startup adapters out of model/agent option-loader pairing.                       | M1        |
+| main-view options refresh projection              | Deepen            | Build model/agent option refresh messages for extension and desktop through one controller.       | M1        |
+| desktop settings main-view refresh wiring         | Deepen            | Route settings-triggered main-view option refresh through the desktop startup-controller factory. | M1        |
+| desktop progress-event bridge runtime ports       | Deepen            | Let the bridge own ghost hydration and snapshot persistence through injected runtime ports.       | M1        |
+| desktop stream snapshot projection                | Deepen            | Project live/restored stream metadata into durable restored-stream snapshots in the backend.      | M1        |
+| terminal-result presentation mapper               | Deepen            | Format structural terminal-result data without importing agent trace event types.                 | M1        |
+| `textEnhancement`                                 | Delete/inline     | Replace generic helper exports with commands.                                                     | M5        |
+| `textPolishCommands`                              | Deepen            | Own prompt/model/error semantics for polishing.                                                   | M5        |
+| `textConnection`                                  | Delete/inline     | Keep provider-specific connection helpers private to a diagnostic command.                        | M5        |
+| `textConnectionCommands`                          | Deepen            | Own provider fan-out and host-loggable connection diagnostic rows.                                | M5        |
+| `runtime/AgentRuntimeHost`                        | Delete/inline     | Move the host event port to `src/hosts`.                                                          | M5        |
+| `hosts/AgentRuntimeHost`                          | Deepen            | Own the progress-event host contract.                                                             | M5        |
+| flow-result category schemas                      | Delete/inline     | Keep category schemas private; expose only the union schema and structural result types.          | M5        |
+| core package workflow result re-export            | Temporary adapter | Keep deprecated `WorkflowFlowResult` type compatibility; keep category schemas private.           | M6        |
+| host imports of `AgentFlowResult`                 | Delete/inline     | Replace runtime result-type coupling with host-local structural projections.                      | M5        |
 
 The table must cover every public `src/agent/runtime/` command module touched by
 the refactor. Untouched modules may be classified later, but a PR should not
@@ -579,10 +579,12 @@ The first audit should begin with the following working classifications.
   and tool-use category schemas are construction details of the public
   `AgentFlowResultSchema`; third-party code should depend on the union schema
   and structural result types, not category-schema exports.
-- The core package workflow result re-export is classified as
-  **Delete/inline**. The public SDK result surface should name the union-level
-  result contract; category-specific callback details remain available through
-  `RunAgentOptions` inference rather than a separate public alias.
+- The core package workflow result re-export is classified as a
+  **Temporary adapter**. Existing SDK consumers may still import the deprecated
+  `WorkflowFlowResult` type, but category-specific schemas remain private and
+  new code should use `AgentFlowResult` plus `category === 'workflow'`
+  narrowing. The removal milestone is M6, after a compatibility note or
+  migration window.
 - Host imports of `AgentFlowResult` are classified as **Delete/inline**. Host
   UI helpers should name the small projection they consume, such as a completed
   workflow output preview request, instead of importing runtime flow-result
@@ -1840,13 +1842,14 @@ Work:
    - It keeps workflow/tool-use flow-result category schemas private, so the
      public validation surface is the union-level `AgentFlowResultSchema`.
      **Implemented in this branch.**
-   - It removes the core package's named `WorkflowFlowResult` re-export, so
-     SDK callers depend on `AgentFlowResult` and inferred callback signatures
-     instead of category-specific aliases. **Implemented in this branch.**
-   - It scans the `@texra/core` public surface for deleted runtime adapter
-     imports and category-specific workflow-result re-exports, while still
-     allowing the package to expose its intended host-neutral core contracts.
+   - It keeps the core package's named `WorkflowFlowResult` type as a
+     deprecated compatibility adapter, but it keeps category-specific result
+     schemas private so validation stays at `AgentFlowResultSchema`.
      **Implemented in this branch.**
+   - It scans the `@texra/core` public surface for deleted runtime adapter
+     imports and category-specific result schemas, while still allowing the
+     package to expose its intended host-neutral core contracts. **Implemented
+     in this branch.**
    - It rejects re-exporting deleted runtime helper names from
      `src/agent/runtime`, so completed pass-through reductions cannot return
      as public APIs without an explicit PRD change. **Implemented in this

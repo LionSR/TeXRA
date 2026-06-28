@@ -297,6 +297,12 @@ const FORBIDDEN_PATTERNS = [
       'use @agent/runtime/streamControl recoverRuntimeRunningStreamsFromPersistedState',
   },
   {
+    pattern: /\bsetRuntimeStreamStatus\(/g,
+    label: 'deleted stream-status forwarding setter',
+    guidance:
+      'use intention-level stream commands, lifecycle-owned StreamStatusService writes, or createProgressRuntimeStatusPort',
+  },
+  {
     pattern: /\bclearRuntimeRetryRequest\(/g,
     label: 'clearRuntimeRetryRequest deleted retry cleanup alias',
     guidance:
@@ -453,6 +459,16 @@ const DELETED_RUNTIME_EXPORTS = [
       'use recoverRuntimeRunningStreamsFromPersistedState for restart recovery',
   },
   {
+    name: 'setRuntimeStreamStatus',
+    guidance:
+      'use intention-level stream commands, lifecycle-owned StreamStatusService writes, or createProgressRuntimeStatusPort',
+  },
+  {
+    name: 'RuntimeStreamStatusRequest',
+    guidance:
+      'setRuntimeStreamStatus was deleted as a pure forwarding status setter',
+  },
+  {
     name: 'releaseQueuedFollowUpsForStreams',
     guidance:
       'release queues through follow-up or stream-resource lifecycle commands',
@@ -606,10 +622,10 @@ const CLI_SCRIPT_FORBIDDEN_IMPORTS = [
 
 const CORE_PUBLIC_SURFACE_FORBIDDEN_PATTERNS = [
   {
-    pattern: /\bWorkflowFlowResult\b/g,
-    label: 'core package workflow result alias',
+    pattern: /\b(?:WorkflowFlowResultSchema|ToolUseFlowResultSchema)\b/g,
+    label: 'core package category result schema',
     guidance:
-      'keep @texra/core result exports at AgentFlowResult and AgentFlowResultSchema',
+      'keep @texra/core result validation at the union-level AgentFlowResultSchema',
   },
 ];
 
