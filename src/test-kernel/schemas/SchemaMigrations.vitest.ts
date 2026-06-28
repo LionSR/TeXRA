@@ -61,6 +61,17 @@ describe('RunUsageAccumulatorJSONSchema — legacy normalizedSnapshots migration
     expect(result.latestUsage).toMatchObject(usageFixture);
   });
 
+  it('keeps an explicit null latestUsage over snapshots in a hybrid payload', () => {
+    const result = RunUsageAccumulatorJSONSchema.parse({
+      latestUsage: null,
+      normalizedSnapshots: [{ round: 0, usage: usageFixture }],
+    });
+
+    // Key-presence semantics: an explicit null means already-migrated, so the
+    // snapshot must NOT revive a value. Matches the old `'latestUsage' in raw`.
+    expect(result.latestUsage).toBeNull();
+  });
+
   it('preserves the last valid usage when an earlier snapshot is malformed', () => {
     const result = RunUsageAccumulatorJSONSchema.parse({
       normalizedSnapshots: [

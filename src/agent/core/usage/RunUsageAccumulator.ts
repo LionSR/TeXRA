@@ -56,9 +56,11 @@ export type RunUsageAccumulatorJSON = z.output<
  * and empty inputs fall through to the canonical schema below.
  *
  * A hybrid payload carrying BOTH a canonical `latestUsage` and snapshots keeps
- * its canonical value — the transform prefers it over the snapshot-derived
- * value, preserving the prior preprocess behavior (which skipped migration when
- * `latestUsage` was already present) and avoiding overwrites with stale data.
+ * its canonical value. The transform uses key-presence semantics (NOT value
+ * nullish): an explicit `latestUsage` — even `null` — means the state already
+ * migrated, so it wins; only an absent key falls back to the snapshot-derived
+ * value. This exactly matches the prior preprocess guard (`'latestUsage' in
+ * raw`) and avoids reviving stale snapshot data over a canonical value.
  *
  * Each snapshot is parsed tolerantly (`.catch`): the old preprocess only ever
  * read the last element's `usage`, so a malformed *earlier* snapshot must not
@@ -78,8 +80,14 @@ const LegacyRunUsageAccumulatorSchema = z
   .transform(
     (legacy): RunUsageAccumulatorJSON => ({
       totals: legacy.totals,
+      // Key-presence, not value-nullish: `.nullish()` parses an absent key as
+      // `undefined` and an explicit `null` as `null`, so `!== undefined` keeps
+      // an explicit null (already-migrated state) and only an absent key falls
+      // back to the latest snapshot.
       latestUsage:
-        legacy.latestUsage ?? legacy.normalizedSnapshots.at(-1)?.usage ?? null,
+        legacy.latestUsage !== undefined
+          ? legacy.latestUsage
+          : (legacy.normalizedSnapshots.at(-1)?.usage ?? null),
     }),
   );
 
