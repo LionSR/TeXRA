@@ -23,7 +23,9 @@ export interface RunCoordinators {
 
 const AgentRuntimeHostSchema = z.custom<AgentRuntimeHost>(
   (val): val is AgentRuntimeHost =>
-    val != null && typeof val === 'object' && typeof (val as AgentRuntimeHost).emit === 'function',
+    val != null &&
+    typeof val === 'object' &&
+    typeof (val as AgentRuntimeHost).emit === 'function',
 );
 
 const RunCoordinatorsSchema = z.custom<RunCoordinators>(
@@ -90,10 +92,14 @@ export const RunContextSchema = z.discriminatedUnion('kind', [
 export type RunContext = z.infer<typeof RunContextSchema>;
 
 /** The launch variant: all run-identifying fields are required. */
-export type LaunchRunContext = z.infer<typeof RunContextSchema> & { kind: 'launch' };
+export type LaunchRunContext = z.infer<typeof RunContextSchema> & {
+  kind: 'launch';
+};
 
 /** The bare variant: only runtimeHost is required. */
-export type BareRunContext = z.infer<typeof RunContextSchema> & { kind: 'bare' };
+export type BareRunContext = z.infer<typeof RunContextSchema> & {
+  kind: 'bare';
+};
 
 // ---------------------------------------------------------------------------
 // CreateRunContextOptions — the input side.  Uses a discriminated union so
@@ -148,7 +154,10 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
   const { getModel, model } =
     options.modelSource === 'live'
       ? { getModel: options.getModel, model: options.model }
-      : { getModel: undefined as (() => string | undefined) | undefined, model: options.model };
+      : {
+          getModel: undefined as (() => string | undefined) | undefined,
+          model: options.model,
+        };
 
   const base = Object.freeze({
     runtimeHost: options.runtimeHost,
