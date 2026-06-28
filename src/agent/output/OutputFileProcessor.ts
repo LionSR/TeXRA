@@ -67,7 +67,7 @@ export class OutputFileProcessor {
         logger.debug(
           `No processed files were generated from ${outputLocation.absolutePath}`,
         );
-        this.emitMissingOutputs(currRound, outputLocation);
+        await this.emitMissingOutputs(currRound, outputLocation);
         await this.handleEmptyOutput(currRound, rawLocation);
       },
       {
@@ -75,7 +75,7 @@ export class OutputFileProcessor {
         level: 'debug',
         label: 'Error processing output file',
         recover: async () => {
-          this.emitMissingOutputs(currRound, outputLocation);
+          await this.emitMissingOutputs(currRound, outputLocation);
           await this.handleEmptyOutput(currRound, rawLocation);
         },
       },
@@ -83,10 +83,24 @@ export class OutputFileProcessor {
   }
 
   /** Logs and signals the UI that a round produced no extractable output files. */
-  private emitMissingOutputs(
+  private async emitMissingOutputs(
     currRound: number,
     outputLocation: FileLocation,
-  ): void {
+  ): Promise<void> {
+    // Distinguish a genuinely empty turn from a non-empty response that simply
+    // could not be parsed: if the model returned content but nothing extracted,
+    // it almost always means it did not wrap each file in
+    // `<documentTag name="…">`. Surface that as a warning so the round is not a
+    // silent "success" that writes no files; the raw response is kept for recovery.
+    const rawText = await flexibleFS.read(outputLocation).catch(() => '');
+    if (rawText.trim().length > 0) {
+      this.ctx.logger.warn(
+        `Round ${currRound}: the model returned output but no files could be ` +
+          `extracted from it — it likely did not wrap each document in ` +
+          `<${this.ctx.agentSetting.documentTag} name="…">. The raw response ` +
+          `was kept at ${outputLocation.absolutePath}.`,
+      );
+    }
     logMissingOutputs(this.ctx.logger, {
       missing: [] as string[],
       xmlFile: outputLocation.absolutePath,

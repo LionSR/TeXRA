@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
@@ -13,6 +13,7 @@ import {
   type ProcessingContext,
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
+import { flexibleFS } from '@utils/files';
 import { normalizeRunId } from '@common/constants/runIds';
 import type {
   AgentFileLocation,
@@ -401,5 +402,75 @@ describe('output progress events', () => {
       },
     ]);
     expect(roundData.get(4)?.outputs).toEqual([]);
+  });
+
+  it('warns when a non-empty response yields zero extracted files', async () => {
+    // Regression: a run where the model returned content but nothing could be
+    // extracted (e.g. it did not wrap files in <documents>) used to "complete"
+    // silently with only the raw output. It must now surface a warning. Stub
+    // the read so the model output is treated as non-empty.
+    const readSpy = vi
+      .spyOn(flexibleFS, 'read')
+      .mockResolvedValue('% chunk.tex\n\\section{Untagged content}\n');
+    try {
+      const { events, host } = createRecordingHost();
+      const warnings: string[] = [];
+      const roundData = new Map<number, RoundOutput>();
+      const logger = {
+        debug: () => {},
+        domain: () => {},
+        warn: (message: string) => warnings.push(message),
+      } as unknown as AgentTrace;
+      const xmlManager = {
+        splitScratchpadMultipleOutputXml: async () => [],
+      } as unknown as XmlOutputManager;
+      const ensureRound = (round: number): RoundOutput => {
+        let data = roundData.get(round);
+        if (!data) {
+          data = {
+            round,
+            outputs: [],
+            compileFailures: [],
+            rawOutput: null,
+            xmlSummary: emptyXmlSummary,
+          };
+          roundData.set(round, data);
+        }
+        return data;
+      };
+      const context: ProcessingContext = {
+        agentSetting: {
+          agentCategory: AgentCategory.Workflow,
+          documentTag: 'documents',
+        } as ProcessingContext['agentSetting'],
+        baseFiles: [],
+        streamId: 'stream:processor',
+        runtimeHost: host,
+        logger,
+        xmlManager,
+        setRoundOutputs: (round, outputs) => {
+          ensureRound(round).outputs = outputs;
+        },
+        ensureRoundData: ensureRound,
+      };
+
+      await new OutputFileProcessor(context).processMultipleOutputs(
+        createLocation('/tmp/output.xml'),
+        5,
+        createLocation('/tmp/output.xml'),
+      );
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('no files could be extracted');
+      // The missing-output signal is still emitted alongside the warning.
+      expect(events).toEqual([
+        {
+          event: 'updateMissingOutputs',
+          payload: { streamId: 'stream:processor', filesByRound: { 5: [] } },
+        },
+      ]);
+    } finally {
+      readSpy.mockRestore();
+    }
   });
 });
