@@ -51,6 +51,7 @@ import type { StreamFilter } from '../store';
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
 import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 function buildTooltip(
   info: StreamTabInfo,
@@ -224,18 +225,19 @@ export class StreamTab extends LitElement {
               `}
         </button>
         <wa-button
+          id="stream-tab-delete-button"
           class="action-icon-button tab-delete"
           appearance="plain"
           variant="neutral"
           size="small"
           type="button"
           aria-label="Delete stream"
-          title="Delete stream"
           data-stream=${stream.name}
           data-action="delete"
         >
           ${waIcon('close')}
         </wa-button>
+        <wa-tooltip for="stream-tab-delete-button">Delete stream</wa-tooltip>
       </div>
     `;
   }
@@ -432,7 +434,7 @@ export class StreamTabs extends LitElement {
                     id: ELEMENT_IDS.DELETE_ALL_BTN,
                     icon: 'trash',
                     label: 'Clear all streams',
-                    title: 'Clear all streams',
+                    tooltip: 'Clear all streams',
                     className: 'delete-all-streams',
                     onClick: this.handleDeleteAll,
                   })}

@@ -14,6 +14,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -46,15 +47,22 @@ interface FileActionOptions {
 }
 
 function renderFileActionButton(opts: FileActionOptions): TemplateResult {
+  // command+file is unique per row; sanitize to a valid id the <wa-tooltip>
+  // can anchor to via `for`. These buttons live in a flex `.file-actions`
+  // row (not a wa-button-group), so the sibling tooltip is safe.
+  const buttonId = `file-action-${opts.command}-${opts.file}`.replace(
+    /[^a-zA-Z0-9_-]/g,
+    '-',
+  );
   return html`
     <wa-button
+      id=${buttonId}
       class="action-icon-button ${opts.className}"
       appearance="plain"
       variant="neutral"
       size="small"
       type="button"
       aria-label=${opts.label}
-      title=${opts.title}
       data-command=${opts.command}
       data-file=${opts.file}
       data-base=${ifDefined(opts.base)}
@@ -62,6 +70,7 @@ function renderFileActionButton(opts: FileActionOptions): TemplateResult {
     >
       ${waIcon(opts.icon)}
     </wa-button>
+    <wa-tooltip for=${buttonId}>${opts.title}</wa-tooltip>
   `;
 }
 
@@ -352,9 +361,10 @@ export class FileList extends LitElement {
           button to open the full run.
         </span>
         ${renderIconActionButton({
+          id: 'storage-hint-dismiss-button',
           icon: 'close',
           label: 'Dismiss storage explanation',
-          title: 'Dismiss storage explanation',
+          tooltip: 'Dismiss storage explanation',
           className: 'storage-hint__dismiss',
           onClick: this.handleDismissStorageHint,
         })}
