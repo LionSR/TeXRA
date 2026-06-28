@@ -116,15 +116,16 @@ const CommonExternalInquiryFieldsSchema = z.object({
 });
 
 /** First inquiry in a thread — no prior transcript, draft, or session links. */
-export const NewExternalInquiryPermissionSchema =
-  PermissionBaseSchema.extend(CommonExternalInquiryFieldsSchema.shape).extend({
-    mode: z.literal('new'),
-    // Always null for new inquiries; included so the discriminated union
-    // produces a common surface for renderers that access these fields.
-    sessionLinks: z.null(),
-    draft: z.null(),
-    transcript: z.null(),
-  });
+export const NewExternalInquiryPermissionSchema = PermissionBaseSchema.extend(
+  CommonExternalInquiryFieldsSchema.shape,
+).extend({
+  mode: z.literal('new'),
+  // Always null for new inquiries; included so the discriminated union
+  // produces a common surface for renderers that access these fields.
+  sessionLinks: z.null(),
+  draft: z.null(),
+  transcript: z.null(),
+});
 export type NewExternalInquiryPermission = z.infer<
   typeof NewExternalInquiryPermissionSchema
 >;
