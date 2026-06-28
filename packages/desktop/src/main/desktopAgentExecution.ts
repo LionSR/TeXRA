@@ -5,6 +5,10 @@ import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewE
 
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import {
+  createProgressRuntimeSessionPort,
+  createProgressRuntimeStatusPort,
+} from '@controllers/progressView/progressRuntimePorts';
 import { createProgressViewCommandHandlers } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
@@ -50,15 +54,9 @@ import {
   releaseRuntimeDeletedStreams,
 } from '@agent/runtime/streamResourceLifecycle';
 import {
-  clearAllRuntimeStreamStatuses,
-  clearRuntimeStreamStatus,
   getRuntimeStreamStatus,
-  getRuntimeStreamStatusSnapshot,
   isRuntimeStreamActiveOrResuming,
-  isRuntimeStreamInFlight,
-  markRuntimeRunningStreamsStopped,
   requestRuntimeStreamStop,
-  setRuntimeStreamStatusSilently,
 } from '@agent/runtime/streamControl';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { toErrorMessage } from '@common/errors';
@@ -237,6 +235,7 @@ export class DesktopProgressBridge {
         isViewVisible: () => true,
       },
     );
+    const runtimeStatus = createProgressRuntimeStatusPort();
     this.backend = new ProgressBackend({
       storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
       snapshots: options.progressSnapshotStore ?? new StreamSnapshotStore(),
@@ -246,19 +245,8 @@ export class DesktopProgressBridge {
       hasTarget: () => true,
       getStreamControls: getProgressStreamControls,
       getQueuedFollowUps: listRuntimeQueuedFollowUpMessages,
-      runtimeSession: {
-        retainInterruptStreams: (streams) =>
-          this.session.interrupts.retainOnly(new Set(streams)),
-        flushPendingTraces: () => this.session.flushPendingTraces(),
-      },
-      runtimeStatus: {
-        getSnapshot: getRuntimeStreamStatusSnapshot,
-        setSilently: setRuntimeStreamStatusSilently,
-        clear: clearRuntimeStreamStatus,
-        clearAll: clearAllRuntimeStreamStatuses,
-        isInFlight: isRuntimeStreamInFlight,
-        markRunningStopped: markRuntimeRunningStreamsStopped,
-      },
+      runtimeSession: createProgressRuntimeSessionPort(this.session),
+      runtimeStatus,
       configureUi: ({ webviewUpdater }) => {
         // Track shown-but-unresolved prompts so hasPendingPermissions can
         // keep the active view on a stream awaiting input (the shared
@@ -418,10 +406,7 @@ export class DesktopProgressBridge {
     // → rail-update translation.  See #6329.
     this.progressEvents = createDesktopProgressEventBridge({
       state: this.state,
-      runtimeStatus: {
-        get: getRuntimeStreamStatus,
-        setSilently: setRuntimeStreamStatusSilently,
-      },
+      runtimeStatus,
       goalControls: {
         getControlState: getRuntimeGoalControlState,
       },

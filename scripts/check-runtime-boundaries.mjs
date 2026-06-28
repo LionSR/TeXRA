@@ -347,6 +347,38 @@ const FORBIDDEN_PATTERNS = [
     guidance:
       'use @agent/runtime/progressViewCommands from host/controller code',
   },
+  {
+    pattern:
+      /\b(?:getRuntimeStreamStatusSnapshot|setRuntimeStreamStatusSilently|clearRuntimeStreamStatus|clearAllRuntimeStreamStatuses|markRuntimeRunningStreamsStopped)\b/g,
+    label: 'progress runtime-status port assembled outside its owner',
+    guidance:
+      'use createProgressRuntimeStatusPort from progressRuntimePorts for shared progress backend wiring',
+    allowedFiles: new Set([
+      'src/controllers/progressView/progressRuntimePorts.ts',
+    ]),
+  },
+  {
+    pattern:
+      /\b(?:defaultSession\(\)|this\.session|session)\.interrupts\.retainOnly\(new Set\(streams\)\)/g,
+    label:
+      'progress runtime-session interrupt port assembled outside its owner',
+    guidance:
+      'use createProgressRuntimeSessionPort from progressRuntimePorts for shared progress backend wiring',
+    allowedFiles: new Set([
+      'src/controllers/progressView/progressRuntimePorts.ts',
+    ]),
+  },
+  {
+    pattern:
+      /\b(?:defaultSession\(\)|this\.session|session)\.flushPendingTraces\(\)/g,
+    label:
+      'progress runtime-session trace-flush port assembled outside its owner',
+    guidance:
+      'use createProgressRuntimeSessionPort from progressRuntimePorts for shared progress backend wiring',
+    allowedFiles: new Set([
+      'src/controllers/progressView/progressRuntimePorts.ts',
+    ]),
+  },
 ];
 
 const CONTROLLER_FORBIDDEN_IMPORTS = [
@@ -675,13 +707,14 @@ function findCliScriptForbiddenImport(source) {
 
 for (const root of SCAN_ROOTS) {
   for (const filePath of listSourceFiles(root)) {
+    const relativePath = relative(process.cwd(), filePath);
     const text = readFileSync(filePath, 'utf8');
     for (const match of text.matchAll(importSourcePattern)) {
       const source = match[1] ?? match[2];
       const forbidden = findForbiddenImport(source);
       if (forbidden) {
         violations.push({
-          filePath: relative(process.cwd(), filePath),
+          filePath: relativePath,
           line: lineNumberForOffset(text, match.index ?? 0),
           source,
           forbiddenSource: forbidden.source,
@@ -692,7 +725,7 @@ for (const root of SCAN_ROOTS) {
         const controllerForbidden = findControllerForbiddenImport(source);
         if (controllerForbidden) {
           violations.push({
-            filePath: relative(process.cwd(), filePath),
+            filePath: relativePath,
             line: lineNumberForOffset(text, match.index ?? 0),
             source,
             forbiddenSource: controllerForbidden.source,
@@ -703,8 +736,9 @@ for (const root of SCAN_ROOTS) {
     }
     for (const forbidden of FORBIDDEN_PATTERNS) {
       for (const match of text.matchAll(forbidden.pattern)) {
+        if (forbidden.allowedFiles?.has(relativePath)) continue;
         violations.push({
-          filePath: relative(process.cwd(), filePath),
+          filePath: relativePath,
           line: lineNumberForOffset(text, match.index ?? 0),
           source: forbidden.label,
           forbiddenSource: forbidden.label,

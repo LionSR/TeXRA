@@ -1,6 +1,10 @@
 import * as vscode from 'vscode';
 
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
+import {
+  createProgressRuntimeSessionPort,
+  createProgressRuntimeStatusPort,
+} from '@controllers/progressView/progressRuntimePorts';
 import { ProgressProposalOptionsController } from '@controllers/progressView/ProgressProposalOptionsController';
 import { getRuntimeToolUseAgent } from '@agent/runtime/agentResolution';
 import {
@@ -13,15 +17,7 @@ import {
   registerRuntimeProgressViewVisibilityProvider,
   type RuntimeProgressViewVisibilityProvider,
 } from '@agent/runtime/progressViewCommands';
-import {
-  clearAllRuntimeStreamStatuses,
-  clearRuntimeStreamStatus,
-  getRuntimeStreamStatusSnapshot,
-  isRuntimeStreamInFlight,
-  markRuntimeRunningStreamsStopped,
-  recoverRuntimeRunningStreamsFromPersistedState,
-  setRuntimeStreamStatusSilently,
-} from '@agent/runtime/streamControl';
+import { recoverRuntimeRunningStreamsFromPersistedState } from '@agent/runtime/streamControl';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -142,19 +138,8 @@ export class ProgressViewProvider
       hasTarget: () => this.getActiveWebview() !== undefined,
       getStreamControls: getProgressStreamControls,
       getQueuedFollowUps: listRuntimeQueuedFollowUpMessages,
-      runtimeSession: {
-        retainInterruptStreams: (streams) =>
-          defaultSession().interrupts.retainOnly(new Set(streams)),
-        flushPendingTraces: () => defaultSession().flushPendingTraces(),
-      },
-      runtimeStatus: {
-        getSnapshot: getRuntimeStreamStatusSnapshot,
-        setSilently: setRuntimeStreamStatusSilently,
-        clear: clearRuntimeStreamStatus,
-        clearAll: clearAllRuntimeStreamStatuses,
-        isInFlight: isRuntimeStreamInFlight,
-        markRunningStopped: markRuntimeRunningStreamsStopped,
-      },
+      runtimeSession: createProgressRuntimeSessionPort(defaultSession()),
+      runtimeStatus: createProgressRuntimeStatusPort(),
       configureUi: ({ webviewUpdater: u }) => {
         const canSend = () => this.canSendToWebview();
         this.toolEditHandler = new ApprovalRequestHandler(
