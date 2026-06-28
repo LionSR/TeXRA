@@ -51,13 +51,19 @@ export type RunUsageAccumulatorJSON = z.output<
 /**
  * Legacy persisted format: an unbounded `normalizedSnapshots` array instead of
  * `latestUsage`. Only the most-recent snapshot's usage is needed, so the array
- * is collapsed to its last element and the rest discarded. This arm is required
- * to carry `normalizedSnapshots`, so it only matches genuinely-legacy data and
- * canonical/empty inputs fall through to the canonical schema below.
+ * is collapsed to its last element and the rest discarded. This arm requires
+ * `normalizedSnapshots`, so it only matches genuinely-legacy data; canonical
+ * and empty inputs fall through to the canonical schema below.
+ *
+ * A hybrid payload carrying BOTH a canonical `latestUsage` and snapshots keeps
+ * its canonical value — the transform prefers it over the snapshot-derived
+ * value, preserving the prior preprocess behavior (which skipped migration when
+ * `latestUsage` was already present) and avoiding overwrites with stale data.
  */
 const LegacyRunUsageAccumulatorSchema = z
   .object({
     totals: RunUsageTotalsSchema.prefault({}),
+    latestUsage: NormalizedUsageSchema.nullish(),
     normalizedSnapshots: z.array(
       z.object({ usage: NormalizedUsageSchema.optional() }),
     ),
@@ -65,7 +71,8 @@ const LegacyRunUsageAccumulatorSchema = z
   .transform(
     (legacy): RunUsageAccumulatorJSON => ({
       totals: legacy.totals,
-      latestUsage: legacy.normalizedSnapshots.at(-1)?.usage ?? null,
+      latestUsage:
+        legacy.latestUsage ?? legacy.normalizedSnapshots.at(-1)?.usage ?? null,
     }),
   );
 
