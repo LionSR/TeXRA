@@ -47,6 +47,7 @@ import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import { APPROVE_SUPER_YOLO_ACTION } from '../events';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type { PermissionState } from '../permissionState';
@@ -92,6 +93,29 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
       return true;
     }
     return false;
+  }
+
+  // Proposals carry their own bypass affordance ("Super Yolo"), not the
+  // edit/bash session bypass. Override the base Approve button to surface the
+  // super-yolo caret (canBypass stays false) and override the shared `a`
+  // accelerator to trigger it. A proposal always has a streamId, so the menu
+  // always applies.
+  protected override renderApproveButton(approveTitle: string): TemplateResult {
+    return html`
+      <approve-split-button
+        .approveTitle=${approveTitle}
+        .canBypass=${false}
+        .canSuperYolo=${true}
+        @approve=${() => this.emitAction('approve')}
+        @approve-super-yolo=${() => this.emitAction(APPROVE_SUPER_YOLO_ACTION)}
+      ></approve-split-button>
+    `;
+  }
+
+  protected override handleApproveSessionKey(): boolean {
+    if (this.showFeedback) return false;
+    this.emitAction(APPROVE_SUPER_YOLO_ACTION);
+    return true;
   }
 
   override render(): TemplateResult {
@@ -292,7 +316,9 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   // ===========================================================================
 
   protected override emitAction(action: string, feedback?: string): void {
-    if (action !== 'approve') {
+    // Super Yolo approves this proposal too, so it carries the same model/agent
+    // dropdown overrides as a plain approve.
+    if (action !== 'approve' && action !== APPROVE_SUPER_YOLO_ACTION) {
       super.emitAction(action, feedback);
       return;
     }
