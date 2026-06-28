@@ -2,13 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.39.0] - 2026-06-28
 
 ### Shared (all surfaces)
 
 #### Improvements
 
 - **Switch from your ChatGPT subscription to an API key when the quota runs out** — when a Codex model driven through your ChatGPT subscription hits its plan usage limit, the error now says so clearly (plan and how long until it resets) and offers a one-click switch to your own OpenAI API key. Accepting turns off "prefer ChatGPT subscription" and retries the same request on your key. In the VS Code progress view press **Use your own API key** (or `k`); in the CLI press `k` on the retry prompt or run `/subscription off`. Auto-retry no longer hammers an exhausted subscription.
+- **Clearer validation error messages** — when a configuration value, stored session, or API response fails schema validation, the error now reads as a concise human-readable summary of what was wrong instead of a raw JSON dump of the validation internals.
+- **Diagnostic logs survive circular references** — object-to-log formatting no longer collapses to an opaque `[object Object]` when a value contains a circular reference; the structure is preserved with `[Circular]` markers so log lines stay useful.
 
 #### Bug Fixes
 
@@ -16,27 +18,6 @@ All notable changes to this project will be documented in this file.
 - **Unavailable model overrides fail fast** — approving a delegation after switching the model to one that isn't available in the active API mode now reports it immediately, instead of reporting the subagent as launched and then failing asynchronously. The approve path uses the same availability check as the initial delegation.
 - **Windows: cancelling or timing out a shell command now stops its child processes** — when a `bash`-tool command was stopped or hit its timeout on Windows, only the top-level shell was terminated and any piped or background child processes (e.g. `find | head`) were left running. They are now torn down with the rest of the command tree.
 - **Programmer errors in network tools no longer hide as transient failures** — the HTTP retry classifier treated every `TypeError` as a network error and retried it. A genuine bug in a web/citation tool (e.g. reading a property of `undefined`) was silently retried and masked instead of surfacing. Only real fetch/undici network failures are now classified as transient.
-
-#### Improvements
-
-- **Clearer validation error messages** — when a configuration value, stored session, or API response fails schema validation, the error now reads as a concise human-readable summary of what was wrong instead of a raw JSON dump of the validation internals.
-- **Diagnostic logs survive circular references** — object-to-log formatting no longer collapses to an opaque `[object Object]` when a value contains a circular reference; the structure is preserved with `[Circular]` markers so log lines stay useful.
-
-### VS Code Extension
-
-#### Features
-
-- **TeXRA research tools in Copilot Chat** — when running on a VS Code build that supports the Language Model Tool API, TeXRA's arXiv search, web fetch, and Crossref search are available in Copilot Chat as `#texra_arxiv_search`, `#texra_web_fetch`, and `#texra_crossref_search`, so agents can pull papers, web pages, and citations without leaving chat. Hosts without the API simply don't show them.
-- **Live usage in the status bar** — hovering the TeXRA status bar item now shows a running cost and input/output token total for active streams, so you can keep an eye on spend without opening the task board.
-
-#### Improvements
-
-- **Clearer pickers** — file, credential, review, and tool-selection menus now keep an explanatory hint visible as you type (on VS Code 1.108+): the latexdiff math-markup and review pickers show your saved default, the API-key picker reminds you keys are stored encrypted, the "Accept edits" picker keeps the edited filename in view, and the review flow echoes your focus text. Entering an API key offers a one-click "Get API key" button inline (VS Code 1.109+).
-
-#### Bug Fixes
-
-- **Tool-edit approval no longer hangs when you close the diff** — closing the proposed-edit diff tab now rejects the edit instead of leaving the agent waiting indefinitely.
-- **More precise diff cleanup** — finishing a tool-edit approval now only closes that exact diff, never an unrelated diff that happens to share a file.
 
 ### CLI
 
@@ -52,9 +33,20 @@ All notable changes to this project will be documented in this file.
 
 ### Extension (VS Code)
 
+#### Features
+
+- **TeXRA research tools in Copilot Chat** — when running on a VS Code build that supports the Language Model Tool API, TeXRA's arXiv search, web fetch, and Crossref search are available in Copilot Chat as `#texra_arxiv_search`, `#texra_web_fetch`, and `#texra_crossref_search`, so agents can pull papers, web pages, and citations without leaving chat. Hosts without the API simply don't show them.
+- **Live usage in the status bar** — hovering the TeXRA status bar item now shows a running cost and input/output token total for active streams, so you can keep an eye on spend without opening the task board.
+
 #### Improvements
 
+- **Clearer pickers** — file, credential, review, and tool-selection menus now keep an explanatory hint visible as you type (on VS Code 1.108+): the latexdiff math-markup and review pickers show your saved default, the API-key picker reminds you keys are stored encrypted, the "Accept edits" picker keeps the edited filename in view, and the review flow echoes your focus text. Entering an API key offers a one-click "Get API key" button inline (VS Code 1.109+).
 - **"Yolo (this session)" right on the approval prompt** — edit and bash approval prompts now offer a **Yolo (this session)** option under the Approve button's ▾ menu (keyboard shortcut `a`), mirroring the CLI's "approve session". It approves the current action and turns off approval prompts for edits and bash commands for the rest of that stream — the same effect as the toolbar shield, but discoverable at the moment you're asked. Previously the only way to enable auto-approval was the shield icon in the progress-view toolbar, which first-time users could easily miss.
+
+#### Bug Fixes
+
+- **Tool-edit approval no longer hangs when you close the diff** — closing the proposed-edit diff tab now rejects the edit instead of leaving the agent waiting indefinitely.
+- **More precise diff cleanup** — finishing a tool-edit approval now only closes that exact diff, never an unrelated diff that happens to share a file.
 
 ## [0.38.10] - 2026-06-23
 
