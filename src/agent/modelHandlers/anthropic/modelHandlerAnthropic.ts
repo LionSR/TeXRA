@@ -966,12 +966,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       .join('');
 
     // Add end tag if needed
-    if (
-      stopReason === ANTHROPIC_STOP.STOP_SEQUENCE &&
-      !newResponse.includes(endTag)
-    ) {
-      newResponse += `\n${endTag}`;
-    }
+    newResponse = this.appendEndTagIfNeeded(
+      newResponse,
+      endTag,
+      stopReason === ANTHROPIC_STOP.STOP_SEQUENCE,
+    );
 
     newResponse = replacementEngine.applyAll(newResponse);
 

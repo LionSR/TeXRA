@@ -16,6 +16,7 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
+import replacementEngine from '@replacement/engine';
 
 // Local imports - tools and utils
 import type { FileLocation } from '@shared/schemas';
@@ -243,9 +244,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         return { response, updatedMessages };
       } catch (err) {
         // Ensure progress streams are finalized on error to prevent
-        // the progress view from being stuck in a loading state
+        // the progress view from being stuck in a loading state. No explicit
+        // final text so any chunks already streamed are preserved (passing `''`
+        // would overwrite the visible partial output).
         thinking.finalize(undefined);
-        output.finalize('');
+        output.finalize();
         // Lift the accumulated partial text onto the error so the retry UI
         // can show the tail (parity with the other streaming providers).
         const partialTail = takeTail(
@@ -546,14 +549,12 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       this.logger.error('content is empty');
     }
 
-    if (
-      stopReason === OPENAI_CHAT_FINISH.STOP &&
-      endTag &&
-      !newResponse.includes(endTag)
-    ) {
-      this.logger.debug(`Adding end tag to response: ${endTag}`);
-      newResponse = `${newResponse}\n${endTag}`;
-    }
+    newResponse = this.appendEndTagIfNeeded(
+      newResponse,
+      endTag,
+      stopReason === OPENAI_CHAT_FINISH.STOP,
+    );
+    newResponse = replacementEngine.applyAll(newResponse);
 
     return {
       text: newResponse,

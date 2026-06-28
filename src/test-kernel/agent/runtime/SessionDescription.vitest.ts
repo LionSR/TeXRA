@@ -21,7 +21,8 @@ vi.mock('@agent/index', () => ({
   getAgent: mocks.getAgent,
 }));
 
-vi.mock('@agent/runtime/helperModel', () => ({
+vi.mock('@agent/runtime/helperModel', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
   createHelperModelKit: mocks.createHelperModelKit,
 }));
 

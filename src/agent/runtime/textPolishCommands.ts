@@ -4,8 +4,8 @@ import * as logger from '@logger/logUtils';
 import { isNonEmptyString } from '@utils/core';
 import { extractTextFromTag } from '@utils/text/xmlUtils';
 
-import { createHelperModelKit } from './helperModel';
 import { initializePolishModel, renderPolishPrompt } from './polishModel';
+import { createHelperModelKit, runHelperModelCompletion } from './helperModel';
 
 const CHANNEL = 'TextPolishCommands';
 
@@ -103,14 +103,9 @@ export async function requestRuntimeTextPolish({
     if (!helperResult.kit) {
       throw new Error(helperResult.reason);
     }
-    const { handler, client } = helperResult.kit;
-    const messages = await handler.initializeMessages('', prompt);
-    const result = await handler.createResponse({
-      client,
-      messages,
-      temperature: 0,
+    const responseText = await runHelperModelCompletion(helperResult.kit, {
+      userPrompt: prompt,
     });
-    const { text: responseText } = handler.extractResponse(result.response, '');
     if (!isNonEmptyString(responseText)) {
       throw new Error('Model returned no text.');
     }

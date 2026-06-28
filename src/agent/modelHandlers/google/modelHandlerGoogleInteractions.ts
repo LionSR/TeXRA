@@ -1924,98 +1924,112 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   ): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
     const output = this.createOutputStream();
     const thinking = this.createThinkingStream();
+    let streamsFinalized = false;
 
-    const pending = new Map<number, PendingStep>();
-    let completedInteraction: GoogleGenAIInteraction | undefined;
-    let runningUsage: Usage | undefined;
-    let interactionId: string | undefined;
+    try {
+      const pending = new Map<number, PendingStep>();
+      let completedInteraction: GoogleGenAIInteraction | undefined;
+      let runningUsage: Usage | undefined;
+      let interactionId: string | undefined;
 
-    for await (const event of stream) {
-      switch (event.event_type) {
-        case 'interaction.created':
-          interactionId = event.interaction.id;
-          this.logger.debug(`Interaction created: ${interactionId}`);
-          break;
+      for await (const event of stream) {
+        switch (event.event_type) {
+          case 'interaction.created':
+            interactionId = event.interaction.id;
+            this.logger.debug(`Interaction created: ${interactionId}`);
+            break;
 
-        case 'step.start':
-          pending.set(event.index, this.seedPendingStep(event.step));
-          break;
+          case 'step.start':
+            pending.set(event.index, this.seedPendingStep(event.step));
+            break;
 
-        case 'step.delta': {
-          const slot = pending.get(event.index) ?? this.seedPendingStep();
-          pending.set(event.index, slot);
-          this.applyDelta(slot, event.delta, output, thinking, onOutputText);
-          if (event.metadata?.total_usage) {
-            runningUsage = event.metadata.total_usage;
+          case 'step.delta': {
+            const slot = pending.get(event.index) ?? this.seedPendingStep();
+            pending.set(event.index, slot);
+            this.applyDelta(slot, event.delta, output, thinking, onOutputText);
+            if (event.metadata?.total_usage) {
+              runningUsage = event.metadata.total_usage;
+            }
+            break;
           }
-          break;
-        }
 
-        case 'step.stop': {
-          const slot = pending.get(event.index);
-          if (slot && slot.type === 'function_call' && slot.argsBuffer) {
-            slot.args = this.parseArguments(slot.argsBuffer);
+          case 'step.stop': {
+            const slot = pending.get(event.index);
+            if (slot && slot.type === 'function_call' && slot.argsBuffer) {
+              slot.args = this.parseArguments(slot.argsBuffer);
+            }
+            break;
           }
-          break;
-        }
 
-        case 'interaction.status_update':
-          this.logger.debug(`Interaction status: ${event.status}`);
-          break;
+          case 'interaction.status_update':
+            this.logger.debug(`Interaction status: ${event.status}`);
+            break;
 
-        case 'interaction.completed':
-          // The completed event carries the final status/usage/steps. Cast to
-          // the handler's Resp shape (steps non-optional downstream is tolerated
-          // via the `?? []` reads in extractors).
-          completedInteraction =
-            event.interaction as unknown as GoogleGenAIInteraction;
-          break;
+          case 'interaction.completed':
+            // The completed event carries the final status/usage/steps. Cast to
+            // the handler's Resp shape (steps non-optional downstream is tolerated
+            // via the `?? []` reads in extractors).
+            completedInteraction =
+              event.interaction as unknown as GoogleGenAIInteraction;
+            break;
 
-        case 'error': {
-          const message = event.error?.message ?? 'Interactions stream error';
-          const err = new Error(message);
-          this.sdkErrorTagger(err, this.config.provider);
-          throw err;
+          case 'error': {
+            const message = event.error?.message ?? 'Interactions stream error';
+            const err = new Error(message);
+            this.sdkErrorTagger(err, this.config.provider);
+            throw err;
+          }
         }
       }
+
+      // Assemble the finalized step list from the per-index accumulators so that
+      // thought signatures + function calls round-trip verbatim next round.
+      const finalizedSteps = this.finalizeSteps(pending);
+
+      const usage = completedInteraction?.usage ?? runningUsage ?? undefined;
+      // If the stream ended without an interaction.completed (or error) event the
+      // turn was truncated/abnormally cut — report `incomplete` (not `completed`)
+      // so the cycle can continue rather than silently treating partial output as
+      // done. `finalizeSteps` preferred over the server steps so streamed thought
+      // signatures survive the round-trip.
+      let status = completedInteraction?.status;
+      if (!status) {
+        this.logger.warn(
+          'Google Interactions stream ended without an interaction.completed event; treating as incomplete.',
+        );
+        status = 'incomplete';
+      }
+
+      const response: GoogleGenAIInteraction = {
+        ...(completedInteraction ?? {}),
+        id: completedInteraction?.id ?? interactionId ?? nanoid(),
+        status,
+        usage,
+        steps:
+          finalizedSteps.length > 0
+            ? finalizedSteps
+            : (completedInteraction?.steps ?? []),
+      } as unknown as GoogleGenAIInteraction;
+
+      const finalReasoning = this.processThinkingBlock(response);
+      thinking.finalize(finalReasoning ?? undefined);
+
+      const finalText = this.extractResponse(response, endTag ?? '').text;
+      output.finalize(finalText);
+      streamsFinalized = true;
+
+      return { response };
+    } finally {
+      // Finalize the progress streams on a mid-stream failure so the progress
+      // view does not hang in a loading state. Guarded so the success-path
+      // finalize above (with the real content) is not overwritten. No explicit
+      // final text so any chunks already streamed are preserved (passing `''`
+      // would overwrite the visible partial output).
+      if (!streamsFinalized) {
+        thinking.finalize(undefined);
+        output.finalize();
+      }
     }
-
-    // Assemble the finalized step list from the per-index accumulators so that
-    // thought signatures + function calls round-trip verbatim next round.
-    const finalizedSteps = this.finalizeSteps(pending);
-
-    const usage = completedInteraction?.usage ?? runningUsage ?? undefined;
-    // If the stream ended without an interaction.completed (or error) event the
-    // turn was truncated/abnormally cut — report `incomplete` (not `completed`)
-    // so the cycle can continue rather than silently treating partial output as
-    // done. `finalizeSteps` preferred over the server steps so streamed thought
-    // signatures survive the round-trip.
-    let status = completedInteraction?.status;
-    if (!status) {
-      this.logger.warn(
-        'Google Interactions stream ended without an interaction.completed event; treating as incomplete.',
-      );
-      status = 'incomplete';
-    }
-
-    const response: GoogleGenAIInteraction = {
-      ...(completedInteraction ?? {}),
-      id: completedInteraction?.id ?? interactionId ?? nanoid(),
-      status,
-      usage,
-      steps:
-        finalizedSteps.length > 0
-          ? finalizedSteps
-          : (completedInteraction?.steps ?? []),
-    } as unknown as GoogleGenAIInteraction;
-
-    const finalReasoning = this.processThinkingBlock(response);
-    thinking.finalize(finalReasoning ?? undefined);
-
-    const finalText = this.extractResponse(response, endTag ?? '').text;
-    output.finalize(finalText);
-
-    return { response };
   }
 
   private seedPendingStep(step?: Step): PendingStep {

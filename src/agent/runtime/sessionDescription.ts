@@ -10,7 +10,10 @@
 import { getAgent } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { createHelperModelKit } from '@agent/runtime/helperModel';
+import {
+  createHelperModelKit,
+  runHelperModelCompletion,
+} from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors';
 import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import * as logger from '@logger/logUtils';
@@ -96,25 +99,15 @@ export async function generateSessionDescription(
       return;
     }
 
-    const { handler, client } = helperResult.kit;
     const userPrompt = buildUserPrompt(
       config.agent,
       agentDescription,
       instruction,
     );
-    const messages = await handler.initializeMessages(
-      '',
+    const text = await runHelperModelCompletion(helperResult.kit, {
       userPrompt,
-      undefined,
-      SYSTEM_PROMPT,
-    );
-    const result = await handler.createResponse({
-      client,
-      messages,
-      temperature: 0,
       systemPrompt: SYSTEM_PROMPT,
     });
-    const { text } = handler.extractResponse(result.response, '');
 
     if (isNonEmptyString(text)) {
       const description = cleanSessionDescription(text);

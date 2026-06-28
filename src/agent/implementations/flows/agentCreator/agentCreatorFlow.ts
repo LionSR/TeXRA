@@ -10,7 +10,10 @@ import {
   AgentToolUseSettingSchema,
   AgentPromptSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { createHelperModelKit } from '@agent/runtime/helperModel';
+import {
+  createHelperModelKit,
+  runHelperModelCompletion,
+} from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
@@ -388,7 +391,6 @@ class GenerateNode extends Node<AgentCreatorShared> {
     if (!helperResult.kit) {
       throw new Error(helperResult.reason);
     }
-    const { handler, client } = helperResult.kit;
 
     const prompts = config[blueprint.category];
     const schemaRef = getSchemaReference(blueprint.category);
@@ -410,19 +412,10 @@ class GenerateNode extends Node<AgentCreatorShared> {
         });
     }
 
-    const messages = await handler.initializeMessages(
-      '',
-      userMessage,
-      undefined,
-      systemPrompt,
-    );
-    const result = await handler.createResponse({
-      client,
-      messages,
-      temperature: 0,
+    const text = await runHelperModelCompletion(helperResult.kit, {
+      userPrompt: userMessage,
       systemPrompt,
     });
-    const { text } = handler.extractResponse(result.response, '');
 
     if (!isNonEmptyString(text)) {
       throw new Error('Model returned no text');
