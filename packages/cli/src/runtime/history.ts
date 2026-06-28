@@ -192,15 +192,11 @@ export async function readCliHistoryConfig(
 export async function deleteCliHistory(options: {
   id?: ExecutionId;
   all?: boolean;
-  /** Pre-computed entry count from `preflightCliHistoryDeleteAll`, surfaced in
-   *  the `'all'` result so structured callers can report what was removed. */
-  preCountForAll?: number;
 }): Promise<CliHistoryDeleteResult> {
   if (options.all) {
     const { deletedExecutionIds } =
       await requestClearRuntimeHistoryExecutions();
-    const count = options.preCountForAll ?? deletedExecutionIds.length;
-    return { deleted: 'all', count };
+    return { deleted: 'all', count: deletedExecutionIds.length };
   }
   if (!options.id) {
     throw new Error('Expected an execution id, or --all.');

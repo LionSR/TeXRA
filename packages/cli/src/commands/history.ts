@@ -85,7 +85,6 @@ async function runHistoryDelete(
 
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.
-  let preCountForAll: number | undefined;
   if (options.all) {
     const preflight = await preflightCliHistoryDeleteAll({
       all: true,
@@ -99,12 +98,11 @@ async function runHistoryDelete(
       );
       return CliExitCode.Usage;
     }
-    preCountForAll = preflight.count;
   }
 
   let result: CliHistoryDeleteResult;
   try {
-    result = await deleteCliHistory({ ...options, preCountForAll });
+    result = await deleteCliHistory(options);
   } catch (error) {
     writeErrorStderr(error);
     return CliExitCode.Usage;

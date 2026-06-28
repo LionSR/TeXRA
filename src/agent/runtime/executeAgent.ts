@@ -23,7 +23,7 @@ import {
   type AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
-import { AgentError, getSdkErrorMessage } from '@common/errors';
+import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
@@ -415,7 +415,11 @@ export async function executeAgent(
       streamId,
       config,
       ctx.runtimeHost,
-    ).catch(() => {});
+    ).catch((error) => {
+      logger.warn(
+        `Failed to generate session description for ${ctx.executionId}: ${toErrorMessage(error)}`,
+      );
+    });
     return runFlowWithLifecycle(
       ctx,
       async (handle) => {

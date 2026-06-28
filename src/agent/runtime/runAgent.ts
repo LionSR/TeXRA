@@ -2,7 +2,9 @@ import { registerExecution } from '@agent/storage';
 
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
 import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
+import { toErrorMessage } from '@common/errors';
 import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
+import { createChannelTrace } from '@logger';
 import {
   EXECUTION_STATUS,
   type ExecutionId,
@@ -14,6 +16,8 @@ import { repairRuntimeHistoryTerminalStatus } from './historyCommands';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 import type { AgentRunHandle } from './executionRegistry';
 import type { SessionHandle } from './SessionHandle';
+
+const logger = createChannelTrace('runAgent');
 
 export interface RunAgentOptions {
   runtimeHost: AgentRuntimeHost;
@@ -95,7 +99,11 @@ export async function runAgent(
       await repairRuntimeHistoryTerminalStatus(
         executionId,
         EXECUTION_STATUS.ERROR,
-      ).catch(() => {});
+      ).catch((repairError) => {
+        logger.warn(
+          `Failed to repair terminal status for ${executionId}: ${toErrorMessage(repairError)}`,
+        );
+      });
     }
     throw err;
   }

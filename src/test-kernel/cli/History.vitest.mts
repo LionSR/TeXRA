@@ -949,14 +949,22 @@ describe('CLI history runtime', () => {
     });
   });
 
-  it('reuses the preflight count instead of re-listing', async () => {
+  it('uses preflight count only for confirmation and reports actual deleted count', async () => {
+    mocks.listExecutions.mockResolvedValue([{}, {}, {}, {}, {}, {}, {}]);
+    await expect(
+      preflightCliHistoryDeleteAll({ all: true, yes: true }),
+    ).resolves.toEqual({ proceed: true, count: 7 });
+    expect(mocks.listExecutions).toHaveBeenCalledOnce();
+
+    mocks.listExecutions.mockClear();
     mocks.deleteAllExecutions.mockResolvedValue(['a1']);
 
-    await expect(
-      deleteCliHistory({ all: true, preCountForAll: 7 }),
-    ).resolves.toEqual({ deleted: 'all', count: 7 });
+    await expect(deleteCliHistory({ all: true })).resolves.toEqual({
+      deleted: 'all',
+      count: 1,
+    });
 
-    // listExecutions must not be called when the count was passed in.
+    // The confirmation count does not drive the post-delete report.
     expect(mocks.listExecutions).not.toHaveBeenCalled();
   });
 

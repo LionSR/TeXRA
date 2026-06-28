@@ -2,6 +2,8 @@ import {
   computeRuntimeAgentOptionsData,
   type RuntimeAgentOptionsData,
 } from '@agent/runtime/agentResolution';
+import { toErrorMessage } from '@common/errors';
+import { createChannelTrace } from '@logger';
 import {
   buildVisibleBasicModelOptionsData,
   computeModelOptionsData,
@@ -12,6 +14,8 @@ import type {
   ModelOptionData,
 } from '@shared/schemas';
 import { AgentCategory, agentName } from '@shared/schemas/agent';
+
+const logger = createChannelTrace('ProgressProposalOptionsController');
 
 export interface ProgressProposalOptionsData {
   readonly modelOptionsData: ModelOptionData[];
@@ -45,7 +49,12 @@ export class ProgressProposalOptionsController {
   ): Promise<ProgressProposalOptionsData> {
     const [modelOptionsData, agentOptionsData] = await Promise.all([
       this.loadModelOptionsWithFallback(),
-      this.loadProposalAgentOptions(proposal).catch(() => undefined),
+      this.loadProposalAgentOptions(proposal).catch((error) => {
+        logger.warn(
+          `Failed to load proposal agent options: ${toErrorMessage(error)}`,
+        );
+        return undefined;
+      }),
     ]);
     return { modelOptionsData, agentOptionsData };
   }
