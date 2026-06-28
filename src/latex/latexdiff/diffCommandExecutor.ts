@@ -1,11 +1,10 @@
 // Internal imports
-import { platform } from '@platform/platform';
 import * as logger from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { executeCommand } from '@utils/system';
 import { getConfig } from '@utils/config/configUtils';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 
 // Local file imports
 import { DEFAULT_MATH_MARKUP, type MathMarkupOption } from './mathMarkup';
@@ -265,18 +264,15 @@ export class DiffCommandExecutor {
     pictureEnvs: string;
     subtype?: string;
   } {
-    const state = platform().workspaceState;
-    const changesOnly = state.get<boolean>(
+    const changesOnly = readPlatformSetting<boolean>(
       WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
-      LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
     );
 
     return {
       mathMarkup:
         options?.mathMarkup ??
-        state.get<MathMarkupOption>(
+        readPlatformSetting<MathMarkupOption>(
           WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-          LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup as MathMarkupOption,
         ),
       pictureEnvs: getConfig<string>(
         'texra.latexdiff.pictureEnvironments',

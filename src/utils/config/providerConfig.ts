@@ -10,6 +10,7 @@
 import { tryGlobalState } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config';
+import { readPlatformSetting } from './platformSettings';
 
 /**
  * When `key` is set in globalSM (treated as boolean), the provider is in its
@@ -215,8 +216,12 @@ export function setWebSocketEnabledOverride(value: boolean | undefined): void {
 }
 
 export function getWebSocketEnabled(): boolean {
+  // WEBSOCKET_OPENAI is catalog-modeled, so its default comes from the schema
+  // via the shared accessor. The other provider toggles below are not in the
+  // catalog and stay on the local `read`.
   return (
-    webSocketEnabledOverride ?? read(GlobalStateKey.WEBSOCKET_OPENAI, false)
+    webSocketEnabledOverride ??
+    readPlatformSetting<boolean>(GlobalStateKey.WEBSOCKET_OPENAI)
   );
 }
 

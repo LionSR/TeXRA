@@ -2,15 +2,14 @@ import * as path from 'node:path';
 
 import { z } from 'zod';
 
-import { tryWorkspaceState } from '@platform/platform';
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { flexibleFS, pathToLocation } from '@utils/files';
 import { executeCommand } from '@utils/system';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { runLatexFormatter } from './texFormatter';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
@@ -43,8 +42,6 @@ export type LaTeXdiffMultipleResult = z.infer<
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-const DEFAULT_LATEXDIFF_TIMEOUT_MS = LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs;
-
 function hasDocumentEnvironment(content: string): boolean {
   return (
     content.includes('\\begin{document}') && content.includes('\\end{document}')
@@ -71,18 +68,14 @@ export class LaTeXdiffService {
    * Resolve the latexdiff timeout from workspace state. Tolerant of
    * pre-initialization: `LaTeXdiffService` is instantiated at module scope in
    * `commands/latex/latexdiffCommands.ts` and `tools/approval/latexPreview.ts`,
-   * which evaluate before `initPlatform()` runs in `activate()`. A throwing
-   * `platform().workspaceState` would prevent the extension from activating; falling
-   * back to the documented default keeps construction safe. Called per-diff
-   * so user updates take effect on the next invocation without any rebuild.
+   * which evaluate before `initPlatform()` runs in `activate()`. `readPlatformSetting`
+   * uses `tryPlatform()` internally, so it returns the catalog schema default
+   * instead of throwing when the platform isn't initialized yet — keeping
+   * construction safe. Called per-diff so user updates take effect on the next
+   * invocation without any rebuild.
    */
   private getLatexdiffTimeout(): number {
-    return (
-      tryWorkspaceState()?.get<number>(
-        WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-        DEFAULT_LATEXDIFF_TIMEOUT_MS,
-      ) ?? DEFAULT_LATEXDIFF_TIMEOUT_MS
-    );
+    return readPlatformSetting<number>(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS);
   }
 
   private logDiffError(context: string, err: unknown): LaTeXdiffResult {

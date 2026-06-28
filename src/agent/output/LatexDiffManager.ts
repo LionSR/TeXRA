@@ -15,10 +15,7 @@ import {
   type OutputFileInfo,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  LATEX_CONFIG_DEFAULTS,
-  LATEX_CONFIG_RANGES,
-} from '@shared/constants/latex';
+import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -28,6 +25,7 @@ import {
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 import { getComparablePath } from '@utils/files/taskRunStorage';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 
 import {
   publishCompiledPdfArtifact,
@@ -193,9 +191,8 @@ export class LatexDiffManager {
       }
     }
 
-    const generateBetweenRoundDiffs = platform().workspaceState.get<boolean>(
+    const generateBetweenRoundDiffs = readPlatformSetting<boolean>(
       WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-      LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
     );
 
     if (generateBetweenRoundDiffs && currRound > 0) {
@@ -374,9 +371,8 @@ export class LatexDiffManager {
     // gets killed by execa instead of orphaning latexmk/pdflatex.
     const timeoutMs = Math.max(
       LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
-      platform().workspaceState.get<number>(
+      readPlatformSetting<number>(
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-        LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
       ),
     );
     const ok = await compileLatex2Pdf(diffLocation, {
