@@ -200,8 +200,7 @@ function routeApproval(
       );
       return;
     case 'showRetryRequest': {
-      const retryPayload =
-        payload as ProgressEventPayloads['showRetryRequest'];
+      const retryPayload = payload as ProgressEventPayloads['showRetryRequest'];
       // Policy check (yolo/never). For 'ask' mode this returns undefined
       // so the user can decide; for auto modes it returns yolo(accept) or
       // never(reject) directly. When the failing request carries a
