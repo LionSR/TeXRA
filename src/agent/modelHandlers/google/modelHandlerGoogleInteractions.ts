@@ -25,7 +25,6 @@ import { K_SLICE } from '@agent/core/constants';
 import {
   detectStatusCode,
   getSdkErrorMessage,
-  isUserAbort,
   attachPartialText,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -39,7 +38,7 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Local imports - utils
-import { delay, isNonEmptyString, isObject } from '@utils/core';
+import { isNonEmptyString, isObject } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
@@ -54,6 +53,7 @@ import {
   computeGoogleInteractionsPrice,
   normalizeGoogleInteractionsUsage,
 } from './googleInteractionsUsage';
+import { BackgroundPoller } from '../support/BackgroundPoller';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
@@ -296,10 +296,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   protected override backgroundModeSupported = true;
 
-  private static readonly BACKGROUND_POLL_INTERVAL_MS = 5000;
-  private static readonly BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
-
-  /** Immutable params for every background poll get() — id is the positional arg. */
   private static readonly BACKGROUND_GET_PARAMS: InteractionGetParamsNonStreaming =
     { stream: false };
 
@@ -317,6 +313,20 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    */
   private static readonly BACKGROUND_PENDING_STATUSES: readonly InteractionStatus[] =
     ['in_progress'];
+
+  /** Shared polling collaborator, created lazily on first use. */
+  private _backgroundPoller?: BackgroundPoller<GoogleGenAIInteraction>;
+  private get backgroundPoller(): BackgroundPoller<GoogleGenAIInteraction> {
+    if (!this._backgroundPoller) {
+      this._backgroundPoller = new BackgroundPoller({
+        pollIntervalMs: 5000,
+        maxDurationMs: 3 * 60 * 60 * 1000, // 3 hours
+        isPending: (r) => this.isBackgroundPending(r),
+        logger: this.logger,
+      });
+    }
+    return this._backgroundPoller;
+  }
 
   /**
    * Id of the background interaction currently being polled, so an abort handler
@@ -1754,98 +1764,68 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     }
 
     this.pendingBackgroundInteractionId = interactionId;
-    const onAbort = () => {
-      // Fire-and-forget cancel; do NOT await inside the listener. The in-flight
-      // delay()/get() reject with AbortError, which the loop translates into the
-      // user-abort throw.
-      void this.cancelBackgroundInteraction(client, interactionId);
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-    if (signal?.aborted) onAbort();
-
-    const pollInterval =
-      ModelHandlerGoogleInteractions.BACKGROUND_POLL_INTERVAL_MS;
-    const maxDuration =
-      ModelHandlerGoogleInteractions.BACKGROUND_MAX_DURATION_MS;
-    const startTime = Date.now();
-    let current = initial;
-    let pollCount = 0;
-
     try {
-      while (this.isBackgroundPending(current)) {
-        pollCount += 1;
-        try {
-          await delay(pollInterval, { signal });
-        } catch (err) {
-          if (isUserAbort(err)) {
-            this.logger.debug(
-              `Background polling aborted for interaction ${interactionId} ` +
-                `while waiting (poll ${pollCount}).`,
-            );
+      const onAbort = () => {
+        // Fire-and-forget cancel; do NOT await inside the listener.
+        void this.cancelBackgroundInteraction(client, interactionId);
+      };
+
+      const polled = await this.backgroundPoller.poll({
+        initialResponse: initial,
+        retrieve: async (id, sig) => {
+          const opts = sig
+            ? { fetchOptions: { signal: sig } }
+            : requestOptions;
+          try {
+            return (await client.interactions.get(
+              id,
+              ModelHandlerGoogleInteractions.BACKGROUND_GET_PARAMS,
+              opts,
+            )) as unknown as GoogleGenAIInteraction;
+          } catch (err) {
+            // Tag and rethrow — a user-abort surfaces as-is; a transient poll
+            // error (5xx/429/network) re-enters createResponse via PocketFlow's
+            // retry layer with a fresh submit (orphaned job ages out; no resume
+            // path in v0).
+            this.sdkErrorTagger(err, this.config.provider);
+            throw err;
           }
-          throw err; // cancel already requested via onAbort
-        }
+        },
+        extractId: (r) => r.id,
+        extractStatus: (r) => r.status ?? 'unknown',
+        signal,
+        providerLabel: 'Google Interactions',
+        onAbort,
+      });
 
-        if (Date.now() - startTime > maxDuration) {
-          throw new Error(
-            `Background interaction ${interactionId} exceeded maximum polling ` +
-              `duration of ${maxDuration} ms. Cancel it with ` +
-              `client.interactions.cancel("${interactionId}").`,
-          );
-        }
-
-        // get(id, params, options): params is Omit<GetInteractionByIdRequest,
-        // 'id'> & { stream?: false } — the id is the positional arg, NOT repeated
-        // in params. Returns Promise<GoogleGenAIInteraction>.
-        try {
-          current = (await client.interactions.get(
-            interactionId,
-            ModelHandlerGoogleInteractions.BACKGROUND_GET_PARAMS,
-            requestOptions,
-          )) as unknown as GoogleGenAIInteraction;
-        } catch (err) {
-          // Tag and rethrow — a user-abort surfaces as-is; a transient poll
-          // error (5xx/429/network) re-enters createResponse via PocketFlow's
-          // retry layer with a fresh submit (orphaned job ages out; no resume
-          // path in v0).
-          this.sdkErrorTagger(err, this.config.provider);
-          throw err;
-        }
-        this.logger.debug(
-          `Background poll ${pollCount} for ${interactionId}: ` +
-            `status=${current.status ?? 'unknown'}`,
-        );
+      // `completed` and `requires_action` are both serviceable terminals: the
+      // latter carries function_call steps, so return it (don't throw) and let the
+      // cycle service the tools, mirroring the streaming/non-streaming paths and
+      // finalizeChain's chain-safe handling. Workflow agents normally carry no
+      // tools, but the gate (isWorkflowMode) is not a hard guarantee, so handle it
+      // rather than crash a run that does emit a call.
+      if (
+        polled.status === 'completed' ||
+        polled.status === 'requires_action'
+      ) {
+        return polled;
       }
+
+      // Terminal failure: failed / cancelled / incomplete / budget_exceeded —
+      // treated uniformly as a thrown, tagged error.
+      const status = polled.status ?? 'unknown';
+      this.logger.error(
+        `Background interaction ${interactionId} ended with status "${status}".`,
+      );
+      const err = new Error(
+        `Google Interactions background interaction ${interactionId} ended with ` +
+          `status "${status}".`,
+      );
+      this.sdkErrorTagger(err, this.config.provider);
+      throw err;
     } finally {
-      signal?.removeEventListener('abort', onAbort);
       this.clearPendingBackgroundInteraction();
     }
-
-    // `completed` and `requires_action` are both serviceable terminals: the
-    // latter carries function_call steps, so return it (don't throw) and let the
-    // cycle service the tools, mirroring the streaming/non-streaming paths and
-    // finalizeChain's chain-safe handling. Workflow agents normally carry no
-    // tools, but the gate (isWorkflowMode) is not a hard guarantee, so handle it
-    // rather than crash a run that does emit a call.
-    if (
-      current.status === 'completed' ||
-      current.status === 'requires_action'
-    ) {
-      return current;
-    }
-
-    // Terminal failure: failed / cancelled / incomplete / budget_exceeded —
-    // treated uniformly as a thrown, tagged error.
-    const status = current.status ?? 'unknown';
-    this.logger.error(
-      `Background interaction ${interactionId} ended with status "${status}".`,
-    );
-    const err = new Error(
-      `Google Interactions background interaction ${interactionId} ended with ` +
-        `status "${status}".`,
-    );
-    this.sdkErrorTagger(err, this.config.provider);
-    throw err;
   }
 
   /** Cancel the in-flight background interaction (best-effort; swallow errors). */
