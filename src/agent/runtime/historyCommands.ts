@@ -200,6 +200,12 @@ export function listRuntimeHistoryWorkspaceFiles(
   return listExecutionWorkspaceFiles(config, filePaths);
 }
 
+export function readRuntimeHistoryWorkspaceFilePaths(
+  executionId: ExecutionId,
+): Promise<string[]> {
+  return getExecutionStore(executionId).readWorkspaceFiles();
+}
+
 export async function readRuntimeHistoryConfig(
   executionId: ExecutionId,
 ): Promise<RuntimeHistoryAgentConfig | null> {

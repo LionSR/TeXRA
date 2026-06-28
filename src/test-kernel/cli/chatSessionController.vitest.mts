@@ -94,7 +94,11 @@ import {
   buildInitialChatAgentConfig,
   createChatSessionController,
 } from '@cli/chat/chatSessionController';
-import { patchStream, resetCliState } from '@cli/chat/tui/state/cliState';
+import {
+  cliState,
+  patchStream,
+  resetCliState,
+} from '@cli/chat/tui/state/cliState';
 import {
   chatTuiCanStartRootRun,
   type TuiSession,
@@ -559,6 +563,20 @@ describe('createChatSessionController', () => {
 
     expect(delivered).toBe(false);
     expect(session.stopRequested).toBe(true);
+    expect(
+      cliState.streams
+        .get()
+        .get(streamId)
+        ?.entries.map((entry) => ({
+          role: entry.role,
+          text: entry.text,
+        })),
+    ).toEqual([
+      {
+        role: 'assistant',
+        text: 'No active session. Start a new agent task to continue.',
+      },
+    ]);
   });
 
   it('killExecution routes kill requests through the controller boundary', () => {

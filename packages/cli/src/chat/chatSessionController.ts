@@ -386,6 +386,9 @@ export function createChatSessionController(
 
       // Child stream ids are keys in parentStream; the root session id is not.
       if (followUpTarget === session.streamId) {
+        if (result.notice?.message) {
+          appendLocalAssistantTranscript(result.notice.message, followUpTarget);
+        }
         session.stopRequested = true;
       } else {
         appendLocalAssistantTranscript(

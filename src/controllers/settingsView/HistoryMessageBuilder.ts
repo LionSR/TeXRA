@@ -8,7 +8,7 @@
  */
 import {
   listRuntimeHistoryExecutions,
-  readRuntimeHistoryExecutionRecord,
+  readRuntimeHistoryWorkspaceFilePaths,
 } from '@agent/runtime/historyCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import type {
@@ -31,10 +31,7 @@ export async function buildHistoryMessage(): Promise<UpdateHistoryMessage> {
       };
       const editedFiles =
         cfg.agentCategory === 'toolUse'
-          ? [
-              ...(await readRuntimeHistoryExecutionRecord(entry.id))
-                .workspaceFilePaths,
-            ]
+          ? [...(await readRuntimeHistoryWorkspaceFilePaths(entry.id))]
           : [];
       return {
         id: entry.id,

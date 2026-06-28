@@ -49,6 +49,7 @@ import {
   readRuntimeHistoryConfig,
   readRuntimeHistoryExecutionRecord,
   readRuntimeHistoryTerminalStatus,
+  readRuntimeHistoryWorkspaceFilePaths,
   repairRuntimeHistoryTerminalStatus,
   requestClearRuntimeHistoryExecutions,
   requestDeleteRuntimeHistoryExecution,
@@ -264,6 +265,23 @@ describe('runtime history commands', () => {
       config,
       ['main.tex'],
     );
+  });
+
+  it('reads persisted workspace file paths without loading the full execution record', async () => {
+    executionStoreMock.readWorkspaceFiles.mockResolvedValue(['main.tex']);
+
+    await expect(
+      readRuntimeHistoryWorkspaceFilePaths(EXECUTION_ID),
+    ).resolves.toEqual(['main.tex']);
+
+    expect(storageMock.getExecutionStore).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(executionStoreMock.readWorkspaceFiles).toHaveBeenCalledOnce();
+    expect(executionStoreMock.readMeta).not.toHaveBeenCalled();
+    expect(executionStoreMock.readConfig).not.toHaveBeenCalled();
+    expect(executionStoreMock.readResultMeta).not.toHaveBeenCalled();
+    expect(executionStoreMock.readReport).not.toHaveBeenCalled();
+    expect(executionStoreMock.readConversation).not.toHaveBeenCalled();
+    expect(agentConfigMock.parse).not.toHaveBeenCalled();
   });
 
   it('reads and parses a stored execution config', async () => {

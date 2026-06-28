@@ -5,20 +5,19 @@ import { AgentCategory } from '@shared/schemas/agent';
 
 const mocks = vi.hoisted(() => ({
   listRuntimeHistoryExecutions: vi.fn(),
-  readRuntimeHistoryExecutionRecord: vi.fn(),
+  readRuntimeHistoryWorkspaceFilePaths: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/historyCommands', () => ({
   listRuntimeHistoryExecutions: mocks.listRuntimeHistoryExecutions,
-  readRuntimeHistoryExecutionRecord: mocks.readRuntimeHistoryExecutionRecord,
+  readRuntimeHistoryWorkspaceFilePaths:
+    mocks.readRuntimeHistoryWorkspaceFilePaths,
 }));
 
 describe('settings history handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.readRuntimeHistoryExecutionRecord.mockResolvedValue({
-      workspaceFilePaths: [],
-    });
+    mocks.readRuntimeHistoryWorkspaceFilePaths.mockResolvedValue([]);
   });
 
   it('includes persisted edited files for tool-use history items', async () => {
@@ -35,9 +34,9 @@ describe('settings history handlers', () => {
         category: 'toolUse',
       },
     ]);
-    mocks.readRuntimeHistoryExecutionRecord.mockResolvedValue({
-      workspaceFilePaths: ['proofs/lemma.md'],
-    });
+    mocks.readRuntimeHistoryWorkspaceFilePaths.mockResolvedValue([
+      'proofs/lemma.md',
+    ]);
 
     const message = await buildHistoryMessage();
 
@@ -55,7 +54,7 @@ describe('settings history handlers', () => {
         description: undefined,
       },
     ]);
-    expect(mocks.readRuntimeHistoryExecutionRecord).toHaveBeenCalledWith(
+    expect(mocks.readRuntimeHistoryWorkspaceFilePaths).toHaveBeenCalledWith(
       'abc123',
     );
   });
