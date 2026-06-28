@@ -316,7 +316,7 @@ decision, not a list of possibilities.
 | extension progress agent-category projection      | Deepen            | Keep tool-use-agent classification on `ProgressViewProvider`, not the message dispatcher.         | M1        |
 | progress proposal options projection              | Deepen            | Build model fallback and proposal-local plain-name agent options in a controller.                 | M1        |
 | schema-driven view dispatcher                     | Deepen            | Await asynchronous handlers so typed command dispatch preserves completion semantics.             | M1        |
-| extension settings goal-list projection           | Deepen            | Build the Goal tab controller through a factory, not a runtime import in the message handler.     | M1        |
+| extension settings goal-list projection           | Deepen            | Let the Goal tab controller own the runtime projection; keep the message handler runtime-free.    | M1        |
 | extension/desktop settings agent-catalogue wiring | Deepen            | Let shared settings controllers own catalogue freshness and agent-file lookup inputs.             | M1        |
 | extension/desktop settings history actions        | Deepen            | Let a shared history controller own config lookup, restore projection, and delete/clear calls.    | M1        |
 | main-view agent selection projection              | Deepen            | Project runtime agent identity into selector id/session type for selection and restore paths.     | M1        |
@@ -1698,10 +1698,10 @@ Work:
      caller awaits message handling. Progress delete-all and similar typed
      commands therefore complete as one operation instead of racing host cleanup
      against tests or callers. **Implemented in this branch.**
-   - Extension settings Goal-tab wiring now uses a controller-layer factory for
-     the runtime goal-list projection; `SettingsViewMessageHandler` no longer
-     imports `goalCommands` solely to construct the controller. **Implemented in
-     this branch.**
+   - Extension settings Goal-tab wiring now constructs the controller directly;
+     the controller owns the default runtime goal-list projection, and
+     `SettingsViewMessageHandler` no longer imports `goalCommands` solely to
+     construct it. **Implemented in this branch.**
    - Extension and desktop settings agent wiring now delegates catalogue
      freshness and agent-file lookup inputs to the shared settings controllers;
      the VS Code agent handler no longer imports runtime agent resolution just

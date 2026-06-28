@@ -1,3 +1,4 @@
+import { listRuntimeGoalSettingsItems } from '@agent/runtime/goalCommands';
 import type {
   GoalSettingsItem,
   UpdateGoalListMessage,
@@ -9,7 +10,11 @@ export interface SettingsGoalControllerDeps {
 }
 
 export class SettingsGoalController {
-  constructor(private readonly deps: SettingsGoalControllerDeps) {}
+  constructor(
+    private readonly deps: SettingsGoalControllerDeps = {
+      listGoalItems: listRuntimeGoalSettingsItems,
+    },
+  ) {}
 
   getGoalListMessage(): UpdateGoalListMessage {
     return {

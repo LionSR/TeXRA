@@ -14,7 +14,6 @@ import * as vscode from 'vscode';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
-import { createSettingsGoalController } from '@controllers/settingsView/SettingsGoalControllerFactory';
 import {
   buildToolDashboardItems,
   buildToolDashboardTerminalAction,
@@ -195,7 +194,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.chatgptHandlers = new ChatGptSubscriptionHandlers(ctx, () =>
       this.refreshAfterChatGptAuthChange(),
     );
-    this.goalController = createSettingsGoalController();
+    this.goalController = new SettingsGoalController();
 
     this.handlerRegistry = this.createHandlerRegistry();
 
