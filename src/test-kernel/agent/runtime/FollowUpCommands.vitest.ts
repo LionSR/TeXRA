@@ -28,6 +28,17 @@ function createRecordingHost(): AgentRuntimeHost {
   };
 }
 
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
 describe('runtime follow-up commands', () => {
   beforeEach(() => {
     mocks.hasPersistedFlowRecord.mockReset();
@@ -164,6 +175,85 @@ describe('runtime follow-up commands', () => {
       });
     } finally {
       session.dispose();
+      clearRuntimeStreamStatus(streamId);
+      ToolUseFollowUpQueue.release(streamId);
+    }
+  });
+
+  it('deduplicates persisted waiting probes per session without sharing the lock across sessions', async () => {
+    const sessionA = new SessionHandle();
+    const sessionB = new SessionHandle();
+    const streamId = 'runtime-follow-up-session-scoped-probe' as StreamTabId;
+    const host = createRecordingHost();
+    const firstProbe = deferred<boolean>();
+    const secondProbe = deferred<boolean>();
+
+    try {
+      setRuntimeStreamStatusSilently(streamId, STREAM_STATUS.STOPPED);
+      mocks.hasPersistedFlowRecord
+        .mockReturnValueOnce(firstProbe.promise)
+        .mockReturnValueOnce(secondProbe.promise);
+
+      const firstSessionRequest = requestRuntimeFollowUp({
+        streamId,
+        text: 'first session message',
+        runtimeHost: host,
+        session: sessionA,
+        persistedWaitingExecutionId: 'runtime-follow-up-session-scoped-exec-a',
+      });
+      const duplicateSameSessionRequest = requestRuntimeFollowUp({
+        streamId,
+        text: 'duplicate same session message',
+        runtimeHost: host,
+        session: sessionA,
+        persistedWaitingExecutionId:
+          'runtime-follow-up-session-scoped-exec-a-duplicate',
+      });
+      const secondSessionRequest = requestRuntimeFollowUp({
+        streamId,
+        text: 'second session message',
+        runtimeHost: host,
+        session: sessionB,
+        persistedWaitingExecutionId: 'runtime-follow-up-session-scoped-exec-b',
+      });
+
+      await vi.waitFor(() => {
+        expect(mocks.hasPersistedFlowRecord).toHaveBeenCalledTimes(2);
+      });
+      expect(mocks.hasPersistedFlowRecord).toHaveBeenNthCalledWith(
+        1,
+        'runtime-follow-up-session-scoped-exec-a',
+      );
+      expect(mocks.hasPersistedFlowRecord).toHaveBeenNthCalledWith(
+        2,
+        'runtime-follow-up-session-scoped-exec-b',
+      );
+      await expect(duplicateSameSessionRequest).resolves.toEqual({
+        outcome: 'no_session',
+        accepted: false,
+        streamStatus: STREAM_STATUS.STOPPED,
+        notice: {
+          severity: 'warning',
+          message: 'No active session. Start a new agent task to continue.',
+        },
+      });
+
+      firstProbe.resolve(true);
+      secondProbe.resolve(true);
+
+      await expect(firstSessionRequest).resolves.toEqual({
+        outcome: 'queued',
+        accepted: true,
+        queueReason: 'waiting',
+      });
+      await expect(secondSessionRequest).resolves.toEqual({
+        outcome: 'queued',
+        accepted: true,
+        queueReason: 'waiting',
+      });
+    } finally {
+      sessionA.dispose();
+      sessionB.dispose();
       clearRuntimeStreamStatus(streamId);
       ToolUseFollowUpQueue.release(streamId);
     }

@@ -1,6 +1,9 @@
 import { shouldProbePersistedFlowForFollowUp } from '@agent/runtime/followUpResumeDetection';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
@@ -19,8 +22,6 @@ import {
 
 import { publishRuntimeQueuedFollowUps } from './queuedFollowUps';
 import { StreamStatusService } from './StreamStatusService';
-
-const persistedWaitingDetections = new Set<StreamTabId>();
 
 export type RuntimeFollowUpOutcome =
   | 'sent'
@@ -77,18 +78,32 @@ export async function requestRuntimeFollowUp({
   persistedWaitingExecutionId,
   wakeQueuedStream,
 }: RuntimeFollowUpRequest): Promise<RuntimeFollowUpResult> {
+  const runtimeSession = session ?? currentSession();
   if (runtimeHost && persistedWaitingExecutionId !== undefined) {
     await detectPersistedToolUseWaitingSession({
       streamId,
       executionId: persistedWaitingExecutionId,
       runtimeHost,
+      session: runtimeSession,
     });
   }
 
   const result =
     typeof text === 'string'
-      ? await sendFollowUp(streamId, text, mediaFiles, displayText, session)
-      : await sendFollowUp(streamId, text, undefined, undefined, session);
+      ? await sendFollowUp(
+          streamId,
+          text,
+          mediaFiles,
+          displayText,
+          runtimeSession,
+        )
+      : await sendFollowUp(
+          streamId,
+          text,
+          undefined,
+          undefined,
+          runtimeSession,
+        );
   if (runtimeHost && (result.status === 'sent' || result.status === 'queued')) {
     publishRuntimeQueuedFollowUps(runtimeHost, streamId);
   }
@@ -102,17 +117,21 @@ async function detectPersistedToolUseWaitingSession({
   streamId,
   executionId,
   runtimeHost,
+  session,
 }: {
   readonly streamId: StreamTabId;
   readonly executionId: ExecutionId | undefined;
   readonly runtimeHost: AgentRuntimeHost;
+  readonly session: SessionHandle;
 }): Promise<boolean> {
   const currentStatus = StreamStatusService.get(streamId);
   if (currentStatus === STREAM_STATUS.WAITING) return true;
   if (!shouldProbePersistedFlowForFollowUp(currentStatus)) return false;
-  if (!executionId || persistedWaitingDetections.has(streamId)) return false;
+  if (!executionId) return false;
 
-  persistedWaitingDetections.add(streamId);
+  const releaseDetection =
+    session.followUps.beginPersistedWaitingDetection(streamId);
+  if (!releaseDetection) return false;
   try {
     const hasFlow = await hasPersistedFlowRecord(executionId);
     if (hasFlow) {
@@ -122,7 +141,7 @@ async function detectPersistedToolUseWaitingSession({
     }
     return hasFlow;
   } finally {
-    persistedWaitingDetections.delete(streamId);
+    releaseDetection();
   }
 }
 

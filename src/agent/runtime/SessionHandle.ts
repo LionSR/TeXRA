@@ -6,8 +6,8 @@
  * vocabulary they already use after 7a–c landed (`session.coordinators.x(...)`,
  * `session.executions.y(...)`). It composes the four landed runtime owners —
  * {@link InterruptRegistry}, {@link ExecutionRegistry}, {@link RunCoordinatorBridge},
- * {@link ExecutionSubscriptionBinder} — plus the trace flusher set and an
- * optional session-scoped host channel.
+ * {@link ExecutionSubscriptionBinder} — plus follow-up probe state, the trace
+ * flusher set, and an optional session-scoped host channel.
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop `BrowserWindow`. The default instance,
@@ -33,6 +33,7 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { toErrorMessage } from '@common/errors';
 import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
+import type { StreamTabId } from '@shared/schemas';
 
 import { tryUseRunContext } from './RunContext';
 import { ExecutionRegistry, executionRegistry } from './executionRegistry';
@@ -54,6 +55,7 @@ export type SessionHandleInit = Partial<
     | 'executions'
     | 'coordinators'
     | 'subscriptions'
+    | 'followUps'
     | 'flushers'
     | 'hostChannel'
   >
@@ -67,6 +69,33 @@ export interface SessionDisposeOptions {
   keepActiveExecutions?: boolean;
 }
 
+export class SessionFollowUpState {
+  private readonly persistedWaitingDetections = new Set<StreamTabId>();
+
+  /**
+   * Claim a persisted-WAITING probe for one stream in this session.
+   *
+   * Returns a release callback when this caller owns the probe, or `undefined`
+   * when another caller in the same session is already probing that stream.
+   */
+  beginPersistedWaitingDetection(
+    streamId: StreamTabId,
+  ): (() => void) | undefined {
+    if (this.persistedWaitingDetections.has(streamId)) return undefined;
+    this.persistedWaitingDetections.add(streamId);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.persistedWaitingDetections.delete(streamId);
+    };
+  }
+
+  clear(): void {
+    this.persistedWaitingDetections.clear();
+  }
+}
+
 export class SessionHandle {
   /** Live executions that can be interrupted by stream id. */
   readonly interrupts: InterruptRegistry;
@@ -76,6 +105,8 @@ export class SessionHandle {
   readonly coordinators: RunCoordinatorBridge;
   /** Execution-status subscriptions bound to agent stream lifecycles. */
   readonly subscriptions: ExecutionSubscriptionBinder;
+  /** Follow-up coordination state scoped to this session. */
+  readonly followUps: SessionFollowUpState;
   /** This session's trace-flush callbacks (drained on dispose / shutdown). */
   readonly flushers: Set<() => void>;
   /**
@@ -97,6 +128,7 @@ export class SessionHandle {
     this.interrupts = interrupts;
     this.executions = executions;
     this.coordinators = coordinators;
+    this.followUps = init.followUps ?? new SessionFollowUpState();
     // INVARIANT (SDK Step 7d residue #9): this per-session binder reads the
     // process-global, streamId-keyed `ToolUseFollowUpQueue` as its release
     // source. That is coherent ONLY while the queue stays keyed by the globally-
@@ -190,6 +222,7 @@ export class SessionHandle {
       } else {
         this.coordinators.cleanupAllRequests();
         this.subscriptions.dispose();
+        this.followUps.clear();
         this.executions.dispose();
         this.interrupts.retainOnly(new Set());
         this.resultListeners.clear();
@@ -215,6 +248,7 @@ export class SessionHandle {
       this.flushPendingTraces();
       this.coordinators.cleanupAllRequests();
       this.subscriptions.dispose();
+      this.followUps.clear();
       this.executions.dispose();
       this.interrupts.retainOnly(new Set());
       this.resultListeners.clear();

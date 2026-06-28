@@ -381,20 +381,21 @@ decoupling PRD's Runtime State Ownership audit (lines 1632-1655) classifies ever
 long-lived registry as truly-global, session-scoped, run-scoped, or host-UI
 state.
 
-Two residual module-level mutables remain, and they are not equal debts. The
-owed one is `desktopAgentResume.ts`: `registeredHandlers` (line 8) is a
-process-global `Set<DesktopResumeHandler>`; `tryResumeDesktopStream` iterates
-`[...registeredHandlers].toReversed()` (line 22) and tries every registered
-handler. It is not a last-writer-wins singleton and does not silently misroute,
-but it is process-global module state that cannot be disposed per window, so on
-the desktop a resume request can fire against another window's handler and the
-Set has no window-scoped owner. The parked one is `persistedWaitingDetections`
-(`followUpCommands.ts:23`), a process-global `Set<StreamTabId>` re-entrancy
-guard; because stream ids are kept globally unique, it does not misroute across
-windows, and the decoupling PRD's own ownership audit (line 1648) already
-classifies this category as session-scoped-by-invariant with the lenient target
-"keep behind `followUpCommands`; move with the follow-up queue if queue ownership
-changes". So the only hard migration here is the desktop Set.
+The remaining audited module-level mutable is `desktopAgentResume.ts`:
+`registeredHandlers` (line 8) is a process-wide registry of window handlers.
+This is no longer the old last-writer-wins singleton: registration returns a
+disposer, `tryResumeDesktopStream` iterates all handlers in reverse registration
+order, and `isDesktopResumeInFlight` aggregates across them. It is acceptable as
+a process router while stream ids are globally unique and handlers self-filter;
+if resume ownership becomes window-keyed, this registry should move behind an
+explicit window resume router.
+
+The previous follow-up debt is now the reference shape. The old
+`persistedWaitingDetections` module-global lock has moved to
+`SessionHandle.followUps` as `SessionFollowUpState`; `followUpCommands` resolves
+the supplied/default session and claims a persisted-WAITING probe through that
+session. The boundary checker now rejects reintroducing the old module-global
+lock name.
 
 **Rule.** Per-session and per-window state is owned by `SessionHandle` or a
 window-scoped object and passed explicitly. A runtime command that touches a live
@@ -475,8 +476,7 @@ enforced separately via `CONTROLLER_FORBIDDEN_IMPORTS` (414-425) scoped to
 `src/controllers` (line 764).
 
 Two real gaps. First, it is type-blind by construction: `importSourcePattern`
-(line 656) matches import source strings and `deletedRuntimeExportPattern` (line
-659) matches identifier names; neither resolves types, so the Pattern 3 leak
+(line 656) matches import source strings and `deletedRuntimeExportPattern` (line 659) matches identifier names; neither resolves types, so the Pattern 3 leak
 (`export type Runtime* = InternalType`) is structurally invisible. The cited
 off-the-shelf tools share this blind spot: dependency-cruiser,
 eslint-plugin-boundaries, and ts-arch are import-graph / path-based, so none of
@@ -525,39 +525,39 @@ named removal milestone rather than leaving it permanent.
 
 ## Pattern-to-Problem Map
 
-| Problem (from above)          | Pattern                                       | Proven by                                   |
-| ----------------------------- | --------------------------------------------- | ------------------------------------------- |
-| 1. One runtime, three hosts   | Smart core + typed protocol; Hexagonal; Null Object; role interfaces | LSP/DAP, rust-analyzer, VS Code; Woolf; ISP |
-| 2. Shallow pass-throughs      | Deep Modules; ACL; Hide Delegate              | Ousterhout; Evans; Fowler "Remove Middle Man" |
-| 3. Type-level leakage         | Information Hiding; DTO / Published Language; Repository; Tell-Don't-Ask | Parnas 1972; Fowler DTO; Evans; King 2019   |
-| 4. Excessive try/except       | Errors as values; define-out; exception aggregation | Rust/Haskell/Go; Ousterhout Ch.10; Erlang "let it crash" |
-| 5. Over-layering              | YAGNI; Rule of Three; "wrong abstraction"     | Beck/Jeffries; Fowler/Roberts; Metz         |
-| 6. Multi-session ownership    | Actor / aggregate root; DI; composition root  | Hewitt/Bishop/Steiger; Evans; Seemann       |
-| 7. UI coupling                | Functional Core, Imperative Shell; Humble Object; UDF | Bernhardt; Meszaros; Flux/Elm               |
-| 8. Boundary erosion over time | Architecture fitness functions                | Ford/Parsons/Kua; ArchUnit, dependency-cruiser |
-| Cross-cutting: reaching the boundary without a rewrite | Strangler Fig                | Fowler 2004                                 |
+| Problem (from above)                                   | Pattern                                                                  | Proven by                                                |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ | -------------------------------------------------------- |
+| 1. One runtime, three hosts                            | Smart core + typed protocol; Hexagonal; Null Object; role interfaces     | LSP/DAP, rust-analyzer, VS Code; Woolf; ISP              |
+| 2. Shallow pass-throughs                               | Deep Modules; ACL; Hide Delegate                                         | Ousterhout; Evans; Fowler "Remove Middle Man"            |
+| 3. Type-level leakage                                  | Information Hiding; DTO / Published Language; Repository; Tell-Don't-Ask | Parnas 1972; Fowler DTO; Evans; King 2019                |
+| 4. Excessive try/except                                | Errors as values; define-out; exception aggregation                      | Rust/Haskell/Go; Ousterhout Ch.10; Erlang "let it crash" |
+| 5. Over-layering                                       | YAGNI; Rule of Three; "wrong abstraction"                                | Beck/Jeffries; Fowler/Roberts; Metz                      |
+| 6. Multi-session ownership                             | Actor / aggregate root; DI; composition root                             | Hewitt/Bishop/Steiger; Evans; Seemann                    |
+| 7. UI coupling                                         | Functional Core, Imperative Shell; Humble Object; UDF                    | Bernhardt; Meszaros; Flux/Elm                            |
+| 8. Boundary erosion over time                          | Architecture fitness functions                                           | Ford/Parsons/Kua; ArchUnit, dependency-cruiser           |
+| Cross-cutting: reaching the boundary without a rewrite | Strangler Fig                                                            | Fowler 2004                                              |
 
 ## Where We Stand
 
-| Pattern                     | Maturity | Reference shape we embody                  | Current gap                                              |
-| --------------------------- | -------- | ------------------------------------------ | ------------------------------------------------------- |
-| 1. Smart core + protocol    | Mature   | typed port `AgentRuntimeHost`, `noopAgentRuntimeHost`, capability ports, lint | none material                          |
-| 2. Deep modules             | Good     | resume/lifecycle/visibility commands       | call-level forwards deleted and guarded; residue is type-level (Pattern 3) |
-| 3. Boundary DTOs            | Partial  | ~20 host-safe goal/queue/result DTOs       | 25 of 45 `Runtime*` exports are structural aliases; hosts rebuild aggregates |
-| 4. Errors as values         | Good     | typed outcomes, `writeTerminalStatus` contract, central `errorHandling.ts` | one diagnostic-dropping swallow (`ProgressViewState.ts:385`) |
-| 5. No premature abstraction | Good     | pass-through audit, deletion-or-invariant  | near mature; no surviving single-call controller factory found |
-| 6. Session ownership        | Good     | `SessionHandle`, ownership audit           | non-disposable process-global `registeredHandlers` Set (`desktopAgentResume`); `persistedWaitingDetections` parked per audit |
-| 7. Declarative UI           | Partial  | CLI Ink TUI (test-locked)                  | four progressView render-time stores; CLI ingestion-time content dedup |
-| 8. Fitness functions        | Good     | family of `check:*` scripts                | type-blind regex; dead-code and CLI-boundary checks not in CI; `knip.json` `".*"` |
-| 9. Strangler Fig            | Good     | deleted-export guards, Phase 0.5 plan      | temporary adapters need named removal milestones        |
-| Layer depth (objective)     | Good     | three-hop adapter / command / internals spine | occasional pass-through controllers to collapse into the adapter or the command |
+| Pattern                     | Maturity | Reference shape we embody                                                     | Current gap                                                                                                              |
+| --------------------------- | -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 1. Smart core + protocol    | Mature   | typed port `AgentRuntimeHost`, `noopAgentRuntimeHost`, capability ports, lint | none material                                                                                                            |
+| 2. Deep modules             | Good     | resume/lifecycle/visibility commands                                          | call-level forwards deleted and guarded; residue is type-level (Pattern 3)                                               |
+| 3. Boundary DTOs            | Partial  | ~20 host-safe goal/queue/result DTOs                                          | 25 of 45 `Runtime*` exports are structural aliases; hosts rebuild aggregates                                             |
+| 4. Errors as values         | Good     | typed outcomes, `writeTerminalStatus` contract, central `errorHandling.ts`    | one diagnostic-dropping swallow (`ProgressViewState.ts:385`)                                                             |
+| 5. No premature abstraction | Good     | pass-through audit, deletion-or-invariant                                     | near mature; no surviving single-call controller factory found                                                           |
+| 6. Session ownership        | Good     | `SessionHandle`, ownership audit                                              | no known accidental session-global in this slice; desktop resume registry remains an intentional process router to watch |
+| 7. Declarative UI           | Partial  | CLI Ink TUI (test-locked)                                                     | four progressView render-time stores; CLI ingestion-time content dedup                                                   |
+| 8. Fitness functions        | Good     | family of `check:*` scripts                                                   | type-blind regex; dead-code and CLI-boundary checks not in CI; `knip.json` `".*"`                                        |
+| 9. Strangler Fig            | Good     | deleted-export guards, Phase 0.5 plan                                         | temporary adapters need named removal milestones                                                                         |
+| Layer depth (objective)     | Good     | three-hop adapter / command / internals spine                                 | occasional pass-through controllers to collapse into the adapter or the command                                          |
 
 The two least-mature areas against the industry baseline are **Pattern 3**
 (convert the 25 internal-type aliases into published projections; the module
-already publishes about 20 good DTOs) and the tail of **Pattern 6** (scope the
-one owed process-global, the `desktopAgentResume` Set; the follow-up guard is
-audited as session-scoped-by-invariant and intentionally parked). Both are
-tracked in the decoupling PRD's migration targets.
+already publishes about 20 good DTOs) and **Pattern 7** (reduce render-time UI
+state reconstruction in the progress view). Pattern 6 is now in the watch state:
+new stream/window keyed mutable state should be rejected unless it is owned by
+`SessionHandle`, a window object, or an explicitly documented process router.
 
 ## Adoption Rules
 

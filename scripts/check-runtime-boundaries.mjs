@@ -590,6 +590,16 @@ const DELETED_RUNTIME_EXPORTS = [
   },
 ];
 
+const RUNTIME_FORBIDDEN_PATTERNS = [
+  {
+    pattern:
+      /^\s*(?:const|let|var)\s+persistedWaitingDetections\s*=\s*new Set\b/gm,
+    label: 'module-global persisted waiting detection lock',
+    guidance:
+      'scope persisted follow-up wake/probe reentrancy through SessionHandle follow-up state',
+  },
+];
+
 const CORE_PUBLIC_SURFACE_FORBIDDEN_IMPORTS = [
   {
     source: '@agent/runtime/AgentRuntimeHost',
@@ -846,6 +856,17 @@ for (const filePath of listSourceFiles('src/agent/runtime')) {
       });
     }
   }
+  for (const forbidden of RUNTIME_FORBIDDEN_PATTERNS) {
+    for (const match of text.matchAll(forbidden.pattern)) {
+      violations.push({
+        filePath: relativePath,
+        line: lineNumberForOffset(text, match.index ?? 0),
+        source: forbidden.label,
+        forbiddenSource: forbidden.label,
+        guidance: forbidden.guidance,
+      });
+    }
+  }
 }
 
 for (const root of CORE_PUBLIC_SURFACE_ROOTS) {
@@ -902,6 +923,7 @@ console.log(
     `${CONTROLLER_FORBIDDEN_IMPORTS.length} controller host-neutrality rules ` +
     `and ${PRIVATE_RUNTIME_IMPORTS.length} private runtime import rules, plus ` +
     `${DELETED_RUNTIME_EXPORTS.length} deleted runtime export rules, plus ` +
+    `${RUNTIME_FORBIDDEN_PATTERNS.length} runtime source pattern rules, plus ` +
     `${CORE_PUBLIC_SURFACE_FORBIDDEN_IMPORTS.length} core public-surface imports ` +
     `and ${CORE_PUBLIC_SURFACE_FORBIDDEN_PATTERNS.length} core public-surface patterns.`,
 );
