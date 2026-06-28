@@ -286,24 +286,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Check if background mode is active for this handler.
    * Background mode is enabled when this handler supports it, the config
    * toggle is on, and this model/agent is eligible for background execution.
+   *
+   * Single source of truth for the background-mode decision: the request path
+   * (`createResponseImpl`), `getStreamingConfig`, and `storesResponsesServerSide`
+   * all route through this method, so a subclass override (e.g. the Codex
+   * subscription handler forcing it off) takes effect on the actual request —
+   * not just on this predicate.
    */
   public override isBackgroundModeActive(): boolean {
-    return this.shouldUseBackgroundResponses();
+    return (
+      this.backgroundModeSupported &&
+      this.isBackgroundModeToggleEnabled() &&
+      this.isBackgroundModeEligible()
+    );
   }
 
   private isBackgroundModeToggleEnabled(): boolean {
     return getConfig<boolean>('texra.model.useBackgroundResponses', true);
-  }
-
-  private shouldUseBackgroundResponses(
-    backgroundToggleEnabled = this.isBackgroundModeToggleEnabled(),
-    backgroundModeEligible = this.isBackgroundModeEligible(),
-  ): boolean {
-    return (
-      this.backgroundModeSupported &&
-      backgroundToggleEnabled &&
-      backgroundModeEligible
-    );
   }
 
   protected override backgroundModeSupported = true;
@@ -1239,10 +1238,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       options;
     const backgroundToggleEnabled = this.isBackgroundModeToggleEnabled();
     const backgroundModeEligible = this.isBackgroundModeEligible();
-    const useBackgroundResponses = this.shouldUseBackgroundResponses(
-      backgroundToggleEnabled,
-      backgroundModeEligible,
-    );
+    // Route through isBackgroundModeActive() so subclass overrides (e.g. the
+    // Codex subscription handler) actually gate the request, not just the
+    // predicate. backgroundToggleEnabled/backgroundModeEligible are kept for the
+    // diagnostic logging below ("toggle on but handler can't run background").
+    const useBackgroundResponses = this.isBackgroundModeActive();
     const streamingToggleEnabled = useBackgroundResponses
       ? super.getStreamingConfig()
       : this.getStreamingConfig();

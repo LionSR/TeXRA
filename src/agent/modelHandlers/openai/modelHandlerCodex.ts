@@ -85,28 +85,25 @@ export const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful assistant.';
  * reverse-engineered wire contract is unit-testable without a live request (see
  * CodexRequestRewrite tests). Each adjustment prevents a specific backend 400:
  *  - drop `max_output_tokens` (rejected as unsupported);
+ *  - drop `background` (the backend has no background mode at all — with both
+ *    store/stream satisfied it still answers `400 {"detail":"Unsupported
+ *    parameter: background"}`, verified by direct probe; it also forces the
+ *    `store:false` that background mode's polling can't use). The handler never
+ *    requests background on the subscription path, so this is a belt-and-braces
+ *    strip;
  *  - force `store: false` (the backend keeps no server-side state) and
  *    `stream: true` (`400 Stream must be set to true` otherwise);
  *  - guarantee a non-empty top-level `instructions`, hoisting system/developer
  *    items out of `input` into `instructions` (matching Zed/Codex), deduping
  *    text already present, with {@link CODEX_DEFAULT_INSTRUCTIONS} as fallback.
- *
- * Background mode is the one exception: when the handler set `background: true`
- * (with store:true via `storesResponsesServerSide`), the transport fields are
- * left untouched so the real backend verdict is observed rather than masked.
- * `instructions` is still normalized — that requirement holds either way.
  */
 export function rewriteCodexRequestBody(
   body: Record<string, unknown>,
 ): Record<string, unknown> {
   const rewritten: Record<string, unknown> = { ...body };
   delete rewritten.max_output_tokens;
-
-  const testingBackground = rewritten.background === true;
-  if (!testingBackground) {
-    delete rewritten.background;
-    rewritten.store = false;
-  }
+  delete rewritten.background;
+  rewritten.store = false;
 
   const instructions: string[] = [];
   if (
@@ -141,9 +138,7 @@ export function rewriteCodexRequestBody(
   rewritten.instructions =
     instructions.join('\n\n') || CODEX_DEFAULT_INSTRUCTIONS;
 
-  if (!testingBackground) {
-    rewritten.stream = true;
-  }
+  rewritten.stream = true;
 
   return rewritten;
 }
@@ -185,15 +180,17 @@ const codexFetch = (async (input, init) => {
 
 export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   /**
-   * Background mode (polling) needs a stored response and a polling endpoint;
-   * the Codex backend has neither — it forces `store:false` and has no
-   * `/responses/{id}` GET route — so a background request very likely fails.
-   * While the subscription drives the request, never enter background mode and
-   * keep the working default streaming path (the shared
+   * The Codex backend has no background mode — a direct probe returns
+   * `400 {"detail":"Unsupported parameter: background"}` even with store:false
+   * and stream:true satisfied (and `400 Store must be set to false` before
+   * that, since background polling needs the server-side state the backend
+   * refuses). So while the subscription drives the request, never enter
+   * background mode and keep the working default streaming path (the shared
    * `model.useBackgroundResponses` toggle stays default-on for the real OpenAI
-   * Responses models, just not for this backend). Once the subscription is off,
-   * the request runs on the user's OpenAI API key, where the base handler
-   * decides background mode normally.
+   * Responses models, just not for this backend). This is the single gate the
+   * request path reads — see {@link ModelHandlerOpenAIResponse.isBackgroundModeActive}.
+   * Once the subscription is off, the request runs on the user's OpenAI API key,
+   * where the base handler decides background mode normally.
    */
   public override isBackgroundModeActive(): boolean {
     return this.usingSubscription() ? false : super.isBackgroundModeActive();
@@ -263,19 +260,15 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return this.usingSubscription() ? false : super.supportsResponseChaining;
   }
 
-  // The Codex backend keeps no server-side state (store:false, also enforced at
-  // the fetch layer). This drives the base request `store` field and gates the
-  // encrypted-reasoning replay path: with no previous_response_id chaining,
-  // reasoning continuity comes from replaying `reasoning.encrypted_content`
-  // blobs in each turn's input instead.
-  //
-  // Background mode (polling) needs server-side storage, so when it's active
-  // store:true is requested — which also auto-disables the encrypted-reasoning
-  // replay (reasoning then lives server-side, like the base path). Once the
+  // The Codex backend keeps no server-side state: it mandates store:false
+  // (verified by probe — store:true returns `400 Store must be set to false`)
+  // and has no background mode to require otherwise. This drives the base
+  // request `store` field and gates the encrypted-reasoning replay path: with no
+  // previous_response_id chaining, reasoning continuity comes from replaying
+  // `reasoning.encrypted_content` blobs in each turn's input instead. Once the
   // subscription is off entirely, the base store:true + chaining is restored.
   protected override get storesResponsesServerSide(): boolean {
-    if (!this.usingSubscription()) return super.storesResponsesServerSide;
-    return this.isBackgroundModeActive();
+    return this.usingSubscription() ? false : super.storesResponsesServerSide;
   }
 
   protected override get supportsInlineInputFileUpload(): boolean {
