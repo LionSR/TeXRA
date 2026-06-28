@@ -56,6 +56,7 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeText } from '@shared/utils/xmlEscape';
+import { assertNever } from '@utils/core';
 
 import {
   buildInitialChatAgentConfig,
@@ -63,7 +64,6 @@ import {
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
-import { assertNever } from './assertNever';
 import { handleTuiSlashCommand } from './commands/handleSlashCommand';
 import {
   applyCliModelSelection,
