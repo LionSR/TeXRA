@@ -68,9 +68,9 @@ import {
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { convertToolSchema, toGoogleTools } from '../toolConversion';
+import { GOOGLE_FINISH } from '../types/StopReasonTypes';
 
 // Type imports
-import { GOOGLE_FINISH } from '../types/StopReasonTypes';
 import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type {
