@@ -21,6 +21,7 @@ import {
 
 // Local imports - agent
 import { logSdkError } from '@agent/trace';
+import type { StreamHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
@@ -437,6 +438,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // mid-stream failure (Google's SDK has no currentMessage accessor, so
     // we accumulate manually as we iterate).
     let aggregatedText = '';
+    // Hoisted so the outer catch can finalize the progress streams on a
+    // mid-stream failure (otherwise the progress view hangs in a loading
+    // state). `StreamHandle.finalize` is idempotent.
+    let thinking: StreamHandle | undefined;
+    let output: StreamHandle | undefined;
 
     try {
       this.logger.debug(
@@ -457,8 +463,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
         // Opened before the request; the deferred starts fire (if ever) at
         // the first thought/text part — the phase signal for this API.
-        const thinking = this.createThinkingStream();
-        const output = this.createOutputStream();
+        thinking = this.createThinkingStream();
+        output = this.createOutputStream();
 
         let baseResponse: GenerateContentResponse | undefined;
         let latestCandidate: Candidate | undefined;
@@ -566,6 +572,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       const response = await chat.sendMessage(sendParams);
       return { response };
     } catch (error) {
+      // Finalize the progress streams on error so the view does not hang in a
+      // loading state. Undefined on the non-streaming path; `finalize` is
+      // idempotent so a re-finalize after the success path is a no-op. No
+      // explicit final text so any chunks already streamed are preserved
+      // (passing `''` would overwrite the visible partial output).
+      thinking?.finalize(undefined);
+      output?.finalize();
       // Error logging follows "log at the boundary" principle - Node's retryPrompt
       // or execFallback will log the error once. We only add debug diagnostics here
       // for specific error types that need additional context.
