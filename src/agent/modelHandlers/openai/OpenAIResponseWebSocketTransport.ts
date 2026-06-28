@@ -377,6 +377,16 @@ export class OpenAIResponseWebSocketTransport {
     const wsConnection = this.wsConnection;
     if (wsConnection) {
       closeQuietly(wsConnection);
+      // A graceful `close()` only sends the close frame and waits for the
+      // server's reply, so the underlying socket stays an active handle and
+      // keeps the Node event loop alive — a headless `--websocket` run would
+      // hang after finishing. We're done with this connection, so force the
+      // socket down to release the handle immediately.
+      try {
+        wsConnection.socket.platformSocket.terminate();
+      } catch {
+        /* already closed */
+      }
       this.wsConnection = null;
       this.wsConnectionCreatedAt = 0;
       this.logger.debug('WebSocket connection closed');
