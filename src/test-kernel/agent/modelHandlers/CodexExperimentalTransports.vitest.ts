@@ -13,6 +13,7 @@ import { resetCodexCoordinator } from '@auth/codex';
 interface CodexInternals {
   storesResponsesServerSide: boolean;
   isWebSocketModeEnabled(): boolean;
+  prepareWireParams(p: Record<string, unknown>): Record<string, unknown>;
 }
 
 function config(): ModelConfig {
@@ -144,5 +145,25 @@ describe('Codex background/websocket transports follow the shared toggles', () =
     expect(
       (handler as unknown as CodexInternals).isWebSocketModeEnabled(),
     ).toBe(true);
+  });
+
+  it('applies the Codex wire rewrite on the WebSocket path (it bypasses codexFetch)', async () => {
+    // Regression: the WebSocket transport sends params directly via the SDK and
+    // never hits codexFetch, so without prepareWireParams the un-rewritten body
+    // (here `max_output_tokens`) reaches Codex → 400 Unsupported parameter.
+    await initPlatformWith({
+      globalState: { 'texra.websocket.openai': true },
+    });
+    const handler = workflowHandler();
+
+    const wire = (handler as unknown as CodexInternals).prepareWireParams({
+      model: 'gpt-5.5',
+      max_output_tokens: 1024,
+      input: [{ role: 'user', content: 'hi' }],
+    });
+
+    expect(wire).not.toHaveProperty('max_output_tokens');
+    expect(wire.store).toBe(false);
+    expect(wire.stream).toBe(true);
   });
 });

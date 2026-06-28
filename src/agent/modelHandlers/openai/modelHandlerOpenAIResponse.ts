@@ -1236,12 +1236,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
-    const backgroundToggleEnabled = this.isBackgroundModeToggleEnabled();
-    const backgroundModeEligible = this.isBackgroundModeEligible();
     // Route through isBackgroundModeActive() so subclass overrides (e.g. the
     // Codex subscription handler) actually gate the request, not just the
-    // predicate. backgroundToggleEnabled/backgroundModeEligible are kept for the
-    // diagnostic logging below ("toggle on but handler can't run background").
+    // predicate.
     const useBackgroundResponses = this.isBackgroundModeActive();
     const streamingToggleEnabled = useBackgroundResponses
       ? super.getStreamingConfig()
@@ -1251,9 +1248,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.isWebSocketModeEnabled() && !useBackgroundResponses;
 
     if (
-      backgroundToggleEnabled &&
-      backgroundModeEligible &&
-      !useBackgroundResponses
+      !useBackgroundResponses &&
+      this.isBackgroundModeToggleEnabled() &&
+      this.isBackgroundModeEligible()
     ) {
       this.logger.debug(
         'Background mode toggle is enabled but this handler does not support background execution. Proceeding without background mode.',
@@ -1582,6 +1579,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Last-chance adaptation of the request before it goes on the wire. The
+   * HTTP paths rewrite the serialized body in their custom `fetch`, but the
+   * WebSocket transport sends `params` directly via the SDK and never touches
+   * `fetch` — so backends needing request shaping (e.g. Codex) must apply it
+   * here too. Identity by default; overridden where a backend rewrites params.
+   */
+  protected prepareWireParams(
+    params: ResponseCreateParamsBase,
+  ): ResponseCreateParamsBase {
+    return params;
+  }
+
+  /**
    * WebSocket transport path: a persistent connection for lower-latency
    * tool-use loops. Polls to completion if the response comes back pending.
    */
@@ -1593,7 +1603,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     const wsResult = await this.getWebSocketTransport().execute(
       client,
-      params,
+      this.prepareWireParams(params),
       signal,
     );
     let response = wsResult.response;

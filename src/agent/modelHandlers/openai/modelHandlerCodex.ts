@@ -13,9 +13,11 @@
  *     `originator: texra` (our own, never `codex_cli_rs`), and the responses
  *     beta header;
  *  3. request shaping — the Codex backend rejects `max_output_tokens` and
- *     requires `store: false`, applied via a custom `fetch` so the large base
- *     request-builder is untouched. (System prompts already go to top-level
- *     `instructions`, which the backend wants.)
+ *     requires `store: false`, applied at each wire boundary so the large base
+ *     request-builder is untouched: a custom `fetch` for the HTTP paths and
+ *     `prepareWireParams` for the WebSocket path (which bypasses `fetch`).
+ *     (System prompts already go to top-level `instructions`, which the
+ *     backend wants.)
  *
  * All three are gated on the "prefer ChatGPT subscription" preference, re-read
  * per request: if the user turns it off mid-run (e.g. the "Use your own API
@@ -41,7 +43,10 @@ import * as logger from '@logger/logUtils';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
-import type { ResponseUsage } from 'openai/resources/responses/responses';
+import type {
+  ResponseCreateParamsBase,
+  ResponseUsage,
+} from 'openai/resources/responses/responses';
 
 const CHANNEL = 'ModelHandlerCodex';
 logger.initialize(CHANNEL);
@@ -221,13 +226,10 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   }
 
   // The Codex backend is streaming-only (`400 Stream must be set to true`
-  // otherwise), so take the streaming path unless background mode is active
-  // (then the base polling path needs non-streaming). After the fallback the
-  // base streaming logic applies.
+  // otherwise) and has no background mode, so the subscription always streams.
+  // After the fallback to the API key, the base streaming logic applies.
   public override getStreamingConfig(): boolean {
-    return this.usingSubscription()
-      ? !this.isBackgroundModeActive()
-      : super.getStreamingConfig();
+    return this.usingSubscription() ? true : super.getStreamingConfig();
   }
 
   /**
@@ -243,6 +245,25 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return this.usingSubscription()
       ? getWebSocketEnabled()
       : super.isWebSocketModeEnabled();
+  }
+
+  /**
+   * The WebSocket transport sends `params` straight through the SDK and never
+   * hits {@link codexFetch}, so the Codex wire rewrite the HTTP path gets in the
+   * fetch adapter must be applied here too. Without it the un-rewritten params
+   * (notably `max_output_tokens`) reach the backend, which answers
+   * `400 {"detail":"Unsupported parameter: max_output_tokens"}`. Gated on the
+   * subscription; on the API-key fallback the base identity transform applies.
+   */
+  protected override prepareWireParams(
+    params: ResponseCreateParamsBase,
+  ): ResponseCreateParamsBase {
+    if (!this.usingSubscription()) return params;
+    // `rewriteCodexRequestBody` works on the parsed JSON body (a plain record),
+    // matching the HTTP `codexFetch` path; the SDK param type has no index
+    // signature, so round-trip it through `Record` at this single boundary.
+    const rewritten = rewriteCodexRequestBody({ ...params });
+    return rewritten as ResponseCreateParamsBase;
   }
 
   // The Codex backend has no `/responses/input_tokens` or `/compact` endpoint
