@@ -26,7 +26,7 @@ import {
   setToolEditApprovalHandler,
 } from '@tools/approval/toolEditApproval';
 import { createRecordingHost } from '../progressTestUtils';
-import { waitForRecordedEvent } from '../../support/asyncTestUtils';
+import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
 
 describe('human prompt progress events', () => {
   afterEach(() => {
