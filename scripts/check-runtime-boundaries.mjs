@@ -719,11 +719,7 @@ function listSourceFiles(root) {
 }
 
 function lineNumberForOffset(text, offset) {
-  let line = 1;
-  for (let i = 0; i < offset; i += 1) {
-    if (text.charCodeAt(i) === 10) line += 1;
-  }
-  return line;
+  return text.slice(0, offset).split(/\r\n|\r|\n/).length;
 }
 
 const violations = [];

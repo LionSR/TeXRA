@@ -31,6 +31,7 @@ import {
   approvalPayloadStreamId,
   approvalQueueStatus,
   clearApprovals,
+  clearApprovalsForStream,
   currentApproval,
   enqueueApproval,
   type ApprovalPayload,
@@ -184,6 +185,56 @@ describe('CLI approval queue', () => {
 
     currentApproval.get()?.decide({ accepted: true });
     await expect(nextResult).resolves.toEqual({ accepted: true });
+  });
+
+  it('clears only queued approvals for the requested stream', async () => {
+    const root = bashPayload('root-stream');
+    const child = bashPayload('child-stream');
+    const rootResult = enqueueApproval(root);
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(root);
+    });
+    const childResult = enqueueApproval(child);
+
+    clearApprovalsForStream('child-stream');
+
+    await expect(childResult).resolves.toEqual({
+      accepted: false,
+      userMessage: 'Session interrupted.',
+    });
+    expect(currentApproval.get()?.payload).toBe(root);
+    expect(approvalQueueStatus.get()).toEqual({
+      depth: 1,
+      kind: 'approval',
+    });
+
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(rootResult).resolves.toEqual({ accepted: true });
+  });
+
+  it('clears an active stream approval without blocking later approvals', async () => {
+    const child = bashPayload('child-stream');
+    const root = bashPayload('root-stream');
+    const childResult = enqueueApproval(child);
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(child);
+    });
+    const rootResult = enqueueApproval(root);
+
+    clearApprovalsForStream('child-stream');
+
+    await expect(childResult).resolves.toEqual({
+      accepted: false,
+      userMessage: 'Session interrupted.',
+    });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(root);
+    });
+
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(rootResult).resolves.toEqual({ accepted: true });
   });
 
   it('notifies only when a TUI approval becomes the foreground modal', async () => {

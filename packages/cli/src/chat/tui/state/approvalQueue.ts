@@ -4,8 +4,8 @@
 // When its turn comes up it publishes itself on the `currentApproval` signal
 // and waits for the modal to call `decide(decision)`. Both pending outer
 // Promises returned to callers and the currently-running task's `advance` are
-// settled by `clearApprovals` so a session interrupt never leaves the queue
-// blocked or the caller hanging.
+// settled by `clearApprovals` / `clearApprovalsForStream` so a session
+// interrupt never leaves the queue blocked or the caller hanging.
 
 import { signal, type Signal } from '@lit-labs/signals';
 import PQueue from 'p-queue';
@@ -217,16 +217,38 @@ export function enqueueApproval(
  */
 export function clearApprovals(): void {
   queue.clear();
-  CURRENT.set(undefined);
   const items = [...pendingItems];
-  pendingItems.clear();
-  syncApprovalStatus();
-  const activeItem = currentItem;
+  CURRENT.set(undefined);
   currentItem = undefined;
+  interruptApprovalItems(items);
+}
+
+/**
+ * Cancel only prompts scoped to a stream. Other pending prompts keep their
+ * queue order; dropped queued tasks will no-op when p-queue reaches them.
+ */
+export function clearApprovalsForStream(streamId: StreamTabId): void {
+  const items = [...pendingItems].filter(
+    (item) => approvalPayloadStreamId(item.payload) === streamId,
+  );
+  if (items.length === 0) return;
+  if (currentItem && items.includes(currentItem)) {
+    CURRENT.set(undefined);
+    currentItem = undefined;
+  }
+  interruptApprovalItems(items);
+}
+
+function interruptApprovalItems(items: readonly ApprovalQueueItem[]): void {
+  let changed = false;
+  for (const item of items) {
+    if (pendingItems.delete(item)) changed = true;
+  }
+  if (changed) syncApprovalStatus();
   for (const item of items) {
     const advance = item.advance;
     item.advance = undefined;
     item.resolve(INTERRUPT);
-    if (item === activeItem) advance?.();
+    advance?.();
   }
 }

@@ -6,7 +6,7 @@
 // without a full agent harness.
 
 import PQueue from 'p-queue';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getRuntimeModelSwitchState: vi.fn(),
@@ -99,6 +99,12 @@ import {
   type TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
+import {
+  clearApprovals,
+  currentApproval,
+  enqueueApproval,
+  type ApprovalPayload,
+} from '@cli/chat/tui/state/approvalQueue';
 import { RUN_OUTCOME, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
@@ -156,6 +162,18 @@ function markWaitingStream(streamId: StreamTabId): void {
   }));
 }
 
+function bashApprovalPayload(streamId: StreamTabId): ApprovalPayload {
+  return {
+    kind: 'bash',
+    payload: {
+      requestId: `approval-${streamId}`,
+      allowBypass: true,
+      streamId,
+      command: 'echo ok',
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Predicate: chatTuiCanStartRootRun
 // ---------------------------------------------------------------------------
@@ -193,6 +211,10 @@ describe('chatTuiCanStartRootRun', () => {
 // ---------------------------------------------------------------------------
 
 describe('createChatSessionController', () => {
+  afterEach(() => {
+    clearApprovals();
+  });
+
   beforeEach(() => {
     resetCliState();
     mocks.getRuntimeModelSwitchState.mockReset();
@@ -606,6 +628,49 @@ describe('createChatSessionController', () => {
       executionId: 'exec-kill-model-test',
       detachActiveChildren: true,
     });
+  });
+
+  it('killExecution clears only approvals scoped to the killed child stream', async () => {
+    const rootStreamId = 'root-stream-for-kill' as StreamTabId;
+    const childStreamId = 'child-stream-for-kill' as StreamTabId;
+    const session = makeSession({
+      streamId: rootStreamId,
+      executionId: 'exec-root-for-kill',
+    });
+    patchStream(rootStreamId, (slice) => ({
+      ...slice,
+      childStreams: [
+        {
+          executionId: 'exec-child-for-kill',
+          agentName: 'child',
+          childStreamId,
+        },
+      ],
+    }));
+    const ctrl = createChatSessionController(makeInit({ session }));
+    const rootApproval = bashApprovalPayload(rootStreamId);
+    const childApproval = bashApprovalPayload(childStreamId);
+    const rootDecision = enqueueApproval(rootApproval);
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(rootApproval);
+    });
+    const childDecision = enqueueApproval(childApproval);
+
+    ctrl.killExecution('exec-child-for-kill');
+
+    await expect(childDecision).resolves.toEqual({
+      accepted: false,
+      userMessage: 'Session interrupted.',
+    });
+    expect(currentApproval.get()?.payload).toBe(rootApproval);
+    expect(mocks.requestKillExecution).toHaveBeenCalledWith({
+      executionId: 'exec-child-for-kill',
+      detachActiveChildren: false,
+    });
+
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(rootDecision).resolves.toEqual({ accepted: true });
   });
 });
 

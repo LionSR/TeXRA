@@ -56,7 +56,10 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import { CHAT_API_MODE_MODEL_RECOVERY } from './chatModelRecovery';
 import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
-import { clearApprovals } from './tui/state/approvalQueue';
+import {
+  clearApprovals,
+  clearApprovalsForStream,
+} from './tui/state/approvalQueue';
 import {
   cliState,
   patchStream,
@@ -207,18 +210,31 @@ export function createChatSessionController(
   // Internal helpers
   // -----------------------------------------------------------------------
 
-  const stopPolicy = (): { readonly detachActiveChildren: boolean } => {
-    clearApprovals();
-    return {
-      detachActiveChildren:
-        tryPlatform()?.workspaceState.get<boolean>(
-          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-          false,
-        ) === true,
-    };
+  const stopPolicy = (): { readonly detachActiveChildren: boolean } => ({
+    detachActiveChildren:
+      tryPlatform()?.workspaceState.get<boolean>(
+        WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+        false,
+      ) === true,
+  });
+
+  const streamIdForExecution = (
+    executionId: ExecutionId,
+  ): StreamTabId | undefined => {
+    if (session.executionId === executionId) return session.streamId;
+    for (const slice of cliState.streams.get().values()) {
+      const child = [
+        ...slice.activeSubagents,
+        ...slice.activeProcesses,
+        ...slice.childStreams,
+      ].find((item) => item.executionId === executionId);
+      if (child?.childStreamId) return child.childStreamId as StreamTabId;
+    }
+    return undefined;
   };
 
   const interruptActiveRun = (): void => {
+    clearApprovals();
     const policy = stopPolicy();
     if (!session.streamId) return;
     requestRuntimeStreamStop({
@@ -230,6 +246,8 @@ export function createChatSessionController(
   };
 
   const killExecution = (executionId: ExecutionId): void => {
+    const streamId = streamIdForExecution(executionId);
+    if (streamId) clearApprovalsForStream(streamId);
     const policy = stopPolicy();
     requestKillExecution({
       executionId,
