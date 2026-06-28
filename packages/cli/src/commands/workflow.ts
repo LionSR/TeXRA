@@ -1,8 +1,7 @@
 import type { RuntimeAgentConfigPayload } from '@agent/runtime/executionRequests';
 import {
-  writeRuntimeHistoryResultMeta,
-  writeRuntimeTerminalStatus,
-  type RuntimeHistoryResultMeta,
+  markRuntimeHistoryExecutionErrored,
+  recordRuntimeWorkflowResultArtifacts,
 } from '@agent/runtime/historyCommands';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS } from '@shared/schemas';
@@ -143,7 +142,7 @@ export async function runWorkflowAgent(
           return CliExitCode.Interrupted;
         }
 
-        await writeRuntimeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+        await markRuntimeHistoryExecutionErrored(executionId);
         writeErrorStderr(error);
         return CliExitCode.AgentError;
       }
@@ -164,17 +163,7 @@ async function persistWorkflowResultMeta(
   result: CliWorkflowRunResult,
 ): Promise<void> {
   try {
-    const resultMeta: RuntimeHistoryResultMeta = {
-      outputs: [...result.outputs],
-      compileFailures: [...result.compileFailures],
-    };
-    if (result.copiedOutput) {
-      resultMeta.copiedOutput = result.copiedOutput;
-    }
-    if (result.copiedOutputs?.length) {
-      resultMeta.copiedOutputs = [...result.copiedOutputs];
-    }
-    await writeRuntimeHistoryResultMeta(executionId, resultMeta);
+    await recordRuntimeWorkflowResultArtifacts(executionId, result);
   } catch (error) {
     writeTextStderr(
       `Warning: could not persist workflow result metadata: ${toErrorMessage(error)}`,

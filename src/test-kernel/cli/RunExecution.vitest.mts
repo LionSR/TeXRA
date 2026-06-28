@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { EXECUTION_STATUS } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -13,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   runAgent: vi.fn(),
   attachDefaultTerminalResultToast: vi.fn(),
   writeTextStderr: vi.fn(),
-  writeTerminalStatus: vi.fn(),
+  markErrored: vi.fn(),
+  markInterrupted: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/runAgent', () => ({
@@ -21,7 +21,8 @@ vi.mock('@agent/runtime/runAgent', () => ({
 }));
 
 vi.mock('@agent/runtime/historyCommands', () => ({
-  writeRuntimeTerminalStatus: mocks.writeTerminalStatus,
+  markRuntimeHistoryExecutionErrored: mocks.markErrored,
+  markRuntimeHistoryExecutionInterrupted: mocks.markInterrupted,
 }));
 
 vi.mock('@agent/runtime/terminalResultToast', () => ({
@@ -235,10 +236,7 @@ describe('executeCliRequest', () => {
     await Promise.resolve();
     await platform.lifecycle.runShutdown();
 
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.INTERRUPTED,
-    );
+    expect(mocks.markInterrupted).toHaveBeenCalledWith('exec-1');
 
     resolveRun?.({
       category: 'toolUse',
@@ -247,11 +245,8 @@ describe('executeCliRequest', () => {
       streamId: 'stream-1',
     });
     await run;
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledTimes(2);
-    expect(mocks.writeTerminalStatus).toHaveBeenLastCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.INTERRUPTED,
-    );
+    expect(mocks.markInterrupted).toHaveBeenCalledTimes(2);
+    expect(mocks.markInterrupted).toHaveBeenLastCalledWith('exec-1');
   });
 
   it('removes the shutdown status hook after owned executions finish', async () => {
@@ -267,10 +262,10 @@ describe('executeCliRequest', () => {
     await executeCliRequest(request, cliContext(), {
       registerExecution: true,
     });
-    mocks.writeTerminalStatus.mockClear();
+    mocks.markInterrupted.mockClear();
     await platform.lifecycle.runShutdown();
 
-    expect(mocks.writeTerminalStatus).not.toHaveBeenCalled();
+    expect(mocks.markInterrupted).not.toHaveBeenCalled();
   });
 });
 
@@ -337,10 +332,7 @@ describe('executeCliConfig', () => {
     );
 
     expect(result).toMatchObject({ ok: false });
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      expect.any(String),
-      EXECUTION_STATUS.ERROR,
-    );
+    expect(mocks.markErrored).toHaveBeenCalledWith(expect.any(String));
     expect(mocks.writeTextStderr).toHaveBeenCalledWith('wrong category');
     expect(mocks.close).toHaveBeenCalledOnce();
   });

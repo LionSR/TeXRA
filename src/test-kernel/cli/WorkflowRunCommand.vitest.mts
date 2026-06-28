@@ -18,15 +18,15 @@ const mocks = vi.hoisted(() => {
     resolveCliLaunchAgent: vi.fn(),
     resolveCliRunModel: vi.fn(),
     readRuntimeHistoryTerminalStatus: vi.fn(),
-    writeResultMeta: vi.fn(),
-    writeTerminalStatus: vi.fn(),
+    recordWorkflowResultArtifacts: vi.fn(),
+    markErrored: vi.fn(),
   };
 });
 
 vi.mock('@agent/runtime/historyCommands', () => ({
   readRuntimeHistoryTerminalStatus: mocks.readRuntimeHistoryTerminalStatus,
-  writeRuntimeHistoryResultMeta: mocks.writeResultMeta,
-  writeRuntimeTerminalStatus: mocks.writeTerminalStatus,
+  recordRuntimeWorkflowResultArtifacts: mocks.recordWorkflowResultArtifacts,
+  markRuntimeHistoryExecutionErrored: mocks.markErrored,
 }));
 
 vi.mock('@agent/index', () => ({
@@ -379,11 +379,14 @@ describe('CLI workflow run command', () => {
       await expect(
         fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
       ).resolves.toBe('polished');
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith('exec-output', {
-        copiedOutput: path.join(root, 'polished.tex'),
-        outputs: [outputSummary],
-        compileFailures: [compileFailure],
-      });
+      expect(mocks.recordWorkflowResultArtifacts).toHaveBeenCalledWith(
+        'exec-output',
+        expect.objectContaining({
+          copiedOutput: path.join(root, 'polished.tex'),
+          outputs: [outputSummary],
+          compileFailures: [compileFailure],
+        }),
+      );
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -432,11 +435,14 @@ describe('CLI workflow run command', () => {
       await expect(
         fs.readFile(path.join(root, 'out', 'paper.tex'), 'utf8'),
       ).resolves.toBe('polished');
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith('exec-output-dir', {
-        copiedOutputs: [path.join(root, 'out', 'paper.tex')],
-        outputs: [outputSummary],
-        compileFailures: [],
-      });
+      expect(mocks.recordWorkflowResultArtifacts).toHaveBeenCalledWith(
+        'exec-output-dir',
+        expect.objectContaining({
+          copiedOutputs: [path.join(root, 'out', 'paper.tex')],
+          outputs: [outputSummary],
+          compileFailures: [],
+        }),
+      );
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -471,7 +477,7 @@ describe('CLI workflow run command', () => {
         },
         terminalStatus: EXECUTION_STATUS.COMPLETED,
       });
-      mocks.writeResultMeta.mockRejectedValueOnce(
+      mocks.recordWorkflowResultArtifacts.mockRejectedValueOnce(
         new Error('metadata disk full'),
       );
 

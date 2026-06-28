@@ -5,10 +5,13 @@ import {
   type RuntimeAgentConfigPayload,
   type RuntimeValidatedExecutionRequest,
 } from '@agent/runtime/executionRequests';
+import {
+  markRuntimeHistoryExecutionErrored,
+  markRuntimeHistoryExecutionInterrupted,
+} from '@agent/runtime/historyCommands';
 import { runAgent } from '@agent/runtime/runAgent';
 import { attachDefaultTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import { writeRuntimeTerminalStatus } from '@agent/runtime/historyCommands';
-import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import type { ExecutionStatus } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
 
@@ -98,7 +101,7 @@ export async function executeCliConfig<
   );
 
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
-    await writeRuntimeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+    await markRuntimeHistoryExecutionErrored(executionId);
     writeTextStderr(
       categoryMismatchMessage ??
         `Agent resolved to a non ${expectedCategory} run.`,
@@ -141,10 +144,7 @@ export async function executeCliRequest(
   const disposeShutdownStatus = ownedExecutionId
     ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
         shutdownInterrupted = true;
-        await writeRuntimeTerminalStatus(
-          ownedExecutionId,
-          EXECUTION_STATUS.INTERRUPTED,
-        );
+        await markRuntimeHistoryExecutionInterrupted(ownedExecutionId);
       })
     : undefined;
   const { approvalPromptsUnavailable, runtimeUnavailableTools } =
@@ -166,10 +166,7 @@ export async function executeCliRequest(
     result = await (options.wrap ? options.wrap(invoke) : invoke());
   } catch (error) {
     if (options.markErrorOnThrow && request.executionId) {
-      await writeRuntimeTerminalStatus(
-        request.executionId,
-        EXECUTION_STATUS.ERROR,
-      );
+      await markRuntimeHistoryExecutionErrored(request.executionId);
     }
     throw error;
   } finally {
@@ -177,10 +174,7 @@ export async function executeCliRequest(
     // If the run settles while shutdown is in progress, keep the
     // signal-owned interrupted status as the final write.
     if (shutdownInterrupted && ownedExecutionId) {
-      await writeRuntimeTerminalStatus(
-        ownedExecutionId,
-        EXECUTION_STATUS.INTERRUPTED,
-      );
+      await markRuntimeHistoryExecutionInterrupted(ownedExecutionId);
     }
     detachResultToast();
     uninstallApprovalHandlers();

@@ -46,15 +46,16 @@ import {
   hasRuntimeExecutionHistory,
   listRuntimeHistoryWorkspaceFiles,
   listRuntimeHistoryExecutions,
+  markRuntimeHistoryExecutionErrored,
+  markRuntimeHistoryExecutionInterrupted,
   readRuntimeHistoryConfig,
   readRuntimeHistoryExecutionRecord,
   readRuntimeHistoryTerminalStatus,
   readRuntimeHistoryWorkspaceFilePaths,
+  recordRuntimeWorkflowResultArtifacts,
   repairRuntimeHistoryTerminalStatus,
   requestClearRuntimeHistoryExecutions,
   requestDeleteRuntimeHistoryExecution,
-  writeRuntimeHistoryResultMeta,
-  writeRuntimeTerminalStatus,
 } from '@agent/runtime/historyCommands';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
@@ -194,24 +195,63 @@ describe('runtime history commands', () => {
     );
   });
 
-  it('writes terminal status and result metadata through runtime commands', async () => {
-    const resultMeta = { success: true };
+  it('records terminal history events through runtime commands', async () => {
     storageMock.writeTerminalStatus.mockResolvedValue(undefined);
-    executionStoreMock.writeResultMeta.mockResolvedValue(undefined);
 
     await expect(
-      writeRuntimeTerminalStatus(EXECUTION_ID, 'completed'),
+      markRuntimeHistoryExecutionErrored(EXECUTION_ID),
     ).resolves.toBeUndefined();
     await expect(
-      writeRuntimeHistoryResultMeta(EXECUTION_ID, resultMeta),
+      markRuntimeHistoryExecutionInterrupted(EXECUTION_ID),
     ).resolves.toBeUndefined();
 
-    expect(storageMock.writeTerminalStatus).toHaveBeenCalledWith(
+    expect(storageMock.writeTerminalStatus).toHaveBeenNthCalledWith(
+      1,
       EXECUTION_ID,
-      'completed',
+      EXECUTION_STATUS.ERROR,
     );
+    expect(storageMock.writeTerminalStatus).toHaveBeenNthCalledWith(
+      2,
+      EXECUTION_ID,
+      EXECUTION_STATUS.INTERRUPTED,
+    );
+  });
+
+  it('normalizes workflow artifacts into persisted result metadata', async () => {
+    executionStoreMock.writeResultMeta.mockResolvedValue(undefined);
+    const output = {
+      round: 1,
+      relativePath: 'main.tex',
+      absolutePath: '/tmp/run/main.tex',
+      location: 'runStorage' as const,
+      originalPath: '/tmp/main.tex',
+      added: 2,
+      removed: 1,
+    };
+    const compileFailure = {
+      round: 1,
+      displayName: 'main.tex',
+      outputPath: '/tmp/run/main.pdf',
+      logPath: '/tmp/run/main.log',
+      logAbsolutePath: '/tmp/run/main.log',
+    };
+
+    await expect(
+      recordRuntimeWorkflowResultArtifacts(EXECUTION_ID, {
+        outputs: [output],
+        compileFailures: [compileFailure],
+        copiedOutput: '/tmp/out/main.tex',
+        copiedOutputs: ['/tmp/out/a.tex', '/tmp/out/b.tex'],
+      }),
+    ).resolves.toBeUndefined();
+
     expect(storageMock.getExecutionStore).toHaveBeenCalledWith(EXECUTION_ID);
-    expect(executionStoreMock.writeResultMeta).toHaveBeenCalledWith(resultMeta);
+    expect(executionStoreMock.writeResultMeta).toHaveBeenCalledWith({
+      outputs: [output],
+      compileFailures: [compileFailure],
+      copiedOutput: '/tmp/out/main.tex',
+      copiedOutputs: ['/tmp/out/a.tex', '/tmp/out/b.tex'],
+    });
   });
 
   it('repairs a missing terminal status without overwriting an existing one', async () => {

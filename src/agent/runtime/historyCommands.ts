@@ -67,6 +67,13 @@ export type RuntimeHistoryTerminalStatusRepairResult =
       readonly terminalStatus: string;
     };
 
+export interface RuntimeWorkflowResultArtifacts {
+  readonly outputs: NonNullable<ResultMeta['outputs']>;
+  readonly compileFailures: NonNullable<ResultMeta['compileFailures']>;
+  readonly copiedOutput?: string;
+  readonly copiedOutputs?: readonly string[];
+}
+
 export interface RuntimeHistoryCommandOptions {
   readonly session?: SessionHandle;
   readonly activeExecutionIds?: readonly ExecutionId[];
@@ -160,11 +167,26 @@ export async function readRuntimeHistoryTerminalStatus(
   return (await getExecutionStore(executionId).readMeta())?.terminalStatus;
 }
 
-export function writeRuntimeTerminalStatus(
+function writeRuntimeHistoryTerminalStatus(
   executionId: ExecutionId,
-  status: string,
+  status: ExecutionStatus,
 ): Promise<void> {
   return writeTerminalStatus(executionId, status);
+}
+
+export function markRuntimeHistoryExecutionErrored(
+  executionId: ExecutionId,
+): Promise<void> {
+  return writeRuntimeHistoryTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+}
+
+export function markRuntimeHistoryExecutionInterrupted(
+  executionId: ExecutionId,
+): Promise<void> {
+  return writeRuntimeHistoryTerminalStatus(
+    executionId,
+    EXECUTION_STATUS.INTERRUPTED,
+  );
 }
 
 /**
@@ -182,14 +204,24 @@ export async function repairRuntimeHistoryTerminalStatus(
     return { status: 'preserved', terminalStatus: existing };
   }
 
-  await writeTerminalStatus(executionId, terminalStatus);
+  await writeRuntimeHistoryTerminalStatus(executionId, terminalStatus);
   return { status: 'written', terminalStatus };
 }
 
-export function writeRuntimeHistoryResultMeta(
+export function recordRuntimeWorkflowResultArtifacts(
   executionId: ExecutionId,
-  resultMeta: RuntimeHistoryResultMeta,
+  artifacts: RuntimeWorkflowResultArtifacts,
 ): Promise<void> {
+  const resultMeta: RuntimeHistoryResultMeta = {
+    outputs: [...artifacts.outputs],
+    compileFailures: [...artifacts.compileFailures],
+  };
+  if (artifacts.copiedOutput) {
+    resultMeta.copiedOutput = artifacts.copiedOutput;
+  }
+  if (artifacts.copiedOutputs?.length) {
+    resultMeta.copiedOutputs = [...artifacts.copiedOutputs];
+  }
   return getExecutionStore(executionId).writeResultMeta(resultMeta);
 }
 

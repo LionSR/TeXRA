@@ -528,6 +528,16 @@ const DELETED_RUNTIME_EXPORTS = [
     guidance: 'keep goal cleanup inside stream-resource/history transactions',
   },
   {
+    name: 'writeRuntimeTerminalStatus',
+    guidance:
+      'use terminal-event commands such as markRuntimeHistoryExecutionErrored or markRuntimeHistoryExecutionInterrupted',
+  },
+  {
+    name: 'writeRuntimeHistoryResultMeta',
+    guidance:
+      'use recordRuntimeWorkflowResultArtifacts so historyCommands owns persisted result metadata shape',
+  },
+  {
     name: 'getRuntimeActiveExecutionIds',
     guidance: 'fold active-execution guards into intention-level commands',
   },
