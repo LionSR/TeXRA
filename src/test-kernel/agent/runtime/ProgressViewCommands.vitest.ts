@@ -36,7 +36,24 @@ describe('runtime progress-view commands', () => {
     expect(isRuntimeProgressViewVisible()).toBe(true);
   });
 
-  it('disposes only the active visibility provider registration', () => {
+  it('reports visible when any registered host progress surface is visible', () => {
+    const first = registerRuntimeProgressViewVisibilityProvider({
+      isViewVisible: () => true,
+    });
+    registrations.push(first);
+
+    const second = registerRuntimeProgressViewVisibilityProvider({
+      isViewVisible: () => false,
+    });
+    registrations.push(second);
+
+    expect(isRuntimeProgressViewVisible()).toBe(true);
+
+    first.dispose();
+    expect(isRuntimeProgressViewVisible()).toBe(false);
+  });
+
+  it('disposes only the matching visibility provider registration', () => {
     const first = registerRuntimeProgressViewVisibilityProvider({
       isViewVisible: () => false,
     });

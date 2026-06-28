@@ -307,7 +307,7 @@ decision, not a list of possibilities.
 | `externalInquiryQueries`                          | Merge          | Fold durable inquiry listing and hydration into `humanInputCommands`.                             | M5        |
 | `humanInputCommands`                              | Deepen         | Own human-input resolution plus durable inquiry overview and permission projection.               | M5        |
 | `ProgressViewBridge`                              | Delete/inline  | Replace raw getter/setter bridge state.                                                           | M5        |
-| `progressViewCommands`                            | Deepen         | Own visibility provider registration and query.                                                   | M5        |
+| `progressViewCommands`                            | Deepen         | Own multi-host visibility provider registration and query.                                        | M5        |
 | progress runtime-status capability                | Deepen         | Inject runtime status operations into shared progress backend instead of importing owners.        | M1        |
 | progress runtime-session capability               | Deepen         | Inject interrupt-pruning and trace-flush operations instead of importing `SessionHandle`.         | M1        |
 | progress stream-tab metadata builder              | Deepen         | Build tabs from resolved display facts; do not query agent registry from shared UI code.          | M1        |
@@ -1041,9 +1041,8 @@ Owns the host-neutral progress-view visibility query.
 
 Responsibilities:
 
-- register the host-owned visibility provider at the composition root;
-- return an owner token that clears the provider only while that registration is
-  still active;
+- register host-owned visibility providers at composition roots;
+- return an owner token that unregisters only that provider;
 - expose a query for whether the progress view is already visible;
 - keep execution and event-listener code away from raw bridge getter/setter
   state.
@@ -1059,8 +1058,9 @@ Depth criterion:
 - host/controller code should not import a raw `ProgressViewBridge` getter or
   setter. It should register visibility through `progressViewCommands`, and
   runtime consumers should query the intention `isRuntimeProgressViewVisible`.
-  Tests should prove registration ownership, including that disposing an old
-  registration cannot hide a newer host view.
+  Tests should prove registration ownership, including that visibility is true
+  when any registered host progress surface is visible and that disposing one
+  registration does not unregister another provider.
 
 #### `textPolishCommands`
 
@@ -1909,9 +1909,10 @@ Work:
    - `.github/workflows/ci.yml` runs `pnpm run check:runtime-boundaries` in the
      Linux validation job. **Implemented in this branch.**
 6. Deepen progress-view visibility registration.
-   - Runtime registration now returns a disposable owner token, and host
-     lifetimes dispose that token. Disposing an old registration cannot clear a
-     newer provider. **Implemented in this branch.**
+   - Runtime registration now maintains a provider registry and returns a
+     disposable owner token. Host lifetimes dispose that token, and progress is
+     visible when any live host provider reports a visible progress surface.
+     **Implemented in this branch.**
 7. Deepen text-polish initialization.
    - Extension activation now initializes polish prompt templates through
      `textPolishCommands` instead of importing lower-level `polishModel`.

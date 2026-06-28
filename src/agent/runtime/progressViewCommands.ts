@@ -6,28 +6,33 @@ export interface RuntimeProgressViewVisibilityRegistration {
   dispose(): void;
 }
 
-let visibilityProvider: RuntimeProgressViewVisibilityProvider | null = null;
+const visibilityProviders = new Set<RuntimeProgressViewVisibilityProvider>();
 
 /**
  * Register the host-owned progress-view visibility provider.
  *
  * Hosts own the actual UI surface; runtime code only asks whether the progress
  * view is already visible before emitting a fallback open/notification request.
+ * Multiple hosts may coexist in one process, so visibility is true when any
+ * live provider reports a visible progress surface.
  */
 export function registerRuntimeProgressViewVisibilityProvider(
   provider: RuntimeProgressViewVisibilityProvider,
 ): RuntimeProgressViewVisibilityRegistration {
-  visibilityProvider = provider;
+  visibilityProviders.add(provider);
   return {
     dispose: () => {
-      if (visibilityProvider === provider) {
-        visibilityProvider = null;
-      }
+      visibilityProviders.delete(provider);
     },
   };
 }
 
 /** Return whether the registered host progress view is currently visible. */
 export function isRuntimeProgressViewVisible(): boolean {
-  return visibilityProvider?.isViewVisible() ?? false;
+  for (const provider of visibilityProviders) {
+    if (provider.isViewVisible()) {
+      return true;
+    }
+  }
+  return false;
 }
