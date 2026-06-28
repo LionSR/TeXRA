@@ -394,6 +394,12 @@ const FORBIDDEN_PATTERNS = [
     ]),
   },
   {
+    pattern: /\bparseRuntimeToolUseAgentConfig\(\s*\{\s*\.\.\./g,
+    label: 'host-side tool-use config reconstruction',
+    guidance:
+      'use @agent/runtime/executionRequests buildRuntimeToolUseTaskStateFromWorkflow when deriving a tool-use continuation from workflow state',
+  },
+  {
     pattern:
       /\b(?:defaultSession\(\)|this\.session|session)\.interrupts\.retainOnly\(new Set\(streams\)\)/g,
     label:

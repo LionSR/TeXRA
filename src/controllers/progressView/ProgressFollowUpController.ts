@@ -4,10 +4,8 @@ import {
   type RuntimeAgentOptionsData,
 } from '@agent/runtime/agentResolution';
 import {
-  buildRuntimeTaskStateFromConfig,
+  buildRuntimeToolUseTaskStateFromWorkflow,
   isRuntimeWorkflowTaskState,
-  parseRuntimeToolUseAgentConfig,
-  type RuntimeAgentConfig,
   type RuntimeExecutionRequest,
   type RuntimeTaskState,
   type RuntimeWorkflowTaskState,
@@ -156,7 +154,17 @@ export class ProgressFollowUpController {
   }
 
   planToolUseFollowUp(input: ToolUseFollowUpInput): ProgressFollowUpPlan {
-    if (!input.taskState || !isRuntimeWorkflowTaskState(input.taskState)) {
+    const continuation = buildRuntimeToolUseTaskStateFromWorkflow({
+      taskState: input.taskState,
+      agent: input.agent,
+      model: input.model,
+      instruction: this.buildWorkflowToolUseFollowupInstruction(
+        input.outputFiles,
+        input.initialQuestion,
+        input.executionId,
+      ),
+    });
+    if (!continuation.success) {
       return {
         kind: 'warning',
         message:
@@ -185,23 +193,9 @@ export class ProgressFollowUpController {
       };
     }
 
-    const agentConfig = parseRuntimeToolUseAgentConfig({
-      ...input.taskState.agentConfig,
-      agent: input.agent,
-      model: input.model,
-      instruction: this.buildWorkflowToolUseFollowupInstruction(
-        input.outputFiles,
-        input.initialQuestion,
-        input.executionId,
-      ),
-      outputFiles: [],
-      editedFile: null,
-      editedFiles: [],
-    });
-
     return {
       kind: 'restoreState',
-      taskState: buildRuntimeTaskStateFromConfig(agentConfig),
+      taskState: continuation.taskState,
       executeImmediately: input.executeImmediately,
     };
   }
@@ -209,7 +203,8 @@ export class ProgressFollowUpController {
   async planCompileFixer(
     input: CompileFixerInput,
   ): Promise<ProgressFollowUpPlan> {
-    if (!input.taskState || !isRuntimeWorkflowTaskState(input.taskState)) {
+    const taskState = input.taskState;
+    if (!taskState || !isRuntimeWorkflowTaskState(taskState)) {
       return {
         kind: 'warning',
         message:
@@ -224,10 +219,7 @@ export class ProgressFollowUpController {
       };
     }
 
-    const model = this.resolveWorkflowModel(
-      input.taskState,
-      input.modelOptions,
-    );
+    const model = this.resolveWorkflowModel(taskState, input.modelOptions);
     if (!model) {
       return {
         kind: 'warning',
@@ -236,7 +228,7 @@ export class ProgressFollowUpController {
     }
 
     const targets = await this.compileFixerTargets(
-      input.taskState.agentConfig,
+      taskState.agentConfig,
       input.compileFailures,
       input.runOutputs,
     );
@@ -249,19 +241,29 @@ export class ProgressFollowUpController {
     }
 
     const editableFiles = targets.map((target) => target.path);
+    const continuation = buildRuntimeToolUseTaskStateFromWorkflow({
+      taskState,
+      agent: 'latexFixer',
+      model,
+      inputFiles: editableFiles,
+      instruction: this.buildCompileFixerQuestion(
+        input.compileFailures,
+        targets,
+        input.executionId,
+      ),
+    });
+    if (!continuation.success) {
+      return {
+        kind: 'warning',
+        message:
+          'No workflow state found for this stream. Cannot run latexFixer.',
+      };
+    }
+
     return {
       kind: 'execute',
       request: {
-        config: this.buildCompileFixerConfig(
-          input.taskState.agentConfig,
-          model,
-          editableFiles,
-          this.buildCompileFixerQuestion(
-            input.compileFailures,
-            targets,
-            input.executionId,
-          ),
-        ),
+        config: continuation.config,
       },
     };
   }
@@ -375,26 +377,8 @@ export class ProgressFollowUpController {
       : undefined;
   }
 
-  private buildCompileFixerConfig(
-    originalConfig: RuntimeAgentConfig,
-    model: string,
-    editableFiles: string[],
-    instruction: string,
-  ): RuntimeAgentConfig {
-    return parseRuntimeToolUseAgentConfig({
-      ...originalConfig,
-      agent: 'latexFixer',
-      model,
-      instruction,
-      inputFiles: editableFiles,
-      outputFiles: [],
-      editedFile: null,
-      editedFiles: [],
-    });
-  }
-
   private async compileFixerTargets(
-    originalConfig: RuntimeAgentConfig,
+    originalConfig: RuntimeWorkflowTaskState['agentConfig'],
     compileFailures: CompileFailure[],
     runOutputs: Map<number, OutputFileInfo[]>,
   ): Promise<CompileFixerTarget[]> {
@@ -468,7 +452,7 @@ export class ProgressFollowUpController {
    * metadata, not a second owner of the compile failure.
    */
   private compileFixerInputCandidates(
-    originalConfig: RuntimeAgentConfig,
+    originalConfig: RuntimeWorkflowTaskState['agentConfig'],
     compileFailures: CompileFailure[],
     runOutputs: Map<number, OutputFileInfo[]>,
   ): string[] {

@@ -58,6 +58,25 @@ export type RuntimeTaskStateBuildResult =
       readonly issues: unknown;
     };
 
+export interface RuntimeToolUseTaskStateFromWorkflowRequest {
+  readonly taskState: RuntimeTaskState | undefined;
+  readonly agent: string;
+  readonly model: string;
+  readonly instruction: string;
+  readonly inputFiles?: readonly string[];
+}
+
+export type RuntimeToolUseTaskStateFromWorkflowResult =
+  | {
+      readonly success: true;
+      readonly config: RuntimeAgentConfig;
+      readonly taskState: RuntimeToolUseTaskState;
+    }
+  | {
+      readonly success: false;
+      readonly reason: 'missing_workflow_state';
+    };
+
 export function validateRuntimeExecutionRequest(
   request: RuntimeExecutionRequest,
 ): RuntimeExecutionValidationResult {
@@ -124,6 +143,40 @@ export function buildRuntimeTaskStateFromConfigInput(
     success: true,
     config: result.data,
     taskState: buildRuntimeTaskStateFromConfig(result.data),
+  };
+}
+
+export function buildRuntimeToolUseTaskStateFromWorkflow({
+  taskState,
+  agent,
+  model,
+  instruction,
+  inputFiles,
+}: RuntimeToolUseTaskStateFromWorkflowRequest): RuntimeToolUseTaskStateFromWorkflowResult {
+  if (!taskState || !isRuntimeWorkflowTaskState(taskState)) {
+    return { success: false, reason: 'missing_workflow_state' };
+  }
+
+  const config = parseRuntimeToolUseAgentConfig({
+    ...taskState.agentConfig,
+    agent,
+    model,
+    instruction,
+    ...(inputFiles && { inputFiles: [...inputFiles] }),
+    outputFiles: [],
+    editedFile: null,
+    editedFiles: [],
+  });
+  const continuationState = buildRuntimeTaskStateFromConfig(config);
+  if (!isRuntimeToolUseTaskState(continuationState)) {
+    throw new Error(
+      'Expected tool-use task state after runtime tool-use continuation construction.',
+    );
+  }
+  return {
+    success: true,
+    config,
+    taskState: continuationState,
   };
 }
 

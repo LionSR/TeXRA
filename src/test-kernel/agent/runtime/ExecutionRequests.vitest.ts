@@ -39,6 +39,7 @@ import {
   buildRuntimeMergeExecutionRequest,
   buildRuntimeTaskStateFromConfig,
   buildRuntimeTaskStateFromConfigInput,
+  buildRuntimeToolUseTaskStateFromWorkflow,
   getRuntimeDefaultMergeModelName,
   isRuntimeToolUseTaskState,
   isRuntimeWorkflowTaskState,
@@ -276,6 +277,73 @@ describe('runtime execution requests', () => {
     expect(buildRuntimeTaskStateFromConfigInput({})).toEqual({
       success: false,
       issues,
+    });
+  });
+
+  it('builds tool-use continuation state from workflow state', () => {
+    const workflowState = {
+      agentConfig: {
+        agent: 'writer',
+        model: 'workflow-model',
+        instruction: 'Draft.',
+        agentCategory: 'workflow',
+        inputFiles: ['main.tex'],
+        outputFiles: ['answer.tex'],
+        editedFile: 'answer.tex',
+        editedFiles: ['answer.tex'],
+      },
+      activeFiles: {
+        input: true,
+        context: false,
+        media: false,
+        output: true,
+      },
+    } as unknown as RuntimeTaskState;
+    taskStateMock.isWorkflowTaskState.mockReturnValueOnce(true);
+    taskStateMock.isToolUseTaskState.mockReturnValueOnce(true);
+
+    const result = buildRuntimeToolUseTaskStateFromWorkflow({
+      taskState: workflowState,
+      agent: 'latexFixer',
+      model: 'tool-model',
+      instruction: 'Fix the compile failure.',
+      inputFiles: ['answer.tex'],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(agentConfigMock.AgentConfigSchema.parse).toHaveBeenCalledWith({
+      agent: 'latexFixer',
+      model: 'tool-model',
+      instruction: 'Fix the compile failure.',
+      agentCategory: 'toolUse',
+      inputFiles: ['answer.tex'],
+      outputFiles: [],
+      editedFile: null,
+      editedFiles: [],
+    });
+    expect(result.config.agent).toBe('latexFixer');
+    expect(result.config.agentCategory).toBe('toolUse');
+    expect(result.config.outputFiles).toEqual([]);
+    expect(result.config.editedFile).toBeNull();
+    expect(result.config.editedFiles).toEqual([]);
+    expect(result.taskState).toEqual({
+      agentConfig: result.config,
+      toolSessionState: {},
+    });
+  });
+
+  it('refuses tool-use continuation state without workflow state', () => {
+    expect(
+      buildRuntimeToolUseTaskStateFromWorkflow({
+        taskState: undefined,
+        agent: 'latexFixer',
+        model: 'tool-model',
+        instruction: 'Fix.',
+      }),
+    ).toEqual({
+      success: false,
+      reason: 'missing_workflow_state',
     });
   });
 });
