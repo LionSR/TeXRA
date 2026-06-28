@@ -2,7 +2,6 @@
 import * as path from 'node:path';
 
 // Local imports
-import { platform } from '@platform/platform';
 import { getExecutionStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
 import {
@@ -37,7 +36,6 @@ import {
   type StorageKey,
   type WorkspaceFileLocation,
 } from '@shared/schemas';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   AbsoluteFS,
@@ -46,6 +44,7 @@ import {
   createWorkspaceLocation,
 } from '@utils/files';
 import { PromptBuilder } from '@utils/prompt';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 
 // Local imports - flow nodes and state
 import { TeXCountNode } from './nodes/TeXCountNode';
@@ -352,14 +351,10 @@ export async function runReflectionFlow<C = unknown>(
 function createWorkspaceStateWorkflowOutputPolicy(): WorkflowOutputPolicy {
   return {
     shouldAutoOpenPdfOrLog: () =>
-      platform().workspaceState.get<boolean>(
-        WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
-        LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
-      ),
+      readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
     shouldRejectOnCompileFailure: () =>
-      platform().workspaceState.get<boolean>(
+      readPlatformSetting<boolean>(
         WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-        LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
       ),
   };
 }
