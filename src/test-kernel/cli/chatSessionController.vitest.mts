@@ -9,34 +9,39 @@ import PQueue from 'p-queue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  getRuntimeModelSwitchDisabledReason: vi.fn(),
-  hasRuntimeToolUseModelSwitchTarget: vi.fn(),
+  getRuntimeModelSwitchState: vi.fn(),
   requestRuntimeModelSwitch: vi.fn(),
   attachDefaultTerminalResultToast: vi.fn(),
   installTuiApprovals: vi.fn(),
   requestKillExecution: vi.fn(),
-  requestStopStream: vi.fn(),
+  requestRuntimeStreamStop: vi.fn(),
   requestRuntimeFollowUp: vi.fn(),
+  requestRuntimeToolUseSnapshotResume: vi.fn(),
   runAgent: vi.fn(),
   writeRuntimeTerminalStatus: vi.fn(),
   setCliHelperModel: vi.fn(),
+  ensureStreamLogLoaded: vi.fn(),
+  getStreamLog: vi.fn(),
   workspaceGet: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/modelSwitch', () => ({
-  getRuntimeModelSwitchDisabledReason:
-    mocks.getRuntimeModelSwitchDisabledReason,
-  hasRuntimeToolUseModelSwitchTarget: mocks.hasRuntimeToolUseModelSwitchTarget,
+  getRuntimeModelSwitchState: mocks.getRuntimeModelSwitchState,
   requestRuntimeModelSwitch: mocks.requestRuntimeModelSwitch,
 }));
 
 vi.mock('@agent/runtime/streamControl', () => ({
   requestKillExecution: mocks.requestKillExecution,
-  requestStopStream: mocks.requestStopStream,
+  requestRuntimeStreamStop: mocks.requestRuntimeStreamStop,
 }));
 
 vi.mock('@agent/runtime/followUpCommands', () => ({
   requestRuntimeFollowUp: mocks.requestRuntimeFollowUp,
+}));
+
+vi.mock('@agent/runtime/resumeCommands', () => ({
+  requestRuntimeToolUseSnapshotResume:
+    mocks.requestRuntimeToolUseSnapshotResume,
 }));
 
 vi.mock('@agent/runtime/runAgent', () => ({
@@ -59,6 +64,17 @@ vi.mock('@cli/runtime/initPlatform', () => ({
   setCliHelperModel: mocks.setCliHelperModel,
 }));
 
+vi.mock('@transcript', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@transcript')>();
+  return {
+    ...actual,
+    getDefaultStreamLogStore: () => ({
+      ensureLoaded: mocks.ensureStreamLogLoaded,
+      get: mocks.getStreamLog,
+    }),
+  };
+});
+
 vi.mock('@platform/platform', () => ({
   tryPlatform: () => ({
     workspaceState: {
@@ -69,6 +85,8 @@ vi.mock('@platform/platform', () => ({
 
 import { StreamSnapshotStore } from '@transcript';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { RuntimeAgentConfig } from '@agent/runtime/executionRequests';
+import type { RuntimeToolUseSessionSnapshot } from '@agent/runtime/resumeCommands';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
@@ -182,19 +200,21 @@ describe('chatTuiCanStartRootRun', () => {
 describe('createChatSessionController', () => {
   beforeEach(() => {
     resetCliState();
-    mocks.getRuntimeModelSwitchDisabledReason.mockReset();
-    mocks.hasRuntimeToolUseModelSwitchTarget.mockReset();
-    mocks.hasRuntimeToolUseModelSwitchTarget.mockReturnValue(false);
+    mocks.getRuntimeModelSwitchState.mockReset();
+    mocks.getRuntimeModelSwitchState.mockReturnValue({ status: 'no_target' });
     mocks.requestRuntimeModelSwitch.mockReset();
-    mocks.requestRuntimeModelSwitch.mockResolvedValue(false);
+    mocks.requestRuntimeModelSwitch.mockResolvedValue({ status: 'no_target' });
     mocks.attachDefaultTerminalResultToast.mockReset();
     mocks.attachDefaultTerminalResultToast.mockReturnValue(vi.fn());
     mocks.installTuiApprovals.mockReset();
     mocks.installTuiApprovals.mockReturnValue(vi.fn());
     mocks.requestKillExecution.mockReset();
-    mocks.requestStopStream.mockReset();
+    mocks.requestRuntimeStreamStop.mockReset();
     mocks.requestRuntimeFollowUp.mockReset();
-    mocks.requestRuntimeFollowUp.mockResolvedValue({ status: 'sent' });
+    mocks.requestRuntimeFollowUp.mockResolvedValue({
+      outcome: 'sent',
+      accepted: true,
+    });
     mocks.runAgent.mockReset();
     mocks.writeRuntimeTerminalStatus.mockReset();
     mocks.writeRuntimeTerminalStatus.mockResolvedValue(undefined);
@@ -213,6 +233,12 @@ describe('createChatSessionController', () => {
     });
     mocks.setCliHelperModel.mockReset();
     mocks.setCliHelperModel.mockResolvedValue(undefined);
+    mocks.requestRuntimeToolUseSnapshotResume.mockReset();
+    mocks.requestRuntimeToolUseSnapshotResume.mockResolvedValue(true);
+    mocks.ensureStreamLogLoaded.mockReset();
+    mocks.ensureStreamLogLoaded.mockResolvedValue(undefined);
+    mocks.getStreamLog.mockReset();
+    mocks.getStreamLog.mockReturnValue(undefined);
     mocks.workspaceGet.mockReset();
     mocks.workspaceGet.mockReturnValue(false);
   });
@@ -292,8 +318,9 @@ describe('createChatSessionController', () => {
       WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     );
-    expect(mocks.requestStopStream).toHaveBeenCalledWith({
+    expect(mocks.requestRuntimeStreamStop).toHaveBeenCalledWith({
       streamId: 'stream-1',
+      clearRetryRequest: true,
       detachActiveChildren: true,
       runtimeHost,
     });
@@ -324,6 +351,7 @@ describe('createChatSessionController', () => {
       expect.objectContaining({
         enforceCategory: true,
         approvalPromptsUnavailable: false,
+        runtimeUnavailableTools: ['inquiry'],
         runtimeHost: expect.any(Object),
         onExecutionIdAllocated: expect.any(Function),
         onStreamResolved: expect.any(Function),
@@ -360,6 +388,49 @@ describe('createChatSessionController', () => {
     expect(session.runExitCode).toBe(CliExitCode.AgentError);
   });
 
+  it('resumes chat sessions with the CLI runtime capability vector', async () => {
+    const session = makeSession();
+    const snapshotStore = {
+      load: vi.fn().mockResolvedValue(undefined),
+      read: vi.fn().mockResolvedValue({
+        runUsage: {},
+        todos: [],
+        plan: null,
+      }),
+    } as unknown as StreamSnapshotStore;
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    await ctrl.resume('exec-chat-resume', {
+      kind: 'toolUse',
+      streamId: 'stream-chat-resume' as StreamTabId,
+      config: {
+        agent: 'chat',
+        model: 'demo-model',
+        agentCategory: AgentCategory.ToolUse,
+        instruction: 'Continue.',
+        workingDirectory: '/tmp/test',
+      } as RuntimeAgentConfig,
+      snapshot: {
+        executionId: 'exec-chat-resume',
+      } as RuntimeToolUseSessionSnapshot,
+    });
+    await session.runPromise;
+
+    expect(mocks.requestRuntimeToolUseSnapshotResume).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvalPromptsUnavailable: false,
+        runtimeUnavailableTools: ['inquiry'],
+        runtimeHost: expect.any(Object),
+        snapshot: expect.objectContaining({
+          executionId: 'exec-chat-resume',
+        }),
+      }),
+    );
+    expect(session.runExitCode).toBe(CliExitCode.Success);
+  });
+
   it('projects model-switch availability from waiting stream state and live tool-use flow', () => {
     const streamId = 'stream-model-switch' as StreamTabId;
     const session = makeSession({
@@ -368,10 +439,10 @@ describe('createChatSessionController', () => {
       runCompleted: false,
     });
     markWaitingStream(streamId);
-    mocks.hasRuntimeToolUseModelSwitchTarget.mockReturnValue(true);
-    mocks.getRuntimeModelSwitchDisabledReason.mockReturnValue(
-      'Provider format differs.',
-    );
+    mocks.getRuntimeModelSwitchState.mockReturnValue({
+      status: 'target',
+      disabledReason: 'Provider format differs.',
+    });
 
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -379,10 +450,8 @@ describe('createChatSessionController', () => {
     expect(ctrl.getModelSwitchDisabledReason('blocked-model')).toBe(
       'Provider format differs.',
     );
-    expect(mocks.hasRuntimeToolUseModelSwitchTarget).toHaveBeenCalledWith({
-      streamId,
-    });
-    expect(mocks.getRuntimeModelSwitchDisabledReason).toHaveBeenCalledWith({
+    expect(mocks.getRuntimeModelSwitchState).toHaveBeenCalledWith({ streamId });
+    expect(mocks.getRuntimeModelSwitchState).toHaveBeenCalledWith({
       streamId,
       candidateModel: 'blocked-model',
     });
@@ -396,8 +465,8 @@ describe('createChatSessionController', () => {
       runCompleted: false,
     });
     markWaitingStream(streamId);
-    mocks.hasRuntimeToolUseModelSwitchTarget.mockReturnValue(true);
-    mocks.requestRuntimeModelSwitch.mockResolvedValue(true);
+    mocks.getRuntimeModelSwitchState.mockReturnValue({ status: 'target' });
+    mocks.requestRuntimeModelSwitch.mockResolvedValue({ status: 'switched' });
 
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -410,6 +479,31 @@ describe('createChatSessionController', () => {
     expect(mocks.setCliHelperModel).toHaveBeenCalledWith('next-model');
   });
 
+  it('switchModel does not persist a model rejected by the runtime boundary', async () => {
+    const streamId = 'stream-switch-disabled-model' as StreamTabId;
+    const session = makeSession({
+      streamId,
+      runPromise: new Promise(() => {}),
+      runCompleted: false,
+    });
+    markWaitingStream(streamId);
+    mocks.getRuntimeModelSwitchState.mockReturnValue({ status: 'target' });
+    mocks.requestRuntimeModelSwitch.mockResolvedValue({
+      status: 'disabled',
+      reason: 'Provider format differs.',
+    });
+
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    await ctrl.switchModel('blocked-model');
+
+    expect(mocks.requestRuntimeModelSwitch).toHaveBeenCalledWith({
+      streamId,
+      model: 'blocked-model',
+    });
+    expect(mocks.setCliHelperModel).not.toHaveBeenCalled();
+  });
+
   it('sends follow-ups through the runtime boundary from the controller', async () => {
     const streamId = 'stream-follow-up-controller' as StreamTabId;
     const session = makeSession({
@@ -418,8 +512,9 @@ describe('createChatSessionController', () => {
       runCompleted: false,
     });
     mocks.requestRuntimeFollowUp.mockResolvedValue({
-      status: 'queued',
-      reason: 'waiting',
+      outcome: 'queued',
+      accepted: true,
+      queueReason: 'waiting',
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -446,8 +541,12 @@ describe('createChatSessionController', () => {
       runCompleted: false,
     });
     mocks.requestRuntimeFollowUp.mockResolvedValue({
-      status: 'no_session',
-      streamStatus: undefined,
+      outcome: 'no_session',
+      accepted: false,
+      notice: {
+        severity: 'warning',
+        message: 'No active session. Start a new agent task to continue.',
+      },
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 

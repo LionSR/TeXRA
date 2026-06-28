@@ -9,9 +9,8 @@ import pDefer from 'p-defer';
 
 // Local imports
 import {
-  RuntimeAgentDirectoryService,
-  RuntimeGlobalStorageAgentDirectoryStorage,
-  type RuntimeAgentDirectoryServiceInstance,
+  createRuntimeAgentDirectoryProvider,
+  type RuntimeAgentDirectoryProvider,
 } from '@agent/runtime/agentDirectories';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
@@ -45,7 +44,7 @@ interface AgentDirectoryWatcherSubscription {
 
 export class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
-  private directoryService: RuntimeAgentDirectoryServiceInstance | undefined;
+  private directoryService: RuntimeAgentDirectoryProvider | undefined;
   private watcherDisposables: vscode.Disposable[] = [];
   private watcherSubscriptions = new Set<AgentDirectoryWatcherSubscription>();
   private externalWatcherDirectoryPaths = new Set<string>();
@@ -58,8 +57,8 @@ export class AgentDirectoryManager {
 
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
-    this.directoryService = new RuntimeAgentDirectoryService({
-      storage: new RuntimeGlobalStorageAgentDirectoryStorage(),
+    this.directoryService = createRuntimeAgentDirectoryProvider({
+      channel: CHANNEL,
       customDirectoryStore: {
         get: () => globalSM?.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
       },
@@ -71,14 +70,10 @@ export class AgentDirectoryManager {
         report: (message, docsId) =>
           showLoggedMessageWithDocs(CHANNEL, message, docsId),
       },
-      logger: {
-        debug: (message) => logger.debug(CHANNEL, message),
-        error: (message) => logger.error(CHANNEL, message),
-      },
     });
   }
 
-  private getDirectoryService(): RuntimeAgentDirectoryServiceInstance {
+  private getDirectoryService(): RuntimeAgentDirectoryProvider {
     if (!this.context || !this.directoryService) {
       throw new Error(
         'Agent directories not initialized. Call agentDirectories.initialize(context) first.',

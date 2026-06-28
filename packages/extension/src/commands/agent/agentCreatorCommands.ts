@@ -5,10 +5,11 @@ import * as yaml from 'yaml';
 
 import {
   getRuntimeAgentCreatorToolGroupOptions,
-  resolveRuntimeAgentCreatorToolGroups,
+  resolveRuntimeAgentCreatorToolGroupSelection,
   runRuntimeAgentCreator,
   type RuntimeAgentCreatorCategory,
   type RuntimeAgentCreatorConfig,
+  type RuntimeAgentCreatorToolGroupOption,
   type RuntimeAgentCreatorUI,
 } from '@agent/runtime/agentCreatorCommands';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
@@ -73,75 +74,74 @@ async function loadCreatorConfig(
  */
 async function pickToolGroups(
   agentName: string,
-  items: vscode.QuickPickItem[],
-): Promise<readonly vscode.QuickPickItem[] | undefined> {
-  return await new Promise<readonly vscode.QuickPickItem[] | undefined>(
-    (resolve) => {
-      const qp = vscode.window.createQuickPick();
-      let settled = false;
-      const finish = (
-        value: readonly vscode.QuickPickItem[] | undefined,
-      ): void => {
-        if (settled) return;
-        settled = true;
-        resolve(value);
-        qp.dispose();
-      };
-      qp.title = `Tool Use Agent: ${agentName}`;
-      qp.placeholder = 'Select tool groups';
-      qp.canSelectMany = true;
-      qp.items = items;
-      const initiallySelected = items.filter((item) => item.picked);
-      qp.selectedItems = initiallySelected;
-      if ('prompt' in qp) {
-        (
-          qp as vscode.QuickPick<vscode.QuickPickItem> & { prompt: string }
-        ).prompt =
-          'Space / click to toggle. Pre-selected groups match your description.';
+  items: RuntimeAgentCreatorToolGroupOption[],
+): Promise<readonly RuntimeAgentCreatorToolGroupOption[] | undefined> {
+  return await new Promise<
+    readonly RuntimeAgentCreatorToolGroupOption[] | undefined
+  >((resolve) => {
+    const qp =
+      vscode.window.createQuickPick<RuntimeAgentCreatorToolGroupOption>();
+    let settled = false;
+    const finish = (
+      value: readonly RuntimeAgentCreatorToolGroupOption[] | undefined,
+    ): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      qp.dispose();
+    };
+    qp.title = `Tool Use Agent: ${agentName}`;
+    qp.placeholder = 'Select tool groups';
+    qp.canSelectMany = true;
+    qp.items = items;
+    const initiallySelected = items.filter((item) => item.picked);
+    qp.selectedItems = initiallySelected;
+    if ('prompt' in qp) {
+      (
+        qp as vscode.QuickPick<vscode.QuickPickItem> & { prompt: string }
+      ).prompt =
+        'Space / click to toggle. Pre-selected groups match your description.';
+    }
+
+    let allSelected =
+      initiallySelected.length > 0 && initiallySelected.length === items.length;
+    const selectAllButton: vscode.QuickInputButton = {
+      iconPath: new vscode.ThemeIcon('check-all'),
+      tooltip: 'Select all / clear',
+    };
+    let activeSelectAllButton: vscode.QuickInputButton | undefined;
+    const refreshSelectAllButton = () => {
+      if ('buttons' in qp) {
+        const toggleButton: QuickInputToggleButton = {
+          ...selectAllButton,
+          toggle: { checked: allSelected },
+        };
+        activeSelectAllButton = toggleButton;
+        qp.buttons = [toggleButton];
       }
-
-      let allSelected =
-        initiallySelected.length > 0 &&
-        initiallySelected.length === items.length;
-      const selectAllButton: vscode.QuickInputButton = {
-        iconPath: new vscode.ThemeIcon('check-all'),
-        tooltip: 'Select all / clear',
-      };
-      let activeSelectAllButton: vscode.QuickInputButton | undefined;
-      const refreshSelectAllButton = () => {
-        if ('buttons' in qp) {
-          const toggleButton: QuickInputToggleButton = {
-            ...selectAllButton,
-            toggle: { checked: allSelected },
-          };
-          activeSelectAllButton = toggleButton;
-          qp.buttons = [toggleButton];
-        }
-      };
+    };
+    refreshSelectAllButton();
+    qp.onDidChangeSelection((selected) => {
+      allSelected = selected.length > 0 && selected.length === qp.items.length;
       refreshSelectAllButton();
-      qp.onDidChangeSelection((selected) => {
-        allSelected =
-          selected.length > 0 && selected.length === qp.items.length;
-        refreshSelectAllButton();
-      });
-      qp.onDidTriggerButton((button) => {
-        if (button !== activeSelectAllButton) {
-          return;
-        }
-        allSelected = qp.items.length > 0 && !allSelected;
-        qp.selectedItems = allSelected ? [...qp.items] : [];
-        refreshSelectAllButton();
-      });
+    });
+    qp.onDidTriggerButton((button) => {
+      if (button !== activeSelectAllButton) {
+        return;
+      }
+      allSelected = qp.items.length > 0 && !allSelected;
+      qp.selectedItems = allSelected ? [...qp.items] : [];
+      refreshSelectAllButton();
+    });
 
-      qp.onDidAccept(() => {
-        finish(qp.selectedItems);
-      });
-      qp.onDidHide(() => {
-        finish(undefined);
-      });
-      qp.show();
-    },
-  );
+    qp.onDidAccept(() => {
+      finish(qp.selectedItems);
+    });
+    qp.onDidHide(() => {
+      finish(undefined);
+    });
+    qp.show();
+  });
 }
 
 function buildVSCodeUI(): RuntimeAgentCreatorUI {
@@ -162,13 +162,10 @@ function buildVSCodeUI(): RuntimeAgentCreatorUI {
     },
 
     async pickTools(agentName, description) {
-      const items: vscode.QuickPickItem[] =
-        getRuntimeAgentCreatorToolGroupOptions(description);
+      const items = getRuntimeAgentCreatorToolGroupOptions(description);
       const selected = await pickToolGroups(agentName, items);
       if (!selected || selected.length === 0) return undefined;
-      return resolveRuntimeAgentCreatorToolGroups(
-        selected.map((item) => item.label),
-      );
+      return resolveRuntimeAgentCreatorToolGroupSelection(selected);
     },
 
     async getCustomAgentDir() {

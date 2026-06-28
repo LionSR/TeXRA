@@ -1,16 +1,16 @@
-import {
-  diff_match_patch,
-  DIFF_DELETE,
-  DIFF_EQUAL,
-  DIFF_INSERT,
-} from 'diff-match-patch';
 import { z } from 'zod';
+import { diff_match_patch } from 'diff-match-patch';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
+import {
+  computeLineChangeSummary,
+  computeUserPatch,
+  firstChangedLine,
+} from '@shared/approval/toolEditDiff';
 import {
   LineChangesSchema,
   type LineChanges,
@@ -18,7 +18,6 @@ import {
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
-import { countLines } from '@utils/text/stringUtils';
 
 import { bashApprovalController } from './bashApproval';
 import { createStreamApprovalController } from './streamApprovalQueue';
@@ -48,8 +47,6 @@ export type ToolEditApprovalResult = z.infer<
 >;
 
 const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
-
-export const REVEAL_TIMEOUT_MS = 1500;
 
 export const toolEditApprovalController =
   createStreamApprovalController<ToolEditApprovalResult>({
@@ -155,92 +152,6 @@ export function setToolEditApprovalHandler(
   ) => Promise<ToolEditApprovalResult>,
 ): void {
   customHandler = handler;
-}
-
-// ============================================================================
-// Pure diff helpers (exported for use by native handler in @frontend/)
-// ============================================================================
-
-function createSemanticDiffs(
-  original: string,
-  proposed: string,
-): ReturnType<InstanceType<typeof diff_match_patch>['diff_main']> {
-  const dmp = new diff_match_patch();
-  const diffs = dmp.diff_main(original, proposed);
-  dmp.diff_cleanupSemantic(diffs);
-  return diffs;
-}
-
-export function computeLineChangeSummary(
-  original: string,
-  proposed: string,
-): LineChanges {
-  if (original === proposed) {
-    return { added: 0, removed: 0 };
-  }
-
-  const diffs = createSemanticDiffs(original, proposed);
-
-  let added = 0;
-  let removed = 0;
-
-  for (const [type, text] of diffs) {
-    if (type === DIFF_INSERT) {
-      added += countLines(text);
-    } else if (type === DIFF_DELETE) {
-      removed += countLines(text);
-    }
-  }
-
-  return { added, removed };
-}
-
-/**
- * Compute the 0-based line number where the first change occurs.
- * Returns null if the content is identical.
- */
-export function firstChangedLine(
-  original: string,
-  proposed: string,
-): number | null {
-  if (original === proposed) {
-    return null;
-  }
-
-  const diffs = createSemanticDiffs(original, proposed);
-  let proposedLine = 0;
-
-  for (const [type, text] of diffs) {
-    switch (type) {
-      case DIFF_EQUAL:
-        proposedLine += (text.match(/\n/g) ?? []).length;
-        break;
-      case DIFF_INSERT:
-        return proposedLine;
-      case DIFF_DELETE:
-        return Math.max(proposedLine - 1, 0);
-    }
-  }
-
-  return 0;
-}
-
-export function computeUserPatch(
-  suggestedContent: string,
-  appliedContent: string,
-): string | undefined {
-  if (suggestedContent === appliedContent) {
-    return undefined;
-  }
-
-  const dmp = new diff_match_patch();
-  const patches = dmp.patch_make(suggestedContent, appliedContent);
-
-  if (patches.length === 0) {
-    return undefined;
-  }
-
-  return dmp.patch_toText(patches);
 }
 
 // ============================================================================

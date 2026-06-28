@@ -69,13 +69,16 @@ export function createDesktopProgressIpc(
       if (!progress && ensureProgress) {
         void ensureProgress()
           .then((loaded) => {
-            if (
-              dispatchProgressViewInbound(
-                message,
-                loaded.progressViewInboundHandlers,
-                reportAsyncError,
-              )
-            ) {
+            const handled = dispatchProgressViewInbound(
+              message,
+              loaded.progressViewInboundHandlers,
+              reportAsyncError,
+            );
+            if (handled instanceof Promise) {
+              void handled.catch(reportAsyncError);
+              return;
+            }
+            if (handled) {
               return;
             }
             onUnsupportedCommand(result.data);
@@ -88,13 +91,16 @@ export function createDesktopProgressIpc(
         return true;
       }
 
-      if (
-        dispatchProgressViewInbound(
-          message,
-          progress.progressViewInboundHandlers,
-          reportAsyncError,
-        )
-      ) {
+      const handled = dispatchProgressViewInbound(
+        message,
+        progress.progressViewInboundHandlers,
+        reportAsyncError,
+      );
+      if (handled instanceof Promise) {
+        void handled.catch(reportAsyncError);
+        return true;
+      }
+      if (handled) {
         return true;
       }
       // Recognized but unhandled command: consume it with a warning.

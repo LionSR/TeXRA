@@ -14,7 +14,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { WorkflowTaskState } from '@agent/core/execution/TaskState';
-import type { FileContext } from '@agent/runtime/textEnhancement';
+import type { RuntimeTextPolishContext } from '@agent/runtime/textPolishCommands';
 
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -44,10 +44,13 @@ function createWorkflowTaskState(
 
 describe('ProgressFollowUpPolishController', () => {
   it('returns a polished text update and builds file context from task state', async () => {
-    const calls: Array<{ text: string; fileContext?: FileContext }> = [];
+    const calls: Array<{
+      text: string;
+      fileContext?: RuntimeTextPolishContext;
+    }> = [];
     const controller = new ProgressFollowUpPolishController({
-      polishText: async (text, fileContext) => {
-        calls.push({ text, fileContext });
+      polishText: async (request) => {
+        calls.push(request);
         return {
           success: true,
           text: 'Please inspect the proof.',

@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import {
+  isStored,
+  makeFakeSettingsStores,
+} from '@test/support/settingsStoresFake';
+import {
   buildConfigListItems,
   buildEnumItems,
   coerceSettingInput,
@@ -26,10 +30,6 @@ import {
 import { DEFAULT_GIT_AUTHOR_NAME } from '@shared/constants/git';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
-import {
-  isStored,
-  makeFakeSettingsStores,
-} from '@test/support/settingsStoresFake';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);

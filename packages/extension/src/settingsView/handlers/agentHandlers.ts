@@ -14,10 +14,6 @@ import * as vscode from 'vscode';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import {
-  getRuntimeAgent,
-  loadRuntimeAgents,
-} from '@agent/runtime/agentResolution';
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { workspaceSM, globalSM } from '@common/state';
@@ -28,7 +24,6 @@ import {
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { agentKey as createKey } from '@shared/schemas/agent';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -74,8 +69,8 @@ export class AgentHandlers {
   // ── Agent selection data ──
 
   async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
-    await loadRuntimeAgents();
-    const { workflow, toolUse } = this.catalogController.buildSelectionItems();
+    const { workflow, toolUse } =
+      await this.catalogController.buildFreshSelectionItems();
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
       workflow,
@@ -255,23 +250,19 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.CUSTOMIZE_AGENT>,
   ): Promise<void> {
     try {
-      const key = createKey(data.agentSource, data.agentName);
-      const entry = getRuntimeAgent(key);
-      if (!entry?.path) {
+      const fileInput =
+        await this.directoryController.resolveCustomizeAgentFileInput({
+          source: data.agentSource,
+          name: data.agentName,
+        });
+      if (!fileInput.ok) {
         await vscode.window.showErrorMessage(
           `Agent not found or has no file: ${data.agentName}`,
         );
         return;
       }
 
-      const customDir = await agentDirectories.custom();
-      const sourceDir = await agentDirectories.getDirectory(data.agentSource);
-
-      const result = this.fileController.planCustomizeAgent({
-        entry,
-        customDir,
-        sourceDir,
-      });
+      const result = this.fileController.planCustomizeAgent(fileInput.input);
       if (!result.ok) {
         await vscode.window.showErrorMessage(
           `Refusing to copy: target path escapes the custom agents directory.`,
@@ -294,7 +285,9 @@ export class AgentHandlers {
         if (choice !== overwrite) return;
       }
 
-      await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
+      await AbsoluteFS.copy(fileInput.input.entry.path, targetPath, {
+        overwrite: true,
+      });
 
       const doc = await vscode.workspace.openTextDocument(
         vscode.Uri.file(targetPath),
@@ -319,20 +312,18 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_CUSTOM_AGENT>,
   ): Promise<void> {
     try {
-      const key = createKey('custom', data.agentName);
-      const entry = getRuntimeAgent(key);
-      if (!entry?.path) {
+      const fileInput =
+        await this.directoryController.resolveDeleteCustomAgentFileInput(
+          data.agentName,
+        );
+      if (!fileInput.ok) {
         await vscode.window.showErrorMessage(
           `Custom agent not found: ${data.agentName}`,
         );
         return;
       }
 
-      const customDir = await agentDirectories.custom();
-      const result = this.fileController.planDeleteCustomAgent({
-        entry,
-        customDir,
-      });
+      const result = this.fileController.planDeleteCustomAgent(fileInput.input);
       if (!result.ok) {
         await vscode.window.showErrorMessage(
           `Refusing to delete: file is not inside the custom agents directory.`,
@@ -407,7 +398,6 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_AGENT_MODE_PRESET>,
   ): Promise<void> {
     try {
-      await loadRuntimeAgents();
       const result = await this.catalogController.applyPreset(data.presetId);
       if (!result.ok) {
         await vscode.window.showErrorMessage(`Unknown team: ${data.presetId}`);
@@ -438,8 +428,6 @@ export class AgentHandlers {
         validateInput: (v) => (v.trim() ? null : 'Name cannot be empty'),
       });
       if (!name) return; // cancelled
-
-      await loadRuntimeAgents();
 
       await this.catalogController.saveCurrentPreset(name);
 

@@ -1,8 +1,8 @@
 // Unit tests for `resolveCliResumeSnapshot` branch logic and the user-facing
 // `explainNonResumable` strings. The retrieval surface is mocked at its module
-// boundaries (history config + snapshot retrieval + stream-id derivation) so
-// the test exercises pure branching, not storage I/O. `agentConfigToTaskState`
-// / `isToolUseTaskState` run for real against minimal configs.
+// boundaries (history config + runtime resume retrieval + stream-id derivation)
+// so the test exercises branching, not storage I/O. The runtime command still
+// projects task state and classifies workflow/tool-use configs for real.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

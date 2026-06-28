@@ -1,6 +1,6 @@
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { isLiveElapsedStatus } from '@common/constants/streamStatus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import {
   STREAM_STATUS,
   type StreamStatus,

@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
+import { createSettingsGoalController } from '@controllers/settingsView/SettingsGoalControllerFactory';
 import {
   buildToolDashboardItems,
   buildToolDashboardTerminalAction,
@@ -24,7 +25,6 @@ import {
   buildModelSelectionMessage,
   createModelSelectionController,
 } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
-import { listRuntimeGoals } from '@agent/runtime/goalCommands';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { BaseViewMessageHandler } from '@common/webview';
@@ -195,9 +195,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.chatgptHandlers = new ChatGptSubscriptionHandlers(ctx, () =>
       this.refreshAfterChatGptAuthChange(),
     );
-    this.goalController = new SettingsGoalController({
-      listGoals: listRuntimeGoals,
-    });
+    this.goalController = createSettingsGoalController();
 
     this.handlerRegistry = this.createHandlerRegistry();
 

@@ -26,12 +26,14 @@ function agent(
   name: string,
   category: AgentCategory,
   tools: string[] = [],
+  source: AgentEntry['source'] = category === AgentCategory.ToolUse
+    ? 'builtInToolUse'
+    : 'builtInWorkflow',
 ): AgentEntry {
   return {
     name,
     category,
-    source:
-      category === AgentCategory.ToolUse ? 'builtInToolUse' : 'builtInWorkflow',
+    source,
     path: `/agents/${name}.yaml`,
     tools,
   };
@@ -831,6 +833,28 @@ describe('CLI multi-agent presets', () => {
     expect(plan.toolUseAgentKeys).toContain('builtInToolUse:review');
     expect(sourceQualifiedPlan.missingAgentOverride).toBeUndefined();
     expect(sourceQualifiedPlan.rootAgent?.name).toBe('review');
+  });
+
+  it('keeps source-qualified root overrides exact', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('review', AgentCategory.ToolUse, ['delegate_agent']),
+        agent('review', AgentCategory.ToolUse, ['delegate_agent'], 'custom'),
+      ],
+      agentOverride: 'custom:review',
+    });
+
+    expect(plan.missingAgentOverride).toBeUndefined();
+    expect(plan.rootAgent).toMatchObject({
+      name: 'review',
+      source: 'custom',
+    });
+    expect(plan.toolUseAgentKeys).toContain('custom:review');
   });
 
   it('allows a preset member when explicitly requested as the root', () => {

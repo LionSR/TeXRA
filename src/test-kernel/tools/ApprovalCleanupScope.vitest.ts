@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   noopAgentRuntimeHost,
   type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+} from '@hosts/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 import {
   cleanupApprovalsForStream,

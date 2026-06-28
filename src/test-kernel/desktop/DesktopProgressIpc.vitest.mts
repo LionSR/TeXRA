@@ -125,8 +125,9 @@ describe('desktop Progress IPC', () => {
         stream: 'run-1',
       }),
     ).toBe(true);
-    await Promise.resolve();
-    expect(onAsyncError).toHaveBeenCalledWith(error);
+    await vi.waitFor(() => {
+      expect(onAsyncError).toHaveBeenCalledWith(error);
+    });
   });
 
   it('ignores invalid Progress IPC payloads', async () => {

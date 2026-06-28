@@ -8,11 +8,7 @@ import {
   setOnboardingDeclined,
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
-import {
-  computeRuntimeAgentOptionsData,
-  getRuntimeAgent,
-  refreshRuntimeAgentCatalog,
-} from '@agent/runtime/agentResolution';
+import { MainViewAgentSelectionController } from '@controllers/mainView/MainViewAgentSelectionController';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - common
@@ -32,10 +28,8 @@ import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
 
 import { agentDirectories } from '@frontend/agents';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
-import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
-import { AgentCategory, agentKeyOf } from '@shared/schemas/agent';
 import { watchConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 
@@ -62,6 +56,8 @@ export class MainViewProvider
   private _messageDisposable?: vscode.Disposable;
   private _progressViewProvider?: ProgressViewProvider;
   private _progressContentProvider?: BundledViewContentProvider;
+  private readonly agentSelectionController =
+    new MainViewAgentSelectionController();
 
   /** Last computed funnel state, so credential hooks can detect the
    *  in-session State 0 → 1 transition. Session-scoped by design. */
@@ -143,7 +139,6 @@ export class MainViewProvider
    * Called when auth state changes (login/logout affects both).
    */
   async refreshOptionsAndView() {
-    await refreshRuntimeAgentCatalog();
     const view = this.getMainModeView();
     if (view) {
       await this.messageHandler.handleMessage(
@@ -201,14 +196,9 @@ export class MainViewProvider
         (this.pendingSetupAgentSelection && transition.state === 'setup'))
     ) {
       this.pendingSetupAgentSelection = false;
-      // Resolve the qualified registry key so the dropdown matches by value;
-      // the plain name still resolves by label if the registry isn't loaded.
-      const entry = getRuntimeAgent('setup', AgentCategory.ToolUse);
-      view.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
-        agentId: entry ? agentKeyOf(entry) : 'setup',
-        sessionType: 'toolUse',
-      });
+      view.webview.postMessage(
+        this.agentSelectionController.getToolUseAgentSelection('setup'),
+      );
     }
     if (transition.kickoffSetup && !this.setupKickoffStarted) {
       this.setupKickoffStarted = true;
@@ -231,12 +221,9 @@ export class MainViewProvider
     const view = this.getMainModeView();
     if (!view) return;
 
-    await refreshRuntimeAgentCatalog();
-    const optionsData = await computeRuntimeAgentOptionsData();
-    view.webview.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      optionsData,
-    });
+    view.webview.postMessage(
+      await this.messageHandler.getAgentOptionsRefreshMessage(),
+    );
   }
 
   /**
@@ -247,11 +234,9 @@ export class MainViewProvider
     const view = this.getMainModeView();
     if (!view) return;
 
-    const optionsData = await computeModelOptionsData();
-    view.webview.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsData,
-    });
+    view.webview.postMessage(
+      await this.messageHandler.getModelOptionsRefreshMessage(),
+    );
   }
 
   private setupFileWatcher() {

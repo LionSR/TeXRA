@@ -1,8 +1,8 @@
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   isActiveStatus,
   isInFlightStatus,
 } from '@common/constants/streamStatus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import {
   STREAM_STATUS,
   type ExecutionStatus,

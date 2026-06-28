@@ -4,26 +4,24 @@ import { currentSession, type SessionHandle } from './SessionHandle';
 import type { ProposalResult } from './AgentProposalCoordinator';
 import type { PlanApprovalResult } from './PlanApprovalCoordinator';
 
+export type RuntimeProposalResult = ProposalResult;
+export type RuntimePlanApprovalResult = PlanApprovalResult;
+
 export interface RuntimePlanApprovalResolution {
   readonly approvalId: string;
-  readonly result: PlanApprovalResult;
+  readonly result: RuntimePlanApprovalResult;
   readonly session?: SessionHandle;
 }
 
 export interface RuntimeProposalResolution {
   readonly proposalId: string;
-  readonly result: ProposalResult;
+  readonly result: RuntimeProposalResult;
   readonly session?: SessionHandle;
 }
 
 export interface RuntimeRetryRequest {
   readonly streamId: StreamTabId;
   readonly feedback?: string;
-  readonly session?: SessionHandle;
-}
-
-export interface RuntimeRetryClearRequest {
-  readonly streamId: StreamTabId;
   readonly session?: SessionHandle;
 }
 
@@ -58,14 +56,6 @@ export function triggerRuntimeRetry({
 export function cancelRuntimeRetry({
   streamId,
   session = currentSession(),
-}: RuntimeRetryClearRequest): boolean {
+}: RuntimeRetryRequest): boolean {
   return session.coordinators.cancelRetry(streamId);
-}
-
-/** Clear retry state for a stream during host-owned stream cleanup. */
-export function clearRuntimeRetryRequest({
-  streamId,
-  session = currentSession(),
-}: RuntimeRetryClearRequest): void {
-  session.coordinators.clearRetryRequest(streamId);
 }

@@ -15,6 +15,7 @@ export interface RuntimeAgentCreatorToolGroupOption {
   readonly description: string;
   readonly detail: string;
   readonly picked: boolean;
+  readonly selection: RuntimeAgentCreatorToolGroups;
 }
 
 export interface RuntimeAgentCreatorToolGroups {
@@ -45,21 +46,23 @@ export function getRuntimeAgentCreatorToolGroupOptions(
     description: group.description,
     detail: group.tools.join(', '),
     picked: suggested.has(label),
+    selection: {
+      tools: [...group.tools],
+      groups: [label],
+    },
   }));
 }
 
-/** Resolve selected tool-group labels into the tools consumed by the flow. */
-export function resolveRuntimeAgentCreatorToolGroups(
-  selectedLabels: readonly string[],
+/** Resolve selected runtime-projected options into the tools consumed by the flow. */
+export function resolveRuntimeAgentCreatorToolGroupSelection(
+  selectedOptions: readonly RuntimeAgentCreatorToolGroupOption[],
 ): RuntimeAgentCreatorToolGroups {
   const tools: string[] = [];
   const groups: string[] = [];
 
-  for (const label of selectedLabels) {
-    const group = TOOL_GROUPS[label];
-    if (!group) continue;
-    tools.push(...group.tools);
-    groups.push(label);
+  for (const option of selectedOptions) {
+    tools.push(...option.selection.tools);
+    groups.push(...option.selection.groups);
   }
 
   return { tools, groups };

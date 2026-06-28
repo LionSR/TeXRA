@@ -1,5 +1,6 @@
 // Barrel export for agent commands
 export { stopAgent, compactResponse } from './agentCommands';
+export type { StopAgentCommandArgs } from './agentCommands';
 export { handleCreateAgentWithAI } from './agentCreatorCommands';
 export { runExecuteCommand, registerExecuteCommand } from './executeCommand';
 export { registerFollowUpCommand } from './followUpCommand';

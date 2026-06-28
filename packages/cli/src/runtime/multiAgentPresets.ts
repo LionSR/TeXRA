@@ -1,7 +1,7 @@
 import { platform } from '@platform/platform';
 import {
-  findRuntimeAgentByIdentifier,
   RUNTIME_BUILTIN_TEAM_ROOT_AGENT_NAMES,
+  resolveRuntimeAgentIdentifiers,
   type RuntimeAgentEntry as AgentEntry,
 } from '@agent/runtime/agentResolution';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
@@ -474,17 +474,7 @@ function resolvePresetAgents(
   names: readonly string[],
   agents: readonly AgentEntry[],
 ): { resolved: AgentEntry[]; missing: string[] } {
-  const resolved: AgentEntry[] = [];
-  const missing: string[] = [];
-  for (const name of names) {
-    const entry = findRuntimeAgentByIdentifier(agents, name);
-    if (entry) {
-      resolved.push(entry);
-    } else {
-      missing.push(name);
-    }
-  }
-  return { resolved, missing };
+  return resolveRuntimeAgentIdentifiers(agents, names);
 }
 
 function resolveAgentOverride(
@@ -493,8 +483,8 @@ function resolveAgentOverride(
 ): { agent?: AgentEntry; missing?: string } {
   const query = override?.trim();
   if (!query) return {};
-  const agent = findRuntimeAgentByIdentifier(agents, query);
-  return agent ? { agent } : { missing: query };
+  const { resolved, missing } = resolveRuntimeAgentIdentifiers(agents, [query]);
+  return resolved[0] ? { agent: resolved[0] } : { missing: missing[0] };
 }
 
 function selectPresetRootAgent(

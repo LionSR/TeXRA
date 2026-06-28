@@ -18,8 +18,7 @@ import {
 import { requestRuntimeFollowUp } from '@agent/runtime/followUpCommands';
 import { requestManualCompaction } from '@agent/runtime/manualCompaction';
 import {
-  getRuntimeModelSwitchDisabledReason,
-  hasRuntimeToolUseModelSwitchTarget,
+  getRuntimeModelSwitchState,
   requestRuntimeModelSwitch,
 } from '@agent/runtime/modelSwitch';
 import { requestRuntimeToolUseSnapshotResume } from '@agent/runtime/resumeCommands';
@@ -27,14 +26,14 @@ import { runAgent } from '@agent/runtime/runAgent';
 import { writeRuntimeTerminalStatus } from '@agent/runtime/historyCommands';
 import {
   requestKillExecution,
-  requestStopStream,
+  requestRuntimeStreamStop,
 } from '@agent/runtime/streamControl';
 import { attachDefaultTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
-import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
+import { resolveCliRuntimeCapabilities } from '@cli/runtime/runtimeCapabilities';
 import { formatCliNoAvailableModelsRecovery } from '@cli/runtime/modelAccess';
 import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
 import {
@@ -213,8 +212,9 @@ export function createChatSessionController(
   const interruptActiveRun = (): void => {
     clearApprovals();
     if (!session.streamId) return;
-    requestStopStream({
+    requestRuntimeStreamStop({
       streamId: session.streamId,
+      clearRetryRequest: true,
       detachActiveChildren:
         tryPlatform()?.workspaceState.get<boolean>(
           WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
@@ -243,7 +243,8 @@ export function createChatSessionController(
 
   const hasActiveToolUseFlow = (): boolean =>
     session.streamId
-      ? hasRuntimeToolUseModelSwitchTarget({ streamId: session.streamId })
+      ? getRuntimeModelSwitchState({ streamId: session.streamId }).status ===
+        'target'
       : false;
 
   const stoppedFocusedChildFollowUpMessage = (streamId: StreamTabId): string =>
@@ -268,10 +269,11 @@ export function createChatSessionController(
       return undefined;
     }
     if (!session.streamId) return undefined;
-    return getRuntimeModelSwitchDisabledReason({
+    const state = getRuntimeModelSwitchState({
       streamId: session.streamId,
       candidateModel,
     });
+    return state.status === 'target' ? state.disabledReason : undefined;
   };
 
   const switchModel = async (model: string): Promise<void> => {
@@ -311,17 +313,23 @@ export function createChatSessionController(
     }
 
     try {
-      const switched = await requestRuntimeModelSwitch({
+      const result = await requestRuntimeModelSwitch({
         streamId: session.streamId,
         model: nextModel,
       });
-      if (!switched) {
-        appendLocalAssistantTranscript(
-          'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
-        );
-        return;
+      switch (result.status) {
+        case 'no_target':
+          appendLocalAssistantTranscript(
+            'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
+          );
+          return;
+        case 'disabled':
+          appendLocalAssistantTranscript(result.reason);
+          return;
+        case 'switched':
+          setCliSessionModelOverride(nextModel);
+          break;
       }
-      setCliSessionModelOverride(nextModel);
     } catch (error: unknown) {
       appendLocalAssistantTranscript(toErrorMessage(error));
       return;
@@ -367,8 +375,11 @@ export function createChatSessionController(
         text,
         ...(mediaFiles !== undefined ? { mediaFiles } : {}),
         ...(displayText !== undefined ? { displayText } : {}),
+        ...(session.runtimeHost !== undefined
+          ? { runtimeHost: session.runtimeHost }
+          : {}),
       });
-      if (result.status === 'sent' || result.status === 'queued') {
+      if (result.accepted) {
         return true;
       }
 
@@ -387,27 +398,7 @@ export function createChatSessionController(
   const requestCompaction = (): void => {
     const streamId = cliState.activeStreamId.get();
     const result = requestManualCompaction(streamId);
-
-    switch (result.status) {
-      case 'no_session':
-        appendLocalAssistantTranscript(
-          'No active tool-use session found for context compaction.',
-          streamId,
-        );
-        return;
-      case 'unsupported_model':
-        appendLocalAssistantTranscript(
-          'Manual context compaction is not available for the current model.',
-          streamId,
-        );
-        return;
-      case 'requested':
-        appendLocalAssistantTranscript(
-          'Context compaction requested. The agent will process it on the next model call.',
-          streamId,
-        );
-        return;
-    }
+    appendLocalAssistantTranscript(result.message, streamId);
   };
 
   // -----------------------------------------------------------------------
@@ -430,7 +421,7 @@ export function createChatSessionController(
     disposers.push(unbindApprovals);
     let executionId: ExecutionId | undefined;
     let waitingTurn = 0;
-    const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
+    const runtimeCapabilities = resolveCliRuntimeCapabilities(sessionContext);
 
     const runPromise = Promise.resolve()
       .then(() => {
@@ -440,7 +431,10 @@ export function createChatSessionController(
           {
             runtimeHost: wrapped,
             enforceCategory: true,
-            approvalPromptsUnavailable: approvalsUnavailable,
+            approvalPromptsUnavailable:
+              runtimeCapabilities.approvalPromptsUnavailable,
+            runtimeUnavailableTools:
+              runtimeCapabilities.runtimeUnavailableTools,
             onExecutionIdAllocated: (allocatedExecutionId) => {
               executionId = allocatedExecutionId;
               session.executionId = allocatedExecutionId;
@@ -572,14 +566,16 @@ export function createChatSessionController(
     const detachResultToast = attachDefaultTerminalResultToast(wrapped);
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
-    const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
+    const runtimeCapabilities = resolveCliRuntimeCapabilities(sessionContext);
 
     session.runPromise = setCliHelperModel(currentModel)
       .then(async () => {
         const resumed = await requestRuntimeToolUseSnapshotResume({
           snapshot: resolution.snapshot,
           runtimeHost: wrapped,
-          approvalPromptsUnavailable: approvalsUnavailable,
+          approvalPromptsUnavailable:
+            runtimeCapabilities.approvalPromptsUnavailable,
+          runtimeUnavailableTools: runtimeCapabilities.runtimeUnavailableTools,
         });
         if (!resumed) {
           throw new Error(

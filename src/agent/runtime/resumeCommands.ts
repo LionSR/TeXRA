@@ -1,20 +1,82 @@
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  retrieveSessionResumeData,
+  type SessionResumeData,
+} from '@agent/runtime/SessionResumeRetrieval';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import type { TaskState } from '@agent/core/execution/TaskState';
+import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { toErrorMessage } from '@common/errors';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
+import {
+  STREAM_STATUS,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 
 import { resumeToolUseFromSnapshot } from './executeAgent';
 import {
-  detectPersistedToolUseWaitingSession,
-  finishToolUseResume,
-  prepareToolUseResume,
-  restoreToolUseResumeFollowUps,
-  type PersistedToolUseWaitingDetectionRequest,
-  type ToolUseResumePreparation,
-} from './toolUseResume';
+  buildRuntimeTaskStateFromConfig,
+  isRuntimeToolUseTaskState,
+  type RuntimeAgentConfig,
+} from './executionRequests';
+import { getStreamTabId } from './streamTab';
+import { publishRuntimeQueuedFollowUps } from './queuedFollowUps';
+import { StreamStatusService } from './StreamStatusService';
 import type { SessionHandle } from './SessionHandle';
 
 export type RuntimeToolUseSessionSnapshot = ToolUseSessionSnapshot;
-export type RuntimePersistedToolUseWaitingDetectionRequest =
-  PersistedToolUseWaitingDetectionRequest;
+export type RuntimeSessionResumeData = SessionResumeData;
+
+export interface RuntimeSessionResumeDataRequest {
+  readonly streamId: StreamTabId;
+  readonly executionId: ExecutionId;
+  readonly taskState: TaskState;
+}
+
+export interface RuntimeToolUseResumeData {
+  readonly snapshot: RuntimeToolUseSessionSnapshot;
+  readonly streamId: StreamTabId;
+  readonly config: RuntimeAgentConfig;
+}
+
+export interface RuntimeToolUseResumeDataRequest {
+  readonly executionId: ExecutionId;
+  readonly config: RuntimeAgentConfig;
+}
+
+export type RuntimeSessionResumeDataResult =
+  | {
+      readonly status: 'resumable';
+      readonly data: RuntimeSessionResumeData;
+    }
+  | {
+      readonly status: 'missing';
+    }
+  | {
+      readonly status: 'failed';
+      readonly error: unknown;
+      readonly message: string;
+    };
+
+export type RuntimeToolUseResumeDataResult =
+  | {
+      readonly status: 'resumable';
+      readonly data: RuntimeToolUseResumeData;
+    }
+  | {
+      readonly status: 'not_tool_use';
+    }
+  | {
+      readonly status: 'not_resumable';
+      readonly streamId: StreamTabId;
+    }
+  | {
+      readonly status: 'failed';
+      readonly streamId: StreamTabId;
+      readonly error: unknown;
+      readonly message: string;
+    };
 
 export interface RuntimeToolUseSnapshotResumeRequest {
   readonly snapshot: RuntimeToolUseSessionSnapshot;
@@ -28,11 +90,176 @@ export interface RuntimeToolUseSnapshotResumeRequest {
   readonly session?: SessionHandle;
 }
 
-/** Detect a persisted waiting tool-use session and mark the stream WAITING. */
-export function detectRuntimePersistedToolUseWaitingSession(
-  request: RuntimePersistedToolUseWaitingDetectionRequest,
-): Promise<boolean> {
-  return detectPersistedToolUseWaitingSession(request);
+export interface RuntimeWorkflowResumeRequest {
+  readonly streamId: StreamTabId;
+  readonly runtimeHost: AgentRuntimeHost;
+  readonly run: () => Promise<void>;
+}
+
+interface ToolUseResumePreparationRequest {
+  readonly streamId: StreamTabId;
+  readonly runtimeHost: AgentRuntimeHost;
+  readonly followUp?: string;
+}
+
+interface ToolUseResumePreparation {
+  readonly streamId: StreamTabId;
+  readonly followUps: readonly FollowUpQueueInput[];
+}
+
+interface ToolUseResumeFollowUpRestoreRequest extends ToolUseResumePreparation {
+  readonly runtimeHost: AgentRuntimeHost;
+}
+
+interface ToolUseResumeFinishRequest {
+  readonly streamId: StreamTabId;
+  readonly runtimeHost: AgentRuntimeHost;
+}
+
+function prepareToolUseResume({
+  streamId,
+  runtimeHost,
+  followUp,
+}: ToolUseResumePreparationRequest): ToolUseResumePreparation | null {
+  if (StreamStatusService.isActiveOrResuming(streamId)) {
+    return null;
+  }
+
+  ToolUseFollowUpQueue.acquire(streamId);
+  StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, {
+    runtimeHost,
+  });
+
+  const explicitFollowUps: readonly FollowUpQueueInput[] =
+    followUp !== undefined ? [{ text: followUp, origin: 'user' }] : [];
+  const followUps = [
+    ...explicitFollowUps,
+    ...ToolUseFollowUpQueue.drainItems(streamId),
+  ];
+  publishRuntimeQueuedFollowUps(runtimeHost, streamId);
+
+  return { streamId, followUps };
+}
+
+function restoreToolUseResumeFollowUps({
+  streamId,
+  runtimeHost,
+  followUps,
+}: ToolUseResumeFollowUpRestoreRequest): void {
+  for (const item of followUps) {
+    ToolUseFollowUpQueue.enqueue(streamId, item, { force: true });
+  }
+  if (followUps.length > 0) {
+    publishRuntimeQueuedFollowUps(runtimeHost, streamId);
+  }
+}
+
+function finishToolUseResume({
+  streamId,
+  runtimeHost,
+}: ToolUseResumeFinishRequest): void {
+  if (StreamStatusService.get(streamId) === STREAM_STATUS.RESUMING) {
+    StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+      runtimeHost,
+    });
+  }
+}
+
+/**
+ * Retrieve persisted resume data and classify storage failures separately from
+ * valid "nothing to resume" states.
+ */
+export async function readRuntimeSessionResumeData({
+  streamId,
+  executionId,
+  taskState,
+}: RuntimeSessionResumeDataRequest): Promise<RuntimeSessionResumeDataResult> {
+  try {
+    const data = await retrieveSessionResumeData(
+      streamId,
+      executionId,
+      taskState,
+    );
+    if (!data) return { status: 'missing' };
+    return { status: 'resumable', data };
+  } catch (error) {
+    return {
+      status: 'failed',
+      error,
+      message: toErrorMessage(error),
+    };
+  }
+}
+
+/**
+ * Resolve resumable tool-use data from the persisted execution config.
+ *
+ * This keeps stream-id derivation, task-state projection, and resume-data
+ * interpretation in one runtime operation; hosts only decide how to present the
+ * classified result.
+ */
+export async function readRuntimeToolUseResumeDataForConfig({
+  executionId,
+  config,
+}: RuntimeToolUseResumeDataRequest): Promise<RuntimeToolUseResumeDataResult> {
+  const taskState = buildRuntimeTaskStateFromConfig(config);
+  if (!isRuntimeToolUseTaskState(taskState)) {
+    return { status: 'not_tool_use' };
+  }
+
+  const streamId = getStreamTabId(config.agent, config.model, {
+    executionId,
+  });
+  const resume = await readRuntimeSessionResumeData({
+    streamId,
+    executionId,
+    taskState,
+  });
+
+  if (resume.status === 'failed') {
+    return {
+      status: 'failed',
+      streamId,
+      error: resume.error,
+      message: resume.message,
+    };
+  }
+  if (resume.status !== 'resumable' || resume.data.type !== 'toolUse') {
+    return { status: 'not_resumable', streamId };
+  }
+
+  return {
+    status: 'resumable',
+    data: {
+      snapshot: resume.data.snapshot,
+      streamId,
+      config: resume.data.snapshot.agentConfig,
+    },
+  };
+}
+
+/**
+ * Resume a persisted workflow by owning the stream-status transition around the
+ * host-specific launch callback. If the launch fails before the run lifecycle
+ * claims the stream, restore WAITING so the stream remains resumable.
+ */
+export async function requestRuntimeWorkflowResume({
+  streamId,
+  runtimeHost,
+  run,
+}: RuntimeWorkflowResumeRequest): Promise<boolean> {
+  StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, { runtimeHost });
+  try {
+    await run();
+    return true;
+  } catch (error) {
+    if (StreamStatusService.get(streamId) === STREAM_STATUS.RESUMING) {
+      StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+        runtimeHost,
+      });
+    }
+    throw error;
+  }
 }
 
 /**

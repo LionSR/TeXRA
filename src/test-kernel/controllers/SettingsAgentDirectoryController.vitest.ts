@@ -17,6 +17,12 @@ const AGENTS = new Map<string, SettingsAgentDirectoryEntry>([
       path: '/repo/resources/agents/writer.yaml',
     },
   ],
+  [
+    'custom:draft',
+    {
+      path: '/repo/custom-agents/draft.yaml',
+    },
+  ],
   ['custom:pathless', {}],
 ]);
 
@@ -150,5 +156,66 @@ describe('SettingsAgentDirectoryController', () => {
       ok: false,
       reason: 'missingLocalDirectory',
     });
+  });
+
+  it('resolves customize input through agent, custom, and source directories', async () => {
+    const { controller } = createController({
+      customDir: '/repo/custom-agents',
+      sourceDirs: {
+        builtInWorkflow: '/repo/resources/agents',
+      },
+    });
+
+    assert.deepEqual(
+      await controller.resolveCustomizeAgentFileInput({
+        source: 'builtInWorkflow',
+        name: 'writer',
+      }),
+      {
+        ok: true,
+        input: {
+          entry: { path: '/repo/resources/agents/writer.yaml' },
+          customDir: '/repo/custom-agents',
+          sourceDir: '/repo/resources/agents',
+        },
+      },
+    );
+  });
+
+  it('refuses customize and delete inputs when an agent has no file', async () => {
+    const { controller } = createController();
+
+    assert.deepEqual(
+      await controller.resolveCustomizeAgentFileInput({
+        source: 'custom',
+        name: 'pathless',
+      }),
+      { ok: false, reason: 'missingFile' },
+    );
+    assert.deepEqual(
+      await controller.resolveDeleteCustomAgentFileInput('pathless'),
+      { ok: false, reason: 'missingFile' },
+    );
+  });
+
+  it('resolves delete input only from the custom agent namespace', async () => {
+    const { controller } = createController({
+      customDir: '/repo/custom-agents',
+    });
+
+    assert.deepEqual(
+      await controller.resolveDeleteCustomAgentFileInput('draft'),
+      {
+        ok: true,
+        input: {
+          entry: { path: '/repo/custom-agents/draft.yaml' },
+          customDir: '/repo/custom-agents',
+        },
+      },
+    );
+    assert.deepEqual(
+      await controller.resolveDeleteCustomAgentFileInput('writer'),
+      { ok: false, reason: 'missingFile' },
+    );
   });
 });

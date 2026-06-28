@@ -6,7 +6,7 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 
 // Local imports - runtime
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 // Local imports - tools
 import {

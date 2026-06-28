@@ -13,7 +13,7 @@
 
 import PQueue from 'p-queue';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 
 /** Progress events that announce per-stream approval-bypass changes. */

@@ -103,8 +103,7 @@ function createController({
   state?: ProgressFollowUpState;
 } = {}): ProgressFollowUpController {
   return new ProgressFollowUpController({
-    getAgentCategory: (agent) =>
-      agent === 'tool-agent' ? AgentCategory.ToolUse : AgentCategory.Workflow,
+    isToolUseAgent: (agent) => agent === 'tool-agent',
     loadModelOptions: async () => modelOptions,
     state,
     workspace: {

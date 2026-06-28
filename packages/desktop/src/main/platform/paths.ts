@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 
 import { app } from 'electron';
 
-import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index/BundledAgentDirectories';
+import { RUNTIME_BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/runtime/agentDirectories';
 import { getWorkspacePathInput } from '@desktop/workspacePath.js';
 export { hasWorkspacePath } from '@desktop/workspacePath.js';
 
@@ -61,7 +61,7 @@ function hasRequiredResourceDirectories(
 ): boolean {
   return (
     isDirectory(candidate) &&
-    BUNDLED_AGENT_DIRECTORY_NAMES.every((directoryName) =>
+    RUNTIME_BUNDLED_AGENT_DIRECTORY_NAMES.every((directoryName) =>
       isDirectory(join(candidate, directoryName)),
     )
   );

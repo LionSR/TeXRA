@@ -8,7 +8,10 @@ import { describe, it, beforeEach, afterEach } from 'vitest';
 // Local imports - agent runtime
 import type { ResolvedAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import {
+  loadAgentDefinitionInspectionData,
+  loadAgentSettingAndPrompts,
+} from '@agent/runtime/agentLoad';
 import { AbsoluteFS } from '@utils/files';
 
 describe('loadAgentSettingAndPrompts', () => {
@@ -145,5 +148,49 @@ describe('loadAgentSettingAndPrompts', () => {
     const [settings] = await loadAgentSettingAndPrompts(resolution);
     assert.strictEqual(settings.agentCategory, AgentCategory.Workflow);
     assert.strictEqual(Object.hasOwn(settings, 'outputExt'), false);
+  });
+
+  it('loads definition inspection data as one operation', async () => {
+    const agentPath = path.join('/', 'tmp', 'agents');
+    const definitionPath = path.join(agentPath, 'child.yaml');
+    const resolution: ResolvedAgent = {
+      entry: {
+        source: 'custom',
+        name: 'child',
+        path: definitionPath,
+        category: AgentCategory.Workflow,
+      },
+      definitionPath,
+      resolvedName: 'child',
+    };
+
+    fileContents.set(
+      normalize(definitionPath),
+      [
+        'name: child',
+        'settings:',
+        '  agentCategory: workflow',
+        '  rounds: 2',
+        'prompts:',
+        '  userRequest: inspect me',
+        '',
+      ].join('\n'),
+    );
+
+    const data = await loadAgentDefinitionInspectionData(resolution);
+
+    assert.strictEqual(data.inheritedAgentName, undefined);
+    assert.deepStrictEqual(data.rawDefinition, {
+      name: 'child',
+      settings: {
+        agentCategory: 'workflow',
+        rounds: 2,
+      },
+      prompts: {
+        userRequest: 'inspect me',
+      },
+    });
+    assert.strictEqual(data.settings.agentCategory, AgentCategory.Workflow);
+    assert.strictEqual(data.prompts.userRequest, 'inspect me');
   });
 });

@@ -21,19 +21,27 @@ const storageMock = vi.hoisted(() => ({
 }));
 
 const agentConfigMock = vi.hoisted(() => ({
-  AgentConfigSchema: {
-    parse: vi.fn((value: unknown) => value),
-  },
+  parse: vi.fn((value: unknown) => value),
+}));
+
+const goalStoreMock = vi.hoisted(() => ({
+  forgetByExecutionIds: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => storageMock);
-vi.mock('@agent/core/definition/AgentConfig', () => agentConfigMock);
+vi.mock('@agent/core/definition/AgentConfig', async () => {
+  const { z } = await import('zod');
+  const schema = z.any();
+  schema.parse = agentConfigMock.parse as typeof schema.parse;
+  return { AgentConfigSchema: schema };
+});
+vi.mock('@tools/goal', () => ({
+  GoalStore: goalStoreMock,
+}));
 
 import {
   clearRuntimeHistoryStoreCache,
   countRuntimeHistoryExecutions,
-  deleteAllRuntimeHistoryExecutions,
-  deleteRuntimeHistoryExecution,
   getRuntimeMostRecentSingleToolUseModel,
   hasRuntimeExecutionHistory,
   listRuntimeHistoryWorkspaceFiles,
@@ -41,13 +49,43 @@ import {
   readRuntimeHistoryConfig,
   readRuntimeHistoryExecutionRecord,
   readRuntimeHistoryTerminalStatus,
+  repairRuntimeHistoryTerminalStatus,
+  requestClearRuntimeHistoryExecutions,
+  requestDeleteRuntimeHistoryExecution,
   writeRuntimeHistoryResultMeta,
   writeRuntimeTerminalStatus,
 } from '@agent/runtime/historyCommands';
-import type { ExecutionId } from '@shared/schemas';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
+import {
+  EXECUTION_STATUS,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 
 const EXECUTION_ID = 'abcdef123456' as ExecutionId;
+const STREAM_ID = 'history@deepseek#abcdef123456' as StreamTabId;
+
+function createRecordingHost(): AgentRuntimeHost {
+  return {
+    emit: vi.fn(),
+  };
+}
+
+function trackActiveExecution(session: SessionHandle): void {
+  const handle = {
+    executionId: EXECUTION_ID,
+    parentStreamId: STREAM_ID,
+    category: 'toolUse',
+    agentName: 'texra',
+    startedAt: Date.now(),
+    runtimeHost: createRecordingHost(),
+    getProgress: () => ({}),
+    updateProgress: vi.fn(),
+  } as Parameters<SessionHandle['executions']['track']>[0];
+  session.executions.track(handle);
+}
 
 describe('runtime history commands', () => {
   afterEach(() => {
@@ -141,6 +179,7 @@ describe('runtime history commands', () => {
       workspaceFilePaths: ['main.tex'],
     });
     expect(storageMock.getExecutionStore).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(agentConfigMock.parse).toHaveBeenCalledWith(config);
   });
 
   it('reads terminal status without exposing execution storage', async () => {
@@ -172,6 +211,36 @@ describe('runtime history commands', () => {
     );
     expect(storageMock.getExecutionStore).toHaveBeenCalledWith(EXECUTION_ID);
     expect(executionStoreMock.writeResultMeta).toHaveBeenCalledWith(resultMeta);
+  });
+
+  it('repairs a missing terminal status without overwriting an existing one', async () => {
+    storageMock.writeTerminalStatus.mockResolvedValue(undefined);
+
+    executionStoreMock.readMeta.mockResolvedValueOnce({
+      timestamp: '2026-01-01T00:00:00.000Z',
+    });
+    await expect(
+      repairRuntimeHistoryTerminalStatus(EXECUTION_ID),
+    ).resolves.toEqual({
+      status: 'written',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+    });
+    expect(storageMock.writeTerminalStatus).toHaveBeenCalledWith(
+      EXECUTION_ID,
+      EXECUTION_STATUS.ERROR,
+    );
+
+    executionStoreMock.readMeta.mockResolvedValueOnce({
+      timestamp: '2026-01-01T00:00:00.000Z',
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    });
+    await expect(
+      repairRuntimeHistoryTerminalStatus(EXECUTION_ID),
+    ).resolves.toEqual({
+      status: 'preserved',
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    });
+    expect(storageMock.writeTerminalStatus).toHaveBeenCalledTimes(1);
   });
 
   it('lists runtime history workspace files', async () => {
@@ -208,30 +277,97 @@ describe('runtime history commands', () => {
     await expect(readRuntimeHistoryConfig(EXECUTION_ID)).resolves.toEqual(raw);
 
     expect(storageMock.getExecutionStore).toHaveBeenCalledWith(EXECUTION_ID);
-    expect(agentConfigMock.AgentConfigSchema.parse).toHaveBeenCalledWith(raw);
+    expect(agentConfigMock.parse).toHaveBeenCalledWith(raw);
   });
 
   it('returns null when no stored config exists', async () => {
     executionStoreMock.readConfig.mockResolvedValue(null);
 
     await expect(readRuntimeHistoryConfig(EXECUTION_ID)).resolves.toBeNull();
-    expect(agentConfigMock.AgentConfigSchema.parse).not.toHaveBeenCalled();
+    expect(agentConfigMock.parse).not.toHaveBeenCalled();
   });
 
-  it('deletes history through runtime commands', async () => {
-    const active = new Set<ExecutionId>([EXECUTION_ID]);
-    storageMock.deleteExecution.mockResolvedValue(true);
-    storageMock.deleteAllExecutions.mockResolvedValue([EXECUTION_ID]);
+  it('refuses runtime history deletion while the execution is still active', async () => {
+    const session = new SessionHandle();
+    try {
+      trackActiveExecution(session);
 
-    await expect(deleteRuntimeHistoryExecution(EXECUTION_ID)).resolves.toBe(
-      true,
-    );
-    await expect(deleteAllRuntimeHistoryExecutions(active)).resolves.toEqual([
-      EXECUTION_ID,
-    ]);
+      await expect(
+        requestDeleteRuntimeHistoryExecution(EXECUTION_ID, { session }),
+      ).resolves.toEqual({ status: 'running' });
 
-    expect(storageMock.deleteExecution).toHaveBeenCalledWith(EXECUTION_ID);
-    expect(storageMock.deleteAllExecutions).toHaveBeenCalledWith(active);
+      expect(storageMock.deleteExecution).not.toHaveBeenCalled();
+      expect(goalStoreMock.forgetByExecutionIds).not.toHaveBeenCalled();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('projects runtime history deletion as deleted or missing', async () => {
+    const session = new SessionHandle();
+    storageMock.deleteExecution.mockResolvedValueOnce(true);
+    try {
+      await expect(
+        requestDeleteRuntimeHistoryExecution(EXECUTION_ID, { session }),
+      ).resolves.toEqual({ status: 'deleted' });
+      expect(storageMock.deleteExecution).toHaveBeenCalledWith(EXECUTION_ID);
+      expect(goalStoreMock.forgetByExecutionIds).toHaveBeenCalledWith([
+        EXECUTION_ID,
+      ]);
+
+      storageMock.deleteExecution.mockResolvedValueOnce(false);
+      await expect(
+        requestDeleteRuntimeHistoryExecution(EXECUTION_ID, { session }),
+      ).resolves.toEqual({ status: 'missing' });
+      expect(goalStoreMock.forgetByExecutionIds).toHaveBeenCalledTimes(1);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('clears history while excluding active runtime executions', async () => {
+    const session = new SessionHandle();
+    const deletedExecutionId = 'deleted000000' as ExecutionId;
+    storageMock.deleteAllExecutions.mockResolvedValue([deletedExecutionId]);
+
+    try {
+      trackActiveExecution(session);
+
+      await expect(
+        requestClearRuntimeHistoryExecutions({ session }),
+      ).resolves.toEqual({
+        deletedExecutionIds: [deletedExecutionId],
+        activeExecutionIds: [EXECUTION_ID],
+      });
+
+      expect(storageMock.deleteAllExecutions).toHaveBeenCalledWith(
+        new Set([EXECUTION_ID]),
+      );
+      expect(goalStoreMock.forgetByExecutionIds).toHaveBeenCalledWith([
+        deletedExecutionId,
+      ]);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('does not forget runtime goals when clear-history removes no executions', async () => {
+    const session = new SessionHandle();
+    storageMock.deleteAllExecutions.mockResolvedValue([]);
+
+    try {
+      await expect(
+        requestClearRuntimeHistoryExecutions({ session }),
+      ).resolves.toEqual({
+        deletedExecutionIds: [],
+        activeExecutionIds: [],
+      });
+
+      expect(storageMock.deleteAllExecutions).toHaveBeenCalledWith(new Set());
+      expect(goalStoreMock.forgetByExecutionIds).not.toHaveBeenCalled();
+    } finally {
+      session.dispose();
+    }
   });
 
   it('clears the runtime history store cache', () => {

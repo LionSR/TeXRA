@@ -8,15 +8,17 @@ const mocks = vi.hoisted(() => ({
     isAuthenticated: vi.fn(),
   },
   getRuntimeAgent: vi.fn(),
-  listRuntimeAgentsByCategory: vi.fn(),
-  listRuntimeVisibleAgents: vi.fn(),
+  getRuntimeToolUseAgent: vi.fn(),
+  getRuntimeWorkflowAgent: vi.fn(),
+  listRuntimeAgents: vi.fn(),
   loadRuntimeAgents: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/agentResolution', () => ({
   getRuntimeAgent: mocks.getRuntimeAgent,
-  listRuntimeAgentsByCategory: mocks.listRuntimeAgentsByCategory,
-  listRuntimeVisibleAgents: mocks.listRuntimeVisibleAgents,
+  getRuntimeToolUseAgent: mocks.getRuntimeToolUseAgent,
+  getRuntimeWorkflowAgent: mocks.getRuntimeWorkflowAgent,
+  listRuntimeAgents: mocks.listRuntimeAgents,
   loadRuntimeAgents: mocks.loadRuntimeAgents,
 }));
 
@@ -42,8 +44,9 @@ describe('CLI agent resolution', () => {
     mocks.authProvider.isAuthenticated.mockReset();
     mocks.authProvider.isAuthenticated.mockResolvedValue(false);
     mocks.getRuntimeAgent.mockReset();
-    mocks.listRuntimeAgentsByCategory.mockReset();
-    mocks.listRuntimeVisibleAgents.mockReset();
+    mocks.getRuntimeToolUseAgent.mockReset();
+    mocks.getRuntimeWorkflowAgent.mockReset();
+    mocks.listRuntimeAgents.mockReset();
     mocks.loadRuntimeAgents.mockReset();
   });
 
@@ -99,23 +102,16 @@ describe('CLI agent resolution', () => {
     const local = agent('lean');
     const remote = agent('lean', 'remote');
     mocks.authProvider.isAuthenticated.mockResolvedValue(true);
-    mocks.getRuntimeAgent
+    mocks.getRuntimeToolUseAgent
       .mockReturnValueOnce(local)
       .mockReturnValueOnce(remote);
     const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('lean', 'chat')).resolves.toBe(remote);
 
-    expect(mocks.getRuntimeAgent).toHaveBeenNthCalledWith(
-      1,
-      'lean',
-      AgentCategory.ToolUse,
-    );
-    expect(mocks.getRuntimeAgent).toHaveBeenNthCalledWith(
-      2,
-      'lean',
-      AgentCategory.ToolUse,
-    );
+    expect(mocks.getRuntimeToolUseAgent).toHaveBeenNthCalledWith(1, 'lean');
+    expect(mocks.getRuntimeToolUseAgent).toHaveBeenNthCalledWith(2, 'lean');
+    expect(mocks.getRuntimeAgent).not.toHaveBeenCalled();
     expect(mocks.loadRuntimeAgents).toHaveBeenNthCalledWith(1, {
       includeRemote: false,
     });
@@ -139,7 +135,7 @@ describe('CLI agent resolution', () => {
 
   it('uses launch target category for local and remote-fallback lookups', async () => {
     const remote = agent('assistant', 'remote');
-    mocks.getRuntimeAgent
+    mocks.getRuntimeToolUseAgent
       .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(remote);
     const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
@@ -148,20 +144,37 @@ describe('CLI agent resolution', () => {
       remote,
     );
 
-    expect(mocks.getRuntimeAgent).toHaveBeenNthCalledWith(
+    expect(mocks.getRuntimeToolUseAgent).toHaveBeenNthCalledWith(
       1,
       'assistant',
-      AgentCategory.ToolUse,
     );
-    expect(mocks.getRuntimeAgent).toHaveBeenNthCalledWith(
+    expect(mocks.getRuntimeToolUseAgent).toHaveBeenNthCalledWith(
       2,
       'assistant',
-      AgentCategory.ToolUse,
     );
+    expect(mocks.getRuntimeAgent).not.toHaveBeenCalled();
+  });
+
+  it('uses the workflow lookup for workflow launch mode', async () => {
+    const workflow = agent(
+      'proofreader',
+      'builtInWorkflow',
+      AgentCategory.Workflow,
+    );
+    mocks.getRuntimeWorkflowAgent.mockReturnValue(workflow);
+    const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
+
+    await expect(resolveCliLaunchAgent('proofreader', 'run')).resolves.toBe(
+      workflow,
+    );
+
+    expect(mocks.getRuntimeWorkflowAgent).toHaveBeenCalledWith('proofreader');
+    expect(mocks.getRuntimeToolUseAgent).not.toHaveBeenCalled();
+    expect(mocks.getRuntimeAgent).not.toHaveBeenCalled();
   });
 
   it('reports launch-specific missing-agent messages', async () => {
-    mocks.getRuntimeAgent.mockReturnValue(undefined);
+    mocks.getRuntimeToolUseAgent.mockReturnValue(undefined);
     const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('missing', 'agentsRun')).rejects.toThrow(

@@ -7,9 +7,9 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';

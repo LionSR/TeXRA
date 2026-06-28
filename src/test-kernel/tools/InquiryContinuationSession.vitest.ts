@@ -1,24 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const sendFollowUpMock = vi.hoisted(() =>
-  vi.fn(async () => ({ status: 'sent' as const })),
+const requestRuntimeFollowUpMock = vi.hoisted(() =>
+  vi.fn(async (): Promise<unknown> => ({ outcome: 'sent', accepted: true })),
 );
 const getThreadSummaryMock = vi.hoisted(() => vi.fn());
 const listOpenThreadsForStreamMock = vi.hoisted(() => vi.fn(async () => []));
 const readExternalInquiryThreadMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
-  sendFollowUp: sendFollowUpMock,
+vi.mock('@agent/runtime/followUpCommands', () => ({
+  requestRuntimeFollowUp: requestRuntimeFollowUpMock,
 }));
 
 vi.mock('@eventBus/ProgressEventBus', () => ({
   bus: { emit: vi.fn() },
-}));
-
-vi.mock('@platform/platform', () => ({
-  platform: () => ({
-    agentResume: { tryResumeStream: vi.fn(async () => false) },
-  }),
 }));
 
 vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
@@ -60,7 +54,7 @@ function answeredManifest(): ExternalInquiryThreadManifest {
 
 describe('external inquiry continuation session routing', () => {
   beforeEach(() => {
-    sendFollowUpMock.mockClear();
+    requestRuntimeFollowUpMock.mockClear();
     getThreadSummaryMock.mockResolvedValue({
       threadId: THREAD,
       parentStreamId: STREAM,
@@ -73,7 +67,7 @@ describe('external inquiry continuation session routing', () => {
     readExternalInquiryThreadMock.mockClear();
   });
 
-  it('passes the host-provided session through to sendFollowUp', async () => {
+  it('passes the host-provided session through to the runtime follow-up command', async () => {
     const session = { tag: 'desktop-session' } as unknown as SessionHandle;
 
     const outcome: InjectionOutcome = await injectContinuationForAnsweredThread(
@@ -83,12 +77,27 @@ describe('external inquiry continuation session routing', () => {
     );
 
     expect(outcome).toBe('sent');
-    expect(sendFollowUpMock).toHaveBeenCalledWith(
-      STREAM,
-      expect.stringContaining('[inquiry] ei_aabbccdd0011 answered.'),
-      undefined,
-      undefined,
+    expect(requestRuntimeFollowUpMock).toHaveBeenCalledWith({
+      streamId: STREAM,
+      text: expect.stringContaining('[inquiry] ei_aabbccdd0011 answered.'),
       session,
+      wakeQueuedStream: true,
+    });
+  });
+
+  it('reports resumed when the runtime wake succeeds', async () => {
+    requestRuntimeFollowUpMock.mockResolvedValueOnce({
+      outcome: 'queued',
+      accepted: true,
+      queueReason: 'waiting',
+      wakeStatus: 'resumed',
+    });
+
+    const outcome: InjectionOutcome = await injectContinuationForAnsweredThread(
+      THREAD,
+      answeredManifest(),
     );
+
+    expect(outcome).toBe('resumed');
   });
 });

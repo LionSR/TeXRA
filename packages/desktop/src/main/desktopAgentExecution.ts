@@ -14,24 +14,51 @@ import { StreamSnapshotStore } from '@transcript';
 import { streamDataDir } from '@transcript/streamDataPaths';
 import { readMeta } from '@transcript/streamSnapshotRead';
 import type { AgentTrace } from '@agent/trace';
-import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
 import {
-  TaskStateSchema,
-  type TaskState,
-} from '@agent/core/execution/TaskState';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { emitQueuedFollowUps } from '@agent/runtime/queuedFollowUps';
-import { requestRuntimeFollowUp } from '@agent/runtime/followUpCommands';
-import { requestRuntimeToolUseSnapshotResume } from '@agent/runtime/resumeCommands';
+  tryParseRuntimeTaskState,
+  type RuntimeTaskState,
+  type RuntimeValidatedExecutionRequest,
+} from '@agent/runtime/executionRequests';
+import { resolveRuntimeBashApproval } from '@agent/runtime/approvalCommands';
+import {
+  listRuntimeQueuedFollowUpMessages,
+  requestRuntimeFollowUp,
+} from '@agent/runtime/followUpCommands';
+import { getRuntimeGoalControlState } from '@agent/runtime/goalCommands';
+import {
+  persistRuntimeExternalInquiryDraft,
+  resolveRuntimeExternalInquiry,
+  resolveRuntimeUserQuestion,
+} from '@agent/runtime/humanInputCommands';
+import {
+  registerRuntimeProgressViewVisibilityProvider,
+  type RuntimeProgressViewVisibilityRegistration,
+} from '@agent/runtime/progressViewCommands';
+import {
+  readRuntimeSessionResumeData,
+  requestRuntimeToolUseSnapshotResume,
+  requestRuntimeWorkflowResume,
+} from '@agent/runtime/resumeCommands';
+import {
+  cancelRuntimeRetry,
+  resolveRuntimePlanApproval,
+  resolveRuntimeProposal,
+} from '@agent/runtime/runCoordinatorCommands';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
-import { clearRuntimeRetryRequest } from '@agent/runtime/runCoordinatorCommands';
 import {
+  releaseRuntimeDeletedStream,
+  releaseRuntimeDeletedStreams,
+} from '@agent/runtime/streamResourceLifecycle';
+import {
+  clearAllRuntimeStreamStatuses,
+  clearRuntimeStreamStatus,
   getRuntimeStreamStatus,
+  getRuntimeStreamStatusSnapshot,
   isRuntimeStreamActiveOrResuming,
-  requestStopStream,
-  setRuntimeStreamStatus,
+  isRuntimeStreamInFlight,
+  markRuntimeRunningStreamsStopped,
+  requestRuntimeStreamStop,
+  setRuntimeStreamStatusSilently,
 } from '@agent/runtime/streamControl';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { toErrorMessage } from '@common/errors';
@@ -43,12 +70,12 @@ import {
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { KVStore } from '@common/storage/KVStore';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { DiffViewHost, ExternalOpener } from '@hosts/uiHosts';
 import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   RUN_OUTCOME,
-  STREAM_STATUS,
   type AgentProposalPermission,
   type AgentCategoryFilter,
   type MainViewPersistedState,
@@ -63,15 +90,6 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import {
-  cleanupUnscopedApprovals,
-  handleProgressViewBashApprovalAction,
-  releaseStreamResources,
-} from '@tools/approval';
-import { GoalStore } from '@tools/goal';
-import { handleExternalInquiryAction } from '@tools/inquiry';
-import { handleUserQuestionAction } from '@tools/userQuestion';
-import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -126,12 +144,12 @@ export interface DesktopAgentExecution {
 }
 
 type ResumeState = {
-  taskState: TaskState;
+  taskState: RuntimeTaskState;
   executionId?: ExecutionId;
 };
 
 type PersistedResumeMeta = {
-  taskState?: TaskState;
+  taskState?: RuntimeTaskState;
   executionId?: ExecutionId;
   description?: string;
   parentStreamId?: StreamTabId;
@@ -203,19 +221,23 @@ export class DesktopProgressBridge {
    * This window's own session. Each desktop BrowserWindow gets a fresh one so
    * its runs, interrupts, coordinator requests, and trace flushers are isolated
    * from other windows and torn down on window close. Cross-window "is this
-   * execution running anywhere" checks use `getAllActiveExecutionIds()`.
+   * execution running anywhere" checks use the runtime execution query.
    */
   private readonly session: SessionHandle = new SessionHandle();
   /** Detaches the session→toast consumer; called on dispose. */
   private detachResultToast: (() => void) | undefined;
+  private readonly visibilityRegistration: RuntimeProgressViewVisibilityRegistration;
 
   constructor(
     private readonly postToRenderer: (message: unknown) => boolean | void,
     private readonly options: DesktopProgressBridgeOptions = {},
   ) {
-    setProgressViewBridge({ isViewVisible: () => true });
+    this.visibilityRegistration = registerRuntimeProgressViewVisibilityProvider(
+      {
+        isViewVisible: () => true,
+      },
+    );
     this.backend = new ProgressBackend({
-      session: this.session,
       storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
       snapshots: options.progressSnapshotStore ?? new StreamSnapshotStore(),
       sendMessage: (message) => {
@@ -223,6 +245,20 @@ export class DesktopProgressBridge {
       },
       hasTarget: () => true,
       getStreamControls: getProgressStreamControls,
+      getQueuedFollowUps: listRuntimeQueuedFollowUpMessages,
+      runtimeSession: {
+        retainInterruptStreams: (streams) =>
+          this.session.interrupts.retainOnly(new Set(streams)),
+        flushPendingTraces: () => this.session.flushPendingTraces(),
+      },
+      runtimeStatus: {
+        getSnapshot: getRuntimeStreamStatusSnapshot,
+        setSilently: setRuntimeStreamStatusSilently,
+        clear: clearRuntimeStreamStatus,
+        clearAll: clearAllRuntimeStreamStatuses,
+        isInFlight: isRuntimeStreamInFlight,
+        markRunningStopped: markRuntimeRunningStreamsStopped,
+      },
       configureUi: ({ webviewUpdater }) => {
         // Track shown-but-unresolved prompts so hasPendingPermissions can
         // keep the active view on a stream awaiting input (the shared
@@ -240,7 +276,10 @@ export class DesktopProgressBridge {
             // run takes the normal cancel path instead of hanging in WAITING
             // for an answer that can never arrive.
             showRetryRequest: (payload) => {
-              this.session.coordinators.cancelRetry(payload.streamId);
+              cancelRuntimeRetry({
+                streamId: payload.streamId,
+                session: this.session,
+              });
             },
             resolveRetryRequest: () => undefined,
             showToolEditPermission: (payload) => {
@@ -379,6 +418,13 @@ export class DesktopProgressBridge {
     // → rail-update translation.  See #6329.
     this.progressEvents = createDesktopProgressEventBridge({
       state: this.state,
+      runtimeStatus: {
+        get: getRuntimeStreamStatus,
+        setSilently: setRuntimeStreamStatusSilently,
+      },
+      goalControls: {
+        getControlState: getRuntimeGoalControlState,
+      },
       streamSnapshotStore: options.streamSnapshotStore,
       sendMessage: (message) => this.send(message),
       logger: this.logger,
@@ -504,7 +550,11 @@ export class DesktopProgressBridge {
         return true;
       },
       resolveProposal: (proposalId, result) => {
-        this.session.coordinators.resolveProposal(proposalId, result);
+        resolveRuntimeProposal({
+          proposalId,
+          result,
+          session: this.session,
+        });
       },
       onMissingProposal: (proposalId) => {
         this.logger.warn(
@@ -587,17 +637,21 @@ export class DesktopProgressBridge {
           });
         },
         handleBashApprovalAction: (message) =>
-          handleProgressViewBashApprovalAction(message),
+          resolveRuntimeBashApproval(message),
         handlePlanApprovalAction: (message) => {
-          this.session.coordinators.resolvePlanApproval(message.approvalId, {
-            action: message.action,
-            ...(message.action === 'reject' && {
-              feedback: message.feedback,
-            }),
+          resolveRuntimePlanApproval({
+            approvalId: message.approvalId,
+            result: {
+              action: message.action,
+              ...(message.action === 'reject' && {
+                feedback: message.feedback,
+              }),
+            },
+            session: this.session,
           });
         },
         handleUserQuestionAction: (message) =>
-          handleUserQuestionAction(message),
+          resolveRuntimeUserQuestion(message),
         handleAgentProposalAction: (message) =>
           this.agentProposalController.handleAction(message),
       },
@@ -626,7 +680,7 @@ export class DesktopProgressBridge {
       // turn, submit/drop settle the durable thread.
       [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: async (data) => {
         if (data.action === 'draft') {
-          await persistOpenTurnDraft({
+          await persistRuntimeExternalInquiryDraft({
             threadId: data.threadId,
             draft: data.draft ?? null,
           });
@@ -640,30 +694,27 @@ export class DesktopProgressBridge {
             );
             return;
           }
-          await handleExternalInquiryAction(
-            {
-              action: 'submit',
-              threadId: data.threadId,
-              answer: data.answer,
-              sessionLinks: data.sessionLinks,
-            },
-            { session: this.session },
-          );
+          await resolveRuntimeExternalInquiry({
+            action: 'submit',
+            threadId: data.threadId,
+            answer: data.answer,
+            sessionLinks: data.sessionLinks,
+            session: this.session,
+          });
           return;
         }
-        await handleExternalInquiryAction(
-          {
-            action: 'drop',
-            threadId: data.threadId,
-            feedback: data.feedback,
-          },
-          { session: this.session },
-        );
+        await resolveRuntimeExternalInquiry({
+          action: 'drop',
+          threadId: data.threadId,
+          feedback: data.feedback,
+          session: this.session,
+        });
       },
     };
   }
 
   dispose(): void {
+    this.visibilityRegistration.dispose();
     this.detachResultToast?.();
     this.toolEditApprovals.dispose();
     this.unsubscribe();
@@ -758,14 +809,14 @@ export class DesktopProgressBridge {
     this.deletedStreams.add(streamId);
     this.progressEvents.onStreamDeleted(streamId);
 
-    // Releases approval state (pending approvals, bypass flags, coordinator
-    // requests) and the follow-up queue for this stream.
-    releaseStreamResources(streamId, this.session);
+    await releaseRuntimeDeletedStream({
+      streamId,
+      session: this.session,
+    });
 
     this.deleteAgentProposalsForStream(streamId);
     this.releasePendingPermissionsForStream(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
-    await GoalStore.forget(streamId);
     await this.state.clearStream(streamId);
     this.send({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
@@ -783,26 +834,15 @@ export class DesktopProgressBridge {
       ...this.streamLogs.keys(),
       ...this.progressEvents.restoredStreams.keys(),
     ]);
-    // Approval cleanup (incl. retry/proposal/plan coordinator state) is scoped
-    // to THIS window's streams via the per-stream helper, NOT the process-wide
-    // `cleanupAllApprovals` reset — so one window's "delete all" can't wipe
-    // another window's pending approvals (the approval controllers are
-    // process-global and streamId-keyed; the coordinator half is session-owned).
     for (const streamId of streamIds) {
       this.deletedStreams.add(streamId);
-      releaseStreamResources(streamId, this.session);
     }
-    // Catch pending approvals with no concrete stream context (undefined or
-    // empty streamId) — the per-stream loop skips them because they do not
-    // equal any StreamTabId. Scope this to THIS window's runtime host so a
-    // sibling window's streamless approval is not rejected.
-    cleanupUnscopedApprovals(this.runtimeHost);
-    // Child/subagent coordinator requests may be session-owned without a local
-    // desktop stream entry, so clear the owning window's coordinator bridge
-    // after the visible per-stream sweep. This is session-scoped and does not
-    // touch sibling windows.
-    this.session.coordinators.cleanupAllRequests();
-    await GoalStore.forgetMany([...streamIds]);
+    await releaseRuntimeDeletedStreams({
+      streamIds,
+      approvalScope: 'session',
+      session: this.session,
+      runtimeHost: this.runtimeHost,
+    });
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
     // ghosts come back zombie-style after relaunch.
@@ -834,9 +874,9 @@ export class DesktopProgressBridge {
   }
 
   private stopStream(streamId: StreamTabId): void {
-    clearRuntimeRetryRequest({ streamId, session: this.session });
-    requestStopStream({
+    requestRuntimeStreamStop({
       streamId,
+      clearRetryRequest: true,
       // Read the live workspace-state value (written by the desktop settings
       // view) at stop time, matching the extension and CLI hosts.
       detachActiveChildren:
@@ -862,7 +902,6 @@ export class DesktopProgressBridge {
     }
 
     this.resumeAttempts.add(streamId);
-    let ownsResumingStatus = false;
     try {
       const resumeState = await this.resolveResumeState(streamId);
       if (!resumeState) {
@@ -880,18 +919,26 @@ export class DesktopProgressBridge {
         return false;
       }
 
-      const resume = await retrieveSessionResumeData(
+      const resumeResult = await readRuntimeSessionResumeData({
         streamId,
         executionId,
         taskState,
-      );
-      if (!resume) {
-        await this.options.showInfoMessage?.(
-          'This run has no resumable session state. Start a new run instead.',
-        );
-        return false;
+      });
+      switch (resumeResult.status) {
+        case 'missing':
+          await this.options.showInfoMessage?.(
+            'This run has no resumable session state. Start a new run instead.',
+          );
+          return false;
+        case 'failed':
+          throw new Error(resumeResult.message, {
+            cause: resumeResult.error,
+          });
+        case 'resumable':
+          break;
       }
 
+      const { data: resume } = resumeResult;
       if (resume.type === 'toolUse') {
         return await requestRuntimeToolUseSnapshotResume({
           snapshot: resume.snapshot,
@@ -900,31 +947,19 @@ export class DesktopProgressBridge {
         });
       }
 
-      ownsResumingStatus = true;
-      setRuntimeStreamStatus({
+      return await requestRuntimeWorkflowResume({
         streamId,
-        status: STREAM_STATUS.RESUMING,
         runtimeHost: this.runtimeHost,
+        run: () =>
+          this.runExecution({
+            config: resume.agentConfig,
+            executionId: resume.executionId,
+          }),
       });
-      await this.runExecution({
-        config: resume.agentConfig,
-        executionId: resume.executionId,
-      });
-      return true;
     } catch (error) {
       this.logger.error(`Failed to resume desktop stream ${streamId}`, {
         data: error instanceof Error ? error : { error },
       });
-      if (
-        ownsResumingStatus &&
-        getRuntimeStreamStatus(streamId) === STREAM_STATUS.RESUMING
-      ) {
-        setRuntimeStreamStatus({
-          streamId,
-          status: STREAM_STATUS.WAITING,
-          runtimeHost: this.runtimeHost,
-        });
-      }
       await this.options.showErrorMessage?.(
         `Resume failed: ${toErrorMessage(error)}`,
       );
@@ -1038,9 +1073,9 @@ export class DesktopProgressBridge {
       const meta = await readMeta(new KVStore(streamDataDir(streamId)));
       if (!meta) return undefined;
 
-      const taskState = TaskStateSchema.safeParse(meta.taskState);
+      const taskState = tryParseRuntimeTaskState(meta.taskState);
       return {
-        ...(taskState.success && { taskState: taskState.data }),
+        ...(taskState && { taskState }),
         ...(meta.executionId && {
           executionId: meta.executionId as ExecutionId,
         }),
@@ -1071,6 +1106,7 @@ export class DesktopProgressBridge {
     text: string,
     mediaFiles?: readonly string[],
   ): Promise<void> {
+    const executionId = this.getStreamExecutionId(streamId);
     // Resolve the follow-up target against THIS window's session: the run's
     // handle is tracked in `this.session`, but this IPC path runs outside the
     // run ALS, so the module default (currentSession ⇒ defaultSession) would
@@ -1079,23 +1115,23 @@ export class DesktopProgressBridge {
       streamId,
       text,
       mediaFiles,
+      runtimeHost: this.runtimeHost,
       session: this.session,
+      ...(executionId !== undefined
+        ? { persistedWaitingExecutionId: executionId }
+        : {}),
+      wakeQueuedStream: true,
     });
-    if (result.status === 'sent' || result.status === 'queued') {
-      emitQueuedFollowUps(this.runtimeHost, streamId);
-      return;
+    if (result.notice) {
+      await this.options.showInfoMessage?.(result.notice.message);
     }
-
-    await this.options.showInfoMessage?.(
-      'No active session. Start a new agent task to continue.',
-    );
   }
 
   async openFileCompile(filePath: string): Promise<void> {
     await this.fileActions.openFileCompile(filePath);
   }
 
-  async runExecution(request: ValidatedExecutionRequest): Promise<void> {
+  async runExecution(request: RuntimeValidatedExecutionRequest): Promise<void> {
     const { runAgent } = await import('@agent/runtime/runAgent');
     await runAgent(request, {
       runtimeHost: this.runtimeHost,

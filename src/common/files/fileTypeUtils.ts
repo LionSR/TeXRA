@@ -1,12 +1,12 @@
 // Internal imports
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import { unique } from '@utils/core';
 import {
   getConfig,
   inspectConfig,
   isConfigExplicitlySet,
 } from '@utils/config/configUtils';
 import { hasExtension } from '@utils/core/pathCore';
-import { unique } from '@utils/core';
 
 /**
  * File categories for extension configuration lookups.

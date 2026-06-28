@@ -10,8 +10,8 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 // Local file imports
-import { defineTool } from './core/define';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
+import { defineTool } from './core/define';
 
 const CHANNEL = 'ReportReviewIssueTool';
 logger.initialize(CHANNEL);

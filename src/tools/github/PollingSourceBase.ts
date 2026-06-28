@@ -14,8 +14,8 @@
 import pMap from 'p-map';
 
 import type { AgentTrace } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import { unique } from '@utils/core';
 

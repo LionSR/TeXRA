@@ -1,47 +1,35 @@
+import { type RuntimeAgentConfig } from '@agent/runtime/executionRequests';
 import {
-  isRuntimeToolUseTaskState,
-  type RuntimeAgentConfig,
-} from '@agent/runtime/executionRequests';
-import type { RuntimeToolUseSessionSnapshot } from '@agent/runtime/resumeCommands';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import { getStreamTabId } from '@agent/runtime/streamTab';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+  readRuntimeToolUseResumeDataForConfig,
+  type RuntimeToolUseResumeData,
+} from '@agent/runtime/resumeCommands';
 import { toErrorMessage } from '@common/errors';
 import { createChannelTrace } from '@logger';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { ExecutionId } from '@shared/schemas';
 
 const logger = createChannelTrace('CliToolUseResumeData');
 
-export interface CliToolUseResumeData {
-  readonly snapshot: RuntimeToolUseSessionSnapshot;
-  readonly streamId: StreamTabId;
-  readonly config: RuntimeAgentConfig;
-}
+export type CliToolUseResumeData = RuntimeToolUseResumeData;
 
-export async function readCliToolUseResumeData(
+async function readCliToolUseResumeData(
   id: ExecutionId,
   config: RuntimeAgentConfig,
 ): Promise<CliToolUseResumeData | null> {
-  const taskState = agentConfigToTaskState(config);
-  if (!isRuntimeToolUseTaskState(taskState)) return null;
-
-  const streamId = getStreamTabId(config.agent, config.model, {
+  const resume = await readRuntimeToolUseResumeDataForConfig({
     executionId: id,
+    config,
   });
-  const resume = await retrieveSessionResumeData(streamId, id, taskState);
-  if (resume?.type !== 'toolUse') return null;
-  return {
-    snapshot: resume.snapshot,
-    streamId,
-    config: resume.snapshot.agentConfig,
-  };
+  if (resume.status === 'failed') {
+    throw new Error(resume.message, { cause: resume.error });
+  }
+  if (resume.status !== 'resumable') return null;
+  return resume.data;
 }
 
 /**
  * Listing-safe variant. History listings enrich many entries at once, so a
  * single unreadable/corrupt flow record must not abort the whole listing:
- * degrade to `null` on retrieval failure. Use {@link readCliToolUseResumeData}
- * (which propagates) on the active-resume path, where a failure must surface.
+ * degrade to `null` on retrieval failure.
  */
 export async function readCliToolUseResumeDataForListing(
   id: ExecutionId,

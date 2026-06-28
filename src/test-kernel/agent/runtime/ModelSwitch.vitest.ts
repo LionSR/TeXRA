@@ -5,12 +5,11 @@ import {
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import {
-  getRuntimeModelSwitchDisabledReason,
-  hasRuntimeToolUseModelSwitchTarget,
+  getRuntimeModelSwitchState,
   requestRuntimeModelSwitch,
 } from '@agent/runtime/modelSwitch';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 
 function createRecordingHost(): AgentRuntimeHost {
@@ -42,23 +41,20 @@ describe('runtime model-switch commands', () => {
     const streamId = 'model-switch-no-flow' as StreamTabId;
 
     try {
-      expect(hasRuntimeToolUseModelSwitchTarget({ streamId, session })).toBe(
-        false,
-      );
       expect(
-        getRuntimeModelSwitchDisabledReason({
+        getRuntimeModelSwitchState({
           streamId,
           candidateModel: 'blocked-model',
           session,
         }),
-      ).toBeUndefined();
+      ).toEqual({ status: 'no_target' });
       await expect(
         requestRuntimeModelSwitch({
           streamId,
           model: 'next-model',
           session,
         }),
-      ).resolves.toBe(false);
+      ).resolves.toEqual({ status: 'no_target' });
     } finally {
       session.dispose();
     }
@@ -90,16 +86,16 @@ describe('runtime model-switch commands', () => {
       handle.attachToolUseFlow(context);
       session.executions.track(handle);
 
-      expect(hasRuntimeToolUseModelSwitchTarget({ streamId, session })).toBe(
-        true,
-      );
       expect(
-        getRuntimeModelSwitchDisabledReason({
+        getRuntimeModelSwitchState({
           streamId,
           candidateModel: 'blocked-model',
           session,
         }),
-      ).toBe('Provider format differs.');
+      ).toEqual({
+        status: 'target',
+        disabledReason: 'Provider format differs.',
+      });
 
       await expect(
         requestRuntimeModelSwitch({
@@ -107,10 +103,54 @@ describe('runtime model-switch commands', () => {
           model: 'next-model',
           session,
         }),
-      ).resolves.toBe(true);
+      ).resolves.toEqual({ status: 'switched' });
 
       expect(modelSwitchDisabledReason).toHaveBeenCalledWith('blocked-model');
+      expect(modelSwitchDisabledReason).toHaveBeenCalledWith('next-model');
       expect(switchModel).toHaveBeenCalledWith('next-model');
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('does not switch to a candidate rejected by the live flow', async () => {
+    const session = new SessionHandle();
+    const streamId = 'model-switch-disabled' as StreamTabId;
+    const host = createRecordingHost();
+    const switchModel = vi.fn().mockResolvedValue(undefined);
+    const modelSwitchDisabledReason = vi.fn((candidate: string) =>
+      candidate === 'blocked-model' ? 'Provider format differs.' : undefined,
+    );
+    const context = createToolUseFlowContext({
+      runtimeHost: host,
+      modelSwitchDisabledReason,
+      switchModel,
+    });
+
+    try {
+      const handle = new AgentExecutionHandle(
+        'exec-model-switch-disabled',
+        streamId,
+        streamId,
+        'test-tool-use',
+        'toolUse',
+        host,
+      );
+      handle.attachToolUseFlow(context);
+      session.executions.track(handle);
+
+      await expect(
+        requestRuntimeModelSwitch({
+          streamId,
+          model: 'blocked-model',
+          session,
+        }),
+      ).resolves.toEqual({
+        status: 'disabled',
+        reason: 'Provider format differs.',
+      });
+
+      expect(switchModel).not.toHaveBeenCalled();
     } finally {
       session.dispose();
     }

@@ -1,5 +1,3 @@
-// Local imports - shared progress backend
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
 import type { ProgressViewOutboundMessage } from '@shared/schemas';
 import {
@@ -9,11 +7,20 @@ import {
 import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import {
   ProgressEventHandler,
+  type GetQueuedFollowUps,
   type GetProgressStreamControls,
   type ProgressEventSubscription,
   type UICallbacks,
 } from '@shared/progressView/backend/events/ProgressEventHandler';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
+import {
+  defaultProgressRuntimeStatus,
+  type ProgressRuntimeStatus,
+} from '@shared/progressView/backend/runtimeStatus';
+import {
+  defaultProgressRuntimeSession,
+  type ProgressRuntimeSession,
+} from '@shared/progressView/backend/runtimeSession';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import type { StreamSnapshotStore } from '@transcript';
 
@@ -37,8 +44,9 @@ export interface ProgressBackendOptions {
   hasTarget(): boolean;
   configureUi(services: ProgressBackendServices): ProgressBackendUiConfig;
   getStreamControls?: GetProgressStreamControls;
-  /** Session that owns this backend's coordination state (defaults to the process session). */
-  session?: SessionHandle;
+  getQueuedFollowUps?: GetQueuedFollowUps;
+  runtimeSession?: ProgressRuntimeSession;
+  runtimeStatus?: ProgressRuntimeStatus;
 }
 
 function sendUpdaterMessage(
@@ -65,10 +73,14 @@ export class ProgressBackend {
   readonly eventHandler: ProgressEventHandler;
 
   constructor(options: ProgressBackendOptions) {
+    const runtimeSession =
+      options.runtimeSession ?? defaultProgressRuntimeSession;
+    const runtimeStatus = options.runtimeStatus ?? defaultProgressRuntimeStatus;
     this.state = new ProgressViewState(
       options.storage,
       options.snapshots,
-      options.session,
+      runtimeSession,
+      runtimeStatus,
     );
     this.webviewUpdater = new WebviewUpdater((message) => {
       sendUpdaterMessage(options.sendMessage, message);
@@ -92,6 +104,8 @@ export class ProgressBackend {
       ui.callbacks,
       ui.hasPendingPermissions,
       options.getStreamControls,
+      options.getQueuedFollowUps,
+      runtimeStatus,
     );
   }
 

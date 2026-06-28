@@ -16,10 +16,8 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import {
-  sendFollowUp,
-  wakeOrReleaseQueuedStream,
-} from '@agent/followUp/ToolUseFollowUp';
+import { requestRuntimeFollowUp } from '@agent/runtime/followUpCommands';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
@@ -42,7 +40,8 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
  *
  * Does NOT implement the session duck-type (no `session.appendFollowUp`), so
  * flow-only commands such as context compaction ignore it. Follow-ups route
- * through the WAITING state queue path: `sendFollowUp()` → stream is WAITING →
+ * through the WAITING state queue path:
+ * `requestRuntimeFollowUp()` → stream is WAITING →
  * `ToolUseFollowUpQueue.enqueue()`.
  */
 class AgentCliSession implements IInterruptible {
@@ -214,6 +213,7 @@ export function runAgentCliSession<TTurn>(
 
   // Capture the run's session inside the tool's ALS so the cleanup below
   // unregisters against the same handle the registration used.
+  const runContext = tryUseRunContext();
   const runSession = currentSession();
   const session = new AgentCliSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
@@ -277,23 +277,21 @@ export function runAgentCliSession<TTurn>(
             ? strategy.formatDelivery(turn, prompt, wallTimeMs)
             : strategy.formatError(turn, prompt, err);
         await persistReportBestEffort(executionId, msg, logger);
-        const delivery = await sendFollowUp(
-          parentStreamId,
-          {
+        const delivery = await requestRuntimeFollowUp({
+          streamId: parentStreamId,
+          text: {
             text: msg,
             origin: 'subagent_result',
           },
-          undefined,
-          undefined,
-          runSession,
-        );
-        if (delivery.status === 'no_session') {
+          runtimeHost: runContext?.runtimeHost,
+          session: runSession,
+          wakeQueuedStream: true,
+        });
+        if (delivery.outcome === 'no_session') {
           logger.warn(
             `Turn result for ${executionId} not delivered: parent stream ${parentStreamId} has no active session (status: ${delivery.streamStatus ?? 'unknown'}). The result remains in the execution report.`,
           );
-        } else if (
-          !(await wakeOrReleaseQueuedStream(parentStreamId, delivery))
-        ) {
+        } else if (delivery.outcome === 'dropped') {
           logger.warn(
             `Turn result for ${executionId} dropped: parent stream ${parentStreamId} is gone and could not be resumed. The result remains in the execution report.`,
           );

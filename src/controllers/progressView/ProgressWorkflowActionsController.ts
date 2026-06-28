@@ -1,11 +1,10 @@
 // Local imports - agent
-import type { ExecutionRequest } from '@agent/core/execution/executionRequests';
-
 import {
-  isWorkflowTaskState,
-  type TaskState,
-  type WorkflowTaskState,
-} from '@agent/core/execution/TaskState';
+  isRuntimeWorkflowTaskState,
+  type RuntimeExecutionRequest,
+  type RuntimeTaskState,
+  type RuntimeWorkflowTaskState,
+} from '@agent/runtime/executionRequests';
 
 // Local imports - shared
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
@@ -34,7 +33,7 @@ export interface WorkflowFileOperationRequest {
 }
 
 export interface ProgressWorkflowActionsState {
-  getTaskState(stream: StreamTabId): TaskState | undefined;
+  getTaskState(stream: StreamTabId): RuntimeTaskState | undefined;
   getExecutionId(stream: StreamTabId): string | undefined;
   getOutputFiles(stream: StreamTabId): Map<number, OutputFileInfo[]>;
   getKnownWorkspaceOutputPaths(stream: StreamTabId): Set<string>;
@@ -42,7 +41,7 @@ export interface ProgressWorkflowActionsState {
 
 export interface ProgressWorkflowActionsControllerDeps {
   state: ProgressWorkflowActionsState;
-  executeAgent(request: ExecutionRequest): Promise<void>;
+  executeAgent(request: RuntimeExecutionRequest): Promise<void>;
   runDiff(request: WorkflowDiffRequest): Promise<void>;
   runFileOperation(
     operation: WorkflowFileOperation,
@@ -57,7 +56,7 @@ export class ProgressWorkflowActionsController {
     const taskState = this.deps.state.getTaskState(stream);
     if (!taskState) return;
 
-    const executionId = isWorkflowTaskState(taskState)
+    const executionId = isRuntimeWorkflowTaskState(taskState)
       ? this.deps.state.getExecutionId(stream)
       : undefined;
 
@@ -116,17 +115,17 @@ export class ProgressWorkflowActionsController {
 
   private async withWorkflowTaskState(
     stream: StreamTabId,
-    action: (taskState: WorkflowTaskState) => Promise<void>,
+    action: (taskState: RuntimeWorkflowTaskState) => Promise<void>,
   ): Promise<void> {
     const taskState = this.deps.state.getTaskState(stream);
-    if (!taskState || !isWorkflowTaskState(taskState)) return;
+    if (!taskState || !isRuntimeWorkflowTaskState(taskState)) return;
 
     await action(taskState);
   }
 
   private resolveOutputFiles(
     stream: StreamTabId,
-    taskState: WorkflowTaskState,
+    taskState: RuntimeWorkflowTaskState,
   ): string[] {
     const generatedPaths = this.deps.state.getKnownWorkspaceOutputPaths(stream);
     return [

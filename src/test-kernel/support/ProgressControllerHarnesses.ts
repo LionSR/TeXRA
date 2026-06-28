@@ -91,19 +91,21 @@ export function createProgressStreamLifecycleHarness(
       }
       recorder.record('stop', stream);
     },
-    cleanupDeletedStream: (stream) => {
+    cleanupDeletedStream: async (stream) => {
       recorder.record('cleanupApprovals', stream);
       recorder.record('clearRetry', stream);
       recorder.record('releaseFollowUp', stream);
+      recorder.record('forgetGoal', stream);
       recorder.record('clearBackups', stream);
       recorder.record('clearWebview', stream);
     },
-    cleanupDeletedStreams: (streams) => {
+    cleanupDeletedStreams: async (streams) => {
       recorder.record('cleanupAllApprovals', 'all');
       for (const stream of streams) {
         recorder.record('clearRetry', stream);
         recorder.record('releaseFollowUp', stream);
       }
+      recorder.record('forgetGoals', 'all');
       recorder.record('clearBackups', 'all');
       recorder.record('clearAllWebview', 'all');
     },

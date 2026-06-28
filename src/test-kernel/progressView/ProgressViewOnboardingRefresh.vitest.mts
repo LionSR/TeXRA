@@ -69,6 +69,7 @@ function createProgressViewProvider(): ProgressViewProviderFake {
     popBackToSidebar: vi.fn(),
     refreshOnboardingFunnel: vi.fn(),
     setActiveStream: vi.fn(),
+    isToolUseAgent: vi.fn(() => true),
     syncFullView: vi.fn(),
   } as unknown as ProgressViewProviderFake;
 }

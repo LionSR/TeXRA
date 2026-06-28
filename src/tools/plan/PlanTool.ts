@@ -31,13 +31,13 @@ import {
   isGoalInFlight,
   type Goal,
 } from '@shared/schemas/goal';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { proposalApprovalState } from '@tools/approval';
 import {
   GoalStore,
   isGoalEnabled,
   setGoalSessionBashAutoApproval,
 } from '@tools/goal';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 

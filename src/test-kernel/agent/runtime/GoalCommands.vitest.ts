@@ -3,8 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const goalStoreMock = vi.hoisted(() => ({
   getForStream: vi.fn(),
   list: vi.fn(),
-  forget: vi.fn(),
-  forgetByExecutionIds: vi.fn(),
+  start: vi.fn(),
 }));
 
 vi.mock('@tools/goal', () => ({
@@ -12,16 +11,15 @@ vi.mock('@tools/goal', () => ({
 }));
 
 import {
-  forgetRuntimeGoal,
-  forgetRuntimeGoalsByExecutionIds,
-  getRuntimeGoalForStream,
-  listRuntimeGoals,
+  getRuntimeGoalControlState,
+  getRuntimeGoalSessionStatus,
+  listRuntimeGoalSettingsItems,
+  startRuntimeGoal,
 } from '@agent/runtime/goalCommands';
 import type { Goal } from '@shared/schemas/goal';
-import type { ExecutionId, StreamTabId } from '@shared/schemas/identifiers';
+import type { StreamTabId } from '@shared/schemas/identifiers';
 
 const STREAM_ID = 'root@deepseekT#abcdef123456' as StreamTabId;
-const EXECUTION_ID = 'abcdef123456' as ExecutionId;
 const GOAL: Goal = {
   goalId: 'goal_abcdef123456',
   streamId: STREAM_ID,
@@ -36,29 +34,77 @@ describe('runtime goal commands', () => {
     vi.clearAllMocks();
   });
 
-  it('reads the current goal for a stream', () => {
+  it('projects the current goal for CLI session status', () => {
     goalStoreMock.getForStream.mockReturnValue(GOAL);
 
-    expect(getRuntimeGoalForStream(STREAM_ID)).toEqual(GOAL);
+    expect(getRuntimeGoalSessionStatus(STREAM_ID)).toEqual({
+      status: 'active',
+      objective: 'finish the proof',
+    });
     expect(goalStoreMock.getForStream).toHaveBeenCalledWith(STREAM_ID);
+
+    goalStoreMock.getForStream.mockReturnValue(null);
+    expect(getRuntimeGoalSessionStatus(STREAM_ID)).toBeNull();
   });
 
-  it('lists goals through the runtime boundary', () => {
+  it('starts a goal and returns only the CLI session-status projection', async () => {
+    goalStoreMock.start.mockResolvedValue({
+      ...GOAL,
+      objective: 'trimmed proof objective',
+    });
+
+    await expect(
+      startRuntimeGoal({
+        streamId: STREAM_ID,
+        objective: '  trimmed proof objective  ',
+      }),
+    ).resolves.toEqual({
+      status: 'active',
+      objective: 'trimmed proof objective',
+    });
+    expect(goalStoreMock.start).toHaveBeenCalledWith(
+      STREAM_ID,
+      '  trimmed proof objective  ',
+    );
+  });
+
+  it('projects goal state for host controls', () => {
+    goalStoreMock.getForStream.mockReturnValue(GOAL);
+
+    expect(getRuntimeGoalControlState(STREAM_ID)).toEqual({
+      active: true,
+      status: 'active',
+      objective: 'finish the proof',
+    });
+  });
+
+  it('projects paused and absent goal state for host controls', () => {
+    goalStoreMock.getForStream.mockReturnValue({
+      ...GOAL,
+      status: 'paused',
+    });
+
+    expect(getRuntimeGoalControlState(STREAM_ID)).toEqual({
+      active: true,
+      status: 'paused',
+      objective: 'finish the proof',
+    });
+
+    goalStoreMock.getForStream.mockReturnValue(null);
+    expect(getRuntimeGoalControlState(STREAM_ID)).toEqual({ active: false });
+  });
+
+  it('projects settings goal rows without leaking storage-only fields', () => {
     goalStoreMock.list.mockReturnValue([GOAL]);
 
-    expect(listRuntimeGoals()).toEqual([GOAL]);
-  });
-
-  it('forgets goals through runtime commands', async () => {
-    goalStoreMock.forget.mockResolvedValue(undefined);
-    goalStoreMock.forgetByExecutionIds.mockResolvedValue(undefined);
-
-    await forgetRuntimeGoal(STREAM_ID);
-    await forgetRuntimeGoalsByExecutionIds([EXECUTION_ID]);
-
-    expect(goalStoreMock.forget).toHaveBeenCalledWith(STREAM_ID);
-    expect(goalStoreMock.forgetByExecutionIds).toHaveBeenCalledWith([
-      EXECUTION_ID,
+    expect(listRuntimeGoalSettingsItems()).toEqual([
+      {
+        goalId: 'goal_abcdef123456',
+        streamId: STREAM_ID,
+        objective: 'finish the proof',
+        status: 'active',
+        createdAt: '2026-06-27T00:00:00.000Z',
+      },
     ]);
   });
 });

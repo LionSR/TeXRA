@@ -1,8 +1,8 @@
 import pDefer, { type DeferredPromise } from 'p-defer';
 import { z } from 'zod';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import {
   UserQuestionAnswersSchema,

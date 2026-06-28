@@ -3,7 +3,6 @@ import { createRunTrace } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
   currentSession,
@@ -13,6 +12,7 @@ import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
 import { classifyAgentError, toErrorMessage } from '@common/errors';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';

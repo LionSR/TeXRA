@@ -2,24 +2,19 @@
 //
 // Resume = continue (load the prior conversation), not re-run. The resumable
 // state lives in the per-execution flow record (executions/<id>/flow-*.json),
-// written per-step during a tool-use run; `retrieveSessionResumeData` rebuilds
+// written per-step during a tool-use run; the runtime resume command rebuilds
 // a full snapshot (messages + state slices) from it. Only tool-use agents
 // resume this way — workflows are not continuable here.
 
+import type { RuntimeAgentConfig } from '@agent/runtime/executionRequests';
 import {
-  isRuntimeToolUseTaskState,
-  type RuntimeAgentConfig,
-} from '@agent/runtime/executionRequests';
-import type { RuntimeToolUseSessionSnapshot } from '@agent/runtime/resumeCommands';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+  readRuntimeToolUseResumeDataForConfig,
+  type RuntimeToolUseSessionSnapshot,
+} from '@agent/runtime/resumeCommands';
 import { toErrorMessage } from '@common/errors';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import { readCliHistoryConfig } from './history';
-import {
-  readCliToolUseResumeData,
-  type CliToolUseResumeData,
-} from './toolUseResumeData';
 
 export type CliResumeResolution =
   | {
@@ -53,22 +48,26 @@ export async function resolveCliResumeSnapshot(
   }
   if (!config) return { kind: 'not-found' };
 
-  const taskState = agentConfigToTaskState(config);
-  if (!isRuntimeToolUseTaskState(taskState)) return { kind: 'workflow' };
-
-  let resume: CliToolUseResumeData | null;
-  try {
-    resume = await readCliToolUseResumeData(id, config);
-  } catch (error) {
-    return { kind: 'load-failed', reason: toErrorMessage(error) };
+  const resume = await readRuntimeToolUseResumeDataForConfig({
+    executionId: id,
+    config,
+  });
+  switch (resume.status) {
+    case 'not_tool_use':
+      return { kind: 'workflow' };
+    case 'not_resumable':
+      return { kind: 'no-snapshot' };
+    case 'failed':
+      return { kind: 'load-failed', reason: resume.message };
+    case 'resumable':
+      break;
   }
-  if (!resume) return { kind: 'no-snapshot' };
 
   return {
     kind: 'toolUse',
-    snapshot: resume.snapshot,
-    streamId: resume.streamId,
-    config: resume.config,
+    snapshot: resume.data.snapshot,
+    streamId: resume.data.streamId,
+    config: resume.data.config,
   };
 }
 

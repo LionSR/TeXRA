@@ -7,27 +7,24 @@ vi.mock('@agent/storage/detectWaitingStreams', () => ({
 }));
 
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   clearAllRuntimeStreamStatuses,
   clearRuntimeStreamStatus,
-  detectRuntimeWaitingStreams,
   getRuntimeStreamStatus,
   getRuntimeStreamStatusSnapshot,
   isRuntimeStreamActiveOrResuming,
   isRuntimeStreamInFlight,
   markRuntimeRunningStreamsStopped,
   onRuntimeStreamStatusChange,
-  recoverRuntimeRunningStreamsAfterRestart,
-  releaseQueuedFollowUpsForStreams,
+  recoverRuntimeRunningStreamsFromPersistedState,
   requestKillExecution,
-  requestStopStream,
+  requestRuntimeStreamStop,
   setRuntimeStreamStatus,
   setRuntimeStreamStatusSilently,
 } from '@agent/runtime/streamControl';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import {
   STREAM_STATUS,
   type ExecutionId,
@@ -50,19 +47,60 @@ describe('runtime stream control commands', () => {
     const streamId = 'stream-control-stop' as StreamTabId;
     const host = createRecordingHost();
     const interrupt = vi.fn();
+    const clearRetryRequest = vi.spyOn(
+      session.coordinators,
+      'clearRetryRequest',
+    );
 
     try {
       session.interrupts.register(streamId, { interrupt });
 
-      const stopped = requestStopStream({
+      const result = requestRuntimeStreamStop({
+        streamId,
+        clearRetryRequest: true,
+        runtimeHost: host,
+        session,
+      });
+
+      expect(result).toEqual({
+        streamId,
+        status: 'stopped',
+        clearedRetryRequest: true,
+      });
+      expect(clearRetryRequest).toHaveBeenCalledWith(streamId);
+      expect(interrupt).toHaveBeenCalledOnce();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('reports marked_stopped when the host repairs an untracked stream', () => {
+    const session = new SessionHandle();
+    const streamId = 'stream-control-mark-untracked-stopped' as StreamTabId;
+    const host = createRecordingHost();
+
+    try {
+      const result = requestRuntimeStreamStop({
         streamId,
         runtimeHost: host,
         session,
       });
 
-      expect(stopped).toBe(true);
-      expect(interrupt).toHaveBeenCalledOnce();
+      expect(result).toEqual({
+        streamId,
+        status: 'marked_stopped',
+        clearedRetryRequest: false,
+      });
+      expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(host.emit).toHaveBeenCalledWith(
+        'updateStreamStatus',
+        expect.objectContaining({
+          streamId,
+          status: STREAM_STATUS.STOPPED,
+        }),
+      );
     } finally {
+      StreamStatusService.clear(streamId, { emit: false });
       session.dispose();
     }
   });
@@ -136,26 +174,6 @@ describe('runtime stream control commands', () => {
     }
   });
 
-  it('releases queued follow-ups for removed streams', () => {
-    const firstStream = 'stream-control-release-first' as StreamTabId;
-    const secondStream = 'stream-control-release-second' as StreamTabId;
-
-    const firstQueue = ToolUseFollowUpQueue.acquire(firstStream);
-    const secondQueue = ToolUseFollowUpQueue.acquire(secondStream);
-    firstQueue.enqueue({ text: 'First follow-up' });
-    secondQueue.enqueue({ text: 'Second follow-up' });
-
-    try {
-      releaseQueuedFollowUpsForStreams([firstStream, secondStream]);
-
-      expect(ToolUseFollowUpQueue.getAll(firstStream)).toEqual([]);
-      expect(ToolUseFollowUpQueue.getAll(secondStream)).toEqual([]);
-    } finally {
-      ToolUseFollowUpQueue.release(firstStream);
-      ToolUseFollowUpQueue.release(secondStream);
-    }
-  });
-
   it('subscribes to runtime stream-status changes', () => {
     const streamId = 'stream-control-status-subscribe' as StreamTabId;
     const listener = vi.fn();
@@ -215,10 +233,8 @@ describe('runtime stream control commands', () => {
     }
   });
 
-  it('repairs running stream statuses for shutdown and restart paths', () => {
+  it('marks running stream statuses stopped for shutdown', () => {
     const stoppedStream = 'stream-control-mark-stopped' as StreamTabId;
-    const waitingStream = 'stream-control-recover-waiting' as StreamTabId;
-    const erroredStream = 'stream-control-recover-error' as StreamTabId;
 
     try {
       setRuntimeStreamStatusSilently(stoppedStream, STREAM_STATUS.RUNNING);
@@ -227,39 +243,45 @@ describe('runtime stream control commands', () => {
       expect(StreamStatusService.get(stoppedStream)).toBe(
         STREAM_STATUS.STOPPED,
       );
+    } finally {
+      StreamStatusService.clear(stoppedStream, { emit: false });
+    }
+  });
 
+  it('detects persisted waiting streams and repairs running statuses after restart', async () => {
+    const waitingStream = 'stream-control-recover-waiting' as StreamTabId;
+    const erroredStream = 'stream-control-recover-error' as StreamTabId;
+    const waitingExecution = 'waiting-exec' as ExecutionId;
+    const erroredExecution = 'errored-exec' as ExecutionId;
+    const executionIdsByStream = new Map<StreamTabId, ExecutionId>([
+      [waitingStream, waitingExecution],
+      [erroredStream, erroredExecution],
+    ]);
+
+    try {
       setRuntimeStreamStatusSilently(waitingStream, STREAM_STATUS.RUNNING);
       setRuntimeStreamStatusSilently(erroredStream, STREAM_STATUS.RUNNING);
+      detectWaitingStreamsMock.mockResolvedValue(new Set([waitingStream]));
 
-      const recovery = recoverRuntimeRunningStreamsAfterRestart(
-        new Set([waitingStream]),
-      );
+      const recovery =
+        await recoverRuntimeRunningStreamsFromPersistedState(
+          executionIdsByStream,
+        );
 
       expect(recovery).toEqual({
         waitingStreams: [waitingStream],
         erroredStreams: [erroredStream],
       });
+      expect(detectWaitingStreamsMock).toHaveBeenCalledWith(
+        executionIdsByStream,
+      );
       expect(StreamStatusService.get(waitingStream)).toBe(
         STREAM_STATUS.WAITING,
       );
       expect(StreamStatusService.get(erroredStream)).toBe(STREAM_STATUS.ERROR);
     } finally {
-      StreamStatusService.clear(stoppedStream, { emit: false });
       StreamStatusService.clear(waitingStream, { emit: false });
       StreamStatusService.clear(erroredStream, { emit: false });
     }
-  });
-
-  it('detects waiting streams through the runtime boundary', async () => {
-    const streamId = 'stream-control-detect-waiting' as StreamTabId;
-    const executionId = 'abcdef123456' as ExecutionId;
-    const executionIdsByStream = new Map([[streamId, executionId]]);
-    const waiting = new Set([streamId]);
-    detectWaitingStreamsMock.mockResolvedValue(waiting);
-
-    await expect(
-      detectRuntimeWaitingStreams(executionIdsByStream),
-    ).resolves.toBe(waiting);
-    expect(detectWaitingStreamsMock).toHaveBeenCalledWith(executionIdsByStream);
   });
 });

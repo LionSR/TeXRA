@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { getHelperModelName } from '@agent/runtime/helperModelName';
+import { buildRuntimeMergeExecutionRequest } from '@agent/runtime/executionRequests';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 
@@ -28,10 +28,20 @@ async function handleMerge(
     return;
   }
 
-  await vscode.commands.executeCommand('texra.execute', {
-    agent: 'merge',
-    model: model ?? getHelperModelName(),
-    inputFiles: [baseFile ?? inputFile],
+  const validation = buildRuntimeMergeExecutionRequest({
+    baseFile: baseFile ?? inputFile,
     editedFile,
+    model,
   });
+  if (!validation.valid) {
+    await showLoggedMessageWithDocs(
+      CHANNEL,
+      `Merge: ${validation.message}`,
+      'intelligent-merge',
+      'View Merge Docs',
+    );
+    return;
+  }
+
+  await vscode.commands.executeCommand('texra.execute', validation.request);
 }

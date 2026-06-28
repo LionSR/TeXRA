@@ -1,12 +1,12 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-const sendFollowUpMock = vi.hoisted(() =>
-  vi.fn(async () => ({ status: 'sent' as const })),
+const requestRuntimeFollowUpMock = vi.hoisted(() =>
+  vi.fn(async () => ({ outcome: 'sent' as const, accepted: true })),
 );
 
-vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
-  sendFollowUp: sendFollowUpMock,
+vi.mock('@agent/runtime/followUpCommands', () => ({
+  requestRuntimeFollowUp: requestRuntimeFollowUpMock,
 }));
 
 // Local imports - runtime
@@ -66,13 +66,12 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       registry.untrack(executionId);
       await new Promise((resolve) => setImmediate(resolve));
 
-      expect(sendFollowUpMock).toHaveBeenCalledWith(
+      expect(requestRuntimeFollowUpMock).toHaveBeenCalledWith({
         streamId,
-        expect.stringContaining(executionId),
-        undefined,
-        undefined,
+        text: expect.stringContaining(executionId),
+        runtimeHost: explicit.host,
         session,
-      );
+      });
     } finally {
       binder.dispose();
       registry.dispose();

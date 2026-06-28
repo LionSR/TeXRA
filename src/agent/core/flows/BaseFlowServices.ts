@@ -11,12 +11,12 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentRunStateSnapshot } from '@agent/core/execution/AgentState';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
   RetryRequestOptions,
   RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
 import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type {
   ActiveChildInfo,
   ExecutionId,

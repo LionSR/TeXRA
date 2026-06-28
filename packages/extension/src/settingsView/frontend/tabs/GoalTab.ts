@@ -10,7 +10,7 @@ import {
   isGoalInFlight,
   goalDurationMs,
 } from '@shared/schemas';
-import type { Goal, GoalStatus } from '@shared/schemas';
+import type { GoalSettingsItem, GoalStatus } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { MetaPart } from '@shared/wa/metaStrip';
@@ -93,7 +93,7 @@ export class GoalTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) items: readonly Goal[] = [];
+  @property({ attribute: false }) items: readonly GoalSettingsItem[] = [];
 
   private handleRefresh = (): void => {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST, {});
@@ -138,7 +138,7 @@ export class GoalTab extends LitElement {
     `;
   }
 
-  private renderRow(item: Goal): TemplateResult {
+  private renderRow(item: GoalSettingsItem): TemplateResult {
     const inFlight = isGoalInFlight(item);
     const metaParts: MetaPart[] = [
       html`<span class="stream-id">${item.streamId}</span>`,

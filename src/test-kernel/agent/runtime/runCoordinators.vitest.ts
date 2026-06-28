@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
 import type { AgentTrace } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
@@ -17,6 +16,7 @@ import {
   AgentExecutionHandle,
   ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import {
   AgentCategory,
   type AgentProposal,

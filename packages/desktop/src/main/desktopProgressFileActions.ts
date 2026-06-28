@@ -1,8 +1,11 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
+import {
+  buildRuntimeMergeExecutionRequest,
+  type RuntimeValidatedExecutionRequest,
+} from '@agent/runtime/executionRequests';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { DiffViewHost } from '@hosts/uiHosts';
 import {
   buildAcceptConfirmMessage,
@@ -43,7 +46,7 @@ export interface DesktopProgressFileActionOptions {
  */
 export interface DesktopProgressFileActionHost {
   runtimeHost: AgentRuntimeHost;
-  runExecution(request: ValidatedExecutionRequest): Promise<void>;
+  runExecution(request: RuntimeValidatedExecutionRequest): Promise<void>;
   listWorkspaceCandidateFiles(): Promise<string[]>;
 }
 
@@ -99,18 +102,9 @@ export class DesktopProgressFileActions {
   }
 
   async runMergeFile(baseFile: string, editedFile: string): Promise<void> {
-    const [{ getHelperModelName }, { validateExecutionRequest }] =
-      await Promise.all([
-        import('@agent/runtime/helperModelName'),
-        import('@agent/core/execution/executionRequests'),
-      ]);
-    const validation = validateExecutionRequest({
-      config: {
-        agent: 'merge',
-        model: getHelperModelName(),
-        inputFiles: [baseFile],
-        editedFile,
-      },
+    const validation = buildRuntimeMergeExecutionRequest({
+      baseFile,
+      editedFile,
     });
     if (!validation.valid) {
       await this.options.showErrorMessage?.(`Merge: ${validation.message}`);

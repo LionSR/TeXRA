@@ -1,5 +1,5 @@
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 export type GitHubSubscriptionChangedEvent =
   | 'prSubscriptionsChanged'

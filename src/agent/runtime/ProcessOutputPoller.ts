@@ -4,11 +4,11 @@ import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import * as logger from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
 import { delay } from '@utils/core/async';
 
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ProcessExecutionHandle } from './ExecutionHandle';
 
 interface ProcessOutputSource {

@@ -1,11 +1,18 @@
 import * as vscode from 'vscode';
 
-import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 
 const CHANNEL = 'FinalOutputOpener';
 logger.initialize(CHANNEL);
+
+export interface FinalOutputOpenRequest {
+  readonly outcome: string;
+  readonly outputs: readonly {
+    readonly round: number;
+    readonly absolutePath: string;
+  }[];
+}
 
 /**
  * On successful workflow completion, preview the final revised output so
@@ -15,7 +22,7 @@ logger.initialize(CHANNEL);
  * Gated by `texra.agentOutputs.autoOpenFinal` (default: true).
  */
 export async function openFinalOutputIfAvailable(
-  result: WorkflowFlowResult,
+  result: FinalOutputOpenRequest,
 ): Promise<void> {
   if (!getConfig<boolean>('texra.agentOutputs.autoOpenFinal', true)) {
     return;

@@ -11,11 +11,25 @@
  * touch any UI. Subagent results and non-actionable outcomes (abort, success)
  * return `null` (no toast), preserving the lifecycle's `!isSubagent` gating.
  */
-import type { ResultEvent } from '@agent/trace';
 import {
   INSTRUCTION_ACTION,
   type ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
+
+export type TerminalResultErrorKind =
+  | 'abort'
+  | 'disk-full'
+  | 'missing-api-key'
+  | 'unexpected';
+
+export interface TerminalResultEvent {
+  readonly outcome: 'completed' | 'failed' | 'cancelled';
+  readonly isSubagent: boolean;
+  readonly error?: {
+    readonly kind: TerminalResultErrorKind;
+    readonly message?: string;
+  };
+}
 
 export type TerminalResultToast =
   | {
@@ -35,7 +49,7 @@ const MISSING_API_KEY_MESSAGE =
  * when none applies (subagent runs, success, user aborts, unclassified errors).
  */
 export function terminalResultToast(
-  event: ResultEvent,
+  event: TerminalResultEvent,
 ): TerminalResultToast | null {
   if (event.isSubagent || !event.error) return null;
 

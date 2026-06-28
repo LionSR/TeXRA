@@ -12,7 +12,6 @@ import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
 
-import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
 import { installCliApprovalHandlers } from './approvalAdapter';
 import { createCliRuntimeHost } from './runtimeHost';
 import { CliExitCode } from './exitCodes';
@@ -21,7 +20,7 @@ import {
   readCliTerminalStatus,
   type ExecuteAgentResult,
 } from './terminalStatus';
-import { CLI_UNAVAILABLE_TOOLS } from './unavailableTools';
+import { resolveCliRuntimeCapabilities } from './runtimeCapabilities';
 import type { CliContext } from './cliContext';
 
 export interface CliExecuteOptions {
@@ -148,18 +147,20 @@ export async function executeCliRequest(
         );
       })
     : undefined;
-  const invoke = (): Promise<ExecuteAgentResult> =>
-    runAgent(request, {
+  const invoke = (): Promise<ExecuteAgentResult> => {
+    const runtimeCapabilities = resolveCliRuntimeCapabilities(runContext, {
+      runtimeUnavailableTools: options.runtimeUnavailableTools,
+    });
+    return runAgent(request, {
       runtimeHost,
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
       stopAfterCycle: options.stopAfterCycle,
-      approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
-      runtimeUnavailableTools: [
-        ...CLI_UNAVAILABLE_TOOLS,
-        ...(options.runtimeUnavailableTools ?? []),
-      ],
+      approvalPromptsUnavailable:
+        runtimeCapabilities.approvalPromptsUnavailable,
+      runtimeUnavailableTools: runtimeCapabilities.runtimeUnavailableTools,
     });
+  };
 
   let result: ExecuteAgentResult;
   try {

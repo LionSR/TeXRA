@@ -1,4 +1,4 @@
-import { getRuntimeGoalForStream } from '@agent/runtime/goalCommands';
+import { getRuntimeGoalSessionStatus } from '@agent/runtime/goalCommands';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { formatCliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
@@ -159,7 +159,7 @@ export async function handleTuiSlashCommand(
           approvalBypasses: slice?.bypass,
           status: slice?.status ?? 'not started',
           goal: activeStreamId
-            ? getRuntimeGoalForStream(activeStreamId)
+            ? getRuntimeGoalSessionStatus(activeStreamId)
             : undefined,
           // Only surface the resume id once a stream exists — never next to
           // a "not started" status.

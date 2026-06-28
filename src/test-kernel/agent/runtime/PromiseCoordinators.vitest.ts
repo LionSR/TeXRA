@@ -5,10 +5,10 @@ import { describe, it } from 'vitest';
 // Standard library imports
 
 // Local imports
-import { type AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { type AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { Plan } from '@shared/schemas';
 
 type RecordedEvent = {

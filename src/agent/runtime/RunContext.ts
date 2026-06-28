@@ -1,8 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentProposalCoordinator } from './AgentProposalCoordinator';
 import type { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
 import type { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';

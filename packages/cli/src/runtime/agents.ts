@@ -1,7 +1,8 @@
 import {
   getRuntimeAgent,
-  listRuntimeAgentsByCategory,
-  listRuntimeVisibleAgents,
+  getRuntimeToolUseAgent,
+  getRuntimeWorkflowAgent,
+  listRuntimeAgents,
   loadRuntimeAgents,
   type RuntimeAgentEntry,
 } from '@agent/runtime/agentResolution';
@@ -146,11 +147,11 @@ async function resolveCliAgentEntry(
   lookupCategory?: AgentCategory,
 ): Promise<RuntimeAgentEntry | undefined> {
   await loadRuntimeAgents({ includeRemote: false });
-  const agent = getRuntimeAgent(name, lookupCategory);
+  const agent = getRuntimeAgentForCliLookup(name, lookupCategory);
 
   if (!agent) {
     await loadRuntimeAgents();
-    return getRuntimeAgent(name, lookupCategory);
+    return getRuntimeAgentForCliLookup(name, lookupCategory);
   }
 
   if (name.includes(':') || !(await getCliAuthProvider().isAuthenticated())) {
@@ -158,7 +159,20 @@ async function resolveCliAgentEntry(
   }
 
   await loadRuntimeAgents();
-  return getRuntimeAgent(name, lookupCategory);
+  return getRuntimeAgentForCliLookup(name, lookupCategory);
+}
+
+function getRuntimeAgentForCliLookup(
+  name: string,
+  lookupCategory: AgentCategory | undefined,
+): RuntimeAgentEntry | undefined {
+  if (lookupCategory === AgentCategory.Workflow) {
+    return getRuntimeWorkflowAgent(name);
+  }
+  if (lookupCategory === AgentCategory.ToolUse) {
+    return getRuntimeToolUseAgent(name);
+  }
+  return getRuntimeAgent(name);
 }
 
 export async function loadCliAgentList(
@@ -262,8 +276,6 @@ function collectCliAgents(
 ): RuntimeAgentEntry[] {
   const categories = categoryFilter ? [categoryFilter] : AGENT_CATEGORIES;
   return categories.flatMap((category) =>
-    source === 'visible'
-      ? listRuntimeVisibleAgents(category)
-      : listRuntimeAgentsByCategory(category),
+    listRuntimeAgents({ category, visibleOnly: source === 'visible' }),
   );
 }

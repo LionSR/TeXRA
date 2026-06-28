@@ -10,7 +10,6 @@ import {
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
@@ -26,6 +25,7 @@ import {
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 import { cleanupAllApprovals } from '@tools/approval';
 

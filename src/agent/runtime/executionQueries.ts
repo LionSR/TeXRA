@@ -1,4 +1,4 @@
-import type { ExecutionId } from '@shared/schemas';
+import { agentName as normalizeAgentName } from '@shared/schemas/agent';
 
 import { currentSession, type SessionHandle } from './SessionHandle';
 
@@ -6,16 +6,17 @@ export interface RuntimeExecutionQueryOptions {
   readonly session?: SessionHandle;
 }
 
-/** Return ids for executions that are still active in the runtime session. */
-export function getRuntimeActiveExecutionIds({
-  session = currentSession(),
-}: RuntimeExecutionQueryOptions = {}): ExecutionId[] {
-  return session.executions.getActiveIds() as ExecutionId[];
+export interface RuntimeActiveAgentNameRequest extends RuntimeExecutionQueryOptions {
+  readonly agentName: string;
 }
 
-/** Return agent names for active agent executions without exposing handles. */
-export function getRuntimeActiveAgentNames({
+/** Return whether a normalized agent name already has an active execution. */
+export function hasRuntimeActiveAgentName({
+  agentName,
   session = currentSession(),
-}: RuntimeExecutionQueryOptions = {}): string[] {
-  return session.executions.getAgentHandles().map((handle) => handle.agentName);
+}: RuntimeActiveAgentNameRequest): boolean {
+  const expected = normalizeAgentName(agentName);
+  return session.executions
+    .getAgentHandles()
+    .some((handle) => normalizeAgentName(handle.agentName) === expected);
 }

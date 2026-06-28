@@ -9,9 +9,7 @@
  * This module is VS Code-free — all platform wiring lives in the caller.
  */
 
-// Local imports - agent
-import { getExecutionStore } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { readRuntimeHistoryExecutionRecord } from '@agent/runtime/historyCommands';
 
 // Local imports - commands (VS Code-free modules)
 import {
@@ -76,26 +74,23 @@ export class ChatExportController {
    * message for each missing piece without coupling to storage details.
    */
   async buildExportInput(historyId: string): Promise<ExportInputResult> {
-    const store = getExecutionStore(historyId as ExecutionId);
-    const [rawConfig, conversation, meta] = await Promise.all([
-      store.readConfig(),
-      store.readConversation(),
-      store.readMeta(),
-    ]);
+    const record = await readRuntimeHistoryExecutionRecord(
+      historyId as ExecutionId,
+    );
 
-    if (!rawConfig) {
+    if (!record.config) {
       return { status: 'config_missing' };
     }
 
-    if (!conversation) {
+    if (!record.conversation) {
       return { status: 'conversation_missing' };
     }
 
-    const config = AgentConfigSchema.parse(rawConfig);
+    const { config } = record;
 
     const exportInput: ChatExportInput = {
-      timestamp: meta?.timestamp ?? new Date().toISOString(),
-      description: meta?.description,
+      timestamp: record.meta?.timestamp ?? new Date().toISOString(),
+      description: record.meta?.description,
       config: {
         agent: config.agent,
         model: config.model,
@@ -105,7 +100,7 @@ export class ChatExportController {
         contextFiles: config.contextFiles,
         outputFiles: config.outputFiles,
       },
-      messages: conversation,
+      messages: record.conversation,
     };
 
     return { status: 'ok', exportInput };

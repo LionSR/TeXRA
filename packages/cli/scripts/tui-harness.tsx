@@ -9,8 +9,23 @@ import path from 'node:path';
 import { render } from 'ink';
 import React from 'react';
 
-import { getAgentsByCategory, loadAgents } from '@agent/index';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import {
+  listRuntimeAgents,
+  loadRuntimeAgents,
+} from '@agent/runtime/agentResolution';
+import {
+  listRuntimeQueuedFollowUpMessages,
+  requestRuntimeFollowUp,
+} from '@agent/runtime/followUpCommands';
+import {
+  getRuntimeGoalSessionStatus,
+  startRuntimeGoal,
+} from '@agent/runtime/goalCommands';
+import {
+  clearRuntimeStreamStatus,
+  setRuntimeStreamStatusSilently,
+} from '@agent/runtime/streamControl';
+import { releaseRuntimeDeletedStreams } from '@agent/runtime/streamResourceLifecycle';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@common/errors';
 import { DEFAULT_STARTUP_TEAM_ID } from '@controllers/onboarding/defaultTeamSeeding';
@@ -34,8 +49,7 @@ import {
   type StreamTabId,
   type UserQuestionPermission,
 } from '@shared/schemas';
-import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
-import { GoalStore } from '@tools/goal';
+import { buildExternalInquiryContinuationText } from '@shared/inquiry/continuationText';
 import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
@@ -222,7 +236,6 @@ const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
-const HARNESS_FOLLOW_UP_QUEUE = ToolUseFollowUpQueue.acquire(STREAM_ID);
 const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 // Keep platform state writes out of the repository unless a scenario opts in.
 const HARNESS_CWD =
@@ -237,8 +250,23 @@ if (!HARNESS_CWD_INPUT && process.env.HARNESS_KEEP_CWD !== '1') {
     rmSync(HARNESS_CWD, { recursive: true, force: true });
   });
 }
-for (const followUp of QUEUED_FOLLOW_UPS) {
-  HARNESS_FOLLOW_UP_QUEUE.enqueue(followUp);
+
+await seedHarnessQueuedFollowUps();
+
+async function seedHarnessQueuedFollowUps(): Promise<void> {
+  if (QUEUED_FOLLOW_UPS.length === 0) return;
+
+  setRuntimeStreamStatusSilently(STREAM_ID, STREAM_STATUS.WAITING);
+  try {
+    for (const followUp of QUEUED_FOLLOW_UPS) {
+      await requestRuntimeFollowUp({
+        streamId: STREAM_ID,
+        text: followUp,
+      });
+    }
+  } finally {
+    clearRuntimeStreamStatus(STREAM_ID);
+  }
 }
 
 function seedHarnessProjectSkill(): void {
@@ -297,15 +325,22 @@ if (process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined) {
     HARNESS_VISIBLE_WORKFLOW_AGENTS,
   );
 }
-await loadAgents({ includeRemote: false });
+await loadRuntimeAgents({ includeRemote: false });
+
+const HARNESS_WORKFLOW_AGENTS = listRuntimeAgents({
+  category: AgentCategory.Workflow,
+});
+const HARNESS_TOOL_USE_AGENTS = listRuntimeAgents({
+  category: AgentCategory.ToolUse,
+});
 
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   presetPlans: planCliMultiAgentPresets(cliMultiAgentPresets(undefined), {
-    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
+    workflowAgents: HARNESS_WORKFLOW_AGENTS,
+    toolUseAgents: HARNESS_TOOL_USE_AGENTS,
   }),
   history: harnessOrchestrationHistory(),
-  toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
+  toolUseAgents: HARNESS_TOOL_USE_AGENTS,
   preferredPresetId: DEFAULT_STARTUP_TEAM_ID,
 });
 
@@ -887,7 +922,7 @@ function appendHarnessExternalInquiryDecision(
   decision: ApprovalDecision,
 ): void {
   appendHarnessUserTranscript(
-    buildContinuationText({
+    buildExternalInquiryContinuationText({
       event: decision.accepted && decision.userMessage ? 'answered' : 'dropped',
       threadId: EXTERNAL_INQUIRY_THREAD_ID,
       question: EXTERNAL_INQUIRY_QUESTION,
@@ -917,7 +952,10 @@ async function appendHarnessPlanDecision(
   decision: ApprovalDecision,
 ): Promise<void> {
   if (decision.planAction === 'approve_and_goal') {
-    await GoalStore.start(STREAM_ID, PLAN_APPROVAL_OBJECTIVE);
+    await startRuntimeGoal({
+      streamId: STREAM_ID,
+      objective: PLAN_APPROVAL_OBJECTIVE,
+    });
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       status: STREAM_STATUS.RUNNING,
@@ -1489,19 +1527,22 @@ function appendHarnessStatus(): void {
       approval: formatCliApprovalPolicy(harnessApprovalPolicy),
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
-      goal: GoalStore.getForStream(streamId),
-      queuedFollowUpMessages: ToolUseFollowUpQueue.getAll(streamId),
+      goal: getRuntimeGoalSessionStatus(streamId),
+      queuedFollowUpMessages: listRuntimeQueuedFollowUpMessages(streamId),
     }),
   );
 }
 
 function resetHarnessForClear(): void {
   const meta = cliState.sessionMeta.get();
+  const streamIds = [...cliState.streams.get().keys()];
   clearApprovals();
-  ToolUseFollowUpQueue.drain(STREAM_ID);
-  void GoalStore.forget(STREAM_ID);
+  void releaseRuntimeDeletedStreams({
+    streamIds,
+    approvalScope: 'process',
+  });
   const store = getDefaultStreamLogStore();
-  for (const streamId of cliState.streams.get().keys()) {
+  for (const streamId of streamIds) {
     store.delete(streamId).catch(() => {
       // The harness reset is best-effort; visible cliState is reset below.
     });

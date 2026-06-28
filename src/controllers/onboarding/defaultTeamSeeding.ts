@@ -14,7 +14,7 @@ import {
   applyPresetRoster,
   type PresetRosterState,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
-import { getAgentsByCategory } from '@agent/index/agentRegistry';
+import { listRuntimeAgents } from '@agent/runtime/agentResolution';
 import {
   AGENT_MODE_PRESETS_BY_ID,
   STARTER_AGENT_MODE_PRESET,
@@ -35,16 +35,16 @@ export function resolveTeamPreset(teamId: string): AgentModePreset | undefined {
 }
 
 /**
- * Roster port over the live agent registry and a workspace state store — the
+ * Roster port over the runtime agent catalog and a workspace state store — the
  * same name-resolution and key-writing path the Settings catalog uses.
- * Requires the agent registry to be loaded; callers sequence after
- * `loadAgents`.
+ * Requires the agent catalog to be loaded; callers sequence after
+ * `loadRuntimeAgents`.
  */
 export function registryPresetRosterState(
   workspaceState: StateStore,
 ): PresetRosterState {
   return {
-    getAgents: (category) => getAgentsByCategory(category),
+    getAgents: (category) => listRuntimeAgents({ category }),
     setEnabledAgentKeys: async (category, enabledKeys) => {
       await workspaceState.update(
         category === 'workflow'

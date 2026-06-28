@@ -3,29 +3,24 @@
  *
  * Host-neutral. When the user submits an answer (or drops an open
  * inquiry), this module synthesizes the `[inquiry] …` continuation
- * text, hands it to `sendFollowUp` for the parent stream, and — for
- * the cases where the cycle has exited (WAITING / children_running) —
- * triggers `AgentResumePort.tryResumeStream` so the parent stream
- * picks the message up.
+ * text and hands it to `requestRuntimeFollowUp` for the parent stream. The
+ * runtime command owns the WAITING / children-running wake logic so this
+ * module only interprets the host-facing result.
  *
  * Returns an `InjectionOutcome` so the caller (action handler) can
  * forward it to the UI via the `inquiryThreadUpdated` event.
  */
 
-import { platform } from '@platform/platform';
-
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { requestRuntimeFollowUp } from '@agent/runtime/followUpCommands';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { createChannelTrace } from '@logger';
 import type {
   ExternalInquiryThreadId,
-  ExternalInquiryThreadSummary,
   InquiryResumeOutcome,
   StreamTabId,
 } from '@shared/schemas';
-import { formatRelativeTime } from '@shared/utils/string';
-import { truncateSummary, truncateWithEllipsis } from '@utils/text/stringUtils';
+import { buildExternalInquiryContinuationText } from '@shared/inquiry/continuationText';
 
 import {
   getThreadSummary,
@@ -37,69 +32,7 @@ import {
 const logger = createChannelTrace('inquiryContinuation');
 
 export type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
-
-const QUESTION_TRUNCATION = 400;
-const ANSWER_TRUNCATION = 2000;
-
-function formatStillOpen(threads: ExternalInquiryThreadSummary[]): string[] {
-  if (!threads.length) return [];
-  const lines = ['', 'Still open on this stream:'];
-  for (const t of threads) {
-    const since = formatRelativeTime(Date.parse(t.lastActivityIso));
-    lines.push(
-      `  - ${t.threadId}  "${truncateWithEllipsis(t.lastQuestionPreview, 60)}"  (dispatched ${since})`,
-    );
-  }
-  return lines;
-}
-
-export function buildContinuationText(params: {
-  event: 'answered' | 'dropped';
-  threadId: ExternalInquiryThreadId;
-  question: string;
-  answer?: string;
-  stillOpen: ExternalInquiryThreadSummary[];
-}): string {
-  const { event, threadId, question, answer, stillOpen } = params;
-  const lines: string[] = [];
-
-  if (event === 'answered') {
-    lines.push(`[inquiry] ${threadId} answered.`);
-    lines.push(`Q: ${truncateSummary(question, QUESTION_TRUNCATION)}`);
-    if (answer !== undefined) {
-      lines.push(
-        `A: ${truncateSummary(answer, ANSWER_TRUNCATION)}` +
-          (answer.length > ANSWER_TRUNCATION
-            ? ` (full text available in thread ${threadId})`
-            : ''),
-      );
-    }
-    lines.push(`Full thread: ${threadId}`);
-    lines.push(...formatStillOpen(stillOpen));
-    if (stillOpen.length === 0) {
-      lines.push('', 'No other open inquiries on this stream.');
-    }
-    lines.push(
-      '',
-      stillOpen.length
-        ? 'Proceed using the new answer. Do not re-dispatch any open thread_id.'
-        : 'Proceed using the new answer.',
-    );
-    return lines.join('\n');
-  }
-
-  // dropped
-  lines.push(`[inquiry] ${threadId} dropped by user.`);
-  lines.push(`Q: ${truncateSummary(question, QUESTION_TRUNCATION)}`);
-  lines.push(`Full thread: ${threadId}`);
-  lines.push(...formatStillOpen(stillOpen));
-  lines.push(
-    '',
-    'Proceed without this answer — either re-formulate (new thread) or take an ' +
-      `alternate approach. Do not re-dispatch ${threadId}.`,
-  );
-  return lines.join('\n');
-}
+export { buildExternalInquiryContinuationText as buildContinuationText } from '@shared/inquiry/continuationText';
 
 async function emitInquiryThreadUpdate(
   threadId: ExternalInquiryThreadId,
@@ -117,15 +50,14 @@ async function deliverContinuation(params: {
   threadId: ExternalInquiryThreadId;
   session?: SessionHandle;
 }): Promise<InjectionOutcome> {
-  const result = await sendFollowUp(
-    params.parentStreamId,
-    params.text,
-    undefined,
-    undefined,
-    params.session,
-  );
+  const result = await requestRuntimeFollowUp({
+    streamId: params.parentStreamId,
+    text: params.text,
+    session: params.session,
+    wakeQueuedStream: true,
+  });
 
-  switch (result.status) {
+  switch (result.outcome) {
     case 'sent':
       await emitInquiryThreadUpdate(
         params.threadId,
@@ -134,32 +66,23 @@ async function deliverContinuation(params: {
       );
       return 'sent';
     case 'queued': {
-      if (result.reason === 'waiting' || result.reason === 'children_running') {
-        const resumed = await platform().agentResume.tryResumeStream(
-          params.parentStreamId,
-        );
-        const outcome: InjectionOutcome = resumed ? 'resumed' : 'queued';
-        await emitInquiryThreadUpdate(
-          params.threadId,
-          {
-            resumeOutcome: outcome,
-          },
-          params.session,
-        );
-        return outcome;
-      }
+      const outcome: InjectionOutcome =
+        result.wakeStatus === 'resumed' ? 'resumed' : 'queued';
       await emitInquiryThreadUpdate(
         params.threadId,
         {
-          resumeOutcome: 'queued',
+          resumeOutcome: outcome,
         },
         params.session,
       );
-      return 'queued';
+      return outcome;
     }
+    case 'dropped':
     case 'no_session':
       logger.warn(
-        `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} has no session.`,
+        result.outcome === 'dropped'
+          ? `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} could not be resumed.`
+          : `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} has no session.`,
       );
       await emitInquiryThreadUpdate(
         params.threadId,
@@ -200,7 +123,7 @@ export async function injectContinuationForAnsweredThread(
   }
 
   const stillOpen = await listOpenThreadsForStream(manifest.parentStreamId);
-  const text = buildContinuationText({
+  const text = buildExternalInquiryContinuationText({
     event: 'answered',
     threadId,
     question: lastTurn.question,
@@ -243,7 +166,7 @@ export async function injectContinuationForDroppedThread(
   const lastTurn = manifest.turns.at(-1);
   const question = lastTurn?.question ?? '';
   const stillOpen = await listOpenThreadsForStream(manifest.parentStreamId);
-  const text = buildContinuationText({
+  const text = buildExternalInquiryContinuationText({
     event: 'dropped',
     threadId,
     question,

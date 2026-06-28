@@ -38,6 +38,7 @@ export interface SettingsAgentCatalogControllerDeps {
   state: SettingsAgentCatalogState;
   builtInOrchestratorAgentNames?: readonly string[];
   now?: () => number;
+  loadAgents?: () => Promise<void>;
 }
 
 export type SettingsAgentPresetApplyResult =
@@ -118,6 +119,14 @@ function resolvePresetAgentKeys(
 export class SettingsAgentCatalogController {
   constructor(private readonly deps: SettingsAgentCatalogControllerDeps) {}
 
+  async buildFreshSelectionItems(): Promise<{
+    workflow: AgentSelectionItem[];
+    toolUse: AgentSelectionItem[];
+  }> {
+    await this.loadAgents();
+    return this.buildSelectionItems();
+  }
+
   buildSelectionItems(): {
     workflow: AgentSelectionItem[];
     toolUse: AgentSelectionItem[];
@@ -147,6 +156,7 @@ export class SettingsAgentCatalogController {
   }
 
   async applyPreset(presetId: string): Promise<SettingsAgentPresetApplyResult> {
+    await this.loadAgents();
     const preset = this.getPreset(presetId);
     if (!preset) return { ok: false, reason: 'unknownPreset' };
 
@@ -156,6 +166,7 @@ export class SettingsAgentCatalogController {
   }
 
   async saveCurrentPreset(name: string): Promise<AgentModePreset> {
+    await this.loadAgents();
     const trimmedName = name.trim();
     const workflowAgents = this.deps.state
       .getVisibleAgents('workflow')
@@ -225,5 +236,9 @@ export class SettingsAgentCatalogController {
     return (
       AGENT_MODE_PRESETS_BY_ID.get(presetId) ?? this.getCustomPreset(presetId)
     );
+  }
+
+  private async loadAgents(): Promise<void> {
+    await this.deps.loadAgents?.();
   }
 }

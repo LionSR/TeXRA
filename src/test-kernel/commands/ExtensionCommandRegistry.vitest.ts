@@ -61,9 +61,15 @@ const HANDLERS = {
       awaitTrue(actions.openDoc(page)),
   ),
   'texra.stopAgent': definedHandler(
-    StreamTabIdSchema,
-    (actions: ExtensionCommandActions, streamId) => {
-      actions.stopAgent(streamId);
+    z.union([
+      StreamTabIdSchema,
+      z.strictObject({
+        streamId: StreamTabIdSchema,
+        clearRetryRequest: z.boolean().nullish(),
+      }),
+    ]),
+    (actions: ExtensionCommandActions, args) => {
+      actions.stopAgent(args);
       return true;
     },
   ),
@@ -305,6 +311,23 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
       ),
     ).toBe(true);
     expect(actions.stopAgent).toHaveBeenCalledExactlyOnceWith('stream-1');
+  });
+
+  it('texra.stopAgent forwards parsed stop options', () => {
+    const actions = makeActions();
+    expect(
+      dispatchCommandFromRegistry(
+        'texra.stopAgent',
+        HANDLERS,
+        actions,
+        undefined,
+        { streamId: 'stream-1', clearRetryRequest: true },
+      ),
+    ).toBe(true);
+    expect(actions.stopAgent).toHaveBeenCalledExactlyOnceWith({
+      streamId: 'stream-1',
+      clearRetryRequest: true,
+    });
   });
 
   it('texra.compactResponse forwards parsed streamId', async () => {

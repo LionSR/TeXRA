@@ -2,8 +2,8 @@
 // Host-agnostic, VS Code-free.
 
 import { type AgentTrace } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { isAbortError, toErrorMessage } from '@common/errors';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type {
   ExecutionId,
   StorageKey,

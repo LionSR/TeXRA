@@ -1,11 +1,11 @@
 import type {
-  Goal,
+  GoalSettingsItem,
   UpdateGoalListMessage,
 } from '@shared/schemas/settingsViewMessages';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 
 export interface SettingsGoalControllerDeps {
-  listGoals(): readonly Goal[];
+  listGoalItems(): readonly GoalSettingsItem[];
 }
 
 export class SettingsGoalController {
@@ -14,7 +14,7 @@ export class SettingsGoalController {
   getGoalListMessage(): UpdateGoalListMessage {
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-      items: [...this.deps.listGoals()],
+      items: [...this.deps.listGoalItems()],
     };
   }
 }

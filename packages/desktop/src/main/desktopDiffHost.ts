@@ -9,7 +9,7 @@ import {
   type DiffSource,
   type DiffViewHost,
 } from '@hosts/uiHosts';
-import { computeUserPatch } from '@tools/approval/toolEditApproval';
+import { computeUserPatch } from '@shared/approval/toolEditDiff';
 
 import {
   buildDesktopShowDiffMessage,

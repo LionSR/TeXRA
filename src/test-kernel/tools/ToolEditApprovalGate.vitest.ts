@@ -6,8 +6,8 @@ import { describe, it, beforeEach, afterEach } from 'vitest';
 import { createFakePlatform } from '@test/support/FakePlatform';
 
 // Local imports - agent types
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { noopAgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 // Local imports - tools
 import type { StreamTabId } from '@shared/schemas';

@@ -1,5 +1,4 @@
 import type { StreamTabId } from '@shared/schemas';
-import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 
 import {
   ProgressViewProvider,
@@ -20,7 +19,5 @@ export async function revealProgressStream(
 export function getProgressStreamLabel(
   streamId: StreamTabId,
 ): string | undefined {
-  const state = ProgressViewProvider.getInstance()?.state;
-  if (!state) return undefined;
-  return buildStreamInfo(state, streamId, 'all')?.label;
+  return ProgressViewProvider.getInstance()?.getStreamLabel(streamId);
 }

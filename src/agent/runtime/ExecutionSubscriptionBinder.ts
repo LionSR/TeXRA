@@ -17,13 +17,13 @@ import {
   type ExecutionProgress,
   type ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { emitQueuedFollowUps } from '@agent/runtime/queuedFollowUps';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
+
+import { requestRuntimeFollowUp } from './followUpCommands';
 import type { SessionHandle } from './SessionHandle';
 
 const logger = createChannelTrace('ExecutionSubscriptionBinder');
@@ -168,16 +168,11 @@ class ExecutionSubscription implements Disposable {
   }
 
   private send(text: string): void {
-    void sendFollowUp(
-      this.streamId,
-      wrapAndSanitizeTag(TAG, text),
-      undefined,
-      undefined,
-      this.session,
-    ).then((result) => {
-      if (result.status === 'sent' || result.status === 'queued') {
-        emitQueuedFollowUps(this.runtimeHost, this.streamId);
-      }
+    void requestRuntimeFollowUp({
+      streamId: this.streamId,
+      text: wrapAndSanitizeTag(TAG, text),
+      runtimeHost: this.runtimeHost,
+      session: this.session,
     });
   }
 }

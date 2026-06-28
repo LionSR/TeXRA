@@ -1,12 +1,7 @@
 // Local imports - agent
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
-
-import type { TaskState } from '@agent/core/execution/TaskState';
+import { buildRuntimeTaskStateFromConfigInput } from '@agent/runtime/executionRequests';
+import type { RuntimeTaskState } from '@agent/runtime/executionRequests';
+import type { RuntimeProposalResult } from '@agent/runtime/runCoordinatorCommands';
 
 // Local imports - shared
 import type { AgentProposal, AgentProposalPermission } from '@shared/schemas';
@@ -19,8 +14,8 @@ type AgentProposalActionInput = Omit<
 
 export interface ProgressAgentProposalControllerDeps {
   getPendingProposal(proposalId: string): AgentProposalPermission | undefined;
-  restoreTaskState(taskState: TaskState): Promise<boolean>;
-  resolveProposal(proposalId: string, result: ProposalResult): void;
+  restoreTaskState(taskState: RuntimeTaskState): Promise<boolean>;
+  resolveProposal(proposalId: string, result: RuntimeProposalResult): void;
   onMissingProposal?(proposalId: string): void;
   onInvalidProposal?(issues: unknown): void;
   onSetupComplete?(proposal: AgentProposalPermission): void;
@@ -78,36 +73,14 @@ export class ProgressAgentProposalController {
     return true;
   }
 
-  private buildTaskState(proposal: AgentProposal): TaskState | null {
-    const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
-    const activeFiles = isWorkflow
-      ? {
-          input: proposal.inputFiles.length > 0,
-          context: proposal.contextFiles.length > 0,
-          media: proposal.mediaFiles.length > 0,
-          output: proposal.outputFiles.length > 0,
-        }
-      : undefined;
-
-    const result = AgentConfigSchema.safeParse({
-      ...proposal,
-      ...(activeFiles && {
-        inputFilesActive: activeFiles.input,
-        contextFilesActive: activeFiles.context,
-        mediaFilesActive: activeFiles.media,
-        outputFilesActive: activeFiles.output,
-      }),
-    });
+  private buildTaskState(proposal: AgentProposal): RuntimeTaskState | null {
+    const result = buildRuntimeTaskStateFromConfigInput(proposal);
 
     if (!result.success) {
-      this.deps.onInvalidProposal?.(result.error.issues);
+      this.deps.onInvalidProposal?.(result.issues);
       return null;
     }
 
-    return (
-      activeFiles
-        ? { agentConfig: result.data, activeFiles }
-        : { agentConfig: result.data }
-    ) as TaskState & { agentConfig: AgentConfig };
+    return result.taskState;
   }
 }

@@ -4,7 +4,6 @@ import { StatusCodes } from 'http-status-codes';
 
 import { Node, type NonIterableObject } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   type RetryResult,
   type RetryRequestOptions,
@@ -17,6 +16,7 @@ import {
   toErrorMessage,
 } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import {
   STREAM_STATUS,
   toRetryErrorInfo,

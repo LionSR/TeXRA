@@ -19,7 +19,10 @@ export interface MainViewStartupOptions {
 
 export interface MainViewStartupControllerDeps {
   getConfig<T>(key: string, defaultValue: T): T;
-  loadOptions(): Promise<MainViewStartupOptions>;
+  loadOptions?: () => Promise<MainViewStartupOptions>;
+  loadModelOptions?: () => Promise<ModelOptionData[]>;
+  loadAgentOptions?: () => Promise<MainViewStartupOptions['agentOptions']>;
+  refreshAgentCatalog?: () => Promise<void>;
   getAuthStatus(): Promise<MainViewAuthStatus>;
 }
 
@@ -49,8 +52,8 @@ export class MainViewStartupController {
   }
 
   async getOptionsAndLoginMessages(): Promise<MainViewStartupMessage[]> {
-    const [{ modelOptions, agentOptions }, authStatus] = await Promise.all([
-      this.deps.loadOptions(),
+    const [options, authStatus] = await Promise.all([
+      this.loadOptionsWithFreshAgentCatalog(),
       this.deps.getAuthStatus(),
     ]);
 
@@ -59,19 +62,84 @@ export class MainViewStartupController {
       this.deps.getConfig<boolean>('ui.showLoginBanner', true);
 
     return [
-      {
-        command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        optionsData: modelOptions,
-      },
-      {
-        command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-        optionsData: agentOptions,
-      },
+      this.getModelOptionsMessage(options.modelOptions),
+      this.getAgentOptionsMessage(options.agentOptions),
       {
         command: showLoginBanner
           ? MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER
           : MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
       },
     ];
+  }
+
+  async getModelOptionsRefreshMessage(): Promise<MainViewStartupMessage> {
+    const modelOptions =
+      this.deps.loadModelOptions == null
+        ? (await this.loadOptionsSnapshot()).modelOptions
+        : await this.deps.loadModelOptions();
+    return this.getModelOptionsMessage(modelOptions);
+  }
+
+  async getAgentOptionsRefreshMessage(): Promise<MainViewStartupMessage> {
+    await this.refreshAgentCatalog();
+    const agentOptions =
+      this.deps.loadAgentOptions == null
+        ? (await this.loadOptionsSnapshot()).agentOptions
+        : await this.deps.loadAgentOptions();
+    return this.getAgentOptionsMessage(agentOptions);
+  }
+
+  async getAllOptionsRefreshMessages(): Promise<MainViewStartupMessage[]> {
+    const options = await this.loadOptionsWithFreshAgentCatalog();
+    return [
+      this.getModelOptionsMessage(options.modelOptions),
+      this.getAgentOptionsMessage(options.agentOptions),
+    ];
+  }
+
+  private async loadOptionsWithFreshAgentCatalog(): Promise<MainViewStartupOptions> {
+    await this.refreshAgentCatalog();
+    return this.loadOptionsSnapshot();
+  }
+
+  private async loadOptionsSnapshot(): Promise<MainViewStartupOptions> {
+    if (this.deps.loadOptions != null) {
+      return this.deps.loadOptions();
+    }
+    if (
+      this.deps.loadModelOptions == null ||
+      this.deps.loadAgentOptions == null
+    ) {
+      throw new Error(
+        'MainViewStartupController requires either loadOptions or both split option loaders.',
+      );
+    }
+    const [modelOptions, agentOptions] = await Promise.all([
+      this.deps.loadModelOptions(),
+      this.deps.loadAgentOptions(),
+    ]);
+    return { modelOptions, agentOptions };
+  }
+
+  private async refreshAgentCatalog(): Promise<void> {
+    await this.deps.refreshAgentCatalog?.();
+  }
+
+  private getModelOptionsMessage(
+    optionsData: ModelOptionData[],
+  ): MainViewStartupMessage {
+    return {
+      command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+      optionsData,
+    };
+  }
+
+  private getAgentOptionsMessage(
+    optionsData: MainViewStartupOptions['agentOptions'],
+  ): MainViewStartupMessage {
+    return {
+      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      optionsData,
+    };
   }
 }

@@ -12,8 +12,8 @@ import {
 } from '@agent/core/flows/ToolUseRoundFlow';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import { noopAgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 describe('ToolUseRoundFlow queued follow-ups', () => {
   it('attaches media from follow-ups queued at round start', async () => {

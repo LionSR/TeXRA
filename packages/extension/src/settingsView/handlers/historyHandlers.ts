@@ -13,18 +13,10 @@ import {
   type ChatExportInput,
   type ExportInputStatus,
 } from '@controllers/settingsView/ChatExportController';
-import {
-  deleteAllRuntimeHistoryExecutions,
-  deleteRuntimeHistoryExecution,
-  readRuntimeHistoryConfig,
-  type RuntimeHistoryAgentConfig,
-} from '@agent/runtime/historyCommands';
-import { getRuntimeActiveExecutionIds } from '@agent/runtime/executionQueries';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import { SettingsHistoryActionController } from '@controllers/settingsView/SettingsHistoryActionController';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ExecutionId } from '@shared/schemas';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -37,6 +29,8 @@ type ChatExportFormat = 'md' | 'tex' | 'html';
 /** History and chat-export handler delegate. */
 export class HistoryHandlers {
   private readonly chatExportController = new ChatExportController();
+  private readonly historyActionController =
+    new SettingsHistoryActionController();
 
   /** Path to the bundled HTML export assets (under extension resources). */
   private readonly htmlAssetsSrc: string;
@@ -56,51 +50,72 @@ export class HistoryHandlers {
   async handleRerunAgent(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RERUN_AGENT>,
   ): Promise<void> {
-    await this.withHistoryConfig(
-      data.historyId,
-      'Failed to rerun agent',
-      async (config) => {
-        await vscode.window.showInformationMessage(
-          'Rerunning agent from history',
-        );
-        await runExecuteCommand(config);
-      },
-    );
+    try {
+      const result = await this.historyActionController.getRerunConfig(
+        data.historyId,
+      );
+      if (!result.ok) {
+        await vscode.window.showErrorMessage('History item not found');
+        return;
+      }
+      await vscode.window.showInformationMessage(
+        'Rerunning agent from history',
+      );
+      await runExecuteCommand(result.config);
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        'Failed to rerun agent',
+        error,
+      );
+    }
   }
 
   async handleRestoreAgent(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RESTORE_AGENT>,
   ): Promise<void> {
-    await this.withHistoryConfig(
-      data.historyId,
-      'Failed to restore configuration',
-      async (config) => {
-        const taskState = agentConfigToTaskState(config);
-        await vscode.commands.executeCommand('texra.restoreState', taskState);
-      },
-    );
+    try {
+      const result = await this.historyActionController.getRestoreTaskState(
+        data.historyId,
+      );
+      if (!result.ok) {
+        await vscode.window.showErrorMessage('History item not found');
+        return;
+      }
+      await vscode.commands.executeCommand(
+        'texra.restoreState',
+        result.taskState,
+      );
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        'Failed to restore configuration',
+        error,
+      );
+    }
   }
 
   async handleDeleteAgent(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT>,
   ): Promise<void> {
     try {
-      const activeIds = getRuntimeActiveExecutionIds();
-      if (activeIds.includes(data.historyId)) {
-        await vscode.window.showWarningMessage(
-          'Cannot delete a running execution',
-        );
-        return;
-      }
-      const deleted = await deleteRuntimeHistoryExecution(
-        data.historyId as ExecutionId,
+      const result = await this.historyActionController.deleteHistoryExecution(
+        data.historyId,
       );
-      if (deleted) {
-        await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
-      } else {
-        await vscode.window.showWarningMessage(
-          `History item not found: ${data.historyId}`,
-        );
+      switch (result.status) {
+        case 'running':
+          await vscode.window.showWarningMessage(
+            'Cannot delete a running execution',
+          );
+          return;
+        case 'missing':
+          await vscode.window.showWarningMessage(
+            `History item not found: ${data.historyId}`,
+          );
+          return;
+        case 'deleted':
+          await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
+          return;
       }
     } catch (error) {
       await showLoggedErrorMessage(
@@ -113,9 +128,7 @@ export class HistoryHandlers {
 
   async handleClearHistory(): Promise<void> {
     try {
-      await deleteAllRuntimeHistoryExecutions(
-        new Set(getRuntimeActiveExecutionIds()),
-      );
+      await this.historyActionController.clearHistoryExecutions();
       await vscode.window.showInformationMessage('Agent history cleared');
       await this.ctx.withActiveWebview(async (w) => {
         await w.postMessage({
@@ -241,22 +254,5 @@ export class HistoryHandlers {
     void vscode.window.showInformationMessage(
       `Chat exported to ${folderName}/index.html`,
     );
-  }
-
-  private async withHistoryConfig(
-    historyId: string,
-    errorPrefix: string,
-    action: (config: RuntimeHistoryAgentConfig) => Promise<void>,
-  ): Promise<void> {
-    try {
-      const config = await readRuntimeHistoryConfig(historyId as ExecutionId);
-      if (!config) {
-        await vscode.window.showErrorMessage('History item not found');
-        return;
-      }
-      await action(config);
-    } catch (error) {
-      await showLoggedErrorMessage(this.ctx.channel, errorPrefix, error);
-    }
   }
 }

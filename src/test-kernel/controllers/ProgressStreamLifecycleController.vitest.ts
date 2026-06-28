@@ -32,6 +32,7 @@ describe('ProgressStreamLifecycleController', () => {
     assert.deepEqual(recorder.calls.get('cleanupApprovals'), ['stream-b']);
     assert.deepEqual(recorder.calls.get('clearRetry'), ['stream-b']);
     assert.deepEqual(recorder.calls.get('releaseFollowUp'), ['stream-b']);
+    assert.deepEqual(recorder.calls.get('forgetGoal'), ['stream-b']);
     assert.deepEqual(recorder.calls.get('clearBackups'), ['stream-b']);
     assert.deepEqual(recorder.calls.get('clearWebview'), ['stream-b']);
     assert.deepEqual(recorder.calls.get('deleteWebview'), ['stream-b']);
@@ -148,6 +149,7 @@ describe('ProgressStreamLifecycleController', () => {
       'stream-a',
       'stream-b',
     ]);
+    assert.deepEqual(recorder.calls.get('forgetGoals'), ['all']);
     assert.deepEqual(recorder.calls.get('clearBackups'), ['all']);
     assert.deepEqual(recorder.calls.get('clearAllWebview'), ['all']);
     assert.deepEqual(syncCalls, [{ forceRebuild: true }]);

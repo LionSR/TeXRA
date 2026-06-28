@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { noopAgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 // Local imports - tools
 import {

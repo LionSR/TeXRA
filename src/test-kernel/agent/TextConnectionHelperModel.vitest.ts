@@ -7,7 +7,7 @@ vi.mock('@agent/runtime/helperModel', () => ({
   createHelperModelKit,
 }));
 
-describe('bestConnectionMethod helper model routing', () => {
+describe('chooseRuntimeTextConnection helper model routing', () => {
   beforeEach(() => {
     vi.resetModules();
     createHelperModelKit.mockReset();
@@ -34,9 +34,12 @@ describe('bestConnectionMethod helper model routing', () => {
       },
     });
 
-    const { bestConnectionMethod } =
-      await import('@agent/runtime/textConnection');
-    const result = await bestConnectionMethod('left', 'right');
+    const { chooseRuntimeTextConnection } =
+      await import('@agent/runtime/textConnectionCommands');
+    const result = await chooseRuntimeTextConnection({
+      str1: 'left',
+      str2: 'right',
+    });
 
     expect(result).toEqual({ connector: '', choice: 'A' });
     expect(createHelperModelKit).toHaveBeenCalledTimes(1);

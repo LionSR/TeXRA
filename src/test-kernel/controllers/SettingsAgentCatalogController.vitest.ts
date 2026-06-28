@@ -53,6 +53,7 @@ function createController(options?: {
   customPresets?: unknown;
   builtInOrchestratorAgentNames?: readonly string[];
   now?: number;
+  loadAgents?: () => Promise<void>;
 }): {
   controller: SettingsAgentCatalogController;
   enabled: Partial<Record<AgentCategory, string[] | undefined>>;
@@ -63,6 +64,7 @@ function createController(options?: {
   return {
     controller: new SettingsAgentCatalogController({
       now: () => options?.now ?? 123,
+      loadAgents: options?.loadAgents,
       builtInOrchestratorAgentNames: options?.builtInOrchestratorAgentNames,
       state: {
         getEnabledAgentKeys: (category) => enabled[category],
@@ -91,6 +93,62 @@ function createController(options?: {
 }
 
 describe('SettingsAgentCatalogController', () => {
+  it('loads the live catalog before building fresh selection data', async () => {
+    const calls: string[] = [];
+    const { controller } = createController({
+      loadAgents: async () => {
+        calls.push('load');
+      },
+      agents: {
+        workflow: [
+          {
+            source: 'custom',
+            name: 'draft',
+            category: 'workflow',
+          },
+        ],
+      },
+    });
+
+    assert.deepEqual(await controller.buildFreshSelectionItems(), {
+      workflow: [
+        {
+          name: 'draft',
+          source: 'custom',
+          category: 'workflow',
+          description: undefined,
+          hasPath: false,
+          filePath: undefined,
+          tools: undefined,
+          enabled: true,
+        },
+      ],
+      toolUse: [
+        {
+          name: 'customTool',
+          source: 'custom',
+          category: 'toolUse',
+          description: undefined,
+          hasPath: true,
+          filePath: '/custom/customTool.yaml',
+          tools: undefined,
+          enabled: true,
+        },
+        {
+          name: 'review',
+          source: 'builtInToolUse',
+          category: 'toolUse',
+          description: undefined,
+          hasPath: true,
+          filePath: '/tools/review.yaml',
+          tools: ['grep'],
+          enabled: true,
+        },
+      ],
+    });
+    assert.deepEqual(calls, ['load']);
+  });
+
   it('builds sorted selection items with never-configured and legacy enabled state', () => {
     const { controller } = createController({
       enabled: {
@@ -147,6 +205,7 @@ describe('SettingsAgentCatalogController', () => {
   });
 
   it('applies custom presets by resolving names to canonical source keys', async () => {
+    const calls: string[] = [];
     const persistedPreset = {
       id: 'custom-team',
       name: 'Custom Team',
@@ -157,6 +216,9 @@ describe('SettingsAgentCatalogController', () => {
     };
     const { controller, enabled } = createController({
       customPresets: [persistedPreset],
+      loadAgents: async () => {
+        calls.push('load');
+      },
     });
 
     assert.deepEqual(await controller.applyPreset('custom-team'), {
@@ -170,6 +232,7 @@ describe('SettingsAgentCatalogController', () => {
     // Unresolved names are kept bare so the agent joins the roster the
     // moment it appears (sign-in, install) — never silently dropped.
     assert.deepEqual(enabled.toolUse, ['builtInToolUse:review', 'missing']);
+    assert.deepEqual(calls, ['load']);
   });
 
   it('reports unknown presets without writing enabled agent state', async () => {
@@ -240,8 +303,12 @@ describe('SettingsAgentCatalogController', () => {
   });
 
   it('saves the currently visible agents as a custom preset', async () => {
+    const calls: string[] = [];
     const state = createController({
       now: 456,
+      loadAgents: async () => {
+        calls.push('load');
+      },
       visible: {
         workflow: [AGENTS.workflow[1]],
         toolUse: [AGENTS.toolUse[0]],
@@ -257,6 +324,7 @@ describe('SettingsAgentCatalogController', () => {
       toolUseAgents: ['review'],
     });
     assert.equal(state.customPresets.length, 1);
+    assert.deepEqual(calls, ['load']);
   });
 
   it('deletes existing custom presets and ignores missing ones', async () => {

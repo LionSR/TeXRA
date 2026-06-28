@@ -12,12 +12,12 @@ import {
 import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import {
-  BUILTIN_TEAM_ROOT_AGENT_NAMES,
-  getAgent,
-  getAgentsByCategory,
-  getVisibleAgents as getVisibleRegistryAgents,
-  type AgentEntry,
-} from '@agent/index/agentRegistry';
+  getRuntimeAgent,
+  listRuntimeAgents,
+  loadRuntimeAgents,
+  RUNTIME_BUILTIN_TEAM_ROOT_AGENT_NAMES,
+  type RuntimeAgentEntry,
+} from '@agent/runtime/agentResolution';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 
@@ -28,8 +28,9 @@ export interface AgentControllerFactoryOptions extends SettingsStatePorts {
   readonly getSourceDirectory: (
     source: AgentSource,
   ) => Promise<string | undefined>;
-  readonly getAgents?: (category: AgentCategory) => AgentEntry[];
-  readonly getVisibleAgents?: (category: AgentCategory) => AgentEntry[];
+  readonly getAgents?: (category: AgentCategory) => RuntimeAgentEntry[];
+  readonly getVisibleAgents?: (category: AgentCategory) => RuntimeAgentEntry[];
+  readonly loadAgents?: () => Promise<void>;
   readonly builtInOrchestratorAgentNames?: readonly string[];
 }
 
@@ -50,8 +51,11 @@ export function createSettingsAgentControllers(
   options: AgentControllerFactoryOptions,
 ): SettingsAgentControllers {
   const { workspaceState, globalState } = options;
-  const getAgents = options.getAgents ?? getAgentsByCategory;
-  const getVisibleAgents = options.getVisibleAgents ?? getVisibleRegistryAgents;
+  const getAgents =
+    options.getAgents ?? ((category) => listRuntimeAgents({ category }));
+  const getVisibleAgents =
+    options.getVisibleAgents ??
+    ((category) => listRuntimeAgents({ category, visibleOnly: true }));
 
   const state: SettingsAgentCatalogState = {
     getEnabledAgentKeys: (category) =>
@@ -73,8 +77,10 @@ export function createSettingsAgentControllers(
 
   const catalog = new SettingsAgentCatalogController({
     state,
+    loadAgents: options.loadAgents ?? loadRuntimeAgents,
     builtInOrchestratorAgentNames:
-      options.builtInOrchestratorAgentNames ?? BUILTIN_TEAM_ROOT_AGENT_NAMES,
+      options.builtInOrchestratorAgentNames ??
+      RUNTIME_BUILTIN_TEAM_ROOT_AGENT_NAMES,
   });
   const directory = new SettingsAgentDirectoryController({
     state: {
@@ -88,7 +94,7 @@ export function createSettingsAgentControllers(
       },
       getCustomDir: options.getCustomAgentDirectory,
       getSourceDir: options.getSourceDirectory,
-      getAgent: (source, name) => getAgent(`${source}:${name}`) ?? null,
+      getAgent: (source, name) => getRuntimeAgent(`${source}:${name}`) ?? null,
     },
   });
   const visibility = new SettingsAgentVisibilityController({

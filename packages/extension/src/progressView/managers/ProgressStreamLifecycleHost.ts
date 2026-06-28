@@ -1,15 +1,10 @@
 import * as vscode from 'vscode';
 
-import { clearRuntimeRetryRequest } from '@agent/runtime/runCoordinatorCommands';
 import {
-  cleanupRuntimeApprovalsForAllStreams,
-  releaseRuntimeStreamResources,
+  releaseRuntimeDeletedStream,
+  releaseRuntimeDeletedStreams,
 } from '@agent/runtime/streamResourceLifecycle';
-import {
-  isRuntimeStreamInFlight,
-  releaseQueuedFollowUpsForStreams,
-} from '@agent/runtime/streamControl';
-import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
+import { isRuntimeStreamInFlight } from '@agent/runtime/streamControl';
 
 import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } from '@controllers/progressView/ProgressStreamLifecycleController';
 import type { ProgressViewProvider } from '../ProgressViewProvider';
@@ -28,10 +23,7 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
   ) {}
 
   getVisibleStreamIds(): StreamTabId[] {
-    return buildStreamInfos(
-      this.provider.state,
-      this.provider.state.agentCategoryFilter,
-    ).map((stream) => stream.name);
+    return this.provider.getVisibleStreamIds();
   }
 
   isStreamInFlight(stream: StreamTabId): boolean {
@@ -42,22 +34,23 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
     stream: StreamTabId,
     options: { clearRetryRequest?: boolean } = {},
   ): Promise<void> {
-    if (options.clearRetryRequest === true) {
-      clearRuntimeRetryRequest({ streamId: stream });
-    }
-    await vscode.commands.executeCommand('texra.stopAgent', stream);
+    await vscode.commands.executeCommand('texra.stopAgent', {
+      streamId: stream,
+      clearRetryRequest: options.clearRetryRequest === true,
+    });
   }
 
-  cleanupDeletedStream(stream: StreamTabId): void {
-    releaseRuntimeStreamResources(stream);
+  async cleanupDeletedStream(stream: StreamTabId): Promise<void> {
+    await releaseRuntimeDeletedStream({ streamId: stream });
     this.backupCleaner.clearStreamBackups(stream);
     this.provider.webviewBridge.clearStream(stream);
   }
 
-  cleanupDeletedStreams(streams: StreamTabId[]): void {
-    // Process-wide approval reset for the single-session extension host.
-    cleanupRuntimeApprovalsForAllStreams();
-    releaseQueuedFollowUpsForStreams(streams);
+  async cleanupDeletedStreams(streams: StreamTabId[]): Promise<void> {
+    await releaseRuntimeDeletedStreams({
+      streamIds: streams,
+      approvalScope: 'process',
+    });
     this.backupCleaner.clearAllBackups();
     this.provider.webviewBridge.clearAll();
   }

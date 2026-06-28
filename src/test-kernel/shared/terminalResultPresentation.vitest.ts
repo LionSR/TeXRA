@@ -1,17 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ResultEvent } from '@agent/trace';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
-import { terminalResultToast } from '@shared/agent/terminalResultPresentation';
+import {
+  terminalResultToast,
+  type TerminalResultEvent,
+} from '@shared/agent/terminalResultPresentation';
 
-function result(over: Partial<ResultEvent>): ResultEvent {
+function result(over: Partial<TerminalResultEvent>): TerminalResultEvent {
   return {
-    type: 'result',
     outcome: 'failed',
-    executionId: 'exec',
-    streamId: 'stream',
-    agentName: 'assistant',
-    category: 'toolUse',
     isSubagent: false,
     ...over,
   };

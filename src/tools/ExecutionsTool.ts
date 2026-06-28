@@ -41,6 +41,7 @@ import {
   EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
 } from '@shared/constants/toolDefaults';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { clamp, unique } from '@utils/core';
@@ -63,7 +64,6 @@ import {
   getExecutionStatusInfo,
   resolveExecutionDisplayCategory,
 } from './executionFormatters';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from './core/define';
 import {
   formatFileView,

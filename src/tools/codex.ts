@@ -30,10 +30,10 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type {
   StreamTabId,
   ExecutionId,

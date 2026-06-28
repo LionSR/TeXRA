@@ -13,7 +13,7 @@ import {
 import {
   noopAgentRuntimeHost,
   type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+} from '@hosts/AgentRuntimeHost';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 interface TestRetryServices {

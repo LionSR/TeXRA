@@ -4,8 +4,8 @@ import { z } from 'zod';
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
 import { arxivProcessor } from '@latex/arxivProcessor';
-import { LsTool } from '@tools/ls';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { LsTool } from '@tools/ls';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';

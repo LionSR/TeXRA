@@ -9,6 +9,7 @@ Central home for all TeXRA Product Requirement Documents, plans, and design audi
 
 | Document                                                                                                                                 | Created    | Updated    |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| [PRD: Runtime/Host Decoupling by Deep Modules](./2026-06-27-prd-runtime-host-decoupling.md)                                              | 2026-06-27 | 2026-06-27 |
 | [PRD: Non-blocking `inquiry` — Async Q&A with the User](./2026-05-15-prd-external-inquiry-async.md)                                      | 2026-05-15 | 2026-06-20 |
 | [PRD: Largest Dual-Systems Consolidation Audit (2026-06)](./2026-06-14-dual-systems-consolidation-2026-06.md)                            | 2026-06-14 | 2026-06-14 |
 | [PRD: Team-First Launcher and Onboarding](./2026-04-30-launcher-and-onboarding.md)                                                       | 2026-04-30 | 2026-06-13 |

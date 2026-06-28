@@ -54,6 +54,7 @@
     "check:desktop-package": "node scripts/verify-desktop-package.mjs",
     "check:cli-architecture": "corepack pnpm --filter @texra-ai/cli check:architecture",
     "check:cli-orchestration-manifest": "node scripts/check-cli-orchestration-manifest.mjs",
+    "check:runtime-boundaries": "node scripts/check-runtime-boundaries.mjs",
     "check:dead-code": "knip --no-progress --include files,exports,types,duplicates",
     "texra-local:build": "corepack pnpm --filter @texra-ai/cli run bundle && corepack pnpm --filter @texra-ai/cli run copy:resources && corepack pnpm --filter @texra-ai/cli run copy:docs",
     "texra-local:link": "node scripts/link-texra-local.mjs",

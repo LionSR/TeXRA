@@ -23,9 +23,9 @@ import {
   type AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import {
   type StreamTabId,
@@ -46,18 +46,18 @@ import {
   type AgentLaunchContext,
 } from './AgentLaunchContext';
 import { runFlowWithLifecycle } from './AgentRunLifecycle';
+import { buildRuntimeTaskStateFromConfig } from './executionRequests';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
-import { getProgressViewBridge } from './ProgressViewBridge';
-import { emitQueuedFollowUps } from './queuedFollowUps';
+import { isRuntimeProgressViewVisible } from './progressViewCommands';
+import { publishRuntimeQueuedFollowUps } from './queuedFollowUps';
 import {
   AgentFlowError,
   buildOptionalFlowResultFields,
   type AgentFlowResult,
 } from './AgentFlowResult';
 import type { AgentExecutionHandle, AgentRunHandle } from './executionRegistry';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
@@ -233,7 +233,7 @@ async function runToolUseAgent(
           options.onProgress?.(update);
         },
         onFollowUpConsumed: () => {
-          emitQueuedFollowUps(ctx.runtimeHost, ctx.streamId);
+          publishRuntimeQueuedFollowUps(ctx.runtimeHost, ctx.streamId);
           options.onFollowUpConsumed?.();
         },
         onModelChanged: (modelHandler) => {
@@ -429,7 +429,7 @@ export async function executeAgent(
         logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
         // Subagents don't need to force-open the progress board or show notifications —
         // the orchestrator's stream is already visible.
-        if (!isSubagent && !getProgressViewBridge().isViewVisible()) {
+        if (!isSubagent && !isRuntimeProgressViewVisible()) {
           ctx.runtimeHost.emit('requestEnsureProgressView', {
             fallbackNotification: buildFallbackNotification(config),
           });
@@ -437,7 +437,7 @@ export async function executeAgent(
         ctx.runtimeHost.emit('setTaskState', {
           streamId,
           executionId,
-          taskState: agentConfigToTaskState(config),
+          taskState: buildRuntimeTaskStateFromConfig(config),
         });
 
         logger.info(`Executing ${config.agent} with model ${config.model}`);
@@ -518,7 +518,7 @@ export async function resumeToolUseFromSnapshot(
             // /memories protocol) that the fresh run had included.
             isSubagent,
             onFollowUpConsumed: () =>
-              emitQueuedFollowUps(ctx.runtimeHost, ctx.streamId),
+              publishRuntimeQueuedFollowUps(ctx.runtimeHost, ctx.streamId),
           },
           undefined,
           (flowContext) => {

@@ -32,7 +32,6 @@ import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 
 // Local imports - agent runtime
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -40,6 +39,7 @@ import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 
 // Internal imports
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import { noopAgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { BashTool } from '@tools/bash';

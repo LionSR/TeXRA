@@ -1,5 +1,5 @@
 import {
-  getRuntimeAgent,
+  getRuntimeToolUseAgent,
   runtimeToolUseAgentHasAnyTool,
 } from '@agent/runtime/agentResolution';
 import { assertCliAgentLaunch } from '@cli/runtime/agents';
@@ -9,7 +9,6 @@ import { cliState } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
-import { AgentCategory } from '@shared/schemas/agent';
 import { type SlashCommandContext } from './slashContext';
 
 export function chatAgentSupportsDelegation(agentName: string): boolean {
@@ -20,11 +19,7 @@ export function chatToolUseAgentUsageError(
   agentName: string,
 ): string | undefined {
   try {
-    assertCliAgentLaunch(
-      agentName,
-      getRuntimeAgent(agentName, AgentCategory.ToolUse),
-      'chat',
-    );
+    assertCliAgentLaunch(agentName, getRuntimeToolUseAgent(agentName), 'chat');
     return undefined;
   } catch (error) {
     if (error instanceof CliUsageError) return error.message;

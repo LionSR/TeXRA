@@ -1,12 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
-import {
-  getRuntimeActiveAgentNames,
-  getRuntimeActiveExecutionIds,
-} from '@agent/runtime/executionQueries';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { hasRuntimeActiveAgentName } from '@agent/runtime/executionQueries';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 function createRecordingHost(): AgentRuntimeHost {
@@ -16,7 +13,7 @@ function createRecordingHost(): AgentRuntimeHost {
 }
 
 describe('runtime execution queries', () => {
-  it('projects active execution ids and agent names without exposing handles', () => {
+  it('checks active agent names without exposing handles', () => {
     const session = new SessionHandle();
     const streamId = 'execution-query-stream' as StreamTabId;
     const executionId = 'execution-query-id' as ExecutionId;
@@ -33,8 +30,12 @@ describe('runtime execution queries', () => {
         ),
       );
 
-      expect(getRuntimeActiveExecutionIds({ session })).toEqual([executionId]);
-      expect(getRuntimeActiveAgentNames({ session })).toEqual(['setup']);
+      expect(hasRuntimeActiveAgentName({ agentName: 'setup', session })).toBe(
+        true,
+      );
+      expect(
+        hasRuntimeActiveAgentName({ agentName: 'other-agent', session }),
+      ).toBe(false);
     } finally {
       session.dispose();
     }

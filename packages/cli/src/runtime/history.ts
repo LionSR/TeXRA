@@ -2,17 +2,16 @@ import * as path from 'node:path';
 
 import {
   countRuntimeHistoryExecutions,
-  deleteAllRuntimeHistoryExecutions,
-  deleteRuntimeHistoryExecution,
   listRuntimeHistoryExecutions,
   readRuntimeHistoryConfig,
   readRuntimeHistoryExecutionRecord,
+  requestClearRuntimeHistoryExecutions,
+  requestDeleteRuntimeHistoryExecution,
   type RuntimeHistoryAgentConfig,
   type RuntimeHistoryExecutionEntry,
   type RuntimeHistoryExecutionMeta,
   type RuntimeHistoryResultMeta,
 } from '@agent/runtime/historyCommands';
-import { forgetRuntimeGoalsByExecutionIds } from '@agent/runtime/goalCommands';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   EXECUTION_STATUS,
@@ -114,6 +113,7 @@ export type CliHistoryDeleteResult =
       readonly deleted: 'one';
       readonly id: ExecutionId;
       readonly found: boolean;
+      readonly blockedReason?: 'running';
     };
 
 export function parseCliHistoryId(raw: string): ExecutionId | undefined {
@@ -197,22 +197,28 @@ export async function deleteCliHistory(options: {
   preCountForAll?: number;
 }): Promise<CliHistoryDeleteResult> {
   if (options.all) {
-    const deletedExecutionIds = await deleteAllRuntimeHistoryExecutions();
-    await forgetRuntimeGoalsByExecutionIds(deletedExecutionIds);
+    const { deletedExecutionIds } =
+      await requestClearRuntimeHistoryExecutions();
     const count = options.preCountForAll ?? deletedExecutionIds.length;
     return { deleted: 'all', count };
   }
   if (!options.id) {
     throw new Error('Expected an execution id, or --all.');
   }
-  const found = await deleteRuntimeHistoryExecution(options.id);
-  if (found) {
-    await forgetRuntimeGoalsByExecutionIds([options.id]);
+  const result = await requestDeleteRuntimeHistoryExecution(options.id);
+  if (result.status === 'running') {
+    return {
+      deleted: 'one',
+      id: options.id,
+      found: true,
+      blockedReason: 'running',
+    };
   }
+
   return {
     deleted: 'one',
     id: options.id,
-    found,
+    found: result.status === 'deleted',
   };
 }
 

@@ -15,9 +15,9 @@ import { z } from 'zod';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { requestRuntimeFollowUp } from '@agent/runtime/followUpCommands';
 
-// Local imports - tools
+// Local imports - shared
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -28,9 +28,15 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
+
+// Local imports - tools
 import { formatFollowUpInstruction } from '@tools/subagentResults';
 import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
 import { defineTool } from '@tools/core/define';
+
+// Local imports - utils
+import { WorkspaceFS } from '@utils/files';
+import { isNonEmptyString } from '@utils/core/stringCore';
 
 // Local imports - delegation
 import {
@@ -47,10 +53,6 @@ import {
   WorkflowAgentInputSchema,
   type WorkflowAgentInput,
 } from './delegation/inputFields';
-
-// Local imports - utils
-import { WorkspaceFS } from '@utils/files';
-import { isNonEmptyString } from '@utils/core/stringCore';
 
 export { rejectOversizedBibAttachments } from './delegation/inputFields';
 export type { WorkflowAgentInput };
@@ -303,9 +305,14 @@ Git worktree support: resolved from the active workspace at runtime.`,
     }
 
     const framedInstruction = formatFollowUpInstruction(instruction);
-    const result = await sendFollowUp(handle.childStreamId, framedInstruction);
+    const result = await requestRuntimeFollowUp({
+      streamId: handle.childStreamId,
+      text: framedInstruction,
+      runtimeHost: parentContext?.runtimeHost ?? handle.runtimeHost,
+      session: currentSession(),
+    });
 
-    switch (result.status) {
+    switch (result.outcome) {
       case 'sent':
         deliveryState.markPending();
         return {
@@ -320,10 +327,14 @@ Git worktree support: resolved from the active workspace at runtime.`,
         return {
           summary: `Follow-up queued for '${handle.agentName}'`,
           output: [
-            `Follow-up instruction queued for '${handle.agentName}' (${result.reason}). The subagent will process it and deliver a new result automatically.`,
+            `Follow-up instruction queued for '${handle.agentName}' (${result.queueReason ?? 'queued'}). The subagent will process it and deliver a new result automatically.`,
             `Execution ID: ${executionId}`,
           ].join('\n'),
         };
+      case 'dropped':
+        throw new Error(
+          `Follow-up for '${handle.agentName}' was dropped before the subagent could receive it.`,
+        );
       case 'no_session':
         throw new Error(
           `No active session for '${handle.agentName}' (stream status: ${result.streamStatus ?? 'unknown'}). The subagent may have stopped or its session expired.`,

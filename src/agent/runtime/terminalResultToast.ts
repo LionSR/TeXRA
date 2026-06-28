@@ -12,10 +12,10 @@
  * extension, whose `extensionAgentRuntimeHost.emit` is `bus.emit`, so the
  * `requestShow*` events reach the same `bus.on` handlers exactly once.
  */
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { terminalResultToast } from '@shared/agent/terminalResultPresentation';
 
 import { defaultSession, type SessionHandle } from './SessionHandle';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 /** Returns a detach disposer; callers detach when the run/host tears down. */
 export function attachTerminalResultToast(

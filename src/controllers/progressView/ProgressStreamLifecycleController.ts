@@ -1,6 +1,4 @@
-// Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
-import { GoalStore } from '@tools/goal';
 
 export interface ProgressStreamLifecycleState {
   getActiveStream(): StreamTabId | '';
@@ -25,8 +23,8 @@ export interface ProgressStreamLifecycleHost {
     stream: StreamTabId,
     options?: { clearRetryRequest?: boolean },
   ): Promise<void>;
-  cleanupDeletedStream(stream: StreamTabId): void;
-  cleanupDeletedStreams(streams: StreamTabId[]): void;
+  cleanupDeletedStream(stream: StreamTabId): Promise<void>;
+  cleanupDeletedStreams(streams: StreamTabId[]): Promise<void>;
   deleteRenderedStream(stream: StreamTabId): void;
   rebuildRenderedStreams(options: { forceRebuild: boolean }): void;
   activateStream(stream: StreamTabId): Promise<void>;
@@ -44,24 +42,20 @@ export class ProgressStreamLifecycleController {
       this.deps.state.hasStream(stream) || this.deps.state.hasTaskState(stream);
     if (!hasStream) return;
 
+    // The wasActive snapshot must happen before the first await: callers may
+    // switch streams synchronously after invoking deleteStream, and that switch
+    // belongs to the post-deletion state, not this snapshot.
+    const wasActive = this.deps.state.getActiveStream() === stream;
+
     if (this.deps.host.isStreamInFlight(stream)) {
       // Finished streams should not get synthetic STOPPED transitions or child
       // interrupts after they completed naturally.
       await this.deps.host.stopStream(stream);
     }
 
-    this.deps.host.cleanupDeletedStream(stream);
+    await this.deps.host.cleanupDeletedStream(stream);
 
-    // The wasActive snapshot must happen before the first await: callers may
-    // switch streams synchronously after invoking deleteStream, and that
-    // switch belongs to the post-deletion state, not this snapshot.
-    const wasActive = this.deps.state.getActiveStream() === stream;
-    await Promise.all([
-      this.deps.state.clearStream(stream),
-      // Deleting the conversation ends any goal with it — without this the
-      // record (and its Goal-tab entry) outlives the stream forever.
-      GoalStore.forget(stream),
-    ]);
+    await this.deps.state.clearStream(stream);
 
     let shouldActivateStream = false;
     const activeAfterClear = this.deps.state.getActiveStream();
@@ -94,8 +88,7 @@ export class ProgressStreamLifecycleController {
       streamIds.map((stream) => this.deps.host.stopStream(stream)),
     );
 
-    this.deps.host.cleanupDeletedStreams(streamIds);
-    await GoalStore.forgetMany(streamIds);
+    await this.deps.host.cleanupDeletedStreams(streamIds);
     await this.deps.state.clearAll();
     this.deps.host.rebuildRenderedStreams({ forceRebuild: true });
   }

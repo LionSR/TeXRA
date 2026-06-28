@@ -1,18 +1,14 @@
 import * as vscode from 'vscode';
 
-import { getRuntimeAgentByIdentifier } from '@agent/runtime/agentResolution';
+import { MainViewAgentSelectionController } from '@controllers/mainView/MainViewAgentSelectionController';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  agentKey as createKey,
-  AgentCategory,
-  type AgentSource,
-} from '@shared/schemas/agent';
+import type { AgentSource } from '@shared/schemas/agent';
 import { delay } from '@utils/core';
 
 const CHANNEL = 'RemoteAgentUtils';
 logger.initialize(CHANNEL);
+const agentSelectionController = new MainViewAgentSelectionController();
 
 interface SelectAgentResult {
   success: boolean;
@@ -37,8 +33,6 @@ export async function selectAgentInMainView(
     source = 'remote',
   } = options;
 
-  const agentValue = createKey(source as AgentSource, agentName);
-
   // Focus main view first - triggers initialization if needed
   await vscode.commands.executeCommand('texra.showMainView');
 
@@ -57,20 +51,18 @@ export async function selectAgentInMainView(
       );
     }
 
-    const entry = getRuntimeAgentByIdentifier(agentValue);
-    const sessionType =
-      entry?.category === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
+    const selection = agentSelectionController.getSourceAgentSelection({
+      source,
+      name: agentName,
+    });
 
     logger.info(
       CHANNEL,
-      `Selecting agent "${agentName}" (${agentValue}) in ${sessionType} dropdown`,
+      `Selecting agent "${agentName}" (${selection.agentId}) ` +
+        `in ${selection.sessionType} dropdown`,
     );
 
-    webviewView.webview.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
-      agentId: agentValue, // Must match schema field name
-      sessionType,
-    });
+    webviewView.webview.postMessage(selection);
 
     if (showSuccessMessage) {
       void vscode.window.showInformationMessage(

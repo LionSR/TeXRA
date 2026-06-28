@@ -15,8 +15,15 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { ExecutionId } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  type ExecutionId,
+  type ExecutionStatus,
+} from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
+import { GoalStore } from '@tools/goal';
+
+import { currentSession, type SessionHandle } from './SessionHandle';
 
 export type RuntimeHistoryAgentConfig = AgentConfig;
 export type RuntimeHistoryExecutionMeta = ExecutionMeta;
@@ -43,6 +50,30 @@ export interface RuntimeHistoryExecutionRecord {
   readonly report: string | null;
   readonly conversation: unknown[] | null;
   readonly workspaceFilePaths: readonly string[];
+}
+
+export type RuntimeHistoryDeleteExecutionResult =
+  | { readonly status: 'deleted' }
+  | { readonly status: 'missing' }
+  | { readonly status: 'running' };
+
+export type RuntimeHistoryTerminalStatusRepairResult =
+  | {
+      readonly status: 'written';
+      readonly terminalStatus: ExecutionStatus;
+    }
+  | {
+      readonly status: 'preserved';
+      readonly terminalStatus: string;
+    };
+
+export interface RuntimeHistoryCommandOptions {
+  readonly session?: SessionHandle;
+}
+
+export interface RuntimeHistoryClearResult {
+  readonly deletedExecutionIds: readonly ExecutionId[];
+  readonly activeExecutionIds: readonly ExecutionId[];
 }
 
 function toRuntimeHistoryExecutionEntry(
@@ -96,15 +127,22 @@ export async function readRuntimeHistoryExecutionRecord(
   executionId: ExecutionId,
 ): Promise<RuntimeHistoryExecutionRecord> {
   const store = getExecutionStore(executionId);
-  const [meta, config, resultMeta, report, conversation, workspaceFilePaths] =
-    await Promise.all([
-      store.readMeta(),
-      store.readConfig(),
-      store.readResultMeta(),
-      store.readReport(),
-      store.readConversation(),
-      store.readWorkspaceFiles(),
-    ]);
+  const [
+    meta,
+    rawConfig,
+    resultMeta,
+    report,
+    conversation,
+    workspaceFilePaths,
+  ] = await Promise.all([
+    store.readMeta(),
+    store.readConfig(),
+    store.readResultMeta(),
+    store.readReport(),
+    store.readConversation(),
+    store.readWorkspaceFiles(),
+  ]);
+  const config = rawConfig ? AgentConfigSchema.parse(rawConfig) : null;
   return {
     meta,
     config,
@@ -128,6 +166,25 @@ export function writeRuntimeTerminalStatus(
   return writeTerminalStatus(executionId, status);
 }
 
+/**
+ * Fill a missing terminal status for a registered execution without
+ * overwriting the canonical terminal fact when the run lifecycle already wrote
+ * it. This is the launch-boundary compensation for failures that happen after
+ * execution-id allocation but before normal lifecycle finalization.
+ */
+export async function repairRuntimeHistoryTerminalStatus(
+  executionId: ExecutionId,
+  terminalStatus: ExecutionStatus = EXECUTION_STATUS.ERROR,
+): Promise<RuntimeHistoryTerminalStatusRepairResult> {
+  const existing = await readRuntimeHistoryTerminalStatus(executionId);
+  if (existing !== undefined) {
+    return { status: 'preserved', terminalStatus: existing };
+  }
+
+  await writeTerminalStatus(executionId, terminalStatus);
+  return { status: 'written', terminalStatus };
+}
+
 export function writeRuntimeHistoryResultMeta(
   executionId: ExecutionId,
   resultMeta: RuntimeHistoryResultMeta,
@@ -149,14 +206,44 @@ export async function readRuntimeHistoryConfig(
   return raw ? AgentConfigSchema.parse(raw) : null;
 }
 
-export function deleteRuntimeHistoryExecution(
+async function deleteRuntimeHistoryExecution(
   executionId: ExecutionId,
 ): Promise<boolean> {
-  return deleteExecution(executionId);
+  const deleted = await deleteExecution(executionId);
+  if (deleted) {
+    await GoalStore.forgetByExecutionIds([executionId]);
+  }
+  return deleted;
 }
 
-export function deleteAllRuntimeHistoryExecutions(
+export async function requestDeleteRuntimeHistoryExecution(
+  executionId: ExecutionId,
+  { session = currentSession() }: RuntimeHistoryCommandOptions = {},
+): Promise<RuntimeHistoryDeleteExecutionResult> {
+  if (session.executions.getActiveIds().includes(executionId)) {
+    return { status: 'running' };
+  }
+
+  const deleted = await deleteRuntimeHistoryExecution(executionId);
+  return { status: deleted ? 'deleted' : 'missing' };
+}
+
+async function deleteAllRuntimeHistoryExecutions(
   activeExecutionIds?: ReadonlySet<ExecutionId>,
 ): Promise<ExecutionId[]> {
-  return deleteAllExecutions(activeExecutionIds);
+  const deletedExecutionIds = await deleteAllExecutions(activeExecutionIds);
+  if (deletedExecutionIds.length > 0) {
+    await GoalStore.forgetByExecutionIds(deletedExecutionIds);
+  }
+  return deletedExecutionIds;
+}
+
+export async function requestClearRuntimeHistoryExecutions({
+  session = currentSession(),
+}: RuntimeHistoryCommandOptions = {}): Promise<RuntimeHistoryClearResult> {
+  const activeExecutionIds = session.executions.getActiveIds() as ExecutionId[];
+  const deletedExecutionIds = await deleteAllRuntimeHistoryExecutions(
+    new Set(activeExecutionIds),
+  );
+  return { deletedExecutionIds, activeExecutionIds };
 }

@@ -7,7 +7,7 @@
  */
 
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 import { ToolError } from '@shared/schemas/toolResult';
 

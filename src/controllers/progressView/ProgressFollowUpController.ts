@@ -1,16 +1,13 @@
 // Local imports - agent
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
-import type { ExecutionRequest } from '@agent/core/execution/executionRequests';
-
-import {
-  isWorkflowTaskState,
-  type TaskState,
-  type WorkflowTaskState,
-} from '@agent/core/execution/TaskState';
+  buildRuntimeTaskStateFromConfig,
+  isRuntimeWorkflowTaskState,
+  parseRuntimeAgentConfig,
+  type RuntimeAgentConfig,
+  type RuntimeExecutionRequest,
+  type RuntimeTaskState,
+  type RuntimeWorkflowTaskState,
+} from '@agent/runtime/executionRequests';
 
 // Local imports - latex
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
@@ -38,14 +35,14 @@ export interface ProgressFollowUpWorkspace {
 }
 
 export interface ProgressFollowUpControllerDeps {
-  getAgentCategory(agent: string): AgentCategory | undefined;
+  isToolUseAgent(agent: string): boolean;
   loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
   state: ProgressFollowUpState;
   workspace: ProgressFollowUpWorkspace;
 }
 
 export interface ProgressFollowUpState {
-  getTaskState(stream: StreamTabId): TaskState | undefined;
+  getTaskState(stream: StreamTabId): RuntimeTaskState | undefined;
   getOutputFiles(stream: StreamTabId): Map<number, OutputFileInfo[]>;
   getCompileFailures(stream: StreamTabId): Map<number, CompileFailure[]>;
   getExecutionId(stream: StreamTabId): string | undefined;
@@ -65,14 +62,14 @@ export type ProgressFollowUpPlan =
   | { kind: 'info'; message: string }
   | {
       kind: 'restoreState';
-      taskState: TaskState;
+      taskState: RuntimeTaskState;
       executeImmediately: boolean;
     }
-  | { kind: 'execute'; request: ExecutionRequest };
+  | { kind: 'execute'; request: RuntimeExecutionRequest };
 
 export interface ToolUseFollowUpInput {
   streamId: StreamTabId;
-  taskState: TaskState | undefined;
+  taskState: RuntimeTaskState | undefined;
   outputFiles: OutputFileInfo[];
   agent: string;
   model: string;
@@ -84,7 +81,7 @@ export interface ToolUseFollowUpInput {
 
 export interface CompileFixerInput {
   streamId: StreamTabId;
-  taskState: TaskState | undefined;
+  taskState: RuntimeTaskState | undefined;
   compileFailures: CompileFailure[];
   runOutputs: Map<number, OutputFileInfo[]>;
   modelOptions: readonly ProgressFollowUpModelOption[];
@@ -135,7 +132,7 @@ export class ProgressFollowUpController {
   }
 
   planToolUseFollowUp(input: ToolUseFollowUpInput): ProgressFollowUpPlan {
-    if (!input.taskState || !isWorkflowTaskState(input.taskState)) {
+    if (!input.taskState || !isRuntimeWorkflowTaskState(input.taskState)) {
       return {
         kind: 'warning',
         message:
@@ -150,7 +147,7 @@ export class ProgressFollowUpController {
       };
     }
 
-    if (this.deps.getAgentCategory(input.agent) !== AgentCategory.ToolUse) {
+    if (!this.deps.isToolUseAgent(input.agent)) {
       return {
         kind: 'warning',
         message: 'Select a tool-use agent before starting a follow-up.',
@@ -164,11 +161,11 @@ export class ProgressFollowUpController {
       };
     }
 
-    const agentConfig = AgentConfigSchema.parse({
+    const agentConfig = parseRuntimeAgentConfig({
       ...input.taskState.agentConfig,
       agent: input.agent,
       model: input.model,
-      agentCategory: AgentCategory.ToolUse,
+      agentCategory: 'toolUse',
       instruction: this.buildWorkflowToolUseFollowupInstruction(
         input.outputFiles,
         input.initialQuestion,
@@ -177,11 +174,11 @@ export class ProgressFollowUpController {
       outputFiles: [],
       editedFile: null,
       editedFiles: [],
-    }) as AgentConfig & { agentCategory: typeof AgentCategory.ToolUse };
+    });
 
     return {
       kind: 'restoreState',
-      taskState: { agentConfig },
+      taskState: buildRuntimeTaskStateFromConfig(agentConfig),
       executeImmediately: input.executeImmediately,
     };
   }
@@ -189,7 +186,7 @@ export class ProgressFollowUpController {
   async planCompileFixer(
     input: CompileFixerInput,
   ): Promise<ProgressFollowUpPlan> {
-    if (!input.taskState || !isWorkflowTaskState(input.taskState)) {
+    if (!input.taskState || !isRuntimeWorkflowTaskState(input.taskState)) {
       return {
         kind: 'warning',
         message:
@@ -256,7 +253,7 @@ export class ProgressFollowUpController {
   }
 
   private resolveWorkflowModel(
-    taskState: WorkflowTaskState,
+    taskState: RuntimeWorkflowTaskState,
     modelOptions: readonly ProgressFollowUpModelOption[],
   ): string | null {
     const workflowModel = taskState.agentConfig.model;
@@ -348,26 +345,26 @@ export class ProgressFollowUpController {
   }
 
   private buildCompileFixerConfig(
-    originalConfig: AgentConfig,
+    originalConfig: RuntimeAgentConfig,
     model: string,
     editableFiles: string[],
     instruction: string,
-  ): AgentConfig {
-    return {
+  ): RuntimeAgentConfig {
+    return parseRuntimeAgentConfig({
       ...originalConfig,
       agent: 'latexFixer',
       model,
       instruction,
-      agentCategory: AgentCategory.ToolUse,
+      agentCategory: 'toolUse',
       inputFiles: editableFiles,
       outputFiles: [],
       editedFile: null,
       editedFiles: [],
-    };
+    });
   }
 
   private async compileFixerTargets(
-    originalConfig: AgentConfig,
+    originalConfig: RuntimeAgentConfig,
     compileFailures: CompileFailure[],
     runOutputs: Map<number, OutputFileInfo[]>,
   ): Promise<CompileFixerTarget[]> {
@@ -441,7 +438,7 @@ export class ProgressFollowUpController {
    * metadata, not a second owner of the compile failure.
    */
   private compileFixerInputCandidates(
-    originalConfig: AgentConfig,
+    originalConfig: RuntimeAgentConfig,
     compileFailures: CompileFailure[],
     runOutputs: Map<number, OutputFileInfo[]>,
   ): string[] {

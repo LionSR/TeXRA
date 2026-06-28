@@ -11,30 +11,45 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  getRuntimeStreamStatus,
-  setRuntimeStreamStatusSilently,
-} from '@agent/runtime/streamControl';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
-  STREAM_STATUS,
   type ProgressViewOutboundMessage,
   type RestoredStreamSnapshot,
+  type StreamStatus,
   type StreamTabId,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas/agent';
-import { isGoalInFlight, type GoalStatus } from '@shared/schemas/goal';
+import type { GoalStatus } from '@shared/schemas/goal';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
-import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
+import { buildRestoredStreamSnapshot } from '@shared/progressView/backend/streamInfoUtils';
 import type { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
-import { GoalStore } from '@tools/goal';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
+export interface DesktopProgressRuntimeStatus {
+  /** Return the current runtime status for a stream, if it is known. */
+  get(streamId: StreamTabId): StreamStatus | undefined;
+  /** Seed or update runtime status without emitting progress events. */
+  setSilently(streamId: StreamTabId, status: StreamStatus): void;
+}
+
+export interface DesktopProgressGoalControlState {
+  readonly active: boolean;
+  readonly status?: GoalStatus;
+  readonly objective?: string;
+}
+
+export interface DesktopProgressGoalControls {
+  getControlState(streamId: StreamTabId): DesktopProgressGoalControlState;
+}
+
 export interface DesktopProgressEventBridgeOptions {
   /** The owning bridge's progress-view state. */
   state: ProgressViewState;
+  /** Runtime stream-status operations needed for ghost hydration/persistence. */
+  runtimeStatus: DesktopProgressRuntimeStatus;
+  /** Runtime goal-control projection used for progress rail updates. */
+  goalControls: DesktopProgressGoalControls;
   /** Snapshot store for cross-launch persistence (may be undefined). */
   streamSnapshotStore?: DesktopStreamSnapshotStore;
   /** Sends a progress-view outbound message to the renderer. */
@@ -135,7 +150,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
         parentStreamId: snapshot.parentStreamId,
         description: snapshot.description,
       });
-      setRuntimeStreamStatusSilently(
+      opts.runtimeStatus.setSilently(
         snapshot.streamId,
         snapshot.lastKnownStatus,
       );
@@ -143,10 +158,10 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
 
     // Subscribe to progress-relevant event-bus channels.
     const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
-      const goal = GoalStore.getForStream(streamId);
-      opts.onGoalStateChanged(streamId, isGoalInFlight(goal), {
-        status: goal?.status,
-        objective: goal?.objective,
+      const goal = opts.goalControls.getControlState(streamId);
+      opts.onGoalStateChanged(streamId, goal.active, {
+        status: goal.status,
+        objective: goal.objective,
       });
     });
     const unsubscribeEnsureProgress = bus.on(
@@ -347,33 +362,10 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     const store = this.opts.streamSnapshotStore;
     if (!store) return;
 
-    const taskState = this.opts.state.snapshots.getTaskState(streamId);
-    const info = buildStreamInfo(this.opts.state, streamId, 'all');
-    const restored = this.restoredStreams.get(streamId);
-    const snapshot: RestoredStreamSnapshot = {
-      streamId,
-      label: info?.label ?? restored?.label ?? streamId,
-      agent: info?.agent ?? restored?.agent,
-      agentCategory:
-        info?.agentCategory ??
-        restored?.agentCategory ??
-        AgentCategory.Workflow,
-      inputFile: info?.inputFile || restored?.inputFile,
-      instruction: taskState?.agentConfig.instruction || restored?.instruction,
-      lastKnownStatus:
-        getRuntimeStreamStatus(streamId) ??
-        restored?.lastKnownStatus ??
-        STREAM_STATUS.STOPPED,
-      description: info?.description ?? restored?.description,
-      executionId: info?.executionId ?? restored?.executionId,
-      parentStreamId: info?.parentStreamId ?? restored?.parentStreamId,
-      creationTimestamp:
-        info?.creationTimestamp ?? restored?.creationTimestamp ?? Date.now(),
-      lastTimestamp:
-        this.opts.state.streamLogs.getLastTimestamp(streamId) ??
-        restored?.lastTimestamp,
-      persistedAt: Date.now(),
-    };
+    const snapshot = buildRestoredStreamSnapshot(this.opts.state, streamId, {
+      restored: this.restoredStreams.get(streamId),
+      lastKnownStatus: this.opts.runtimeStatus.get(streamId),
+    });
     void store.upsert(snapshot).catch((error: unknown) => {
       this.opts.logger.warn('Failed to persist stream snapshot', {
         data: error instanceof Error ? error : { error },

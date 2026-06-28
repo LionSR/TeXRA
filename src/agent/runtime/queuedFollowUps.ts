@@ -1,28 +1,27 @@
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
-
-export interface QueuedFollowUpsProjection {
+export interface RuntimeQueuedFollowUpsProjection {
   readonly streamId: StreamTabId;
   readonly messages: string[];
 }
 
-export function getQueuedFollowUpsProjection(
+function getRuntimeQueuedFollowUpsProjection(
   streamId: StreamTabId,
-): QueuedFollowUpsProjection {
+): RuntimeQueuedFollowUpsProjection {
   return {
     streamId,
     messages: ToolUseFollowUpQueue.getAll(streamId),
   };
 }
 
-export function emitQueuedFollowUps(
+export function publishRuntimeQueuedFollowUps(
   runtimeHost: AgentRuntimeHost,
   streamId: StreamTabId,
 ): void {
   runtimeHost.emit(
     'updateQueuedFollowUps',
-    getQueuedFollowUpsProjection(streamId),
+    getRuntimeQueuedFollowUpsProjection(streamId),
   );
 }

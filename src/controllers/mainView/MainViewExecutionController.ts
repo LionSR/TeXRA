@@ -1,14 +1,14 @@
 // Third-party imports
 
 // Local imports - agent
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
-  validateExecutionRequest,
-  type ValidatedExecutionRequest,
-} from '@agent/core/execution/executionRequests';
+  validateRuntimeExecutionRequest,
+  type RuntimeValidatedExecutionRequest,
+} from '@agent/runtime/executionRequests';
 
 // Local imports - shared schemas
 import type { MainViewExecuteMessage } from '@shared/mainView';
+import { AgentCategory } from '@shared/schemas/agent';
 import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
@@ -22,7 +22,7 @@ import {
 } from '@utils/files/pastedImageUtils';
 
 export type MainViewExecutionPreparationResult =
-  | { valid: true; request: ValidatedExecutionRequest }
+  | { valid: true; request: RuntimeValidatedExecutionRequest }
   | { valid: false; message: string; docsCommand?: string };
 
 function mapMediaFile(file: string | null): string | null {
@@ -32,8 +32,8 @@ function mapMediaFile(file: string | null): string | null {
 export function prepareMainViewExecutionRequest(
   message: MainViewExecuteMessage,
 ): MainViewExecutionPreparationResult {
-  // AgentConfigSchema prefaults agent/model; reject missing UI selections before
-  // schema parsing so the user sees the real form problem.
+  // Runtime config parsing prefaults agent/model; reject missing UI selections
+  // first so the user sees the real form problem.
   if (!message.agent || !message.model) {
     return {
       valid: false,
@@ -63,7 +63,7 @@ export function prepareMainViewExecutionRequest(
     };
   }
 
-  const validation = validateExecutionRequest({
+  const validation = validateRuntimeExecutionRequest({
     config: {
       ...message,
       agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,

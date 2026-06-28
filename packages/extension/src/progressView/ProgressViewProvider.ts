@@ -1,14 +1,27 @@
 import * as vscode from 'vscode';
 
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
-import { computeRuntimeAgentOptionsData } from '@agent/runtime/agentResolution';
+import { ProgressProposalOptionsController } from '@controllers/progressView/ProgressProposalOptionsController';
+import { getRuntimeToolUseAgent } from '@agent/runtime/agentResolution';
 import {
-  listRuntimeExternalInquiryThreads,
+  listRuntimeExternalInquiryOverviewThreads,
   listRuntimeOpenExternalInquiryPermissions,
-} from '@agent/runtime/externalInquiryQueries';
-import type { IProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
-import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
-import { detectRuntimeWaitingStreams } from '@agent/runtime/streamControl';
+} from '@agent/runtime/humanInputCommands';
+import { listRuntimeQueuedFollowUpMessages } from '@agent/runtime/followUpCommands';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  registerRuntimeProgressViewVisibilityProvider,
+  type RuntimeProgressViewVisibilityProvider,
+} from '@agent/runtime/progressViewCommands';
+import {
+  clearAllRuntimeStreamStatuses,
+  clearRuntimeStreamStatus,
+  getRuntimeStreamStatusSnapshot,
+  isRuntimeStreamInFlight,
+  markRuntimeRunningStreamsStopped,
+  recoverRuntimeRunningStreamsFromPersistedState,
+  setRuntimeStreamStatusSilently,
+} from '@agent/runtime/streamControl';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -20,13 +33,8 @@ import { workspaceSM } from '@common/state';
 import { bus } from '@eventBus/ProgressEventBus';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createChannelTrace } from '@logger';
-import {
-  buildVisibleBasicModelOptionsData,
-  computeModelOptionsData,
-} from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import {
-  AgentCategory,
   type AgentProposalPermission,
   type BashPermission,
   type ExternalInquiryPermission,
@@ -38,16 +46,16 @@ import {
   type ToolEditPermission,
   type UserQuestionPermission,
 } from '@shared/schemas';
-import { agentName } from '@shared/schemas/agent';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
-import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
+import {
+  buildStreamInfo,
+  buildStreamInfos,
+} from '@shared/progressView/backend/streamInfoUtils';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 
 import type { MainViewProvider } from '../MainViewProvider';
-
-const MAX_INQUIRY_THREAD_HYDRATION = 100;
 
 export type ProgressStreamRevealResult = 'revealed' | 'missing';
 
@@ -62,11 +70,11 @@ interface ProgressViewLogger {
  * In sidebar mode, the single `texra.mainView` hosts progress content —
  * MainViewProvider owns the WebviewView and delegates messages here.
  *
- * Implements IProgressViewBridge for agent runtime integration.
+ * Implements the runtime visibility provider for agent progress integration.
  */
 export class ProgressViewProvider
   extends BaseWebviewProvider
-  implements IProgressViewBridge
+  implements RuntimeProgressViewVisibilityProvider
 {
   public static readonly viewType = 'texra.progress';
   private static _instance: ProgressViewProvider | undefined;
@@ -92,6 +100,8 @@ export class ProgressViewProvider
 
   private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
   private _mainViewProvider?: MainViewProvider;
+  private readonly proposalOptionsController =
+    new ProgressProposalOptionsController();
 
   private toolEditHandler!: ApprovalRequestHandler<
     ToolEditPermission,
@@ -131,6 +141,20 @@ export class ProgressViewProvider
       sendMessage: (message) => this.sendToActiveProgressWebview(message),
       hasTarget: () => this.getActiveWebview() !== undefined,
       getStreamControls: getProgressStreamControls,
+      getQueuedFollowUps: listRuntimeQueuedFollowUpMessages,
+      runtimeSession: {
+        retainInterruptStreams: (streams) =>
+          defaultSession().interrupts.retainOnly(new Set(streams)),
+        flushPendingTraces: () => defaultSession().flushPendingTraces(),
+      },
+      runtimeStatus: {
+        getSnapshot: getRuntimeStreamStatusSnapshot,
+        setSilently: setRuntimeStreamStatusSilently,
+        clear: clearRuntimeStreamStatus,
+        clearAll: clearAllRuntimeStreamStatuses,
+        isInFlight: isRuntimeStreamInFlight,
+        markRunningStopped: markRuntimeRunningStreamsStopped,
+      },
       configureUi: ({ webviewUpdater: u }) => {
         const canSend = () => this.canSendToWebview();
         this.toolEditHandler = new ApprovalRequestHandler(
@@ -158,7 +182,7 @@ export class ProgressViewProvider
             u.showPermission({
               kind: PERMISSION_KIND.PROPOSAL,
               data: p,
-              modelOptionsData: buildVisibleBasicModelOptionsData(),
+              ...this.proposalOptionsController.getInitialOptions(),
             });
             // Then upgrade with availability metadata if possible
             void this.sendProposalModelOptions(p);
@@ -246,9 +270,9 @@ export class ProgressViewProvider
     );
 
     ProgressViewProvider._instance = this;
-    setProgressViewBridge(this);
 
     this._disposables.push(
+      registerRuntimeProgressViewVisibilityProvider(this),
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
         await this.backend.load();
         this.syncFullView({ forceRebuild: true });
@@ -316,29 +340,12 @@ export class ProgressViewProvider
   private async sendProposalModelOptions(
     proposal: AgentProposalPermission,
   ): Promise<void> {
-    // Model options have a visible-model fallback that does not require
-    // ServerSideKeyService, so the dropdown still appears if availability
-    // loading fails. Agent options have no static equivalent, so the agent
-    // dropdown is omitted when the registry fetch fails.
-    const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
-    const loadAgentOptions = async () => {
-      const all = await computeRuntimeAgentOptionsData();
-      const raw = isWorkflow ? all.workflow : all.toolUse;
-      // proposal.agent is a plain name, so keep identity separate from label.
-      return raw.map((opt) => ({ ...opt, value: agentName(opt.value) }));
-    };
-    const [modelOptions, agentOptions] = await Promise.all([
-      computeModelOptionsData().catch(() =>
-        buildVisibleBasicModelOptionsData(),
-      ),
-      loadAgentOptions().catch(() => undefined),
-    ]);
+    const options = await this.proposalOptionsController.buildOptions(proposal);
     if (!this.agentProposalHandler.get(proposal.proposalId)) return;
     this.webviewUpdater.showPermission({
       kind: PERMISSION_KIND.PROPOSAL,
       data: proposal,
-      modelOptionsData: modelOptions,
-      agentOptionsData: agentOptions,
+      ...options,
     });
   }
 
@@ -428,11 +435,7 @@ export class ProgressViewProvider
     if (!this.webviewUpdater.isAvailable()) return;
 
     try {
-      const threads = await listRuntimeExternalInquiryThreads({
-        status: 'any',
-        scope: 'all',
-        limit: MAX_INQUIRY_THREAD_HYDRATION,
-      });
+      const threads = await listRuntimeExternalInquiryOverviewThreads();
       this.webviewUpdater.syncInquiryThreads(threads);
     } catch {
       // A damaged manifest should not prevent the progress view from
@@ -513,10 +516,10 @@ export class ProgressViewProvider
   }
 
   public async cleanupTasksAfterRestart(): Promise<void> {
-    const waitingStreams = await detectRuntimeWaitingStreams(
+    const recovery = await recoverRuntimeRunningStreamsFromPersistedState(
       this.state.snapshots.getExecutionIdMap(),
     );
-    await this.resetRunningStreamStatuses(waitingStreams);
+    await this.resetRunningStreamStatuses(recovery);
     this.syncFullView({ forceRebuild: true });
   }
 
@@ -532,10 +535,12 @@ export class ProgressViewProvider
   }
 
   private async resetRunningStreamStatuses(
-    waitingStreams: Set<StreamTabId>,
+    recovery: Parameters<
+      ProgressBackend['eventHandler']['applyRunningStreamRecovery']
+    >[0],
   ): Promise<void> {
     const affectedStreams =
-      this.eventHandler.resetRunningTasksToError(waitingStreams);
+      this.eventHandler.applyRunningStreamRecovery(recovery);
 
     const streamsWithRunningGroups = await this.state.endRunningTaskGroups(
       Date.now(),
@@ -576,6 +581,28 @@ export class ProgressViewProvider
     this.webviewUpdater.setActiveStream(streamId);
     // Hydrate content (logs, todos, follow-ups, instruction, bypass state) + active-state metadata
     this.eventHandler.syncStreamContent(streamId, { includeActiveState: true });
+  }
+
+  public getStreamLabel(streamId: StreamTabId): string | undefined {
+    return buildStreamInfo(this.state, streamId, 'all')?.label;
+  }
+
+  public getVisibleStreamIds(): StreamTabId[] {
+    return buildStreamInfos(this.state, this.state.agentCategoryFilter).map(
+      (stream) => stream.name,
+    );
+  }
+
+  public isToolUseAgent(agent: string): boolean {
+    return getRuntimeToolUseAgent(agent) !== undefined;
+  }
+
+  public syncGoalControlState(streamId: StreamTabId): void {
+    const controls = getProgressStreamControls(streamId);
+    this.webviewUpdater.updateGoalActive(streamId, controls.goalActive, {
+      status: controls.goalStatus,
+      objective: controls.goalObjective,
+    });
   }
 
   public async revealStream(

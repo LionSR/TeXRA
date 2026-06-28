@@ -4,16 +4,15 @@ import {
   MainViewInteractionController,
   type MainViewCommandPlan,
 } from '@controllers/mainView/MainViewInteractionController';
-import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@controllers/onboarding/onboardingFunnel';
-import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
+import { AUTH_COMMANDS } from '@commands/auth';
 import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
-import { loadOptions } from '@frontend/agents/optionsLoader';
+import { createExtensionMainViewStartupController } from '@frontend/agents/mainViewStartup';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -34,6 +33,7 @@ import { DiffManager } from './managers/DiffManager';
 import * as executionHandlers from './managers/executionHandlers';
 import { FileManager } from './managers/FileManager';
 import { InstructionManager } from './managers/InstructionManager';
+import type { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
 import type { CommandMessage } from './managers/executionHandlers';
 
 export interface MainViewOnboardingHooks {
@@ -73,11 +73,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         PROVIDER_URLS[provider as keyof typeof PROVIDER_URLS],
       getToolDocsCommand,
     });
-    this.startupController = new MainViewStartupController({
-      getConfig,
-      loadOptions,
-      getAuthStatus,
-    });
+    this.startupController = createExtensionMainViewStartupController();
   }
 
   public override async handleMessage(
@@ -89,7 +85,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       this.instructionManager.attachWebview(webviewView);
       this.diffManager.attachWebview(webviewView);
 
-      const handled = dispatchMainViewInbound(
+      const handled = await dispatchMainViewInbound(
         message,
         this.createHandlerRegistry(webviewView),
         (error) => {
@@ -448,6 +444,14 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     value: boolean;
   }): Promise<void> {
     await updateConfig(configUpdate.key, configUpdate.value);
+  }
+
+  public async getAgentOptionsRefreshMessage() {
+    return this.startupController.getAgentOptionsRefreshMessage();
+  }
+
+  public async getModelOptionsRefreshMessage() {
+    return this.startupController.getModelOptionsRefreshMessage();
   }
 
   protected async handleWebviewReady(): Promise<void> {

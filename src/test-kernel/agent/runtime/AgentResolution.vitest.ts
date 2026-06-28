@@ -2,25 +2,41 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const agentIndexMock = vi.hoisted(() => ({
   computeAgentOptionsData: vi.fn(),
+  findAgentByIdentifier: vi.fn(),
   getAgent: vi.fn(),
   getAgentsByCategory: vi.fn(),
+  getAgentsBySource: vi.fn(),
   getVisibleAgents: vi.fn(),
   loadAgents: vi.fn(),
   refresh: vi.fn(),
+  toRemoteAgentProfileData: vi.fn(),
+}));
+
+const agentLaunchContextMock = vi.hoisted(() => ({
+  getAgentPath: vi.fn(),
+}));
+
+const agentLoadMock = vi.hoisted(() => ({
+  loadAgentDefinitionInspectionData: vi.fn(),
 }));
 
 vi.mock('@agent/index', () => agentIndexMock);
+vi.mock('@agent/runtime/AgentLaunchContext', () => agentLaunchContextMock);
+vi.mock('@agent/runtime/agentLoad', () => agentLoadMock);
 
 import {
   computeRuntimeAgentOptionsData,
   getRuntimeAgent,
-  getRuntimeAgentByIdentifier,
-  getRuntimeToolUseAgentCategory,
-  listRuntimeAgentsByCategory,
-  listRuntimeVisibleAgents,
+  getRuntimeToolUseAgent,
+  getRuntimeWorkflowAgent,
+  inspectRuntimeAgentDefinition,
+  listRuntimeRemoteAgentProfiles,
+  listRuntimeAgents,
   loadRuntimeAgents,
   refreshRuntimeAgentCatalog,
+  resolveRuntimeAgentIdentifiers,
   runtimeToolUseAgentHasAnyTool,
+  type RuntimeAgentEntry,
 } from '@agent/runtime/agentResolution';
 import { AgentCategory } from '@shared/schemas/agent';
 
@@ -29,7 +45,7 @@ describe('runtime agent resolution', () => {
     vi.clearAllMocks();
   });
 
-  it('resolves tool-use agents through the runtime boundary', () => {
+  it('exposes distinct runtime lookup intentions', () => {
     const entry = {
       category: AgentCategory.ToolUse,
       tools: ['delegate_agent'],
@@ -37,17 +53,49 @@ describe('runtime agent resolution', () => {
     agentIndexMock.getAgent.mockReturnValue(entry);
 
     expect(getRuntimeAgent('proof')).toBe(entry);
-    expect(getRuntimeAgentByIdentifier('remote:proof')).toBe(entry);
-    expect(getRuntimeToolUseAgentCategory('proof')).toBe(AgentCategory.ToolUse);
+    expect(getRuntimeAgent('remote:proof')).toBe(entry);
+    expect(getRuntimeWorkflowAgent('workflow-proof')).toBe(entry);
+    expect(getRuntimeToolUseAgent('proof')).toBe(entry);
     expect(
       runtimeToolUseAgentHasAnyTool('proof', new Set(['delegate_agent'])),
     ).toBe(true);
     expect(agentIndexMock.getAgent).toHaveBeenNthCalledWith(1, 'proof');
+    expect(agentIndexMock.getAgent).toHaveBeenCalledWith('remote:proof');
+    expect(agentIndexMock.getAgent).toHaveBeenCalledWith(
+      'workflow-proof',
+      AgentCategory.Workflow,
+    );
     expect(agentIndexMock.getAgent).toHaveBeenCalledWith(
       'proof',
       AgentCategory.ToolUse,
     );
-    expect(agentIndexMock.getAgent).toHaveBeenCalledWith('remote:proof');
+  });
+
+  it('resolves candidate identifiers as a batch and reports misses', () => {
+    const proof: RuntimeAgentEntry = {
+      name: 'proof',
+      category: AgentCategory.ToolUse,
+      source: 'builtInToolUse',
+      path: '/agents/proof.yaml',
+    };
+    const review: RuntimeAgentEntry = {
+      name: 'review',
+      category: AgentCategory.ToolUse,
+      source: 'builtInToolUse',
+      path: '/agents/review.yaml',
+    };
+    const agents = [proof, review];
+    agentIndexMock.findAgentByIdentifier.mockImplementation(
+      (entries: typeof agents, identifier: string) =>
+        entries.find((entry) => entry.name === identifier),
+    );
+
+    expect(
+      resolveRuntimeAgentIdentifiers(agents, ['proof', 'missing', 'review']),
+    ).toEqual({
+      resolved: [proof, review],
+      missing: ['missing'],
+    });
   });
 
   it('loads and projects the runtime agent catalog', async () => {
@@ -78,8 +126,13 @@ describe('runtime agent resolution', () => {
     await expect(
       loadRuntimeAgents({ includeRemote: false }),
     ).resolves.toBeUndefined();
-    expect(listRuntimeVisibleAgents(AgentCategory.ToolUse)).toBe(visible);
-    expect(listRuntimeAgentsByCategory(AgentCategory.ToolUse)).toBe(all);
+    expect(
+      listRuntimeAgents({
+        category: AgentCategory.ToolUse,
+        visibleOnly: true,
+      }),
+    ).toBe(visible);
+    expect(listRuntimeAgents({ category: AgentCategory.ToolUse })).toBe(all);
 
     expect(agentIndexMock.loadAgents).toHaveBeenCalledWith({
       includeRemote: false,
@@ -90,6 +143,111 @@ describe('runtime agent resolution', () => {
     expect(agentIndexMock.getAgentsByCategory).toHaveBeenCalledWith(
       AgentCategory.ToolUse,
     );
+  });
+
+  it('projects remote agent profile records through the runtime boundary', () => {
+    const remote = {
+      name: 'cloud-proof',
+      category: AgentCategory.ToolUse,
+      source: 'remote',
+    };
+    const profile = {
+      name: 'cloud-proof',
+      description: '',
+      visibility: ['public'],
+      category: AgentCategory.ToolUse,
+      supportsMultipleOutput: false,
+    };
+    agentIndexMock.getAgentsBySource.mockReturnValue([remote]);
+    agentIndexMock.toRemoteAgentProfileData.mockReturnValue(profile);
+
+    expect(listRuntimeRemoteAgentProfiles()).toEqual([profile]);
+
+    expect(agentIndexMock.getAgentsBySource).toHaveBeenCalledWith('remote');
+    expect(agentIndexMock.toRemoteAgentProfileData.mock.calls[0]?.[0]).toBe(
+      remote,
+    );
+  });
+
+  it('inspects local agent definitions as one runtime transaction', async () => {
+    const resolution = {
+      definitionPath: '/agents/proof.yaml',
+      entry: {
+        name: 'proof',
+        category: AgentCategory.Workflow,
+        source: 'builtInWorkflow',
+      },
+      resolvedName: 'proof',
+    };
+    const settings = { model: 'test-model' };
+    const prompts = { systemPrompt: 'Check the proof.' };
+    const rawDefinition = {
+      name: 'proof',
+      inherits: 'base-proof',
+      settings: {},
+      prompts: {},
+    };
+    agentLaunchContextMock.getAgentPath.mockResolvedValue(resolution);
+    agentLoadMock.loadAgentDefinitionInspectionData.mockResolvedValue({
+      rawDefinition,
+      inheritedAgentName: 'base-proof',
+      settings,
+      prompts,
+    });
+
+    await expect(
+      inspectRuntimeAgentDefinition('proof', {} as never),
+    ).resolves.toEqual({
+      resolution,
+      rawDefinition,
+      inheritedAgentName: 'base-proof',
+      settings,
+      prompts,
+    });
+
+    expect(agentLaunchContextMock.getAgentPath).toHaveBeenCalledWith(
+      'proof',
+      {},
+      AgentCategory.Workflow,
+      undefined,
+    );
+    expect(
+      agentLoadMock.loadAgentDefinitionInspectionData,
+    ).toHaveBeenCalledWith(resolution);
+  });
+
+  it('inspects remote agents without local YAML loading', async () => {
+    const resolution = {
+      definitionPath: 'remote:proof',
+      entry: {
+        name: 'proof',
+        category: AgentCategory.ToolUse,
+        source: 'remote',
+      },
+      resolvedName: 'proof',
+    };
+    const settings = { agentCategory: AgentCategory.ToolUse };
+    const prompts = { systemPrompt: 'Remote proof.' };
+    agentLaunchContextMock.getAgentPath.mockResolvedValue(resolution);
+    agentLoadMock.loadAgentDefinitionInspectionData.mockResolvedValue({
+      settings,
+      prompts,
+    });
+
+    await expect(
+      inspectRuntimeAgentDefinition(
+        'remote:proof',
+        {} as never,
+        AgentCategory.ToolUse,
+      ),
+    ).resolves.toEqual({
+      resolution,
+      settings,
+      prompts,
+    });
+    expect(
+      agentLoadMock.loadAgentDefinitionInspectionData,
+    ).toHaveBeenCalledWith(resolution);
   });
 
   it('refreshes the runtime agent catalog', async () => {

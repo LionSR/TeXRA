@@ -11,11 +11,11 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 import type { FileLocation } from '@shared/schemas';
 
 // Local imports - tools
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
   currentToolRoot,
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local imports - utilities
 import {

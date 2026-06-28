@@ -21,6 +21,16 @@ function readProgressViewProvider(): string {
   );
 }
 
+function readProgressProposalOptionsController(): string {
+  return readFileSync(
+    resolve(
+      REPO_ROOT,
+      'src/controllers/progressView/ProgressProposalOptionsController.ts',
+    ),
+    'utf8',
+  );
+}
+
 describe('ProgressViewProvider pending permissions', () => {
   it('does not type its local logger as agent trace internals', () => {
     const source = readProgressViewProvider();
@@ -44,14 +54,12 @@ describe('ProgressViewProvider pending permissions', () => {
   });
 
   it('keeps proposal agent dropdown identity separate from display labels', () => {
-    const source = readProgressViewProvider();
-    const methodStart = source.indexOf('sendProposalModelOptions');
-    const methodEnd = source.indexOf('public static getInstance', methodStart);
-    expect(methodStart).toBeGreaterThanOrEqual(0);
-    expect(methodEnd).toBeGreaterThan(methodStart);
-    const method = source.slice(methodStart, methodEnd);
+    const provider = readProgressViewProvider();
+    const controller = readProgressProposalOptionsController();
 
-    expect(method).toContain('value: agentName(opt.value)');
-    expect(method).not.toContain('value: opt.label');
+    expect(provider).toContain('proposalOptionsController.buildOptions');
+    expect(provider).not.toContain('agentName(');
+    expect(controller).toContain('value: agentName(option.value)');
+    expect(controller).not.toContain('value: option.label');
   });
 });

@@ -2,11 +2,7 @@ import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 
-import {
-  RuntimeBundledAgentDirectorySync,
-  RuntimeGlobalStorageAgentDirectoryStorage,
-  RuntimePathAgentDirectoryBundleSource,
-} from '@agent/runtime/agentDirectories';
+import { syncRuntimeBundledAgentDirectories } from '@agent/runtime/agentDirectories';
 import { toErrorMessage } from '@common/errors';
 import {
   GlobalStateKey,
@@ -77,24 +73,19 @@ export async function copyDefaultAgents(
 ): Promise<void> {
   const currentVersion = vscode.extensions.getExtension(context.extension.id)
     ?.packageJSON.version;
-  const sync = new RuntimeBundledAgentDirectorySync({
-    bundleSource: new RuntimePathAgentDirectoryBundleSource(
-      path.join(context.extensionPath, 'resources'),
-    ),
-    storage: new RuntimeGlobalStorageAgentDirectoryStorage(),
-    versionStore: {
-      get: () => globalSM.get<string>(GlobalStateKey.LAST_KNOWN_VERSION),
-      update: (version) =>
-        globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, version),
-    },
-    logger: {
-      info: (message) => logger.info('extension', message),
-      warn: (message) => logger.warn('extension', message),
-    },
-  });
 
   try {
-    await sync.reconcile(currentVersion);
+    await syncRuntimeBundledAgentDirectories({
+      channel: 'extension',
+      resourcesPath: vscode.Uri.joinPath(context.extensionUri, 'resources')
+        .fsPath,
+      currentVersion,
+      versionStore: {
+        get: () => globalSM.get<string>(GlobalStateKey.LAST_KNOWN_VERSION),
+        update: (version) =>
+          globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, version),
+      },
+    });
   } catch (err) {
     logger.error(
       'extension',

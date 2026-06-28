@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports - agent
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { noopAgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 // Local imports - tools
 import type { GhCheckRun, GhPullRequest } from '@tools/github/prTypes';

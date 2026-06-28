@@ -113,6 +113,8 @@ describe('progress view snapshot hydration', () => {
       bridge,
       {} as never,
       () => false,
+      undefined,
+      (streamId) => ToolUseFollowUpQueue.getAll(streamId),
     );
 
     state.snapshots.addOutputFiles(stream, { 1: [outputFile] });

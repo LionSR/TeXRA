@@ -32,12 +32,6 @@ interface LatexPreviewDisplayOptions {
   openBuildDisplay?: BuildDisplayFn;
 }
 
-let openBuildDisplayIfTex: BuildDisplayFn = async () => {};
-/** Inject the VS Code LaTeX build+display function. Default: no-op. */
-export function setOpenBuildDisplay(fn: BuildDisplayFn): void {
-  openBuildDisplayIfTex = fn;
-}
-
 /** Interface for entries that support LaTeX preview operations */
 export interface LatexPreviewEntry {
   request: { path: string };
@@ -57,6 +51,17 @@ const TEXRA_TEMP_DIR = '.texra-temp';
 const TEMP_ID_LENGTH = 8;
 
 const latexdiffService = new LaTeXdiffService('ToolEditApproval');
+
+function resolveOpenBuildDisplay(
+  entry: LatexPreviewEntry,
+  options: LatexPreviewDisplayOptions | undefined,
+): BuildDisplayFn | undefined {
+  const openBuildDisplay = options?.openBuildDisplay;
+  if (!openBuildDisplay) {
+    entry.onError('LaTeX preview is unavailable in this host.');
+  }
+  return openBuildDisplay;
+}
 
 /** Silently attempt to delete a file, ignoring errors */
 async function silentUnlink(filePath: string): Promise<void> {
@@ -215,6 +220,9 @@ export async function previewProposedLatex(
   options: LatexPreviewDisplayOptions = {},
 ): Promise<void> {
   await withLatexOperation(entry, 'Preview', async () => {
+    const openBuildDisplay = resolveOpenBuildDisplay(entry, options);
+    if (!openBuildDisplay) return;
+
     const content = await readFileWithFallback(
       entry.proposedUri,
       entry.proposedContent,
@@ -227,12 +235,9 @@ export async function previewProposedLatex(
 
     if (entry.isSettled()) return;
 
-    await (options.openBuildDisplay ?? openBuildDisplayIfTex)(
-      tempPathToLocation(tempPath),
-      {
-        preserveFocus: true,
-      },
-    );
+    await openBuildDisplay(tempPathToLocation(tempPath), {
+      preserveFocus: true,
+    });
   });
 }
 
@@ -249,6 +254,9 @@ export async function runLatexdiff(
   options?: LatexdiffOptions,
 ): Promise<void> {
   await withLatexOperation(entry, 'LaTeXdiff', async () => {
+    const openBuildDisplay = resolveOpenBuildDisplay(entry, options);
+    if (!openBuildDisplay) return;
+
     const [originalContent, proposedContent] = await Promise.all([
       readFileWithFallback(entry.originalUri, entry.originalContent),
       readFileWithFallback(entry.proposedUri, entry.proposedContent),
@@ -303,11 +311,8 @@ export async function runLatexdiff(
 
     if (entry.isSettled()) return;
 
-    await (options?.openBuildDisplay ?? openBuildDisplayIfTex)(
-      tempPathToLocation(diffFilePath),
-      {
-        preserveFocus: true,
-      },
-    );
+    await openBuildDisplay(tempPathToLocation(diffFilePath), {
+      preserveFocus: true,
+    });
   });
 }

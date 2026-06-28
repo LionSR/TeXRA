@@ -13,19 +13,15 @@ import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
-  computeRuntimeToolEditLineChangeSummary,
-  computeRuntimeToolEditUserPatch,
-  emitRuntimeToolEditApprovalPrompt,
-  findRuntimeToolEditFirstChangedLine,
-  registerRuntimePendingToolEditApproval,
   setRuntimeToolEditApprovalHandler,
+  startRuntimeToolEditApprovalPrompt,
   type RuntimeToolEditApprovalRequest,
   type RuntimeToolEditApprovalResult,
-  unregisterRuntimePendingToolEditApproval,
+  type RuntimeToolEditApprovalPromptSession,
 } from '@agent/runtime/approvalCommands';
 import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import {
   type DiffSession,
   type DiffSource,
@@ -35,11 +31,17 @@ import type { StreamTabId } from '@shared/schemas';
 import type { LineChanges } from '@shared/schemas/lineChanges';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import {
+  computeLineChangeSummary,
+  computeUserPatch,
+  firstChangedLine,
+} from '@shared/approval/toolEditDiff';
+import { writeApprovalTempFiles } from '@shared/approval/tempFileManager';
+import {
+  type BuildDisplayFn,
   type LatexPreviewEntry,
   previewProposedLatex,
   runLatexdiff,
 } from '@tools/approval/latexPreview';
-import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import { WorkspaceFS } from '@utils/files';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -63,6 +65,7 @@ const pendingApprovals = new Map<string, PendingApprovalEntry>();
 const diffViewHost: DiffViewHost = new VscodeDiffViewHost();
 let storageDirectory: string | undefined;
 let runtimeHost: AgentRuntimeHost | undefined;
+let openBuildDisplay: BuildDisplayFn | undefined;
 
 function getStorageDir(): string {
   if (!storageDirectory) {
@@ -91,10 +94,7 @@ async function revealFirstChangedLine(
   originalContent: string,
   proposedContent: string,
 ): Promise<void> {
-  const line = findRuntimeToolEditFirstChangedLine(
-    originalContent,
-    proposedContent,
-  );
+  const line = firstChangedLine(originalContent, proposedContent);
   if (line === null) {
     return;
   }
@@ -103,8 +103,7 @@ async function revealFirstChangedLine(
 }
 
 async function showProgressViewApprovalPrompt(
-  requestId: string,
-  request: RuntimeToolEditApprovalRequest,
+  promptSession: RuntimeToolEditApprovalPromptSession,
   relativePath: string,
   lineChanges: LineChanges,
 ): Promise<void> {
@@ -113,18 +112,10 @@ async function showProgressViewApprovalPrompt(
     vscode.commands.executeCommand('texra.showProgressView'),
   ).catch(() => {});
 
-  // Activate the stream that needs approval and post the prompt (shared with
-  // the desktop host); VS Code computes the relative path via the workspace.
-  emitRuntimeToolEditApprovalPrompt(getRuntimeHost(), {
-    requestId,
-    request,
+  promptSession.emitPrompt({
     relativePath,
     lineChanges,
   });
-}
-
-function resolveProgressViewApprovalPrompt(requestId: string): void {
-  getRuntimeHost().emit('resolveToolEditPermission', { requestId });
 }
 
 async function nativeRequestApproval(
@@ -159,7 +150,7 @@ async function nativeRequestApproval(
   const description = vscode.workspace.asRelativePath(
     WorkspaceFS.fullPath(filePath),
   );
-  const lineChanges = computeRuntimeToolEditLineChangeSummary(
+  const lineChanges = computeLineChangeSummary(
     originalContent,
     proposedContent,
   );
@@ -177,6 +168,7 @@ async function nativeRequestApproval(
   let result: RuntimeToolEditApprovalResult = { accepted: false };
   let diffSession: DiffSession | undefined;
   let tabCloseDisposable: vscode.Disposable | undefined;
+  let runtimePrompt: RuntimeToolEditApprovalPromptSession | undefined;
   try {
     const openedSession = await diffViewHost.openDiff(
       originalSource,
@@ -216,11 +208,16 @@ async function nativeRequestApproval(
         };
 
         pendingApprovals.set(requestId, entry);
-        registerRuntimePendingToolEditApproval(requestId, {
-          streamId: streamId ?? undefined,
+        runtimePrompt = startRuntimeToolEditApprovalPrompt({
+          requestId,
+          request,
           runtimeHost: getRuntimeHost(),
-          isSettled: () => approvalSettled,
-          settle,
+          pending: {
+            streamId: streamId ?? undefined,
+            runtimeHost: getRuntimeHost(),
+            isSettled: () => approvalSettled,
+            settle,
+          },
         });
 
         // Closing the proposed diff tab (e.g. Ctrl+W) must resolve the approval
@@ -274,10 +271,9 @@ async function nativeRequestApproval(
       }
     }
 
-    if (!approvalSettled) {
+    if (!approvalSettled && runtimePrompt) {
       void showProgressViewApprovalPrompt(
-        requestId,
-        request,
+        runtimePrompt,
         description,
         lineChanges,
       );
@@ -290,10 +286,7 @@ async function nativeRequestApproval(
       const appliedContent = normalizeLineEndings(
         await diffViewHost.readProposedContent(openedSession, proposedContent),
       );
-      const userPatch = computeRuntimeToolEditUserPatch(
-        proposedContent,
-        appliedContent,
-      );
+      const userPatch = computeUserPatch(proposedContent, appliedContent);
       result = {
         ...result,
         appliedContent,
@@ -311,7 +304,7 @@ async function nativeRequestApproval(
     // Get entry before deleting to access workspace temp cleanup functions
     const entry = pendingApprovals.get(requestId);
     pendingApprovals.delete(requestId);
-    unregisterRuntimePendingToolEditApproval(requestId);
+    runtimePrompt?.complete();
     if (diffSession) {
       await diffViewHost.closeDiff(diffSession);
     }
@@ -323,8 +316,6 @@ async function nativeRequestApproval(
         entry.workspaceTempCleanup.map((fn) => fn().catch(() => {})),
       );
     }
-
-    resolveProgressViewApprovalPrompt(requestId);
   }
 }
 
@@ -353,11 +344,14 @@ export async function handleProgressViewToolEditApprovalAction(
 
     case 'showLatexdiff':
       // Use ONLYCHANGEDPAGE for tool edit approvals to focus on changes
-      await runLatexdiff(entry, { subtype: 'ONLYCHANGEDPAGE' });
+      await runLatexdiff(entry, {
+        subtype: 'ONLYCHANGEDPAGE',
+        openBuildDisplay,
+      });
       break;
 
     case 'previewProposed':
-      await previewProposedLatex(entry);
+      await previewProposedLatex(entry, { openBuildDisplay });
       break;
 
     case 'approve': {
@@ -389,9 +383,11 @@ export async function handleProgressViewToolEditApprovalAction(
 export function initializeNativeToolEditApproval(
   context: vscode.ExtensionContext,
   host: AgentRuntimeHost,
+  buildDisplay: BuildDisplayFn,
 ): void {
   const baseDir = context.storageUri ?? context.globalStorageUri;
   storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
   runtimeHost = host;
+  openBuildDisplay = buildDisplay;
   setRuntimeToolEditApprovalHandler(nativeRequestApproval);
 }

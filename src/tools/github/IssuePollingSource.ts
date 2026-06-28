@@ -16,7 +16,7 @@
 
 import { z } from 'zod';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 import { shouldDropBotEvent } from './botFilter';
 import {

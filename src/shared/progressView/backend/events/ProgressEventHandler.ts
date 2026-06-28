@@ -1,12 +1,3 @@
-import type { AgentTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { getQueuedFollowUpsProjection } from '@agent/runtime/queuedFollowUps';
-import {
-  getRuntimeStreamStatusSnapshot,
-  markRuntimeRunningStreamsStopped,
-  recoverRuntimeRunningStreamsAfterRestart,
-  setRuntimeStreamStatusSilently,
-} from '@agent/runtime/streamControl';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import type {
   ProgressEventBusLike,
@@ -14,6 +5,7 @@ import type {
 } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
+  AgentCategory,
   type ConversationProgress,
   type GoalStatus,
   type StreamStatus,
@@ -23,6 +15,11 @@ import {
   WebviewUpdater,
   type LogContentExtras,
 } from '@shared/progressView/backend/WebviewUpdater';
+import {
+  defaultProgressRuntimeStatus,
+  type ProgressRunningStreamRecovery,
+  type ProgressRuntimeStatus,
+} from '@shared/progressView/backend/runtimeStatus';
 import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
 import {
   ProgressViewState,
@@ -45,6 +42,10 @@ export type ProgressEventSubscription = {
   dispose(): void;
 };
 
+interface ProgressEventLogger {
+  debug(message: string): void;
+}
+
 export interface ProgressStreamControls {
   toolEditBypass: boolean;
   superYoloBypass: boolean;
@@ -57,6 +58,8 @@ export type GetProgressStreamControls = (
   stream: StreamTabId,
 ) => ProgressStreamControls;
 
+export type GetQueuedFollowUps = (stream: StreamTabId) => readonly string[];
+
 function getDefaultProgressStreamControls(): ProgressStreamControls {
   return {
     toolEditBypass: false,
@@ -65,9 +68,13 @@ function getDefaultProgressStreamControls(): ProgressStreamControls {
   };
 }
 
+function getDefaultQueuedFollowUps(): readonly string[] {
+  return [];
+}
+
 /** Handles progress event bus subscriptions for the progress view. */
 export class ProgressEventHandler {
-  private readonly logger: AgentTrace;
+  private readonly logger: ProgressEventLogger;
   private readonly ctx: EventHandlerContext;
   private progressThrottleTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingProgressUpdates = new Map<StreamTabId, ConversationProgress>();
@@ -79,6 +86,8 @@ export class ProgressEventHandler {
     private readonly uiCallbacks: UICallbacks,
     private readonly hasPendingPermissions: (streamId: string) => boolean,
     private readonly getStreamControls: GetProgressStreamControls = getDefaultProgressStreamControls,
+    private readonly getQueuedFollowUps: GetQueuedFollowUps = getDefaultQueuedFollowUps,
+    private readonly runtimeStatus: ProgressRuntimeStatus = defaultProgressRuntimeStatus,
   ) {
     this.logger = createChannelTrace('ProgressEventHandler');
     this.ctx = { state: this.state, webviewUpdater: this.webviewUpdater };
@@ -348,7 +357,7 @@ export class ProgressEventHandler {
     if (!wasKnownStream || filterChanged) {
       this.webviewUpdater.sendStreamMetadata(
         this.state,
-        getRuntimeStreamStatusSnapshot(),
+        this.runtimeStatus.getSnapshot(),
       );
     } else if (shouldSwitch) {
       this.webviewUpdater.setActiveStream(streamId);
@@ -388,7 +397,7 @@ export class ProgressEventHandler {
       // including for background subagents that are not the active stream.
       this.webviewUpdater.sendStreamMetadata(
         this.state,
-        getRuntimeStreamStatusSnapshot(),
+        this.runtimeStatus.getSnapshot(),
       );
     }
   }
@@ -472,7 +481,7 @@ export class ProgressEventHandler {
   }
 
   private markAllRunningTasksAsCancelled(): void {
-    markRuntimeRunningStreamsStopped();
+    this.runtimeStatus.markRunningStopped();
   }
 
   public syncStreamContent(
@@ -502,7 +511,7 @@ export class ProgressEventHandler {
 
     const extras = this.buildStreamSyncExtras(stream);
     const { todos, plan } = this.state.snapshots.getWorkPlan(stream);
-    const queuedFollowUps = getQueuedFollowUpsProjection(stream).messages;
+    const queuedFollowUps = [...this.getQueuedFollowUps(stream)];
     const agentCategory = this.getStreamCategory(stream);
 
     // Optionally include active-stream state (replaces syncActiveStreamState).
@@ -569,7 +578,7 @@ export class ProgressEventHandler {
     previousStatus?: StreamStatus,
   ): void {
     if (previousStatus === undefined) {
-      setRuntimeStreamStatusSilently(streamId, status);
+      this.runtimeStatus.setSilently(streamId, status);
     }
 
     // Keep memory bounded by stream status:
@@ -596,7 +605,7 @@ export class ProgressEventHandler {
 
     if (isNewStream) {
       this.maybeUpdateFilterForCategory(this.getStreamCategory(streamId));
-      const statusesForRefresh = getRuntimeStreamStatusSnapshot();
+      const statusesForRefresh = this.runtimeStatus.getSnapshot();
       statusesForRefresh.set(streamId, status);
       this.webviewUpdater.sendStreamMetadata(this.state, statusesForRefresh);
     } else {
@@ -614,12 +623,12 @@ export class ProgressEventHandler {
   }
 
   getAllStreamStatuses(): Map<StreamTabId, StreamStatus> {
-    return getRuntimeStreamStatusSnapshot();
+    return this.runtimeStatus.getSnapshot();
   }
 
-  resetRunningTasksToError(waitingStreams: Set<StreamTabId>): StreamTabId[] {
-    const recovery = recoverRuntimeRunningStreamsAfterRestart(waitingStreams);
-
+  applyRunningStreamRecovery(
+    recovery: ProgressRunningStreamRecovery,
+  ): readonly StreamTabId[] {
     for (const streamId of recovery.waitingStreams) {
       this.logger.debug(`Stream ${streamId} restored to WAITING after reload`);
     }

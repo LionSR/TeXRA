@@ -1,21 +1,74 @@
-import type { ExecutionId, StreamTabId } from '@shared/schemas/identifiers';
-import type { Goal } from '@shared/schemas/goal';
+import type { StreamTabId } from '@shared/schemas/identifiers';
+import {
+  isGoalInFlight,
+  type Goal,
+  type GoalStatus,
+} from '@shared/schemas/goal';
 import { GoalStore } from '@tools/goal';
 
-export function getRuntimeGoalForStream(streamId: StreamTabId): Goal | null {
-  return GoalStore.getForStream(streamId);
+export interface RuntimeGoalControlState {
+  readonly active: boolean;
+  readonly status?: GoalStatus;
+  readonly objective?: string;
 }
 
-export function listRuntimeGoals(): Goal[] {
-  return GoalStore.list();
+export interface RuntimeGoalSessionStatus {
+  readonly status: GoalStatus;
+  readonly objective: string;
 }
 
-export function forgetRuntimeGoal(streamId: StreamTabId): Promise<void> {
-  return GoalStore.forget(streamId);
+export interface StartRuntimeGoalRequest {
+  readonly streamId: StreamTabId;
+  readonly objective: string;
 }
 
-export function forgetRuntimeGoalsByExecutionIds(
-  executionIds: readonly ExecutionId[],
-): Promise<void> {
-  return GoalStore.forgetByExecutionIds(executionIds);
+export interface RuntimeGoalSettingsItem {
+  readonly goalId: string;
+  readonly streamId: StreamTabId;
+  readonly objective: string;
+  readonly status: GoalStatus;
+  readonly createdAt: string;
+}
+
+function toRuntimeGoalSessionStatus(goal: Goal): RuntimeGoalSessionStatus {
+  return { status: goal.status, objective: goal.objective };
+}
+
+export function getRuntimeGoalSessionStatus(
+  streamId: StreamTabId,
+): RuntimeGoalSessionStatus | null {
+  const goal = GoalStore.getForStream(streamId);
+  return goal ? toRuntimeGoalSessionStatus(goal) : null;
+}
+
+export function getRuntimeGoalControlState(
+  streamId: StreamTabId,
+): RuntimeGoalControlState {
+  const goal = GoalStore.getForStream(streamId);
+  return {
+    active: isGoalInFlight(goal),
+    ...(goal?.status ? { status: goal.status } : {}),
+    ...(goal?.objective ? { objective: goal.objective } : {}),
+  };
+}
+
+export async function startRuntimeGoal({
+  streamId,
+  objective,
+}: StartRuntimeGoalRequest): Promise<RuntimeGoalSessionStatus> {
+  return toRuntimeGoalSessionStatus(await GoalStore.start(streamId, objective));
+}
+
+function toRuntimeGoalSettingsItem(goal: Goal): RuntimeGoalSettingsItem {
+  return {
+    goalId: goal.goalId,
+    streamId: goal.streamId,
+    objective: goal.objective,
+    status: goal.status,
+    createdAt: goal.createdAt,
+  };
+}
+
+export function listRuntimeGoalSettingsItems(): RuntimeGoalSettingsItem[] {
+  return GoalStore.list().map(toRuntimeGoalSettingsItem);
 }

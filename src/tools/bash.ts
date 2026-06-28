@@ -10,21 +10,21 @@ import {
   registerExecution,
   writeTerminalStatus,
 } from '@agent/storage';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   getCurrentToolContexts,
   type ToolCallContext,
 } from '@agent/followUp/ToolFileInteractionContext';
 import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { requestRuntimeFollowUp } from '@agent/runtime/followUpCommands';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { toErrorMessage } from '@common/errors';
 import {
   deriveRunOutcome,
   projectRunOutcome,
 } from '@common/constants/streamStatus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 // Local imports - tools
 import { type StreamTabId, type ExecutionId } from '@shared/schemas';
@@ -312,17 +312,16 @@ export class BashTool extends defineTool({
     };
 
     const deliverParentFollowUp = async (text: string): Promise<void> => {
-      const result = await sendFollowUp(
-        parentStreamId,
-        {
+      const result = await requestRuntimeFollowUp({
+        streamId: parentStreamId,
+        text: {
           text,
           origin: 'subagent_result',
         },
-        undefined,
-        undefined,
-        runSession,
-      );
-      if (result.status === 'no_session') {
+        runtimeHost,
+        session: runSession,
+      });
+      if (result.outcome === 'no_session') {
         logger.debug(
           `Background bash follow-up dropped: parent stream ${parentStreamId} has no active session (${result.streamStatus ?? 'unknown'}).`,
         );

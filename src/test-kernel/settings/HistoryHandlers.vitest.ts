@@ -4,25 +4,25 @@ import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBui
 import { AgentCategory } from '@shared/schemas/agent';
 
 const mocks = vi.hoisted(() => ({
-  listExecutions: vi.fn(),
-  readWorkspaceFiles: vi.fn(),
+  listRuntimeHistoryExecutions: vi.fn(),
+  readRuntimeHistoryExecutionRecord: vi.fn(),
 }));
 
-vi.mock('@agent/storage', () => ({
-  getExecutionStore: vi.fn(() => ({
-    readWorkspaceFiles: mocks.readWorkspaceFiles,
-  })),
-  listExecutions: mocks.listExecutions,
+vi.mock('@agent/runtime/historyCommands', () => ({
+  listRuntimeHistoryExecutions: mocks.listRuntimeHistoryExecutions,
+  readRuntimeHistoryExecutionRecord: mocks.readRuntimeHistoryExecutionRecord,
 }));
 
 describe('settings history handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.readWorkspaceFiles.mockResolvedValue([]);
+    mocks.readRuntimeHistoryExecutionRecord.mockResolvedValue({
+      workspaceFilePaths: [],
+    });
   });
 
   it('includes persisted edited files for tool-use history items', async () => {
-    mocks.listExecutions.mockResolvedValue([
+    mocks.listRuntimeHistoryExecutions.mockResolvedValue([
       {
         id: 'abc123',
         timestamp: '2026-05-31T12:00:00.000Z',
@@ -35,7 +35,9 @@ describe('settings history handlers', () => {
         category: 'toolUse',
       },
     ]);
-    mocks.readWorkspaceFiles.mockResolvedValue(['proofs/lemma.md']);
+    mocks.readRuntimeHistoryExecutionRecord.mockResolvedValue({
+      workspaceFilePaths: ['proofs/lemma.md'],
+    });
 
     const message = await buildHistoryMessage();
 
@@ -53,5 +55,8 @@ describe('settings history handlers', () => {
         description: undefined,
       },
     ]);
+    expect(mocks.readRuntimeHistoryExecutionRecord).toHaveBeenCalledWith(
+      'abc123',
+    );
   });
 });

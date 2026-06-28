@@ -7,6 +7,7 @@ import { satisfies as semverSatisfies } from 'semver';
 
 // Local imports - LaTeX
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+import { extractErrorMessage } from '@common/errors';
 import {
   probeLatexToolchain,
   type LatexToolchainProbe,
@@ -15,7 +16,6 @@ import {
   TEXRA_CLI_SUPPORTED_NODE_RANGE,
   TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY,
 } from '@shared/constants/cliRuntime';
-import { extractErrorMessage } from '@common/errors';
 
 // Local imports - CLI runtime
 import { CliExitCode } from './exitCodes';

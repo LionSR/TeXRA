@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - runtime
 import { getActiveFlushers } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
@@ -22,9 +21,11 @@ import {
   AgentExecutionHandle,
   executionRegistry,
 } from '@agent/runtime/executionRegistry';
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -126,6 +127,33 @@ describe('SessionHandle', () => {
       expect(a.executions.getHandle('exec:isolated')).toBeUndefined();
       expect(b.executions.getHandle('exec:b')).toBe(handleB);
     } finally {
+      b.dispose();
+    }
+  });
+
+  it('releases only the matching stream subscription across sessions', () => {
+    const a = new SessionHandle();
+    const b = new SessionHandle();
+    const { host } = createRecordingHost();
+    const streamA = 'stream:subscription-release-a' as StreamTabId;
+    const streamB = 'stream:subscription-release-b' as StreamTabId;
+    const executionA = 'exec:subscription-release-a';
+    const executionB = 'exec:subscription-release-b';
+
+    try {
+      trackAgent(a, host, createCoordinators(host), executionA, streamA);
+      trackAgent(b, host, createCoordinators(host), executionB, streamB);
+      a.subscriptions.bind(streamA, executionA, host);
+      b.subscriptions.bind(streamB, executionB, host);
+
+      ToolUseFollowUpQueue.release(streamA);
+
+      expect(a.subscriptions.unbind(streamA, executionA)).toBe(false);
+      expect(b.subscriptions.unbind(streamB, executionB)).toBe(true);
+    } finally {
+      ToolUseFollowUpQueue.release(streamA);
+      ToolUseFollowUpQueue.release(streamB);
+      a.dispose();
       b.dispose();
     }
   });

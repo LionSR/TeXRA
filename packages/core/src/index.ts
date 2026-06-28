@@ -72,7 +72,6 @@ export {
 export {
   type AgentFlowResult,
   AgentFlowResultSchema,
-  type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 // Per-run control handle (F-2): the run's live handle, exposed via `onRun`.
 // Its `.result` promise settles with the terminal `ResultEvent` (always
@@ -83,7 +82,7 @@ export { type AgentRunHandle } from '@agent/runtime/executionRegistry';
 export {
   type AgentRuntimeHost,
   noopAgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+} from '@hosts/AgentRuntimeHost';
 
 // ── 5b. Session ownership (per-session runtime-state container) ──
 // One owner per session for interrupt / execution / coordinator / subscription

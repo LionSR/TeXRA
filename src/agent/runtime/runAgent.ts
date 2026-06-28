@@ -2,10 +2,15 @@ import { registerExecution } from '@agent/storage';
 
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
 import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse/ToolUseServices';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
+import {
+  EXECUTION_STATUS,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 import { executeAgent } from './executeAgent';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
+import { repairRuntimeHistoryTerminalStatus } from './historyCommands';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 import type { AgentRunHandle } from './executionRegistry';
 import type { SessionHandle } from './SessionHandle';
@@ -57,6 +62,7 @@ export async function runAgent(
   options.onExecutionIdAllocated?.(executionId);
   const shouldRegister =
     options.registerExecution ?? request.executionId === undefined;
+  let historyRepairCandidate = request.executionId !== undefined;
 
   if (shouldRegister) {
     await registerExecution(
@@ -66,19 +72,31 @@ export async function runAgent(
       undefined,
       request.config.agentCategory,
     );
+    historyRepairCandidate = true;
   }
 
-  const result = await executeAgent(request.config, executionId, {
-    runtimeHost: options.runtimeHost,
-    enforceCategory: options.enforceCategory,
-    stopAfterCycle: options.stopAfterCycle,
-    approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-    runtimeUnavailableTools: options.runtimeUnavailableTools,
-    onStreamResolved: options.onStreamResolved,
-    onBeforeWaiting: options.onBeforeWaiting,
-    session: options.session,
-    onRun: options.onRun,
-  });
+  let result: AgentFlowResult;
+  try {
+    result = await executeAgent(request.config, executionId, {
+      runtimeHost: options.runtimeHost,
+      enforceCategory: options.enforceCategory,
+      stopAfterCycle: options.stopAfterCycle,
+      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      runtimeUnavailableTools: options.runtimeUnavailableTools,
+      onStreamResolved: options.onStreamResolved,
+      onBeforeWaiting: options.onBeforeWaiting,
+      session: options.session,
+      onRun: options.onRun,
+    });
+  } catch (err) {
+    if (historyRepairCandidate) {
+      await repairRuntimeHistoryTerminalStatus(
+        executionId,
+        EXECUTION_STATUS.ERROR,
+      ).catch(() => {});
+    }
+    throw err;
+  }
   if (result.category === 'workflow') {
     await options.openWorkflowOutput?.(result);
   }

@@ -37,8 +37,10 @@ vi.mock('@agent/index', () => ({
 
 vi.mock('@agent/runtime/agentResolution', () => ({
   getRuntimeAgent: mocks.getAgent,
-  listRuntimeAgentsByCategory: mocks.getAgentsByCategory,
-  listRuntimeVisibleAgents: mocks.getVisibleAgents,
+  getRuntimeToolUseAgent: mocks.getAgent,
+  getRuntimeWorkflowAgent: mocks.getAgent,
+  listRuntimeAgents: ({ category }: { category: unknown }) =>
+    mocks.getAgentsByCategory(category),
   loadRuntimeAgents: mocks.loadAgents,
 }));
 

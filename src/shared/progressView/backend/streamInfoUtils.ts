@@ -1,5 +1,12 @@
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
+import {
+  AgentCategory,
+  type AgentCategoryFilter,
+  type RestoredStreamSnapshot,
+  STREAM_STATUS,
+  type StreamStatus,
+  type StreamTabId,
+  type StreamTabInfo,
+} from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
 import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
 import { buildStreamTabInfo } from './streamTabInfo';
@@ -95,4 +102,48 @@ export function buildStreamInfos(
     .filter(filterNotNull);
 
   return infos.sort(compareByNewestCreationTime);
+}
+
+export interface RestoredStreamSnapshotInputs {
+  readonly restored?: RestoredStreamSnapshot;
+  readonly lastKnownStatus?: StreamStatus;
+  readonly now?: () => number;
+}
+
+/**
+ * Project a progress-view stream into the durable desktop snapshot format.
+ * The desktop bridge supplies runtime status and prior restored state; this
+ * helper owns the fallback order between live metadata and persisted metadata.
+ */
+export function buildRestoredStreamSnapshot(
+  state: ProgressViewState,
+  streamId: StreamTabId,
+  inputs: RestoredStreamSnapshotInputs = {},
+): RestoredStreamSnapshot {
+  const taskState = state.snapshots.getTaskState(streamId);
+  const info = buildStreamInfo(state, streamId, 'all');
+  const persistedAt = inputs.now?.() ?? Date.now();
+  const restored = inputs.restored;
+
+  return {
+    streamId,
+    label: info?.label ?? restored?.label ?? streamId,
+    agent: info?.agent ?? restored?.agent,
+    agentCategory:
+      info?.agentCategory ?? restored?.agentCategory ?? AgentCategory.Workflow,
+    inputFile: info?.inputFile || restored?.inputFile,
+    instruction: taskState?.agentConfig.instruction || restored?.instruction,
+    lastKnownStatus:
+      inputs.lastKnownStatus ??
+      restored?.lastKnownStatus ??
+      STREAM_STATUS.STOPPED,
+    description: info?.description ?? restored?.description,
+    executionId: info?.executionId ?? restored?.executionId,
+    parentStreamId: info?.parentStreamId ?? restored?.parentStreamId,
+    creationTimestamp:
+      info?.creationTimestamp ?? restored?.creationTimestamp ?? persistedAt,
+    lastTimestamp:
+      state.streamLogs.getLastTimestamp(streamId) ?? restored?.lastTimestamp,
+    persistedAt,
+  };
 }

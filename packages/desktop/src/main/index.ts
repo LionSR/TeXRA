@@ -17,8 +17,11 @@ import {
   backfillFirstRunDone,
   hasAnyProviderApiKey,
 } from '@controllers/onboarding/onboardingFunnel';
-import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import { getAgent } from '@agent/index/agentRegistry';
+import { requireRuntimeAgentDirectory } from '@agent/runtime/agentDirectories';
+import {
+  getRuntimeToolUseAgent,
+  loadRuntimeAgents,
+} from '@agent/runtime/agentResolution';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -26,9 +29,8 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
-import { AgentCategory, agentKeyOf } from '@shared/schemas/agent';
+import { AGENT_SOURCE, agentKeyOf } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { setDesktopAgentResumeHandler } from './desktopAgentResume.js';
 import {
   openDesktopStreamSnapshotStore,
@@ -412,7 +414,6 @@ function createWindow(options: {
     log: console,
     callbackState: options.authCallbackState,
   });
-  setOpenBuildDisplay(previewHost.openBuildDisplay);
   const openLogsFolder = async () =>
     previewHost.openPath(getDesktopLogDirectory());
   const openWorkspaceFolder = async () => {
@@ -672,7 +673,7 @@ function createWindow(options: {
       hasCredential: probeCredential,
       readyGate: onboardingReadyGate,
       selectSetupAgent: async () => {
-        const entry = getAgent('setup', AgentCategory.ToolUse);
+        const entry = getRuntimeToolUseAgent('setup');
         ipcRef.current?.postToRenderer({
           command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
           agentId: entry ? agentKeyOf(entry) : 'setup',
@@ -698,11 +699,10 @@ function createWindow(options: {
           // credential change can re-trigger the auto-start.
           throw new Error('Setup launch: no runnable model resolved.');
         }
-        // Idempotent: returns the in-flight/initialized registry so a kickoff
-        // racing the startup `loadAgents()` cannot hit "Could not find agent:
+        // Idempotent: returns the in-flight/initialized catalog so a kickoff
+        // racing the startup catalog load cannot hit "Could not find agent:
         // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
-        const { loadAgents } = await import('@agent/index');
-        await loadAgents();
+        await loadRuntimeAgents();
         await (await getAgentExecution()).handleExecute(message);
       },
       signInWithChatGpt: async () => {
@@ -731,8 +731,8 @@ function createWindow(options: {
     try {
       const globalState = platform().globalState;
       // Gate the whole probe + backfill on the flag being unwritten, so the
-      // credential/relay/`listExecutions` I/O only runs once (first launch
-      // after upgrade) rather than on every window creation.
+      // credential/relay/history I/O only runs once (first launch after
+      // upgrade) rather than on every window creation.
       if (
         globalState.get<boolean | undefined>(
           GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
@@ -747,13 +747,14 @@ function createWindow(options: {
       // already ran and is awaited before createWindow), wrongly classifying a
       // fresh credentialed user as a veteran → 'done', so State 1 never shows.
       const hasPriorInstall = options.hasPriorInstall;
-      // Inline `listExecutions` import so the agent storage module tree-shakes
+      // Inline history import so the agent storage module tree-shakes
       // from the desktop main bundle unless we actually reach the backfill
       // path on the first launch.
-      const { listExecutions } = await import('@agent/storage');
-      const hasRunHistory = await listExecutions()
-        .then((entries) => entries.length > 0)
-        .catch(() => false);
+      const { hasRuntimeExecutionHistory } =
+        await import('@agent/runtime/historyCommands');
+      const hasRunHistory = await hasRuntimeExecutionHistory().catch(
+        () => false,
+      );
       await backfillFirstRunDone(globalState, {
         hasCredential,
         hasPriorInstall,
@@ -784,7 +785,8 @@ function createWindow(options: {
   const shellActions = createDesktopShellActions(
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
     {
-      getCustomAgentDirectory: () => getAgentDirectories().custom(),
+      getCustomAgentDirectory: () =>
+        requireRuntimeAgentDirectory(AGENT_SOURCE.CUSTOM),
       openExternalUrl: previewHost.openExternal,
       openLogFolder: openLogsFolder,
       openPath: previewHost.openPath,

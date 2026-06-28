@@ -2,16 +2,14 @@ import type { TaskState } from '@agent/core/execution/TaskState';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { isNonEmptyString } from '@utils/core';
-
 import { extractTextFromTag } from '@utils/text/xmlUtils';
-import { renderPolishPrompt } from './polishModel';
+
 import { createHelperModelKit } from './helperModel';
+import { initializePolishModel, renderPolishPrompt } from './polishModel';
 
-const CHANNEL = 'TextEnhancement';
+const CHANNEL = 'TextPolishCommands';
 
-// ── Types ────────────────────────────────────────────────────
-
-export interface FileContext {
+export interface RuntimeTextPolishContext {
   agent?: string;
   inputFiles?: string[];
   contextFiles?: string[];
@@ -19,13 +17,31 @@ export interface FileContext {
   outputFiles?: string[];
 }
 
-// ── File context ─────────────────────────────────────────────
+export interface RuntimeTextPolishRequest {
+  readonly text: string;
+  readonly fileContext?: RuntimeTextPolishContext;
+}
 
-export function buildFileContextFromTaskState(
+export interface RuntimeTextPolishInitialization {
+  readonly promptTemplatePath: string;
+}
+
+export type RuntimeTextPolishResult =
+  | {
+      readonly success: true;
+      readonly text: string;
+    }
+  | {
+      readonly success: false;
+      readonly text: string;
+      readonly error?: string;
+    };
+
+export function buildRuntimeTextPolishContextFromTaskState(
   taskState: TaskState,
-): FileContext {
+): RuntimeTextPolishContext {
   const { agentConfig } = taskState;
-  const context: FileContext = {};
+  const context: RuntimeTextPolishContext = {};
 
   if (agentConfig.agent) {
     context.agent = agentConfig.agent;
@@ -46,7 +62,13 @@ export function buildFileContextFromTaskState(
   return context;
 }
 
-function formatFileContext(ctx: FileContext): string {
+export function initializeRuntimeTextPolish({
+  promptTemplatePath,
+}: RuntimeTextPolishInitialization): void {
+  initializePolishModel(promptTemplatePath);
+}
+
+function formatFileContext(ctx: RuntimeTextPolishContext): string {
   const lines: string[] = ['Current context:'];
   if (ctx.agent) lines.push(`Agent: ${ctx.agent}`);
 
@@ -66,15 +88,13 @@ function formatFileContext(ctx: FileContext): string {
     lines.push('', 'Files in the task:', ...fileEntries);
   }
 
-  return lines.join('\n') + '\n';
+  return `${lines.join('\n')}\n`;
 }
 
-// ── Polishing ────────────────────────────────────────────────
-
-export async function polishTextWithAI(
-  text: string,
-  fileContext?: FileContext,
-): Promise<{ success: boolean; text: string; error?: string }> {
+export async function requestRuntimeTextPolish({
+  text,
+  fileContext,
+}: RuntimeTextPolishRequest): Promise<RuntimeTextPolishResult> {
   try {
     const fileContextString = fileContext ? formatFileContext(fileContext) : '';
     const prompt = await renderPolishPrompt(fileContextString, text);

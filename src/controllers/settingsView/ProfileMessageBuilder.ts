@@ -14,10 +14,9 @@
  * resilience the desktop assembly already had).
  */
 import {
-  getAgentsBySource,
-  loadAgents,
-  toRemoteAgentProfileData,
-} from '@agent/index';
+  listRuntimeRemoteAgentProfiles,
+  loadRuntimeAgents,
+} from '@agent/runtime/agentResolution';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { FREE_TIER, ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -107,8 +106,8 @@ export async function buildProfileMessage(
 
   let remoteAgents: RemoteAgent[] = [];
   try {
-    await loadAgents();
-    remoteAgents = getAgentsBySource('remote').map(toRemoteAgentProfileData);
+    await loadRuntimeAgents();
+    remoteAgents = listRuntimeRemoteAgentProfiles();
   } catch {
     // Keep auth/profile UI usable even if the agent registry refresh fails.
   }

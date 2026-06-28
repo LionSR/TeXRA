@@ -34,6 +34,13 @@ export interface AgentYamlValidationResult extends ValidAgentDefinition {
   prompts: AgentPrompt;
 }
 
+export interface AgentDefinitionInspectionData {
+  readonly settings: AgentSetting;
+  readonly prompts: AgentPrompt;
+  readonly rawDefinition?: object;
+  readonly inheritedAgentName?: string;
+}
+
 /**
  * Parses a YAML string or already-parsed object and validates that it
  * represents a full agent definition. Returns the validated name, settings,
@@ -60,8 +67,7 @@ export function validateAgentYamlContent(
   };
 }
 
-/** Loads and parses a YAML file from an absolute path. */
-export async function loadYaml(absolutePath: string): Promise<object> {
+async function loadYaml(absolutePath: string): Promise<object> {
   if (!path.isAbsolute(absolutePath)) {
     throw new Error('loadYaml requires an absolute path');
   }
@@ -70,7 +76,7 @@ export async function loadYaml(absolutePath: string): Promise<object> {
   return yaml.parse(yamlContent);
 }
 
-export function ensureAgentCategoryForSource<
+function ensureAgentCategoryForSource<
   T extends { agentCategory?: AgentCategory },
 >(settings: T, source: AgentSource): T {
   if (source === 'builtInToolUse' && !settings.agentCategory) {
@@ -131,4 +137,30 @@ export async function loadAgentSettingAndPrompts(
 
   // Apply defaults and validate the final settings and prompts
   return [AgentSettingSchema.parse(settings), AgentPromptSchema.parse(prompts)];
+}
+
+export async function loadAgentDefinitionInspectionData(
+  resolution: ResolvedAgent,
+): Promise<AgentDefinitionInspectionData> {
+  const [settings, prompts] = await loadAgentSettingAndPrompts(resolution);
+
+  if (resolution.entry.source === 'remote') {
+    return { settings, prompts };
+  }
+
+  const rawDefinition = await loadYaml(resolution.definitionPath);
+  const inheritedAgentName =
+    rawDefinition &&
+    typeof rawDefinition === 'object' &&
+    'inherits' in rawDefinition &&
+    typeof rawDefinition.inherits === 'string'
+      ? rawDefinition.inherits
+      : undefined;
+
+  return {
+    rawDefinition,
+    ...(inheritedAgentName !== undefined && { inheritedAgentName }),
+    settings,
+    prompts,
+  };
 }

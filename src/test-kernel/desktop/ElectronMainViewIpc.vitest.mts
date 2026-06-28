@@ -1,3 +1,6 @@
+// Standard library imports
+import { readFileSync } from 'node:fs';
+
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,7 +13,11 @@ import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import {
+  desktopSourcePath,
+  moduleFileUrl,
+  repoPath,
+} from './desktopTestPaths.mjs';
 
 interface MainViewIpcModule {
   installDesktopMainViewIpc(
@@ -486,8 +493,8 @@ describe('desktop main-view IPC', () => {
       off: vi.fn(),
     };
     const modelListRefresh = createDeferred();
-    vi.doMock('@agent/index/agentRegistry', () => ({
-      computeAgentOptionsData: vi.fn(async () => ({
+    vi.doMock('@agent/runtime/agentResolution', () => ({
+      computeRuntimeAgentOptionsData: vi.fn(async () => ({
         workflow: [],
         toolUse: [],
       })),
@@ -541,5 +548,22 @@ describe('desktop main-view IPC', () => {
         optionsData: [{ value: 'fresh-model' }],
       },
     });
+  });
+
+  it('keeps startup option loading out of the IPC adapter', () => {
+    const startupIpc = readFileSync(
+      repoPath('packages/desktop/src/main/desktopMainViewStartup.ts'),
+      'utf8',
+    );
+    const startupController = readFileSync(
+      repoPath('packages/desktop/src/main/desktopMainViewStartupController.ts'),
+      'utf8',
+    );
+
+    expect(startupIpc).toContain('createDesktopMainViewStartupController');
+    expect(startupIpc).not.toContain('computeRuntimeAgentOptionsData');
+    expect(startupIpc).not.toContain('computeModelOptionsData');
+    expect(startupController).toContain('computeRuntimeAgentOptionsData');
+    expect(startupController).toContain('computeModelOptionsData');
   });
 });

@@ -4,22 +4,21 @@
  * the polling source, key derivation, and external event names differ.
  *
  * Each (streamId, key) pair holds one disposable from the polling source.
- * Event callbacks route through `sendFollowUp` so events land in the same
- * follow-up queue user-typed messages use; the agent consumes them via
- * the normal `waitForFollowUp` mechanism. When a stream's queue is released
- * (orchestrator disposed, user deleted the stream) every subscription
- * bound to that stream is auto-disposed.
+ * Event callbacks route through `requestRuntimeFollowUp` so events land in the
+ * same follow-up queue user-typed messages use, while queue projection remains
+ * owned by the runtime command boundary. When a stream's queue is released
+ * (orchestrator disposed, user deleted the stream), every subscription bound to
+ * that stream is auto-disposed.
  */
 
 import type { AgentTrace } from '@agent/trace';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { emitQueuedFollowUps } from '@agent/runtime/queuedFollowUps';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { requestRuntimeFollowUp } from '@agent/runtime/followUpCommands';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -69,10 +68,10 @@ interface BoundSubscription {
   /**
    * Session captured at bind() time (inside the run's AsyncLocalStorage).
    * onEvent fires later from a detached polling timer where the ALS is empty, so
-   * it must pass this session to sendFollowUp explicitly — otherwise sendFollowUp
-   * falls back to defaultSession() and the follow-up is misrouted/dropped on a
-   * non-default session (e.g. a desktop per-window session). Mirrors
-   * ExecutionSubscriptionBinder.
+   * it must pass this session to the runtime follow-up command explicitly.
+   * Otherwise detached callbacks would fall back to the default session and
+   * misroute/drop input on a non-default session, e.g. a desktop window
+   * session. Mirrors ExecutionSubscriptionBinder.
    */
   session: SessionHandle;
 }
@@ -129,16 +128,11 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       session,
     };
     subscription.onEvent = (text: string) => {
-      void sendFollowUp(
+      void requestRuntimeFollowUp({
         streamId,
         text,
-        undefined,
-        undefined,
-        subscription.session,
-      ).then((result) => {
-        if (result.status === 'sent' || result.status === 'queued') {
-          emitQueuedFollowUps(subscription.runtimeHost, streamId);
-        }
+        runtimeHost: subscription.runtimeHost,
+        session: subscription.session,
       });
     };
     bound.set(key, subscription);

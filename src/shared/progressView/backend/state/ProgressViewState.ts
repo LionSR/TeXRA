@@ -5,20 +5,10 @@ import {
   StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
-import type { AgentTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import {
-  clearAllRuntimeStreamStatuses,
-  clearRuntimeStreamStatus,
-  isRuntimeStreamInFlight,
-} from '@agent/runtime/streamControl';
-import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
 import { toErrorMessage } from '@common/errors';
 import { createChannelTrace } from '@logger';
 import {
+  AgentCategory,
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
   LOG_LEVELS,
@@ -32,6 +22,14 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
+import {
+  defaultProgressRuntimeStatus,
+  type ProgressRuntimeStatus,
+} from '@shared/progressView/backend/runtimeStatus';
+import {
+  defaultProgressRuntimeSession,
+  type ProgressRuntimeSession,
+} from '@shared/progressView/backend/runtimeSession';
 import {
   getStreamTabStore,
   mapStreamTabStorage,
@@ -75,6 +73,11 @@ const ProgressViewPrefsSchema = z.object({
 });
 
 type ProgressViewPrefs = z.infer<typeof ProgressViewPrefsSchema>;
+
+interface ProgressViewStateLogger {
+  info(message: string): void;
+  warn(message: string, options?: { data?: unknown }): void;
+}
 
 /**
  * Backend-owned ephemeral counters, updated during streaming.
@@ -137,16 +140,14 @@ export class ProgressViewState {
   private _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
-  private readonly logger: AgentTrace;
-  private readonly session: SessionHandle;
-
+  private readonly logger: ProgressViewStateLogger;
   constructor(
     storage: MementoStorage,
     snapshots = new StreamSnapshotStore(),
-    session: SessionHandle = defaultSession(),
+    private readonly runtimeSession: ProgressRuntimeSession = defaultProgressRuntimeSession,
+    private readonly runtimeStatus: ProgressRuntimeStatus = defaultProgressRuntimeStatus,
   ) {
     this.logger = createChannelTrace('ProgressViewState');
-    this.session = session;
     this._prefs = new PersistedState(
       createBackendStorage(storage),
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
@@ -159,7 +160,9 @@ export class ProgressViewState {
 
   /** Drop interruptible handles whose stream sidecar was removed. */
   pruneInterruptHandles(): void {
-    this.session.interrupts.retainOnly(this.snapshots.getTaskStateStreams());
+    this.runtimeSession.retainInterruptStreams(
+      this.snapshots.getTaskStateStreams(),
+    );
   }
 
   // -- Preferences ------------------------------------------------------------
@@ -190,7 +193,7 @@ export class ProgressViewState {
    * call this on the stream being moved away from to close the loop.
    */
   releasePreviousActive(streamId: StreamTabId): void {
-    if (!isRuntimeStreamInFlight(streamId)) {
+    if (!this.runtimeStatus.isInFlight(streamId)) {
       this.streamLogs.releaseEntries(streamId);
     }
   }
@@ -318,7 +321,7 @@ export class ProgressViewState {
 
   async clearStream(stream: StreamTabId): Promise<void> {
     // Clear in-memory state
-    clearRuntimeStreamStatus(stream);
+    this.runtimeStatus.clear(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
@@ -349,7 +352,7 @@ export class ProgressViewState {
     );
 
     // Clear in-memory state
-    clearAllRuntimeStreamStatuses();
+    this.runtimeStatus.clearAll();
     this._sessionState.clear();
     this._streamStates.clear();
     this._prefs.reset();
@@ -401,7 +404,7 @@ export class ProgressViewState {
    * Flush pending writes from all managers.
    */
   async flush(): Promise<void> {
-    this.session.flushPendingTraces();
+    this.runtimeSession.flushPendingTraces();
     await Promise.all([this.streamLogs.flush(), this.snapshots.flush()]);
   }
 

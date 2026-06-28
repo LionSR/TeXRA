@@ -6,12 +6,16 @@ import {
   createResponseCycleFlow,
   type ResponseCycleShared,
 } from '@agent/core/flows/ResponseCycleFlow';
-import { withModelClient } from '@agent/core/flows/CycleServices';
+import {
+  withModelClient,
+  type ModelClientServices,
+  type ResponseCycleServices,
+} from '@agent/core/flows/CycleServices';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/execution/AgentState';
-import { bestConnectionMethod } from '@agent/runtime/textConnection';
+import { chooseRuntimeTextConnection } from '@agent/runtime/textConnectionCommands';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { ensureError, normalizeProviderError } from '@common/errors';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
@@ -98,18 +102,18 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
       const flow = createResponseCycleFlow<C>();
       const { modelHandler } = this.services;
-      flow.setServices(
-        await withModelClient(
-          {
-            ...this.services,
-            bestConnectionMethod,
-            round: prepRes.round,
-            run: prepRes.run,
-            workspace: prepRes.workspace,
-          },
-          modelHandler,
-        ),
-      );
+      const cycleServices: Omit<
+        ResponseCycleServices<C>,
+        keyof ModelClientServices<C>
+      > = {
+        ...this.services,
+        bestConnectionMethod: (str1, str2) =>
+          chooseRuntimeTextConnection({ str1, str2 }),
+        round: prepRes.round,
+        run: prepRes.run,
+        workspace: prepRes.workspace,
+      };
+      flow.setServices(await withModelClient(cycleServices, modelHandler));
       await flow.run(cycleShared);
 
       if (cycleShared.lastError) {

@@ -1,12 +1,12 @@
 // Local imports - common webview
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { unique } from '@utils/core';
 
 // Local imports - shared utilities
 import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared schemas
 import type { MultipleDocumentFileType } from '@shared/schemas';
+import { unique } from '@utils/core';
 
 // Third-party type imports
 import type { ReactiveController, ReactiveControllerHost } from 'lit';

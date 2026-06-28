@@ -21,10 +21,7 @@ import {
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
 import { initializeGoalPrompts } from '@agent/goal';
-import {
-  bootstrapRuntimeAgentDirectories,
-  RuntimePathAgentDirectoryBundleSource,
-} from '@agent/runtime/agentDirectories';
+import { bootstrapRuntimeAgentDirectories } from '@agent/runtime/agentDirectories';
 
 // Local imports - auth
 import {
@@ -273,9 +270,7 @@ export async function initCliPlatform(
       GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION;
     await bootstrapRuntimeAgentDirectories({
       channel: 'cli',
-      bundleSource: new RuntimePathAgentDirectoryBundleSource(
-        context.resourcesPath,
-      ),
+      resourcesPath: context.resourcesPath,
       currentVersion: context.version,
       customDirectoryStore: { get: () => undefined },
       versionStore: {

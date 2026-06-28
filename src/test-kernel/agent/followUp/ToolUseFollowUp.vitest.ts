@@ -9,7 +9,6 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   AgentExecutionHandle,
   executionRegistry,
@@ -22,6 +21,7 @@ import {
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import { noopAgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 
 describe('ToolUseFollowUp', () => {

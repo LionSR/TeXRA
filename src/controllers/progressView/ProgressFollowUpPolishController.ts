@@ -1,10 +1,11 @@
 // Local imports - agent
-import type { TaskState } from '@agent/core/execution/TaskState';
 import {
-  buildFileContextFromTaskState,
-  polishTextWithAI,
-  type FileContext,
-} from '@agent/runtime/textEnhancement';
+  buildRuntimeTextPolishContextFromTaskState,
+  requestRuntimeTextPolish,
+  type RuntimeTextPolishRequest,
+  type RuntimeTextPolishResult,
+} from '@agent/runtime/textPolishCommands';
+import type { RuntimeTaskState } from '@agent/runtime/executionRequests';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -21,19 +22,12 @@ type UpdateFollowUpTextMessage = Extract<
 export interface ProgressFollowUpPolishInput {
   readonly stream: StreamTabId;
   readonly text: string;
-  readonly taskState: TaskState | undefined;
-}
-
-export interface ProgressFollowUpPolishTextResult {
-  readonly success: boolean;
-  readonly text: string;
-  readonly error?: string;
+  readonly taskState: RuntimeTaskState | undefined;
 }
 
 export type ProgressFollowUpPolishText = (
-  text: string,
-  fileContext?: FileContext,
-) => Promise<ProgressFollowUpPolishTextResult>;
+  request: RuntimeTextPolishRequest,
+) => Promise<RuntimeTextPolishResult>;
 
 export interface ProgressFollowUpPolishControllerDeps {
   readonly polishText: ProgressFollowUpPolishText;
@@ -61,7 +55,7 @@ export type ProgressFollowUpPolishResult =
 export class ProgressFollowUpPolishController {
   constructor(
     private readonly deps: ProgressFollowUpPolishControllerDeps = {
-      polishText: polishTextWithAI,
+      polishText: requestRuntimeTextPolish,
     },
   ) {}
 
@@ -73,8 +67,13 @@ export class ProgressFollowUpPolishController {
     }
 
     try {
-      const fileContext = buildFileContextFromTaskState(input.taskState);
-      const result = await this.deps.polishText(input.text, fileContext);
+      const fileContext = buildRuntimeTextPolishContextFromTaskState(
+        input.taskState,
+      );
+      const result = await this.deps.polishText({
+        text: input.text,
+        fileContext,
+      });
       if (result.success) {
         return {
           kind: 'updated',

@@ -12,13 +12,12 @@
 
 import { platform } from '@platform';
 import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
-import { getQueuedFollowUpsProjection } from '@agent/runtime/queuedFollowUps';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
@@ -35,7 +34,14 @@ export type SendFollowUpResult =
     }
   | { status: 'no_session'; streamStatus: string | undefined };
 
-/** In-flight resume attempts per stream — see {@link wakeOrReleaseQueuedStream}. */
+export type QueuedFollowUpWakeResult =
+  | { readonly status: 'not_required' }
+  | { readonly status: 'resumed' }
+  | { readonly status: 'resume_in_flight' }
+  | { readonly status: 'queued' }
+  | { readonly status: 'dropped' };
+
+/** In-flight resume attempts per stream — see {@link wakeQueuedFollowUpStream}. */
 const wakeAttempts = new Map<StreamTabId, Promise<boolean>>();
 
 /**
@@ -49,15 +55,15 @@ const wakeAttempts = new Map<StreamTabId, Promise<boolean>>();
  * Returns false when the queued item was dropped by the re-release; callers
  * should treat the delivery as failed and rely on their durable copy.
  */
-export async function wakeOrReleaseQueuedStream(
+export async function wakeQueuedFollowUpStream(
   streamId: StreamTabId,
   result: SendFollowUpResult,
-): Promise<boolean> {
+): Promise<QueuedFollowUpWakeResult> {
   if (
     result.status !== 'queued' ||
     (result.reason !== 'waiting' && result.reason !== 'children_running')
   ) {
-    return true;
+    return { status: 'not_required' };
   }
   // Serialize wakes per stream: hosts report an already-in-flight resume as
   // `false`, indistinguishable from "unresumable", and may not have set
@@ -73,16 +79,28 @@ export async function wakeOrReleaseQueuedStream(
     wakeAttempts.set(streamId, attempt);
   }
   const resumed = await attempt;
+  if (resumed) {
+    return { status: 'resumed' };
+  }
   if (
-    resumed ||
-    result.reason !== 'children_running' ||
     resumePort.isResumeInFlight?.(streamId) === true ||
     StreamStatusService.isActiveOrResuming(streamId)
   ) {
-    return true;
+    return { status: 'resume_in_flight' };
+  }
+  if (result.reason !== 'children_running') {
+    return { status: 'queued' };
   }
   ToolUseFollowUpQueue.release(streamId);
-  return false;
+  return { status: 'dropped' };
+}
+
+export async function wakeOrReleaseQueuedStream(
+  streamId: StreamTabId,
+  result: SendFollowUpResult,
+): Promise<boolean> {
+  const wake = await wakeQueuedFollowUpStream(streamId, result);
+  return wake.status !== 'dropped';
 }
 
 const logger = createChannelTrace('ToolUseFollowUp');
@@ -110,7 +128,10 @@ export function notifyFollowUpSent(
       );
     }
   }
-  runtimeHost?.emit('followUpSent', getQueuedFollowUpsProjection(streamId));
+  runtimeHost?.emit('followUpSent', {
+    streamId,
+    messages: ToolUseFollowUpQueue.getAll(streamId),
+  });
 }
 
 /**

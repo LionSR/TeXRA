@@ -25,8 +25,8 @@ import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 
 // Local imports - tools
-import { requireRuntimeHost } from '@tools/contextHelpers';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { requireRuntimeHost } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import {
   buildApprovalRejectedResult,

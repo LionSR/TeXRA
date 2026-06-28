@@ -14,7 +14,7 @@ export type DispatcherFn<TMessage extends CommandMessage> = (
   raw: unknown,
   handlers: HandlerRegistry<TMessage>,
   onError?: (error: unknown) => void,
-) => boolean;
+) => boolean | Promise<boolean>;
 
 /**
  * Creates a type-safe message dispatcher for a given schema.
@@ -40,7 +40,7 @@ export function createDispatcher<TMessage extends CommandMessage>(
     raw: unknown,
     handlers: HandlerRegistry<TMessage>,
     onError?: (error: unknown) => void,
-  ): boolean => {
+  ): boolean | Promise<boolean> => {
     const parseResult = schema.safeParse(raw);
     if (!parseResult.success) {
       onError?.(parseResult.error);
@@ -58,7 +58,12 @@ export function createDispatcher<TMessage extends CommandMessage>(
 
     const handlerResult = handler(message);
     if (handlerResult instanceof Promise) {
-      handlerResult.catch((error) => onError?.(error));
+      return handlerResult
+        .then(() => true)
+        .catch((error) => {
+          onError?.(error);
+          return true;
+        });
     }
     return true;
   };

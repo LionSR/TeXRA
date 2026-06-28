@@ -8,7 +8,8 @@ import {
   type DiffSource,
   type DiffViewHost,
 } from '@hosts/uiHosts';
-import { REVEAL_TIMEOUT_MS } from '@tools/approval/toolEditApproval';
+
+const REVEAL_TIMEOUT_MS = 1500;
 
 export class VscodeDiffViewHost implements DiffViewHost {
   async openDiff(

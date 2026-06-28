@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachDefaultTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 function resultEvent(overrides: Partial<ResultEvent> = {}): ResultEvent {
   return {

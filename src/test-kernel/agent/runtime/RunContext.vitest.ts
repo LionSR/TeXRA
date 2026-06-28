@@ -7,7 +7,7 @@ import {
   useRunContext,
   withRunContext,
 } from '@agent/runtime/RunContext';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 function createRuntimeHost(): AgentRuntimeHost {
   return {

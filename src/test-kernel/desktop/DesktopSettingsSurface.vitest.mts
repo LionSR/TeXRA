@@ -64,4 +64,25 @@ describe('desktop settings surface', () => {
     expect(desktopSettingsIpc).toContain('options.revealPath ??');
     expect(desktopMain).toContain('shell.showItemInFolder(filePath)');
   });
+
+  it('routes main-view option refresh projection through the startup controller', () => {
+    const desktopSettingsIpc = readSource(
+      'packages/desktop/src/main/desktopSettingsIpc.ts',
+    );
+
+    expect(desktopSettingsIpc).toContain(
+      'createDesktopMainViewStartupController',
+    );
+    expect(desktopSettingsIpc).toContain(
+      'mainViewStartupController.getModelOptionsRefreshMessage',
+    );
+    expect(desktopSettingsIpc).toContain(
+      'mainViewStartupController.getAgentOptionsRefreshMessage',
+    );
+    expect(desktopSettingsIpc).not.toContain('MAIN_VIEW_COMMANDS');
+    expect(desktopSettingsIpc).not.toContain('SET_MODEL_OPTIONS');
+    expect(desktopSettingsIpc).not.toContain('SET_AGENT_OPTIONS');
+    expect(desktopSettingsIpc).not.toContain('computeModelOptionsData');
+    expect(desktopSettingsIpc).not.toContain('computeRuntimeAgentOptionsData');
+  });
 });

@@ -4,11 +4,11 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
   ProgressEventBusLike,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type {
   DiffOptions,
   DiffSession,
@@ -458,6 +458,52 @@ describe('desktop tool edit approval', () => {
       controller.dispose();
       await rm(tempRoot, { recursive: true, force: true });
       await rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('reports unavailable LaTeXdiff preview when no build display is injected', async () => {
+    const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+    const { bus, requestToolEditApproval, desktopModule } =
+      await loadApprovalModules();
+    const messages: string[] = [];
+    const controller = desktopModule.createDesktopToolEditApprovalController({
+      runtimeHost: createBusRuntimeHost(bus),
+      tempRoot,
+      showErrorMessage: (message) => {
+        messages.push(message);
+      },
+    });
+    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
+    const offShow = bus.on('showToolEditPermission', (payload) =>
+      shown.push(payload),
+    );
+
+    try {
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/main.tex',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
+
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'showLatexdiff',
+      });
+
+      await vi.waitFor(() =>
+        expect(messages).toContain(
+          'LaTeX preview is unavailable in this host.',
+        ),
+      );
+
+      controller.dispose();
+      await expect(resultPromise).resolves.toMatchObject({ accepted: false });
+    } finally {
+      offShow();
+      controller.dispose();
+      await rm(tempRoot, { recursive: true, force: true });
     }
   });
 

@@ -8,21 +8,21 @@ import {
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
 import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
+import { SettingsHistoryActionController } from '@controllers/settingsView/SettingsHistoryActionController';
 import {
   buildModelSelectionMessage,
   createModelSelectionController,
 } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
-  computeAgentOptionsData,
-  getAgentsByCategory,
-  getVisibleAgents as getVisibleRegistryAgents,
-  loadAgents,
-  type AgentEntry,
-} from '@agent/index/agentRegistry';
-import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
+  listRuntimeAgents,
+  loadRuntimeAgents,
+  type RuntimeAgentEntry,
+} from '@agent/runtime/agentResolution';
+import {
+  requireRuntimeAgentDirectory,
+  resolveRuntimeAgentDirectory,
+} from '@agent/runtime/agentDirectories';
 import {
   codexCoordinator,
   getChatGptAuthStatus,
@@ -37,14 +37,9 @@ import {
   isApiProvider,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
-import {
-  computeModelOptionsData,
-  invalidateModelOptionsCache,
-} from '@model/computeModelOptions';
-import type { ExecutionId } from '@shared/schemas';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -54,7 +49,11 @@ import {
   normalizePlatform,
 } from '@shared/constants/latex';
 import type { LatexConfigField } from '@shared/constants/latex';
-import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
+import {
+  AGENT_SOURCE,
+  type AgentCategory,
+  type AgentSource,
+} from '@shared/schemas/agent';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
@@ -111,6 +110,10 @@ import {
   getCachedToolCheckResults,
   refreshDefaultDisabledToolCache,
 } from './desktopSettingsIpcHelpers.js';
+import {
+  createDesktopMainViewStartupController,
+  type DesktopMainViewAgentOptionsLoader,
+} from './desktopMainViewStartupController.js';
 import type { ConfigProvider } from '@platform/interfaces/config';
 import type { StateStore } from '@platform/interfaces/state';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -126,10 +129,10 @@ type ToolDashboardBuilder = (
 export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
   sendStartupCatalogData?: boolean;
-  loadAgents?: typeof loadAgents;
-  loadAgentOptionsData?: typeof computeAgentOptionsData;
-  getAgents?: (category: AgentCategory) => AgentEntry[];
-  getVisibleAgents?: (category: AgentCategory) => AgentEntry[];
+  loadAgents?: typeof loadRuntimeAgents;
+  loadAgentOptionsData?: DesktopMainViewAgentOptionsLoader;
+  getAgents?: (category: AgentCategory) => RuntimeAgentEntry[];
+  getVisibleAgents?: (category: AgentCategory) => RuntimeAgentEntry[];
   globalState?: StateStore;
   workspaceState?: StateStore;
   config?: ConfigProvider;
@@ -181,12 +184,13 @@ export function createDesktopSettingsIpc(
   const workspaceState = options.workspaceState ?? platform().workspaceState;
   const globalState = options.globalState ?? platform().globalState;
   const onError = options.onError ?? defaultOnError;
-  const loadAgentRegistry = options.loadAgents ?? loadAgents;
-  const loadAgentOptionsData =
-    options.loadAgentOptionsData ?? computeAgentOptionsData;
-  const getAgentEntries = options.getAgents ?? getAgentsByCategory;
+  const loadAgentRegistry = options.loadAgents ?? loadRuntimeAgents;
+  const loadAgentOptionsData = options.loadAgentOptionsData;
+  const getAgentEntries =
+    options.getAgents ?? ((category) => listRuntimeAgents({ category }));
   const getVisibleAgentEntries =
-    options.getVisibleAgents ?? getVisibleRegistryAgents;
+    options.getVisibleAgents ??
+    ((category) => listRuntimeAgents({ category, visibleOnly: true }));
   const usesDefaultToolDashboardBuilder =
     options.buildToolDashboardItems == null;
   const buildToolDashboardItems =
@@ -194,7 +198,8 @@ export function createDesktopSettingsIpc(
   const refreshToolAvailability = options.refreshToolAvailability;
   const secrets = options.secrets ?? tryPlatform()?.secrets ?? emptySecrets;
   const getCustomAgentDirectory =
-    options.getCustomAgentDirectory ?? (() => getAgentDirectories().custom());
+    options.getCustomAgentDirectory ??
+    (() => requireRuntimeAgentDirectory(AGENT_SOURCE.CUSTOM));
   const latexConfigPersistenceController =
     new LatexConfigPersistenceController();
   const latexToolingController = new LatexToolingController({
@@ -220,6 +225,7 @@ export function createDesktopSettingsIpc(
     getSourceDirectory: getAgentDirectory,
     getAgents: getAgentEntries,
     getVisibleAgents: getVisibleAgentEntries,
+    loadAgents: loadAgentRegistry,
   });
   const modelSelectionController = createModelSelectionController({
     workspaceState,
@@ -231,6 +237,15 @@ export function createDesktopSettingsIpc(
       globalState,
       onError,
     });
+  const mainViewStartupController = createDesktopMainViewStartupController({
+    modelListRefresh,
+    getConfig: (key, defaultValue) =>
+      getConfigProvider().get(key, defaultValue),
+    getVisibleModels: () => modelSelectionController.getVisibleModels(),
+    loadAgentOptions: loadAgentOptionsData,
+    getAuthStatus: async () => ({ authenticated: false }),
+  });
+  const historyActionController = new SettingsHistoryActionController();
   const memoryController = createSettingsMemoryController({
     globalState,
     prompt: {
@@ -278,21 +293,15 @@ export function createDesktopSettingsIpc(
   }
 
   function getAgentDirectory(source: AgentSource): Promise<string | undefined> {
-    switch (source) {
-      case 'custom':
-        return getCustomAgentDirectory();
-      case 'builtInWorkflow':
-        return getAgentDirectories().builtIn();
-      case 'builtInToolUse':
-        return getAgentDirectories().builtInToolUse();
-      case 'remote':
-        return Promise.resolve(undefined);
+    if (source === AGENT_SOURCE.CUSTOM) {
+      return getCustomAgentDirectory();
     }
+    return resolveRuntimeAgentDirectory(source);
   }
 
   async function postAgentSelectionData(): Promise<void> {
-    await loadAgentRegistry();
-    const { workflow, toolUse } = agentCatalogController.buildSelectionItems();
+    const { workflow, toolUse } =
+      await agentCatalogController.buildFreshSelectionItems();
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
       workflow,
@@ -308,19 +317,15 @@ export function createDesktopSettingsIpc(
   }
 
   async function postMainModelOptionsData(): Promise<void> {
-    options.postToRenderer({
-      command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsData: await computeModelOptionsData(
-        modelSelectionController.getVisibleModels(),
-      ),
-    });
+    options.postToRenderer(
+      await mainViewStartupController.getModelOptionsRefreshMessage(),
+    );
   }
 
   async function postMainAgentOptionsData(): Promise<void> {
-    options.postToRenderer({
-      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      optionsData: await loadAgentOptionsData(),
-    });
+    options.postToRenderer(
+      await mainViewStartupController.getAgentOptionsRefreshMessage(),
+    );
   }
 
   async function postCustomAgentDir(): Promise<void> {
@@ -421,21 +426,23 @@ export function createDesktopSettingsIpc(
   }
 
   async function deleteHistoryItem(historyId: string): Promise<void> {
-    if (getAllActiveExecutionIds().includes(historyId)) {
-      await options.showInfoMessage?.('Cannot delete a running execution');
-      return;
+    const result =
+      await historyActionController.deleteHistoryExecution(historyId);
+    switch (result.status) {
+      case 'running':
+        await options.showInfoMessage?.('Cannot delete a running execution');
+        return;
+      case 'missing':
+        await options.showInfoMessage?.(`History item not found: ${historyId}`);
+        return;
+      case 'deleted':
+        await postHistoryData();
+        return;
     }
-
-    const deleted = await deleteExecution(historyId as ExecutionId);
-    if (!deleted) {
-      await options.showInfoMessage?.(`History item not found: ${historyId}`);
-      return;
-    }
-    await postHistoryData();
   }
 
   async function clearHistory(): Promise<void> {
-    await deleteAllExecutions(new Set(getAllActiveExecutionIds()));
+    await historyActionController.clearHistoryExecutions();
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
     });
@@ -966,7 +973,6 @@ export function createDesktopSettingsIpc(
   }
 
   async function applyAgentModePreset(presetId: string): Promise<void> {
-    await loadAgentRegistry();
     const result = await agentCatalogController.applyPreset(presetId);
     if (!result.ok) {
       await options.showErrorMessage?.(`Unknown team: ${presetId}`);
@@ -982,7 +988,6 @@ export function createDesktopSettingsIpc(
       prompt: 'Name for the new team',
     });
     if (!name?.trim()) return;
-    await loadAgentRegistry();
     const preset = await agentCatalogController.saveCurrentPreset(name);
     postAgentModePresets();
     await options.showInfoMessage?.(`Saved team "${preset.name}"`);
@@ -1207,7 +1212,16 @@ export function createDesktopSettingsIpc(
         }
         return false;
       }
-      return dispatchSettingsViewInbound(message, settingsHandlers, onError);
+      const handled = dispatchSettingsViewInbound(
+        message,
+        settingsHandlers,
+        onError,
+      );
+      if (handled instanceof Promise) {
+        void handled.catch(onError);
+        return true;
+      }
+      return handled;
     },
   };
 }

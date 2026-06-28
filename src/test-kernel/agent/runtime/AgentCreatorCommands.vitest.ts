@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   getRuntimeAgentCreatorToolGroupOptions,
-  resolveRuntimeAgentCreatorToolGroups,
+  resolveRuntimeAgentCreatorToolGroupSelection,
   runRuntimeAgentCreator,
   type RuntimeAgentCreatorConfig,
   type RuntimeAgentCreatorUI,
@@ -65,18 +65,21 @@ describe('runtime agent-creator commands', () => {
         description: expect.any(String),
         detail: expect.any(String),
         picked: expect.any(Boolean),
+        selection: expect.objectContaining({
+          groups: [expect.any(String)],
+          tools: expect.any(Array),
+        }),
       }),
     );
   });
 
-  it('resolves selected tool groups to flow tool names', () => {
-    expect(
-      resolveRuntimeAgentCreatorToolGroups([
-        'File Operations',
-        'Computation',
-        'Unknown Group',
-      ]),
-    ).toEqual({
+  it('resolves selected runtime options to flow tool names', () => {
+    const options = getRuntimeAgentCreatorToolGroupOptions('compute files');
+    const selected = options.filter((option) =>
+      ['File Operations', 'Computation'].includes(option.label),
+    );
+
+    expect(resolveRuntimeAgentCreatorToolGroupSelection(selected)).toEqual({
       groups: ['File Operations', 'Computation'],
       tools: [
         'bash',

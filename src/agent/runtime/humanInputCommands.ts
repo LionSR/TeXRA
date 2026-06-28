@@ -1,13 +1,28 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { UserQuestionAnswers } from '@shared/schemas';
+import type {
+  ExternalInquiryPermission,
+  ExternalInquiryThreadSummary,
+  UserQuestionAnswers,
+} from '@shared/schemas';
 import type {
   ExternalInquiryThreadId,
   InquiryActionMessage,
   InquiryDraft,
 } from '@shared/schemas/inquiry';
 import { handleUserQuestionAction } from '@tools/userQuestion';
+import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
+import {
+  getOpenTurnDraft,
+  listOpenThreads,
+  listThreadsByStatus,
+  manifestToTranscript,
+  persistOpenTurnDraft,
+  readExternalInquiryThread,
+  type ExternalInquiryThreadManifest,
+} from '@tools/inquiry/externalInquiryStorage';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
-import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
+
+const RUNTIME_EXTERNAL_INQUIRY_OVERVIEW_LIMIT = 100;
 
 export interface RuntimeUserQuestionResolution {
   readonly requestId: string;
@@ -45,4 +60,67 @@ export function persistRuntimeExternalInquiryDraft(
   request: RuntimeExternalInquiryDraftPersistence,
 ): Promise<void> {
   return persistOpenTurnDraft(request);
+}
+
+/**
+ * List the bounded, host-safe external inquiry thread summaries used by
+ * progress surfaces.
+ */
+export function listRuntimeExternalInquiryOverviewThreads(): Promise<
+  ExternalInquiryThreadSummary[]
+> {
+  return listThreadsByStatus({
+    status: 'any',
+    scope: 'all',
+    limit: RUNTIME_EXTERNAL_INQUIRY_OVERVIEW_LIMIT,
+  });
+}
+
+/**
+ * Project a durable inquiry manifest into the live permission shape consumed by
+ * host progress UIs. Only an unanswered open turn attached to a parent stream is
+ * resumable as a host prompt.
+ */
+export function runtimeExternalInquiryPermissionFromManifest(
+  manifest: ExternalInquiryThreadManifest,
+): ExternalInquiryPermission | null {
+  if (manifest.status !== 'open') return null;
+  if (!manifest.parentStreamId) return null;
+
+  const lastTurn = manifest.turns.at(-1);
+  if (!lastTurn || lastTurn.answer) return null;
+
+  return {
+    requestId: manifest.threadId,
+    threadId: manifest.threadId,
+    question: lastTurn.question,
+    context: lastTurn.context ?? undefined,
+    suggestSearch: lastTurn.suggestSearch ?? undefined,
+    attachFiles: lastTurn.attachFiles ?? undefined,
+    sessionLinks: collectKnownSessionLinks(manifest),
+    draft: getOpenTurnDraft(manifest),
+    transcript: manifestToTranscript(manifest),
+    allowBypass: false,
+    streamId: manifest.parentStreamId,
+  };
+}
+
+/** Rehydrate unresolved durable inquiries into live host prompt permissions. */
+export async function listRuntimeOpenExternalInquiryPermissions(): Promise<
+  ExternalInquiryPermission[]
+> {
+  const open = await listOpenThreads();
+  const permissions: ExternalInquiryPermission[] = [];
+
+  for (const summary of open) {
+    const manifest = await readExternalInquiryThread(summary.threadId, {
+      hydrate: true,
+    }).catch(() => null);
+    if (!manifest) continue;
+
+    const permission = runtimeExternalInquiryPermissionFromManifest(manifest);
+    if (permission) permissions.push(permission);
+  }
+
+  return permissions;
 }

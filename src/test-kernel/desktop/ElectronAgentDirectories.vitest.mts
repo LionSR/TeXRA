@@ -19,6 +19,7 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
+import { AGENT_SOURCE } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
@@ -44,11 +45,13 @@ interface ElectronAgentDirectoriesModule {
   ): Promise<void>;
 }
 
-interface AgentDirectoriesRegistryModule {
-  getAgentDirectories(): {
-    builtIn(): Promise<string>;
-    builtInToolUse(): Promise<string>;
-  };
+interface RuntimeAgentDirectoriesModule {
+  requireRuntimeAgentDirectory(
+    source: typeof AGENT_SOURCE.BUILT_IN_WORKFLOW,
+  ): Promise<string>;
+  requireRuntimeAgentDirectory(
+    source: typeof AGENT_SOURCE.BUILT_IN_TOOL_USE,
+  ): Promise<string>;
 }
 
 async function writeText(filePath: string, content: string): Promise<void> {
@@ -68,7 +71,7 @@ describe('desktop agent directory bootstrap', () => {
 
   async function createHarness(): Promise<{
     bootstrapElectronAgentDirectories: ElectronAgentDirectoriesModule['bootstrapElectronAgentDirectories'];
-    getAgentDirectories: AgentDirectoriesRegistryModule['getAgentDirectories'];
+    requireRuntimeAgentDirectory: RuntimeAgentDirectoriesModule['requireRuntimeAgentDirectory'];
     globalStateStore: JsonStore;
     resourcesPath: string;
     storage: StorageProvider;
@@ -91,14 +94,14 @@ describe('desktop agent directory bootstrap', () => {
       { JsonStore },
       { bootstrapElectronAgentDirectories },
       { initPlatform },
-      { getAgentDirectories },
+      { requireRuntimeAgentDirectory },
     ] = await Promise.all([
       loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
       loadDesktopPlatformModule<ElectronAgentDirectoriesModule>(
         'agentDirectories.ts',
       ),
       import('@platform/platform'),
-      import('@agent/index/agentDirectoriesRegistry'),
+      import('@agent/runtime/agentDirectories'),
     ]);
     const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
     const globalStateStore = await JsonStore.open(
@@ -123,7 +126,7 @@ describe('desktop agent directory bootstrap', () => {
 
     return {
       bootstrapElectronAgentDirectories,
-      getAgentDirectories,
+      requireRuntimeAgentDirectory,
       globalStateStore,
       resourcesPath,
       storage,
@@ -133,7 +136,7 @@ describe('desktop agent directory bootstrap', () => {
   it('copies bundled agents into fresh userData storage and registers directory access', async () => {
     const {
       bootstrapElectronAgentDirectories,
-      getAgentDirectories,
+      requireRuntimeAgentDirectory,
       globalStateStore,
       resourcesPath,
       storage,
@@ -141,8 +144,12 @@ describe('desktop agent directory bootstrap', () => {
 
     await bootstrapElectronAgentDirectories(resourcesPath, '1.2.3');
 
-    const builtInDir = await getAgentDirectories().builtIn();
-    const toolUseDir = await getAgentDirectories().builtInToolUse();
+    const builtInDir = await requireRuntimeAgentDirectory(
+      AGENT_SOURCE.BUILT_IN_WORKFLOW,
+    );
+    const toolUseDir = await requireRuntimeAgentDirectory(
+      AGENT_SOURCE.BUILT_IN_TOOL_USE,
+    );
 
     expect(builtInDir).toBe(join(storage.getGlobalStoragePath(), 'agents'));
     expect(toolUseDir).toBe(

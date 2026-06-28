@@ -1,17 +1,34 @@
-// Third-party imports
-import * as assert from 'node:assert';
-import { describe, it, afterEach } from 'vitest';
-
 // Node.js built-in imports
+import * as assert from 'node:assert';
+
+// Third-party imports
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 
+// Local imports - tests
+import { createFakePlatform } from '@test/support/FakePlatform';
+
+// Local imports - agent
+import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { clearRuntimeStreamStatus } from '@agent/runtime/streamControl';
+
+// Local imports - shared
+import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+
 // Local imports - tools
 import {
+  DelegateAgentTool,
   rejectOversizedBibAttachments,
   type WorkflowAgentInput,
 } from '@tools/DelegationTools';
+import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
+
+// Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
 const BASE_INPUT: WorkflowAgentInput = {
@@ -108,5 +125,70 @@ describe('DelegationTools', () => {
 
     assert.strictEqual(result, null);
     assert.strictEqual(statCalled, false);
+  });
+
+  it('resumes subagents through the runtime follow-up command', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({ workspacePath: '/workspace' }));
+
+    const session = new SessionHandle();
+    const parentStreamId = 'delegate-resume-parent' as StreamTabId;
+    const childStreamId = 'delegate-resume-child' as StreamTabId;
+    const executionId = 'delegate-resume-execution';
+    const runtimeHost = { emit: vi.fn() };
+
+    try {
+      const handle = new AgentExecutionHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        'assistant',
+        'toolUse',
+        runtimeHost,
+      );
+      session.executions.trackAgentExecution(handle, {
+        status: STREAM_STATUS.WAITING,
+      });
+      subagentDeliveryRegistry.start(executionId);
+
+      const result = await withRunContext(
+        createRunContext({
+          runtimeHost,
+          streamId: parentStreamId,
+          session,
+        }),
+        () =>
+          new DelegateAgentTool().call({
+            execution_id: executionId,
+            instruction: 'Also check the boundary term.',
+          }),
+      );
+
+      if (result.isError) {
+        assert.fail(result.error);
+      }
+      assert.strictEqual(result.summary, "Follow-up queued for 'assistant'");
+      assert.match(result.output ?? '', /\(waiting\)/);
+      assert.deepStrictEqual(ToolUseFollowUpQueue.getAll(childStreamId), [
+        [
+          '<orchestrator-followup>',
+          'Also check the boundary term.',
+          '</orchestrator-followup>',
+        ].join('\n'),
+      ]);
+      assert.ok(
+        runtimeHost.emit.mock.calls.some(
+          ([event, payload]) =>
+            event === 'updateQueuedFollowUps' &&
+            payload.streamId === childStreamId &&
+            payload.messages.length === 1,
+        ),
+      );
+    } finally {
+      subagentDeliveryRegistry.finish(executionId);
+      session.dispose();
+      clearRuntimeStreamStatus(childStreamId);
+      ToolUseFollowUpQueue.release(childStreamId);
+    }
   });
 });

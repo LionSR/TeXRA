@@ -5,6 +5,10 @@ export interface SettingsAgentDirectoryEntry {
   path?: string;
 }
 
+export interface SettingsAgentDirectoryFileEntry {
+  path: string;
+}
+
 export interface SettingsAgentDirectoryState {
   getConfiguredCustomDir(): string | undefined;
   setConfiguredCustomDir(path: string): Promise<void>;
@@ -36,6 +40,27 @@ export type SettingsRevealAgentFileResult =
 export type SettingsOpenAgentFolderResult =
   | { ok: true; path: string }
   | { ok: false; reason: 'missingLocalDirectory' };
+
+export type SettingsCustomizeAgentFileInputResult =
+  | {
+      ok: true;
+      input: {
+        entry: SettingsAgentDirectoryFileEntry;
+        customDir: string;
+        sourceDir?: string;
+      };
+    }
+  | { ok: false; reason: 'missingFile' };
+
+export type SettingsDeleteCustomAgentFileInputResult =
+  | {
+      ok: true;
+      input: {
+        entry: SettingsAgentDirectoryFileEntry;
+        customDir: string;
+      };
+    }
+  | { ok: false; reason: 'missingFile' };
 
 export class SettingsAgentDirectoryController {
   constructor(private readonly deps: SettingsAgentDirectoryControllerDeps) {}
@@ -86,5 +111,37 @@ export class SettingsAgentDirectoryController {
     if (!sourceDir) return { ok: false, reason: 'missingLocalDirectory' };
 
     return { ok: true, path: sourceDir };
+  }
+
+  async resolveCustomizeAgentFileInput(input: {
+    source: AgentSource;
+    name: string;
+  }): Promise<SettingsCustomizeAgentFileInputResult> {
+    const entry = this.deps.state.getAgent(input.source, input.name);
+    if (!entry?.path) return { ok: false, reason: 'missingFile' };
+
+    return {
+      ok: true,
+      input: {
+        entry: { path: entry.path },
+        customDir: await this.deps.state.getCustomDir(),
+        sourceDir: await this.deps.state.getSourceDir(input.source),
+      },
+    };
+  }
+
+  async resolveDeleteCustomAgentFileInput(
+    name: string,
+  ): Promise<SettingsDeleteCustomAgentFileInputResult> {
+    const entry = this.deps.state.getAgent('custom', name);
+    if (!entry?.path) return { ok: false, reason: 'missingFile' };
+
+    return {
+      ok: true,
+      input: {
+        entry: { path: entry.path },
+        customDir: await this.deps.state.getCustomDir(),
+      },
+    };
   }
 }

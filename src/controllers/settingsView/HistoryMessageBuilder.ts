@@ -2,11 +2,14 @@
  * History list construction shared between desktop and extension settings
  * controllers.
  *
- * Both hosts iterate `listExecutions()` and turn each entry into the same
+ * Both hosts iterate runtime history entries and turn each entry into the same
  * `HistoryItem` shape for the settings UI. Action handlers (delete, rerun,
  * export) remain host-specific because they touch host-only UI surfaces.
  */
-import { getExecutionStore, listExecutions } from '@agent/storage';
+import {
+  listRuntimeHistoryExecutions,
+  readRuntimeHistoryExecutionRecord,
+} from '@agent/runtime/historyCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import type {
   HistoryItem,
@@ -14,7 +17,7 @@ import type {
 } from '@shared/schemas/historyViewMessages';
 
 export async function buildHistoryMessage(): Promise<UpdateHistoryMessage> {
-  const entries = await listExecutions();
+  const entries = await listRuntimeHistoryExecutions();
   const visibleEntries = entries.filter(
     (entry) => entry.agentConfig !== null && entry.category !== 'process',
   );
@@ -28,7 +31,10 @@ export async function buildHistoryMessage(): Promise<UpdateHistoryMessage> {
       };
       const editedFiles =
         cfg.agentCategory === 'toolUse'
-          ? await getExecutionStore(entry.id).readWorkspaceFiles()
+          ? [
+              ...(await readRuntimeHistoryExecutionRecord(entry.id))
+                .workspaceFilePaths,
+            ]
           : [];
       return {
         id: entry.id,

@@ -7,8 +7,8 @@ import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
-import { formatResultCount } from '@utils/text/stringUtils';
 import { unique } from '@utils/core';
+import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,
   resolveLatexFileOrThrow,

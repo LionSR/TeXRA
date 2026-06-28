@@ -2,16 +2,23 @@ import * as path from 'node:path';
 
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { isRemoteAgent } from '@agent/index/agentRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
 import { AgentCategory, getCleanAgentName } from '@shared/schemas/agent';
 import { isProcessAgent } from '@shared/streams/agentKind';
 
+export interface StreamTabAgentConfig {
+  readonly agent?: string;
+  readonly agentCategory?: AgentCategory;
+  readonly inputFiles?: readonly string[];
+  readonly model?: string;
+  readonly instruction?: string;
+  readonly workingDirectory?: string | null;
+}
+
 export interface StreamTabInfoInputs {
   streamId: string;
   /** Live taskState's config — preferred source of truth when available. */
-  config?: AgentConfig;
+  config?: StreamTabAgentConfig;
   /** Fallback hints (e.g. for hydrated ghost streams without taskState). */
   hints?: {
     agent?: string;
@@ -67,12 +74,10 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const command =
     processAgent && config?.instruction ? config.instruction : undefined;
 
-  // Hint takes precedence: the runtime/event layer sometimes knows
-  // remote-ness (e.g. setActiveStream payload) before the agent registry
-  // is loaded, in which case `isRemoteAgent` would return false for a
-  // genuinely remote agent.
-  const isRemote =
-    hints?.isRemote ?? (rawAgentName ? isRemoteAgent(rawAgentName) : false);
+  // Remote-ness is resolved by the runtime/event layer and carried as a hint.
+  // This builder receives already-resolved display primitives and must not
+  // query the agent registry.
+  const isRemote = hints?.isRemote ?? false;
 
   // Worktree context comes from one of two sources, in order:
   //   1. An explicit hint passed in by the caller (already resolved branch /

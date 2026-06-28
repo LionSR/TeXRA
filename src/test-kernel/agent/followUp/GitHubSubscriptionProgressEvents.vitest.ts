@@ -1,18 +1,18 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-const sendFollowUpMock = vi.hoisted(() =>
-  vi.fn(async () => ({ status: 'sent' as const })),
+const requestRuntimeFollowUpMock = vi.hoisted(() =>
+  vi.fn(async () => ({ outcome: 'sent' as const, accepted: true })),
 );
 
-vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
-  sendFollowUp: sendFollowUpMock,
+vi.mock('@agent/runtime/followUpCommands', () => ({
+  requestRuntimeFollowUp: requestRuntimeFollowUpMock,
 }));
 
 // Local imports - agent runtime
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 // Local imports - shared schemas
 import type { StreamTabId } from '@shared/schemas';
@@ -227,7 +227,7 @@ describe('GitHub subscription progress events', () => {
       keyOf: (input) => input,
       bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
     });
-    sendFollowUpMock.mockClear();
+    requestRuntimeFollowUpMock.mockClear();
 
     withRunContext(
       createRunContext({
@@ -240,12 +240,11 @@ describe('GitHub subscription progress events', () => {
 
     source.emit('owner/repo', 'new github event');
 
-    expect(sendFollowUpMock).toHaveBeenCalledWith(
+    expect(requestRuntimeFollowUpMock).toHaveBeenCalledWith({
       streamId,
-      'new github event',
-      undefined,
-      undefined,
+      text: 'new github event',
+      runtimeHost: host.host,
       session,
-    );
+    });
   });
 });

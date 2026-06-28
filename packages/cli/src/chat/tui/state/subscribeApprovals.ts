@@ -14,10 +14,9 @@
 // fire-and-forget event).
 
 import {
+  applyRuntimeApprovalDecisionBypass,
   resolveRuntimeBashApproval,
-  setRuntimeBashApprovalSessionBypass,
   setRuntimeToolEditApprovalHandler,
-  setRuntimeToolEditApprovalSessionBypass,
 } from '@agent/runtime/approvalCommands';
 import {
   resolveRuntimeExternalInquiry,
@@ -90,17 +89,12 @@ export function installTuiApprovals(
       decision = await enqueueTuiApproval({ kind: 'toolEdit', request }, host);
       markIfRejected(context, decision);
     }
-    if (
-      decision.accepted &&
-      decision.bypass === 'toolEdit' &&
-      request.streamId
-    ) {
-      setRuntimeToolEditApprovalSessionBypass({
-        streamId: request.streamId,
-        enabled: true,
-        runtimeHost: host,
-      });
-    }
+    applyRuntimeApprovalDecisionBypass({
+      streamId: request.streamId,
+      accepted: decision.accepted,
+      bypass: decision.bypass,
+      runtimeHost: host,
+    });
     return decision.accepted
       ? { accepted: true, appliedContent: request.proposedContent }
       : { accepted: false, userMessage: decision.userMessage };
@@ -126,17 +120,12 @@ function routeApproval(
         cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showBashPermission'],
         (bashPayload, decision) => {
-          if (
-            decision.accepted &&
-            decision.bypass === 'bash' &&
-            bashPayload.streamId
-          ) {
-            setRuntimeBashApprovalSessionBypass({
-              streamId: bashPayload.streamId,
-              enabled: true,
-              runtimeHost: host,
-            });
-          }
+          applyRuntimeApprovalDecisionBypass({
+            streamId: bashPayload.streamId,
+            accepted: decision.accepted,
+            bypass: decision.bypass,
+            runtimeHost: host,
+          });
           dispatchBash(bashPayload, decision);
         },
       );

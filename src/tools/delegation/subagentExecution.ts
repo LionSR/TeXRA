@@ -15,16 +15,13 @@ import {
 import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { requestRuntimeFollowUp } from '@agent/runtime/followUpCommands';
 import {
   getAgentFlowErrorResult,
   type AgentFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import {
-  sendFollowUp,
-  wakeOrReleaseQueuedStream,
-} from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 
 // Local imports - logger
@@ -357,24 +354,21 @@ export async function executeSubagent(
     );
     if (!targetStreamId) return false;
 
-    const result = await sendFollowUp(
-      targetStreamId,
-      followUp,
-      undefined,
-      undefined,
-      parentSession,
-    );
-    if (result.status === 'no_session') {
+    const result = await requestRuntimeFollowUp({
+      streamId: targetStreamId,
+      text: followUp,
+      runtimeHost,
+      session: parentSession,
+      wakeQueuedStream: options?.wake,
+    });
+    if (result.outcome === 'no_session') {
       logger.warn(
         'subagentDelivery',
         `Unable to deliver subagent result for ${executionId}: parent stream ${targetStreamId} has no active session (status: ${result.streamStatus ?? 'unknown'}).`,
       );
       return false;
     }
-    if (
-      options?.wake &&
-      !(await wakeOrReleaseQueuedStream(targetStreamId, result))
-    ) {
+    if (result.outcome === 'dropped') {
       logger.warn(
         'subagentDelivery',
         `Dropped subagent result for ${executionId}: parent stream ${targetStreamId} is gone and could not be resumed. The result remains in the execution report.`,

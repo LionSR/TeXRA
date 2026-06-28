@@ -33,6 +33,7 @@ import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import {
   STREAM_STATUS,
   type ExecutionId,
@@ -62,7 +63,6 @@ import {
   type StreamStatusRegistry,
 } from './StreamStatusService';
 import { currentSession, type SessionHandle } from './SessionHandle';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface AgentLaunchContext extends AgentCore {
   usageMonitor: UsageMonitor;

@@ -85,7 +85,7 @@ function createController(
   existingFiles: Set<string>,
 ): ProgressFollowUpController {
   return new ProgressFollowUpController({
-    getAgentCategory: () => AgentCategory.ToolUse,
+    isToolUseAgent: () => true,
     loadModelOptions: async () => [],
     state: emptyFollowUpState,
     workspace: {

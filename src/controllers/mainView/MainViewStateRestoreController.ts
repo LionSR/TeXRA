@@ -1,13 +1,9 @@
-// Local imports - agent registry
-import { resolveAgentKey } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-
-// Local imports - task state
+import { MainViewAgentSelectionController } from '@controllers/mainView/MainViewAgentSelectionController';
 import {
-  isToolUseTaskState,
-  isWorkflowTaskState,
-  type TaskState,
-} from '@agent/core/execution/TaskState';
+  isRuntimeToolUseTaskState,
+  isRuntimeWorkflowTaskState,
+  type RuntimeTaskState,
+} from '@agent/runtime/executionRequests';
 
 // Local imports - shared schemas
 import {
@@ -15,30 +11,31 @@ import {
   type MainViewPersistedState,
 } from '@shared/schemas';
 
+const agentSelectionController = new MainViewAgentSelectionController();
+
 /** Convert a TaskState payload into a full main view state snapshot. */
 export function buildMainViewState(
-  taskState: TaskState,
+  taskState: RuntimeTaskState,
 ): MainViewPersistedState {
   const { agentConfig } = taskState;
-  const isToolUse = isToolUseTaskState(taskState);
-  const isWorkflow = isWorkflowTaskState(taskState);
+  const isToolUse = isRuntimeToolUseTaskState(taskState);
+  const isWorkflow = isRuntimeWorkflowTaskState(taskState);
   const toolConfig = agentConfig.toolConfig ?? {};
 
-  const agentCategory = isToolUse
-    ? AgentCategory.ToolUse
-    : AgentCategory.Workflow;
-
-  // Resolve agent name to full key (e.g., "criticize" -> "builtIn:criticize").
-  // This ensures the frontend receives the exact key used in dropdown options.
-  const resolvedAgent = resolveAgentKey(agentConfig.agent, agentCategory);
+  const selection = agentSelectionController.getCategoryAgentSelection({
+    agentIdentifier: agentConfig.agent,
+    category: isToolUse ? 'toolUse' : 'workflow',
+  });
 
   // Build partial state from agentConfig and toolConfig, then parse with schema
   // to apply prefault defaults for any missing fields.
   // Note: UIFileFieldsSchema uses catch('') for nullable fields from AgentConfig.
   return MainViewPersistedStateSchema.parse({
-    sessionType: isToolUse ? 'toolUse' : 'workflow',
-    workflowAgent: isToolUse ? undefined : resolvedAgent,
-    toolUseAgent: isToolUse ? resolvedAgent : undefined,
+    sessionType: selection.sessionType,
+    workflowAgent:
+      selection.sessionType === 'workflow' ? selection.agentId : undefined,
+    toolUseAgent:
+      selection.sessionType === 'toolUse' ? selection.agentId : undefined,
     model: agentConfig.model,
     instruction: agentConfig.instruction,
     editedFile: agentConfig.editedFile,

@@ -115,6 +115,7 @@ async function runHistoryDelete(
   // exit because the human-readable path can't render "not found" usefully.
   if (
     result.deleted === 'one' &&
+    result.blockedReason == null &&
     !result.found &&
     context.outputFormat === 'text'
   ) {
@@ -126,6 +127,12 @@ async function runHistoryDelete(
   if (result.deleted === 'all') {
     const noun = result.count === 1 ? 'stored execution' : 'stored executions';
     text = `Deleted ${result.count} ${noun}.`;
+  } else if (result.blockedReason === 'running') {
+    text = '';
+    if (context.outputFormat === 'text') {
+      writeTextStderr('Cannot delete a running execution');
+      return CliExitCode.Usage;
+    }
   } else if (result.found) {
     text = `Deleted execution ${result.id}.`;
   } else {

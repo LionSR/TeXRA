@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import { createGunzip } from 'node:zlib';
 
 import { StatusCodes } from 'http-status-codes';
@@ -16,6 +15,7 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
+import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 
 export interface ExtractResult {
   success: boolean;

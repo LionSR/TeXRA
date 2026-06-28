@@ -1,5 +1,5 @@
 import {
-  listRuntimeAgentsByCategory,
+  listRuntimeAgents,
   loadRuntimeAgents,
 } from '@agent/runtime/agentResolution';
 import { AgentCategory } from '@shared/schemas/agent';
@@ -50,8 +50,8 @@ function planCurrentMultiAgentRun(
     throw new CliUsageError(missingMultiAgentPresetMessage(init.preset));
   }
   return planCliMultiAgentPresetRun(preset, {
-    workflowAgents: listRuntimeAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: listRuntimeAgentsByCategory(AgentCategory.ToolUse),
+    workflowAgents: listRuntimeAgents({ category: AgentCategory.Workflow }),
+    toolUseAgents: listRuntimeAgents({ category: AgentCategory.ToolUse }),
     agentOverride: init.agent,
   });
 }
@@ -60,8 +60,8 @@ function planLoadedCliMultiAgentPresets(
   presets: readonly CliMultiAgentPreset[],
 ): CliMultiAgentPresetRunPlan[] {
   return planCliMultiAgentPresets(presets, {
-    workflowAgents: listRuntimeAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: listRuntimeAgentsByCategory(AgentCategory.ToolUse),
+    workflowAgents: listRuntimeAgents({ category: AgentCategory.Workflow }),
+    toolUseAgents: listRuntimeAgents({ category: AgentCategory.ToolUse }),
   });
 }
 

@@ -31,6 +31,7 @@ import { getActiveFlushers, unregisterFlushers } from '@transcript';
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { toErrorMessage } from '@common/errors';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 
 import { tryUseRunContext } from './RunContext';
@@ -42,7 +43,6 @@ import {
   executionSubscriptionBinder,
 } from './ExecutionSubscriptionBinder';
 import { StreamStatusService } from './StreamStatusService';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('sessionHandle');
 

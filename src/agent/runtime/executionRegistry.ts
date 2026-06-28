@@ -5,7 +5,6 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   StreamStatusService,
   type StreamStatusRegistry,
@@ -15,6 +14,7 @@ import {
   type InterruptRegistry,
 } from '@agent/runtime/InterruptRegistry';
 import { isInFlightStatus } from '@common/constants/streamStatus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import {
   STREAM_STATUS,
   LIVE_ELAPSED_STREAM_STATUSES,

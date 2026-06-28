@@ -1,6 +1,6 @@
 import { logMissingOutputs, type AgentTrace } from '@agent/trace';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import {
   type FileLocation,
   type OutputFileInfo,

@@ -128,8 +128,8 @@ export abstract class BaseViewMessageHandler<
     dispatcher: DispatcherFn<TMessage>,
     handlers: HandlerRegistry<TMessage>,
   ): Promise<void> {
-    await this.withActiveView(webviewView, () => {
-      const handled = dispatcher(message, handlers, (error) => {
+    await this.withActiveView(webviewView, async () => {
+      const handled = await dispatcher(message, handlers, (error) => {
         this.logger.debug(this.channel, 'Message validation failed', {
           data: error,
         });

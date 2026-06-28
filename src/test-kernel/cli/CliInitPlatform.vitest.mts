@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageLogService } from '@telemetry/UsageLogService';
-import { RuntimePathAgentDirectoryBundleSource } from '@agent/runtime/agentDirectories';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SkillSource } from '@skills/loadSkills';
@@ -25,16 +24,9 @@ const mocks = vi.hoisted(() => ({
   shutdownHandlers: [] as Array<() => unknown>,
 }));
 
-vi.mock('@agent/runtime/agentDirectories', () => {
-  class RuntimePathAgentDirectoryBundleSource {
-    constructor(readonly resourcesBasePath: string) {}
-  }
-
-  return {
-    bootstrapRuntimeAgentDirectories: mocks.bootstrapRuntimeAgentDirectories,
-    RuntimePathAgentDirectoryBundleSource,
-  };
-});
+vi.mock('@agent/runtime/agentDirectories', () => ({
+  bootstrapRuntimeAgentDirectories: mocks.bootstrapRuntimeAgentDirectories,
+}));
 
 vi.mock('@auth/serverKeys', () => ({
   getServerSideKeyService: () => mocks.serverSideKeyService,
@@ -201,21 +193,12 @@ describe('CLI platform init', () => {
       expect.objectContaining({
         channel: 'cli',
         currentVersion: '1.2.3',
+        resourcesPath: '/tmp/resources-versioned',
       }),
     );
 
     const options =
       mocks.bootstrapRuntimeAgentDirectories.mock.calls.at(-1)?.[0];
-
-    // Verify the bundle source is the right class AND was constructed with the
-    // forwarded resourcesPath — not just that some bundle source was passed.
-    expect(options?.bundleSource).toBeInstanceOf(
-      RuntimePathAgentDirectoryBundleSource,
-    );
-    expect(
-      (options?.bundleSource as { resourcesBasePath?: string })
-        .resourcesBasePath,
-    ).toBe('/tmp/resources-versioned');
 
     expect(options?.versionStore.get()).toBe('1.2.2');
 

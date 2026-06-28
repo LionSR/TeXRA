@@ -9,7 +9,9 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
+  STREAM_STATUS,
   type ProgressViewOutboundMessage,
+  type StreamTabId,
 } from '@shared/schemas';
 import {
   ProgressBackend,
@@ -116,6 +118,108 @@ describe('ProgressBackend', () => {
       agentFilter: 'all',
       streamStates: undefined,
     });
+
+    backend.dispose();
+  });
+
+  it('hydrates queued follow-ups through the injected provider', () => {
+    const stream = 'stream:queued-provider' as StreamTabId;
+    const messages: ProgressViewOutboundMessage[] = [];
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      sendMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+      getQueuedFollowUps: (streamId) => {
+        expect(streamId).toBe(stream);
+        return ['queued via runtime'];
+      },
+    });
+
+    backend.eventHandler.syncStreamContent(stream);
+
+    expect(messages.at(-1)).toMatchObject({
+      command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+      stream,
+      queuedFollowUps: ['queued via runtime'],
+    });
+
+    backend.dispose();
+  });
+
+  it('routes stream-status state through the injected runtime-status capability', async () => {
+    const stream = 'stream:runtime-status' as StreamTabId;
+    const runtimeStatus = {
+      getSnapshot: vi.fn(() => new Map([[stream, STREAM_STATUS.RUNNING]])),
+      setSilently: vi.fn(),
+      clear: vi.fn(),
+      clearAll: vi.fn(),
+      isInFlight: vi.fn(() => false),
+      markRunningStopped: vi.fn(),
+    };
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      sendMessage: vi.fn(() => true),
+      hasTarget: () => false,
+      configureUi: () => createUiConfig(),
+      runtimeStatus,
+    });
+    const subscription = backend.setupEventListeners(bus);
+
+    try {
+      backend.eventHandler.setStreamStatus(stream, STREAM_STATUS.RUNNING);
+      expect(runtimeStatus.setSilently).toHaveBeenCalledWith(
+        stream,
+        STREAM_STATUS.RUNNING,
+      );
+
+      expect(backend.eventHandler.getAllStreamStatuses()).toEqual(
+        new Map([[stream, STREAM_STATUS.RUNNING]]),
+      );
+      expect(runtimeStatus.getSnapshot).toHaveBeenCalled();
+
+      backend.state.releasePreviousActive(stream);
+      expect(runtimeStatus.isInFlight).toHaveBeenCalledWith(stream);
+
+      await backend.state.clearStream(stream);
+      expect(runtimeStatus.clear).toHaveBeenCalledWith(stream);
+
+      bus.emit('extensionDeactivating', undefined);
+      expect(runtimeStatus.markRunningStopped).toHaveBeenCalled();
+
+      await backend.state.clearAll();
+      expect(runtimeStatus.clearAll).toHaveBeenCalled();
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+    }
+  });
+
+  it('routes interrupt pruning and trace flushing through the injected runtime-session capability', async () => {
+    const stream = 'stream:runtime-session' as StreamTabId;
+    const runtimeSession = {
+      retainInterruptStreams: vi.fn(),
+      flushPendingTraces: vi.fn(),
+    };
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      sendMessage: vi.fn(() => true),
+      hasTarget: () => false,
+      configureUi: () => createUiConfig(),
+      runtimeSession,
+    });
+
+    backend.state.snapshots.setTaskState(stream, toolUseTaskState('edit', 'm'));
+    backend.state.pruneInterruptHandles();
+    expect(runtimeSession.retainInterruptStreams).toHaveBeenCalledWith(
+      new Set([stream]),
+    );
+
+    await backend.state.flush();
+    expect(runtimeSession.flushPendingTraces).toHaveBeenCalled();
 
     backend.dispose();
   });

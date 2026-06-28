@@ -39,7 +39,7 @@ import {
   type ClaudeAgentPermissionMode,
   type LatexConfigValues,
   type NumberVscodeSetting,
-  type Goal,
+  type GoalSettingsItem,
   type PRSubscriptionEntry,
   type ToolDashboardItem,
   type ChatGptAuthStatus,
@@ -229,7 +229,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly inlineCriticismEnabled = signal(false);
 
   // Goal settings state
-  private readonly goalItems = signal<readonly Goal[]>([]);
+  private readonly goalItems = signal<readonly GoalSettingsItem[]>([]);
 
   // Outbound message handlers (extension host → settings webview). Each entry
   // receives the already-parsed, typed message and updates the matching

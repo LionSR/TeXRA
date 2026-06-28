@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 
-import { polishTextWithAI, FileContext } from '@agent/runtime/textEnhancement';
+import {
+  requestRuntimeTextPolish,
+  type RuntimeTextPolishContext,
+} from '@agent/runtime/textPolishCommands';
 import { toErrorMessage } from '@common/errors';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
@@ -53,7 +56,10 @@ export class InstructionManager extends BaseWebviewManager {
     }
     try {
       const fileContext = this.buildFileContext(message);
-      const result = await polishTextWithAI(message.text, fileContext);
+      const result = await requestRuntimeTextPolish({
+        text: message.text,
+        fileContext,
+      });
       if (result.success) {
         this.postMessage({
           command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
@@ -78,8 +84,10 @@ export class InstructionManager extends BaseWebviewManager {
   }
 
   /** Build file context for AI text polishing, filtering empty/placeholder values */
-  private buildFileContext(message: PolishInstructionMessage): FileContext {
-    const context: FileContext = { agent: message.agent };
+  private buildFileContext(
+    message: PolishInstructionMessage,
+  ): RuntimeTextPolishContext {
+    const context: RuntimeTextPolishContext = { agent: message.agent };
 
     // Multi-file fields (check active flag and array content)
     const multiFields = [

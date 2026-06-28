@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const mocks = vi.hoisted(() => ({
-  getRuntimeActiveAgentNames: vi.fn<() => string[]>(),
+  hasRuntimeActiveAgentName: vi.fn<(request: unknown) => boolean>(),
   getUseOpenRouter: vi.fn<() => boolean>(),
   hasUsableApiKey: vi.fn<(provider: string) => Promise<boolean>>(),
   runAgent: vi.fn<() => Promise<unknown>>(),
@@ -35,7 +35,7 @@ vi.mock('@frontend/secretManager', () => ({
 }));
 
 vi.mock('@agent/runtime/executionQueries', () => ({
-  getRuntimeActiveAgentNames: mocks.getRuntimeActiveAgentNames,
+  hasRuntimeActiveAgentName: mocks.hasRuntimeActiveAgentName,
 }));
 
 vi.mock('@agent/runtime/runAgent', () => ({
@@ -167,7 +167,7 @@ const { launchSetupAssistant } =
 
 describe('setup assistant routing check ordering', () => {
   beforeEach(() => {
-    mocks.getRuntimeActiveAgentNames.mockReturnValue([]);
+    mocks.hasRuntimeActiveAgentName.mockReturnValue(false);
     mocks.getUseOpenRouter.mockReset();
     mocks.hasUsableApiKey.mockReset();
     mocks.runAgent.mockReset();
@@ -244,7 +244,7 @@ describe('setup assistant routing check ordering', () => {
   });
 
   it('does not launch a second setup assistant while one is active', async () => {
-    mocks.getRuntimeActiveAgentNames.mockReturnValue(['setup']);
+    mocks.hasRuntimeActiveAgentName.mockReturnValue(true);
 
     const result = await launchSetupAssistant();
 

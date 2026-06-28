@@ -1,22 +1,18 @@
+import { getRuntimeApprovalBypassStatus } from '@agent/runtime/approvalCommands';
+import { getRuntimeGoalControlState } from '@agent/runtime/goalCommands';
 import type { StreamTabId } from '@shared/schemas';
 import type { ProgressStreamControls } from '@shared/progressView/backend/events/ProgressEventHandler';
-import { isGoalInFlight } from '@shared/schemas/goal';
-import {
-  isApprovalBypassedForStream,
-  proposalApprovalState,
-} from '@tools/approval';
-import { GoalStore } from '@tools/goal';
 
 export function getProgressStreamControls(
   streamId: StreamTabId,
 ): ProgressStreamControls {
-  const goal = GoalStore.getForStream(streamId);
-  const goalActive = isGoalInFlight(goal);
+  const goal = getRuntimeGoalControlState(streamId);
+  const approvalBypass = getRuntimeApprovalBypassStatus(streamId);
   return {
-    toolEditBypass: isApprovalBypassedForStream(streamId),
-    superYoloBypass: proposalApprovalState.isBypassed(streamId),
-    goalActive,
-    ...(goalActive && goal
+    toolEditBypass: approvalBypass.toolEditBypass,
+    superYoloBypass: approvalBypass.delegatedTaskBypass,
+    goalActive: goal.active,
+    ...(goal.active
       ? { goalStatus: goal.status, goalObjective: goal.objective }
       : {}),
   };

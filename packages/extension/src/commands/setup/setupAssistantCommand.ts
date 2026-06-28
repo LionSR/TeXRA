@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { loadRuntimeAgents } from '@agent/runtime/agentResolution';
-import { getRuntimeActiveAgentNames } from '@agent/runtime/executionQueries';
+import { hasRuntimeActiveAgentName } from '@agent/runtime/executionQueries';
 import { parseRuntimeAgentConfig } from '@agent/runtime/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
 import { isCodexSubscriptionActive } from '@auth/codex';
@@ -27,7 +27,6 @@ import {
 } from '@shared/copy/onboarding';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { agentName } from '@shared/schemas/agent';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const CHANNEL = 'SetupAssistant';
@@ -326,11 +325,7 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     // a second concurrent setup conversation would race the first one's
     // installs and config writes. The launcher's manual Execute path is
     // deliberately not gated — an explicit user action wins.
-    if (
-      getRuntimeActiveAgentNames().some(
-        (activeAgentName) => agentName(activeAgentName) === SETUP_AGENT_NAME,
-      )
-    ) {
+    if (hasRuntimeActiveAgentName({ agentName: SETUP_AGENT_NAME })) {
       void vscode.window.showInformationMessage(
         'The setup assistant is already running — follow it in the Progress view.',
       );

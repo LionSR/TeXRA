@@ -3,10 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
-  noopAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
-import {
   AgentExecutionHandle,
   executionRegistry,
   type LiveToolUseFlowContext,
@@ -14,6 +10,10 @@ import {
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { onFollowUpSent, sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import {
+  noopAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@hosts/AgentRuntimeHost';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { createRecordingHost } from '../progressTestUtils';
 

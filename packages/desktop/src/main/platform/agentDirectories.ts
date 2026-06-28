@@ -1,15 +1,14 @@
 import { platform } from '@platform/platform';
-import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
+import { bootstrapRuntimeAgentDirectories } from '@agent/runtime/agentDirectories';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 export async function bootstrapElectronAgentDirectories(
   resourcesPath: string,
   appVersion: string | undefined,
 ): Promise<void> {
-  await bootstrapPlatformAgentDirectories({
+  await bootstrapRuntimeAgentDirectories({
     channel: 'desktop',
-    bundleSource: new PathAgentDirectoryBundleSource(resourcesPath),
+    resourcesPath,
     currentVersion: appVersion,
     customDirectoryStore: {
       get: () =>

@@ -25,7 +25,7 @@ import {
   clearRuntimeHistoryStoreCache,
   hasRuntimeExecutionHistory,
 } from '@agent/runtime/historyCommands';
-import { initializePolishModel } from '@agent/runtime/polishModel';
+import { initializeRuntimeTextPolish } from '@agent/runtime/textPolishCommands';
 import {
   getServerSideKeyService,
   initializeServerSideKeyAccess,
@@ -100,7 +100,6 @@ import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setAddCriticismSink } from '@tools/AddCriticismTool';
 import { setLinterProvider } from '@tools/DiagnosticsTool';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { setToolMissingHandler } from '@utils/system';
@@ -184,14 +183,14 @@ export async function activate(context: vscode.ExtensionContext) {
   logger.setOutputChannelFactory((name) =>
     vscode.window.createOutputChannel(name),
   );
-  initializePolishModel(
-    path.join(
+  initializeRuntimeTextPolish({
+    promptTemplatePath: path.join(
       context.extensionPath,
       'resources',
       'templates',
       'instructionPolish.yaml',
     ),
-  );
+  });
   initializeGoalPrompts(
     path.join(context.extensionPath, 'resources', 'goal', 'goal.yaml'),
   );
@@ -471,7 +470,11 @@ export async function activate(context: vscode.ExtensionContext) {
   registerCommands(context);
   registerFileDecorations(context);
 
-  initializeNativeToolEditApproval(context, extensionAgentRuntimeHost);
+  initializeNativeToolEditApproval(
+    context,
+    extensionAgentRuntimeHost,
+    openBuildDisplayIfTex,
+  );
   setLeanLanguageServices(leanVscodeIntegration);
   setOpenPdfOpener(async ({ location, preserveFocus }) => {
     await vscode.commands.executeCommand(
@@ -607,7 +610,6 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push({ dispose: disposeGitHubAuthListener });
   setLinterProvider(getLinterMessages);
-  setOpenBuildDisplay(openBuildDisplayIfTex);
   registerInlineCriticism(context);
   setAddCriticismSink((payload) => {
     const accepted = pushManualCriticism({

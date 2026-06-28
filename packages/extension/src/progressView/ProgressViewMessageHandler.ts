@@ -14,16 +14,11 @@ import { ProgressAgentProposalController } from '@controllers/progressView/Progr
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { getRuntimeToolUseAgentCategory } from '@agent/runtime/agentResolution';
 import { resolveRuntimeBashApproval } from '@agent/runtime/approvalCommands';
 import {
   validateRuntimeExecutionRequest,
   type RuntimeExecutionRequest,
 } from '@agent/runtime/executionRequests';
-import {
-  forgetRuntimeGoal,
-  getRuntimeGoalForStream,
-} from '@agent/runtime/goalCommands';
 import {
   persistRuntimeExternalInquiryDraft,
   resolveRuntimeExternalInquiry,
@@ -52,7 +47,6 @@ import { isApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
-import { isGoalInFlight } from '@shared/schemas/goal';
 import {
   dispatchProgressViewInbound,
   type ProgressViewInboundHandlerRegistry,
@@ -130,17 +124,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
       void this.streamLifecycleController.deleteStream(streamId);
-      void forgetRuntimeGoal(streamId);
     });
     context.subscriptions.push({ dispose: unsubscribeRemoveStream });
 
     const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
-      const goal = getRuntimeGoalForStream(streamId);
-      this.provider.webviewUpdater.updateGoalActive(
-        streamId,
-        isGoalInFlight(goal),
-        { status: goal?.status, objective: goal?.objective },
-      );
+      this.provider.syncGoalControlState(streamId);
     });
     context.subscriptions.push({ dispose: unsubscribeGoal });
   }
@@ -657,7 +645,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
-      getAgentCategory: (agent) => getRuntimeToolUseAgentCategory(agent),
+      isToolUseAgent: (agent) => this.provider.isToolUseAgent(agent),
       loadModelOptions: async () => {
         const { modelOptions } = await loadOptions();
         return modelOptions;

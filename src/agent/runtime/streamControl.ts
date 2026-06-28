@@ -1,6 +1,6 @@
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import { isInFlightStatus } from '@common/constants/streamStatus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import {
   type ExecutionId,
   STREAM_STATUS,
@@ -13,13 +13,24 @@ import {
   StreamStatusService,
   type StreamStatusChange,
 } from './StreamStatusService';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { KillExecutionOptions } from './executionRegistry';
 
 export type RuntimeStreamStatusChange = StreamStatusChange;
 
-export interface StopStreamRequest {
+export type RuntimeStreamStopStatus =
+  | 'stopped'
+  | 'marked_stopped'
+  | 'not_found';
+
+export interface RuntimeStreamStopResult {
   readonly streamId: StreamTabId;
+  readonly status: RuntimeStreamStopStatus;
+  readonly clearedRetryRequest: boolean;
+}
+
+export interface RuntimeStreamStopRequest {
+  readonly streamId: StreamTabId;
+  readonly clearRetryRequest?: boolean;
   readonly detachActiveChildren?: boolean;
   readonly runtimeHost?: AgentRuntimeHost;
   readonly session?: SessionHandle;
@@ -42,16 +53,26 @@ export interface RuntimeStreamStatusRequest {
 }
 
 /** Request runtime-owned stopping of a visible agent stream. */
-export function requestStopStream({
+export function requestRuntimeStreamStop({
   streamId,
+  clearRetryRequest,
   detachActiveChildren,
   runtimeHost,
   session = currentSession(),
-}: StopStreamRequest): boolean {
-  return session.executions.stopAgentStream(streamId, {
+}: RuntimeStreamStopRequest): RuntimeStreamStopResult {
+  const shouldClearRetryRequest = clearRetryRequest === true;
+  if (shouldClearRetryRequest) {
+    session.coordinators.clearRetryRequest(streamId);
+  }
+  const stopped = session.executions.stopAgentStream(streamId, {
     detachActiveChildren,
     runtimeHost,
   });
+  return {
+    streamId,
+    status: stopped ? 'stopped' : runtimeHost ? 'marked_stopped' : 'not_found',
+    clearedRetryRequest: shouldClearRetryRequest,
+  };
 }
 
 /** Request runtime-owned termination of a tracked execution. */
@@ -128,8 +149,15 @@ export function markRuntimeRunningStreamsStopped(): void {
   }
 }
 
-/** Repair RUNNING statuses after restart according to recovered waiting streams. */
-export function recoverRuntimeRunningStreamsAfterRestart(
+/** Recover persisted RUNNING statuses after host restart. */
+export async function recoverRuntimeRunningStreamsFromPersistedState(
+  executionIdsByStream: ReadonlyMap<StreamTabId, ExecutionId>,
+): Promise<RuntimeRunningStreamRecovery> {
+  const waitingStreams = await detectWaitingStreams(executionIdsByStream);
+  return recoverRuntimeRunningStreamsAfterRestart(waitingStreams);
+}
+
+function recoverRuntimeRunningStreamsAfterRestart(
   waitingStreams: ReadonlySet<StreamTabId>,
 ): RuntimeRunningStreamRecovery {
   const restoredWaiting: StreamTabId[] = [];
@@ -153,22 +181,6 @@ export function recoverRuntimeRunningStreamsAfterRestart(
   }
 
   return { waitingStreams: restoredWaiting, erroredStreams };
-}
-
-/** Detect streams whose persisted execution state can resume after restart. */
-export function detectRuntimeWaitingStreams(
-  executionIdsByStream: ReadonlyMap<StreamTabId, ExecutionId>,
-): Promise<Set<StreamTabId>> {
-  return detectWaitingStreams(executionIdsByStream);
-}
-
-/** Release queued follow-ups for streams whose visible records were removed. */
-export function releaseQueuedFollowUpsForStreams(
-  streamIds: Iterable<StreamTabId>,
-): void {
-  for (const streamId of streamIds) {
-    ToolUseFollowUpQueue.release(streamId);
-  }
 }
 
 /** Subscribe to runtime stream-status changes without exposing the status store. */

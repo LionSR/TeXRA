@@ -11,8 +11,8 @@
 import pDefer, { type DeferredPromise } from 'p-defer';
 import pTimeout from 'p-timeout';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 
 /** Base result type — subclasses extend with specific actions. */
 interface BaseResult {

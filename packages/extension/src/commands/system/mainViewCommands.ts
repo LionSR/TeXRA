@@ -2,18 +2,13 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  computeRuntimeAgentOptionsData,
-  refreshRuntimeAgentCatalog,
-} from '@agent/runtime/agentResolution';
 import { arXivCommands } from '@commands/latex';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { gitCommands } from '@commands/git/gitCommands';
 import { toErrorMessage } from '@common/errors';
+import { createExtensionMainViewStartupController } from '@frontend/agents/mainViewStartup';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { computeModelOptionsData } from '@model/computeModelOptions';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 import { sampleProjectCommands } from './sampleProjectCommands';
 
@@ -36,6 +31,7 @@ const mainViewCommands = {
 export function registerMainViewCommands(
   context: vscode.ExtensionContext,
 ): void {
+  const startupController = createExtensionMainViewStartupController();
   registerCommands(context, [
     {
       id: mainViewCommands.refreshModelOptions,
@@ -44,11 +40,9 @@ export function registerMainViewCommands(
         if (!webview) return;
 
         try {
-          const optionsData = await computeModelOptionsData();
-          webview.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-            optionsData,
-          });
+          webview.webview.postMessage(
+            await startupController.getModelOptionsRefreshMessage(),
+          );
         } catch (error) {
           const message = toErrorMessage(error);
           logger.error(CHANNEL, `Failed to refresh model options: ${message}`);
@@ -65,12 +59,9 @@ export function registerMainViewCommands(
         if (!webview) return;
 
         try {
-          await refreshRuntimeAgentCatalog();
-          const optionsData = await computeRuntimeAgentOptionsData();
-          webview.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-            optionsData,
-          });
+          webview.webview.postMessage(
+            await startupController.getAgentOptionsRefreshMessage(),
+          );
         } catch (error) {
           const message = toErrorMessage(error);
           logger.error(CHANNEL, `Failed to refresh agent options: ${message}`);
@@ -87,19 +78,11 @@ export function registerMainViewCommands(
         if (!webview) return;
 
         try {
-          await refreshRuntimeAgentCatalog();
-          const [modelOptionsData, agentOptionsData] = await Promise.all([
-            computeModelOptionsData(),
-            computeRuntimeAgentOptionsData(),
-          ]);
-          webview.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-            optionsData: modelOptionsData,
-          });
-          webview.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-            optionsData: agentOptionsData,
-          });
+          const messages =
+            await startupController.getAllOptionsRefreshMessages();
+          for (const message of messages) {
+            webview.webview.postMessage(message);
+          }
         } catch (error) {
           const message = toErrorMessage(error);
           logger.error(CHANNEL, `Failed to refresh options: ${message}`);

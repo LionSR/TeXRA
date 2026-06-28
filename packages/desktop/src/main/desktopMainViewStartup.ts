@@ -1,22 +1,13 @@
-import {
-  MainViewStartupController,
-  type MainViewStartupOptions,
-} from '@controllers/mainView/MainViewStartupController';
-import { computeAgentOptionsData } from '@agent/index/agentRegistry';
-import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
-import { getConfig } from '@utils/config/configUtils';
 
 import {
   createCommandHandler,
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
+import { createDesktopMainViewStartupController } from './desktopMainViewStartupController.js';
+import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
-
-async function defaultGetAuthStatus(): Promise<MainViewAuthStatus> {
-  return { authenticated: false };
-}
 
 export interface DesktopMainViewStartupOptions {
   renderer: DesktopRenderer;
@@ -33,18 +24,10 @@ export function createDesktopMainViewStartup({
   loadOptions,
   onAsyncError,
 }: DesktopMainViewStartupOptions): DesktopMessageHandler {
-  const startupController = new MainViewStartupController({
-    getConfig,
-    loadOptions: async () => {
-      await modelListRefresh;
-      if (loadOptions != null) return loadOptions();
-      const [agentOptions, modelOptions] = await Promise.all([
-        computeAgentOptionsData(),
-        computeModelOptionsData(),
-      ]);
-      return { agentOptions, modelOptions };
-    },
-    getAuthStatus: getAuthStatus ?? defaultGetAuthStatus,
+  const startupController = createDesktopMainViewStartupController({
+    modelListRefresh,
+    getAuthStatus,
+    loadOptions,
   });
 
   async function postStartupMessages(): Promise<void> {

@@ -8,11 +8,13 @@
  */
 import * as vscode from 'vscode';
 
-import { isRuntimeStreamActiveOrResuming } from '@agent/runtime/streamControl';
 import {
-  retrieveSessionResumeData,
-  type SessionResumeData,
-} from '@agent/runtime/SessionResumeRetrieval';
+  readRuntimeSessionResumeData,
+  requestRuntimeWorkflowResume,
+  type RuntimeSessionResumeData,
+} from '@agent/runtime/resumeCommands';
+import { isRuntimeStreamActiveOrResuming } from '@agent/runtime/streamControl';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';
@@ -46,23 +48,27 @@ export async function tryResumeFromSnapshot(
     return false;
   }
 
-  let resumeData: SessionResumeData | null;
-  try {
-    resumeData = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      taskState,
-    );
-  } catch (error) {
-    // Retrieval failed unexpectedly (distinct from "no resumable session").
-    // Auto-resume is best-effort here, so degrade, but log the real failure
-    // rather than letting it masquerade as "nothing to resume".
-    logger.error(`Failed to retrieve resume data for stream: ${streamId}`, {
-      data: error,
-    });
-    return false;
+  const resumeResult = await readRuntimeSessionResumeData({
+    streamId,
+    executionId,
+    taskState,
+  });
+  let resumeData: RuntimeSessionResumeData;
+  switch (resumeResult.status) {
+    case 'resumable':
+      resumeData = resumeResult.data;
+      break;
+    case 'missing':
+      return false;
+    case 'failed':
+      // Retrieval failed unexpectedly (distinct from "no resumable session").
+      // Auto-resume is best-effort here, so degrade, but log the real failure
+      // rather than letting it masquerade as "nothing to resume".
+      logger.error(`Failed to retrieve resume data for stream: ${streamId}`, {
+        data: resumeResult.error,
+      });
+      return false;
   }
-  if (!resumeData) return false;
 
   logger.info(
     `Auto-resuming ${resumeData.type} session for stream: ${streamId}`,
@@ -77,9 +83,15 @@ export async function tryResumeFromSnapshot(
       return parseResult.success && parseResult.data.success;
     }
     // Workflow: execute returns void - success if no exception thrown
-    await vscode.commands.executeCommand('texra.execute', {
-      config: resumeData.agentConfig,
-      executionId: resumeData.executionId,
+    await requestRuntimeWorkflowResume({
+      streamId,
+      runtimeHost: extensionAgentRuntimeHost,
+      run: async () => {
+        await vscode.commands.executeCommand('texra.execute', {
+          config: resumeData.agentConfig,
+          executionId: resumeData.executionId,
+        });
+      },
     });
     return true;
   } catch (error) {

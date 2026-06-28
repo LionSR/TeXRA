@@ -6,7 +6,7 @@ import {
   createProgressViewCommandHandlers,
   type ProgressViewCommandActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   ProgressViewInboundMessageSchema,
@@ -27,6 +27,12 @@ vi.mock('@utils/files/pastedImageUtils', () => ({
 }));
 
 const savePastedImageBase64Mock = vi.mocked(savePastedImageBase64);
+
+async function expectHandled(
+  result: boolean | Promise<boolean>,
+): Promise<void> {
+  await expect(Promise.resolve(result)).resolves.toBe(true);
+}
 
 function createActions(
   overrides: Partial<ProgressViewCommandActions> = {},
@@ -373,7 +379,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       createActions({ bypass: { runtimeHost: host, showInfo } }),
     );
 
-    expect(
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
@@ -381,8 +387,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-    await Promise.resolve();
+    );
 
     expect(isApprovalBypassedForStream(stream)).toBe(true);
     expect(isBashApprovalBypassedForStream(stream)).toBe(true);
@@ -396,7 +401,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.',
     );
 
-    expect(
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
@@ -404,8 +409,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-    await Promise.resolve();
+    );
 
     expect(isApprovalBypassedForStream(stream)).toBe(false);
     expect(isBashApprovalBypassedForStream(stream)).toBe(false);
@@ -430,13 +434,12 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     expect(isApprovalBypassedForStream(stream)).toBe(true);
     expect(isBashApprovalBypassedForStream(stream)).toBe(false);
 
-    expect(
+    await expectHandled(
       dispatchProgressViewInbound(
         { command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, stream },
         handlers,
       ),
-    ).toBe(true);
-    await Promise.resolve();
+    );
 
     expect(isApprovalBypassedForStream(stream)).toBe(true);
     expect(isBashApprovalBypassedForStream(stream)).toBe(true);
@@ -453,7 +456,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       createActions({ bypass: { runtimeHost: host, showInfo } }),
     );
 
-    expect(
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
@@ -461,8 +464,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-    await Promise.resolve();
+    );
 
     expect(proposalApprovalState.isBypassed(stream)).toBe(true);
     expect(isApprovalBypassedForStream(stream)).toBe(true);
@@ -481,7 +483,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       'Delegated task auto-approval enabled for this stream.',
     );
 
-    expect(
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
@@ -489,8 +491,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-    await Promise.resolve();
+    );
 
     expect(proposalApprovalState.isBypassed(stream)).toBe(false);
     expect(isApprovalBypassedForStream(stream)).toBe(false);
@@ -513,7 +514,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     const actions = createActions();
     const handlers = createProgressViewCommandHandlers(actions);
 
-    expect(
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
@@ -522,8 +523,8 @@ describe('createProgressViewCommandHandlers - approvals', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-    expect(
+    );
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
@@ -533,8 +534,8 @@ describe('createProgressViewCommandHandlers - approvals', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-    expect(
+    );
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
@@ -543,8 +544,8 @@ describe('createProgressViewCommandHandlers - approvals', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-    expect(
+    );
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION,
@@ -554,8 +555,8 @@ describe('createProgressViewCommandHandlers - approvals', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-    expect(
+    );
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
@@ -566,9 +567,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-
-    await Promise.resolve();
+    );
 
     expect(actions.approval.handleToolEditApprovalAction).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
@@ -609,7 +608,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     actions.approval.handleToolEditApprovalAction = vi.fn(() => false);
     const handlers = createProgressViewCommandHandlers(actions);
 
-    expect(
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
@@ -618,9 +617,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-
-    await Promise.resolve();
+    );
 
     expect(actions.approval.onUnsupportedToolEditApproval).toHaveBeenCalledWith(
       {
@@ -638,7 +635,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     );
     const handlers = createProgressViewCommandHandlers(actions);
 
-    expect(
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
@@ -647,9 +644,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-
-    await Promise.resolve();
+    );
 
     expect(actions.approval.onUnsupportedToolEditApproval).toHaveBeenCalledWith(
       {
@@ -667,7 +662,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     );
     const handlers = createProgressViewCommandHandlers(actions);
 
-    expect(
+    await expectHandled(
       dispatchProgressViewInbound(
         {
           command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
@@ -676,9 +671,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
         },
         handlers,
       ),
-    ).toBe(true);
-
-    await Promise.resolve();
+    );
 
     expect(
       actions.approval.onUnsupportedToolEditApproval,

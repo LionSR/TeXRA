@@ -5,11 +5,9 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
-// Local imports - utilities
-import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import {
-  listRuntimeAgentsByCategory,
-  resolveRuntimeAgentPath,
+  inspectRuntimeAgentDefinition,
+  listRuntimeAgents,
 } from '@agent/runtime/agentResolution';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import {
@@ -29,7 +27,7 @@ export async function handleTestAgentLoading(): Promise<void> {
     logger.info(CHANNEL, 'Testing agent loading from registry:');
 
     // Get first two workflow agents from registry to test loading
-    const agents = listRuntimeAgentsByCategory(AgentCategory.Workflow);
+    const agents = listRuntimeAgents({ category: AgentCategory.Workflow });
     if (agents.length === 0) {
       throw new Error('No workflow agents found in registry');
     }
@@ -37,33 +35,32 @@ export async function handleTestAgentLoading(): Promise<void> {
     const testAgent = agents[0];
     logger.info(CHANNEL, `\nTesting agent: ${testAgent.name}`);
 
-    // Resolve the agent
-    const resolution = await resolveRuntimeAgentPath(
+    const inspection = await inspectRuntimeAgentDefinition(
       testAgent.name,
       extensionAgentRuntimeHost,
     );
 
     // Load the YAML directly
-    logger.info(CHANNEL, `Loading from: ${resolution.definitionPath}`);
-    const rawYaml = await loadYaml(resolution.definitionPath);
     logger.info(
       CHANNEL,
-      `Raw YAML loaded: ${JSON.stringify(rawYaml, null, 2)}`,
+      `Loading from: ${inspection.resolution.definitionPath}`,
+    );
+    logger.info(
+      CHANNEL,
+      `Raw YAML loaded: ${JSON.stringify(inspection.rawDefinition, null, 2)}`,
     );
 
     // Load with settings and prompts processing
-    const [settings, prompts] = await loadAgentSettingAndPrompts(resolution);
     logger.info(CHANNEL, '\nProcessed settings:');
-    logger.info(CHANNEL, JSON.stringify(settings, null, 2));
+    logger.info(CHANNEL, JSON.stringify(inspection.settings, null, 2));
     logger.info(CHANNEL, '\nProcessed prompts:');
-    logger.info(CHANNEL, JSON.stringify(prompts, null, 2));
+    logger.info(CHANNEL, JSON.stringify(inspection.prompts, null, 2));
 
     // Check if this agent has inheritance
-    const config = rawYaml as { inherits?: string };
-    if (config?.inherits) {
+    if (inspection.inheritedAgentName) {
       logger.info(
         CHANNEL,
-        `\nInheritance chain: ${testAgent.name} -> ${config.inherits}`,
+        `\nInheritance chain: ${testAgent.name} -> ${inspection.inheritedAgentName}`,
       );
     }
 
@@ -90,32 +87,26 @@ export async function handleLoadSpecificAgent(): Promise<void> {
 
     logger.info(CHANNEL, `Testing loading of agent: ${agentName}`);
 
-    const agentPath = await resolveRuntimeAgentPath(
+    const inspection = await inspectRuntimeAgentDefinition(
       agentName,
       extensionAgentRuntimeHost,
     );
     logger.info(
       CHANNEL,
-      `Loading from path: ${path.dirname(agentPath.definitionPath)}`,
+      `Loading from path: ${path.dirname(inspection.resolution.definitionPath)}`,
     );
-
-    // Load and display the agent configuration
-    const [settings, prompts] = await loadAgentSettingAndPrompts(agentPath);
 
     // Display the results
     logger.info(CHANNEL, '\nAgent settings loaded:');
-    logger.info(CHANNEL, JSON.stringify(settings, null, 2));
+    logger.info(CHANNEL, JSON.stringify(inspection.settings, null, 2));
     logger.info(CHANNEL, '\nAgent prompts loaded:');
-    logger.info(CHANNEL, JSON.stringify(prompts, null, 2));
+    logger.info(CHANNEL, JSON.stringify(inspection.prompts, null, 2));
 
     // If the agent inherits from another, show the inheritance chain
-    const config = (await loadYaml(agentPath.definitionPath)) as {
-      inherits?: string;
-    };
-    if (config?.inherits) {
+    if (inspection.inheritedAgentName) {
       logger.info(
         CHANNEL,
-        `\nInheritance chain: ${agentName} -> ${config.inherits}`,
+        `\nInheritance chain: ${agentName} -> ${inspection.inheritedAgentName}`,
       );
     }
 

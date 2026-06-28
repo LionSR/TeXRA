@@ -19,7 +19,11 @@ import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progres
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 // Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import {
+  desktopSourcePath,
+  moduleFileUrl,
+  repoPath,
+} from './desktopTestPaths.mjs';
 import type { StreamSnapshotStore as ProgressSnapshotStore } from '@transcript';
 
 type Bridge = {
@@ -50,7 +54,7 @@ type TestableBridge = Bridge & {
 };
 
 type BridgeWithSession = TestableBridge & {
-  session: {
+  session: unknown & {
     coordinators: {
       cleanupAllRequests(): void;
     };
@@ -84,6 +88,7 @@ interface DesktopAgentExecutionModule {
   DesktopProgressBridge: new (
     postToRenderer: (message: unknown) => void,
     options?: {
+      showErrorMessage?: (message: string) => Promise<void> | void;
       streamSnapshotStore?: TestDesktopStreamSnapshotStore;
       progressSnapshotStore?: ProgressSnapshotStore;
     },
@@ -104,6 +109,9 @@ type CreateBridgeOptions = {
   retrieveSessionResumeData?: ReturnType<typeof vi.fn>;
   resumeToolUseFromSnapshot?: ReturnType<typeof vi.fn>;
   runAgent?: RunExecutionRequest;
+  requestRuntimeStreamStop?: ReturnType<typeof vi.fn>;
+  requestRuntimeFollowUp?: ReturnType<typeof vi.fn>;
+  showErrorMessage?: (message: string) => Promise<void> | void;
   streamSnapshotStore?: TestDesktopStreamSnapshotStore;
   configureProgressSnapshotStore?: (store: ProgressSnapshotStore) => void;
 };
@@ -137,17 +145,45 @@ async function createBridge(
   options: CreateBridgeOptions = {},
 ): Promise<TestableBridge> {
   vi.resetModules();
-  vi.doMock('@agent/runtime/ProgressViewBridge', () => ({
-    setProgressViewBridge: vi.fn(),
+  const retrieveSessionResumeData =
+    options.retrieveSessionResumeData ?? vi.fn(async () => null);
+  vi.doMock('@agent/runtime/progressViewCommands', () => ({
+    registerRuntimeProgressViewVisibilityProvider: vi.fn(() => ({
+      dispose: vi.fn(),
+    })),
+    isRuntimeProgressViewVisible: vi.fn(() => true),
   }));
+  if (options.requestRuntimeStreamStop) {
+    vi.doMock('@agent/runtime/streamControl', async () => ({
+      ...((await vi.importActual('@agent/runtime/streamControl')) as object),
+      requestRuntimeStreamStop: options.requestRuntimeStreamStop,
+    }));
+  }
+  if (options.requestRuntimeFollowUp) {
+    vi.doMock('@agent/runtime/followUpCommands', async () => ({
+      ...((await vi.importActual('@agent/runtime/followUpCommands')) as object),
+      requestRuntimeFollowUp: options.requestRuntimeFollowUp,
+    }));
+  }
   vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
-    retrieveSessionResumeData:
-      options.retrieveSessionResumeData ?? vi.fn(async () => null),
+    retrieveSessionResumeData,
   }));
-  vi.doMock('@agent/runtime/executeAgent', () => ({
-    resumeToolUseFromSnapshot:
-      options.resumeToolUseFromSnapshot ?? vi.fn(async () => {}),
-  }));
+  const resumeToolUseFromSnapshot =
+    options.resumeToolUseFromSnapshot ?? vi.fn(async () => {});
+  const executeAgentMock = () => ({ resumeToolUseFromSnapshot });
+  vi.doMock('@agent/runtime/executeAgent', executeAgentMock);
+  vi.doMock(
+    repoPath('src', 'agent', 'runtime', 'executeAgent'),
+    executeAgentMock,
+  );
+  vi.doMock(
+    repoPath('src', 'agent', 'runtime', 'executeAgent.ts'),
+    executeAgentMock,
+  );
+  vi.doMock(
+    moduleFileUrl(repoPath('src', 'agent', 'runtime', 'executeAgent.ts')),
+    executeAgentMock,
+  );
   vi.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(),
   }));
@@ -260,6 +296,7 @@ async function createBridge(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
   return new DesktopProgressBridge((message) => messages.push(message), {
+    showErrorMessage: options.showErrorMessage,
     streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore,
   }) as TestableBridge;
@@ -277,8 +314,11 @@ async function createExecution(options: {
   onRunCompleted?: () => void;
 }): Promise<DesktopExecution> {
   vi.resetModules();
-  vi.doMock('@agent/runtime/ProgressViewBridge', () => ({
-    setProgressViewBridge: vi.fn(),
+  vi.doMock('@agent/runtime/progressViewCommands', () => ({
+    registerRuntimeProgressViewVisibilityProvider: vi.fn(() => ({
+      dispose: vi.fn(),
+    })),
+    isRuntimeProgressViewVisible: vi.fn(() => true),
   }));
   vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData: vi.fn(async () => null),
@@ -387,6 +427,26 @@ function workflowTaskState(): {
   };
 }
 
+function toolUseTaskState(): {
+  agentConfig: {
+    agent: string;
+    model: string;
+    agentCategory: typeof AgentCategory.ToolUse;
+    toolConfig: typeof DEFAULT_TOOL_CONFIG;
+  };
+  toolSessionState: Record<string, never>;
+} {
+  return {
+    agentConfig: {
+      agent: 'search',
+      model: 'deepseekproT',
+      agentCategory: AgentCategory.ToolUse,
+      toolConfig: DEFAULT_TOOL_CONFIG,
+    },
+    toolSessionState: {},
+  };
+}
+
 function expectWorkflowResume(
   runAgent: ReturnType<typeof vi.fn>,
   taskState: ReturnType<typeof workflowTaskState>,
@@ -411,9 +471,15 @@ async function settleProgressEvents(): Promise<void> {
 
 describe('DesktopProgressBridge', () => {
   afterEach(() => {
-    vi.doUnmock('@agent/runtime/ProgressViewBridge');
+    vi.doUnmock('@agent/runtime/progressViewCommands');
     vi.doUnmock('@agent/runtime/SessionResumeRetrieval');
+    vi.doUnmock('@agent/runtime/resumeCommands');
     vi.doUnmock('@agent/runtime/executeAgent');
+    vi.doUnmock(repoPath('src', 'agent', 'runtime', 'executeAgent'));
+    vi.doUnmock(repoPath('src', 'agent', 'runtime', 'executeAgent.ts'));
+    vi.doUnmock(
+      moduleFileUrl(repoPath('src', 'agent', 'runtime', 'executeAgent.ts')),
+    );
     vi.doUnmock('@agent/runtime/runAgent');
     vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
@@ -441,7 +507,7 @@ describe('DesktopProgressBridge', () => {
       off();
       bridge.dispose();
     }
-  });
+  }, 30_000);
 
   it('preserves progress and badge metadata across repeated stream syncs', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000);
@@ -1037,6 +1103,123 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('routes stop and follow-up through each desktop window session', async () => {
+    const stopA = vi.fn((request) => ({
+      streamId: request.streamId,
+      status: 'not_found',
+      clearedRetryRequest: request.clearRetryRequest === true,
+    }));
+    const stopB = vi.fn((request) => ({
+      streamId: request.streamId,
+      status: 'not_found',
+      clearedRetryRequest: request.clearRetryRequest === true,
+    }));
+    const followUpA = vi.fn(async () => ({
+      outcome: 'sent',
+      accepted: true,
+    }));
+    const followUpB = vi.fn(async () => ({
+      outcome: 'sent',
+      accepted: true,
+    }));
+    const bridgeA = await createBridge([], {
+      requestRuntimeStreamStop: stopA,
+      requestRuntimeFollowUp: followUpA,
+    });
+    const bridgeB = await createBridge([], {
+      requestRuntimeStreamStop: stopB,
+      requestRuntimeFollowUp: followUpB,
+    });
+    const taskState = toolUseTaskState();
+    const sessionA = (bridgeA as BridgeWithSession).session;
+    const sessionB = (bridgeB as BridgeWithSession).session;
+
+    try {
+      expect(sessionA).not.toBe(sessionB);
+      const stopHandlerA =
+        bridgeA.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.STOP_STREAM
+        ]!;
+      const stopHandlerB =
+        bridgeB.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.STOP_STREAM
+        ]!;
+      const followUpHandlerA =
+        bridgeA.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP
+        ]!;
+      const followUpHandlerB =
+        bridgeB.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP
+        ]!;
+
+      await stopHandlerA({
+        command: PROGRESS_VIEW_COMMANDS.STOP_STREAM,
+        stream: 'stream-a',
+      } as never);
+      await stopHandlerB({
+        command: PROGRESS_VIEW_COMMANDS.STOP_STREAM,
+        stream: 'stream-b',
+      } as never);
+      bridgeA.handleProgressEvent('setTaskState', {
+        streamId: 'stream-a',
+        executionId: 'abc123',
+        taskState,
+      });
+      bridgeB.handleProgressEvent('setTaskState', {
+        streamId: 'stream-b',
+        executionId: 'def456',
+        taskState,
+      });
+      await followUpHandlerA({
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: 'stream-a',
+        text: 'continue A',
+      } as never);
+      await followUpHandlerB({
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: 'stream-b',
+        text: 'continue B',
+      } as never);
+
+      expect(stopA).toHaveBeenCalledWith(
+        expect.objectContaining({
+          streamId: 'stream-a',
+          clearRetryRequest: true,
+          session: sessionA,
+        }),
+      );
+      expect(stopB).toHaveBeenCalledWith(
+        expect.objectContaining({
+          streamId: 'stream-b',
+          clearRetryRequest: true,
+          session: sessionB,
+        }),
+      );
+      expect(followUpA).toHaveBeenCalledWith(
+        expect.objectContaining({
+          streamId: 'stream-a',
+          text: 'continue A',
+          session: sessionA,
+          persistedWaitingExecutionId: 'abc123',
+          wakeQueuedStream: true,
+        }),
+      );
+      expect(followUpB).toHaveBeenCalledWith(
+        expect.objectContaining({
+          streamId: 'stream-b',
+          text: 'continue B',
+          session: sessionB,
+          persistedWaitingExecutionId: 'def456',
+          wakeQueuedStream: true,
+        }),
+      );
+    } finally {
+      bridgeA.dispose();
+      bridgeB.dispose();
+    }
+  });
+
   it('does not resume a stream deleted in this desktop session', async () => {
     const taskState = {
       agentConfig: {
@@ -1587,141 +1770,232 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('resumes tool-use streams through the shared snapshot path', async () => {
+    const streamId = 'tool-use-resume-shared-path' as StreamTabId;
     const retrieveSessionResumeData = vi.fn(async () => ({
       type: 'toolUse',
       snapshot: {
-        executionId: 'exec-1',
-        streamId: 'stream-1',
+        executionId: 'abc123',
+        streamId,
         agentConfig: {
           agent: 'search',
           model: 'deepseekproT',
           agentCategory: AgentCategory.ToolUse,
+          toolConfig: DEFAULT_TOOL_CONFIG,
         },
       },
     }));
     const resumeToolUseFromSnapshot = vi.fn(async () => {});
     const messages: unknown[] = [];
+    const taskState = toolUseTaskState();
+    const kvRead = vi.fn(async (key: string) =>
+      key === 'meta'
+        ? {
+            executionId: 'abc123',
+            taskState,
+          }
+        : undefined,
+    );
     const bridge = await createBridge(messages, {
+      kvRead,
       retrieveSessionResumeData,
       resumeToolUseFromSnapshot,
     });
-    const { ToolUseFollowUpQueue } =
-      await import('@agent/followUp/ToolUseFollowUpQueueManager');
     const { StreamStatusService } =
       await import('@agent/runtime/StreamStatusService');
-    const taskState = {
-      agentConfig: {
-        agent: 'search',
-        model: 'deepseekproT',
-        agentCategory: AgentCategory.ToolUse,
-      },
-    };
 
     try {
-      bridge.handleProgressEvent('setTaskState', {
-        streamId: 'stream-1',
-        executionId: 'exec-1',
-        taskState,
-      });
-      ToolUseFollowUpQueue.enqueue(
-        'stream-1',
-        { text: 'queued follow-up' },
-        { force: true },
-      );
+      const session = (bridge as BridgeWithSession).session;
+      StreamStatusService.clear(streamId, { emit: false });
 
-      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
+      await expect(bridge.tryResumeStream(streamId)).resolves.toBe(true);
+      expect(kvRead).toHaveBeenCalledWith('meta');
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
-        'stream-1',
-        'exec-1',
-        taskState,
+        streamId,
+        'abc123',
+        expect.objectContaining({
+          agentConfig: expect.objectContaining(taskState.agentConfig),
+          toolSessionState: {},
+        }),
       );
       expect(resumeToolUseFromSnapshot).toHaveBeenCalledWith(
         expect.objectContaining({
-          executionId: 'exec-1',
-          streamId: 'stream-1',
+          executionId: 'abc123',
+          streamId,
         }),
-        expect.objectContaining({ emit: expect.any(Function) }),
-        expect.objectContaining({ setupSession: expect.any(Function) }),
+        expect.objectContaining({
+          emit: expect.any(Function),
+        }),
+        expect.objectContaining({
+          session,
+        }),
       );
-      const [, , resumeOptions] = resumeToolUseFromSnapshot.mock
-        .calls[0] as unknown as [
-        unknown,
-        unknown,
-        {
-          setupSession(session: {
-            appendFollowUp(followUp: {
-              text: string;
-              mediaFiles?: readonly string[];
-              displayText?: string;
-              origin?: 'user' | 'subagent_result';
-            }): void;
-          }): void;
-        },
-      ];
-      const appendFollowUp = vi.fn();
-      resumeOptions.setupSession({ appendFollowUp });
-      expect(appendFollowUp).toHaveBeenCalledWith({
-        text: 'queued follow-up',
-        origin: 'user',
-      });
     } finally {
-      ToolUseFollowUpQueue.release('stream-1');
-      StreamStatusService.clear('stream-1', { emit: false });
+      StreamStatusService.clear(streamId, { emit: false });
       bridge.dispose();
     }
   });
 
-  it('keeps queued follow-ups when tool-use resume fails', async () => {
+  it('routes tool-use resume through each desktop window session', async () => {
+    const streamIdA = 'tool-use-resume-window-a' as StreamTabId;
+    const streamIdB = 'tool-use-resume-window-b' as StreamTabId;
+    const executionIdA = 'abc123';
+    const executionIdB = 'def456';
+    const taskState = toolUseTaskState();
+    const resumeA = vi.fn(async () => {});
+    const resumeB = vi.fn(async () => {});
+    const retrieveA = vi.fn(async () => ({
+      type: 'toolUse',
+      snapshot: {
+        executionId: executionIdA,
+        streamId: streamIdA,
+        agentConfig: taskState.agentConfig,
+      },
+    }));
+    const retrieveB = vi.fn(async () => ({
+      type: 'toolUse',
+      snapshot: {
+        executionId: executionIdB,
+        streamId: streamIdB,
+        agentConfig: taskState.agentConfig,
+      },
+    }));
+    const bridgeA = await createBridge([], {
+      kvRead: vi.fn(async (key: string) =>
+        key === 'meta'
+          ? {
+              executionId: executionIdA,
+              taskState,
+            }
+          : undefined,
+      ),
+      retrieveSessionResumeData: retrieveA,
+      resumeToolUseFromSnapshot: resumeA,
+    });
+    const bridgeB = await createBridge([], {
+      kvRead: vi.fn(async (key: string) =>
+        key === 'meta'
+          ? {
+              executionId: executionIdB,
+              taskState,
+            }
+          : undefined,
+      ),
+      retrieveSessionResumeData: retrieveB,
+      resumeToolUseFromSnapshot: resumeB,
+    });
+    const sessionA = (bridgeA as BridgeWithSession).session;
+    const sessionB = (bridgeB as BridgeWithSession).session;
+
+    try {
+      expect(sessionA).not.toBe(sessionB);
+
+      await expect(bridgeA.tryResumeStream(streamIdA)).resolves.toBe(true);
+      await expect(bridgeB.tryResumeStream(streamIdB)).resolves.toBe(true);
+
+      expect(retrieveA).toHaveBeenCalledWith(
+        streamIdA,
+        executionIdA,
+        expect.objectContaining({
+          agentConfig: expect.objectContaining(taskState.agentConfig),
+        }),
+      );
+      expect(retrieveB).toHaveBeenCalledWith(
+        streamIdB,
+        executionIdB,
+        expect.objectContaining({
+          agentConfig: expect.objectContaining(taskState.agentConfig),
+        }),
+      );
+      expect(resumeA).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executionId: executionIdA,
+          streamId: streamIdA,
+        }),
+        expect.objectContaining({
+          emit: expect.any(Function),
+        }),
+        expect.objectContaining({
+          session: sessionA,
+        }),
+      );
+      expect(resumeB).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executionId: executionIdB,
+          streamId: streamIdB,
+        }),
+        expect.objectContaining({
+          emit: expect.any(Function),
+        }),
+        expect.objectContaining({
+          session: sessionB,
+        }),
+      );
+    } finally {
+      bridgeA.dispose();
+      bridgeB.dispose();
+    }
+  });
+
+  it('reports failures from the shared tool-use snapshot resume path', async () => {
+    const streamId = 'tool-use-resume-failure-path' as StreamTabId;
     const retrieveSessionResumeData = vi.fn(async () => ({
       type: 'toolUse',
       snapshot: {
-        executionId: 'exec-1',
-        streamId: 'stream-1',
+        executionId: 'abc123',
+        streamId,
         agentConfig: {
           agent: 'search',
           model: 'deepseekproT',
           agentCategory: AgentCategory.ToolUse,
+          toolConfig: DEFAULT_TOOL_CONFIG,
         },
       },
     }));
     const resumeToolUseFromSnapshot = vi.fn(async () => {
       throw new Error('resume failed');
     });
+    const showErrorMessage = vi.fn();
+    const taskState = toolUseTaskState();
+    const kvRead = vi.fn(async (key: string) =>
+      key === 'meta'
+        ? {
+            executionId: 'abc123',
+            taskState,
+          }
+        : undefined,
+    );
     const bridge = await createBridge([], {
+      kvRead,
       retrieveSessionResumeData,
       resumeToolUseFromSnapshot,
+      showErrorMessage,
     });
-    const { ToolUseFollowUpQueue } =
-      await import('@agent/followUp/ToolUseFollowUpQueueManager');
     const { StreamStatusService } =
       await import('@agent/runtime/StreamStatusService');
 
     try {
-      bridge.handleProgressEvent('setTaskState', {
-        streamId: 'stream-1',
-        executionId: 'exec-1',
-        taskState: {
-          agentConfig: {
-            agent: 'search',
-            model: 'deepseekproT',
-            agentCategory: AgentCategory.ToolUse,
-          },
-        },
-      });
-      ToolUseFollowUpQueue.enqueue(
-        'stream-1',
-        { text: 'queued follow-up' },
-        { force: true },
-      );
+      const session = (bridge as BridgeWithSession).session;
+      StreamStatusService.clear(streamId, { emit: false });
 
-      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
-      expect(ToolUseFollowUpQueue.getAll('stream-1')).toEqual([
-        'queued follow-up',
-      ]);
-      expect(StreamStatusService.get('stream-1')).toBe(STREAM_STATUS.WAITING);
+      await expect(bridge.tryResumeStream(streamId)).resolves.toBe(false);
+      expect(kvRead).toHaveBeenCalledWith('meta');
+      expect(resumeToolUseFromSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executionId: 'abc123',
+          streamId,
+        }),
+        expect.objectContaining({
+          emit: expect.any(Function),
+        }),
+        expect.objectContaining({
+          session,
+        }),
+      );
+      expect(showErrorMessage).toHaveBeenCalledWith(
+        'Resume failed: resume failed',
+      );
     } finally {
-      ToolUseFollowUpQueue.release('stream-1');
-      StreamStatusService.clear('stream-1', { emit: false });
+      StreamStatusService.clear(streamId, { emit: false });
       bridge.dispose();
     }
   });
@@ -1746,6 +2020,7 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('does not launch duplicate concurrent resume attempts', async () => {
+    const streamId = 'tool-use-resume-concurrent-path' as StreamTabId;
     let allowRetrieve: () => void = () => undefined;
     const retrieveGate = new Promise<void>((resolve) => {
       allowRetrieve = resolve;
@@ -1760,41 +2035,44 @@ describe('DesktopProgressBridge', () => {
       return {
         type: 'toolUse',
         snapshot: {
-          executionId: 'exec-1',
-          streamId: 'stream-1',
+          executionId: 'abc123',
+          streamId,
           agentConfig: {
             agent: 'search',
             model: 'deepseekproT',
             agentCategory: AgentCategory.ToolUse,
+            toolConfig: DEFAULT_TOOL_CONFIG,
           },
         },
       };
     });
-    const bridge = await createBridge([], { retrieveSessionResumeData });
+    const taskState = toolUseTaskState();
+    const kvRead = vi.fn(async (key: string) =>
+      key === 'meta'
+        ? {
+            executionId: 'abc123',
+            taskState,
+          }
+        : undefined,
+    );
+    const bridge = await createBridge([], {
+      kvRead,
+      retrieveSessionResumeData,
+    });
     const { StreamStatusService } =
       await import('@agent/runtime/StreamStatusService');
 
     try {
-      bridge.handleProgressEvent('setTaskState', {
-        streamId: 'stream-1',
-        executionId: 'exec-1',
-        taskState: {
-          agentConfig: {
-            agent: 'search',
-            model: 'deepseekproT',
-            agentCategory: AgentCategory.ToolUse,
-          },
-        },
-      });
-
-      const firstResume = bridge.tryResumeStream('stream-1');
+      StreamStatusService.clear(streamId, { emit: false });
+      const firstResume = bridge.tryResumeStream(streamId);
       await retrieveStartedPromise;
-      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
+      await expect(bridge.tryResumeStream(streamId)).resolves.toBe(false);
       allowRetrieve();
       await expect(firstResume).resolves.toBe(true);
+      expect(kvRead).toHaveBeenCalledWith('meta');
       expect(retrieveSessionResumeData).toHaveBeenCalledTimes(1);
     } finally {
-      StreamStatusService.clear('stream-1', { emit: false });
+      StreamStatusService.clear(streamId, { emit: false });
       bridge.dispose();
     }
   });

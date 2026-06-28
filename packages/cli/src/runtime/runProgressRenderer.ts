@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 // Local imports - agent metadata
-import { getRuntimeAgent } from '@agent/runtime/agentResolution';
+import { getRuntimeWorkflowAgent } from '@agent/runtime/agentResolution';
 
 // Local imports - progress events
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -195,7 +195,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.state.inputLabel = formatInputLabel(config.inputFiles);
     this.state.plannedRounds =
       config.agentCategory === AgentCategory.Workflow
-        ? getRuntimeAgent(config.agent, AgentCategory.Workflow)?.rounds
+        ? getRuntimeWorkflowAgent(config.agent)?.rounds
         : undefined;
     this.state.phase ??= 'running';
     return true;

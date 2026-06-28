@@ -13,6 +13,7 @@ import {
   compactResponse as agentCompactResponse,
   handleCreateAgentWithAI as agentHandleCreateAgentWithAI,
   runExecuteCommand as agentRunExecuteCommand,
+  type StopAgentCommandArgs,
 } from '@commands/agent';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex';
 import { runSetupAssistant as setupRunAssistant } from '@commands/setup';
@@ -227,7 +228,7 @@ export interface ExtensionCommandActions {
   loadSpecificAgent(): Promise<void>;
   openProgressViewInTab(): Promise<void>;
   openDoc(page: string): Promise<void>;
-  stopAgent(streamId: string): void;
+  stopAgent(args: StopAgentCommandArgs): void;
   compactResponse(streamId: string): Promise<void>;
   parseXml(): Promise<void>;
   parseYaml(): Promise<void>;
@@ -395,9 +396,15 @@ const EXTENSION_COMMAND_HANDLERS = {
       awaitTrue(actions.openDoc(page)),
   ),
   'texra.stopAgent': definedHandler(
-    StreamTabIdSchema,
-    (actions: ExtensionCommandActions, streamId) => {
-      actions.stopAgent(streamId);
+    z.union([
+      StreamTabIdSchema,
+      z.strictObject({
+        streamId: StreamTabIdSchema,
+        clearRetryRequest: z.boolean().nullish(),
+      }),
+    ]),
+    (actions: ExtensionCommandActions, args) => {
+      actions.stopAgent(args);
       return true;
     },
   ),

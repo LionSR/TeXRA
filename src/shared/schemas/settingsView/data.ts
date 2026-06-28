@@ -19,7 +19,7 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-import { GoalSchema } from '../goal';
+import { GoalStatusSchema } from '../goal';
 
 import {
   AgentCategorySchema,
@@ -505,10 +505,20 @@ export type UpdateInlineCriticismEnabledMessage = z.infer<
   typeof UpdateInlineCriticismEnabledMessageSchema
 >;
 
+/** Settings-view goal row projected from the runtime goal store. */
+export const GoalSettingsItemSchema = z.object({
+  goalId: z.string().min(1),
+  streamId: StreamTabIdSchema,
+  objective: z.string().min(1),
+  status: GoalStatusSchema,
+  createdAt: z.iso.datetime(),
+});
+export type GoalSettingsItem = z.infer<typeof GoalSettingsItemSchema>;
+
 /** Outbound: pushed when the list changes or in response to GET_GOAL_LIST. */
 export const UpdateGoalListMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST),
-  items: z.array(GoalSchema),
+  items: z.array(GoalSettingsItemSchema),
 });
 export type UpdateGoalListMessage = z.infer<typeof UpdateGoalListMessageSchema>;
 

@@ -4,10 +4,21 @@ import path from 'node:path';
 
 import { nanoid } from 'nanoid';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  setRuntimeToolEditApprovalHandler,
+  startRuntimeToolEditApprovalPrompt,
+  type RuntimeToolEditApprovalRequest,
+  type RuntimeToolEditApprovalResult,
+} from '@agent/runtime/approvalCommands';
 import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import type { DiffViewHost } from '@hosts/uiHosts';
+import { writeApprovalTempFiles } from '@shared/approval/tempFileManager';
+import {
+  computeLineChangeSummary,
+  computeUserPatch,
+} from '@shared/approval/toolEditDiff';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
@@ -15,17 +26,6 @@ import {
   runLatexdiff,
   type LatexPreviewEntry,
 } from '@tools/approval/latexPreview';
-import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
-import {
-  computeLineChangeSummary,
-  computeUserPatch,
-  emitToolEditApprovalPrompt,
-  registerPendingApproval,
-  setToolEditApprovalHandler,
-  unregisterPendingApproval,
-  type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
-} from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -49,13 +49,14 @@ export interface DesktopToolEditApprovalController {
 
 interface DesktopPendingToolEditApproval extends LatexPreviewEntry {
   requestId: string;
-  request: ToolEditApprovalRequest;
+  request: RuntimeToolEditApprovalRequest;
   tempDir: string;
   originalUri: { fsPath: string };
   proposedUri: { fsPath: string };
   originalContent: string;
   proposedContent: string;
-  settle: (result: ToolEditApprovalResult) => void;
+  completeRuntimePrompt: () => void;
+  settle: (result: RuntimeToolEditApprovalResult) => void;
 }
 
 class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalController {
@@ -63,12 +64,14 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   private disposed = false;
 
   constructor(private readonly options: DesktopToolEditApprovalOptions) {
-    setToolEditApprovalHandler((request) => this.requestApproval(request));
+    setRuntimeToolEditApprovalHandler((request) =>
+      this.requestApproval(request),
+    );
   }
 
   async requestApproval(
-    request: ToolEditApprovalRequest,
-  ): Promise<ToolEditApprovalResult> {
+    request: RuntimeToolEditApprovalRequest,
+  ): Promise<RuntimeToolEditApprovalResult> {
     if (this.disposed) {
       throw new Error('Desktop tool edit approval controller is disposed.');
     }
@@ -81,25 +84,36 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     const entry = await this.createPendingEntry(requestId, request);
     let settled = false;
 
-    const result = await new Promise<ToolEditApprovalResult>((resolve) => {
-      entry.settle = (value) => {
-        if (settled) return;
-        settled = true;
-        resolve(value);
-      };
-      entry.isSettled = () => settled;
-      this.pending.set(requestId, entry);
-      registerPendingApproval(requestId, {
-        // `streamId` is `.nullish()` on the tool schema (string | null |
-        // undefined); the approval registry expects `string | undefined`, so
-        // collapse null → undefined (matches nativeToolEditApproval).
-        streamId: request.streamId ?? undefined,
-        runtimeHost: this.options.runtimeHost,
-        isSettled: () => settled,
-        settle: (value) => this.settle(requestId, value),
-      });
-      this.showProgressPermission(requestId, request, lineChanges);
-    });
+    const result = await new Promise<RuntimeToolEditApprovalResult>(
+      (resolve) => {
+        entry.settle = (value) => {
+          if (settled) return;
+          settled = true;
+          resolve(value);
+        };
+        entry.isSettled = () => settled;
+        const promptSession = startRuntimeToolEditApprovalPrompt({
+          requestId,
+          request,
+          runtimeHost: this.options.runtimeHost,
+          pending: {
+            // `streamId` is `.nullish()` on the tool schema (string | null |
+            // undefined); the approval registry expects `string | undefined`,
+            // so collapse null -> undefined (matches nativeToolEditApproval).
+            streamId: request.streamId ?? undefined,
+            runtimeHost: this.options.runtimeHost,
+            isSettled: () => settled,
+            settle: (value) => this.settle(requestId, value),
+          },
+        });
+        entry.completeRuntimePrompt = () => promptSession.complete();
+        this.pending.set(requestId, entry);
+        promptSession.emitPrompt({
+          relativePath: this.relativeDisplayPath(request.path),
+          lineChanges,
+        });
+      },
+    );
 
     if (result.accepted && result.appliedContent != null) return result;
     return { ...result, lineChanges: result.lineChanges ?? lineChanges };
@@ -147,7 +161,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    setToolEditApprovalHandler();
+    setRuntimeToolEditApprovalHandler();
     for (const requestId of [...this.pending.keys()]) {
       this.settle(requestId, { accepted: false });
     }
@@ -155,7 +169,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
 
   private async createPendingEntry(
     requestId: string,
-    request: ToolEditApprovalRequest,
+    request: RuntimeToolEditApprovalRequest,
   ): Promise<DesktopPendingToolEditApproval> {
     const tempRoot = this.options.tempRoot ?? tmpdir();
     const tempDir = await mkdtemp(path.join(tempRoot, 'texra-tool-edit-'));
@@ -175,27 +189,12 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       originalContent: request.originalContent,
       proposedContent: request.proposedContent,
       isSettled: () => false,
+      completeRuntimePrompt: () => {},
       settle: () => {},
       workspaceTempCleanup: [],
       latexOperationInProgress: false,
       onError: (message) => this.report(message),
     };
-  }
-
-  private showProgressPermission(
-    requestId: string,
-    request: ToolEditApprovalRequest,
-    lineChanges: { added: number; removed: number },
-  ): void {
-    // Activate the stream that needs approval and post the prompt (shared with
-    // the VS Code host); the desktop host has no workspace API, so it falls
-    // back to a basename when computing the relative display path.
-    emitToolEditApprovalPrompt(this.options.runtimeHost, {
-      requestId,
-      request,
-      relativePath: this.relativeDisplayPath(request.path),
-      lineChanges,
-    });
   }
 
   private relativeDisplayPath(filePath: string): string {
@@ -206,14 +205,16 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     }
   }
 
-  private settle(requestId: string, result: ToolEditApprovalResult): void {
+  private settle(
+    requestId: string,
+    result: RuntimeToolEditApprovalResult,
+  ): void {
     const entry = this.pending.get(requestId);
     if (!entry || entry.isSettled()) return;
 
     this.pending.delete(requestId);
-    unregisterPendingApproval(requestId);
+    entry.completeRuntimePrompt();
     entry.settle(result);
-    this.options.runtimeHost.emit('resolveToolEditPermission', { requestId });
     this.cleanupEntry(entry);
   }
 
