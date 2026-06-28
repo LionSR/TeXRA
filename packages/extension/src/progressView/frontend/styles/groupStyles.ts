@@ -72,7 +72,9 @@ export const groupStyles = css`
      so the disclosure chevron is consistent with every other panel. Strip the
      WA card chrome so the group reads as an inline disclosure rather than a
      boxed panel — our .log-group-header (status rail + padding) and
-     .log-group-content (dashed connector) own the visuals. */
+     .log-group-content (dashed connector) own the visuals. Unlike the shared
+     .collapsible-quiet panels, collapse here is by lazy DOM removal in
+     TaskGroupList (not the 1fr/0fr grid trick), so no content-grid rules. */
   wa-details.log-group::part(base) {
     background: transparent;
     border: none;

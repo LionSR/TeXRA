@@ -423,30 +423,23 @@ export class TaskGroupList extends LitElement {
   }
 
   /**
-   * Handle a group's open/close. wa-details emits wa-show / wa-hide which
-   * BUBBLE (unlike the native <details> `toggle`), so nested child groups
-   * would otherwise re-trigger their ancestors — guard on
-   * target === currentTarget. Reads groupId from the element ID to avoid
-   * per-row closures.
+   * Handle a group's open/close — wired to both wa-show and wa-hide. Those
+   * events BUBBLE (unlike the native <details> `toggle`), so nested child
+   * groups would otherwise re-trigger their ancestors — guard on
+   * target === currentTarget. Open state comes from the event type; groupId
+   * from the element ID (no per-row closures). Lit binds the host as `this`.
    */
-  private handleGroupToggle(event: Event, open: boolean): void {
+  private handleGroupToggle(event: Event): void {
     if (event.target !== event.currentTarget) return;
     const details = event.currentTarget as HTMLElement;
     const groupId = details.id.slice(GROUP_DOM_IDS.DETAILS_PREFIX.length);
     if (this.toggleStates) {
-      this.toggleStates.set(groupId, !open);
+      // toggleStates stores `true` = collapsed; wa-show means now-open.
+      this.toggleStates.set(groupId, event.type !== 'wa-show');
     }
     // Re-render to add/remove children from the DOM (lazy collapsed groups)
     this.requestUpdate();
   }
-
-  private readonly handleGroupShow = (event: Event): void => {
-    this.handleGroupToggle(event, true);
-  };
-
-  private readonly handleGroupHide = (event: Event): void => {
-    this.handleGroupToggle(event, false);
-  };
 
   /** Render child group header inline (only called for non-root groups) */
   private renderGroupHeader(group: TaskGroup): TemplateResult {
@@ -526,8 +519,8 @@ export class TaskGroupList extends LitElement {
         id=${detailsId}
         class="log-group"
         ?open=${expanded}
-        @wa-show=${this.handleGroupShow}
-        @wa-hide=${this.handleGroupHide}
+        @wa-show=${this.handleGroupToggle}
+        @wa-hide=${this.handleGroupToggle}
       >
         <div
           slot="summary"
