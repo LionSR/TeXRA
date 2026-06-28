@@ -343,38 +343,47 @@ export class HistoryItemElement extends LitElement {
             @click=${this.handleActionClick}
           >
             ${renderIconActionButton({
+              id: 'history-delete-button',
               icon: 'trash',
               label: 'Delete',
+              tooltip: 'Delete this history item',
               action: 'delete',
             })}
             ${renderIconActionButton({
+              id: 'history-setup-button',
               icon: 'reply',
               label: 'Setup',
+              tooltip: "Restore this run's setup",
               action: 'restore',
             })}
             ${renderIconActionButton({
+              id: 'history-rerun-button',
               icon: 'rotate-right',
               label: 'Rerun',
+              tooltip: 'Rerun this task',
               action: 'rerun',
             })}
             ${isToolUse
               ? html`
                   ${renderIconActionButton({
+                    id: 'history-export-md-button',
                     icon: 'file-lines',
                     label: 'Export Markdown',
-                    title: 'Export as Markdown',
+                    tooltip: 'Export as Markdown',
                     action: 'export-md',
                   })}
                   ${renderIconActionButton({
+                    id: 'history-export-pdf-button',
                     icon: 'file-pdf',
                     label: 'Export PDF',
-                    title: 'Export as LaTeX/PDF',
+                    tooltip: 'Export as LaTeX/PDF',
                     action: 'export-tex',
                   })}
                   ${renderIconActionButton({
+                    id: 'history-export-html-button',
                     icon: 'globe',
                     label: 'Export HTML',
-                    title: 'Export as shareable HTML webpage',
+                    tooltip: 'Export as shareable HTML webpage',
                     action: 'export-html',
                   })}
                 `

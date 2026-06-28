@@ -77,21 +77,26 @@ export class SearchBar extends LitElement {
         ></wa-input>
         <div class="search-controls action-button-group">
           ${renderIconActionButton({
+            id: 'history-search-prev-button',
             icon: 'chevron-up',
             label: 'Previous match',
+            tooltip: 'Previous match',
             onClick: this.handlePrev,
           })}
           ${renderIconActionButton({
+            id: 'history-search-next-button',
             icon: 'chevron-down',
             label: 'Next match',
+            tooltip: 'Next match',
             onClick: this.handleNext,
           })}
           <span class="match-count">${this.matchCount}</span>
           ${this.canClearHistory
             ? renderIconActionButton({
+                id: 'history-search-clear-button',
                 icon: 'trash',
                 label: 'Clear history',
-                title: 'Clear all history',
+                tooltip: 'Clear all history',
                 action: 'clear-history',
                 onClick: this.handleClearHistory,
               })

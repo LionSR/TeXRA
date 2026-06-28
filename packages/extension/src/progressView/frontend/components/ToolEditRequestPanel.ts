@@ -9,6 +9,7 @@ import { when } from 'lit/directives/when.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import {
@@ -99,6 +100,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
                 @wa-select=${this.handleMenuSelect}
               >
                 <wa-button
+                  id="tool-edit-diff-dropdown-trigger"
                   slot="trigger"
                   class="action-icon-button diff-dropdown-trigger"
                   appearance="plain"
@@ -106,7 +108,6 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
                   size="small"
                   type="button"
                   aria-label="More diff actions"
-                  title="More diff actions"
                 >
                   ${waIcon('chevron-down')}
                 </wa-button>
@@ -117,6 +118,9 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
                   LaTeXdiff
                 </wa-dropdown-item>
               </wa-dropdown>
+              <wa-tooltip for="tool-edit-diff-dropdown-trigger">
+                More diff actions
+              </wa-tooltip>
             `
           : nothing}
       </div>

@@ -10,6 +10,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles + helpers
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -140,6 +141,7 @@ export class ApproveSplitButton extends LitElement {
           @wa-select=${this.handleSelect}
         >
           <wa-button
+            id="approve-split-trigger-button"
             slot="trigger"
             class="action-icon-button approve-split-trigger"
             appearance="plain"
@@ -147,7 +149,6 @@ export class ApproveSplitButton extends LitElement {
             size="small"
             type="button"
             aria-label="More approve options"
-            title="Approve and stop asking this session (a)"
           >
             ${waIcon('chevron-down')}
           </wa-button>
@@ -166,6 +167,9 @@ export class ApproveSplitButton extends LitElement {
               </wa-dropdown-item>`,
           )}
         </wa-dropdown>
+        <wa-tooltip for="approve-split-trigger-button">
+          Approve and stop asking this session (a)
+        </wa-tooltip>
       </div>
     `;
   }

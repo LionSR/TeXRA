@@ -323,6 +323,36 @@ export class StreamHeader extends LitElement {
     const toolbarButtons =
       TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
 
+    // Precompute per-button view metadata once so the button-group and the
+    // sibling <wa-tooltip> elements share the same active-state-aware title.
+    // The tooltips live OUTSIDE <wa-button-group>: the group's rounded-corner
+    // styling keys off ::slotted(:first-child)/(:last-child), so interleaving
+    // tooltip nodes between the buttons would break those selectors. They
+    // anchor by `for=${btn.id}` within this shadow root instead.
+    const toolbarButtonViews = (toolbarButtons as ToolbarButton[]).map(
+      (btn) => {
+        const { disabled, hidden } = this.getButtonState(
+          btn.id,
+          status,
+          hasExecutionId,
+        );
+        const isActive = Boolean(
+          btn.isToggle &&
+          (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
+            ? this.superYoloActive
+            : this.yoloActive),
+        );
+        const title = isActive && btn.titleActive ? btn.titleActive : btn.title;
+        const classes = classMap({
+          'action-icon-button': true,
+          ...(btn.className ? { [btn.className]: true } : {}),
+          'toolbar-button--hidden': hidden,
+          'is-active': isActive,
+        });
+        return { btn, disabled, hidden, title, classes };
+      },
+    );
+
     return html`
       <div class="log-header">
         <div class="log-header__primary">
@@ -357,48 +387,32 @@ export class StreamHeader extends LitElement {
               @click=${this.handleToolbarClick}
             >
               ${repeat(
-                toolbarButtons as ToolbarButton[],
-                (btn) => btn.id,
-                (btn) => {
-                  const { disabled, hidden } = this.getButtonState(
-                    btn.id,
-                    status,
-                    hasExecutionId,
-                  );
-                  const isActive = Boolean(
-                    btn.isToggle &&
-                    (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
-                      ? this.superYoloActive
-                      : this.yoloActive),
-                  );
-                  const title =
-                    isActive && btn.titleActive ? btn.titleActive : btn.title;
-                  const classes = classMap({
-                    'action-icon-button': true,
-                    ...(btn.className ? { [btn.className]: true } : {}),
-                    'toolbar-button--hidden': hidden,
-                    'is-active': isActive,
-                  });
-                  return html`
-                    <wa-button
-                      id=${btn.id}
-                      class=${classes}
-                      appearance="plain"
-                      variant="neutral"
-                      size="small"
-                      type="button"
-                      aria-label=${title}
-                      title=${title}
-                      data-command=${btn.command}
-                      aria-hidden=${hidden ? 'true' : 'false'}
-                      ?disabled=${disabled}
-                    >
-                      ${waIcon(btn.icon as TeXRAIconName)}
-                    </wa-button>
-                  `;
-                },
+                toolbarButtonViews,
+                (view) => view.btn.id,
+                ({ btn, disabled, hidden, title, classes }) => html`
+                  <wa-button
+                    id=${btn.id}
+                    class=${classes}
+                    appearance="plain"
+                    variant="neutral"
+                    size="small"
+                    type="button"
+                    aria-label=${title}
+                    data-command=${btn.command}
+                    aria-hidden=${hidden ? 'true' : 'false'}
+                    ?disabled=${disabled}
+                  >
+                    ${waIcon(btn.icon as TeXRAIconName)}
+                  </wa-button>
+                `,
               )}
             </wa-button-group>
+            ${repeat(
+              toolbarButtonViews.filter((view) => !view.hidden),
+              (view) => view.btn.id,
+              (view) =>
+                html`<wa-tooltip for=${view.btn.id}>${view.title}</wa-tooltip>`,
+            )}
           </div>
         </div>
       </div>

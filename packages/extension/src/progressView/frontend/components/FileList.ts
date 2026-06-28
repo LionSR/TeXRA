@@ -14,6 +14,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -41,20 +42,32 @@ interface FileActionOptions {
   readonly className: string;
   readonly command: string;
   readonly file: string;
+  // Unique per (round, file-index) so the button id can't collide when the
+  // same workspace path appears across rounds in one shadow root.
+  readonly idPrefix: string;
   readonly base?: string;
   readonly prev?: string;
 }
 
 function renderFileActionButton(opts: FileActionOptions): TemplateResult {
+  // idPrefix is unique per (round, file-index); command is unique per button
+  // within a file, so the pair never collides — even when the same path shows
+  // up across rounds in one shadow root. Sanitize to a valid id the
+  // <wa-tooltip> anchors to via `for`. These buttons live in a flex
+  // `.file-actions` row (not a wa-button-group), so the sibling tooltip is safe.
+  const buttonId = `${opts.idPrefix}-${opts.command}`.replace(
+    /[^a-zA-Z0-9_-]/g,
+    '-',
+  );
   return html`
     <wa-button
+      id=${buttonId}
       class="action-icon-button ${opts.className}"
       appearance="plain"
       variant="neutral"
       size="small"
       type="button"
       aria-label=${opts.label}
-      title=${opts.title}
       data-command=${opts.command}
       data-file=${opts.file}
       data-base=${ifDefined(opts.base)}
@@ -62,6 +75,7 @@ function renderFileActionButton(opts: FileActionOptions): TemplateResult {
     >
       ${waIcon(opts.icon)}
     </wa-button>
+    <wa-tooltip for=${buttonId}>${opts.title}</wa-tooltip>
   `;
 }
 
@@ -352,9 +366,10 @@ export class FileList extends LitElement {
           button to open the full run.
         </span>
         ${renderIconActionButton({
+          id: 'storage-hint-dismiss-button',
           icon: 'close',
           label: 'Dismiss storage explanation',
-          title: 'Dismiss storage explanation',
+          tooltip: 'Dismiss storage explanation',
           className: 'storage-hint__dismiss',
           onClick: this.handleDismissStorageHint,
         })}
@@ -372,7 +387,7 @@ export class FileList extends LitElement {
       return html`${repeat(
         files,
         (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
-        (file) => this.renderFileItem(file, round),
+        (file, index) => this.renderFileItem(file, round, index),
       )}`;
     }
 
@@ -386,7 +401,7 @@ export class FileList extends LitElement {
           ${repeat(
             files,
             (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
-            (file) => this.renderFileItem(file, round),
+            (file, index) => this.renderFileItem(file, round, index),
           )}
         </div>
       </wa-details>
@@ -396,8 +411,12 @@ export class FileList extends LitElement {
   private renderFileItem(
     file: OutputFileInfo,
     round: number,
+    fileIndex: number,
   ): TemplateResult | typeof nothing {
     if (!file?.location) return nothing;
+
+    // Unique within this shadow root: round + the file's index in that round.
+    const idPrefix = `file-action-r${round}-f${fileIndex}`;
 
     const location = file.location;
     // Prefer: workspace original → source doc name → run-storage relative path.
@@ -433,11 +452,13 @@ export class FileList extends LitElement {
       filePath,
       effectiveBase,
       compareBase,
+      idPrefix,
     );
     const previousAction = this.renderPreviousAction(
       filePath,
       effectiveBase,
       diffBase,
+      idPrefix,
     );
 
     return html`
@@ -474,6 +495,7 @@ export class FileList extends LitElement {
                 className: '',
                 command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
                 file: failure.log.absolutePath,
+                idPrefix,
               })
             : nothing}
           ${baseActions} ${previousAction}
@@ -596,6 +618,7 @@ export class FileList extends LitElement {
     filePath: string,
     basePath: string,
     compareBase: string,
+    idPrefix: string,
   ): TemplateResult | typeof nothing {
     if (!basePath) return nothing;
 
@@ -608,6 +631,7 @@ export class FileList extends LitElement {
         command: PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL,
         file: filePath,
         base: compareBase,
+        idPrefix,
       })}
       ${renderFileActionButton({
         icon: 'diff-multiple',
@@ -617,6 +641,7 @@ export class FileList extends LitElement {
         command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
         file: filePath,
         base: basePath,
+        idPrefix,
       })}
       ${renderFileActionButton({
         icon: 'check',
@@ -626,6 +651,7 @@ export class FileList extends LitElement {
         command: PROGRESS_VIEW_COMMANDS.ACCEPT_FILE,
         file: filePath,
         base: compareBase,
+        idPrefix,
       })}
       ${renderFileActionButton({
         icon: 'git-merge',
@@ -635,6 +661,7 @@ export class FileList extends LitElement {
         command: PROGRESS_VIEW_COMMANDS.MERGE_FILE,
         file: filePath,
         base: basePath,
+        idPrefix,
       })}
     `;
   }
@@ -643,6 +670,7 @@ export class FileList extends LitElement {
     filePath: string,
     basePath: string,
     previousPath: string | undefined,
+    idPrefix: string,
   ): TemplateResult | typeof nothing {
     if (!previousPath || previousPath === basePath) return nothing;
 
@@ -655,6 +683,7 @@ export class FileList extends LitElement {
       file: filePath,
       base: basePath,
       prev: previousPath,
+      idPrefix,
     });
   }
 }
