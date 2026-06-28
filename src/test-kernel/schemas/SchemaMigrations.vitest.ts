@@ -61,6 +61,18 @@ describe('RunUsageAccumulatorJSONSchema — legacy normalizedSnapshots migration
     expect(result.latestUsage).toMatchObject(usageFixture);
   });
 
+  it('preserves the last valid usage when an earlier snapshot is malformed', () => {
+    const result = RunUsageAccumulatorJSONSchema.parse({
+      normalizedSnapshots: [
+        { round: 0, usage: { bogus: 'not a usage' } },
+        { round: 1, usage: usageFixture },
+      ],
+    });
+
+    // A malformed earlier snapshot must not drop the latest valid usage.
+    expect(result.latestUsage).toMatchObject(usageFixture);
+  });
+
   it('parses empty object to zero totals and null latestUsage', () => {
     const result = RunUsageAccumulatorJSONSchema.parse({});
 
