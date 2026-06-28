@@ -28,7 +28,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 
 // Local imports
-import '@awesome.me/webawesome/dist/components/tag/tag.js';
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import {
   STREAM_STATUS,
   type ActiveChildInfo,
@@ -154,16 +154,18 @@ export class BackgroundTasksPanel extends LitElement {
         color: var(--color-text-secondary);
       }
 
-      wa-tag.task-status {
+      /* Status uses a native wa-badge (filled), matching the app-wide badge
+         idiom (GoalTab / WorktreeChip / StreamHeader goal chip) rather than a
+         wa-tag — tags are for removable/category chips, badges for status. */
+      wa-badge.task-status {
         flex: 0 0 auto;
         margin-left: auto;
       }
 
-      wa-tag.task-status::part(base) {
-        min-height: 1.25rem;
-        padding: 0 var(--wa-space-xs);
+      wa-badge.task-status::part(base) {
+        padding: 2px var(--wa-space-2xs);
         font-size: var(--font-size-xs);
-        line-height: 1;
+        font-weight: var(--font-weight-medium);
       }
 
       /* Nested sections use Web Awesome <wa-details class="collapsible-quiet">
@@ -350,11 +352,11 @@ export class BackgroundTasksPanel extends LitElement {
             format="narrow"
             sync
           ></wa-relative-time>
-          <wa-tag
+          <wa-badge
             class="task-status"
             variant=${inquiryStatusVariant(thread.status)}
-            size="small"
-            >${thread.status}</wa-tag
+            appearance="filled"
+            >${thread.status}</wa-badge
           >
         </div>
       </div>
@@ -461,11 +463,11 @@ export class BackgroundTasksPanel extends LitElement {
           ${child.elapsed
             ? html`<span class="task-elapsed">(${child.elapsed})</span>`
             : nothing}
-          <wa-tag
+          <wa-badge
             class="task-status"
             variant=${waiting ? 'neutral' : 'warning'}
-            size="small"
-            >${waiting ? 'waiting' : 'running'}</wa-tag
+            appearance="filled"
+            >${waiting ? 'waiting' : 'running'}</wa-badge
           >
         </div>
         ${entry?.stdout

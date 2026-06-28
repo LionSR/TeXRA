@@ -14,6 +14,7 @@ import type { GettingStartedAction } from '@shared/schemas';
 // Local imports - shared utilities
 // Side-effect imports - register WA icon and spinner components
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
@@ -421,12 +422,20 @@ export class TaskGroupList extends LitElement {
     return remaining <= threshold;
   }
 
-  /** Handle details toggle — reads groupId from element ID to avoid closures */
-  private handleDetailsToggle(event: Event): void {
-    const details = event.currentTarget as HTMLDetailsElement;
+  /**
+   * Handle a group's open/close — wired to both wa-show and wa-hide. Those
+   * events BUBBLE (unlike the native <details> `toggle`), so nested child
+   * groups would otherwise re-trigger their ancestors — guard on
+   * target === currentTarget. Open state comes from the event type; groupId
+   * from the element ID (no per-row closures). Lit binds the host as `this`.
+   */
+  private handleGroupToggle(event: Event): void {
+    if (event.target !== event.currentTarget) return;
+    const details = event.currentTarget as HTMLElement;
     const groupId = details.id.slice(GROUP_DOM_IDS.DETAILS_PREFIX.length);
     if (this.toggleStates) {
-      this.toggleStates.set(groupId, !details.open);
+      // toggleStates stores `true` = collapsed; wa-show means now-open.
+      this.toggleStates.set(groupId, event.type !== 'wa-show');
     }
     // Re-render to add/remove children from the DOM (lazy collapsed groups)
     this.requestUpdate();
@@ -506,13 +515,15 @@ export class TaskGroupList extends LitElement {
     const expanded = this.isExpanded(group.id);
 
     return html`
-      <details
+      <wa-details
         id=${detailsId}
         class="log-group"
         ?open=${expanded}
-        @toggle=${this.handleDetailsToggle}
+        @wa-show=${this.handleGroupToggle}
+        @wa-hide=${this.handleGroupToggle}
       >
-        <summary
+        <div
+          slot="summary"
           id="${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}"
           class=${classMap({
             'log-group-header': true,
@@ -520,7 +531,7 @@ export class TaskGroupList extends LitElement {
           })}
         >
           ${this.renderGroupHeader(group)}
-        </summary>
+        </div>
         <div id=${contentId} class="log-group-content">
           ${expanded
             ? html`${this.renderMessageEntries(
@@ -533,7 +544,7 @@ export class TaskGroupList extends LitElement {
               )}`
             : nothing}
         </div>
-      </details>
+      </wa-details>
     `;
   }
 

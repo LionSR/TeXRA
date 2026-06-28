@@ -146,9 +146,9 @@ export const streamTabStyles = css`
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--height-control);
-    min-width: var(--height-control);
-    height: var(--height-control);
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
     margin: 0 0 0 var(--wa-space-2xs);
     color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
     opacity: 0;
