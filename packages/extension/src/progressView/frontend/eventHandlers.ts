@@ -338,14 +338,16 @@ export function handlePermissionAction(
       // stream — mirroring the edit/bash "Yolo (this session)" decomposition. It
       // never reaches the backend proposal protocol (action enum stays
       // approve|reject|setup). Enable bypass BEFORE settling the approval:
-      // webview messages are FIFO and TOGGLE_SUPER_YOLO_BYPASS sets the
+      // webview messages are FIFO and ENABLE_SUPER_YOLO_BYPASS sets the
       // per-stream bypass synchronously, so it lands before approve unblocks the
-      // agent and the next proposal can't race ahead and re-prompt. A visible
-      // proposal prompt means super-yolo is currently OFF (a bypassed stream
-      // auto-approves and never prompts), so TOGGLE reliably turns it ON.
+      // agent and the next proposal can't race ahead and re-prompt. Use the
+      // idempotent ENABLE (force-on), not the TOGGLE: super-yolo can be turned on
+      // from the stream header while this prompt is still visible (that doesn't
+      // auto-resolve the open proposal), and a toggle would then flip bypass back
+      // OFF here — the opposite of "enable". Mirrors edit/bash ENABLE_APPROVAL_BYPASS.
       const isSuperYolo = action === APPROVE_SUPER_YOLO_ACTION;
       if (isSuperYolo) {
-        postMessage(PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS, {
+        postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS, {
           stream: permission.data.streamId,
         });
       }
