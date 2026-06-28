@@ -29,6 +29,14 @@ const originalGlobals = {
   ResizeObserver: globalThis.ResizeObserver,
   localStorage: globalThis.localStorage,
   Node: (globalThis as { Node?: unknown }).Node,
+  HTMLSlotElement: globalThis.HTMLSlotElement,
+  MouseEvent: globalThis.MouseEvent,
+  AbortController: globalThis.AbortController,
+  AbortSignal: globalThis.AbortSignal,
+  requestAnimationFrame: (globalThis as { requestAnimationFrame?: unknown })
+    .requestAnimationFrame,
+  cancelAnimationFrame: (globalThis as { cancelAnimationFrame?: unknown })
+    .cancelAnimationFrame,
 };
 
 class NoopResizeObserver implements ResizeObserver {
@@ -56,6 +64,21 @@ function installDom(): void {
   globalThis.ResizeObserver = NoopResizeObserver;
   globalThis.localStorage = dom.window.localStorage;
   (globalThis as { Node: unknown }).Node = dom.window.Node;
+  // <wa-tooltip> attaches anchor listeners with an AbortSignal and positions
+  // via requestAnimationFrame. Bind the jsdom-backed implementations so the
+  // signal identity matches the EventTarget (jsdom rejects a foreign signal).
+  globalThis.HTMLSlotElement = dom.window.HTMLSlotElement;
+  globalThis.MouseEvent = dom.window.MouseEvent;
+  globalThis.AbortController = dom.window.AbortController;
+  globalThis.AbortSignal = dom.window.AbortSignal;
+  globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) =>
+    setTimeout(() => cb(performance.now()), 0) as unknown as number) as (
+    cb: FrameRequestCallback,
+  ) => number;
+  globalThis.cancelAnimationFrame = ((handle: number) =>
+    clearTimeout(handle as unknown as ReturnType<typeof setTimeout>)) as (
+    handle: number,
+  ) => void;
   installAttachInternalsFallback(
     dom.window as unknown as Parameters<
       typeof installAttachInternalsFallback
@@ -78,10 +101,30 @@ function restoreDom(): void {
   globalThis.KeyboardEvent = originalGlobals.KeyboardEvent;
   globalThis.ResizeObserver = originalGlobals.ResizeObserver;
   globalThis.localStorage = originalGlobals.localStorage;
+  globalThis.HTMLSlotElement = originalGlobals.HTMLSlotElement;
+  globalThis.MouseEvent = originalGlobals.MouseEvent;
+  globalThis.AbortController = originalGlobals.AbortController;
+  globalThis.AbortSignal = originalGlobals.AbortSignal;
+  restoreOptionalGlobal(
+    'requestAnimationFrame',
+    originalGlobals.requestAnimationFrame,
+  );
+  restoreOptionalGlobal(
+    'cancelAnimationFrame',
+    originalGlobals.cancelAnimationFrame,
+  );
   if (originalGlobals.Node === undefined) {
     delete (globalThis as { Node?: unknown }).Node;
   } else {
     (globalThis as { Node: unknown }).Node = originalGlobals.Node;
+  }
+}
+
+function restoreOptionalGlobal(key: string, value: unknown): void {
+  if (value === undefined) {
+    delete (globalThis as Record<string, unknown>)[key];
+  } else {
+    (globalThis as Record<string, unknown>)[key] = value;
   }
 }
 
