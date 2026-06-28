@@ -200,8 +200,22 @@ export function getGLMCodingPlan(): boolean {
   return read(GlobalStateKey.GLM_CODING_PLAN, false);
 }
 
+/**
+ * Per-process override for the OpenAI WebSocket toggle, set from the CLI
+ * `--websocket`/`--no-websocket` flag. The global-state key has no CLI setter,
+ * so this lets a single CLI invocation flip the transport without persisting to
+ * `~/.texra/global-storage/state.json`. `undefined` falls through to the stored
+ * setting (the extension/desktop UI toggle). Hosts other than the CLI never set
+ * it, so the stored value remains authoritative there.
+ */
+let webSocketEnabledOverride: boolean | undefined;
+
+export function setWebSocketEnabledOverride(value: boolean | undefined): void {
+  webSocketEnabledOverride = value;
+}
+
 export function getWebSocketEnabled(): boolean {
-  return read(GlobalStateKey.WEBSOCKET_OPENAI, false);
+  return webSocketEnabledOverride ?? read(GlobalStateKey.WEBSOCKET_OPENAI, false);
 }
 
 /**

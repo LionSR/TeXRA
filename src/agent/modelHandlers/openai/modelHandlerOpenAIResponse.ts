@@ -1592,6 +1592,33 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Some backends (the ChatGPT-subscription Codex endpoint) stream output items
+   * (text, tool calls, reasoning) but leave the completed response's `output` /
+   * `output_text` empty or partial. Fill the missing items from the streamed
+   * `output_item.done` events and text deltas so function calls and final text
+   * are not dropped. Shared by the HTTP streaming and WebSocket transports —
+   * both observe the same sparse completed response. `output` / `output_text`
+   * are mutable on the base `Response`, so this assigns through that view (the
+   * streaming path's value is a `ParsedResponse`) and mutates in place.
+   */
+  private rebuildSparseResponseOutput(
+    response: Response,
+    streamedItems: Response['output'],
+    streamedText: string,
+  ): void {
+    const mergedOutput = mergeMissingStreamedOutputItems(
+      response.output,
+      streamedItems,
+    );
+    if (mergedOutput !== response.output) {
+      response.output = mergedOutput;
+    }
+    if (streamedText && !hasResponseOutputText(response)) {
+      response.output_text = streamedText;
+    }
+  }
+
+  /**
    * WebSocket transport path: a persistent connection for lower-latency
    * tool-use loops. Polls to completion if the response comes back pending.
    */
@@ -1620,6 +1647,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal,
       );
     }
+
+    // The Codex backend leaves the completed response's output empty; rebuild
+    // it from the streamed items/text, mirroring the HTTP streaming path, so
+    // tool calls and final text survive. (No-op after a background poll, which
+    // returns a fully-populated response.)
+    this.rebuildSparseResponseOutput(
+      response,
+      wsResult.streamedItems,
+      wsResult.streamedText,
+    );
 
     // Finalize streams after background polling so the final text
     // reflects the completed response, not the pre-poll snapshot.
@@ -1687,23 +1724,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
-      // Some backends (the ChatGPT-subscription Codex endpoint) stream output
-      // items (text, tool calls, reasoning) but leave the completed response's
-      // `output` empty or partial. Fill missing items from streamed
-      // `output_item.done` events so function calls are not dropped.
-      // `finalResponse()` returns a `ParsedResponse`, but `output` /
-      // `output_text` are mutable fields on the base `Response`; assign
-      // through that view so no hand-rolled response shape is needed.
-      const mergedOutput = mergeMissingStreamedOutputItems(
-        response.output,
-        streamedItems,
-      );
-      if (mergedOutput !== response.output) {
-        (response as Response).output = mergedOutput;
-      }
-      if (streamedText && !hasResponseOutputText(response)) {
-        (response as Response).output_text = streamedText;
-      }
+      this.rebuildSparseResponseOutput(response, streamedItems, streamedText);
 
       processor.finalize(response);
 

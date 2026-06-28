@@ -14,6 +14,11 @@ interface CodexInternals {
   storesResponsesServerSide: boolean;
   isWebSocketModeEnabled(): boolean;
   prepareWireParams(p: Record<string, unknown>): Record<string, unknown>;
+  rebuildSparseResponseOutput(
+    response: { output: unknown[]; output_text?: string },
+    streamedItems: unknown[],
+    streamedText: string,
+  ): void;
 }
 
 function config(): ModelConfig {
@@ -145,6 +150,35 @@ describe('Codex background/websocket transports follow the shared toggles', () =
     expect(
       (handler as unknown as CodexInternals).isWebSocketModeEnabled(),
     ).toBe(true);
+  });
+
+  it('rebuilds the sparse Codex completed response from streamed items/text', async () => {
+    // The Codex backend's `response.completed` carries no output (verified
+    // against the official Rust client: its Completed event has only
+    // response_id/usage/end_turn, and it accumulates OutputItemDone). Both the
+    // HTTP and WebSocket transports must rebuild `output`/`output_text` from the
+    // streamed deltas — otherwise the whole turn, tool calls included, is lost.
+    await initPlatformWith({});
+    const handler = workflowHandler() as unknown as CodexInternals;
+
+    // A sparse completed response, as Codex returns it over WebSocket.
+    const response = { output: [] as unknown[], output_text: undefined };
+    const streamedItems = [
+      { type: 'reasoning', id: 'rs_1', summary: [] },
+      {
+        type: 'function_call',
+        id: 'fc_1',
+        call_id: 'call_1',
+        name: 'delegate',
+        arguments: '{"task":"review"}',
+      },
+    ];
+
+    handler.rebuildSparseResponseOutput(response, streamedItems, 'hello world');
+
+    // Tool call survives (this is what was being dropped on the WS path).
+    expect(response.output).toEqual(streamedItems);
+    expect(response.output_text).toBe('hello world');
   });
 
   it('applies the Codex wire rewrite on the WebSocket path (it bypasses codexFetch)', async () => {

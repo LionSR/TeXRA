@@ -43,6 +43,14 @@ type CliGlobalArgsDef = {
     type: 'boolean';
     description: string;
   };
+  // Positively-named boolean with no default: when unset it stays `undefined`
+  // and falls through to the stored `texra.websocket.openai` toggle; `--no-
+  // websocket` arrives as `websocket: false` to force the HTTP path for the run.
+  websocket: {
+    type: 'boolean';
+    negativeDescription: string;
+    description: string;
+  };
 };
 
 type CliSkillSourceArgsDef = {
@@ -104,6 +112,12 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
     description:
       'For headless commands, disable prompts and default approvals to never',
   },
+  websocket: {
+    type: 'boolean',
+    description:
+      'Use the experimental OpenAI WebSocket transport for this run (overrides the stored setting)',
+    negativeDescription: 'Force the HTTP transport for this run',
+  },
 };
 
 export const SKILL_SOURCE_ARGS: CliSkillSourceArgsDef = {
@@ -153,6 +167,7 @@ export const INTERACTIVE_GLOBAL_ARGS: Omit<
   'api-mode': GLOBAL_ARGS['api-mode'],
   'approval-policy': GLOBAL_ARGS['approval-policy'],
   color: GLOBAL_ARGS.color,
+  websocket: GLOBAL_ARGS.websocket,
 };
 
 export const INTERACTIVE_AGENT_GLOBAL_ARGS = {
