@@ -4,6 +4,7 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -132,6 +133,7 @@ export class ToolsTab extends LitElement {
         stroke: var(--color-status-error);
         stroke-width: 4;
         stroke-linecap: round;
+        transform-origin: 50% 50%;
       }
 
       .tools-health-labels {
@@ -366,7 +368,7 @@ export class ToolsTab extends LitElement {
                   r="${r}"
                   stroke-dasharray="${circ}"
                   stroke-dashoffset="${missOffset}"
-                  style="transform: rotate(${missRotation}deg); transform-origin: 50% 50%"
+                  style=${styleMap({ transform: `rotate(${missRotation}deg)` })}
                 />`
               : nothing}
           </svg>
