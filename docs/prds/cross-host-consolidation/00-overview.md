@@ -47,6 +47,7 @@ Ink delivery, CLI-only in-run controls).
 | 04 | Agent identity: resolve-once, carry the resolved name | `src/agent/runtime/AgentLaunchContext.ts` | Medium |
 | 05 | External-inquiry resolution policy into `humanInputCommands` | `src/agent/runtime/humanInputCommands.ts` | Medium |
 | 06 | Reduce the `resolve*` method surface (165 names, overloaded verb) | `runCoordinatorCommands` + naming convention | Low-Med |
+| 07 | UI as a pure reactive projection of the runtime (one store, hosts derive) | `src/shared/progressView/backend` (generalize) | Medium-High |
 
 ## Priority order
 
@@ -59,6 +60,14 @@ Lowest-risk highest-leverage first:
 4. **Sub-PRD 02 / 05** - the two remaining unshared sequences.
 5. **Sub-PRD 04** - the identity resolve-once cleanup.
 6. **Sub-PRD 06** - the `resolve*` verb convergence, mostly opportunistic.
+
+Sub-PRD 07 is the unifying frame: it views the same desktop fault from the store
+side and makes every host a pure reactive projection of one shared store. It
+depends on 01 (and the drift-bug fixes) landing first, and it does not re-claim
+01's deletions. Its honest scope is roughly half its first-draft promise: the
+record-store delta patch type does not exist yet and must ship before the
+frontend mirror reducer can be deleted, so treat 07 as the medium-term direction,
+not a quick win.
 
 ## Immediate drift bugs
 
