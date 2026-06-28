@@ -35,7 +35,7 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
         mediaFiles?: string[];
       }) => {
         const { stream: streamId, text, mediaFiles } = payload;
-        const executionId =
+        const persistedWaitingExecutionId =
           ProgressViewProvider.getInstance()?.state?.snapshots.getExecutionId(
             streamId,
           );
@@ -45,9 +45,7 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
           text,
           mediaFiles,
           runtimeHost: extensionAgentRuntimeHost,
-          ...(executionId !== undefined
-            ? { persistedWaitingExecutionId: executionId }
-            : {}),
+          persistedWaitingExecutionId,
           wakeQueuedStream: true,
         });
         await showFollowUpNotice(result.notice);

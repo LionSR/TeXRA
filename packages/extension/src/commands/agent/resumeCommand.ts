@@ -31,12 +31,10 @@ async function resumeFromSnapshot(
     return { success: false };
   }
 
-  const runtimeHost = extensionAgentRuntimeHost;
-
   try {
     const success = await requestRuntimeToolUseSnapshotResume({
       snapshot,
-      runtimeHost,
+      runtimeHost: extensionAgentRuntimeHost,
       followUp,
     });
     return { success };

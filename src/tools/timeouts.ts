@@ -22,7 +22,10 @@ import { AbortError } from 'p-retry';
  * p-retry change, or an `AbortError` thrown outside the retry callback).
  */
 export function unwrapAbortError(error: unknown): unknown {
-  return (error instanceof AbortError && error.originalError) || error;
+  if (error instanceof AbortError && error.originalError) {
+    return error.originalError;
+  }
+  return error;
 }
 
 /**

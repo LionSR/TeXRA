@@ -12,11 +12,11 @@ logger.initialize(CHANNEL);
 export async function handleTestConnection(): Promise<void> {
   try {
     const entries = await runRuntimeTextConnectionDiagnostics();
-    let provider = '';
+    let lastProvider: string | undefined;
     for (const entry of entries) {
-      if (entry.provider !== provider) {
-        if (provider) logger.info(CHANNEL, '\n-------------------\n');
-        provider = entry.provider;
+      if (entry.provider !== lastProvider) {
+        if (lastProvider) logger.info(CHANNEL, '\n-------------------\n');
+        lastProvider = entry.provider;
         logger.info(CHANNEL, `Testing ${entry.provider} implementation:`);
       }
       logger.debug(CHANNEL, `\nTesting: "${entry.str1}" + "${entry.str2}"`);

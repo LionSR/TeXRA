@@ -65,25 +65,27 @@ export function createDesktopProgressIpc(
       }
       if (passThroughCommands.has(command)) return false;
 
+      // Dispatch to the bridge handlers. A recognized command with no handler
+      // is consumed with a warning; async handlers report errors via the
+      // dispatcher's own onError, so we only guard against the rare rejection.
+      const dispatchOrWarn = (bridge: DesktopProgressIpcBridge): void => {
+        const handled = dispatchProgressViewInbound(
+          message,
+          bridge.progressViewInboundHandlers,
+          reportAsyncError,
+        );
+        if (handled instanceof Promise) {
+          void handled.catch(reportAsyncError);
+          return;
+        }
+        if (!handled) {
+          onUnsupportedCommand(result.data);
+        }
+      };
+
       const progress = getProgress();
       if (!progress && ensureProgress) {
-        void ensureProgress()
-          .then((loaded) => {
-            const handled = dispatchProgressViewInbound(
-              message,
-              loaded.progressViewInboundHandlers,
-              reportAsyncError,
-            );
-            if (handled instanceof Promise) {
-              void handled.catch(reportAsyncError);
-              return;
-            }
-            if (handled) {
-              return;
-            }
-            onUnsupportedCommand(result.data);
-          })
-          .catch(reportAsyncError);
+        void ensureProgress().then(dispatchOrWarn).catch(reportAsyncError);
         return true;
       }
       if (!progress) {
@@ -91,20 +93,7 @@ export function createDesktopProgressIpc(
         return true;
       }
 
-      const handled = dispatchProgressViewInbound(
-        message,
-        progress.progressViewInboundHandlers,
-        reportAsyncError,
-      );
-      if (handled instanceof Promise) {
-        void handled.catch(reportAsyncError);
-        return true;
-      }
-      if (handled) {
-        return true;
-      }
-      // Recognized but unhandled command: consume it with a warning.
-      onUnsupportedCommand(result.data);
+      dispatchOrWarn(progress);
       return true;
     },
   };

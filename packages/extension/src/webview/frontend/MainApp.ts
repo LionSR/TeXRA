@@ -712,11 +712,8 @@ export class MainApp extends MainAppBase {
     return true;
   }
 
-  private commandHandler(
-    command: string,
-    payload?: Record<string, unknown>,
-  ): () => void {
-    return () => postMessage(command, payload);
+  private commandHandler(command: string): () => void {
+    return () => postMessage(command);
   }
 
   private detailHandler<TDetail>(

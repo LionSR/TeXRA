@@ -45,12 +45,10 @@ export function objectToLogString(
   obj: unknown,
   maxLength: number = 1000,
 ): string {
-  // `safe-stable-stringify` never throws on the inputs `JSON.stringify` chokes
-  // on: circular references become `"[Circular]"` and BigInt is handled, so a
-  // log line keeps its diagnostic value instead of collapsing to the useless
-  // `"[object Object]"` that the old `catch (_err) { return String(obj) }`
-  // produced. Returns `undefined` only for inputs with no JSON representation
-  // (e.g. a bare `undefined`), which we render as the string `"undefined"`.
+  // `safe-stable-stringify` handles the inputs `JSON.stringify` throws on:
+  // circular references become "[Circular]" and BigInt is supported. It returns
+  // `undefined` only for values with no JSON representation (e.g. a bare
+  // `undefined`), which we render as the string "undefined".
   const json = safeStringify(obj) ?? String(obj);
   return json.length > maxLength
     ? `${json.slice(0, maxLength)}... (${json.length} chars)`

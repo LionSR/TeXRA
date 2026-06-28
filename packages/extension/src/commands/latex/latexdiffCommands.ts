@@ -69,6 +69,9 @@ async function withLatexdiffTool<T>(
   }
 }
 
+type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
+type MarkupQuickPick = vscode.QuickPick<MarkupItem> & { prompt: string };
+
 async function promptForLatexdiffMathMarkup(): Promise<
   MathMarkupOption | undefined
 > {
@@ -76,20 +79,18 @@ async function promptForLatexdiffMathMarkup(): Promise<
     WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     DEFAULT_MATH_MARKUP,
   );
-  const items: (vscode.QuickPickItem & { value: MathMarkupOption })[] =
-    MATH_MARKUP_OPTIONS.map((mode) => ({
-      label: mode,
-      description: describeMathMarkupOption(mode),
-      picked: mode === configuredMode,
-      value: mode,
-    }));
+  const items: MarkupItem[] = MATH_MARKUP_OPTIONS.map((mode) => ({
+    label: mode,
+    description: describeMathMarkupOption(mode),
+    picked: mode === configuredMode,
+    value: mode,
+  }));
   // Keep the configured mode first so Enter accepts it immediately.
   const prioritizedItems = [
     ...items.filter((item) => item.value === configuredMode),
     ...items.filter((item) => item.value !== configuredMode),
   ];
 
-  type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
   return await new Promise<MathMarkupOption | undefined>((resolve) => {
     const qp = vscode.window.createQuickPick<MarkupItem>();
     let settled = false;
@@ -124,10 +125,6 @@ async function promptForLatexdiffMathMarkup(): Promise<
     qp.show();
   });
 }
-
-type MarkupQuickPick = vscode.QuickPick<
-  vscode.QuickPickItem & { value: MathMarkupOption }
-> & { prompt: string };
 
 async function openLatexdiffResult(
   base: FileLocation,

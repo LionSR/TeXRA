@@ -6,11 +6,7 @@ import {
   createResponseCycleFlow,
   type ResponseCycleShared,
 } from '@agent/core/flows/ResponseCycleFlow';
-import {
-  withModelClient,
-  type ModelClientServices,
-  type ResponseCycleServices,
-} from '@agent/core/flows/CycleServices';
+import { withModelClient } from '@agent/core/flows/CycleServices';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
@@ -102,12 +98,9 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
       const flow = createResponseCycleFlow<C>();
       const { modelHandler } = this.services;
-      const cycleServices: Omit<
-        ResponseCycleServices<C>,
-        keyof ModelClientServices<C>
-      > = {
+      const cycleServices = {
         ...this.services,
-        bestConnectionMethod: (str1, str2) =>
+        bestConnectionMethod: (str1: string, str2: string) =>
           chooseRuntimeTextConnection({ str1, str2 }),
         round: prepRes.round,
         run: prepRes.run,

@@ -26,23 +26,12 @@ export function resolveCliRuntimeCapabilities(
 ): CliRuntimeCapabilities {
   return {
     approvalPromptsUnavailable: approvalPromptsUnavailable(context),
-    runtimeUnavailableTools: mergeUnavailableTools(
-      CLI_UNAVAILABLE_TOOLS,
-      options.runtimeUnavailableTools ?? [],
-    ),
+    // Dedupe, keeping first-seen order (Set preserves insertion order).
+    runtimeUnavailableTools: [
+      ...new Set([
+        ...CLI_UNAVAILABLE_TOOLS,
+        ...(options.runtimeUnavailableTools ?? []),
+      ]),
+    ],
   };
-}
-
-function mergeUnavailableTools(
-  baseTools: readonly string[],
-  extraTools: readonly string[],
-): readonly string[] {
-  const merged: string[] = [];
-  const seen = new Set<string>();
-  for (const toolName of [...baseTools, ...extraTools]) {
-    if (seen.has(toolName)) continue;
-    seen.add(toolName);
-    merged.push(toolName);
-  }
-  return merged;
 }

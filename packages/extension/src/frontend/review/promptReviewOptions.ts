@@ -41,6 +41,56 @@ const BRANCH_PROMPT_HINT =
   'The review will diff the current branch against the selected branch';
 
 /**
+ * Show a managed QuickPick that resolves to the accepted item, or `undefined`
+ * when the user dismisses it (Escape). Centralizes the settle-once, dispose,
+ * and default-selection boilerplate shared by the approach and branch steps.
+ */
+function showReviewQuickPick<T extends vscode.QuickPickItem>(options: {
+  title: string;
+  placeholder: string;
+  items: T[];
+  prompt?: string;
+  buttons?: vscode.QuickInputButton[];
+  onButton?: (
+    button: vscode.QuickInputButton,
+    finish: (value: T | undefined) => void,
+  ) => void;
+}): Promise<T | undefined> {
+  return new Promise<T | undefined>((resolve) => {
+    const qp = vscode.window.createQuickPick<T>();
+    let settled = false;
+    const finish = (value: T | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      qp.dispose();
+    };
+    qp.title = options.title;
+    qp.placeholder = options.placeholder;
+    qp.ignoreFocusOut = true;
+    qp.items = options.items;
+    qp.activeItems = [options.items[0]];
+    if (options.prompt !== undefined && 'prompt' in qp) {
+      (qp as vscode.QuickPick<T> & { prompt: string }).prompt = options.prompt;
+    }
+    if (options.buttons && 'buttons' in qp) {
+      qp.buttons = options.buttons;
+    }
+    if (options.onButton) {
+      const handleButton = options.onButton;
+      qp.onDidTriggerButton((button) => handleButton(button, finish));
+    }
+    qp.onDidAccept(() => {
+      finish(qp.activeItems[0] ?? qp.selectedItems[0]);
+    });
+    qp.onDidHide(() => {
+      finish(undefined);
+    });
+    qp.show();
+  });
+}
+
+/**
  * Drive the three-step QuickPick flow. Each step honors Escape: returning
  * `undefined` from any prompt cancels the whole run, so a half-configured
  * review never starts.
@@ -79,38 +129,16 @@ export async function promptReviewOptions(
       ? [thoroughItem, quickItem]
       : [quickItem, thoroughItem];
   const trimmedInstructions = userInstructions.trim();
-  const approachPick = await new Promise<ApproachItem | undefined>(
-    (resolve) => {
-      const qp = vscode.window.createQuickPick<ApproachItem>();
-      let settled = false;
-      const finish = (value: ApproachItem | undefined): void => {
-        if (settled) return;
-        settled = true;
-        resolve(value);
-        qp.dispose();
-      };
-      qp.title = 'Agent Review — Approach';
-      qp.placeholder = 'Choose review depth';
-      qp.ignoreFocusOut = true;
-      qp.items = approachItems;
-      qp.activeItems = [approachItems[0]];
-      // VS Code 1.108+: echo the step-1 focus text when present; otherwise
-      // keep the original approach explanation visible.
-      if ('prompt' in qp) {
-        (qp as vscode.QuickPick<ApproachItem> & { prompt: string }).prompt =
-          trimmedInstructions
-            ? `Focus: ${trimmedInstructions}`
-            : APPROACH_PROMPT_HINT;
-      }
-      qp.onDidAccept(() => {
-        finish(qp.activeItems[0] ?? qp.selectedItems[0]);
-      });
-      qp.onDidHide(() => {
-        finish(undefined);
-      });
-      qp.show();
-    },
-  );
+  const approachPick = await showReviewQuickPick<ApproachItem>({
+    title: 'Agent Review — Approach',
+    placeholder: 'Choose review depth',
+    items: approachItems,
+    // VS Code 1.108+: echo the step-1 focus text when present; otherwise
+    // keep the original approach explanation visible.
+    prompt: trimmedInstructions
+      ? `Focus: ${trimmedInstructions}`
+      : APPROACH_PROMPT_HINT,
+  });
   if (!approachPick) return undefined;
 
   const candidates = await listBaseBranchCandidates(cwd);
@@ -134,39 +162,17 @@ export async function promptReviewOptions(
     iconPath: new vscode.ThemeIcon('check'),
     tooltip: 'Use auto-detect (skip)',
   };
-  const branchPick = await new Promise<BranchItem | undefined>((resolve) => {
-    const qp = vscode.window.createQuickPick<BranchItem>();
-    let settled = false;
-    const finish = (value: BranchItem | undefined): void => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-      qp.dispose();
-    };
-    qp.title = 'Agent Review — Diff Against';
-    qp.placeholder = 'Choose the branch to compare against';
-    qp.ignoreFocusOut = true;
-    qp.items = branchItems;
-    qp.activeItems = [branchItems[0]];
-    if ('prompt' in qp) {
-      (qp as vscode.QuickPick<BranchItem> & { prompt: string }).prompt =
-        BRANCH_PROMPT_HINT;
-    }
-    if ('buttons' in qp) {
-      qp.buttons = [useDefaultButton];
-    }
-    qp.onDidTriggerButton((button) => {
+  const branchPick = await showReviewQuickPick<BranchItem>({
+    title: 'Agent Review — Diff Against',
+    placeholder: 'Choose the branch to compare against',
+    items: branchItems,
+    prompt: BRANCH_PROMPT_HINT,
+    buttons: [useDefaultButton],
+    onButton: (button, finish) => {
       if (button === useDefaultButton) {
         finish(branchItems[0]);
       }
-    });
-    qp.onDidAccept(() => {
-      finish(qp.activeItems[0] ?? qp.selectedItems[0]);
-    });
-    qp.onDidHide(() => {
-      finish(undefined);
-    });
-    qp.show();
+    },
   });
   if (!branchPick) return undefined;
 

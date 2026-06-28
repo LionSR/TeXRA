@@ -68,11 +68,13 @@ export async function releaseRuntimeDeletedStreams({
 
   if (approvalScope === 'process') {
     cleanupAllApprovals(session);
-    releaseRuntimeDeletedStreamQueues({
-      streamIds: streams,
-      runtimeHost,
-      publishQueueProjection,
-    });
+    for (const streamId of streams) {
+      releaseRuntimeDeletedStreamQueue({
+        streamId,
+        runtimeHost,
+        publishQueueProjection,
+      });
+    }
     await GoalStore.forgetMany(streams);
     return;
   }
@@ -88,24 +90,6 @@ export async function releaseRuntimeDeletedStreams({
   cleanupUnscopedApprovals(runtimeHost);
   session.coordinators.cleanupAllRequests();
   await GoalStore.forgetMany(streams);
-}
-
-function releaseRuntimeDeletedStreamQueues({
-  streamIds,
-  runtimeHost,
-  publishQueueProjection,
-}: {
-  readonly streamIds: readonly StreamTabId[];
-  readonly runtimeHost: AgentRuntimeHost | undefined;
-  readonly publishQueueProjection: boolean | undefined;
-}): void {
-  for (const streamId of streamIds) {
-    releaseRuntimeDeletedStreamQueue({
-      streamId,
-      runtimeHost,
-      publishQueueProjection,
-    });
-  }
 }
 
 function releaseRuntimeDeletedStreamQueue({

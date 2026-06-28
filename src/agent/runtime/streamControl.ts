@@ -154,12 +154,6 @@ export async function recoverRuntimeRunningStreamsFromPersistedState(
   executionIdsByStream: ReadonlyMap<StreamTabId, ExecutionId>,
 ): Promise<RuntimeRunningStreamRecovery> {
   const waitingStreams = await detectWaitingStreams(executionIdsByStream);
-  return recoverRuntimeRunningStreamsAfterRestart(waitingStreams);
-}
-
-function recoverRuntimeRunningStreamsAfterRestart(
-  waitingStreams: ReadonlySet<StreamTabId>,
-): RuntimeRunningStreamRecovery {
   const restoredWaiting: StreamTabId[] = [];
   const erroredStreams: StreamTabId[] = [];
 

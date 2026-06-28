@@ -11,7 +11,6 @@ import * as vscode from 'vscode';
 import {
   readRuntimeSessionResumeData,
   requestRuntimeWorkflowResume,
-  type RuntimeSessionResumeData,
 } from '@agent/runtime/resumeCommands';
 import { isRuntimeStreamActiveOrResuming } from '@agent/runtime/streamControl';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -53,22 +52,17 @@ export async function tryResumeFromSnapshot(
     executionId,
     taskState,
   });
-  let resumeData: RuntimeSessionResumeData;
-  switch (resumeResult.status) {
-    case 'resumable':
-      resumeData = resumeResult.data;
-      break;
-    case 'missing':
-      return false;
-    case 'failed':
-      // Retrieval failed unexpectedly (distinct from "no resumable session").
-      // Auto-resume is best-effort here, so degrade, but log the real failure
-      // rather than letting it masquerade as "nothing to resume".
-      logger.error(`Failed to retrieve resume data for stream: ${streamId}`, {
-        data: resumeResult.error,
-      });
-      return false;
+  if (resumeResult.status === 'missing') return false;
+  if (resumeResult.status === 'failed') {
+    // Retrieval failed unexpectedly (distinct from "no resumable session").
+    // Auto-resume is best-effort here, so degrade, but log the real failure
+    // rather than letting it masquerade as "nothing to resume".
+    logger.error(`Failed to retrieve resume data for stream: ${streamId}`, {
+      data: resumeResult.error,
+    });
+    return false;
   }
+  const resumeData = resumeResult.data;
 
   logger.info(
     `Auto-resuming ${resumeData.type} session for stream: ${streamId}`,

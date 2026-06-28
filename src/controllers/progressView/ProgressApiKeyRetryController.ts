@@ -79,8 +79,8 @@ export class ProgressApiKeyRetryController {
       };
     }
 
-    // Disable relay (included access) so the retry uses the user's own key —
-    // not the relay JWT — whenever the switch promises "your own API key".
+    // Disable relay (included access) so the retry uses the user's own key
+    // (not the relay JWT) whenever the switch promises "your own API key".
     // Both relay exhaustion (viaRelay) and subscription exhaustion
     // (chatgptSubscription) fall through to `super.getApiKey()`, which otherwise
     // still prefers relay when included access is on, so the retry would never

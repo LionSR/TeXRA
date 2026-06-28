@@ -62,7 +62,10 @@ export async function runAgent(
   options.onExecutionIdAllocated?.(executionId);
   const shouldRegister =
     options.registerExecution ?? request.executionId === undefined;
-  let historyRepairCandidate = request.executionId !== undefined;
+  // A history entry exists to repair when we either reuse the caller's
+  // execution id or register a fresh one below.
+  const historyRepairCandidate =
+    request.executionId !== undefined || shouldRegister;
 
   if (shouldRegister) {
     await registerExecution(
@@ -72,7 +75,6 @@ export async function runAgent(
       undefined,
       request.config.agentCategory,
     );
-    historyRepairCandidate = true;
   }
 
   let result: AgentFlowResult;

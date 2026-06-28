@@ -41,17 +41,11 @@ function toResultText(result: ToolResult): string {
 export function registerLanguageModelTools(
   context: vscode.ExtensionContext,
 ): void {
-  const lm = (vscode as { lm?: typeof vscode.lm }).lm;
-  if (!lm) {
-    // Language Model namespace not available (e.g. older Cursor builds).
-    return;
-  }
-
-  const languageModelTools = lm as Partial<
-    Pick<typeof vscode.lm, 'registerTool'>
-  >;
-  if (typeof languageModelTools.registerTool !== 'function') {
-    // Language Model Tool API not available (e.g. Cursor 1.105).
+  // Feature-detect the API; the namespace or the tool method is absent on
+  // hosts without it (e.g. Cursor 1.105), where the manifest
+  // `languageModelTools` contribution is simply ignored.
+  const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
+  if (!lm || typeof lm.registerTool !== 'function') {
     return;
   }
 
@@ -65,7 +59,7 @@ export function registerLanguageModelTools(
       );
       continue;
     }
-    const disposable = languageModelTools.registerTool(lmName, {
+    const disposable = lm.registerTool(lmName, {
       async invoke(
         options: vscode.LanguageModelToolInvocationOptions<unknown>,
       ) {

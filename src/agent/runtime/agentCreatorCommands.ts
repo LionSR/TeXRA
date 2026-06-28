@@ -34,18 +34,13 @@ export function getRuntimeAgentCreatorToolGroupOptions(
   description: string,
 ): RuntimeAgentCreatorToolGroupOption[] {
   const lower = description.toLowerCase();
-  const suggested = new Set<string>(['File Operations']);
-  for (const [name, group] of Object.entries(TOOL_GROUPS)) {
-    if (group.keywords.some((keyword) => lower.includes(keyword))) {
-      suggested.add(name);
-    }
-  }
-
   return Object.entries(TOOL_GROUPS).map(([label, group]) => ({
     label,
     description: group.description,
     detail: group.tools.join(', '),
-    picked: suggested.has(label),
+    picked:
+      label === 'File Operations' ||
+      group.keywords.some((keyword) => lower.includes(keyword)),
     selection: {
       tools: [...group.tools],
       groups: [label],

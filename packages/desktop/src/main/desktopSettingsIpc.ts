@@ -185,7 +185,6 @@ export function createDesktopSettingsIpc(
   const globalState = options.globalState ?? platform().globalState;
   const onError = options.onError ?? defaultOnError;
   const loadAgentRegistry = options.loadAgents ?? loadRuntimeAgents;
-  const loadAgentOptionsData = options.loadAgentOptionsData;
   const getAgentEntries =
     options.getAgents ?? ((category) => listRuntimeAgents({ category }));
   const getVisibleAgentEntries =
@@ -242,7 +241,7 @@ export function createDesktopSettingsIpc(
     getConfig: (key, defaultValue) =>
       getConfigProvider().get(key, defaultValue),
     getVisibleModels: () => modelSelectionController.getVisibleModels(),
-    loadAgentOptions: loadAgentOptionsData,
+    loadAgentOptions: options.loadAgentOptionsData,
     getAuthStatus: async () => ({ authenticated: false }),
   });
   const historyActionController = new SettingsHistoryActionController();

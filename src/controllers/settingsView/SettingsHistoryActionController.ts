@@ -67,11 +67,15 @@ export class SettingsHistoryActionController {
   deleteHistoryExecution(
     historyId: string,
   ): Promise<RuntimeHistoryDeleteExecutionResult> {
-    return this.deleteExecution(historyId);
+    return (this.deps.deleteExecution ?? requestDeleteRuntimeHistoryExecution)(
+      historyId as ExecutionId,
+    );
   }
 
   clearHistoryExecutions(): Promise<RuntimeHistoryClearResult> {
-    return this.clearExecutions();
+    return (
+      this.deps.clearExecutions ?? requestClearRuntimeHistoryExecutions
+    )();
   }
 
   private readConfig(
@@ -86,19 +90,5 @@ export class SettingsHistoryActionController {
     return (this.deps.buildTaskState ?? buildRuntimeTaskStateFromConfig)(
       config,
     );
-  }
-
-  private deleteExecution(
-    historyId: string,
-  ): Promise<RuntimeHistoryDeleteExecutionResult> {
-    return (this.deps.deleteExecution ?? requestDeleteRuntimeHistoryExecution)(
-      historyId as ExecutionId,
-    );
-  }
-
-  private clearExecutions(): Promise<RuntimeHistoryClearResult> {
-    return (
-      this.deps.clearExecutions ?? requestClearRuntimeHistoryExecutions
-    )();
   }
 }

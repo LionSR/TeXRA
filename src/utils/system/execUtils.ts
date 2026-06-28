@@ -126,26 +126,15 @@ function workspacePathOrProcessCwd(): string {
 }
 
 /**
- * Signal a process and all of its descendants.
+ * Signal a process and all of its descendants. Best-effort and fire-and-forget:
+ * a process that already exited is a no-op.
  *
- * Two platform strategies, each picking the most reliable mechanism:
- *
- * - **Windows** has no process-group signalling, so a bare `process.kill(pid)`
- *   only hit the shell and left piped children (e.g. `find | head`) running
- *   with stdout still open, hanging `await subprocess`. We delegate to
- *   `tree-kill`, which shells out to `taskkill /T /F` to tear down the whole
- *   process tree — closing that long-standing orphaned-children gap.
- *
- * - **POSIX** signals the whole process group via the negative PID. Callers
- *   that need teardown spawn the shell `detached` (a new group leader), so the
- *   group kill reaches backgrounded children (`cmd &`) directly and
- *   synchronously. Group membership is stronger than a parent/child (`ps
- *   --ppid`) walk here: it survives re-parenting and double-forks that a tree
- *   walk would miss. Falls back to the bare PID when the target isn't a group
- *   leader.
- *
- * Best-effort and fire-and-forget — a process that already exited is a no-op,
- * matching the previous contract where every caller ignored the result.
+ * Windows has no process-group signalling, so a bare `process.kill(pid)` hits
+ * only the shell and leaves piped children (e.g. `find | head`) running. We
+ * delegate to `tree-kill`, which shells out to `taskkill /T /F` to tear down
+ * the whole process tree. POSIX signals the process group via the negative PID
+ * (callers needing teardown spawn the shell `detached` as a new group leader),
+ * falling back to the bare PID when the target isn't a group leader.
  */
 export function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
   if (IS_WINDOWS) {
@@ -165,7 +154,7 @@ export function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
     try {
       process.kill(pid, signal);
     } catch {
-      // Process already exited — nothing to signal.
+      // Process already exited; nothing to signal.
     }
   }
 }

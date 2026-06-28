@@ -47,22 +47,18 @@ export class MainViewAgentSelectionController {
   }): MainViewAgentSelectionMessage {
     const requestedKey = agentKey(input.source, input.name);
     const entry = this.getAgent(requestedKey);
-    return {
-      command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
-      agentId: entry ? agentKeyOf(entry) : requestedKey,
-      sessionType: this.getSessionType(entry, input.source),
-    };
+    return this.toSelectionMessage(
+      entry,
+      requestedKey,
+      this.getSessionType(entry, input.source),
+    );
   }
 
   getToolUseAgentSelection(
     agentIdentifier: string,
   ): MainViewAgentSelectionMessage {
     const entry = this.getToolUseAgent(agentIdentifier);
-    return {
-      command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
-      agentId: entry ? agentKeyOf(entry) : agentIdentifier,
-      sessionType: 'toolUse',
-    };
+    return this.toSelectionMessage(entry, agentIdentifier, 'toolUse');
   }
 
   getCategoryAgentSelection(input: {
@@ -70,10 +66,22 @@ export class MainViewAgentSelectionController {
     category: AgentCategory;
   }): MainViewAgentSelectionMessage {
     const entry = this.getCategoryAgent(input.agentIdentifier, input.category);
+    return this.toSelectionMessage(
+      entry,
+      input.agentIdentifier,
+      this.getSessionTypeForCategory(input.category),
+    );
+  }
+
+  private toSelectionMessage(
+    entry: RuntimeAgentEntry | undefined,
+    fallbackAgentId: string,
+    sessionType: SessionType,
+  ): MainViewAgentSelectionMessage {
     return {
       command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
-      agentId: entry ? agentKeyOf(entry) : input.agentIdentifier,
-      sessionType: this.getSessionTypeForCategory(input.category),
+      agentId: entry ? agentKeyOf(entry) : fallbackAgentId,
+      sessionType,
     };
   }
 

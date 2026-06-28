@@ -167,7 +167,7 @@ export class ProgressEventHandler {
             );
           }
         },
-        extensionDeactivating: () => this.markAllRunningTasksAsCancelled(),
+        extensionDeactivating: () => this.runtimeStatus.markRunningStopped(),
         // Output events — workflow tabs hold one run; ignore the storageKey dim.
         addOutputFiles: (ctx, { streamId, filesByRound }) => {
           ctx.state.snapshots.addOutputFiles(streamId, filesByRound);
@@ -251,9 +251,9 @@ export class ProgressEventHandler {
         },
         // Follow-up events
         updateQueuedFollowUps: (ctx, { streamId, messages }) => {
-          this.sendIfActive(streamId, () => {
-            ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages);
-          });
+          this.sendIfActive(streamId, () =>
+            ctx.webviewUpdater.updateQueuedFollowUps(streamId, messages),
+          );
         },
       },
       signal,
@@ -478,10 +478,6 @@ export class ProgressEventHandler {
       activeProcesses: state.activeProcesses,
       finishedProcessCount: state.finishedProcessCount,
     };
-  }
-
-  private markAllRunningTasksAsCancelled(): void {
-    this.runtimeStatus.markRunningStopped();
   }
 
   public syncStreamContent(

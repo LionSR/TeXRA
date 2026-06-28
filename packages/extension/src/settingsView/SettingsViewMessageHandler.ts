@@ -1020,9 +1020,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await vscode.env.openExternal(vscode.Uri.parse(url));
   }
 
-  private async postMessageToActiveWebview(
-    message: unknown | null | undefined,
-  ): Promise<void> {
+  private async postMessageToActiveWebview(message: unknown): Promise<void> {
     if (message == null) return;
     await this.withActiveWebview(async (webview) => {
       await webview.postMessage(message);

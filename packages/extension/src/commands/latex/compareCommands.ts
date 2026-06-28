@@ -241,7 +241,7 @@ async function resolveAcceptTarget(
       qp.activeItems = [defaultItem];
     }
     // VS Code 1.108+: keep the edited filename visible after the placeholder
-    // is cleared by typing — this is a destructive replace-vs-copy choice.
+    // is cleared by typing. This is a destructive replace-vs-copy choice.
     if ('prompt' in qp) {
       (qp as vscode.QuickPick<AcceptItem> & { prompt: string }).prompt =
         `Edited file: ${path.basename(editedPath)}`;

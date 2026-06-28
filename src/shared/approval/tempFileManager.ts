@@ -52,16 +52,18 @@ export async function writeApprovalTempFiles(
     originalPath,
     proposedPath,
     cleanup: async () => {
-      const swallowUnlink = (target: string) => (error: unknown) => {
-        // Best-effort cleanup; ENOENT/already-removed is expected and benign.
-        debug('approval.tempFiles', `Failed to unlink temp file ${target}`, {
-          data: error,
-        });
-      };
-      await Promise.all([
-        unlink(originalPath).catch(swallowUnlink(originalPath)),
-        unlink(proposedPath).catch(swallowUnlink(proposedPath)),
-      ]);
+      await Promise.all(
+        [originalPath, proposedPath].map((target) =>
+          unlink(target).catch((error: unknown) => {
+            // Best-effort cleanup; ENOENT/already-removed is expected and benign.
+            debug(
+              'approval.tempFiles',
+              `Failed to unlink temp file ${target}`,
+              { data: error },
+            );
+          }),
+        ),
+      );
     },
   };
 }

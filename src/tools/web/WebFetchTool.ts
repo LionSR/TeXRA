@@ -164,9 +164,8 @@ export class WebFetchTool extends defineTool({
         { retries: WEB_FETCH_RETRIES, minTimeout: 500, randomize: true },
       ));
     } catch (error) {
-      // Defensive: ensure the specific type checks below see the real error
-      // even if a p-retry AbortError wrapper reaches here (p-retry v8 already
-      // unwraps it to .originalError, so this is normally a no-op).
+      // Unwrap any p-retry AbortError wrapper so the checks below classify the
+      // real error (see unwrapAbortError; normally a no-op under p-retry v8).
       const err = unwrapAbortError(error);
       if (isTimeoutError(err)) {
         throw new ToolError(

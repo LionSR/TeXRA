@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
+// Local imports
 import {
   inspectRuntimeAgentDefinition,
   listRuntimeAgents,
@@ -40,7 +41,6 @@ export async function handleTestAgentLoading(): Promise<void> {
       extensionAgentRuntimeHost,
     );
 
-    // Load the YAML directly
     logger.info(
       CHANNEL,
       `Loading from: ${inspection.resolution.definitionPath}`,
@@ -50,7 +50,6 @@ export async function handleTestAgentLoading(): Promise<void> {
       `Raw YAML loaded: ${JSON.stringify(inspection.rawDefinition, null, 2)}`,
     );
 
-    // Load with settings and prompts processing
     logger.info(CHANNEL, '\nProcessed settings:');
     logger.info(CHANNEL, JSON.stringify(inspection.settings, null, 2));
     logger.info(CHANNEL, '\nProcessed prompts:');

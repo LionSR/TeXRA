@@ -147,20 +147,19 @@ export async function executeCliRequest(
         );
       })
     : undefined;
-  const invoke = (): Promise<ExecuteAgentResult> => {
-    const runtimeCapabilities = resolveCliRuntimeCapabilities(runContext, {
+  const { approvalPromptsUnavailable, runtimeUnavailableTools } =
+    resolveCliRuntimeCapabilities(runContext, {
       runtimeUnavailableTools: options.runtimeUnavailableTools,
     });
-    return runAgent(request, {
+  const invoke = (): Promise<ExecuteAgentResult> =>
+    runAgent(request, {
       runtimeHost,
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
       stopAfterCycle: options.stopAfterCycle,
-      approvalPromptsUnavailable:
-        runtimeCapabilities.approvalPromptsUnavailable,
-      runtimeUnavailableTools: runtimeCapabilities.runtimeUnavailableTools,
+      approvalPromptsUnavailable,
+      runtimeUnavailableTools,
     });
-  };
 
   let result: ExecuteAgentResult;
   try {

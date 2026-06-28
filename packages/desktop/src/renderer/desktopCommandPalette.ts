@@ -14,7 +14,7 @@ import {
   type DesktopCommandActions,
   type DesktopCommandMenuEntry,
 } from '../desktopCommandSurface';
-import { getDefaultPlatform, getRendererPlatform } from './rendererPlatform';
+import { getRendererPlatform } from './rendererPlatform';
 
 export interface DesktopCommandPaletteOptions {
   document: Document;
@@ -57,12 +57,12 @@ export function createDesktopCommandPalette({
 }
 
 function getDesktopCommandPaletteEntries({
-  streams = [],
-  platform = getDefaultPlatform(),
+  streams,
+  platform,
 }: {
-  streams?: readonly StreamTabInfo[];
-  platform?: NodeJS.Platform;
-} = {}): CommandPaletteEntry[] {
+  streams: readonly StreamTabInfo[];
+  platform: NodeJS.Platform;
+}): CommandPaletteEntry[] {
   const desktopEntries = getDesktopCommandMenuEntries(undefined, platform)
     .map(toPaletteEntry)
     .filter(filterNotNullish);

@@ -141,9 +141,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const forwardToActiveView = (message: ProgressViewInboundMessage) => {
       this.postToActiveView(message);
     };
-    const runCommand = (command: string, ...args: unknown[]) => {
+    const runCommand = (command: string) => {
       return async () => {
-        await safeExecuteCommand(command, args, this.viewName);
+        await safeExecuteCommand(command, [], this.viewName);
       };
     };
 

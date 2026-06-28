@@ -250,18 +250,18 @@ export function handlePermissionAction(
           : PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION;
       // "Yolo (this session)" approves the current request like a normal
       // approve and enables auto-approval (edits + bash) for the rest of the
-      // stream — mirroring the toolbar shield and the CLI's `a` = approve
+      // stream, mirroring the toolbar shield and the CLI's `a` = approve
       // session. It never reaches the backend approval protocol.
       const isYolo = action === APPROVE_SESSION_ACTION;
       if (isYolo) {
         // Enable session bypass BEFORE settling the approval. Webview messages
         // are delivered FIFO and ENABLE_APPROVAL_BYPASS sets the per-stream
         // bypass synchronously when handled, so it lands before the approve
-        // message unblocks the agent — the agent can't race ahead and
-        // re-prompt the next gated action. Set-on (not toggle) is also
-        // inversion-proof: edit and bash bypass can be decoupled on a delegated
-        // child stream. The button only renders with a real stream (see
-        // canBypass), but guard anyway.
+        // message unblocks the agent, leaving no window for the agent to
+        // re-prompt the next gated action. Setting it on (rather than toggling)
+        // also keeps edit and bash bypass decoupled on a delegated child
+        // stream. The button only renders with a real stream (see canBypass),
+        // but guard anyway.
         const stream = permission.data.streamId;
         if (stream) {
           postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, {

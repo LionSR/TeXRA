@@ -60,15 +60,13 @@ export async function resolveCliResumeSnapshot(
     case 'failed':
       return { kind: 'load-failed', reason: resume.message };
     case 'resumable':
-      break;
+      return {
+        kind: 'toolUse',
+        snapshot: resume.data.snapshot,
+        streamId: resume.data.streamId,
+        config: resume.data.config,
+      };
   }
-
-  return {
-    kind: 'toolUse',
-    snapshot: resume.data.snapshot,
-    streamId: resume.data.streamId,
-    config: resume.data.config,
-  };
 }
 
 /** A user-facing line explaining why a non-tool-use resolution can't continue. */

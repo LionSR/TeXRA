@@ -195,17 +195,12 @@ export const requestPanelStyles: CSSResult = css`
     max-width: 100%;
   }
 
-  /* The primary action buttons hug their content and stay button-sized: they
-     never grow to fill a wide panel and are width-capped, so they group at the
-     start of the row instead of stretching, and the label centers within the
-     button's own padding. min-width: auto restores the flex min-content floor
-     (overriding the bounded-children min-width: 0 above), so a button never
-     shrinks below its own label and wraps to the next row instead of
-     clipping. Keyed off the semantic .action-button class the button helper
-     sets in its template (not the data-action behaviour hook) and sized on the
-     host element, so there is no shadow-part piercing and no source-order
-     tiebreak to keep in sync. Tool edit approvals override with their bespoke
-     sizing below, winning by specificity. */
+  /* Primary action buttons hug their content (button-sized, width-capped) and
+     group at the start of the row instead of stretching. min-width: auto
+     overrides the bounded-children min-width: 0 above so a button keeps its
+     min-content floor and wraps instead of clipping its label. Keyed off the
+     .action-button class (not the data-action hook) so no part piercing is
+     needed; tool edit approvals override with bespoke sizing below. */
   :is(${ACTIONS}) .action-button {
     flex: 0 1 auto;
     min-width: auto;

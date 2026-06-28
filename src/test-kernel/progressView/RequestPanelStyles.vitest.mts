@@ -28,8 +28,8 @@ describe('request panel styles', () => {
       '.approval-request__actions wa-button[data-action] {',
     );
     const boundedChildrenStart = source.indexOf(':is(${ACTIONS}) > * {');
-    const primaryActionsCommentStart = source.indexOf(
-      '/* The primary action buttons',
+    const primaryActionsStart = source.indexOf(
+      ':is(${ACTIONS}) .action-button {',
     );
     const baseStart = source.indexOf(
       '.approval-request__actions wa-button[data-action]::part(base)',
@@ -42,7 +42,7 @@ describe('request panel styles', () => {
     const baseRule = source.slice(baseStart, source.indexOf('}', baseStart));
     const boundedChildrenRule = source.slice(
       boundedChildrenStart,
-      primaryActionsCommentStart,
+      primaryActionsStart,
     );
     const labelRule = source.slice(labelStart, colorsStart);
 
@@ -51,7 +51,7 @@ describe('request panel styles', () => {
     expect(hostRule).toContain('min-width: 0');
     expect(hostRule).toContain('max-width: 100%');
     expect(boundedChildrenStart).toBeGreaterThanOrEqual(0);
-    expect(primaryActionsCommentStart).toBeGreaterThan(boundedChildrenStart);
+    expect(primaryActionsStart).toBeGreaterThan(boundedChildrenStart);
     expect(boundedChildrenRule).toContain('min-width: 0');
     expect(boundedChildrenRule).toContain('max-width: 100%');
     expect(actionStart).toBeGreaterThanOrEqual(0);

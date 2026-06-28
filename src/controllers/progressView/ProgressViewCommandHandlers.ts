@@ -134,13 +134,13 @@ export function createProgressViewCommandHandlers(
   // the one Yolo concept. The shield toolbar button flips it; the inline "Yolo
   // (this session)" prompt button forces it on. Bash rides along silently — the
   // shield reflects tool-edit state — so both surfaces stay in lockstep.
-  const showCoupledBypassInfo = async (enabled: boolean): Promise<void> => {
+  async function showCoupledBypassInfo(enabled: boolean): Promise<void> {
     await showInfo?.(
       enabled
         ? 'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.'
         : 'YOLO mode disabled: Tool actions and bash commands will prompt for approval.',
     );
-  };
+  }
 
   return {
     [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>

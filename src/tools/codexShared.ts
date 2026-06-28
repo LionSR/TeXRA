@@ -5,14 +5,12 @@ import {
   CODEX_THREAD_TOOL,
   CODEX_TODO_TOOL,
   CODEX_TURN_TOOL,
-} from '@shared/schemas/codex';
-import type {
-  CodexFileChangeToolInput,
-  CodexMcpToolOutput,
-  CodexThreadToolInput,
-  CodexTodoToolInput,
-  CodexTurnState,
-  CodexTurnToolInput,
+  type CodexFileChangeToolInput,
+  type CodexMcpToolOutput,
+  type CodexThreadToolInput,
+  type CodexTodoToolInput,
+  type CodexTurnState,
+  type CodexTurnToolInput,
 } from '@shared/schemas/codex';
 import { getBasename } from '@shared/utils/path';
 import { truncateSummary } from '@utils/text/stringUtils';

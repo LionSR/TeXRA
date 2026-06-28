@@ -32,7 +32,7 @@ import {
 const logger = createChannelTrace('inquiryContinuation');
 
 export type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
-export { buildExternalInquiryContinuationText as buildContinuationText } from '@shared/inquiry/continuationText';
+export { buildExternalInquiryContinuationText as buildContinuationText };
 
 async function emitInquiryThreadUpdate(
   threadId: ExternalInquiryThreadId,

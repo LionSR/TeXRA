@@ -74,13 +74,13 @@ function formatFileContext(ctx: RuntimeTextPolishContext): string {
 
   const fileEntries: string[] = [];
 
-  const arrays: Array<[string, string[] | undefined]> = [
+  const fileGroups: Array<[string, string[] | undefined]> = [
     ['Input Files', ctx.inputFiles],
     ['Context Files', ctx.contextFiles],
     ['Media Files', ctx.mediaFiles],
     ['Output Files', ctx.outputFiles],
   ];
-  for (const [label, files] of arrays) {
+  for (const [label, files] of fileGroups) {
     if (files?.length) fileEntries.push(`${label}: ${files.join(', ')}`);
   }
 

@@ -20,7 +20,6 @@ import {
   AGENT_SOURCE,
   AgentCategory,
   type AgentSource,
-  type AgentCategory as AgentCategoryType,
 } from '@shared/schemas/agent';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import type { RemoteAgent } from '@shared/schemas/profileViewMessages';
@@ -42,7 +41,7 @@ export interface RuntimeAgentIdentifierResolution {
 }
 
 export interface RuntimeAgentListRequest {
-  readonly category: AgentCategoryType;
+  readonly category: AgentCategory;
   readonly visibleOnly?: boolean;
 }
 
@@ -62,7 +61,7 @@ export interface RuntimeAgentDefinitionInspection {
 export async function inspectRuntimeAgentDefinition(
   agentIdentifier: string,
   runtimeHost: AgentRuntimeHost,
-  lookupCategory: AgentCategoryType = AgentCategory.Workflow,
+  lookupCategory: AgentCategory = AgentCategory.Workflow,
   source?: AgentSource | null,
 ): Promise<RuntimeAgentDefinitionInspection> {
   const resolution = await getAgentPath(

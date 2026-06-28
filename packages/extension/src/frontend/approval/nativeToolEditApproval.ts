@@ -208,13 +208,14 @@ async function nativeRequestApproval(
         };
 
         pendingApprovals.set(requestId, entry);
+        const host = getRuntimeHost();
         runtimePrompt = startRuntimeToolEditApprovalPrompt({
           requestId,
           request,
-          runtimeHost: getRuntimeHost(),
+          runtimeHost: host,
           pending: {
             streamId: streamId ?? undefined,
-            runtimeHost: getRuntimeHost(),
+            runtimeHost: host,
             isSettled: () => approvalSettled,
             settle,
           },

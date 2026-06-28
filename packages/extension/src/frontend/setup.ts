@@ -77,8 +77,7 @@ export async function copyDefaultAgents(
   try {
     await syncRuntimeBundledAgentDirectories({
       channel: 'extension',
-      resourcesPath: vscode.Uri.joinPath(context.extensionUri, 'resources')
-        .fsPath,
+      resourcesPath: path.join(context.extensionPath, 'resources'),
       currentVersion,
       versionStore: {
         get: () => globalSM.get<string>(GlobalStateKey.LAST_KNOWN_VERSION),

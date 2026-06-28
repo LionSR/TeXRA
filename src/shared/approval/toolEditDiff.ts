@@ -63,7 +63,6 @@ export function firstChangedLine(
         proposedLine += (text.match(/\n/g) ?? []).length;
         break;
       case DIFF_INSERT:
-        return proposedLine;
       case DIFF_DELETE:
         return proposedLine;
     }

@@ -206,16 +206,6 @@ export async function readRuntimeHistoryConfig(
   return raw ? AgentConfigSchema.parse(raw) : null;
 }
 
-async function deleteRuntimeHistoryExecution(
-  executionId: ExecutionId,
-): Promise<boolean> {
-  const deleted = await deleteExecution(executionId);
-  if (deleted) {
-    await GoalStore.forgetByExecutionIds([executionId]);
-  }
-  return deleted;
-}
-
 export async function requestDeleteRuntimeHistoryExecution(
   executionId: ExecutionId,
   { session = currentSession() }: RuntimeHistoryCommandOptions = {},
@@ -224,26 +214,22 @@ export async function requestDeleteRuntimeHistoryExecution(
     return { status: 'running' };
   }
 
-  const deleted = await deleteRuntimeHistoryExecution(executionId);
-  return { status: deleted ? 'deleted' : 'missing' };
-}
-
-async function deleteAllRuntimeHistoryExecutions(
-  activeExecutionIds?: ReadonlySet<ExecutionId>,
-): Promise<ExecutionId[]> {
-  const deletedExecutionIds = await deleteAllExecutions(activeExecutionIds);
-  if (deletedExecutionIds.length > 0) {
-    await GoalStore.forgetByExecutionIds(deletedExecutionIds);
+  const deleted = await deleteExecution(executionId);
+  if (deleted) {
+    await GoalStore.forgetByExecutionIds([executionId]);
   }
-  return deletedExecutionIds;
+  return { status: deleted ? 'deleted' : 'missing' };
 }
 
 export async function requestClearRuntimeHistoryExecutions({
   session = currentSession(),
 }: RuntimeHistoryCommandOptions = {}): Promise<RuntimeHistoryClearResult> {
   const activeExecutionIds = session.executions.getActiveIds() as ExecutionId[];
-  const deletedExecutionIds = await deleteAllRuntimeHistoryExecutions(
+  const deletedExecutionIds = await deleteAllExecutions(
     new Set(activeExecutionIds),
   );
+  if (deletedExecutionIds.length > 0) {
+    await GoalStore.forgetByExecutionIds(deletedExecutionIds);
+  }
   return { deletedExecutionIds, activeExecutionIds };
 }

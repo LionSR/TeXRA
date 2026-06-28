@@ -139,8 +139,7 @@ async function resolveWakeResult(
     return {
       outcome: 'dropped',
       accepted: false,
-      queueReason:
-        result.status === 'queued' ? result.reason : interpreted.queueReason,
+      queueReason: interpreted.queueReason,
       wakeStatus: wake.status,
       ...(result.status === 'no_session'
         ? { streamStatus: result.streamStatus }

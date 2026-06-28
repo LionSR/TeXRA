@@ -141,6 +141,7 @@ export class ProgressViewState {
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
   private readonly logger: ProgressViewStateLogger;
+
   constructor(
     storage: MementoStorage,
     snapshots = new StreamSnapshotStore(),

@@ -7,21 +7,13 @@ export interface RuntimeQueuedFollowUpsProjection {
   readonly messages: string[];
 }
 
-function getRuntimeQueuedFollowUpsProjection(
-  streamId: StreamTabId,
-): RuntimeQueuedFollowUpsProjection {
-  return {
-    streamId,
-    messages: ToolUseFollowUpQueue.getAll(streamId),
-  };
-}
-
 export function publishRuntimeQueuedFollowUps(
   runtimeHost: AgentRuntimeHost,
   streamId: StreamTabId,
 ): void {
-  runtimeHost.emit(
-    'updateQueuedFollowUps',
-    getRuntimeQueuedFollowUpsProjection(streamId),
-  );
+  const projection: RuntimeQueuedFollowUpsProjection = {
+    streamId,
+    messages: ToolUseFollowUpQueue.getAll(streamId),
+  };
+  runtimeHost.emit('updateQueuedFollowUps', projection);
 }

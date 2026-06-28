@@ -120,10 +120,10 @@ export function buildRestoredStreamSnapshot(
   streamId: StreamTabId,
   inputs: RestoredStreamSnapshotInputs = {},
 ): RestoredStreamSnapshot {
+  const { restored, lastKnownStatus, now } = inputs;
   const taskState = state.snapshots.getTaskState(streamId);
   const info = buildStreamInfo(state, streamId, 'all');
-  const persistedAt = inputs.now?.() ?? Date.now();
-  const restored = inputs.restored;
+  const persistedAt = now?.() ?? Date.now();
 
   return {
     streamId,
@@ -134,9 +134,7 @@ export function buildRestoredStreamSnapshot(
     inputFile: info?.inputFile || restored?.inputFile,
     instruction: taskState?.agentConfig.instruction || restored?.instruction,
     lastKnownStatus:
-      inputs.lastKnownStatus ??
-      restored?.lastKnownStatus ??
-      STREAM_STATUS.STOPPED,
+      lastKnownStatus ?? restored?.lastKnownStatus ?? STREAM_STATUS.STOPPED,
     description: info?.description ?? restored?.description,
     executionId: info?.executionId ?? restored?.executionId,
     parentStreamId: info?.parentStreamId ?? restored?.parentStreamId,

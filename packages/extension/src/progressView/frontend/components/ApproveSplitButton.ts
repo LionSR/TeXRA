@@ -170,9 +170,11 @@ export class ApproveSplitButton extends LitElement {
     `;
   }
 
-  private handleSelect = (event: CustomEvent<{ item: HTMLElement }>): void => {
-    const value =
-      (event.detail?.item as HTMLElement & { value?: string })?.value ?? '';
+  private handleSelect = (
+    event: CustomEvent<{ item: HTMLElement & { value?: string } }>,
+  ): void => {
+    const value = event.detail?.item?.value ?? '';
+    // Ignore unknown menu values defensively.
     if (value === YOLO_VALUE) {
       this.emit('approve-session');
     } else if (value === SUPER_YOLO_VALUE) {

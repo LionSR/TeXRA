@@ -1,6 +1,8 @@
 // Local imports - agent
-import { buildRuntimeTaskStateFromConfigInput } from '@agent/runtime/executionRequests';
-import type { RuntimeTaskState } from '@agent/runtime/executionRequests';
+import {
+  buildRuntimeTaskStateFromConfigInput,
+  type RuntimeTaskState,
+} from '@agent/runtime/executionRequests';
 import type { RuntimeProposalResult } from '@agent/runtime/runCoordinatorCommands';
 
 // Local imports - shared

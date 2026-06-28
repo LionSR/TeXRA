@@ -10,7 +10,10 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import './ApproveSplitButton';
 
 // Local imports - shared utilities
-import { FEEDBACK_ELIGIBLE_KINDS } from '@shared/utils/uiConstants';
+import {
+  FEEDBACK_ELIGIBLE_KINDS,
+  PERMISSION_KIND,
+} from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - progress view events
@@ -42,9 +45,8 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
         }
         return false;
       case 'a':
-        // Session-bypass ("Yolo") accelerator. A no-op (returns false) on
-        // prompts that don't allow bypass or while the feedback box is open,
-        // so it only acts on the edit/bash prompts that surface the affordance.
+        // Session-bypass ("Yolo") accelerator; no-ops unless this prompt
+        // allows bypass (see handleApproveSessionKey).
         return this.handleApproveSessionKey();
       default:
         return this.handleExtraKey(key);
@@ -128,10 +130,9 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
   }
 
   protected renderApproveButton(approveTitle: string): TemplateResult {
-    // Declarative: the <approve-split-button> component owns the plain-vs-split
-    // rendering and the menu's keyboard-accessible selection. When the prompt
+    // <approve-split-button> owns the plain-vs-split rendering. When the prompt
     // allows session bypass it surfaces "Yolo (this session)" under the Approve
-    // caret; selecting it (or the `a` shortcut) approves AND auto-approves edits
+    // caret; selecting it (or the `a` shortcut) approves and auto-approves edits
     // + bash for the rest of the stream.
     return html`
       <approve-split-button
@@ -145,25 +146,27 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
 
   /**
    * Whether this prompt advertises the session-bypass ("Yolo") affordance.
-   * Only tool-edit and bash permissions carry `allowBypass`; it is true exactly
-   * when the stream is not already auto-approving (a bypassed stream never
-   * prompts, so a visible prompt always means bypass is currently off). Also
-   * requires a concrete `streamId`: session bypass is per-stream, so without one
-   * there is nothing to scope it to and the button would silently no-op.
+   * Only tool-edit and bash prompts carry `allowBypass`, and it is set only
+   * while the stream is not already auto-approving (a bypassed stream never
+   * prompts). A concrete `streamId` is also required, since the bypass is
+   * scoped per stream.
    */
   protected get canBypass(): boolean {
-    const data = this.permission.data as {
-      allowBypass?: boolean;
-      streamId?: string;
-    };
-    return Boolean(data.allowBypass && data.streamId);
+    const { permission } = this;
+    if (
+      permission.kind !== PERMISSION_KIND.TOOL_EDIT &&
+      permission.kind !== PERMISSION_KIND.BASH
+    ) {
+      return false;
+    }
+    return permission.data.allowBypass && permission.data.streamId !== '';
   }
 
   /**
-   * Handle the shared `a` = approve-session shortcut — the keyboard accelerator
-   * for the Approve menu's "Yolo (this session)" item, wired from
-   * `handleKeyboardShortcut`. No-op while the feedback textarea is open (so
-   * typing "a" there is not hijacked) or when the prompt does not allow bypass.
+   * Handle the shared `a` = approve-session shortcut, the keyboard accelerator
+   * for the Approve menu's "Yolo (this session)" item. No-op while the feedback
+   * textarea is open (so typing "a" there is not hijacked) or when the prompt
+   * does not allow bypass.
    */
   protected handleApproveSessionKey(): boolean {
     if (this.showFeedback || !this.canBypass) {
