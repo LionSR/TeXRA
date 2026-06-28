@@ -245,9 +245,7 @@ export function createProgressViewCommandHandlers(
       setBashApprovalSessionBypass(data.stream, true, runtimeHost, {
         silent: true,
       });
-      await showInfo?.(
-        'Delegated task auto-approval enabled for this stream.',
-      );
+      await showInfo?.('Delegated task auto-approval enabled for this stream.');
     },
 
     [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (data) => {
