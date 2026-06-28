@@ -197,11 +197,16 @@ export const GLOBAL_BOOL_FLAGS = new Set<string>(
   Object.entries(ROOT_ROUTING_ARGS).flatMap(([name, def]) => {
     if (def.type !== 'boolean') return [];
     const flags = flagSpellings(name, def);
-    // Booleans defaulting to `true` are passed by their negated form
-    // (`--no-color`); citty rewrites those to `<name>: false`.
-    // Register the negated spelling so leading-flag reordering and unknown-
-    // command detection recognize `texra --no-color agents list`.
-    if ('default' in def && def.default === true) flags.push(`--no-${name}`);
+    // Register the negated `--no-<name>` spelling so leading-flag reordering and
+    // unknown-command detection recognize it (e.g. `texra --no-color agents
+    // list`, `texra --no-websocket run polish`). citty rewrites any
+    // `--no-<name>` to `<name>: false`; we register the spelling for booleans
+    // that document a negated form — those defaulting to `true` (passed via the
+    // negative, like `--no-color`) and opt-in toggles that advertise a
+    // `negativeDescription` (like `--no-websocket`, which has no default).
+    if (('default' in def && def.default === true) || 'negativeDescription' in def) {
+      flags.push(`--no-${name}`);
+    }
     return flags;
   }),
 );
