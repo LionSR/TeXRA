@@ -67,6 +67,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   USER_QUESTION_ACTION: 'userQuestionAction',
   RESTORE_PROPOSAL_CONFIG: 'restoreProposalConfig',
   TOGGLE_SUPER_YOLO_BYPASS: 'toggleSuperYoloBypass',
+  ENABLE_SUPER_YOLO_BYPASS: 'enableSuperYoloBypass',
   GOAL_ACTIVE_UPDATED: 'goalActiveUpdated',
 
   OPEN_MEMORY_VIEW: 'openMemoryView',
