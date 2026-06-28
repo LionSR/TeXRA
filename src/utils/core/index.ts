@@ -21,6 +21,7 @@ export {
   filterNotNullish,
   ensureArray,
   unique,
+  assertNever,
 } from './typeGuards';
 export { debounce, delay } from './async';
 export {
