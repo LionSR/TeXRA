@@ -46,12 +46,6 @@ export interface RuntimeRunningStreamRecovery {
   readonly erroredStreams: StreamTabId[];
 }
 
-export interface RuntimeStreamStatusRequest {
-  readonly streamId: StreamTabId;
-  readonly status: StreamStatus;
-  readonly runtimeHost: AgentRuntimeHost;
-}
-
 /** Request runtime-owned stopping of a visible agent stream. */
 export function requestRuntimeStreamStop({
   streamId,
@@ -109,15 +103,6 @@ export function getRuntimeStreamStatusSnapshot(): Map<
   StreamStatus
 > {
   return StreamStatusService.getAll();
-}
-
-/** Set a stream status and notify the owning host. */
-export function setRuntimeStreamStatus({
-  streamId,
-  status,
-  runtimeHost,
-}: RuntimeStreamStatusRequest): void {
-  StreamStatusService.set(streamId, status, { runtimeHost });
 }
 
 /** Set a stream status without emitting a host event. */

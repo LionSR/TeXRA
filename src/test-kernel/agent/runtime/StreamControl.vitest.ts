@@ -21,7 +21,6 @@ import {
   recoverRuntimeRunningStreamsFromPersistedState,
   requestKillExecution,
   requestRuntimeStreamStop,
-  setRuntimeStreamStatus,
   setRuntimeStreamStatusSilently,
 } from '@agent/runtime/streamControl';
 import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
@@ -196,25 +195,13 @@ describe('runtime stream control commands', () => {
     }
   });
 
-  it('sets, snapshots, and clears runtime stream statuses', () => {
+  it('sets, snapshots, and clears runtime stream statuses silently', () => {
     const streamId = 'stream-control-status-snapshot' as StreamTabId;
-    const host = createRecordingHost();
 
     try {
-      setRuntimeStreamStatus({
-        streamId,
-        status: STREAM_STATUS.RUNNING,
-        runtimeHost: host,
-      });
+      setRuntimeStreamStatusSilently(streamId, STREAM_STATUS.RUNNING);
 
       expect(getRuntimeStreamStatus(streamId)).toBe(STREAM_STATUS.RUNNING);
-      expect(host.emit).toHaveBeenCalledWith(
-        'updateStreamStatus',
-        expect.objectContaining({
-          streamId,
-          status: STREAM_STATUS.RUNNING,
-        }),
-      );
 
       expect(getRuntimeStreamStatusSnapshot().get(streamId)).toBe(
         STREAM_STATUS.RUNNING,
