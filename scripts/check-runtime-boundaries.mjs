@@ -366,6 +366,12 @@ const FORBIDDEN_PATTERNS = [
       'construct SettingsGoalController directly; the controller owns its default runtime projection',
   },
   {
+    pattern: /\bcreateDesktopMainViewStartupController\(/g,
+    label: 'deleted desktop main-view startup controller factory',
+    guidance:
+      'use createMainViewStartupController from @controllers/mainView/MainViewStartupControllerFactory',
+  },
+  {
     pattern:
       /\b(?:getRuntimeStreamStatusSnapshot|setRuntimeStreamStatusSilently|clearRuntimeStreamStatus|clearAllRuntimeStreamStatuses|markRuntimeRunningStreamsStopped)\b/g,
     label: 'progress runtime-status port assembled outside its owner',

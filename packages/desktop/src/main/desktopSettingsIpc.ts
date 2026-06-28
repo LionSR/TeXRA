@@ -14,6 +14,10 @@ import {
   createModelSelectionController,
 } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import {
+  createMainViewStartupController,
+  type MainViewAgentOptionsLoader,
+} from '@controllers/mainView/MainViewStartupControllerFactory';
+import {
   createSettingsAgentControllers,
   type AgentControllerFactoryOptions,
 } from '@controllers/settingsView/SettingsAgentControllerFactory';
@@ -108,10 +112,6 @@ import {
   getCachedToolCheckResults,
   refreshDefaultDisabledToolCache,
 } from './desktopSettingsIpcHelpers.js';
-import {
-  createDesktopMainViewStartupController,
-  type DesktopMainViewAgentOptionsLoader,
-} from './desktopMainViewStartupController.js';
 import type { ConfigProvider } from '@platform/interfaces/config';
 import type { StateStore } from '@platform/interfaces/state';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -128,7 +128,7 @@ export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
   sendStartupCatalogData?: boolean;
   loadAgents?: AgentControllerFactoryOptions['loadAgents'];
-  loadAgentOptionsData?: DesktopMainViewAgentOptionsLoader;
+  loadAgentOptionsData?: MainViewAgentOptionsLoader;
   getAgents?: AgentControllerFactoryOptions['getAgents'];
   getVisibleAgents?: AgentControllerFactoryOptions['getVisibleAgents'];
   globalState?: StateStore;
@@ -228,7 +228,7 @@ export function createDesktopSettingsIpc(
       globalState,
       onError,
     });
-  const mainViewStartupController = createDesktopMainViewStartupController({
+  const mainViewStartupController = createMainViewStartupController({
     modelListRefresh,
     getConfig: (key, defaultValue) =>
       getConfigProvider().get(key, defaultValue),

@@ -49,8 +49,14 @@ describe('main view layering', () => {
     const handler = readSource(
       'packages/extension/src/webview/MainViewMessageHandler.ts',
     );
+    const extensionStartup = readSource(
+      'packages/extension/src/frontend/agents/mainViewStartup.ts',
+    );
+    const startupFactory = readSource(
+      'src/controllers/mainView/MainViewStartupControllerFactory.ts',
+    );
 
-    for (const source of [provider, commands]) {
+    for (const source of [provider, commands, extensionStartup]) {
       expect(source).not.toContain('computeRuntimeAgentOptionsData');
       expect(source).not.toContain('computeModelOptionsData');
       expect(source).not.toContain('SET_MODEL_OPTIONS');
@@ -58,5 +64,7 @@ describe('main view layering', () => {
     }
     expect(handler).toContain('createExtensionMainViewStartupController');
     expect(handler).not.toContain('new MainViewStartupController');
+    expect(startupFactory).toContain('computeRuntimeAgentOptionsData');
+    expect(startupFactory).toContain('computeModelOptionsData');
   });
 });

@@ -5,7 +5,7 @@ import {
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
-import { createDesktopMainViewStartupController } from './desktopMainViewStartupController.js';
+import { createMainViewStartupController } from '@controllers/mainView/MainViewStartupControllerFactory';
 import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 
@@ -24,7 +24,7 @@ export function createDesktopMainViewStartup({
   loadOptions,
   onAsyncError,
 }: DesktopMainViewStartupOptions): DesktopMessageHandler {
-  const startupController = createDesktopMainViewStartupController({
+  const startupController = createMainViewStartupController({
     modelListRefresh,
     getAuthStatus,
     loadOptions,

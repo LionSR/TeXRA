@@ -70,9 +70,7 @@ describe('desktop settings surface', () => {
       'packages/desktop/src/main/desktopSettingsIpc.ts',
     );
 
-    expect(desktopSettingsIpc).toContain(
-      'createDesktopMainViewStartupController',
-    );
+    expect(desktopSettingsIpc).toContain('createMainViewStartupController');
     expect(desktopSettingsIpc).toContain(
       'mainViewStartupController.getModelOptionsRefreshMessage',
     );

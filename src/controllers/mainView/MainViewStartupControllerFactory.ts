@@ -1,38 +1,49 @@
 import {
-  type MainViewStartupControllerDeps,
   MainViewStartupController,
+  type MainViewStartupControllerDeps,
   type MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
-import { computeRuntimeAgentOptionsData } from '@agent/runtime/agentResolution';
+import {
+  computeRuntimeAgentOptionsData,
+  refreshRuntimeAgentCatalog,
+} from '@agent/runtime/agentResolution';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { getConfig as readConfig } from '@utils/config/configUtils';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 
-export type DesktopMainViewAgentOptionsLoader = () => Promise<
+export type MainViewAgentOptionsLoader = () => Promise<
   MainViewStartupOptions['agentOptions']
 >;
 
-export interface DesktopMainViewStartupControllerOptions {
+export type MainViewAgentCatalogRefreshPolicy = 'none' | 'runtime';
+
+export interface MainViewStartupControllerFactoryOptions {
   modelListRefresh?: PromiseLike<void>;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   loadOptions?: () => Promise<MainViewStartupOptions>;
   getConfig?: MainViewStartupControllerDeps['getConfig'];
   getVisibleModels?: () => readonly string[];
-  loadAgentOptions?: DesktopMainViewAgentOptionsLoader;
+  loadAgentOptions?: MainViewAgentOptionsLoader;
+  agentCatalogRefresh?: MainViewAgentCatalogRefreshPolicy;
 }
 
 async function defaultGetAuthStatus(): Promise<MainViewAuthStatus> {
   return { authenticated: false };
 }
 
-export function createDesktopMainViewStartupController({
+/**
+ * Construct the main-view startup controller with the shared option-loading
+ * law used by extension and desktop hosts.
+ */
+export function createMainViewStartupController({
   modelListRefresh,
   getAuthStatus,
   loadOptions,
   getConfig,
   getVisibleModels,
   loadAgentOptions,
-}: DesktopMainViewStartupControllerOptions): MainViewStartupController {
+  agentCatalogRefresh = 'none',
+}: MainViewStartupControllerFactoryOptions = {}): MainViewStartupController {
   return new MainViewStartupController({
     getConfig: getConfig ?? readConfig,
     loadOptions,
@@ -42,6 +53,10 @@ export function createDesktopMainViewStartupController({
     },
     loadAgentOptions:
       loadAgentOptions ?? (() => computeRuntimeAgentOptionsData()),
+    refreshAgentCatalog:
+      agentCatalogRefresh === 'runtime'
+        ? refreshRuntimeAgentCatalog
+        : undefined,
     getAuthStatus: getAuthStatus ?? defaultGetAuthStatus,
   });
 }

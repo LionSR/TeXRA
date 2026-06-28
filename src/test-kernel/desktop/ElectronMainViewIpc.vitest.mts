@@ -498,6 +498,7 @@ describe('desktop main-view IPC', () => {
         workflow: [],
         toolUse: [],
       })),
+      refreshRuntimeAgentCatalog: vi.fn(async () => undefined),
     }));
     vi.doMock('@model/computeModelOptions', () => ({
       computeModelOptionsData: vi.fn(async () => [{ value: 'fresh-model' }]),
@@ -555,15 +556,15 @@ describe('desktop main-view IPC', () => {
       repoPath('packages/desktop/src/main/desktopMainViewStartup.ts'),
       'utf8',
     );
-    const startupController = readFileSync(
-      repoPath('packages/desktop/src/main/desktopMainViewStartupController.ts'),
+    const startupFactory = readFileSync(
+      repoPath('src/controllers/mainView/MainViewStartupControllerFactory.ts'),
       'utf8',
     );
 
-    expect(startupIpc).toContain('createDesktopMainViewStartupController');
+    expect(startupIpc).toContain('createMainViewStartupController');
     expect(startupIpc).not.toContain('computeRuntimeAgentOptionsData');
     expect(startupIpc).not.toContain('computeModelOptionsData');
-    expect(startupController).toContain('computeRuntimeAgentOptionsData');
-    expect(startupController).toContain('computeModelOptionsData');
+    expect(startupFactory).toContain('computeRuntimeAgentOptionsData');
+    expect(startupFactory).toContain('computeModelOptionsData');
   });
 });

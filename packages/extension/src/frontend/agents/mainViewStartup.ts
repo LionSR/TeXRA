@@ -1,21 +1,10 @@
-import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
-import {
-  computeRuntimeAgentOptionsData,
-  refreshRuntimeAgentCatalog,
-} from '@agent/runtime/agentResolution';
+import { createMainViewStartupController } from '@controllers/mainView/MainViewStartupControllerFactory';
 import { getAuthStatus } from '@commands/auth';
-import { computeModelOptionsData } from '@model/computeModelOptions';
-import { getConfig } from '@utils/config';
-
-import { loadOptions } from './optionsLoader';
+import type { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
 
 export function createExtensionMainViewStartupController(): MainViewStartupController {
-  return new MainViewStartupController({
-    getConfig,
+  return createMainViewStartupController({
     getAuthStatus,
-    loadOptions,
-    loadModelOptions: computeModelOptionsData,
-    loadAgentOptions: computeRuntimeAgentOptionsData,
-    refreshAgentCatalog: refreshRuntimeAgentCatalog,
+    agentCatalogRefresh: 'runtime',
   });
 }
