@@ -179,11 +179,7 @@ export async function loadCliAgentList(
   options: CliAgentListOptions = {},
 ): Promise<CliAgentListResult> {
   const includeHidden = options.includeHidden === true;
-  if (includeHidden) {
-    await loadRuntimeAgents();
-  } else {
-    await loadRuntimeAgents({ includeRemote: false });
-  }
+  await loadRuntimeAgents(includeHidden ? undefined : { includeRemote: false });
 
   const agents = collectCliAgents(
     includeHidden ? 'all' : 'visible',

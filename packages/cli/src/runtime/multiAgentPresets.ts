@@ -404,13 +404,13 @@ export function planCliMultiAgentPresetRun(
     readonly agentOverride?: string;
   },
 ): CliMultiAgentPresetRunPlan {
-  const workflow = resolvePresetAgents(
-    preset.workflowAgents,
+  const workflow = resolveRuntimeAgentIdentifiers(
     options.workflowAgents,
+    preset.workflowAgents,
   );
-  const toolUse = resolvePresetAgents(
-    preset.toolUseAgents,
+  const toolUse = resolveRuntimeAgentIdentifiers(
     options.toolUseAgents,
+    preset.toolUseAgents,
   );
   const override = resolveAgentOverride(
     options.agentOverride,
@@ -468,13 +468,6 @@ export async function withCliMultiAgentPresetVisibility<T>(
       previousToolUseAgents,
     );
   }
-}
-
-function resolvePresetAgents(
-  names: readonly string[],
-  agents: readonly AgentEntry[],
-): { resolved: AgentEntry[]; missing: string[] } {
-  return resolveRuntimeAgentIdentifiers(agents, names);
 }
 
 function resolveAgentOverride(

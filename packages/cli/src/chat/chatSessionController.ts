@@ -281,6 +281,8 @@ export function createChatSessionController(
 
   const switchModel = async (model: string): Promise<void> => {
     const nextModel = model.trim();
+    const toolUseOnlyMessage =
+      'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.';
     if (chatTuiCanStartRootRun(session)) {
       try {
         const { apiMode } = cliState.sessionMeta.get();
@@ -309,9 +311,7 @@ export function createChatSessionController(
     }
 
     if (!session.streamId) {
-      appendLocalAssistantTranscript(
-        'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
-      );
+      appendLocalAssistantTranscript(toolUseOnlyMessage);
       return;
     }
 
@@ -322,9 +322,7 @@ export function createChatSessionController(
       });
       switch (result.status) {
         case 'no_target':
-          appendLocalAssistantTranscript(
-            'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
-          );
+          appendLocalAssistantTranscript(toolUseOnlyMessage);
           return;
         case 'disabled':
           appendLocalAssistantTranscript(result.reason);
