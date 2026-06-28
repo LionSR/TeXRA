@@ -395,6 +395,12 @@ export class OpenAIResponseWebSocketTransport {
         // Ignore ping errors
       }
     }, WS_KEEPALIVE_INTERVAL_MS);
+    // A background ping timer must never, by itself, keep the Node event loop
+    // alive: a headless `texra ... --websocket` run would otherwise hang after
+    // finishing until the connection ages out. `unref` lets the process exit
+    // once the real work is done; an in-flight request is held by its own
+    // pending promise, and interactive sessions by the TUI's own handles.
+    this.wsKeepaliveInterval.unref?.();
   }
 
   /** Stop keepalive pings. */
