@@ -162,10 +162,13 @@ describe('runtime resume commands', () => {
     expect(StreamStatusService.get(STREAM_ID)).toBe(STREAM_STATUS.RESUMING);
   });
 
-  it('owns workflow resume status transitions around the launch callback', async () => {
+  it('lets the workflow launch lifecycle claim the resumed stream', async () => {
     const host = createRecordingHost();
+    StreamStatusService.set(STREAM_ID, STREAM_STATUS.WAITING, {
+      runtimeHost: host,
+    });
     const launch = vi.fn(async () => {
-      expect(StreamStatusService.get(STREAM_ID)).toBe(STREAM_STATUS.RESUMING);
+      expect(StreamStatusService.get(STREAM_ID)).toBe(STREAM_STATUS.WAITING);
       StreamStatusService.set(STREAM_ID, STREAM_STATUS.RUNNING, {
         runtimeHost: host,
       });
@@ -185,6 +188,9 @@ describe('runtime resume commands', () => {
 
   it('restores WAITING when workflow resume launch fails before claiming the stream', async () => {
     const host = createRecordingHost();
+    StreamStatusService.set(STREAM_ID, STREAM_STATUS.WAITING, {
+      runtimeHost: host,
+    });
 
     await expect(
       requestRuntimeWorkflowResume({
@@ -195,6 +201,25 @@ describe('runtime resume commands', () => {
         },
       }),
     ).rejects.toThrow('workflow resume failed');
+
+    expect(StreamStatusService.get(STREAM_ID)).toBe(STREAM_STATUS.WAITING);
+  });
+
+  it('repairs a workflow resume launch path left in RESUMING', async () => {
+    const host = createRecordingHost();
+
+    await expect(
+      requestRuntimeWorkflowResume({
+        streamId: STREAM_ID,
+        runtimeHost: host,
+        run: async () => {
+          StreamStatusService.set(STREAM_ID, STREAM_STATUS.RESUMING, {
+            runtimeHost: host,
+          });
+          throw new Error('workflow resume failed after reservation');
+        },
+      }),
+    ).rejects.toThrow('workflow resume failed after reservation');
 
     expect(StreamStatusService.get(STREAM_ID)).toBe(STREAM_STATUS.WAITING);
   });

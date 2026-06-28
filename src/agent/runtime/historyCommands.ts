@@ -23,7 +23,7 @@ import {
 import { AgentCategory } from '@shared/schemas/agent';
 import { GoalStore } from '@tools/goal';
 
-import { currentSession, type SessionHandle } from './SessionHandle';
+import { getAllActiveExecutionIds, type SessionHandle } from './SessionHandle';
 
 export type RuntimeHistoryAgentConfig = AgentConfig;
 export type RuntimeHistoryExecutionMeta = ExecutionMeta;
@@ -69,6 +69,7 @@ export type RuntimeHistoryTerminalStatusRepairResult =
 
 export interface RuntimeHistoryCommandOptions {
   readonly session?: SessionHandle;
+  readonly activeExecutionIds?: readonly ExecutionId[];
 }
 
 export interface RuntimeHistoryClearResult {
@@ -208,9 +209,10 @@ export async function readRuntimeHistoryConfig(
 
 export async function requestDeleteRuntimeHistoryExecution(
   executionId: ExecutionId,
-  { session = currentSession() }: RuntimeHistoryCommandOptions = {},
+  options: RuntimeHistoryCommandOptions = {},
 ): Promise<RuntimeHistoryDeleteExecutionResult> {
-  if (session.executions.getActiveIds().includes(executionId)) {
+  const activeExecutionIds = getRuntimeHistoryActiveExecutionIds(options);
+  if (activeExecutionIds.includes(executionId)) {
     return { status: 'running' };
   }
 
@@ -222,9 +224,9 @@ export async function requestDeleteRuntimeHistoryExecution(
 }
 
 export async function requestClearRuntimeHistoryExecutions({
-  session = currentSession(),
+  ...options
 }: RuntimeHistoryCommandOptions = {}): Promise<RuntimeHistoryClearResult> {
-  const activeExecutionIds = session.executions.getActiveIds() as ExecutionId[];
+  const activeExecutionIds = getRuntimeHistoryActiveExecutionIds(options);
   const deletedExecutionIds = await deleteAllExecutions(
     new Set(activeExecutionIds),
   );
@@ -232,4 +234,13 @@ export async function requestClearRuntimeHistoryExecutions({
     await GoalStore.forgetByExecutionIds(deletedExecutionIds);
   }
   return { deletedExecutionIds, activeExecutionIds };
+}
+
+function getRuntimeHistoryActiveExecutionIds({
+  activeExecutionIds,
+  session,
+}: RuntimeHistoryCommandOptions): ExecutionId[] {
+  if (activeExecutionIds) return [...activeExecutionIds];
+  if (session) return session.executions.getActiveIds() as ExecutionId[];
+  return getAllActiveExecutionIds() as ExecutionId[];
 }

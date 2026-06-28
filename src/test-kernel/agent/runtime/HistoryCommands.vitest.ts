@@ -303,6 +303,22 @@ describe('runtime history commands', () => {
     }
   });
 
+  it('guards deletion against active executions in any live session by default', async () => {
+    const session = new SessionHandle();
+    try {
+      trackActiveExecution(session);
+
+      await expect(
+        requestDeleteRuntimeHistoryExecution(EXECUTION_ID),
+      ).resolves.toEqual({ status: 'running' });
+
+      expect(storageMock.deleteExecution).not.toHaveBeenCalled();
+      expect(goalStoreMock.forgetByExecutionIds).not.toHaveBeenCalled();
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('projects runtime history deletion as deleted or missing', async () => {
     const session = new SessionHandle();
     storageMock.deleteExecution.mockResolvedValueOnce(true);
@@ -336,6 +352,30 @@ describe('runtime history commands', () => {
       await expect(
         requestClearRuntimeHistoryExecutions({ session }),
       ).resolves.toEqual({
+        deletedExecutionIds: [deletedExecutionId],
+        activeExecutionIds: [EXECUTION_ID],
+      });
+
+      expect(storageMock.deleteAllExecutions).toHaveBeenCalledWith(
+        new Set([EXECUTION_ID]),
+      );
+      expect(goalStoreMock.forgetByExecutionIds).toHaveBeenCalledWith([
+        deletedExecutionId,
+      ]);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('guards clear-history against active executions in any live session by default', async () => {
+    const session = new SessionHandle();
+    const deletedExecutionId = 'deleted000000' as ExecutionId;
+    storageMock.deleteAllExecutions.mockResolvedValue([deletedExecutionId]);
+
+    try {
+      trackActiveExecution(session);
+
+      await expect(requestClearRuntimeHistoryExecutions()).resolves.toEqual({
         deletedExecutionIds: [deletedExecutionId],
         activeExecutionIds: [EXECUTION_ID],
       });

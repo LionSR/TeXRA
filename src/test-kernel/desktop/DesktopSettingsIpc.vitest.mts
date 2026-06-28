@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
@@ -206,6 +207,22 @@ function createDeferred(): {
     resolve = done;
   });
   return { promise, resolve };
+}
+
+function trackDesktopActiveExecution(
+  session: SessionHandle,
+  executionId: string,
+): void {
+  session.executions.track({
+    executionId,
+    parentStreamId: `desktop@model#${executionId}`,
+    category: 'workflow',
+    agentName: 'writer',
+    startedAt: Date.now(),
+    runtimeHost: { emit: vi.fn() },
+    getProgress: () => ({}),
+    updateProgress: vi.fn(),
+  } as Parameters<SessionHandle['executions']['track']>[0]);
 }
 
 function inactiveLatexSettingsStatus(): unknown {
@@ -1846,6 +1863,37 @@ describe('desktop settings IPC', () => {
     expect(messages).toEqual([
       'Rerun from history is not available in the desktop app yet.',
     ]);
+  });
+
+  it('blocks desktop history deletion while an execution is active in any runtime session', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const session = new SessionHandle();
+    const messages: string[] = [];
+    const executionId = 'desktop-live-run';
+
+    try {
+      trackDesktopActiveExecution(session, executionId);
+      const settings = createDesktopSettingsIpc({
+        workspaceState: new MemoryStateStore(),
+        globalState: new MemoryStateStore(),
+        postToRenderer: () => {},
+        showInfoMessage: async (message) => {
+          messages.push(message);
+        },
+      });
+
+      expect(
+        settings.handleMessage({
+          command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
+          historyId: executionId,
+        }),
+      ).toBe(true);
+      await flushAsyncWork();
+
+      expect(messages).toEqual(['Cannot delete a running execution']);
+    } finally {
+      session.dispose();
+    }
   });
 
   it('ignores unsupported or malformed settings messages', async () => {

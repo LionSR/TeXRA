@@ -239,16 +239,16 @@ export async function readRuntimeToolUseResumeDataForConfig({
 }
 
 /**
- * Resume a persisted workflow by owning the stream-status transition around the
- * host-specific launch callback. If the launch fails before the run lifecycle
- * claims the stream, restore WAITING so the stream remains resumable.
+ * Resume a persisted workflow by delegating stream ownership to the normal run
+ * lifecycle. The launch callback calls `runAgent`, which must be free to claim
+ * the stream itself; this wrapper only repairs a host path that leaves the
+ * stream in RESUMING after a failed launch.
  */
 export async function requestRuntimeWorkflowResume({
   streamId,
   runtimeHost,
   run,
 }: RuntimeWorkflowResumeRequest): Promise<boolean> {
-  StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, { runtimeHost });
   try {
     await run();
     return true;
