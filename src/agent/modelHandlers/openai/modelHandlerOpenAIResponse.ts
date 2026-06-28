@@ -32,6 +32,7 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import { isGpt5ModelName, isGptFamilyModelName } from '@model/modelNames';
+import replacementEngine from '@replacement/engine';
 
 // Type imports
 import type { FileLocation } from '@shared/schemas';
@@ -1643,6 +1644,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // the completed response's `output` empty, so we keep the items to rebuild
     // it below — otherwise the whole turn, tool calls included, is dropped.
     const streamedItems: Response['output'] = [];
+    // Hoisted so the catch can finalize the progress streams on a mid-stream
+    // failure (otherwise the progress view hangs in a loading state).
+    let processor: ResponseStreamProcessor | undefined;
     try {
       const { stream: _stream, ...rest } = params;
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
@@ -1650,7 +1654,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       // Processor handles interleaved thinking and web search
       // GPT can: think → web_search → think more → web_search → text
-      const processor = this.createStreamProcessor();
+      processor = this.createStreamProcessor();
 
       for await (const event of stream) {
         processor.process(event);
@@ -1704,6 +1708,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
       return { response, updatedMessages: ctx.compactedMessages };
     } catch (error) {
+      // Finalize the progress streams on error so the view does not hang in a
+      // loading state (no-op if the stream never opened or already finalized).
+      processor?.abort();
       // Attach a capped tail of any streamed text before it propagates so the
       // retry UI receives the same structured error shape downstream.
       if (streamedText) {
@@ -1901,13 +1908,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ? OPENAI_CHAT_FINISH.STOP
         : OPENAI_CHAT_FINISH.LENGTH;
 
-    if (
-      stopReason === OPENAI_CHAT_FINISH.STOP &&
-      endTag &&
-      !newResponse.includes(endTag)
-    ) {
-      return { text: `${newResponse}\n${endTag}`, usage, stopReason };
-    }
+    newResponse = this.appendEndTagIfNeeded(
+      newResponse,
+      endTag,
+      stopReason === OPENAI_CHAT_FINISH.STOP,
+    );
+    newResponse = replacementEngine.applyAll(newResponse);
 
     return { text: newResponse, usage, stopReason };
   }

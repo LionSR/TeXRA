@@ -16,6 +16,7 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
+import replacementEngine from '@replacement/engine';
 
 // Local imports - tools and utils
 import type { FileLocation } from '@shared/schemas';
@@ -546,14 +547,12 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       this.logger.error('content is empty');
     }
 
-    if (
-      stopReason === OPENAI_CHAT_FINISH.STOP &&
-      endTag &&
-      !newResponse.includes(endTag)
-    ) {
-      this.logger.debug(`Adding end tag to response: ${endTag}`);
-      newResponse = `${newResponse}\n${endTag}`;
-    }
+    newResponse = this.appendEndTagIfNeeded(
+      newResponse,
+      endTag,
+      stopReason === OPENAI_CHAT_FINISH.STOP,
+    );
+    newResponse = replacementEngine.applyAll(newResponse);
 
     return {
       text: newResponse,

@@ -27,6 +27,7 @@ import {
 import type { ToolDefinition } from '@model';
 
 // Local imports - tools and utils
+import replacementEngine from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
@@ -406,6 +407,12 @@ export class ModelHandlerOpenAI<
       this.finalizeStreams(thinking, output, finalResponse);
       return finalResponse;
     } catch (streamError) {
+      // Finalize the progress streams on error so the progress view does not
+      // hang in a loading state (parity with the OpenRouter streaming path).
+      // `finalize` is idempotent, so this is safe even if a partial finalize
+      // already ran.
+      thinking.finalize(undefined);
+      output.finalize('');
       // Tag at the boundary so abort identity survives wrapping and
       // minification (mirrors the Anthropic stream catch).
       tagOpenAISdkError(streamError, this.config.provider);
@@ -899,14 +906,12 @@ export class ModelHandlerOpenAI<
         };
 
         // Add end tag if response was stopped and tag isn't present
-        if (
-          stopReason === OPENAI_CHAT_FINISH.STOP &&
-          endTag &&
-          !newResponse.includes(endTag)
-        ) {
-          this.logger.debug(`Adding end tag to response: ${endTag}`);
-          newResponse = `${newResponse}\n${endTag}`;
-        }
+        newResponse = this.appendEndTagIfNeeded(
+          newResponse,
+          endTag,
+          stopReason === OPENAI_CHAT_FINISH.STOP,
+        );
+        newResponse = replacementEngine.applyAll(newResponse);
 
         return { text: newResponse, usage, stopReason };
       }
@@ -951,14 +956,12 @@ export class ModelHandlerOpenAI<
     }
 
     // Add end tag if response was stopped and tag isn't present
-    if (
-      stopReason === OPENAI_CHAT_FINISH.STOP &&
-      endTag &&
-      !newResponse.includes(endTag)
-    ) {
-      this.logger.debug(`Adding end tag to response: ${endTag}`);
-      newResponse = `${newResponse}\n${endTag}`;
-    }
+    newResponse = this.appendEndTagIfNeeded(
+      newResponse,
+      endTag,
+      stopReason === OPENAI_CHAT_FINISH.STOP,
+    );
+    newResponse = replacementEngine.applyAll(newResponse);
 
     return { text: newResponse, usage: responseObject.usage, stopReason };
   }

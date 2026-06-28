@@ -103,6 +103,17 @@ export class ResponseStreamProcessor {
     this.emitWebSearchesFromResponse(response);
   }
 
+  /**
+   * Finalize the thinking/output streams without a completed response. Used on
+   * the error path so a mid-stream failure does not leave the progress view's
+   * streams hanging in a loading state. `StreamHandle.finalize` is idempotent,
+   * so calling this after a partial `finalize` is safe.
+   */
+  abort(): void {
+    this.closeThinkingStream();
+    this.outputStream.finalize('');
+  }
+
   private openThinkingStream(): StreamHandle {
     return (this.thinkingStream ??= this.deps.createThinkingStream());
   }
