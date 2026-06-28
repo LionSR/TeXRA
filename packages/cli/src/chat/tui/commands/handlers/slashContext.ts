@@ -2,7 +2,6 @@ import { type CliContext } from '@cli/runtime/cliContext';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { type ExecutionId } from '@shared/schemas';
-export { CHAT_API_MODE_MODEL_RECOVERY } from '@cli/chat/chatModelRecovery';
 
 import {
   openCliSlashCommandForm,

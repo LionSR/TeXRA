@@ -43,6 +43,7 @@ import {
   isRuntimeToolUseTaskState,
   isRuntimeWorkflowTaskState,
   parseRuntimeAgentConfig,
+  parseRuntimeToolUseAgentConfig,
   parseRuntimeTaskState,
   tryParseRuntimeTaskState,
   type RuntimeAgentConfig,
@@ -146,6 +147,21 @@ describe('runtime execution requests', () => {
     expect(agentConfigMock.AgentConfigSchema.parse).toHaveBeenCalledWith(
       config,
     );
+  });
+
+  it('parses tool-use configs by owning the category stamp', () => {
+    const config = {
+      agent: 'changeReviewer',
+      model: 'deepseekT',
+      instruction: 'Review.',
+    };
+
+    parseRuntimeToolUseAgentConfig(config);
+
+    expect(agentConfigMock.AgentConfigSchema.parse).toHaveBeenCalledWith({
+      ...config,
+      agentCategory: 'toolUse',
+    });
   });
 
   it('parses and classifies task state through the runtime boundary', () => {

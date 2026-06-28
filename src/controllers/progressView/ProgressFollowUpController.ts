@@ -2,7 +2,7 @@
 import {
   buildRuntimeTaskStateFromConfig,
   isRuntimeWorkflowTaskState,
-  parseRuntimeAgentConfig,
+  parseRuntimeToolUseAgentConfig,
   type RuntimeAgentConfig,
   type RuntimeExecutionRequest,
   type RuntimeTaskState,
@@ -161,11 +161,10 @@ export class ProgressFollowUpController {
       };
     }
 
-    const agentConfig = parseRuntimeAgentConfig({
+    const agentConfig = parseRuntimeToolUseAgentConfig({
       ...input.taskState.agentConfig,
       agent: input.agent,
       model: input.model,
-      agentCategory: 'toolUse',
       instruction: this.buildWorkflowToolUseFollowupInstruction(
         input.outputFiles,
         input.initialQuestion,
@@ -350,12 +349,11 @@ export class ProgressFollowUpController {
     editableFiles: string[],
     instruction: string,
   ): RuntimeAgentConfig {
-    return parseRuntimeAgentConfig({
+    return parseRuntimeToolUseAgentConfig({
       ...originalConfig,
       agent: 'latexFixer',
       model,
       instruction,
-      agentCategory: 'toolUse',
       inputFiles: editableFiles,
       outputFiles: [],
       editedFile: null,

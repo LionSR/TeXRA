@@ -54,6 +54,7 @@ import {
   type ApprovalDecision,
   type ApprovalPayload,
 } from './approvalQueue';
+import { setCliCodexSubscription } from './codexSubscription';
 
 /**
  * Install the typed approval pipeline. Returns an `unbind` callback that
@@ -290,6 +291,9 @@ async function applyRetryDecision(
       ...cliState.sessionMeta.get(),
       apiMode: decision.apiMode,
     });
+  }
+  if (decision.disableChatGptSubscription) {
+    await setCliCodexSubscription(false);
   }
   triggerRuntimeRetry({
     streamId: payload.streamId,

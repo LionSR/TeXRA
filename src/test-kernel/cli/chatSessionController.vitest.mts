@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   requestRuntimeFollowUp: vi.fn(),
   requestRuntimeToolUseSnapshotResume: vi.fn(),
   runAgent: vi.fn(),
-  writeRuntimeTerminalStatus: vi.fn(),
+  repairRuntimeHistoryTerminalStatus: vi.fn(),
   setCliHelperModel: vi.fn(),
   ensureStreamLogLoaded: vi.fn(),
   getStreamLog: vi.fn(),
@@ -49,7 +49,7 @@ vi.mock('@agent/runtime/runAgent', () => ({
 }));
 
 vi.mock('@agent/runtime/historyCommands', () => ({
-  writeRuntimeTerminalStatus: mocks.writeRuntimeTerminalStatus,
+  repairRuntimeHistoryTerminalStatus: mocks.repairRuntimeHistoryTerminalStatus,
 }));
 
 vi.mock('@agent/runtime/terminalResultToast', () => ({
@@ -216,8 +216,11 @@ describe('createChatSessionController', () => {
       accepted: true,
     });
     mocks.runAgent.mockReset();
-    mocks.writeRuntimeTerminalStatus.mockReset();
-    mocks.writeRuntimeTerminalStatus.mockResolvedValue(undefined);
+    mocks.repairRuntimeHistoryTerminalStatus.mockReset();
+    mocks.repairRuntimeHistoryTerminalStatus.mockResolvedValue({
+      status: 'written',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+    });
     mocks.runAgent.mockImplementation(async (_request, options) => {
       const executionId = 'exec-chat-controller-run-agent';
       const streamId = 'stream-chat-controller-run-agent' as StreamTabId;
@@ -381,7 +384,7 @@ describe('createChatSessionController', () => {
 
     await session.runPromise;
 
-    expect(mocks.writeRuntimeTerminalStatus).toHaveBeenCalledWith(
+    expect(mocks.repairRuntimeHistoryTerminalStatus).toHaveBeenCalledWith(
       'exec-chat-controller-failed',
       EXECUTION_STATUS.ERROR,
     );

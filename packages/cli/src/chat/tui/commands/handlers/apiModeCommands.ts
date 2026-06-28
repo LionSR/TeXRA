@@ -8,14 +8,12 @@ import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { formatCliNoAvailableModelsRecovery } from '@cli/runtime/modelAccess';
 import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
 
+import { CHAT_API_MODE_MODEL_RECOVERY } from '@cli/chat/chatModelRecovery';
 import { cliState } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { toErrorMessage } from '@common/errors/errorMessage';
-import {
-  CHAT_API_MODE_MODEL_RECOVERY,
-  type SlashCommandContext,
-} from './slashContext';
+import { type SlashCommandContext } from './slashContext';
 
 const API_MODE_USAGE = 'Usage: /api personal | /api included';
 

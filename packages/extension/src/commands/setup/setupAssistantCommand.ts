@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { loadRuntimeAgents } from '@agent/runtime/agentResolution';
 import { hasRuntimeActiveAgentName } from '@agent/runtime/executionQueries';
-import { parseRuntimeAgentConfig } from '@agent/runtime/executionRequests';
+import { parseRuntimeToolUseAgentConfig } from '@agent/runtime/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { AUTH_COMMANDS } from '@auth/constants';
@@ -372,9 +372,8 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
       return 'not-started';
     }
 
-    const config = parseRuntimeAgentConfig({
+    const config = parseRuntimeToolUseAgentConfig({
       agent: 'setup',
-      agentCategory: 'toolUse',
       model: resolution.model,
       instruction: SETUP_INSTRUCTION,
     });

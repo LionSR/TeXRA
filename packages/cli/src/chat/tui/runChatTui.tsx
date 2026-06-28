@@ -58,6 +58,7 @@ import {
   createChatSessionController,
   type ChatSessionController,
 } from '../chatSessionController';
+import { CHAT_API_MODE_MODEL_RECOVERY } from '../chatModelRecovery';
 import { App } from './App';
 import { handleTuiSlashCommand } from './commands/handleSlashCommand';
 import {
@@ -69,10 +70,7 @@ import {
 import { applyCliApiModeSelection } from './commands/handlers/apiModeCommands';
 import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
 import { loginFromChat } from './commands/handlers/loginCommands';
-import {
-  CHAT_API_MODE_MODEL_RECOVERY,
-  type SlashCommandContext,
-} from './commands/handlers/slashContext';
+import { type SlashCommandContext } from './commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';

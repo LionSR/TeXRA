@@ -372,7 +372,7 @@ export function cliMultiAgentPresetAvailability(
     ),
     rootAgent: plan.rootAgent
       ? {
-          key: toAgentKey(plan.rootAgent),
+          key: agentKeyOf(plan.rootAgent),
           name: plan.rootAgent.name,
           source: plan.rootAgent.source,
         }
@@ -430,8 +430,8 @@ export function planCliMultiAgentPresetRun(
     preset,
     rootAgent,
     missingAgentOverride: override.missing,
-    workflowAgentKeys: workflow.resolved.map(toAgentKey),
-    toolUseAgentKeys: toolUseAgents.map(toAgentKey),
+    workflowAgentKeys: workflow.resolved.map(agentKeyOf),
+    toolUseAgentKeys: toolUseAgents.map(agentKeyOf),
     missingWorkflowAgents: workflow.missing,
     missingToolUseAgents: toolUse.missing,
   };
@@ -519,8 +519,8 @@ function includeAgent(
   agents: readonly AgentEntry[],
   rootAgent: AgentEntry,
 ): AgentEntry[] {
-  const rootKey = toAgentKey(rootAgent);
-  return agents.some((agent) => toAgentKey(agent) === rootKey)
+  const rootKey = agentKeyOf(rootAgent);
+  return agents.some((agent) => agentKeyOf(agent) === rootKey)
     ? [...agents]
     : [...agents, rootAgent];
 }
@@ -528,7 +528,7 @@ function includeAgent(
 function availablePresetTeamMemberCount(
   plan: CliMultiAgentPresetRunPlan,
 ): number {
-  const rootKey = plan.rootAgent ? toAgentKey(plan.rootAgent) : undefined;
+  const rootKey = plan.rootAgent ? agentKeyOf(plan.rootAgent) : undefined;
   const memberKeys = [
     ...plan.workflowAgentKeys,
     ...plan.toolUseAgentKeys.filter((key) => key !== rootKey),
@@ -590,10 +590,6 @@ function launcherAgentKindLabel(
 
 function agentHasDelegationTools(agent: AgentEntry): boolean {
   return hasDelegationTool(agent.tools);
-}
-
-function toAgentKey(agent: AgentEntry): string {
-  return agentKeyOf(agent);
 }
 
 function availablePresetAgents(

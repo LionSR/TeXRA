@@ -18,11 +18,22 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import { AgentCategory } from '@shared/schemas/agent';
 
 import { getHelperModelName } from './helperModelName';
 
 export type RuntimeAgentConfig = AgentConfig;
 export type RuntimeAgentConfigPayload = AgentConfigPayload;
+export type RuntimeAgentConfigPayloadWithoutCategory = Omit<
+  RuntimeAgentConfigPayload,
+  'agentCategory'
+>;
+export type RuntimeToolUseAgentConfigInput = Omit<
+  RuntimeAgentConfigPayloadWithoutCategory,
+  'model'
+> & {
+  readonly model?: RuntimeAgentConfigPayload['model'] | undefined;
+};
 export type RuntimeExecutionRequest = ExecutionRequest;
 export type RuntimeValidatedExecutionRequest = ValidatedExecutionRequest;
 export type RuntimeExecutionValidationResult = ExecutionValidationResult;
@@ -74,6 +85,15 @@ export function buildRuntimeMergeExecutionRequest({
 
 export function parseRuntimeAgentConfig(config: unknown): RuntimeAgentConfig {
   return AgentConfigSchema.parse(config);
+}
+
+export function parseRuntimeToolUseAgentConfig(
+  config: RuntimeToolUseAgentConfigInput,
+): RuntimeAgentConfig {
+  return parseRuntimeAgentConfig({
+    ...config,
+    agentCategory: AgentCategory.ToolUse,
+  });
 }
 
 export function parseRuntimeTaskState(state: unknown): RuntimeTaskState {

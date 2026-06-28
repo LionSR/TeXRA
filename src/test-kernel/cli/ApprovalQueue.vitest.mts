@@ -1,10 +1,31 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const notifyMock = vi.hoisted(() => vi.fn());
+const runtimeApprovalMocks = vi.hoisted(() => ({
+  applyRuntimeApprovalDecisionBypass: vi.fn(),
+  resolveRuntimeBashApproval: vi.fn(),
+  setRuntimeToolEditApprovalHandler: vi.fn(),
+}));
+const runtimeCoordinatorMocks = vi.hoisted(() => ({
+  cancelRuntimeRetry: vi.fn(),
+  resolveRuntimePlanApproval: vi.fn(),
+  resolveRuntimeProposal: vi.fn(),
+  triggerRuntimeRetry: vi.fn(),
+}));
+const apiModeMock = vi.hoisted(() => ({
+  setCliApiMode: vi.fn(),
+}));
+const codexSubscriptionMock = vi.hoisted(() => ({
+  setCliCodexSubscription: vi.fn(),
+}));
 
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: notifyMock,
 }));
+vi.mock('@agent/runtime/approvalCommands', () => runtimeApprovalMocks);
+vi.mock('@agent/runtime/runCoordinatorCommands', () => runtimeCoordinatorMocks);
+vi.mock('@cli/runtime/apiAccessMode', () => apiModeMock);
+vi.mock('@cli/chat/tui/state/codexSubscription', () => codexSubscriptionMock);
 
 import {
   approvalPayloadStreamId,
@@ -14,7 +35,11 @@ import {
   enqueueApproval,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
-import { enqueueTuiApproval } from '@cli/chat/tui/state/subscribeApprovals';
+import {
+  enqueueTuiApproval,
+  installTuiApprovals,
+} from '@cli/chat/tui/state/subscribeApprovals';
+import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 
 function bashPayload(streamId: string): ApprovalPayload {
@@ -45,6 +70,7 @@ function externalInquiryPayload(streamId: string): ApprovalPayload {
 afterEach(() => {
   clearApprovals();
   notifyMock.mockClear();
+  vi.clearAllMocks();
 });
 
 describe('CLI approval queue', () => {
@@ -195,6 +221,57 @@ describe('CLI approval queue', () => {
 
     currentApproval.get()?.decide({ accepted: false });
     await expect(secondResult).resolves.toEqual({ accepted: false });
+  });
+
+  it('applies subscription-off retry decisions before retrying', async () => {
+    const order: string[] = [];
+    apiModeMock.setCliApiMode.mockImplementation(async () => {
+      order.push('api-mode');
+    });
+    codexSubscriptionMock.setCliCodexSubscription.mockImplementation(
+      async () => {
+        order.push('subscription');
+      },
+    );
+    runtimeCoordinatorMocks.triggerRuntimeRetry.mockImplementation(() => {
+      order.push('retry');
+    });
+    const host = { emit: vi.fn() } as unknown as CliRuntimeHost;
+    const context = {
+      approvalPolicy: 'ask',
+      mode: 'interactive',
+    } as CliContext;
+    const uninstall = installTuiApprovals(host, context);
+
+    host.emit('showRetryRequest', {
+      streamId: 'stream-retry',
+      operation: 'model call',
+      errorMessage: 'ChatGPT subscription limit reached.',
+    });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload.kind).toBe('retry');
+    });
+
+    currentApproval.get()?.decide({
+      accepted: true,
+      apiMode: 'personal',
+      disableChatGptSubscription: true,
+      userMessage: 'Use API key and retry.',
+    });
+    await vi.waitFor(() => {
+      expect(runtimeCoordinatorMocks.triggerRuntimeRetry).toHaveBeenCalledWith({
+        streamId: 'stream-retry',
+        feedback: 'Use API key and retry.',
+      });
+    });
+
+    expect(apiModeMock.setCliApiMode).toHaveBeenCalledWith('personal');
+    expect(codexSubscriptionMock.setCliCodexSubscription).toHaveBeenCalledWith(
+      false,
+    );
+    expect(order).toEqual(['api-mode', 'subscription', 'retry']);
+
+    uninstall();
   });
 
   it('extracts stream ids from every approval payload used by the TUI', () => {

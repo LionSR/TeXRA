@@ -28,7 +28,7 @@ import {
   type ReviewIssueReport,
   type ReviewSeverity,
 } from '@agent/review/reviewIssues';
-import { parseRuntimeAgentConfig } from '@agent/runtime/executionRequests';
+import { parseRuntimeToolUseAgentConfig } from '@agent/runtime/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
 import { toErrorMessage } from '@common/errors';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -36,6 +36,7 @@ import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
@@ -301,7 +302,7 @@ class AgentReviewServiceImpl {
         userInstructions: options.userInstructions,
       });
       const model = getConfig<string>('agentReview.model', '').trim();
-      const config = parseRuntimeAgentConfig({
+      const config = parseRuntimeToolUseAgentConfig({
         agent: REVIEW_AGENT,
         instruction,
         displayInstruction: `Agent review: diff with ${baseDescription} (${changedFiles.length} file${changedFiles.length === 1 ? '' : 's'})${options.userInstructions ? ' · custom focus' : ''}`,
@@ -501,6 +502,7 @@ class AgentReviewServiceImpl {
     try {
       await vscode.commands.executeCommand('texra.execute', {
         agent: FIX_AGENT,
+        agentCategory: AgentCategory.ToolUse,
         instruction,
         // Issue paths are relative to the reviewed repository root.
         ...(this.reviewRoot ? { workingDirectory: this.reviewRoot } : {}),

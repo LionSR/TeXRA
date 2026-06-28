@@ -12,7 +12,7 @@ import PQueue from 'p-queue';
 import { tryPlatform } from '@platform/platform';
 import { getDefaultStreamLogStore, StreamSnapshotStore } from '@transcript';
 import {
-  parseRuntimeAgentConfig,
+  parseRuntimeToolUseAgentConfig,
   type RuntimeAgentConfigPayload,
 } from '@agent/runtime/executionRequests';
 import { requestRuntimeFollowUp } from '@agent/runtime/followUpCommands';
@@ -23,7 +23,7 @@ import {
 } from '@agent/runtime/modelSwitch';
 import { requestRuntimeToolUseSnapshotResume } from '@agent/runtime/resumeCommands';
 import { runAgent } from '@agent/runtime/runAgent';
-import { writeRuntimeTerminalStatus } from '@agent/runtime/historyCommands';
+import { repairRuntimeHistoryTerminalStatus } from '@agent/runtime/historyCommands';
 import {
   requestKillExecution,
   requestRuntimeStreamStop,
@@ -209,30 +209,33 @@ export function createChatSessionController(
   // Internal helpers
   // -----------------------------------------------------------------------
 
-  const interruptActiveRun = (): void => {
+  const stopPolicy = (): { readonly detachActiveChildren: boolean } => {
     clearApprovals();
-    if (!session.streamId) return;
-    requestRuntimeStreamStop({
-      streamId: session.streamId,
-      clearRetryRequest: true,
+    return {
       detachActiveChildren:
         tryPlatform()?.workspaceState.get<boolean>(
           WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
           false,
         ) === true,
+    };
+  };
+
+  const interruptActiveRun = (): void => {
+    const policy = stopPolicy();
+    if (!session.streamId) return;
+    requestRuntimeStreamStop({
+      streamId: session.streamId,
+      clearRetryRequest: true,
+      detachActiveChildren: policy.detachActiveChildren,
       runtimeHost: session.runtimeHost,
     });
   };
 
   const killExecution = (executionId: ExecutionId): void => {
-    clearApprovals();
+    const policy = stopPolicy();
     requestKillExecution({
       executionId,
-      detachActiveChildren:
-        tryPlatform()?.workspaceState.get<boolean>(
-          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-          false,
-        ) === true,
+      detachActiveChildren: policy.detachActiveChildren,
     });
   };
 
@@ -425,7 +428,7 @@ export function createChatSessionController(
 
     const runPromise = Promise.resolve()
       .then(() => {
-        const registeredConfig = parseRuntimeAgentConfig(config);
+        const registeredConfig = parseRuntimeToolUseAgentConfig(config);
         return runAgent(
           { config: registeredConfig },
           {
@@ -482,7 +485,7 @@ export function createChatSessionController(
       .catch(async (error: unknown) => {
         if (!session.stopRequested) {
           if (executionId) {
-            await writeRuntimeTerminalStatus(
+            await repairRuntimeHistoryTerminalStatus(
               executionId,
               EXECUTION_STATUS.ERROR,
             );
