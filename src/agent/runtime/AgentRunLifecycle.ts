@@ -160,10 +160,7 @@ export async function runFlowWithLifecycle(
     // The flow's outcome is the canonical terminal fact; everything below is
     // one row of the projection table. No other layer may re-derive these.
     const projection = projectRunOutcome(result.outcome);
-    await writeTerminalStatus(
-      ctx.executionId,
-      projection.executionStatus,
-    ).catch(() => {});
+    await writeTerminalStatus(ctx.executionId, projection.executionStatus);
 
     // Onboarding funnel (PRD: agent-native onboarding): State 1 ends when any
     // real run completes. The setup conversation itself doesn't count, but the
@@ -227,10 +224,7 @@ export async function runFlowWithLifecycle(
     const kind = classifyAgentError(err);
     const outcome = AGENT_ERROR_OUTCOME[kind];
     const projection = projectRunOutcome(outcome);
-    await writeTerminalStatus(
-      ctx.executionId,
-      projection.executionStatus,
-    ).catch(() => {});
+    await writeTerminalStatus(ctx.executionId, projection.executionStatus);
     const sdkMsg = getSdkErrorMessage(err);
     const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
 

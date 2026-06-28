@@ -370,7 +370,7 @@ export class BashTool extends defineTool({
           await writeTerminalStatus(
             executionId,
             backgroundBashTerminalStatus(result.success),
-          ).catch(() => {});
+          );
           await store.writeReport(msg);
         } catch (err: unknown) {
           logBackgroundFailure('persist', err);
@@ -396,7 +396,7 @@ export class BashTool extends defineTool({
         await writeTerminalStatus(
           executionId,
           backgroundBashTerminalStatus(false),
-        ).catch(() => {});
+        );
         await getExecutionStore(executionId).writeReport(msg);
       } catch (err: unknown) {
         logBackgroundFailure('persist', err);
