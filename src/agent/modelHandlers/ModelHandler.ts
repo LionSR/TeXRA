@@ -652,6 +652,23 @@ export abstract class ModelHandler<
     return { endTurn, shouldStop };
   }
 
+  /**
+   * Append the agent's end tag to a natural-stop response when the model did
+   * not already emit it. Shared by the provider handlers that use an
+   * `includes` presence check; each caller supplies its own "natural stop"
+   * predicate because provider stop-reason vocabularies differ.
+   */
+  protected appendEndTagIfNeeded(
+    text: string,
+    endTag: string,
+    isNaturalStop: boolean,
+  ): string {
+    if (isNaturalStop && endTag && !text.includes(endTag)) {
+      return `${text}\n${endTag}`;
+    }
+    return text;
+  }
+
   protected containCutOffMessage(
     content: Array<{ type: string; text?: string }> | string,
   ): boolean {

@@ -21,7 +21,6 @@ import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUti
 import { K_SLICE } from '@agent/core/constants';
 import { toErrorMessage } from '@common/errors';
 import type { ToolDefinition } from '@model';
-import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
@@ -297,7 +296,10 @@ class ResponseProcessNode<C> extends BaseNode<
       let updatedAccumulatedOutput: string | undefined;
 
       if (newResponse) {
-        processedResponse = replacementEngine.applyAll(newResponse);
+        // Text cleanup (replacementEngine.applyAll) is applied once inside each
+        // handler's extractResponse, so newResponse is already cleaned here.
+        // Re-applying would run non-idempotent custom replacements twice.
+        processedResponse = newResponse;
 
         const connector = await this.services.bestConnectionMethod(
           prepRes.lastResponse.slice(-K_SLICE),
