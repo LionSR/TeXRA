@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 
-import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
 import { toErrorMessage } from '@common/errors';
 import { hasLatexCompiler } from '@latex/latexToolchain';
@@ -11,10 +10,7 @@ import type {
   OutputFileInfo,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  LATEX_CONFIG_DEFAULTS,
-  LATEX_CONFIG_RANGES,
-} from '@shared/constants/latex';
+import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
 import {
   createRunStorageLocation,
   flexibleFS,
@@ -24,6 +20,7 @@ import {
 } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 
 import {
   publishCompiledPdfArtifact,
@@ -75,12 +72,7 @@ export async function runCompileCheck(
   ctx: CompileCheckContext,
   currentRound: number,
 ): Promise<CompileCheckResult> {
-  if (
-    !platform().workspaceState.get<boolean>(
-      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
-      LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
-    )
-  ) {
+  if (!readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE)) {
     return { failures: [], artifacts: [] };
   }
 
@@ -107,9 +99,8 @@ export async function runCompileCheck(
 
   const timeoutMs = Math.max(
     MIN_TIMEOUT_MS,
-    platform().workspaceState.get<number>(
+    readPlatformSetting<number>(
       WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-      LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
     ),
   );
   // compileRoot is created lazily on first failure so successful rounds leave
