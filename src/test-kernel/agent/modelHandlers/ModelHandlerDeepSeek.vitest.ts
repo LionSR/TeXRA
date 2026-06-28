@@ -336,7 +336,10 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
           },
         },
       ] as any,
-      [{ status: 'executed', output: 'first result' }, { status: 'executed', output: 'second result' }],
+      [
+        { status: 'executed', output: 'first result' },
+        { status: 'executed', output: 'second result' },
+      ],
       [[], []],
       workspace as any,
       '',

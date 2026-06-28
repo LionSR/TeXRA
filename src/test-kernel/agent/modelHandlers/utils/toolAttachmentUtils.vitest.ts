@@ -41,7 +41,10 @@ describe('checkToolResultTextLimit', () => {
 
 describe('formatToolResultAsText', () => {
   it('returns output when present', () => {
-    const result = formatToolResultAsText({ status: 'executed', output: 'test output' });
+    const result = formatToolResultAsText({
+      status: 'executed',
+      output: 'test output',
+    });
     assert.equal(result, 'test output');
   });
 
@@ -54,7 +57,10 @@ describe('formatToolResultAsText', () => {
   });
 
   it('returns error when no output', () => {
-    const result = formatToolResultAsText({ status: 'error', error: 'test error' });
+    const result = formatToolResultAsText({
+      status: 'error',
+      error: 'test error',
+    });
     assert.equal(result, 'test error');
   });
 

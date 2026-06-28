@@ -134,7 +134,8 @@ export function extractToolAttachments(
   // over error for status (mirrors formatToolResultAsText priority).
   const hasError = isNonEmptyString(result.error);
   const hasOutput = isNonEmptyString(result.output);
-  const status = hasError && !hasOutput ? ('error' as const) : ('executed' as const);
+  const status =
+    hasError && !hasOutput ? ('error' as const) : ('executed' as const);
 
   // Stamp the discriminator onto the raw result so the discriminated union
   // schema validates the correct variant.
