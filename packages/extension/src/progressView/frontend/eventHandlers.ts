@@ -21,7 +21,7 @@ import {
 import { removePrompt, resolvedProposalIds } from './slices/permissionSlice';
 import { updateToolUseState } from './stateUtils';
 import { clearInquiryDraft } from './components/ExternalInquiryPanel';
-import { APPROVE_SESSION_ACTION } from './events';
+import { APPROVE_SESSION_ACTION, APPROVE_SUPER_YOLO_ACTION } from './events';
 import type {
   FilterEventDetail,
   FollowupCommandDetail,
@@ -332,10 +332,28 @@ export function handlePermissionAction(
         permission.data.streamId,
       );
       break;
-    case PERMISSION_KIND.PROPOSAL:
+    case PERMISSION_KIND.PROPOSAL: {
+      // "Super Yolo (this session)" approves this proposal like a normal approve
+      // and enables per-stream delegated-task auto-approval for the rest of the
+      // stream — mirroring the edit/bash "Yolo (this session)" decomposition. It
+      // never reaches the backend proposal protocol (action enum stays
+      // approve|reject|setup). Enable bypass BEFORE settling the approval:
+      // webview messages are FIFO and ENABLE_SUPER_YOLO_BYPASS sets the
+      // per-stream bypass synchronously, so it lands before approve unblocks the
+      // agent and the next proposal can't race ahead and re-prompt. Use the
+      // idempotent ENABLE (force-on), not the TOGGLE: super-yolo can be turned on
+      // from the stream header while this prompt is still visible (that doesn't
+      // auto-resolve the open proposal), and a toggle would then flip bypass back
+      // OFF here — the opposite of "enable". Mirrors edit/bash ENABLE_APPROVAL_BYPASS.
+      const isSuperYolo = action === APPROVE_SUPER_YOLO_ACTION;
+      if (isSuperYolo) {
+        postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS, {
+          stream: permission.data.streamId,
+        });
+      }
       postMessage(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
         proposalId: permission.data.proposalId,
-        action,
+        action: isSuperYolo ? 'approve' : action,
         feedback,
         model: modelOverride,
         agent: agentOverride,
@@ -351,6 +369,7 @@ export function handlePermissionAction(
         resolvedProposalIds.add(permission.data.proposalId);
       }
       break;
+    }
     case PERMISSION_KIND.PLAN_APPROVAL:
       postMessage(PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION, {
         approvalId: permission.data.approvalId,
