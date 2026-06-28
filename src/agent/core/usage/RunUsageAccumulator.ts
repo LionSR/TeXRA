@@ -30,54 +30,55 @@ const RunUsageTotalsSchema = z.object({
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
 /**
- * Schema for RunUsageAccumulator JSON serialization.
- * Uses .prefault() for input normalization before validation.
+ * Canonical schema for RunUsageAccumulator JSON serialization.
  *
  * `latestUsage` replaces the old unbounded `normalizedSnapshots` array —
- * only the most-recent round's usage is needed at runtime. The preprocess
- * migrates legacy persisted data (with `normalizedSnapshots`) by extracting
- * the last element, so existing sessions resume without data loss.
+ * only the most-recent round's usage is needed at runtime.
  */
-export const RunUsageAccumulatorJSONSchema = z.preprocess(
-  (raw) => {
-    if (
-      raw &&
-      typeof raw === 'object' &&
-      !Array.isArray(raw) &&
-      !('latestUsage' in raw) &&
-      'normalizedSnapshots' in raw &&
-      Array.isArray((raw as Record<string, unknown>).normalizedSnapshots)
-    ) {
-      const snapshots = (raw as Record<string, unknown>)
-        .normalizedSnapshots as unknown[];
-      const last = snapshots.at(-1);
-      const usage =
-        last &&
-        typeof last === 'object' &&
-        !Array.isArray(last) &&
-        'usage' in (last as Record<string, unknown>)
-          ? (last as Record<string, unknown>).usage
-          : null;
-      return {
-        ...(raw as Record<string, unknown>),
-        latestUsage: usage ?? null,
-      };
-    }
-    return raw;
-  },
-  z.object({
-    totals: RunUsageTotalsSchema.prefault({}),
-    latestUsage: NormalizedUsageSchema.nullable().prefault(null),
-  }),
-);
+const RunUsageAccumulatorCanonicalSchema = z.object({
+  totals: RunUsageTotalsSchema.prefault({}),
+  latestUsage: NormalizedUsageSchema.nullable().prefault(null),
+});
 
 /**
  * Output type for RunUsageAccumulator serialization.
  * Uses z.output<> to get the type after parsing (totals fully resolved).
  */
 export type RunUsageAccumulatorJSON = z.output<
-  typeof RunUsageAccumulatorJSONSchema
+  typeof RunUsageAccumulatorCanonicalSchema
 >;
+
+/**
+ * Legacy persisted format: an unbounded `normalizedSnapshots` array instead of
+ * `latestUsage`. Only the most-recent snapshot's usage is needed, so the array
+ * is collapsed to its last element and the rest discarded. This arm is required
+ * to carry `normalizedSnapshots`, so it only matches genuinely-legacy data and
+ * canonical/empty inputs fall through to the canonical schema below.
+ */
+const LegacyRunUsageAccumulatorSchema = z
+  .object({
+    totals: RunUsageTotalsSchema.prefault({}),
+    normalizedSnapshots: z.array(
+      z.object({ usage: NormalizedUsageSchema.optional() }),
+    ),
+  })
+  .transform(
+    (legacy): RunUsageAccumulatorJSON => ({
+      totals: legacy.totals,
+      latestUsage: legacy.normalizedSnapshots.at(-1)?.usage ?? null,
+    }),
+  );
+
+/**
+ * Entry schema handling both formats in one place (per the backward-compat
+ * convention in CLAUDE.md). The legacy arm is tried first because it requires
+ * `normalizedSnapshots`; canonical and empty payloads only match the second
+ * arm, so all downstream code sees one canonical shape.
+ */
+export const RunUsageAccumulatorJSONSchema = z.union([
+  LegacyRunUsageAccumulatorSchema,
+  RunUsageAccumulatorCanonicalSchema,
+]);
 
 // ============================================================================
 // Standalone functions operating on RunUsageAccumulatorJSON

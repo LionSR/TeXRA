@@ -50,59 +50,58 @@ interface ModelAvailabilityStatus {
   requiresKey: boolean;
 }
 
-const AVAILABILITY_STATUS: Record<
+/**
+ * Per-kind status fields. `kind` is intentionally omitted here — the record key
+ * is the single source of truth and `availabilityStatus()` reattaches it.
+ */
+const AVAILABILITY_STATUS_FIELDS: Record<
   ModelAvailabilityKind,
-  ModelAvailabilityStatus
+  Omit<ModelAvailabilityStatus, 'kind'>
 > = {
   'openrouter-key': {
-    kind: 'openrouter-key',
     label: 'OpenRouter key',
     available: true,
     requiresKey: false,
   },
-  'provider-key': {
-    kind: 'provider-key',
-    label: 'API key set',
-    available: true,
-    requiresKey: false,
-  },
+  'provider-key': { label: 'API key set', available: true, requiresKey: false },
   'included-access': {
-    kind: 'included-access',
     label: 'Included access',
     available: true,
     requiresKey: false,
   },
   'missing-key': {
-    kind: 'missing-key',
     label: 'Missing API key',
     available: false,
     requiresKey: true,
   },
   'not-included': {
-    kind: 'not-included',
     label: 'Not included',
     available: false,
     requiresKey: false,
   },
   'included-login-required': {
-    kind: 'included-login-required',
     label: 'Login required',
     available: false,
     requiresKey: false,
   },
   'subscription-access': {
-    kind: 'subscription-access',
     label: 'ChatGPT subscription',
     available: true,
     requiresKey: false,
   },
   'relay-quota-exhausted': {
-    kind: 'relay-quota-exhausted',
     label: 'Relay quota exhausted',
     available: false,
     requiresKey: false,
   },
 };
+
+/** Resolve a full availability status from its kind. */
+function availabilityStatus(
+  kind: ModelAvailabilityKind,
+): ModelAvailabilityStatus {
+  return { kind, ...AVAILABILITY_STATUS_FIELDS[kind] };
+}
 
 /** Check whether a model is available through a personal provider or OpenRouter key. */
 async function getPersonalAccessKindForModel(
@@ -166,36 +165,36 @@ async function resolveModelAvailability(
     ctx.codexSignedIn &&
     shouldUseCodexSubscription(config, ctx.useOpenRouter)
   ) {
-    return AVAILABILITY_STATUS['subscription-access'];
+    return availabilityStatus('subscription-access');
   }
 
   // OpenRouter routing is intentionally outside included access; a configured
   // OpenRouter key is the only ready state for these calls.
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
     return ctx.hasOpenRouter
-      ? AVAILABILITY_STATUS['openrouter-key']
-      : AVAILABILITY_STATUS['missing-key'];
+      ? availabilityStatus('openrouter-key')
+      : availabilityStatus('missing-key');
   }
 
   if (ctx.relayQuotaExhausted) {
-    return AVAILABILITY_STATUS['relay-quota-exhausted'];
+    return availabilityStatus('relay-quota-exhausted');
   }
 
   if (canUseIncludedAccessForModel(model, config, ctx)) {
-    return AVAILABILITY_STATUS['included-access'];
+    return availabilityStatus('included-access');
   }
 
   // Fall back to personal API keys when the user opted out of included access
   // OR they aren't authenticated for it (avoids showing every model as
   // disabled for unauthenticated users with the default setting).
   if (ctx.useIncludedAccess && ctx.hasServerAccess) {
-    return AVAILABILITY_STATUS['not-included'];
+    return availabilityStatus('not-included');
   }
 
   const personalAccess = await getPersonalAccessKindForModel(config, ctx);
   return personalAccess
-    ? AVAILABILITY_STATUS[personalAccess]
-    : AVAILABILITY_STATUS['missing-key'];
+    ? availabilityStatus(personalAccess)
+    : availabilityStatus('missing-key');
 }
 
 async function buildAvailabilityContext(
