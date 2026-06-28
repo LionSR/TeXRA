@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { z } from 'zod';
 
+import { ExecutionIdSchema, StreamTabIdSchema } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -14,70 +16,96 @@ export interface RunCoordinators {
   readonly retry: RetryRequestCoordinatorImpl;
 }
 
-/**
- * Ambient per-run context stored in an {@link AsyncLocalStorage} scope.
- *
- * Tools and utilities that cannot take explicit parameters reach host services
- * via `tryUseRunContext()`. The canonical source of truth for these fields is
- * {@link AgentLaunchContext} / {@link AgentCore}; the ambient context exposes
- * the subset that tool-side code needs without importing the full launch
- * context.
- *
- * **Why the field names differ from AgentCore.** This is a *flat* ambient
- * projection, not a copy of the nested launch context, so the names describe
- * the run directly rather than mirror `AgentCore`'s shape:
- *   - `AgentConfig.agent`  → `agentName` (`AgentConfig` nests it; here it is flat)
- *   - `AgentConfig.model`  → `model`     (flat + live; see below)
- *
- * The one place that maps `AgentLaunchContext` onto these fields is
- * `agentContextToRunContext` (in `AgentLaunchContext.ts`), so the projection
- * has a single owner and cannot drift across the codebase.
- *
- * `model` is a live property when the context is projected from an
- * {@link AgentLaunchContext}, so mid-session model switches are visible to
- * delegation tools that inherit the parent model.
- */
-export interface RunContext {
-  readonly runtimeHost: AgentRuntimeHost;
-  readonly streamId?: StreamTabId;
-  readonly executionId?: ExecutionId;
-  readonly coordinators?: RunCoordinators;
-  /** Current model short name for this run (e.g. "opus46T"). */
-  readonly model?: string;
-  /** Agent name (e.g. "orchestrator", "search-agent"). */
-  readonly agentName?: string;
-  /** Working directory override for tool calls (e.g. a git worktree path). */
-  readonly workingDirectory?: string;
-  /**
-   * Delegation depth: 0 for root (user-initiated), N for a subagent N levels
-   * deep. Read by delegation tools to compute the child's depth.
-   */
-  readonly delegationDepth?: number;
-  /** Whether approval or user prompts cannot be answered by the current host. */
-  readonly approvalPromptsUnavailable?: boolean;
-  /** Tools unavailable because the current host/runtime cannot support them. */
-  readonly runtimeUnavailableTools?: readonly string[];
-  /** Whether this run should stop after one tool-use cycle instead of idling. */
-  readonly stopAfterCycle?: boolean;
-  /**
-   * The session that owns this run's coordination state (interrupts,
-   * executions, coordinators, subscriptions). Run-scoped code resolves it via
-   * `currentSession()` (`tryUseRunContext()?.session ?? defaultSession`);
-   * when omitted the default session — which wraps the process singletons by
-   * identity — is used, so reads are byte-identical to direct singleton access.
-   */
-  readonly session?: SessionHandle;
-}
+// ---------------------------------------------------------------------------
+// Zod schemas for runtime objects (z.custom — these are live instances, not
+// serializable data, so the validation predicate only guards against nullish)
+// ---------------------------------------------------------------------------
 
-export interface CreateRunContextOptions {
+const AgentRuntimeHostSchema = z.custom<AgentRuntimeHost>(
+  (val): val is AgentRuntimeHost =>
+    val != null && typeof val === 'object' && typeof (val as AgentRuntimeHost).emit === 'function',
+);
+
+const RunCoordinatorsSchema = z.custom<RunCoordinators>(
+  (val): val is RunCoordinators => val != null && typeof val === 'object',
+);
+
+const SessionHandleSchema = z.custom<SessionHandle>(
+  (val): val is SessionHandle => val != null && typeof val === 'object',
+);
+
+// ---------------------------------------------------------------------------
+// Shared optional fields (present in both variants)
+// ---------------------------------------------------------------------------
+
+const sharedOptionalFields = {
+  workingDirectory: z.string().optional(),
+  delegationDepth: z.int().nonnegative().optional(),
+  approvalPromptsUnavailable: z.boolean().optional(),
+  runtimeUnavailableTools: z.array(z.string()).optional(),
+  stopAfterCycle: z.boolean().optional(),
+};
+
+// ---------------------------------------------------------------------------
+// Discriminated union schema
+//
+// 'launch' — projected from AgentLaunchContext; all run-identifying fields
+//           are guaranteed present.
+// 'bare'   — manually constructed (tests, one-shot tool environments, etc.);
+//           only runtimeHost is required.
+// ---------------------------------------------------------------------------
+
+export const RunContextSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('launch'),
+    runtimeHost: AgentRuntimeHostSchema,
+    streamId: StreamTabIdSchema,
+    executionId: ExecutionIdSchema,
+    coordinators: RunCoordinatorsSchema,
+    /** Current model short name resolved from a live getter (see createRunContext). */
+    model: z.string().optional(),
+    /** Agent name (e.g. "orchestrator", "search-agent"). */
+    agentName: z.string(),
+    /** Session that owns this run's coordination state. */
+    session: SessionHandleSchema,
+    ...sharedOptionalFields,
+  }),
+  z.object({
+    kind: z.literal('bare'),
+    runtimeHost: AgentRuntimeHostSchema,
+    streamId: StreamTabIdSchema.optional(),
+    executionId: ExecutionIdSchema.optional(),
+    coordinators: RunCoordinatorsSchema.optional(),
+    /** Current model short name for this run (e.g. "opus46T"). */
+    model: z.string().optional(),
+    /** Agent name (e.g. "orchestrator", "search-agent"). */
+    agentName: z.string().optional(),
+    /** Session that owns this run's coordination state. */
+    session: SessionHandleSchema.optional(),
+    ...sharedOptionalFields,
+  }),
+]);
+
+/** RunContext discriminated union — derived from the Zod schema. */
+export type RunContext = z.infer<typeof RunContextSchema>;
+
+/** The launch variant: all run-identifying fields are required. */
+export type LaunchRunContext = z.infer<typeof RunContextSchema> & { kind: 'launch' };
+
+/** The bare variant: only runtimeHost is required. */
+export type BareRunContext = z.infer<typeof RunContextSchema> & { kind: 'bare' };
+
+// ---------------------------------------------------------------------------
+// CreateRunContextOptions — the input side.  Uses a discriminated union so
+// the model source is explicit: either a live getter (launch path) or a
+// static string (manual / test path).
+// ---------------------------------------------------------------------------
+
+export interface CreateRunContextBase {
   runtimeHost: AgentRuntimeHost;
   streamId?: StreamTabId;
   executionId?: ExecutionId;
   coordinators?: RunCoordinators;
-  /** Static model fallback for manually-created run contexts. */
-  model?: string;
-  /** Live model provider for contexts backed by mutable launch state. */
-  getModel?: () => string | undefined;
   agentName?: string;
   workingDirectory?: string;
   delegationDepth?: number;
@@ -87,16 +115,42 @@ export interface CreateRunContextOptions {
   session?: SessionHandle;
 }
 
+export type CreateRunContextOptions = CreateRunContextBase &
+  (
+    | {
+        /** Discriminator — live model provider (launch contexts). */
+        modelSource: 'live';
+        getModel: () => string | undefined;
+        /** Static fallback used when getModel() returns undefined. */
+        model?: string;
+      }
+    | {
+        /** Discriminator — static model string (manual / test contexts). */
+        modelSource?: 'static';
+        model?: string;
+      }
+  );
+
 const runContextScope = new AsyncLocalStorage<RunContext>();
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
 
 export function createRunContext(options: CreateRunContextOptions): RunContext {
   if (options.runtimeHost == null) {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
-  const { getModel, model } = options;
+  const kind: RunContext['kind'] =
+    options.modelSource === 'live' ? 'launch' : 'bare';
 
-  return Object.freeze<RunContext>({
+  const { getModel, model } =
+    options.modelSource === 'live'
+      ? { getModel: options.getModel, model: options.model }
+      : { getModel: undefined as (() => string | undefined) | undefined, model: options.model };
+
+  const base = Object.freeze({
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
@@ -112,7 +166,13 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     stopAfterCycle: options.stopAfterCycle,
     session: options.session,
   });
+
+  return Object.freeze({ kind, ...base }) as unknown as RunContext;
 }
+
+// ---------------------------------------------------------------------------
+// ALS helpers
+// ---------------------------------------------------------------------------
 
 /**
  * Run code with an active per-run context.
