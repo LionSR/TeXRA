@@ -20,6 +20,8 @@ import {
   humanInputDenialFeedback,
   immediateDecision,
   immediateDecisionForApproval,
+  isCliApiSwitchableRetry,
+  isCliChatGptSubscriptionRetry,
   markApprovalDenied,
 } from '@cli/runtime/approvalAdapter';
 import {
@@ -40,6 +42,8 @@ import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 import { assertNever } from '@utils/core';
+import { lookupApiKey, isApiProvider } from '@model/apiProviders';
+import { platform } from '@platform/platform';
 import { notify } from '../notifications/terminalNotifier';
 import { cliState } from './cliState';
 import { setCliCodexSubscription } from './codexSubscription';
@@ -49,6 +53,56 @@ import {
   type ApprovalDecision,
   type ApprovalPayload,
 } from './approvalQueue';
+
+// =========================================================================
+// Retry auto-switch: skip the modal when a usable personal key exists
+// =========================================================================
+
+/** Check whether a usable personal API key is stored for a provider. */
+async function hasUsablePersonalKey(provider: string): Promise<boolean> {
+  if (!isApiProvider(provider)) return false;
+  const key = await lookupApiKey(platform().secrets, provider);
+  return typeof key === 'string' && key.trim().length > 0;
+}
+
+/**
+ * When a retry is triggered by relay exhaustion or ChatGPT-subscription
+ * limits, and the stored personal key is not the broken credential, switch
+ * to personal keys and retry without showing the modal — matching the
+ * progress-view behaviour in {@link ProgressApiKeyRetryController}.
+ *
+ * Returns the auto-switch decision, or `undefined` when the modal is needed
+ * (no usable key stored, direct-key failure, or unknown provider).
+ */
+async function maybeAutoSwitchRetry(
+  payload: ProgressEventPayloads['showRetryRequest'],
+): Promise<ApprovalDecision | undefined> {
+  if (!isCliApiSwitchableRetry(payload)) return undefined;
+
+  const details = payload.errorDetails;
+  // Upstream credit depletion means the stored direct key IS the broken
+  // credential — the user must provide a changed key, so we cannot
+  // auto-switch to the stored value.
+  if (details?.isUpstreamCreditDepleted) return undefined;
+
+  // ChatGPT-subscription exhaustion → the user needs an OpenAI key.
+  // Relay exhaustion → use the provider from the error details if known.
+  const provider = isCliChatGptSubscriptionRetry(payload)
+    ? 'openai'
+    : details?.provider;
+
+  if (!provider || !isApiProvider(provider)) return undefined;
+
+  const hasKey = await hasUsablePersonalKey(provider);
+  if (!hasKey) return undefined;
+
+  const isChatGptSubscription = isCliChatGptSubscriptionRetry(payload);
+  return {
+    accepted: true,
+    apiMode: 'personal',
+    ...(isChatGptSubscription ? { disableChatGptSubscription: true } : {}),
+  };
+}
 
 /**
  * Install the typed approval pipeline. Returns an `unbind` callback that
@@ -145,15 +199,38 @@ function routeApproval(
         dispatchProposal,
       );
       return;
-    case 'showRetryRequest':
-      routeWithPolicy(
+    case 'showRetryRequest': {
+      const retryPayload =
+        payload as ProgressEventPayloads['showRetryRequest'];
+      // Policy check (yolo/never). For 'ask' mode this returns undefined
+      // so the user can decide; for auto modes it returns yolo(accept) or
+      // never(reject) directly. When the failing request carries a
+      // credential-exhausted / 401-403 error the policy also returns
+      // undefined in interactive mode so the switch-to-personal affordance
+      // remains available.
+      const policy = immediateDecisionForApproval(
+        'showRetryRequest',
+        retryPayload,
         context,
-        host,
-        cliApprovalEventKind(event),
-        payload as ProgressEventPayloads['showRetryRequest'],
-        dispatchRetry,
       );
+      if (policy) {
+        dispatchRetry(retryPayload, policy);
+        return;
+      }
+      // Relay / subscription exhaustion with a stored personal key →
+      // switch and retry without showing the modal (matches progress-view
+      // gate: ProgressApiKeyRetryController §hasAnyUsableKey).
+      void (async () => {
+        const autoDecision = await maybeAutoSwitchRetry(retryPayload);
+        if (autoDecision) {
+          await applyRetryDecision(retryPayload, autoDecision);
+          return;
+        }
+        // No usable key available — show the modal so the user can enter one.
+        routeWithPolicyForRetry(context, host, retryPayload);
+      })();
       return;
+    }
     case 'showExternalInquiry':
       // Human-input requests cannot be auto-answered in yolo mode, so they
       // share a policy helper with the non-TUI approval path.
@@ -173,6 +250,23 @@ function routeApproval(
     default:
       assertNever(event, 'Unhandled TUI approval event');
   }
+}
+
+/**
+ * Enqueue a retry approval for the TUI modal — only called after the
+ * auto-switch check found no usable personal key, so the user needs to
+ * see the retry prompt.
+ */
+function routeWithPolicyForRetry(
+  context: CliContext,
+  host: CliRuntimeHost,
+  payload: ProgressEventPayloads['showRetryRequest'],
+): void {
+  const queuePayload: ApprovalPayload = { kind: 'retry', payload };
+  void enqueueTuiApproval(queuePayload, host).then((decision) => {
+    markIfRejected(context, decision);
+    dispatchRetry(payload, decision);
+  });
 }
 
 function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
