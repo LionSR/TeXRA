@@ -867,17 +867,6 @@ describe('CLI root argument routing', () => {
     ).toBe(EXECUTION_STATUS.ERROR);
   });
 
-  it('honors stored interrupted terminal status', () => {
-    expect(
-      cliTerminalStatus(
-        {
-          outcome: RUN_OUTCOME.COMPLETED,
-        } as Parameters<typeof cliTerminalStatus>[0],
-        EXECUTION_STATUS.INTERRUPTED,
-      ),
-    ).toBe(EXECUTION_STATUS.INTERRUPTED);
-  });
-
   it('includes working directory metadata in CLI run results', () => {
     const result = createCliRunResult(
       {

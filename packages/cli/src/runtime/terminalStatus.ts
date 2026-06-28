@@ -1,12 +1,8 @@
 import { runAgent } from '@agent/runtime/runAgent';
-import { readRuntimeHistoryTerminalStatus } from '@agent/runtime/historyCommands';
+import { resolveRuntimeHistoryTerminalStatus } from '@agent/runtime/historyCommands';
 
 import { projectRunOutcome } from '@common/constants/streamStatus';
-import {
-  EXECUTION_STATUS,
-  ExecutionStatusSchema,
-  type ExecutionStatus,
-} from '@shared/schemas';
+import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
 import { hasCliApprovalDenied } from './approvalAdapter';
 import { CliExitCode } from './exitCodes';
@@ -31,13 +27,6 @@ export type CliRunResult = ExecuteAgentResult extends infer T
     : never
   : never;
 
-function isExecutionStatus(
-  value: string | undefined,
-): value is ExecutionStatus {
-  // Schema is the source of truth — no hand-maintained value list.
-  return ExecutionStatusSchema.safeParse(value).success;
-}
-
 export type CliToolUseRunResult = Extract<
   CliRunResult,
   { category: 'toolUse' }
@@ -52,11 +41,7 @@ export function toolUseResultText(result: CliToolUseRunResult): string {
   );
 }
 
-export function cliTerminalStatus(
-  result: ExecuteAgentResult,
-  storedTerminalStatus?: string,
-): ExecutionStatus {
-  if (isExecutionStatus(storedTerminalStatus)) return storedTerminalStatus;
+export function cliTerminalStatus(result: ExecuteAgentResult): ExecutionStatus {
   return projectRunOutcome(result.outcome).executionStatus;
 }
 
@@ -99,8 +84,8 @@ export function terminalStatusExitCode(
 export async function readCliTerminalStatus(
   result: ExecuteAgentResult,
 ): Promise<ExecutionStatus> {
-  const terminalStatus = await readRuntimeHistoryTerminalStatus(
-    result.executionId,
-  ).catch(() => undefined);
-  return cliTerminalStatus(result, terminalStatus);
+  return resolveRuntimeHistoryTerminalStatus({
+    executionId: result.executionId,
+    outcome: result.outcome,
+  });
 }

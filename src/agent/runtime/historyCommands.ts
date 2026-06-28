@@ -15,10 +15,13 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import { projectRunOutcome } from '@common/constants/streamStatus';
 import {
   EXECUTION_STATUS,
   type ExecutionId,
+  ExecutionStatusSchema,
   type ExecutionStatus,
+  type RunOutcome,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { GoalStore } from '@tools/goal';
@@ -66,6 +69,11 @@ export type RuntimeHistoryTerminalStatusRepairResult =
       readonly status: 'preserved';
       readonly terminalStatus: string;
     };
+
+export interface RuntimeHistoryTerminalStatusRequest {
+  readonly executionId: ExecutionId;
+  readonly outcome: RunOutcome;
+}
 
 export interface RuntimeWorkflowResultArtifacts {
   readonly outputs: NonNullable<ResultMeta['outputs']>;
@@ -161,10 +169,22 @@ export async function readRuntimeHistoryExecutionRecord(
   };
 }
 
-export async function readRuntimeHistoryTerminalStatus(
+async function readRuntimeHistoryTerminalStatus(
   executionId: ExecutionId,
 ): Promise<string | undefined> {
   return (await getExecutionStore(executionId).readMeta())?.terminalStatus;
+}
+
+export async function resolveRuntimeHistoryTerminalStatus({
+  executionId,
+  outcome,
+}: RuntimeHistoryTerminalStatusRequest): Promise<ExecutionStatus> {
+  const terminalStatus = await readRuntimeHistoryTerminalStatus(
+    executionId,
+  ).catch(() => undefined);
+  const parsedTerminalStatus = ExecutionStatusSchema.safeParse(terminalStatus);
+  if (parsedTerminalStatus.success) return parsedTerminalStatus.data;
+  return projectRunOutcome(outcome).executionStatus;
 }
 
 function writeRuntimeHistoryTerminalStatus(

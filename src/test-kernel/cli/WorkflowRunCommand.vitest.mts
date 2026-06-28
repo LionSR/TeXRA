@@ -17,14 +17,12 @@ const mocks = vi.hoisted(() => {
     isAuthenticated: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
     resolveCliRunModel: vi.fn(),
-    readRuntimeHistoryTerminalStatus: vi.fn(),
     recordWorkflowResultArtifacts: vi.fn(),
     markErrored: vi.fn(),
   };
 });
 
 vi.mock('@agent/runtime/historyCommands', () => ({
-  readRuntimeHistoryTerminalStatus: mocks.readRuntimeHistoryTerminalStatus,
   recordRuntimeWorkflowResultArtifacts: mocks.recordWorkflowResultArtifacts,
   markRuntimeHistoryExecutionErrored: mocks.markErrored,
 }));

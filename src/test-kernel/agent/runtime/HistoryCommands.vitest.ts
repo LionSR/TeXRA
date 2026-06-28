@@ -50,10 +50,10 @@ import {
   markRuntimeHistoryExecutionInterrupted,
   readRuntimeHistoryConfig,
   readRuntimeHistoryExecutionRecord,
-  readRuntimeHistoryTerminalStatus,
   readRuntimeHistoryWorkspaceFilePaths,
   recordRuntimeWorkflowResultArtifacts,
   repairRuntimeHistoryTerminalStatus,
+  resolveRuntimeHistoryTerminalStatus,
   requestClearRuntimeHistoryExecutions,
   requestDeleteRuntimeHistoryExecution,
 } from '@agent/runtime/historyCommands';
@@ -62,6 +62,7 @@ import type { AgentRuntimeHost } from '@hosts/AgentRuntimeHost';
 import {
   EXECUTION_STATUS,
   type ExecutionId,
+  RUN_OUTCOME,
   type StreamTabId,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
@@ -184,15 +185,43 @@ describe('runtime history commands', () => {
     expect(agentConfigMock.parse).toHaveBeenCalledWith(config);
   });
 
-  it('reads terminal status without exposing execution storage', async () => {
+  it('resolves persisted terminal status before outcome projection', async () => {
     executionStoreMock.readMeta.mockResolvedValue({
       timestamp: '2026-01-01T00:00:00.000Z',
-      terminalStatus: 'completed',
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
     });
 
-    await expect(readRuntimeHistoryTerminalStatus(EXECUTION_ID)).resolves.toBe(
-      'completed',
-    );
+    await expect(
+      resolveRuntimeHistoryTerminalStatus({
+        executionId: EXECUTION_ID,
+        outcome: RUN_OUTCOME.COMPLETED,
+      }),
+    ).resolves.toBe(EXECUTION_STATUS.INTERRUPTED);
+  });
+
+  it('falls back to the outcome projection when persisted terminal status is invalid', async () => {
+    executionStoreMock.readMeta.mockResolvedValue({
+      timestamp: '2026-01-01T00:00:00.000Z',
+      terminalStatus: 'legacy-unknown',
+    });
+
+    await expect(
+      resolveRuntimeHistoryTerminalStatus({
+        executionId: EXECUTION_ID,
+        outcome: RUN_OUTCOME.FAILED,
+      }),
+    ).resolves.toBe(EXECUTION_STATUS.ERROR);
+  });
+
+  it('falls back to the outcome projection when terminal status cannot be read', async () => {
+    executionStoreMock.readMeta.mockRejectedValue(new Error('disk gone'));
+
+    await expect(
+      resolveRuntimeHistoryTerminalStatus({
+        executionId: EXECUTION_ID,
+        outcome: RUN_OUTCOME.CANCELLED,
+      }),
+    ).resolves.toBe(EXECUTION_STATUS.INTERRUPTED);
   });
 
   it('records terminal history events through runtime commands', async () => {

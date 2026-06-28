@@ -538,6 +538,11 @@ const DELETED_RUNTIME_EXPORTS = [
       'use recordRuntimeWorkflowResultArtifacts so historyCommands owns persisted result metadata shape',
   },
   {
+    name: 'readRuntimeHistoryTerminalStatus',
+    guidance:
+      'use resolveRuntimeHistoryTerminalStatus so historyCommands owns persisted-status validation and outcome fallback',
+  },
+  {
     name: 'getRuntimeActiveExecutionIds',
     guidance: 'fold active-execution guards into intention-level commands',
   },
