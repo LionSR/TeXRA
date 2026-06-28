@@ -31,3 +31,10 @@ export function ensureArray<T>(value: T | T[]): T[] {
 export function unique<T>(iterable: Iterable<T>): T[] {
   return [...new Set(iterable)];
 }
+
+/** Exhaustiveness helper for discriminated unions. Call in the `default` branch of a switch. */
+export function assertNever(value: never, message: string): never {
+  const detail =
+    typeof value === 'string' ? value : JSON.stringify(value, undefined, 2);
+  throw new Error(`${message}: ${detail}`);
+}

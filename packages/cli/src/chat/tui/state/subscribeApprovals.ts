@@ -39,7 +39,7 @@ import {
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
-import { assertNever } from '../assertNever';
+import { assertNever } from '@utils/core';
 import { notify } from '../notifications/terminalNotifier';
 import { cliState } from './cliState';
 import { setCliCodexSubscription } from './codexSubscription';

@@ -11,7 +11,7 @@ import { ExternalInquiry } from './ExternalInquiry';
 import { PlanApproval } from './PlanApproval';
 import { RetryRequest } from './RetryRequest';
 import { UserQuestion } from './UserQuestion';
-import { assertNever } from '../assertNever';
+import { assertNever } from '@utils/core';
 import type { PendingApproval } from '../state/approvalQueue';
 
 export interface ApprovalModalProps {

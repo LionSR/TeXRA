@@ -63,7 +63,7 @@ import {
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
-import { assertNever } from './assertNever';
+import { assertNever } from '@utils/core';
 import { handleTuiSlashCommand } from './commands/handleSlashCommand';
 import {
   applyCliModelSelection,
