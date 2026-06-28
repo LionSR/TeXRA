@@ -273,7 +273,7 @@ export class FollowUpInput extends LitElement {
                 id: ELEMENT_IDS.POLISH_FOLLOW_UP_BTN,
                 icon: 'sparkle',
                 label: 'Polish follow-up',
-                title: 'Polish follow-up with AI',
+                tooltip: 'Polish follow-up with AI',
                 busy: this.polishing,
                 onClick: this.emitPolish,
               })}
@@ -281,7 +281,7 @@ export class FollowUpInput extends LitElement {
                 id: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
                 icon: this.recordingController.state.icon,
                 label: this.recordingController.state.title,
-                title: this.recordingController.state.title,
+                tooltip: this.recordingController.state.title,
                 className: this.recordingController.state.recording
                   ? this.recordingController.state.recordingClass
                   : '',
@@ -291,14 +291,14 @@ export class FollowUpInput extends LitElement {
                 id: ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN,
                 icon: 'clear-all',
                 label: 'Clear input',
-                title: 'Clear input',
+                tooltip: 'Clear input',
                 onClick: this.emitClear,
               })}
               ${renderIconActionButton({
                 id: ELEMENT_IDS.SEND_FOLLOW_UP_BTN,
                 icon: 'send',
                 label: 'Send',
-                title: 'Send follow-up message',
+                tooltip: 'Send follow-up message',
                 onClick: this.emitSend,
               })}
             </div>

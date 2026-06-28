@@ -10,9 +10,12 @@ import {
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -24,7 +27,7 @@ import {
   formatUpdatedDate,
 } from '@shared/utils/string';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 
 // Local imports - memory view events
@@ -187,6 +190,68 @@ export class MemoryItem extends LitElement {
     }
   }
 
+  /**
+   * Pin / Open / Delete cluster. Tooltips render after the group: a
+   * wa-button-group fuses corners via CSS ::slotted(:first/:last-child), so a
+   * slotted <wa-tooltip> would break the segmenting. Each <wa-tooltip> anchors
+   * by `for` within this element's shadow root, so the static ids stay unique
+   * per instance even when many memory-item rows are on screen.
+   */
+  private renderActionGroup(): TemplateResult {
+    const pinned = this.item?.pinned === true;
+    const actions = [
+      {
+        id: 'memory-pin-button',
+        icon: (pinned ? 'thumbtack-slash' : 'thumbtack') as TeXRAIconName,
+        label: pinned ? 'Unpin' : 'Pin',
+        tooltip: pinned ? 'Unpin this memory' : 'Pin as core long-term memory',
+        onClick: this.handleTogglePin,
+      },
+      {
+        id: 'memory-open-button',
+        icon: 'file-export' as TeXRAIconName,
+        label: 'Open',
+        tooltip: 'Open in editor',
+        onClick: this.handleOpen,
+      },
+      {
+        id: 'memory-delete-button',
+        icon: 'trash' as TeXRAIconName,
+        label: 'Delete',
+        tooltip: 'Delete this memory',
+        onClick: this.handleDelete,
+      },
+    ];
+    return html`
+      <wa-button-group label="Memory actions">
+        ${repeat(
+          actions,
+          (action) => action.id,
+          (action) => html`
+            <wa-button
+              id=${action.id}
+              class="action-icon-button"
+              appearance="plain"
+              variant="neutral"
+              size="small"
+              type="button"
+              aria-label=${action.label}
+              @click=${action.onClick}
+            >
+              ${waIcon(action.icon)}
+            </wa-button>
+          `,
+        )}
+      </wa-button-group>
+      ${repeat(
+        actions,
+        (action) => action.id,
+        (action) =>
+          html`<wa-tooltip for=${action.id}>${action.tooltip}</wa-tooltip>`,
+      )}
+    `;
+  }
+
   override render(): TemplateResult | typeof nothing {
     if (!this.item) {
       return nothing;
@@ -206,28 +271,7 @@ export class MemoryItem extends LitElement {
       >
         <div class="list-item-header">
           <div class="memory-path">${this.item.displayPath}</div>
-          <wa-button-group label="Memory actions">
-            ${renderIconActionButton({
-              icon: this.item.pinned ? 'thumbtack-slash' : 'thumbtack',
-              label: this.item.pinned ? 'Unpin' : 'Pin',
-              title: this.item.pinned
-                ? 'Unpin this memory'
-                : 'Pin as core long-term memory',
-              onClick: this.handleTogglePin,
-            })}
-            ${renderIconActionButton({
-              icon: 'file-export',
-              label: 'Open',
-              title: 'Open in editor',
-              onClick: this.handleOpen,
-            })}
-            ${renderIconActionButton({
-              icon: 'trash',
-              label: 'Delete',
-              title: 'Delete this memory',
-              onClick: this.handleDelete,
-            })}
-          </wa-button-group>
+          ${this.renderActionGroup()}
         </div>
         <div class="text-secondary meta-strip">
           ${this.renderMeta(this.item)}
