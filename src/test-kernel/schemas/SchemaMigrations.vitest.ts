@@ -50,6 +50,40 @@ describe('RunUsageAccumulatorJSONSchema — legacy normalizedSnapshots migration
     expect(result.latestUsage).toMatchObject(usageFixture);
   });
 
+  it('keeps canonical latestUsage when a hybrid payload also has snapshots', () => {
+    const stale = { ...usageFixture, inputTokens: 1 };
+    const result = RunUsageAccumulatorJSONSchema.parse({
+      latestUsage: usageFixture,
+      normalizedSnapshots: [{ round: 0, usage: stale }],
+    });
+
+    // The canonical latestUsage must win over the snapshot-derived value.
+    expect(result.latestUsage).toMatchObject(usageFixture);
+  });
+
+  it('keeps an explicit null latestUsage over snapshots in a hybrid payload', () => {
+    const result = RunUsageAccumulatorJSONSchema.parse({
+      latestUsage: null,
+      normalizedSnapshots: [{ round: 0, usage: usageFixture }],
+    });
+
+    // Key-presence semantics: an explicit null means already-migrated, so the
+    // snapshot must NOT revive a value. Matches the old `'latestUsage' in raw`.
+    expect(result.latestUsage).toBeNull();
+  });
+
+  it('preserves the last valid usage when an earlier snapshot is malformed', () => {
+    const result = RunUsageAccumulatorJSONSchema.parse({
+      normalizedSnapshots: [
+        { round: 0, usage: { bogus: 'not a usage' } },
+        { round: 1, usage: usageFixture },
+      ],
+    });
+
+    // A malformed earlier snapshot must not drop the latest valid usage.
+    expect(result.latestUsage).toMatchObject(usageFixture);
+  });
+
   it('parses empty object to zero totals and null latestUsage', () => {
     const result = RunUsageAccumulatorJSONSchema.parse({});
 
