@@ -117,6 +117,43 @@ function createController({
 }
 
 describe('ProgressFollowUpController', () => {
+  it('builds follow-up options from model rows and only tool-use agents', async () => {
+    const controller = new ProgressFollowUpController({
+      isToolUseAgent: (agent) => agent === 'tool-agent',
+      loadModelOptions: async () => [
+        { value: 'gemini31p', label: 'Gemini', disabled: false },
+      ],
+      loadAgentOptions: async () => ({
+        workflow: [{ value: 'builtInWorkflow:writer', label: 'Writer' }],
+        toolUse: [
+          {
+            value: 'builtInToolUse:review',
+            label: 'Review',
+            isToolUse: true,
+          },
+        ],
+      }),
+      state: emptyFollowUpState,
+      workspace: {
+        locatePath: () => ({ kind: 'workspace', relativePath: 'main.tex' }),
+        exists: async () => true,
+      },
+    });
+
+    assert.deepEqual(await controller.buildFollowUpOptions(), {
+      modelOptionsData: [
+        { value: 'gemini31p', label: 'Gemini', disabled: false },
+      ],
+      toolUseAgentsData: [
+        {
+          value: 'builtInToolUse:review',
+          label: 'Review',
+          isToolUse: true,
+        },
+      ],
+    });
+  });
+
   it('builds a tool-use follow-up restore plan from workflow outputs', () => {
     const controller = createController();
     const taskState = createFollowUpWorkflowTaskState();

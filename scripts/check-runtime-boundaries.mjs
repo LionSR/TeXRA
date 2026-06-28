@@ -86,6 +86,12 @@ const FORBIDDEN_IMPORTS = [
       'use @agent/runtime/progressViewCommands from host/controller code',
   },
   {
+    source: '@frontend/agents/optionsLoader',
+    includeSubpaths: true,
+    guidance:
+      'use intention-level option controllers such as ProgressFollowUpController or MainViewStartupControllerFactory',
+  },
+  {
     source: '@agent/runtime/helperModelName',
     includeSubpaths: true,
     guidance:

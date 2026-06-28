@@ -1,5 +1,9 @@
 // Local imports - agent
 import {
+  computeRuntimeAgentOptionsData,
+  type RuntimeAgentOptionsData,
+} from '@agent/runtime/agentResolution';
+import {
   buildRuntimeTaskStateFromConfig,
   isRuntimeWorkflowTaskState,
   parseRuntimeToolUseAgentConfig,
@@ -11,9 +15,11 @@ import {
 
 // Local imports - latex
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 
 // Local imports - shared
 import type {
+  AgentOptionData,
   CompileFailure,
   OutputFileInfo,
   StreamTabId,
@@ -36,9 +42,15 @@ export interface ProgressFollowUpWorkspace {
 
 export interface ProgressFollowUpControllerDeps {
   isToolUseAgent(agent: string): boolean;
-  loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
+  loadModelOptions?(): Promise<readonly ProgressFollowUpModelOption[]>;
+  loadAgentOptions?: () => Promise<RuntimeAgentOptionsData>;
   state: ProgressFollowUpState;
   workspace: ProgressFollowUpWorkspace;
+}
+
+export interface ProgressFollowUpOptionsData {
+  readonly toolUseAgentsData?: AgentOptionData[];
+  readonly modelOptionsData: readonly ProgressFollowUpModelOption[];
 }
 
 export interface ProgressFollowUpState {
@@ -96,10 +108,22 @@ export type StreamToolUseFollowUpInput = Omit<
 export class ProgressFollowUpController {
   constructor(private readonly deps: ProgressFollowUpControllerDeps) {}
 
+  async buildFollowUpOptions(): Promise<ProgressFollowUpOptionsData> {
+    const [modelOptionsData, agentOptions] = await Promise.all([
+      this.loadModelOptions(),
+      this.loadAgentOptions(),
+    ]);
+
+    return {
+      toolUseAgentsData: agentOptions.toolUse,
+      modelOptionsData,
+    };
+  }
+
   async planToolUseFollowUpForStream(
     input: StreamToolUseFollowUpInput,
   ): Promise<ProgressFollowUpPlan> {
-    const modelOptions = await this.deps.loadModelOptions();
+    const modelOptions = await this.loadModelOptions();
     const outputFiles = [
       ...this.deps.state.getOutputFiles(input.streamId).values(),
     ].flat();
@@ -116,7 +140,7 @@ export class ProgressFollowUpController {
   async planCompileFixerForStream(
     streamId: StreamTabId,
   ): Promise<ProgressFollowUpPlan> {
-    const modelOptions = await this.deps.loadModelOptions();
+    const modelOptions = await this.loadModelOptions();
     const compileFailures = [
       ...this.deps.state.getCompileFailures(streamId).values(),
     ].flat();
@@ -249,6 +273,14 @@ export class ProgressFollowUpController {
     return modelOptions.some((option) => {
       return option.value === model && !option.disabled;
     });
+  }
+
+  private loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]> {
+    return (this.deps.loadModelOptions ?? computeModelOptionsData)();
+  }
+
+  private loadAgentOptions(): Promise<RuntimeAgentOptionsData> {
+    return (this.deps.loadAgentOptions ?? computeRuntimeAgentOptionsData)();
   }
 
   private resolveWorkflowModel(

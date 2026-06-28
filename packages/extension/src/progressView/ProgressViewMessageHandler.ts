@@ -38,7 +38,6 @@ import { BaseViewMessageHandler } from '@common/webview';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
-import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
 import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -646,10 +645,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
       isToolUseAgent: (agent) => this.provider.isToolUseAgent(agent),
-      loadModelOptions: async () => {
-        const { modelOptions } = await loadOptions();
-        return modelOptions;
-      },
       state: {
         getTaskState: (stream) =>
           this.provider.state.snapshots.getTaskState(stream),
@@ -855,12 +850,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleGetFollowupOptions(streamId: StreamTabId): Promise<void> {
-    const { agentOptions, modelOptions } = await loadOptions();
+    const { toolUseAgentsData, modelOptionsData } =
+      await this.followUpController.buildFollowUpOptions();
     this.postToActiveView({
       command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
       stream: streamId,
-      toolUseAgentsData: agentOptions.toolUse,
-      modelOptionsData: modelOptions,
+      toolUseAgentsData,
+      modelOptionsData,
     });
   }
 
