@@ -68,6 +68,7 @@ import {
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { convertToolSchema, toGoogleTools } from '../toolConversion';
+import { GOOGLE_FINISH } from '../types/StopReasonTypes';
 
 // Type imports
 import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
@@ -923,12 +924,28 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
     let responseText = replacementEngine.applyAll(rawText);
     const usage = responseObject.usage;
-    const stopReason: ProviderStopReason = responseObject.status ?? 'completed';
+    // Map the Interactions terminal *status* to the canonical Google chat
+    // FinishReason the shared stop/continue logic understands (mirrors the
+    // OpenAI Responses handler at extractResponse). `checkStopConditions` keys
+    // `endTurn` on GOOGLE_FINISH.STOP and `shouldContinue` /
+    // `isTokenLimitStopReason` key truncation on GOOGLE_FINISH.MAX_TOKENS; the
+    // raw 'completed' / 'incomplete' status strings match neither, so a clean
+    // completion ending on the document tag would be misread as
+    // `shouldStop && !endTurn` — i.e. a user cancellation — and its
+    // already-generated output discarded. Non-terminal statuses (e.g.
+    // 'requires_action' for tool-call rounds) pass through unchanged.
+    const status = responseObject.status ?? 'completed';
+    const stopReason: ProviderStopReason =
+      status === 'completed'
+        ? GOOGLE_FINISH.STOP
+        : status === 'incomplete'
+          ? GOOGLE_FINISH.MAX_TOKENS
+          : status;
 
     // If the model completed naturally without the end tag, append it (mirrors
-    // the chat handler's STOP behavior, keyed on the terminal `completed` status).
+    // the chat handler's STOP behavior, keyed on the terminal completion).
     if (
-      stopReason === 'completed' &&
+      stopReason === GOOGLE_FINISH.STOP &&
       endTag &&
       responseText.length > 0 &&
       !responseText.endsWith(endTag)
@@ -1003,14 +1020,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    // "incomplete" is the Interactions truncation status (analogous to chat's
+    // The Interactions truncation status ('incomplete') is normalized to
+    // GOOGLE_FINISH.MAX_TOKENS in extractResponse (analogous to chat's
     // MAX_TOKENS): the response was cut short by the output budget.
-    const truncated = stopReason === 'incomplete';
+    const truncated = stopReason === GOOGLE_FINISH.MAX_TOKENS;
     const containsEndTag = hasEndTag(agentSetting, newResponse);
 
     if (truncated && !containsEndTag) {
       this.logger.debug(
-        `Should continue: incomplete status and end tag '${agentSetting.endTag}' is missing.`,
+        `Should continue: truncated (MAX_TOKENS) and end tag '${agentSetting.endTag}' is missing.`,
       );
       return true;
     }

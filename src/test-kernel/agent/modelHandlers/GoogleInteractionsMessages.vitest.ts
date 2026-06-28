@@ -7,6 +7,7 @@ import {
 
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import { GOOGLE_FINISH } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { Interactions } from '@google/genai';
 
 type Step = Interactions.Step;
@@ -278,6 +279,52 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     expect(extracted.text).toContain('answer body');
     expect(extracted.text).not.toContain('ignore me');
     expect(extracted.text.endsWith('</doc>')).toBe(true);
-    expect(extracted.stopReason).toBe('completed');
+    // The Interactions 'completed' status is normalized to the canonical Google
+    // STOP finish reason so shared stop logic reads it as a natural end-of-turn.
+    expect(extracted.stopReason).toBe(GOOGLE_FINISH.STOP);
+  });
+
+  it('maps a completed interaction to endTurn (not a spurious cancellation)', () => {
+    // Regression: a background/non-streaming Interactions response that finished
+    // cleanly on the document end tag was returning the raw 'completed' status,
+    // which is not in `endTurnReasons` — so checkStopConditions yielded
+    // endTurn=false while encounterDocumentTag forced shouldStop=true. The
+    // ResponseCycle then read `shouldStop && !endTurn` as a user cancellation
+    // and discarded the already-generated output. The status must normalize to
+    // GOOGLE_FINISH.STOP so endTurn=true.
+    const handler = createHandler();
+    const response = {
+      id: 'int',
+      status: 'completed',
+      steps: [
+        {
+          type: 'model_output',
+          content: [{ type: 'text', text: 'body</doc>' }],
+        },
+      ],
+    } as never;
+
+    const { stopReason, text } = handler.extractResponse(response, '</doc>');
+    const setting = { documentTag: 'doc', endTag: '</doc>' } as never;
+    const round = { continuationCount: 0 } as never;
+    const global = {
+      usageAccumulator: {
+        totals: {
+          firstInputTokens: 100,
+          totalInputTokens: 100,
+          totalOutputTokens: 50,
+        },
+      },
+    } as never;
+
+    const { endTurn, shouldStop } = handler.checkStopConditions(
+      stopReason,
+      text,
+      round,
+      global,
+      setting,
+    );
+    expect(shouldStop).toBe(true);
+    expect(endTurn).toBe(true);
   });
 });
