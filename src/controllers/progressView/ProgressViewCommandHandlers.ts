@@ -1,5 +1,6 @@
 // Local imports - shared
 import {
+  applyRuntimeApprovalDecisionBypass,
   setRuntimeCoupledApprovalBypass,
   toggleRuntimeCoupledApprovalBypass,
   toggleRuntimeDelegatedTaskApprovalBypass,
@@ -228,12 +229,11 @@ export function createProgressViewCommandHandlers(
     // enabled branch: edit bypass rides along only if not already on, bash
     // silently.
     [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: async (data) => {
-      proposalApprovalState.setBypass(data.stream, true, runtimeHost);
-      if (!isApprovalBypassedForStream(data.stream)) {
-        setToolEditApprovalSessionBypass(data.stream, true, runtimeHost);
-      }
-      setBashApprovalSessionBypass(data.stream, true, runtimeHost, {
-        silent: true,
+      applyRuntimeApprovalDecisionBypass({
+        accepted: true,
+        bypass: 'superYolo',
+        streamId: data.stream,
+        runtimeHost,
       });
       await showInfo?.('Delegated task auto-approval enabled for this stream.');
     },
