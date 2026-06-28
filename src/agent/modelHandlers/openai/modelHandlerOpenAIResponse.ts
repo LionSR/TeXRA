@@ -2033,7 +2033,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // tryResumeBackgroundResponse instead of creating a new request.
     this.pendingBackgroundResponseId = initialResponse.id;
 
-    const polled = await this.backgroundPoller.poll({
+    const polled = (await this.backgroundPoller.poll({
       initialResponse,
       retrieve: async (responseId, sig) => {
         try {
@@ -2077,7 +2077,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       signal,
       providerLabel: 'OpenAI',
       onAbort: () => this.clearPendingBackgroundResponse(),
-    }) as T;
+    })) as T;
 
     if (polled.status === 'completed') {
       return polled;
