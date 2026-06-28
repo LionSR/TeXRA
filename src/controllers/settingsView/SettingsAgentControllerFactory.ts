@@ -7,6 +7,7 @@
  */
 import {
   SettingsAgentCatalogController,
+  type SettingsAgentCatalogEntry,
   type SettingsAgentCatalogState,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
@@ -16,7 +17,6 @@ import {
   listRuntimeAgents,
   loadRuntimeAgents,
   RUNTIME_BUILTIN_TEAM_ROOT_AGENT_NAMES,
-  type RuntimeAgentEntry,
 } from '@agent/runtime/agentResolution';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
@@ -28,8 +28,10 @@ export interface AgentControllerFactoryOptions extends SettingsStatePorts {
   readonly getSourceDirectory: (
     source: AgentSource,
   ) => Promise<string | undefined>;
-  readonly getAgents?: (category: AgentCategory) => RuntimeAgentEntry[];
-  readonly getVisibleAgents?: (category: AgentCategory) => RuntimeAgentEntry[];
+  readonly getAgents?: (category: AgentCategory) => SettingsAgentCatalogEntry[];
+  readonly getVisibleAgents?: (
+    category: AgentCategory,
+  ) => SettingsAgentCatalogEntry[];
   readonly loadAgents?: () => Promise<void>;
   readonly builtInOrchestratorAgentNames?: readonly string[];
 }

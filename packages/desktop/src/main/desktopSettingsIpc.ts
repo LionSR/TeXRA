@@ -13,12 +13,10 @@ import {
   buildModelSelectionMessage,
   createModelSelectionController,
 } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
-import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import {
-  listRuntimeAgents,
-  loadRuntimeAgents,
-  type RuntimeAgentEntry,
-} from '@agent/runtime/agentResolution';
+  createSettingsAgentControllers,
+  type AgentControllerFactoryOptions,
+} from '@controllers/settingsView/SettingsAgentControllerFactory';
 import {
   requireRuntimeAgentDirectory,
   resolveRuntimeAgentDirectory,
@@ -129,10 +127,10 @@ type ToolDashboardBuilder = (
 export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
   sendStartupCatalogData?: boolean;
-  loadAgents?: typeof loadRuntimeAgents;
+  loadAgents?: AgentControllerFactoryOptions['loadAgents'];
   loadAgentOptionsData?: DesktopMainViewAgentOptionsLoader;
-  getAgents?: (category: AgentCategory) => RuntimeAgentEntry[];
-  getVisibleAgents?: (category: AgentCategory) => RuntimeAgentEntry[];
+  getAgents?: AgentControllerFactoryOptions['getAgents'];
+  getVisibleAgents?: AgentControllerFactoryOptions['getVisibleAgents'];
   globalState?: StateStore;
   workspaceState?: StateStore;
   config?: ConfigProvider;
@@ -184,12 +182,6 @@ export function createDesktopSettingsIpc(
   const workspaceState = options.workspaceState ?? platform().workspaceState;
   const globalState = options.globalState ?? platform().globalState;
   const onError = options.onError ?? defaultOnError;
-  const loadAgentRegistry = options.loadAgents ?? loadRuntimeAgents;
-  const getAgentEntries =
-    options.getAgents ?? ((category) => listRuntimeAgents({ category }));
-  const getVisibleAgentEntries =
-    options.getVisibleAgents ??
-    ((category) => listRuntimeAgents({ category, visibleOnly: true }));
   const usesDefaultToolDashboardBuilder =
     options.buildToolDashboardItems == null;
   const buildToolDashboardItems =
@@ -222,9 +214,9 @@ export function createDesktopSettingsIpc(
     globalState,
     getCustomAgentDirectory,
     getSourceDirectory: getAgentDirectory,
-    getAgents: getAgentEntries,
-    getVisibleAgents: getVisibleAgentEntries,
-    loadAgents: loadAgentRegistry,
+    getAgents: options.getAgents,
+    getVisibleAgents: options.getVisibleAgents,
+    loadAgents: options.loadAgents,
   });
   const modelSelectionController = createModelSelectionController({
     workspaceState,

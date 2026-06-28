@@ -58,4 +58,12 @@ describe('settings view layering', () => {
       ),
     ).not.toContain('@agent/runtime/historyCommands');
   });
+
+  it('keeps runtime agent catalogue defaults out of desktop settings IPC', () => {
+    expect(
+      importSources(
+        readSource('packages/desktop/src/main/desktopSettingsIpc.ts'),
+      ),
+    ).not.toContain('@agent/runtime/agentResolution');
+  });
 });
