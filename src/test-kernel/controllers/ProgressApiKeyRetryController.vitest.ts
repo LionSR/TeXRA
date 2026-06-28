@@ -159,7 +159,7 @@ describe('ProgressApiKeyRetryController', () => {
     assert.deepEqual(harness.retries, ['stream-b']);
   });
 
-  it('uses any existing usable key for relay-limit consent', async () => {
+  it('uses any existing usable key for relay-limit consent without re-prompting', async () => {
     const harness = createHarness({
       keys: { openai: 'stored-key' },
     });
@@ -175,7 +175,8 @@ describe('ProgressApiKeyRetryController', () => {
       disabledIncludedModelAccess: true,
       disabledChatGptSubscription: false,
     });
-    assert.deepEqual(harness.prompts, [undefined]);
+    // A usable key already exists, so the switch must not pop the key prompt.
+    assert.deepEqual(harness.prompts, []);
     assert.deepEqual(harness.includedAccessValues, [false]);
     assert.equal(harness.invalidations, 1);
     assert.deepEqual(harness.retries, ['stream-b']);
@@ -204,7 +205,7 @@ describe('ProgressApiKeyRetryController', () => {
     assert.deepEqual(harness.retries, ['stream-c']);
   });
 
-  it('disables the ChatGPT subscription and retries with a usable OpenAI key', async () => {
+  it('disables the ChatGPT subscription and retries with the existing OpenAI key, no prompt', async () => {
     const harness = createHarness({
       keys: { openai: 'stored-openai' },
     });
@@ -223,7 +224,9 @@ describe('ProgressApiKeyRetryController', () => {
       disabledIncludedModelAccess: true,
       disabledChatGptSubscription: true,
     });
-    assert.deepEqual(harness.prompts, ['openai']);
+    // The subscription quota failed, not the key — a stored key is already
+    // usable, so "Use your own API key" must not jump to the key-input prompt.
+    assert.deepEqual(harness.prompts, []);
     assert.deepEqual(harness.includedAccessValues, [false]);
     assert.equal(harness.codexDisableCount, 1);
     assert.equal(harness.invalidations, 2);
@@ -245,6 +248,8 @@ describe('ProgressApiKeyRetryController', () => {
       disabledIncludedModelAccess: false,
       disabledChatGptSubscription: false,
     });
+    // No usable key exists, so the prompt is still shown (then declined here).
+    assert.deepEqual(harness.prompts, ['openai']);
     assert.equal(harness.codexDisableCount, 0);
     assert.deepEqual(harness.retries, []);
   });
