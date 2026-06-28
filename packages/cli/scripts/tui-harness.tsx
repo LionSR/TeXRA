@@ -1223,6 +1223,7 @@ if (SHOW_EXTERNAL_INQUIRY) {
       kind: 'externalInquiry',
       payload: {
         requestId: 'harness-external-inquiry',
+        mode: 'followUp' as const,
         question: EXTERNAL_INQUIRY_QUESTION,
         threadId: EXTERNAL_INQUIRY_THREAD_ID,
         allowBypass: false,

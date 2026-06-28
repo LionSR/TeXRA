@@ -34,8 +34,9 @@ function externalInquiryPayload(streamId: string): ApprovalPayload {
     kind: 'externalInquiry',
     payload: {
       requestId: `external-${streamId}`,
+      mode: 'followUp' as const,
       question: 'Please verify the finite enumeration independently.',
-      threadId: `thread-${streamId}`,
+      threadId: 'ei_000000000001',
       allowBypass: false,
       streamId,
     },

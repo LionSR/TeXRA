@@ -369,16 +369,19 @@ export class ExternalInquiryTool extends defineTool({
 
     runtimeHost.emit('requestEnsureProgressView', {});
     runtimeHost.emit('setActiveStream', { streamId });
+    const isFollowUp = !!input.thread_id;
+
     runtimeHost.emit('showExternalInquiry', {
       requestId: persisted.threadId, // legacy field — panel addresses by threadId now
+      mode: isFollowUp ? 'followUp' : 'new',
       question: input.question,
       threadId: persisted.threadId,
       context: input.context ?? undefined,
       suggestSearch: input.suggestSearch ?? undefined,
       attachFiles: input.attachFiles ?? undefined,
-      sessionLinks: collectKnownSessionLinks(manifest),
-      draft: getOpenTurnDraft(manifest),
-      transcript: manifestToTranscript(manifest),
+      sessionLinks: isFollowUp ? collectKnownSessionLinks(manifest) : null,
+      draft: isFollowUp ? getOpenTurnDraft(manifest) : null,
+      transcript: isFollowUp ? manifestToTranscript(manifest) : null,
       allowBypass: false,
       streamId,
     });
