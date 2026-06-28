@@ -266,8 +266,15 @@ export class OpenAIResponseWebSocketTransport {
         }
       };
 
-      /** Attach partial-text tail to an error before rejecting with it. */
+      /** Finalize the processor's streams, attach any partial-text tail, then reject. */
       const rejectWithPartial = (err: unknown): void => {
+        // Finalize the processor's progress streams so a mid-stream WebSocket
+        // failure does not leave the progress view hanging in a loading state.
+        // Unlike the HTTP path (which finalizes via the caller's catch), the
+        // processor is owned here and is never returned to the caller on a
+        // reject, so it must be finalized on this side. `abort()` preserves any
+        // chunks already streamed; `finalize` is idempotent.
+        processor.abort();
         if (streamedText) {
           attachPartialText(err, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
         }
@@ -363,10 +370,11 @@ export class OpenAIResponseWebSocketTransport {
         } as ResponsesClientEvent);
       } catch (sendError) {
         // If send() throws synchronously, clean up listeners to prevent leaks
-        // on the reused WebSocket connection.
+        // on the reused WebSocket connection, and finalize the processor's
+        // streams (via rejectWithPartial) so they do not hang.
         settled = true;
         cleanup();
-        reject(sendError);
+        rejectWithPartial(sendError);
       }
     });
   }

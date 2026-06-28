@@ -8,6 +8,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - tools and utils
+import replacementEngine from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
@@ -100,8 +101,12 @@ export class ModelHandlerValidation extends ModelHandler<
   }
 
   extractResponse(responseObject: ValidationResponse): ExtractResponseResult {
+    // Apply text cleanup here like every other handler's extractResponse. The
+    // response cycle relies on this single per-handler pass (it no longer
+    // re-applies cleanup itself), so a handler that returned raw text would
+    // silently skip cleanup on the reflection path.
     return {
-      text: responseObject.text,
+      text: replacementEngine.applyAll(responseObject.text),
       usage: responseObject.usage,
       stopReason: responseObject.stopReason,
     };
