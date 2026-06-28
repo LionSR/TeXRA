@@ -22,9 +22,7 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
-import { clamp } from '@utils/core';
-
-import { assertNever } from './assertNever';
+import { assertNever, clamp } from '@utils/core';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
 import { ApprovalModal } from './modals/ApprovalModal';

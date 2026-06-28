@@ -1,6 +1,7 @@
 import { safeStorage } from 'electron';
 
 import { toErrorMessage } from '@common/errors';
+import { assertNever } from '@utils/core';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 import type { PlatformSecrets } from '@platform/secrets';
 
@@ -126,7 +127,7 @@ export class ElectronSecrets implements PlatformSecrets {
         await this.warnAboutBasicTextStorage();
         throw new Error(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE);
       default:
-        assertNever(storageMode);
+        assertNever(storageMode, 'Unhandled Electron secret storage mode');
     }
   }
 
@@ -176,8 +177,4 @@ export function getSecretStorageMode(): SecretStorageMode {
     return 'basic_text';
   }
   return 'encrypted';
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unhandled Electron secret storage mode: ${value}`);
 }
