@@ -75,9 +75,10 @@ export class ProviderKeyList extends LitElement {
     const removeButton =
       entry.status === 'set'
         ? renderIconActionButton({
+            id: `provider-key-remove-${provider}`,
             icon: 'trash',
             label: 'Remove',
-            title: 'Remove key',
+            tooltip: 'Remove key',
             onClick: () =>
               this.dispatchEvent(ProviderKeyEvents.removeKey({ provider })),
           })
@@ -86,16 +87,18 @@ export class ProviderKeyList extends LitElement {
     return html`
       <div class="provider-actions action-button-group">
         ${renderIconActionButton({
+          id: `provider-key-set-${provider}`,
           icon: 'key',
           label: 'Set',
-          title: 'Set API key',
+          tooltip: 'Set API key',
           onClick: () =>
             this.dispatchEvent(ProviderKeyEvents.setKey({ provider })),
         })}
         ${renderIconActionButton({
+          id: `provider-key-get-${provider}`,
           icon: 'arrow-up-right-from-square',
           label: 'Get',
-          title: 'Get API key from provider',
+          tooltip: 'Get API key from provider',
           onClick: () =>
             this.dispatchEvent(ProviderKeyEvents.openKeyUrl({ provider })),
         })}

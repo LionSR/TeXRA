@@ -76,9 +76,10 @@ export class WorkflowHintBanner extends LitElement {
             edits.
           </div>
           ${renderIconActionButton({
+            id: 'workflow-hint-dismiss-button',
             icon: 'close',
             label: 'Dismiss workflow mode reminder',
-            title: 'Dismiss this reminder',
+            tooltip: 'Dismiss this reminder',
             onClick: this.handleDismiss,
           })}
         </div>
