@@ -1,16 +1,14 @@
 // Local imports - formatter implementations
-import { platform } from '@platform/platform';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 
 // Local file imports
 import { runLatexIndent } from './formatter/latexindentpt';
 import { runTexFmt } from './formatter/texfmt';
 
 export async function runLatexFormatter(filePath: string): Promise<boolean> {
-  const formatter = platform().workspaceState.get<string>(
+  const formatter = readPlatformSetting<string>(
     WorkspaceStateKey.LATEX_FORMATTER,
-    LATEX_CONFIG_DEFAULTS.latexFormatter,
   );
 
   switch (formatter) {

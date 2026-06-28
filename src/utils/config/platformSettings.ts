@@ -1,0 +1,48 @@
+import { tryPlatform } from '@platform/platform';
+
+import {
+  readSetting,
+  settingDefault,
+  type SettingsHostKind,
+} from '@shared/config/settingsAccess';
+import { stateSettingByKey } from '@shared/schemas/stateSettings';
+
+/**
+ * Read a catalog-modeled state setting from the live platform, resolving its
+ * default from the entry's schema `.prefault()` — the single default source.
+ *
+ * Replaces the scattered `platform().<store>.get(key, handPassedDefault)` reads
+ * whose second argument duplicated the catalog default: the value now comes from
+ * the schema, and a stale/invalid stored value snaps back to that default (via
+ * `readSetting`'s `safeParse`) rather than propagating. The store slot
+ * (`workspaceState` / `globalState` / `config`) is the one the catalog entry
+ * declares, so the right backing store is picked without the caller naming it.
+ *
+ * Graceful when the platform isn't initialized yet — returns the schema default
+ * instead of throwing — matching the previous `tryWorkspaceState()?.get(...) ??
+ * default` sites. `host` only changes the slot for the CLI-divergent git-author
+ * keys (`cliStore: 'config'`); every key read through here today is
+ * host-uniform, so the default suffices.
+ */
+export function readPlatformSetting<T>(
+  key: string,
+  host: SettingsHostKind = 'extension',
+): T {
+  const entry = stateSettingByKey(key);
+  if (!entry) {
+    throw new Error(`No state-setting catalog entry for key: ${key}`);
+  }
+  const active = tryPlatform();
+  if (!active) {
+    return settingDefault(entry) as T;
+  }
+  return readSetting(
+    entry,
+    {
+      config: active.config,
+      workspaceState: active.workspaceState,
+      globalState: active.globalState,
+    },
+    host,
+  ) as T;
+}
