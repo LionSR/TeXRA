@@ -505,6 +505,10 @@ const DELETED_RUNTIME_EXPORTS = [
       'setRuntimeStreamStatus was deleted as a pure forwarding status setter',
   },
   {
+    name: 'getRuntimeDefaultMergeModelName',
+    guidance: 'buildRuntimeMergeExecutionRequest owns the helper-model default',
+  },
+  {
     name: 'releaseQueuedFollowUpsForStreams',
     guidance:
       'release queues through follow-up or stream-resource lifecycle commands',

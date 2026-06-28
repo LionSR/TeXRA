@@ -40,7 +40,6 @@ import {
   buildRuntimeTaskStateFromConfig,
   buildRuntimeTaskStateFromConfigInput,
   buildRuntimeToolUseTaskStateFromWorkflow,
-  getRuntimeDefaultMergeModelName,
   isRuntimeToolUseTaskState,
   isRuntimeWorkflowTaskState,
   parseRuntimeAgentConfig,
@@ -129,12 +128,6 @@ describe('runtime execution requests', () => {
         },
       },
     );
-  });
-
-  it('exposes the runtime default merge model name', () => {
-    expect(getRuntimeDefaultMergeModelName()).toBe('helper-default');
-
-    expect(helperModelNameMock.getHelperModelName).toHaveBeenCalledOnce();
   });
 
   it('parses agent configs through the runtime boundary', () => {

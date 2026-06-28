@@ -83,10 +83,6 @@ export function validateRuntimeExecutionRequest(
   return validateExecutionRequest(request);
 }
 
-export function getRuntimeDefaultMergeModelName(): string {
-  return getHelperModelName();
-}
-
 export function buildRuntimeMergeExecutionRequest({
   baseFile,
   editedFile,
@@ -95,7 +91,7 @@ export function buildRuntimeMergeExecutionRequest({
   return validateRuntimeExecutionRequest({
     config: {
       agent: 'merge',
-      model: model ?? getRuntimeDefaultMergeModelName(),
+      model: model ?? getHelperModelName(),
       inputFiles: [baseFile],
       editedFile,
     },
