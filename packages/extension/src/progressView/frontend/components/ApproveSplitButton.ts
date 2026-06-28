@@ -153,15 +153,17 @@ export class ApproveSplitButton extends LitElement {
           </wa-button>
           ${when(
             this.canBypass,
-            () => html`<wa-dropdown-item value=${YOLO_VALUE}>
-              ${waIcon('shield')} Yolo (this session)
-            </wa-dropdown-item>`,
+            () =>
+              html`<wa-dropdown-item value=${YOLO_VALUE}>
+                ${waIcon('shield')} Yolo (this session)
+              </wa-dropdown-item>`,
           )}
           ${when(
             this.canSuperYolo,
-            () => html`<wa-dropdown-item value=${SUPER_YOLO_VALUE}>
-              ${waIcon('rocket')} Super Yolo (this session)
-            </wa-dropdown-item>`,
+            () =>
+              html`<wa-dropdown-item value=${SUPER_YOLO_VALUE}>
+                ${waIcon('rocket')} Super Yolo (this session)
+              </wa-dropdown-item>`,
           )}
         </wa-dropdown>
       </div>
