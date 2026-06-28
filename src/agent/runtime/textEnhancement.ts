@@ -5,7 +5,7 @@ import { isNonEmptyString } from '@utils/core';
 
 import { extractTextFromTag } from '@utils/text/xmlUtils';
 import { renderPolishPrompt } from './polishModel';
-import { createHelperModelKit } from './helperModel';
+import { createHelperModelKit, runHelperModelCompletion } from './helperModel';
 
 const CHANNEL = 'TextEnhancement';
 
@@ -83,14 +83,9 @@ export async function polishTextWithAI(
     if (!helperResult.kit) {
       throw new Error(helperResult.reason);
     }
-    const { handler, client } = helperResult.kit;
-    const messages = await handler.initializeMessages('', prompt);
-    const result = await handler.createResponse({
-      client,
-      messages,
-      temperature: 0,
+    const responseText = await runHelperModelCompletion(helperResult.kit, {
+      userPrompt: prompt,
     });
-    const { text: responseText } = handler.extractResponse(result.response, '');
     if (!isNonEmptyString(responseText)) {
       throw new Error('Model returned no text.');
     }
