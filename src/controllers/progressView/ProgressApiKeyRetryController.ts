@@ -69,11 +69,13 @@ export class ProgressApiKeyRetryController {
       // Relay/subscription exhaustion does not break the stored direct key, so
       // if a usable one already exists, switch to it and retry without
       // re-prompting — the user has already provided a key. Only prompt when
-      // none exists yet.
-      if (!(await this.hasAnyUsableKey(providersToCheck))) {
-        await this.deps.promptForApiKey(request.provider);
-      }
+      // none exists yet, and only re-check the keys after that prompt (so the
+      // common already-set path reads the secret store once, not twice).
       shouldProceed = await this.hasAnyUsableKey(providersToCheck);
+      if (!shouldProceed) {
+        await this.deps.promptForApiKey(request.provider);
+        shouldProceed = await this.hasAnyUsableKey(providersToCheck);
+      }
     }
 
     if (!shouldProceed) {
