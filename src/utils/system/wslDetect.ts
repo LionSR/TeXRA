@@ -1,31 +1,23 @@
 /**
  * WSL (Windows Subsystem for Linux) detection.
  *
+ * Delegates to the maintained `is-wsl` package rather than hand-parsing
+ * `/proc/version`: it also checks `os.release()`, the WSL-specific
+ * `/proc/sys/fs/binfmt_misc/WSLInterop` and `/run/WSL` markers, and excludes
+ * containers running on a WSL host (via `is-inside-container`) so a devcontainer
+ * isn't misreported as WSL. `is-wsl` computes its result once at import, so the
+ * previous module-level cache is no longer needed.
+ *
  * This module is intentionally free of VS Code dependencies so it can be
  * imported from VS Code-free zones like `src/tools/`.
  */
 
-import { readFileSync } from 'node:fs';
-
-/** Cached WSL detection result (null = not yet checked). */
-let wslDetected: boolean | null = null;
+import isWsl from 'is-wsl';
 
 /**
- * Detect whether we are running inside Windows Subsystem for Linux (WSL).
- * Checks /proc/version for the "microsoft" or "WSL" marker strings that
- * Microsoft's WSL kernel injects.  Result is cached after the first call.
+ * Whether we are running inside Windows Subsystem for Linux (WSL).
+ * Kept as a function so existing call sites (`isWSL()`) stay unchanged.
  */
 export function isWSL(): boolean {
-  if (wslDetected !== null) return wslDetected;
-  if (process.platform !== 'linux') {
-    wslDetected = false;
-    return false;
-  }
-  try {
-    const version = readFileSync('/proc/version', 'utf-8');
-    wslDetected = /microsoft|wsl/i.test(version);
-  } catch {
-    wslDetected = false;
-  }
-  return wslDetected;
+  return isWsl;
 }
