@@ -79,7 +79,7 @@ export async function inspectRuntimeAgentDefinition(
 export function loadRuntimeAgents(
   options?: RuntimeAgentLoadOptions,
 ): Promise<void> {
-  return options === undefined ? loadAgents() : loadAgents(options);
+  return loadAgents(options);
 }
 
 /** Return display-ready agent catalog options for UI pickers. */

@@ -144,6 +144,9 @@ async function runHistoryDelete(
     ndjson: { kind: 'history-delete', result },
     text,
   });
+  if (result.deleted === 'one' && result.blockedReason === 'running') {
+    return CliExitCode.Usage;
+  }
   return CliExitCode.Success;
 }
 
