@@ -244,9 +244,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         return { response, updatedMessages };
       } catch (err) {
         // Ensure progress streams are finalized on error to prevent
-        // the progress view from being stuck in a loading state
+        // the progress view from being stuck in a loading state. No explicit
+        // final text so any chunks already streamed are preserved (passing `''`
+        // would overwrite the visible partial output).
         thinking.finalize(undefined);
-        output.finalize('');
+        output.finalize();
         // Lift the accumulated partial text onto the error so the retry UI
         // can show the tail (parity with the other streaming providers).
         const partialTail = takeTail(

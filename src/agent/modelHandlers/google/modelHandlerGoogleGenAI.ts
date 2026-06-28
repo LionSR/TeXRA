@@ -574,9 +574,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     } catch (error) {
       // Finalize the progress streams on error so the view does not hang in a
       // loading state. Undefined on the non-streaming path; `finalize` is
-      // idempotent so a re-finalize after the success path is a no-op.
+      // idempotent so a re-finalize after the success path is a no-op. No
+      // explicit final text so any chunks already streamed are preserved
+      // (passing `''` would overwrite the visible partial output).
       thinking?.finalize(undefined);
-      output?.finalize('');
+      output?.finalize();
       // Error logging follows "log at the boundary" principle - Node's retryPrompt
       // or execFallback will log the error once. We only add debug diagnostics here
       // for specific error types that need additional context.

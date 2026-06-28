@@ -2004,10 +2004,12 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     } finally {
       // Finalize the progress streams on a mid-stream failure so the progress
       // view does not hang in a loading state. Guarded so the success-path
-      // finalize above (with the real content) is not overwritten.
+      // finalize above (with the real content) is not overwritten. No explicit
+      // final text so any chunks already streamed are preserved (passing `''`
+      // would overwrite the visible partial output).
       if (!streamsFinalized) {
         thinking.finalize(undefined);
-        output.finalize('');
+        output.finalize();
       }
     }
   }
