@@ -369,7 +369,15 @@ export function createChatSessionController(
         await sleep(25);
         followUpTarget = session.streamId;
       }
-      if (!followUpTarget || session.stopRequested) return false;
+      if (!followUpTarget) {
+        if (!session.stopRequested) {
+          appendLocalAssistantTranscript(
+            'No active session. Start a new agent task to continue.',
+          );
+        }
+        return false;
+      }
+      if (session.stopRequested) return false;
 
       const result = await requestRuntimeFollowUp({
         streamId: followUpTarget,

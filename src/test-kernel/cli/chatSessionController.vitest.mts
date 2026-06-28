@@ -103,6 +103,7 @@ import {
   chatTuiCanStartRootRun,
   type TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
+import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
@@ -567,6 +568,37 @@ describe('createChatSessionController', () => {
       cliState.streams
         .get()
         .get(streamId)
+        ?.entries.map((entry) => ({
+          role: entry.role,
+          text: entry.text,
+        })),
+    ).toEqual([
+      {
+        role: 'assistant',
+        text: 'No active session. Start a new agent task to continue.',
+      },
+    ]);
+  });
+
+  it('surfaces a local notice when a queued root follow-up has no stream target', async () => {
+    const session = makeSession({
+      streamId: undefined,
+      runPromise: Promise.resolve(),
+      runCompleted: true,
+      stopRequested: false,
+    });
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    const delivered = await ctrl.sendFollowUp({
+      text: 'Did this launch?',
+    });
+
+    expect(delivered).toBe(false);
+    expect(mocks.requestRuntimeFollowUp).not.toHaveBeenCalled();
+    expect(
+      cliState.streams
+        .get()
+        .get(CLI_LOCAL_STREAM_ID)
         ?.entries.map((entry) => ({
           role: entry.role,
           text: entry.text,
