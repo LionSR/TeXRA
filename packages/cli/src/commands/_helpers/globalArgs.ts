@@ -204,7 +204,10 @@ export const GLOBAL_BOOL_FLAGS = new Set<string>(
     // that document a negated form — those defaulting to `true` (passed via the
     // negative, like `--no-color`) and opt-in toggles that advertise a
     // `negativeDescription` (like `--no-websocket`, which has no default).
-    if (('default' in def && def.default === true) || 'negativeDescription' in def) {
+    if (
+      ('default' in def && def.default === true) ||
+      'negativeDescription' in def
+    ) {
       flags.push(`--no-${name}`);
     }
     return flags;

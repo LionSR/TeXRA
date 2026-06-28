@@ -31,9 +31,9 @@ describe('websocket global flag routing', () => {
   });
 
   it('recognizes a leading --no-websocket as a single-token global flag', () => {
-    expect(knownGlobalFlagTokenCount(['--no-websocket', 'run', 'polish'], 0)).toBe(
-      1,
-    );
+    expect(
+      knownGlobalFlagTokenCount(['--no-websocket', 'run', 'polish'], 0),
+    ).toBe(1);
     expect(knownGlobalFlagTokenCount(['--websocket', 'run'], 0)).toBe(1);
   });
 });
