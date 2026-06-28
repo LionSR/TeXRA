@@ -378,6 +378,12 @@ const FORBIDDEN_PATTERNS = [
       'use createMainViewStartupController from @controllers/mainView/MainViewStartupControllerFactory',
   },
   {
+    pattern: /\blet\s+activeHandler:\s*DesktopResumeHandler\b/g,
+    label: 'desktop resume last-writer singleton',
+    guidance:
+      'register desktop resume handlers so multiple desktop windows can retain stream ownership',
+  },
+  {
     pattern:
       /\b(?:getRuntimeStreamStatusSnapshot|setRuntimeStreamStatusSilently|clearRuntimeStreamStatus|clearAllRuntimeStreamStatuses|markRuntimeRunningStreamsStopped)\b/g,
     label: 'progress runtime-status port assembled outside its owner',

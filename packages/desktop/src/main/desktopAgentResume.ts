@@ -5,25 +5,28 @@ interface DesktopResumeHandler {
   isResumeInFlight(streamId: StreamTabId): boolean;
 }
 
-let activeHandler: DesktopResumeHandler | undefined;
+const registeredHandlers = new Set<DesktopResumeHandler>();
 
 export function setDesktopAgentResumeHandler(
   handler: DesktopResumeHandler,
 ): () => void {
-  activeHandler = handler;
+  registeredHandlers.add(handler);
   return () => {
-    if (activeHandler === handler) {
-      activeHandler = undefined;
-    }
+    registeredHandlers.delete(handler);
   };
 }
 
 export async function tryResumeDesktopStream(
   streamId: StreamTabId,
 ): Promise<boolean> {
-  return activeHandler?.tryResumeStream(streamId) ?? false;
+  for (const handler of [...registeredHandlers].toReversed()) {
+    if (await handler.tryResumeStream(streamId)) return true;
+  }
+  return false;
 }
 
 export function isDesktopResumeInFlight(streamId: StreamTabId): boolean {
-  return activeHandler?.isResumeInFlight(streamId) ?? false;
+  return [...registeredHandlers].some((handler) =>
+    handler.isResumeInFlight(streamId),
+  );
 }
