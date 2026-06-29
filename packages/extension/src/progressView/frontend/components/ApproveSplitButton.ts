@@ -79,30 +79,64 @@ export class ApproveSplitButton extends LitElement {
         min-width: 0;
       }
 
+      /* Square the inner corners so the label and caret fuse into one pill. */
       .approve-split .approve-split-main::part(base) {
         border-top-right-radius: 0;
         border-bottom-right-radius: 0;
       }
 
+      /* Pull the caret onto the label so their 1px borders overlap into a
+         single divider (instead of a doubled line) once they appear on hover. */
       .approve-split-menu {
         flex: 0 0 auto;
         display: inline-flex;
+        margin-left: calc(-1 * var(--border-thin));
       }
 
       .approve-split-trigger {
         flex: 0 0 auto;
-        width: 20px;
-        min-width: 20px;
-        padding: 0;
+        width: 1.5rem;
+        min-width: 1.5rem;
       }
 
+      /* Match the .action-button chrome: borderless at rest with the border
+         reserved (transparent) so nothing shifts, the caret at full presence
+         (success color, not the faint icon-button default), and only the right
+         corners rounded so it tucks against the label. */
       .approve-split-trigger::part(base) {
+        min-height: var(--height-control-compact);
+        height: auto;
+        width: 100%;
         padding: 0;
+        opacity: var(--opacity-full);
         color: var(--wa-color-success-fill-loud);
+        background: transparent;
+        border: var(--border-thin) solid transparent;
         border-top-left-radius: 0;
         border-bottom-left-radius: 0;
-        border-left: var(--border-thin) solid
-          var(--wa-color-button-separator, var(--wa-form-control-border-color));
+      }
+
+      .approve-split-trigger::part(base):hover {
+        background: transparent;
+      }
+
+      .approve-split-trigger wa-icon {
+        font-size: var(--font-size-sm);
+      }
+
+      /* Hovering or opening either half outlines the whole pair as one box with
+         a single internal divider, so the caret reads as Approve's menu rather
+         than a stray glyph floating beside the button. */
+      .approve-split:hover .approve-split-main::part(base),
+      .approve-split:hover .approve-split-trigger::part(base),
+      .approve-split:focus-within .approve-split-trigger::part(base),
+      .approve-split wa-dropdown[open] .approve-split-trigger::part(base) {
+        border-color: var(--wa-color-surface-border, var(--color-border));
+      }
+
+      .approve-split-trigger:focus-visible::part(base) {
+        outline: var(--border-thin) solid var(--wa-color-focus);
+        outline-offset: var(--border-thin);
       }
 
       .approve-split wa-dropdown[open] .approve-split-trigger wa-icon {
@@ -143,7 +177,7 @@ export class ApproveSplitButton extends LitElement {
           <wa-button
             id="approve-split-trigger-button"
             slot="trigger"
-            class="action-icon-button approve-split-trigger"
+            class="approve-split-trigger"
             appearance="plain"
             variant="neutral"
             size="small"
