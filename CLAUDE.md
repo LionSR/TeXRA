@@ -276,6 +276,14 @@ Never compensate for data model problems at render time. Renderers should only t
 
 **Fix:** Store data once at the source with all metadata (timestamps, IDs). If renderers need to generate or deduplicate, the upstream code path is missing data.
 
+### Duplicate UI Controls (Anti-pattern)
+
+One home per user action. Don't surface the same action (a dispatched event, a
+config/state write, or a command) from two controls; competing controls confuse
+users and drift out of sync. Secondary surfaces show read-only status, never a
+second control. Legit: a global default vs a per-item override, or one action as
+a command plus a single UI button. Grep and details: code-review checklist § 5.
+
 ### Terminal UI (CLI / Ink) discipline
 
 The `texra` CLI ships an Ink (React) TUI under `packages/cli/src/chat/tui/`.
