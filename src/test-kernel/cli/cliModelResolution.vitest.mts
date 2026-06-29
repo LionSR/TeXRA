@@ -275,7 +275,7 @@ describe('buildHeadlessRunContext', () => {
       outputFormat: 'text',
       quietLogs: false,
     });
-    const runContext = buildHeadlessRunContext(context, KNOWN_MODEL);
+    const runContext = buildHeadlessRunContext(context);
     expect(runContext.helperModel).toBe('configured-helper');
     expect(runContext.quietLogs).toBe(true);
     expect(runContext.renderRunProgress).toBe(true);
@@ -283,7 +283,7 @@ describe('buildHeadlessRunContext', () => {
 
   it('keeps human run progress for json output', () => {
     const context = makeContext({ outputFormat: 'json' });
-    const runContext = buildHeadlessRunContext(context, KNOWN_MODEL);
+    const runContext = buildHeadlessRunContext(context);
     expect(runContext.renderRunProgress).toBe(true);
   });
 });

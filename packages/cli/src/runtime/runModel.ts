@@ -86,10 +86,7 @@ export async function resolveCliRunModel(
 }
 
 /** Derive the headless run context shared by every CLI runner. */
-export function buildHeadlessRunContext(
-  context: CliContext,
-  _model: string,
-): CliContext {
+export function buildHeadlessRunContext(context: CliContext): CliContext {
   return {
     ...context,
     quietLogs: true,
