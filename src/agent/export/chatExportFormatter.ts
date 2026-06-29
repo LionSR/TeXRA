@@ -9,15 +9,18 @@
  * and a node-renderer table. Adding a new block type means adding one case
  * to assistantBlockToNode() and one entry per renderer table.
  *
- * This module is VS Code-free — all platform wiring lives in the caller.
+ * This module is host-neutral — all platform wiring lives in the caller. The
+ * LaTeX document preamble is a host-supplied string (the `.tex` template lives
+ * under the extension's `resources/`), so it is passed into `formatChatAsLatex`
+ * rather than imported here.
  *
  * The implementation lives in `./chatExport/`; this file is the public entry
- * point so existing import paths keep working.
+ * point so callers import a single stable surface.
  */
 
 import type { ChatExportInput } from '@agent/export/schemas';
 import { renderDocument } from './chatExport/formatSpec';
-import { latexSpec } from './chatExport/latexSpec';
+import { createLatexSpec } from './chatExport/latexSpec';
 import { markdownSpec } from './chatExport/markdownSpec';
 
 export type {
@@ -37,6 +40,9 @@ export function formatChatAsMarkdown(input: ChatExportInput): string {
   return renderDocument(input, markdownSpec);
 }
 
-export function formatChatAsLatex(input: ChatExportInput): string {
-  return renderDocument(input, latexSpec);
+export function formatChatAsLatex(
+  input: ChatExportInput,
+  latexPreamble: string,
+): string {
+  return renderDocument(input, createLatexSpec(latexPreamble));
 }

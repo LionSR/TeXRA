@@ -1,6 +1,12 @@
-/** LaTeX format spec for chat export. */
+/**
+ * LaTeX format spec for chat export.
+ *
+ * The document preamble is injected via `createLatexSpec(latexPreamble)` rather
+ * than imported here: the `.tex` template lives under the extension package's
+ * `resources/` (host-specific), so this core formatter stays free of any
+ * `@resources` import and is buildable from any host.
+ */
 
-import latexPreamble from '@resources/templates/chatExport.tex';
 import type { DocumentMeta } from '@agent/export/schemas';
 import { filterNotNullish } from '@utils/core';
 
@@ -11,7 +17,7 @@ import {
   type NodeRenderers,
 } from './formatSpec';
 
-function latexHeader(meta: DocumentMeta): string {
+function latexHeader(meta: DocumentMeta, latexPreamble: string): string {
   const esc = escapeLatex;
 
   const rows = HEADER_FIELDS.filter((f) => f.key === 'date' || meta[f.key]).map(
@@ -106,8 +112,14 @@ const TEX_NODES: NodeRenderers = {
       .join('\n'),
 };
 
-export const latexSpec: FormatSpec = {
-  header: latexHeader,
-  footer: '\\end{document}',
-  nodes: TEX_NODES,
-};
+/**
+ * Build the LaTeX format spec, binding the host-supplied document preamble
+ * into the header renderer.
+ */
+export function createLatexSpec(latexPreamble: string): FormatSpec {
+  return {
+    header: (meta) => latexHeader(meta, latexPreamble),
+    footer: '\\end{document}',
+    nodes: TEX_NODES,
+  };
+}

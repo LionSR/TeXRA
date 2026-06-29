@@ -7,6 +7,11 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
+// The `.tex` template is bundled in the extension's resources/ tree and loaded
+// as raw text by the esbuild `.tex: text` loader; it is injected into the
+// host-neutral ChatExportController so core stays free of `@resources`.
+import latexPreamble from '@resources/templates/chatExport.tex';
+
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import {
   ChatExportController,
@@ -39,7 +44,9 @@ type ChatExportFormat = 'md' | 'tex' | 'html';
 
 /** History and chat-export handler delegate. */
 export class HistoryHandlers {
-  private readonly chatExportController = new ChatExportController();
+  private readonly chatExportController = new ChatExportController({
+    latexPreamble,
+  });
 
   /** Path to the bundled HTML export assets (under extension resources). */
   private readonly htmlAssetsSrc: string;
