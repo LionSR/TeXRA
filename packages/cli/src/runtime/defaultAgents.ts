@@ -51,12 +51,14 @@ export function resolveDefaultToolUseAgent<T extends { readonly name: string }>(
   agents: readonly T[] | undefined,
 ): string {
   const candidates = agents ? implicitDefaultToolUseAgents(agents) : [];
-  const byName = (name: string): T | undefined =>
+  const findByName = (name: string): T | undefined =>
     candidates.find((candidate) => agentName(candidate.name) === name);
-  const builtIn = byName(BUILTIN_DEFAULT_CHAT_AGENT);
-  if (builtIn) return builtIn.name;
-  const preferred = PREFERRED_TOOL_USE_AGENTS.map((name) => byName(name)).find(
-    (candidate): candidate is T => candidate !== undefined,
-  );
-  return preferred?.name ?? candidates[0]?.name ?? BUILTIN_DEFAULT_CHAT_AGENT;
+  for (const name of [
+    BUILTIN_DEFAULT_CHAT_AGENT,
+    ...PREFERRED_TOOL_USE_AGENTS,
+  ]) {
+    const found = findByName(name);
+    if (found) return found.name;
+  }
+  return candidates[0]?.name ?? BUILTIN_DEFAULT_CHAT_AGENT;
 }
