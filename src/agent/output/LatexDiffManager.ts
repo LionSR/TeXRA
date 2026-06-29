@@ -22,6 +22,7 @@ import {
   createWorkspaceLocation,
   flexibleFS,
   TaskRunFileService,
+  WorkspaceFS,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 import { getComparablePath } from '@utils/files/taskRunStorage';
@@ -59,6 +60,32 @@ export class LatexDiffManager {
       .fs.realPath(location.absolutePath)
       .catch(() => location.absolutePath);
     return path.dirname(resolved);
+  }
+
+  /**
+   * Directory of the document's live workspace source — the one place that
+   * carries the `figures/` and `.bib` dependencies the diff still `\input`s.
+   * The base location is never the live workspace file: `resolveBaseFilesForDiff`
+   * (`snapshotResolution.ts`) rewrites a round diff base to its
+   * `executions/<id>/original/<rel>` snapshot, and a between-round diff base is
+   * the prior round's output at `r<N>/<rel>`. Both keep the path
+   * workspace-relative apart from a leading run-storage `r<N>/` round segment,
+   * so strip that and map onto the workspace root; fall back to the file's own
+   * directory for external bases or when no workspace is open.
+   *
+   * Assumption: a leading `r<digits>/` segment is a run-storage round prefix,
+   * not a real workspace folder. A document whose live source genuinely sits
+   * under a top-level `r<digits>/` folder (e.g. a "revision 1" `r1/`) would be
+   * mis-stripped — unavoidable with a relativePath-only heuristic, and rare
+   * since it collides with the round-directory naming.
+   */
+  private resolveWorkspaceSourceDir(location: FileLocation): string {
+    const workspaceRoot = WorkspaceFS.getPath();
+    if (workspaceRoot && location.kind !== 'external') {
+      const workspaceRelative = location.relativePath.replace(/^r\d+[/\\]/, '');
+      return path.join(workspaceRoot, path.dirname(workspaceRelative));
+    }
+    return path.dirname(location.absolutePath);
   }
 
   private logLatexdiffResult(
@@ -375,10 +402,16 @@ export class LatexDiffManager {
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
       ),
     );
+    // The diff `.tex` is written to `diff/r{round}/` rather than alongside the
+    // document's `\input`/`\bibliography` targets, so add the live workspace
+    // source directory to the search path; otherwise `\input{figures/…}` and
+    // `\bibliography{…}` fail to resolve when the source lives in a subfolder.
+    const sourceDir = this.resolveWorkspaceSourceDir(referenceLocation);
     const ok = await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,
       timeout: timeoutMs,
+      extraInputDirs: [sourceDir],
     });
 
     if (!ok) {
