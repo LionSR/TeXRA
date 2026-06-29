@@ -246,7 +246,7 @@ credentials-only. A deprecation note covers the transition.
 | State | Extension / desktop     | CLI                        | Walkthrough beat                              | Docs page                                                             |
 | ----- | ----------------------- | -------------------------- | --------------------------------------------- | --------------------------------------------------------------------- |
 | 0     | welcome card            | first-run picker (shipped) | "Sign in — free for academics — or add a key" | `first-run.md` step 0; `quick-start.md` lead                          |
-| 1     | setup agent auto-starts | setup agent after picker   | "The setup assistant takes it from here"      | `first-run.md` body (polish demo, agent-run or manual)                |
+| 1     | setup card → click to run | setup agent after picker   | "The setup assistant takes it from here"      | `first-run.md` body (polish demo, agent-run or manual)                |
 | 2     | orchestrator default    | orchestrator/chat default  | "Meet the orchestrator"                       | `quick-start.md` (launcher reference), `built-in-agents.md` (catalog) |
 
 Doc changes:
@@ -324,7 +324,7 @@ mirrors it; this PRD's State 0 wording is the canonical text.
 | Funnel state derivation (host-neutral)                                | new `src/controllers/onboarding/` module; lift `packages/cli/src/onboarding/onboardingState.ts` + `packages/cli/src/runtime/credentialStatus.ts` logic behind `@platform`            |
 | Shared copy                                                           | new `src/shared/copy/onboarding.ts`; consume in `runOnboarding.tsx`, new welcome card, walkthrough source                                                                            |
 | Welcome card (extension/desktop)                                      | new component in `packages/extension/src/webview/frontend/components/`; visibility wiring in `BannerGroup.ts` / `MainApp.ts`                                                         |
-| State 0 → 1 handoff                                                   | extension credential-changed event → select `setup` + kickoff; CLI post-picker continuation in `chat.ts` / `orchestrate.ts`                                                          |
+| State 0 → 1 handoff                                                   | extension credential-changed event → select `setup` (launch is an explicit "Run setup assistant" click, never auto-started); CLI post-picker continuation in `chat.ts` / `orchestrate.ts`                                                          |
 | `apply_team` tool (writes workspace roster + user-level default team) | new tool in `src/tools/`; preset application path exists in `SettingsAgentCatalogController.ts`                                                                                      |
 | Default-team seeding of fresh workspaces                              | user-scoped `defaultTeamId` key (shared with launcher PRD), starter team in `agentRegistryConstants.ts`, seeding at activation in `packages/extension/src/extension.ts` and CLI init |
 | Project-bootstrap row (empty folder, State 2)                         | `GettingStartedBanner.ts` slimmed; trigger condition unchanged                                                                                                                       |
@@ -340,8 +340,10 @@ mirrors it; this PRD's State 0 wording is the canonical text.
    "Browse all agents…", slimmed bootstrap row.
 2. **State 0 on the extension**: shared copy module + welcome card
    replacing three banners; CLI unchanged.
-3. **State 1**: auto-start setup on credential arrival (both hosts),
-   `apply_team` tool + default-team seeding of fresh workspaces,
-   setup-prompt additions, `texra setup` vocabulary fix.
+3. **State 1**: on credential arrival, select `setup` and show the setup
+   card (both hosts); the user launches it with an explicit "Run setup
+   assistant" click — never auto-started. Plus `apply_team` tool +
+   default-team seeding of fresh workspaces, setup-prompt additions,
+   `texra setup` vocabulary fix.
 4. **Narrative**: walkthrough rewrite + docs-site edits (can trail by
    a release, but must land before marketing the flow).

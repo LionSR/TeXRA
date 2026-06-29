@@ -23,7 +23,7 @@ import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { isNonEmptyString } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
-/** Instruction handed to the setup agent on auto-kickoff (mirrors the extension). */
+/** Instruction handed to the setup agent when launched (mirrors the extension). */
 export const SETUP_INSTRUCTION =
   'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.';
 
