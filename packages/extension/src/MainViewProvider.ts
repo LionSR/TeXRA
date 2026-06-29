@@ -14,10 +14,7 @@ import { agentKeyOf } from '@shared/schemas/agent';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - common
-import {
-  hasAnyUsableSetupCredential,
-  launchSetupAssistant,
-} from '@commands/setup';
+import { hasAnyUsableSetupCredential } from '@commands/setup';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -63,8 +60,6 @@ export class MainViewProvider
   /** Last computed funnel state, so credential hooks can detect the
    *  in-session State 0 → 1 transition. Session-scoped by design. */
   private onboardingFunnelState: OnboardingFunnelState | undefined;
-  /** The setup conversation auto-starts at most once per session. */
-  private setupKickoffStarted = false;
   /** A State 1 entry observed with no view keeps its setup-agent selection
    *  pending until a launcher exists to receive it. */
   private pendingSetupAgentSelection = false;
@@ -156,8 +151,9 @@ export class MainViewProvider
    * Single derivation point for the onboarding funnel on this host (PRD:
    * agent-native onboarding). Recomputes the user-scoped funnel state,
    * pushes it to the webview when the main tab is visible, and acts on the
-   * State 0 → 1 transition: clear a stale skip, select the setup agent, and
-   * start setup once.
+   * State 0 → 1 transition: clear a stale skip and select the setup agent.
+   * It never auto-starts setup — the user launches it explicitly from the
+   * setup card's "Run setup assistant" button (ONBOARDING_RUN_SETUP).
    * Invoked by the message handler on webview ready — which credential-changed
    * hooks replay via refreshOptionsAndView — and after welcome-card actions.
    */
@@ -205,17 +201,6 @@ export class MainViewProvider
         command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
         agentId: entry ? agentKeyOf(entry) : 'setup',
         sessionType: 'toolUse',
-      });
-    }
-    if (transition.kickoffSetup && !this.setupKickoffStarted) {
-      this.setupKickoffStarted = true;
-      // Fire-and-forget: the setup agent run owns its own progress UI. If
-      // preflight declines to start, allow a later credential/config change
-      // to try again in this session.
-      void launchSetupAssistant().then((result) => {
-        if (result === 'not-started') {
-          this.setupKickoffStarted = false;
-        }
       });
     }
   }

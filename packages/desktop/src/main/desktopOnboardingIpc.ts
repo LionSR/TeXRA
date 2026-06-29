@@ -36,7 +36,7 @@ export interface DesktopOnboardingIpcOptions {
   readyGate?: Promise<void>;
   /** Post SET_SELECTED_AGENT to the renderer when entering State 1. */
   selectSetupAgent?: () => Promise<void>;
-  /** Auto-start the setup conversation on the State 0→1 transition. */
+  /** Launch the setup conversation when the user clicks "Run Setup". */
   kickoffSetup?: () => Promise<void>;
   /** Run ChatGPT sign-in flow from the welcome card. */
   signInWithChatGpt?: () => Promise<void>;
@@ -107,18 +107,15 @@ export function createDesktopOnboardingIpc(
     if (transition.selectSetupAgent) {
       await options.selectSetupAgent?.();
     }
-    // The funnel state was already pushed above so the renderer can paint the
-    // setup card immediately; the kickoff runs fire-and-forget (see
-    // startSetupKickoff) so a later refresh isn't blocked behind it.
-    if (transition.kickoffSetup) {
-      startSetupKickoff();
-    }
+    // Entering State 1 only selects the setup agent and paints the setup card;
+    // it never auto-starts the setup conversation. The user launches setup
+    // explicitly via the card's "Run Setup" button (ONBOARDING_RUN_SETUP).
   }
 
-  // Single guarded entry point for launching setup. Both the auto-kickoff on the
-  // needs-credential→setup transition and the explicit "Run Setup" card action
-  // route through here, so a setup run can't be started twice concurrently —
-  // the host's `handleExecute`/`runAgent` has no in-flight dedup of its own.
+  // Single guarded entry point for launching setup. The explicit "Run Setup"
+  // card action routes through here so a setup run can't be started twice
+  // concurrently — the host's `handleExecute`/`runAgent` has no in-flight
+  // dedup of its own.
   function startSetupKickoff(): void {
     if (setupKickoffStarted) return;
     setupKickoffStarted = true;
@@ -133,9 +130,9 @@ export function createDesktopOnboardingIpc(
       .finally(() => {
         // Clear the guard once the run settles (success or failure), not only on
         // error: while it's in flight the guard blocks a concurrent second run,
-        // but afterwards a manual "Run Setup" click or a later credential cycle
-        // must be able to launch setup again (otherwise the guard would stay
-        // stuck for the window's lifetime after the first kickoff).
+        // but afterwards another manual "Run Setup" click must be able to launch
+        // setup again (otherwise the guard would stay stuck for the window's
+        // lifetime after the first kickoff).
         setupKickoffStarted = false;
       });
   }
@@ -175,8 +172,8 @@ export function createDesktopOnboardingIpc(
 
   async function runSetup(): Promise<void> {
     await options.selectSetupAgent?.();
-    // Route through the shared guard so a manual "Run Setup" click after an
-    // auto-kickoff (or a double-click) can't launch a second concurrent run.
+    // Route through the shared guard so a double-click of "Run Setup" can't
+    // launch a second concurrent run.
     startSetupKickoff();
     await refreshOnboardingFunnel();
   }
