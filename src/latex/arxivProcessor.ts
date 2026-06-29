@@ -4,6 +4,7 @@ import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import { createGunzip } from 'node:zlib';
 
+import { parse as parseContentDisposition } from 'content-disposition';
 import { StatusCodes } from 'http-status-codes';
 import * as arxivIdentifiers from 'identifiers-arxiv';
 import pRetry, { AbortError } from 'p-retry';
@@ -177,6 +178,7 @@ class ArxivSourceProcessor {
     timeout: number,
   ): Promise<string> {
     let destPath = destBasePath;
+    let usedDispositionFilename = false;
     let shouldCleanup = true;
     try {
       // AbortSignal.timeout covers both connection establishment and body streaming.
@@ -196,18 +198,38 @@ class ArxivSourceProcessor {
           : new Error(message);
       }
 
-      // Extract filename from Content-Disposition header if available
+      // Extract filename from Content-Disposition header if available.
+      // Uses content-disposition package for full RFC 6266 / RFC 5987 compliance,
+      // which handles both `filename=` and `filename*=UTF-8''...` (percent-encoded
+      // Unicode names that the old regex silently dropped).
       const disposition = response.headers.get('content-disposition');
       if (disposition) {
-        const match = /filename="?([^";]+)"?/i.exec(disposition);
-        if (match) {
-          // Place file in download directory using basename to prevent path traversal
-          destPath = path.join(
-            path.dirname(destBasePath),
-            path.basename(match[1]),
+        let filename: string | undefined;
+        try {
+          filename = parseContentDisposition(disposition).parameters.filename;
+        } catch (error) {
+          // Malformed header — fall through to content-type fallback below.
+          logger.debug(
+            this.channel,
+            'Ignoring malformed Content-Disposition header from arXiv source download',
+            {
+              data: {
+                header: disposition,
+                error: toErrorMessage(error),
+              },
+            },
           );
         }
-      } else {
+        if (filename) {
+          // basename prevents path traversal from a crafted header value.
+          destPath = path.join(
+            path.dirname(destBasePath),
+            path.basename(filename),
+          );
+          usedDispositionFilename = true;
+        }
+      }
+      if (!usedDispositionFilename) {
         const contentType = response.headers.get('content-type') ?? '';
         const extension = this.getExtensionFromContentType(contentType);
         destPath = destBasePath + extension;
