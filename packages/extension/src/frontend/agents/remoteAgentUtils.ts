@@ -10,10 +10,6 @@ import { delay } from '@utils/core';
 const CHANNEL = 'RemoteAgentUtils';
 logger.initialize(CHANNEL);
 
-function selectAgentErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unknown error';
-}
-
 interface SelectAgentResult {
   success: boolean;
   message: string;
@@ -83,7 +79,8 @@ export async function selectAgentInMainView(
       message: `Agent "${agentName}" selected successfully`,
     };
   } catch (error) {
-    const errorMessage = selectAgentErrorMessage(error);
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
     logger.error(CHANNEL, `Failed to select agent: ${errorMessage}`);
     return handleFallback(
       agentName,
