@@ -2,14 +2,20 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import {
+  isStored,
+  makeFakeSettingsStores,
+} from '@test/support/settingsStoresFake';
+import {
   buildConfigListItems,
   buildEnumItems,
   coerceSettingInput,
   ConfigForm,
   formatSettingValue,
+  isConfigResetInput,
   settingDisplayName,
   settingEditKind,
   settingStoreLabel,
+  validateSettingInput,
 } from '@cli/chat/tui/forms/ConfigForm';
 import {
   listSlashCommands,
@@ -26,10 +32,6 @@ import {
 import { DEFAULT_GIT_AUTHOR_NAME } from '@shared/constants/git';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
-import {
-  isStored,
-  makeFakeSettingsStores,
-} from '@test/support/settingsStoresFake';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -94,14 +96,50 @@ describe('ConfigForm helpers', () => {
 
   it('coerces text-editor input by kind', () => {
     expect(coerceSettingInput('texra-ai', false)).toEqual({
+      ok: true,
       value: 'texra-ai',
     });
-    expect(coerceSettingInput('', false)).toEqual({ value: '' });
-    expect(coerceSettingInput('120000', true)).toEqual({ value: 120000 });
-    expect(coerceSettingInput('  90000 ', true)).toEqual({ value: 90000 });
-    // Blank / non-numeric input for a number field is ignored, not written.
-    expect(coerceSettingInput('', true)).toBeNull();
-    expect(coerceSettingInput('abc', true)).toBeNull();
+    expect(coerceSettingInput('', false)).toEqual({ ok: true, value: '' });
+    expect(coerceSettingInput('120000', true)).toEqual({
+      ok: true,
+      value: 120000,
+    });
+    expect(coerceSettingInput('  90000 ', true)).toEqual({
+      ok: true,
+      value: 90000,
+    });
+    expect(coerceSettingInput('', true)).toEqual({
+      ok: false,
+      message: 'Enter a number, or press Ctrl+R to reset.',
+    });
+    expect(coerceSettingInput('abc', true)).toEqual({
+      ok: false,
+      message: 'Enter a finite number.',
+    });
+    expect(coerceSettingInput('Infinity', true)).toEqual({
+      ok: false,
+      message: 'Enter a finite number.',
+    });
+  });
+
+  it('validates coerced text input against the setting schema', () => {
+    const timeout = entryByKey(
+      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+    );
+    expect(validateSettingInput(timeout, '120000', true)).toEqual({
+      ok: true,
+      value: 120000,
+    });
+
+    const invalid = validateSettingInput(timeout, '0', true);
+    expect(invalid.ok).toBe(false);
+    if (!invalid.ok) expect(invalid.message).not.toBe('');
+  });
+
+  it('recognizes parsed and raw Ctrl+R reset input', () => {
+    expect(isConfigResetInput('r', { ctrl: true })).toBe(true);
+    expect(isConfigResetInput('\u0012', {})).toBe(true);
+    expect(isConfigResetInput('r', { meta: true })).toBe(false);
   });
 
   it('formats values for display', () => {
@@ -121,10 +159,21 @@ describe('ConfigForm helpers', () => {
     ).toBe('workspaceState');
   });
 
-  it('strips the texra prefix for display names', () => {
+  it('prefers compact titles and falls back to stripped keys for display names', () => {
     expect(
       settingDisplayName(entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS)),
-    ).toBe('git.markCommits');
+    ).toBe('Mark agent commits');
+
+    expect(
+      settingDisplayName({
+        key: 'texra.example.record',
+        schema: z.record(z.string(), z.string()).prefault({}),
+        description: 'A record setting with no inline editor.',
+        category: 'example',
+        store: 'workspaceState',
+        hosts: ['vscode'],
+      }),
+    ).toBe('example.record');
   });
 
   it('builds list items showing value + store, with editable rows enabled', () => {
@@ -139,7 +188,7 @@ describe('ConfigForm helpers', () => {
     );
 
     expect(markCommits).toMatchObject({
-      label: 'git.markCommits',
+      label: 'Mark agent commits',
       disabled: false,
     });
     expect(markCommits?.description).toContain('on');
