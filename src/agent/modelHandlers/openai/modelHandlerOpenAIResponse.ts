@@ -1209,18 +1209,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const buffer = this.getTokenSafetyBuffer();
     const contextWindow = this.getEffectiveContextWindow();
+    const bufferedMaxTokens = contextWindow - inputEstimate - buffer;
     const validation = this.validateTokenLimits(
       inputEstimate,
       maxOutputTokens,
       contextWindow,
       buffer,
     );
-    const capped = clamp(validation.adjustedMaxTokens, 0, maxOutputTokens);
+    const capped = Math.min(
+      clamp(validation.adjustedMaxTokens, 0, maxOutputTokens),
+      clamp(bufferedMaxTokens, 0, maxOutputTokens),
+    );
     if (capped === maxOutputTokens) return maxOutputTokens;
 
     if (this.shouldFailWhenFallbackOutputBudgetIsReduced()) {
       throw new Error(
-        `Token estimate (${inputEstimate}) + output budget (${maxOutputTokens}) exceeds context window (${contextWindow}), and this route cannot enforce a reduced output budget locally.`,
+        `Token estimate (${inputEstimate}) + output budget (${maxOutputTokens}) + safety buffer (${buffer}) exceeds context window (${contextWindow}), and this route cannot enforce a reduced output budget locally.`,
       );
     }
 

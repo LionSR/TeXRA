@@ -214,7 +214,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
    * request. Without it the handler trusts the larger llm-zoo `contextWindow`,
    * so its own token accounting never trips and the first signal of overflow is
    * the backend's opaque `400 context_length_exceeded`. {@link Math.min} keeps
-   * it a floor so a model already below the cap is left untouched, and the clamp
+   * it a cap so a model already below the cap is left untouched, and the clamp
    * lifts on the API-key fallback like every other subscription-gated override.
    */
   public override getEffectiveContextWindow(): number {
@@ -245,7 +245,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
    * error from {@link resolveAccessToken}.)
    *
    * Also gated on agent category: when {@link isCodexSubscriptionToolUseOnly} is
-   * on (the default), only handlers explicitly tagged as tool-use drive the
+   * on, only handlers explicitly tagged as tool-use drive the
    * subscription. Workflow and untagged helper handlers fall back to the base
    * API-key / relay path. The Codex backend has no background mode (which
    * workflow runs lean on) and is less stable for long runs, so workflows stay

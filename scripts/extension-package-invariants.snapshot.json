@@ -533,7 +533,7 @@
               "type": "boolean"
             },
             "texra.chatgptCodex.subscriptionToolUseOnly": {
-              "default": true,
+              "default": false,
               "description": "Use the ChatGPT subscription for tool-use agents only. Workflow agents fall back to your OpenAI API key or relay, because the Codex backend has no background mode and is less stable for long workflow runs.",
               "scope": "resource",
               "type": "boolean"

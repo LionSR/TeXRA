@@ -72,11 +72,6 @@ function computeCliModelOptionsData(
   models: readonly string[] | undefined,
   agentCategory: AgentCategory | undefined,
 ): Promise<ModelOptionData[]> {
-  if (agentCategory === undefined) {
-    return models === undefined
-      ? computeModelOptionsData()
-      : computeModelOptionsData(models);
-  }
   return computeModelOptionsData(models, undefined, { agentCategory });
 }
 

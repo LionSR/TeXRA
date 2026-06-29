@@ -1086,9 +1086,11 @@ describe('CLI model access resolution', () => {
         },
       },
     ]);
-    expect(computeModelOptionsDataMock).toHaveBeenCalledWith([
-      'hiddenFixtureModel',
-    ]);
+    expect(computeModelOptionsDataMock).toHaveBeenCalledWith(
+      ['hiddenFixtureModel'],
+      undefined,
+      { agentCategory: undefined },
+    );
   });
 
   it('uses the loaded access list as the availability source of truth', async () => {
@@ -1136,9 +1138,12 @@ describe('CLI model access resolution', () => {
         fallbackSource: 'override',
       }),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
-    expect(computeModelOptionsDataMock).toHaveBeenNthCalledWith(2, [
-      'hiddenFixtureModel',
-    ]);
+    expect(computeModelOptionsDataMock).toHaveBeenNthCalledWith(
+      2,
+      ['hiddenFixtureModel'],
+      undefined,
+      { agentCategory: undefined },
+    );
   });
 
   it('checks hidden model access against a supplied visible model list', async () => {
@@ -1166,9 +1171,11 @@ describe('CLI model access resolution', () => {
         ],
       }),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
-    expect(computeModelOptionsDataMock).toHaveBeenCalledWith([
-      'hiddenFixtureModel',
-    ]);
+    expect(computeModelOptionsDataMock).toHaveBeenCalledWith(
+      ['hiddenFixtureModel'],
+      undefined,
+      { agentCategory: undefined },
+    );
   });
 
   it('resolves hidden model entries for diagnostic commands', async () => {
@@ -1195,9 +1202,11 @@ describe('CLI model access resolution', () => {
         availabilityLabel: 'Missing API key',
       },
     });
-    expect(computeModelOptionsDataMock).toHaveBeenCalledWith([
-      'hiddenFixtureModel',
-    ]);
+    expect(computeModelOptionsDataMock).toHaveBeenCalledWith(
+      ['hiddenFixtureModel'],
+      undefined,
+      { agentCategory: undefined },
+    );
   });
 
   it('resolves user-facing model names to canonical registry ids', async () => {
@@ -1230,9 +1239,11 @@ describe('CLI model access resolution', () => {
         availability: 'missing-key',
       },
     });
-    expect(computeModelOptionsDataMock).toHaveBeenCalledWith([
-      'userFacingFixture',
-    ]);
+    expect(computeModelOptionsDataMock).toHaveBeenCalledWith(
+      ['userFacingFixture'],
+      undefined,
+      { agentCategory: undefined },
+    );
   });
 
   it('reports stale hidden model configuration directly', async () => {

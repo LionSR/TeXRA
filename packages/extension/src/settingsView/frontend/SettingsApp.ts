@@ -214,7 +214,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly chatgptAuth = signal<ChatGptAuthStatus>({
     signedIn: false,
     preferSubscription: false,
-    subscriptionToolUseOnly: true,
+    subscriptionToolUseOnly: false,
   });
   private readonly desktopCrashReportingEnabled = signal(false);
   private readonly desktopCrashReportingConfigured = signal(false);

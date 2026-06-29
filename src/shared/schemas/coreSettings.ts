@@ -92,7 +92,7 @@ export const DEFAULT_CORE_SETTINGS = {
   },
   chatgptCodex: {
     preferSubscription: false,
-    subscriptionToolUseOnly: true,
+    subscriptionToolUseOnly: false,
   },
   files: {
     included: {

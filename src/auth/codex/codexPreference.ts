@@ -27,7 +27,7 @@ export function isPreferCodexSubscription(): boolean {
 }
 
 /**
- * Whether the ChatGPT subscription is restricted to tool-use agents (on by
+ * Whether the ChatGPT subscription is restricted to tool-use agents (off by
  * default). When true, workflow agents skip the subscription and route through
  * the user's API key / relay — the Codex backend has no background mode and is
  * less stable for long workflow runs. Read per request by the Codex handler.
@@ -36,8 +36,8 @@ export function isCodexSubscriptionToolUseOnly(): boolean {
   return (
     tryPlatform()?.config.get<boolean>(
       CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
-      true,
-    ) ?? true
+      false,
+    ) ?? false
   );
 }
 
@@ -49,7 +49,7 @@ export async function setCodexSubscriptionToolUseOnly(
   const target = codexPreferenceUpdateTarget(
     CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
   );
-  if (!host) return { effective: true, target };
+  if (!host) return { effective: false, target };
 
   await host.config.update(
     CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,

@@ -217,7 +217,7 @@ export class ModelsTab extends LitElement {
     const signedIn = this.chatgptAuth?.signedIn ?? false;
     const preferSubscription = this.chatgptAuth?.preferSubscription ?? false;
     const subscriptionToolUseOnly =
-      this.chatgptAuth?.subscriptionToolUseOnly ?? true;
+      this.chatgptAuth?.subscriptionToolUseOnly ?? false;
     const account =
       this.chatgptAuth?.email ?? this.chatgptAuth?.accountId ?? 'your account';
     return html`

@@ -750,7 +750,7 @@ describe('desktop settings IPC', () => {
       status: {
         signedIn: false,
         preferSubscription: false,
-        subscriptionToolUseOnly: true,
+        subscriptionToolUseOnly: false,
       },
     });
 
@@ -774,7 +774,7 @@ describe('desktop settings IPC', () => {
       status: {
         signedIn: false,
         preferSubscription: true,
-        subscriptionToolUseOnly: true,
+        subscriptionToolUseOnly: false,
       },
     });
     posted.length = 0;

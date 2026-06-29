@@ -32,7 +32,10 @@ export function sumUsageStats(
   items: Iterable<TokenUsageStats>,
 ): TokenUsageStats {
   const total = emptyUsageStats();
+  let sawUsage = false;
+  let allRoundsViaChatGptSubscription = true;
   for (const usage of items) {
+    sawUsage = true;
     total.inputTokens += usage.inputTokens;
     total.outputTokens += usage.outputTokens;
     total.cost += usage.cost;
@@ -43,9 +46,10 @@ export function sumUsageStats(
     total.cacheCreationInputTokens =
       (total.cacheCreationInputTokens ?? 0) +
       (usage.cacheCreationInputTokens ?? 0);
-    total.viaChatGptSubscription =
-      total.viaChatGptSubscription || (usage.viaChatGptSubscription ?? false);
+    allRoundsViaChatGptSubscription =
+      allRoundsViaChatGptSubscription && usage.viaChatGptSubscription === true;
   }
+  total.viaChatGptSubscription = sawUsage && allRoundsViaChatGptSubscription;
   return total;
 }
 

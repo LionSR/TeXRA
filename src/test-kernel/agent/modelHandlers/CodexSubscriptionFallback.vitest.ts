@@ -136,14 +136,16 @@ describe('ModelHandlerCodex subscription fallback', () => {
   it('leaves a model whose window is already below the ceiling untouched', async () => {
     await initFakePlatformWithSubscription();
 
-    // The clamp is a floor (Math.min), so a sub-ceiling window is unchanged.
+    // The clamp is a cap (Math.min), so a sub-ceiling window is unchanged.
     const handler = new ModelHandlerCodex(config);
     handler.setAgentCategory(AgentCategory.ToolUse);
     expect(handler.getEffectiveContextWindow()).toBe(config.contextWindow);
   });
 
   it('routes untagged helper handlers to the API-key path while the tool-use-only switch is on', async () => {
-    await initFakePlatformWithSubscription();
+    await initFakePlatformWithSubscription({
+      'texra.chatgptCodex.subscriptionToolUseOnly': true,
+    });
 
     const handler = new ModelHandlerCodex(config);
 
@@ -152,7 +154,9 @@ describe('ModelHandlerCodex subscription fallback', () => {
   });
 
   it('keeps tool-use agents on the subscription while the tool-use-only switch is on', async () => {
-    await initFakePlatformWithSubscription();
+    await initFakePlatformWithSubscription({
+      'texra.chatgptCodex.subscriptionToolUseOnly': true,
+    });
 
     const handler = new ModelHandlerCodex(config);
     handler.setAgentCategory(AgentCategory.ToolUse);
@@ -161,11 +165,13 @@ describe('ModelHandlerCodex subscription fallback', () => {
     expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
   });
 
-  it('routes workflow agents to the API-key path while the tool-use-only switch is on (default)', async () => {
-    await initFakePlatformWithSubscription();
+  it('routes workflow agents to the API-key path while the tool-use-only switch is on', async () => {
+    await initFakePlatformWithSubscription({
+      'texra.chatgptCodex.subscriptionToolUseOnly': true,
+    });
 
     // The Codex backend has no background mode and is less stable for long
-    // runs, so workflow agents must skip the subscription by default.
+    // runs, so workflow agents must skip the subscription when this scope is on.
     const handler = new ModelHandlerCodex(largeWindowConfig);
     handler.setAgentCategory(AgentCategory.Workflow);
 
@@ -195,6 +201,29 @@ describe('ModelHandlerCodex subscription fallback', () => {
         temperature: 0,
       }),
     ).rejects.toThrow(/cannot enforce a reduced output budget locally/);
+    expect(requestSpy).not.toHaveBeenCalled();
+  });
+
+  it('preserves the fallback safety buffer before sending subscription requests', async () => {
+    await initFakePlatformWithSubscription();
+
+    const handler = new ModelHandlerCodex(largeWindowConfig);
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    const requestSpy = vi.fn();
+    (
+      handler as unknown as {
+        conversationState: { cumulativeInputTokens: number };
+      }
+    ).conversationState.cumulativeInputTokens =
+      CODEX_SUBSCRIPTION_CONTEXT_WINDOW - config.maxOutputTokens - 100;
+
+    await expect(
+      handler.createResponse({
+        client: { responses: { create: requestSpy } } as never,
+        messages: [],
+        temperature: 0,
+      }),
+    ).rejects.toThrow(/safety buffer/);
     expect(requestSpy).not.toHaveBeenCalled();
   });
 

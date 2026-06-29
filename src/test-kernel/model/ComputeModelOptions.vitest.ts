@@ -142,7 +142,10 @@ describe('computeModelOptionsData relay quota state', () => {
     const { initPlatform } = await import('@platform/platform');
     initPlatform(
       createFakePlatform({
-        config: { 'texra.chatgptCodex.preferSubscription': true },
+        config: {
+          'texra.chatgptCodex.preferSubscription': true,
+          'texra.chatgptCodex.subscriptionToolUseOnly': true,
+        },
         globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
       }),
     );
@@ -162,7 +165,10 @@ describe('computeModelOptionsData relay quota state', () => {
     const { initPlatform } = await import('@platform/platform');
     initPlatform(
       createFakePlatform({
-        config: { 'texra.chatgptCodex.preferSubscription': true },
+        config: {
+          'texra.chatgptCodex.preferSubscription': true,
+          'texra.chatgptCodex.subscriptionToolUseOnly': true,
+        },
         globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
         secrets: {
           [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
@@ -190,7 +196,10 @@ describe('computeModelOptionsData relay quota state', () => {
     const { initPlatform } = await import('@platform/platform');
     initPlatform(
       createFakePlatform({
-        config: { 'texra.chatgptCodex.preferSubscription': true },
+        config: {
+          'texra.chatgptCodex.preferSubscription': true,
+          'texra.chatgptCodex.subscriptionToolUseOnly': true,
+        },
         globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
         secrets: {
           [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),

@@ -4,7 +4,7 @@ import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import type { ExecutionId } from '@shared/schemas';
+import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import {
   readSetting,
   resetSetting,
@@ -212,6 +212,7 @@ export function registerBuiltinSlashCommands(options?: {
       <ModelListForm
         currentModel={current}
         apiMode={cliState.sessionMeta.get().apiMode}
+        agentCategory={AgentCategory.ToolUse}
         availableRows={props.availableRows}
         selectable={selectable}
         getModelSwitchDisabledReason={options?.getModelSwitchDisabledReason}

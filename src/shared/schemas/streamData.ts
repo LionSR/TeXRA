@@ -253,16 +253,29 @@ const FiniteNumber = z.coerce
   .number()
   .transform((n) => (Number.isFinite(n) ? n : 0));
 
+function isNumericUsageField(schema: z.ZodType): boolean {
+  const inner = schema instanceof z.ZodOptional ? schema.unwrap() : schema;
+  return inner instanceof z.ZodNumber;
+}
+
+const numericUsageParsingShape = Object.fromEntries(
+  Object.entries(TokenUsageStatsSchema.shape)
+    .filter(([, schema]) => isNumericUsageField(schema))
+    .map(([key, schema]) => [
+      key,
+      schema instanceof z.ZodOptional
+        ? FiniteNumber.optional().prefault(0)
+        : FiniteNumber,
+    ]),
+);
+
 /** Parsing schema with safe number coercion. */
 const TokenUsageStatsParsingBaseSchema = z.object({
-  inputTokens: FiniteNumber,
-  outputTokens: FiniteNumber,
-  cost: FiniteNumber,
-  cacheReadInputTokens: FiniteNumber.optional().prefault(0),
-  cacheMissInputTokens: FiniteNumber.optional().prefault(0),
-  cacheCreationInputTokens: FiniteNumber.optional().prefault(0),
+  ...numericUsageParsingShape,
   viaChatGptSubscription: z.boolean().catch(false).prefault(false),
-});
+  // The numeric fields are derived from `TokenUsageStatsSchema.shape` above;
+  // TypeScript cannot recover the required keys through `Object.fromEntries`.
+}) as unknown as z.ZodType<TokenUsageStats>;
 
 export const TokenUsageStatsParsingSchema =
   TokenUsageStatsParsingBaseSchema.catch(emptyUsageStats());
