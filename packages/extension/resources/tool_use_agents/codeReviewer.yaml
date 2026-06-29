@@ -8,7 +8,6 @@ settings:
     - read_file
     - glob
     - grep
-    - ls
     - bash
     - diagnostics
     - todo_write

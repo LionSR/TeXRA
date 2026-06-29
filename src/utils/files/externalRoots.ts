@@ -6,7 +6,7 @@ import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 /**
  * Allowlist of external filesystem roots that tools may read or write.
  *
- * Tools like read_file, write_file, ls, glob, and grep normally refuse any
+ * Tools like read_file, write_file, glob, and grep normally refuse any
  * path outside the workspace. Registering a root here lets those tools
  * operate on absolute paths that fall inside it, while paths outside the
  * registry keep their current "stay within the workspace" rejection.

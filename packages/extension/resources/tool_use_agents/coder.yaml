@@ -10,7 +10,6 @@ settings:
     - edit_file
     - glob
     - grep
-    - ls
     - bash
     - diagnostics
     - todo_write
@@ -36,7 +35,7 @@ prompts:
 
     ## Before you write
 
-    Understand the surrounding code first. Use `ls`, `glob`, and `grep` to find
+    Understand the surrounding code first. Use `glob` and `grep` to find
     the relevant files, the existing patterns, the build/test commands, and the
     project's conventions (naming, error handling, imports, formatting). Read
     the files you are about to change in full. Match the local idiom and comment
