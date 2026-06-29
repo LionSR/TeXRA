@@ -355,7 +355,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
       input: parsedInput ?? call.raw,
       ...(Object.keys(logOutput).length > 0 ? { output: logOutput } : {}),
       ...(editedFiles.length && { files: editedFiles }),
-      isError: Boolean(result.isError),
+      isError: extracted.sanitizedResult.status === 'error',
     };
 
     // Update in-progress log (slow tools) or create new log (fast tools)

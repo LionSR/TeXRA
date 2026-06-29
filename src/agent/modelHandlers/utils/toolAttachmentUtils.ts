@@ -136,6 +136,7 @@ export function extractToolAttachments(
   // with formatToolResultAsText.
   const hasError = isNonEmptyString(result.error);
   const hasOutput = isNonEmptyString(result.output);
+  const hasSummary = isNonEmptyString(result.summary);
   const isError = result.isError === true;
   const status =
     isError || (hasError && !hasOutput)
@@ -152,7 +153,9 @@ export function extractToolAttachments(
             ? result.error
             : hasOutput
               ? result.output
-              : 'Tool failed',
+              : hasSummary
+                ? result.summary
+                : 'Tool failed',
         }
       : {}),
     status,

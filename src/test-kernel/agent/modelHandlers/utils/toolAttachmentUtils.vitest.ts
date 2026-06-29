@@ -160,4 +160,18 @@ describe('extractToolAttachments', () => {
     assert.equal(sanitizedResult.status, 'error');
     assert.equal(sanitizedResult.error, 'Tool failed');
   });
+
+  it('uses summary as the error text for summary-only failures', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      isError: true,
+      summary: 'The operation failed before producing output.',
+    });
+
+    assert.equal(sanitizedResult.status, 'error');
+    assert.equal(
+      sanitizedResult.error,
+      'The operation failed before producing output.',
+    );
+    assert.equal(Object.hasOwn(sanitizedResult, 'summary'), false);
+  });
 });
