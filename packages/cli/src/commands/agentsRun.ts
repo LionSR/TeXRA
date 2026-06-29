@@ -57,7 +57,7 @@ export async function runToolUseAgent(
   await resolveCliLaunchAgent(init.agent, 'agentsRun');
 
   const model = await resolveCliRunModel(context, init.model, 'chat');
-  const runContext = buildHeadlessRunContext(context, model);
+  const runContext = buildHeadlessRunContext(context);
 
   return withExpandedRunInputs(
     init.inputFiles,

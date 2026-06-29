@@ -14,12 +14,14 @@ export async function selectCliRootModel({
   modelSource,
   noAvailableModelsMessage,
   agentCategory,
+  persistAsHelperModel = false,
 }: {
   readonly apiMode?: CliApiMode;
   readonly model: string;
   readonly modelSource: CliModelSelectionSource;
   readonly noAvailableModelsMessage?: string;
   readonly agentCategory?: AgentCategory;
+  readonly persistAsHelperModel?: boolean;
 }): Promise<CliRunnableModelResolution> {
   const selection = await resolveCliRunnableModel(model, {
     fallbackSource: modelSource,
@@ -27,6 +29,8 @@ export async function selectCliRootModel({
     agentCategory,
     ...(noAvailableModelsMessage == null ? {} : { noAvailableModelsMessage }),
   });
-  await setCliHelperModel(selection.model);
+  if (persistAsHelperModel) {
+    await setCliHelperModel(selection.model);
+  }
   return selection;
 }

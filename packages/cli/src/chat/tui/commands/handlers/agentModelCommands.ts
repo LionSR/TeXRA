@@ -86,6 +86,7 @@ export async function applyCliModelSelection(
           CHAT_API_MODE_MODEL_RECOVERY,
         ),
         agentCategory: AgentCategory.ToolUse,
+        persistAsHelperModel: true,
       });
       setCliSessionModelOverride(selection.model);
       appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
