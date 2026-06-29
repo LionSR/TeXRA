@@ -520,8 +520,12 @@ serve(async (req) => {
 ### 5. Deploy Edge Function
 
 ```bash
-supabase functions deploy get-agent-config
+supabase functions deploy get-agent-config --no-verify-jwt
 ```
+
+Deploy with `--no-verify-jwt`: the function verifies the user's JWT internally,
+so the gateway check must stay off (it would otherwise reject the request before
+the function runs). All TeXRA edge functions are deployed this way.
 
 ### 6. Get Edge Function URL
 
