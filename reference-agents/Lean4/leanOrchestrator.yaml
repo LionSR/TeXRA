@@ -19,7 +19,6 @@ settings:
     - bash
     - glob
     - grep
-    - ls
     # External CLI agents
     - codex
     - claude_code

@@ -100,8 +100,9 @@ prompts:
        required.
     2. **Read reference docs.** Always include `tool_catalog.md` plus the
        matching schema file.
-    3. **Study examples.** `glob {{ BUILTIN_WORKFLOW_DIR }}/*` or
-       `{{ BUILTIN_TOOLUSE_DIR }}/*`, then `read_file` on a close analogue
+    3. **Study examples.** Use `glob` with `path: "{{ BUILTIN_WORKFLOW_DIR }}"`
+       or `path: "{{ BUILTIN_TOOLUSE_DIR }}"` and `pattern: "*"`, then
+       `read_file` on a close analogue
        (e.g. `polish.yaml` for editing-style workflows, `research.yaml` for
        tool-use with wolfram + bash).
     4. **Draft.** Write the YAML to

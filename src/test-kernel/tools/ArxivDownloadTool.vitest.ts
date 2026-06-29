@@ -1,14 +1,24 @@
 // Third-party imports
 import * as assert from 'node:assert';
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Node.js built-in imports
 
+const gitignoreMock = vi.hoisted(() => ({
+  ignoredPaths: new Set<string>(),
+}));
+
+vi.mock('@tools/gitignore', () => ({
+  getGitignoreMatcher: async () => ({
+    ignores: (path: string) => gitignoreMock.ignoredPaths.has(path),
+  }),
+}));
+
 // Local imports - tools
+import { FileType } from '@platform/interfaces/filesystem';
 import * as arxivModule from '@latex/arxivProcessor';
 import { ArxivDownloadTool } from '@tools/arxiv/ArxivDownloadTool';
 import { WorkspaceFS } from '@utils/files';
-import { FileType } from '@platform/interfaces/filesystem';
 
 declare module '@latex/arxivProcessor' {
   interface ArxivSourceProcessor {
@@ -41,6 +51,7 @@ describe('ArxivDownloadTool', () => {
     processor.downloadSource = originalDownloadSource;
     wsFS.relativePath = originalRelativePath;
     wsFS.readDir = originalReadDir;
+    gitignoreMock.ignoredPaths.clear();
   });
 
   it('returns download summary and a listing of the extracted files', async () => {
@@ -61,8 +72,13 @@ describe('ArxivDownloadTool', () => {
 
     wsFS.relativePath = () => 'sample';
 
+    gitignoreMock.ignoredPaths.add('sample/node_modules');
+
     wsFS.readDir = async () => [
+      ['.git', FileType.Directory],
+      ['.gitignore', FileType.File],
       ['main.tex', FileType.File],
+      ['node_modules', FileType.Directory],
       ['src', FileType.Directory],
     ];
 
@@ -75,5 +91,7 @@ describe('ArxivDownloadTool', () => {
     assert.strictEqual(result.summary, 'arXiv source downloaded to sample');
     assert.ok(result.output?.includes('Directory listing for sample'));
     assert.ok(result.output?.includes('file main.tex'));
+    assert.ok(!result.output?.includes('.gitignore'));
+    assert.ok(!result.output?.includes('node_modules'));
   });
 });
