@@ -9,8 +9,8 @@ import {
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
 import {
-  BUILTIN_DEFAULT_CHAT_AGENT,
   implicitDefaultToolUseAgents,
+  pickDefaultToolUseAgent,
 } from './defaultAgents';
 import { formatCliHistoryResumeSummary } from './historyLabels';
 import {
@@ -150,12 +150,16 @@ function recentAgentItems(
   const toolUseNames = new Set(
     implicitDefaultToolUseAgents(toolUseAgents).map((agent) => agent.name),
   );
+  // The agent "New chat" already starts (the roster-resolved default, which is
+  // `assistant` on a full catalog but the team lead under a scoped roster), so
+  // it isn't duplicated as a redundant "Chat with …" recent row.
+  const defaultAgent = pickDefaultToolUseAgent(toolUseAgents);
   const seen = new Set<string>();
   const items: CliOrchestrationItem[] = [];
 
   for (const entry of history) {
     if (entry.category && entry.category !== AgentCategory.ToolUse) continue;
-    if (entry.agent === BUILTIN_DEFAULT_CHAT_AGENT) continue;
+    if (entry.agent === defaultAgent) continue;
     if (!toolUseNames.has(entry.agent) || seen.has(entry.agent)) continue;
     seen.add(entry.agent);
     items.push({

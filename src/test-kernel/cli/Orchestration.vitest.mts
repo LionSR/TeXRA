@@ -178,7 +178,11 @@ describe('CLI orchestration items', () => {
           status: CLI_HISTORY_RESUMABLE_STATUS,
         }),
       ],
-      toolUseAgents: [toolUseAgent('review'), toolUseAgent('orchestrator')],
+      toolUseAgents: [
+        toolUseAgent('assistant'),
+        toolUseAgent('review'),
+        toolUseAgent('orchestrator'),
+      ],
     });
 
     expect(items.map((item) => item.label)).toEqual([
@@ -214,6 +218,7 @@ describe('CLI orchestration items', () => {
         }),
       ],
       toolUseAgents: [
+        toolUseAgent('assistant'),
         toolUseAgent('search'),
         toolUseAgent('review'),
         toolUseAgent('orchestrator'),
@@ -235,7 +240,11 @@ describe('CLI orchestration items', () => {
         historyEntry('aaaaaaaaaaaa', { agent: 'review' }),
         historyEntry('bbbbbbbbbbbb', { agent: 'orchestrator' }),
       ],
-      toolUseAgents: [toolUseAgent('review'), toolUseAgent('orchestrator')],
+      toolUseAgents: [
+        toolUseAgent('assistant'),
+        toolUseAgent('review'),
+        toolUseAgent('orchestrator'),
+      ],
     });
 
     expect(items.map((item) => item.label)).toEqual([
@@ -292,7 +301,7 @@ describe('CLI orchestration items', () => {
         historyEntry('bbbbbbbbbbbb', { agent: 'missing' }),
         historyEntry('cccccccccccc', { agent: 'review' }),
       ],
-      toolUseAgents: [toolUseAgent('review')],
+      toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
     });
 
     expect(items.map((item) => item.label)).toContain('Chat with review');
@@ -307,7 +316,11 @@ describe('CLI orchestration items', () => {
         historyEntry('aaaaaaaaaaaa', { agent: 'simplifier' }),
         historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
       ],
-      toolUseAgents: [toolUseAgent('simplifier'), toolUseAgent('review')],
+      toolUseAgents: [
+        toolUseAgent('assistant'),
+        toolUseAgent('simplifier'),
+        toolUseAgent('review'),
+      ],
     });
 
     expect(items.map((item) => item.label)).toContain('Chat with review');
@@ -331,6 +344,24 @@ describe('CLI orchestration items', () => {
     expect(items.map((item) => item.label)).not.toContain(
       'Chat with assistant',
     );
+  });
+
+  it('does not duplicate the roster default when assistant is hidden', () => {
+    // A scoped roster hides `assistant`, so New chat starts the roster-resolved
+    // default (`research`). It must not also appear as a "Chat with research"
+    // recent row, while a non-default recent agent still does.
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [
+        historyEntry('aaaaaaaaaaaa', { agent: 'research' }),
+        historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
+      ],
+      toolUseAgents: [toolUseAgent('research'), toolUseAgent('review')],
+    });
+
+    expect(items.map((item) => item.label)).toContain('New chat');
+    expect(items.map((item) => item.label)).toContain('Chat with review');
+    expect(items.map((item) => item.label)).not.toContain('Chat with research');
   });
 
   it('lists team presets as runnable orchestration actions', () => {
@@ -457,7 +488,7 @@ describe('CLI orchestration items', () => {
             status: CLI_HISTORY_RESUMABLE_STATUS,
           }),
         ],
-        toolUseAgents: [toolUseAgent('review')],
+        toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
       }),
       [modelAccess('deepseekT', 'provider-key', false)],
       'personal',
