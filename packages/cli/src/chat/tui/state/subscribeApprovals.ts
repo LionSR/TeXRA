@@ -13,6 +13,7 @@
 // it returns a typed Promise<ToolEditApprovalResult>, not a fire-and-forget
 // event).
 
+import { platform } from '@platform/platform';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
@@ -20,6 +21,8 @@ import {
   humanInputDenialFeedback,
   immediateDecision,
   immediateDecisionForApproval,
+  isCliApiSwitchableRetry,
+  isCliChatGptSubscriptionRetry,
   markApprovalDenied,
 } from '@cli/runtime/approvalAdapter';
 import {
@@ -30,6 +33,12 @@ import {
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import {
+  API_PROVIDERS,
+  lookupApiKey,
+  isApiProvider,
+  type ApiProvider,
+} from '@model/apiProviders';
 import {
   handleProgressViewBashApprovalAction,
   setBashApprovalSessionBypass,
@@ -45,10 +54,71 @@ import { cliState } from './cliState';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,
+  clearRetryApprovalsForStream,
   enqueueApproval,
+  onApprovalsCleared,
   type ApprovalDecision,
   type ApprovalPayload,
 } from './approvalQueue';
+
+// =========================================================================
+// Retry auto-switch: skip the modal when a usable personal key exists
+// =========================================================================
+
+/** Check whether a usable personal API key is stored for a provider. */
+async function hasUsablePersonalKey(provider: ApiProvider): Promise<boolean> {
+  const key = await lookupApiKey(platform().secrets, provider);
+  return typeof key === 'string' && key.trim().length > 0;
+}
+
+/**
+ * When a retry is triggered by relay exhaustion or ChatGPT-subscription
+ * limits, and the stored personal key is not the broken credential, switch
+ * to personal keys and retry without showing the modal — matching the
+ * progress-view API-key retry behaviour.
+ *
+ * Returns the auto-switch decision, or `undefined` when the modal is needed
+ * (no usable key stored, direct-key failure, or unknown provider).
+ */
+async function maybeAutoSwitchRetry(
+  payload: ProgressEventPayloads['showRetryRequest'],
+): Promise<ApprovalDecision | undefined> {
+  if (!isCliApiSwitchableRetry(payload)) return undefined;
+
+  const details = payload.errorDetails;
+  // Upstream credit depletion means the stored direct key IS the broken
+  // credential — the user must provide a changed key, so we cannot
+  // auto-switch to the stored value.
+  if (details?.isUpstreamCreditDepleted) return undefined;
+
+  // ChatGPT-subscription exhaustion -> the user needs an OpenAI key.
+  // Relay exhaustion -> use the provider from error details when known;
+  // provider-less relay failures can use any configured personal key.
+  const providers: readonly ApiProvider[] = isCliChatGptSubscriptionRetry(
+    payload,
+  )
+    ? ['openai']
+    : details?.provider
+      ? isApiProvider(details.provider)
+        ? [details.provider]
+        : []
+      : API_PROVIDERS;
+  if (providers.length === 0) return undefined;
+
+  const hasKey = (
+    await Promise.all(
+      providers.map((provider) => hasUsablePersonalKey(provider)),
+    )
+  ).some(Boolean);
+  if (!hasKey) return undefined;
+
+  const isChatGptSubscription = isCliChatGptSubscriptionRetry(payload);
+  return {
+    accepted: true,
+    apiMode: 'personal',
+    ...(isChatGptSubscription ? { disableChatGptSubscription: true } : {}),
+  };
+}
 
 /**
  * Install the typed approval pipeline. Returns an `unbind` callback that
@@ -59,6 +129,9 @@ export function installTuiApprovals(
   context: CliContext,
 ): () => void {
   const originalEmit = host.emit;
+  const disposeApprovalClearListener = onApprovalsCleared(() => {
+    invalidateRetryRoutes({ cancel: true });
+  });
   host.emit = ((event, payload) => {
     // Approval events are intentionally NOT forwarded to originalEmit.
     // The underlying `createCliRuntimeHost.emit` chains through
@@ -97,6 +170,8 @@ export function installTuiApprovals(
   });
 
   return () => {
+    invalidateRetryRoutes({ cancel: false });
+    disposeApprovalClearListener();
     host.emit = originalEmit;
     setToolEditApprovalHandler();
   };
@@ -146,12 +221,10 @@ function routeApproval(
       );
       return;
     case 'showRetryRequest':
-      routeWithPolicy(
+      routeRetry(
         context,
         host,
-        cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showRetryRequest'],
-        dispatchRetry,
       );
       return;
     case 'showExternalInquiry':
@@ -175,12 +248,69 @@ function routeApproval(
   }
 }
 
+/**
+ * Retry auto-switches need an async key lookup before the modal appears.
+ * Track the latest route per stream so a stale lookup cannot switch API mode
+ * or trigger an older retry after a newer retry request replaced it.
+ */
+const activeRetryRoutes = new Map<string, symbol>();
+
+function invalidateRetryRoutes(options: { cancel: boolean }): void {
+  const streamIds = [...activeRetryRoutes.keys()];
+  activeRetryRoutes.clear();
+  if (!options.cancel) return;
+  for (const streamId of streamIds) {
+    runCoordinatorBridge.cancelRetry(streamId);
+  }
+}
+
+function routeRetry(
+  context: CliContext,
+  host: CliRuntimeHost,
+  payload: ProgressEventPayloads['showRetryRequest'],
+): void {
+  const routeId = Symbol(payload.streamId);
+  activeRetryRoutes.set(payload.streamId, routeId);
+  clearRetryApprovalsForStream(payload.streamId);
+  const isCurrent = () => activeRetryRoutes.get(payload.streamId) === routeId;
+  const finish = () => {
+    if (isCurrent()) activeRetryRoutes.delete(payload.streamId);
+  };
+
+  routeWithPolicy(
+    context,
+    host,
+    'retry',
+    payload,
+    (retryPayload, decision) => {
+      if (!isCurrent()) return;
+      if (
+        decision.accepted &&
+        (decision.apiMode || decision.disableChatGptSubscription)
+      ) {
+        clearRetryApprovalsForStream(retryPayload.streamId);
+      }
+      dispatchRetry(retryPayload, decision, { isCurrent, onComplete: finish });
+    },
+    {
+      beforeQueue: maybeAutoSwitchRetry,
+      isCurrent,
+    },
+  );
+}
+
+interface RouteWithPolicyOptions<P> {
+  beforeQueue?: (payload: P) => Promise<ApprovalDecision | undefined>;
+  isCurrent?: () => boolean;
+}
+
 function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
   context: CliContext,
   host: CliRuntimeHost,
   kind: K,
   payload: P,
   dispatch: (payload: P, decision: ApprovalDecision) => void,
+  options: RouteWithPolicyOptions<P> = {},
 ): void {
   const policy =
     kind === 'retry'
@@ -200,10 +330,37 @@ function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
     ApprovalPayload,
     { kind: K }
   >;
-  void enqueueTuiApproval(queuePayload, host).then((decision) => {
-    markIfRejected(context, decision);
-    dispatch(payload, decision);
-  });
+  void (async () => {
+    try {
+      let autoDecision: ApprovalDecision | undefined;
+      if (options.beforeQueue) {
+        try {
+          autoDecision = await options.beforeQueue(payload);
+        } catch {
+          // The lookup is speculative; falling back to the retry modal is safe.
+          autoDecision = undefined;
+        }
+        if (options.isCurrent && !options.isCurrent()) return;
+        if (autoDecision) {
+          dispatch(payload, autoDecision);
+          return;
+        }
+      }
+
+      const decision = await enqueueTuiApproval(queuePayload, host);
+      if (options.isCurrent && !options.isCurrent()) return;
+      markIfRejected(context, decision);
+      dispatch(payload, decision);
+    } catch {
+      if (options.isCurrent && !options.isCurrent()) return;
+      const decision: ApprovalDecision = {
+        accepted: false,
+        userMessage: 'CLI approval prompt failed.',
+      };
+      markIfRejected(context, decision);
+      dispatch(payload, decision);
+    }
+  })();
 }
 
 export function enqueueTuiApproval(
@@ -263,10 +420,20 @@ function dispatchProposal(
 function dispatchRetry(
   payload: ProgressEventPayloads['showRetryRequest'],
   decision: ApprovalDecision,
+  options: { isCurrent?: () => boolean; onComplete?: () => void } = {},
 ): void {
   if (decision.accepted) {
-    void applyRetryDecision(payload, decision);
+    void applyRetryDecision(payload, decision, options)
+      .catch(() => {
+        if (options.isCurrent?.() ?? true) {
+          runCoordinatorBridge.cancelRetry(payload.streamId);
+        }
+      })
+      .finally(() => {
+        options.onComplete?.();
+      });
   } else {
+    options.onComplete?.();
     runCoordinatorBridge.cancelRetry(payload.streamId);
   }
 }
@@ -274,9 +441,13 @@ function dispatchRetry(
 async function applyRetryDecision(
   payload: ProgressEventPayloads['showRetryRequest'],
   decision: ApprovalDecision,
+  options: { isCurrent?: () => boolean } = {},
 ): Promise<void> {
+  const isCurrent = () => options.isCurrent?.() ?? true;
+  if (!isCurrent()) return;
   if (decision.apiMode) {
     await setCliApiMode(decision.apiMode);
+    if (!isCurrent()) return;
     cliState.sessionMeta.set({
       ...cliState.sessionMeta.get(),
       apiMode: decision.apiMode,
@@ -284,7 +455,9 @@ async function applyRetryDecision(
   }
   if (decision.disableChatGptSubscription) {
     await setCliCodexSubscription(false);
+    if (!isCurrent()) return;
   }
+  if (!isCurrent()) return;
   runCoordinatorBridge.triggerRetry(payload.streamId, decision.userMessage);
 }
 
