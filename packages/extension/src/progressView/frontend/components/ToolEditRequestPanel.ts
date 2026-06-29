@@ -102,7 +102,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
                 <wa-button
                   id="tool-edit-diff-dropdown-trigger"
                   slot="trigger"
-                  class="action-icon-button diff-dropdown-trigger"
+                  class="diff-dropdown-trigger"
                   appearance="plain"
                   variant="neutral"
                   size="small"
