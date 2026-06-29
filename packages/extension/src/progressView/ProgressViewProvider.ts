@@ -487,21 +487,13 @@ export class ProgressViewProvider
           allowBypass: false,
           streamId: manifest.parentStreamId,
         };
-        const permission: ExternalInquiryPermission = isFollowUp
-          ? {
-              ...basePermission,
-              mode: 'followUp',
-              sessionLinks,
-              draft,
-              transcript,
-            }
-          : {
-              ...basePermission,
-              mode: 'new',
-              sessionLinks,
-              draft,
-              transcript,
-            };
+        const permission: ExternalInquiryPermission = {
+          ...basePermission,
+          mode: isFollowUp ? 'followUp' : 'new',
+          sessionLinks,
+          draft,
+          transcript,
+        };
         this.externalInquiryHandler.show(permission);
       } catch {
         // Skip threads whose manifest can't be read; surface logs elsewhere.
