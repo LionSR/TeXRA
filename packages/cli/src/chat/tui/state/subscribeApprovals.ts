@@ -13,6 +13,7 @@
 // it returns a typed Promise<ToolEditApprovalResult>, not a fire-and-forget
 // event).
 
+import { platform } from '@platform/platform';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
@@ -33,6 +34,12 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
+  API_PROVIDERS,
+  lookupApiKey,
+  isApiProvider,
+  type ApiProvider,
+} from '@model/apiProviders';
+import {
   handleProgressViewBashApprovalAction,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
@@ -42,13 +49,6 @@ import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 import { assertNever } from '@utils/core';
-import {
-  API_PROVIDERS,
-  lookupApiKey,
-  isApiProvider,
-  type ApiProvider,
-} from '@model/apiProviders';
-import { platform } from '@platform/platform';
 import { notify } from '../notifications/terminalNotifier';
 import { cliState } from './cliState';
 import { setCliCodexSubscription } from './codexSubscription';
@@ -56,6 +56,7 @@ import {
   approvalPayloadStreamId,
   clearRetryApprovalsForStream,
   enqueueApproval,
+  onApprovalsCleared,
   type ApprovalDecision,
   type ApprovalPayload,
 } from './approvalQueue';
@@ -97,9 +98,12 @@ async function maybeAutoSwitchRetry(
     payload,
   )
     ? ['openai']
-    : details?.provider && isApiProvider(details.provider)
-      ? [details.provider]
+    : details?.provider
+      ? isApiProvider(details.provider)
+        ? [details.provider]
+        : []
       : API_PROVIDERS;
+  if (providers.length === 0) return undefined;
 
   const hasKey = (
     await Promise.all(
@@ -125,6 +129,9 @@ export function installTuiApprovals(
   context: CliContext,
 ): () => void {
   const originalEmit = host.emit;
+  const disposeApprovalClearListener = onApprovalsCleared(() => {
+    invalidateRetryRoutes({ cancel: true });
+  });
   host.emit = ((event, payload) => {
     // Approval events are intentionally NOT forwarded to originalEmit.
     // The underlying `createCliRuntimeHost.emit` chains through
@@ -163,6 +170,8 @@ export function installTuiApprovals(
   });
 
   return () => {
+    invalidateRetryRoutes({ cancel: false });
+    disposeApprovalClearListener();
     host.emit = originalEmit;
     setToolEditApprovalHandler();
   };
@@ -246,6 +255,15 @@ function routeApproval(
  */
 const activeRetryRoutes = new Map<string, symbol>();
 
+function invalidateRetryRoutes(options: { cancel: boolean }): void {
+  const streamIds = [...activeRetryRoutes.keys()];
+  activeRetryRoutes.clear();
+  if (!options.cancel) return;
+  for (const streamId of streamIds) {
+    runCoordinatorBridge.cancelRetry(streamId);
+  }
+}
+
 function routeRetry(
   context: CliContext,
   host: CliRuntimeHost,
@@ -253,6 +271,7 @@ function routeRetry(
 ): void {
   const routeId = Symbol(payload.streamId);
   activeRetryRoutes.set(payload.streamId, routeId);
+  clearRetryApprovalsForStream(payload.streamId);
   const isCurrent = () => activeRetryRoutes.get(payload.streamId) === routeId;
   const finish = () => {
     if (isCurrent()) activeRetryRoutes.delete(payload.streamId);
@@ -318,6 +337,7 @@ function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
         try {
           autoDecision = await options.beforeQueue(payload);
         } catch {
+          // The lookup is speculative; falling back to the retry modal is safe.
           autoDecision = undefined;
         }
         if (options.isCurrent && !options.isCurrent()) return;

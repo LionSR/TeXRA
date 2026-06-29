@@ -79,6 +79,7 @@ export const currentApproval = CURRENT as Signal.State<
 export const approvalQueueStatus = STATUS as Signal.State<ApprovalQueueStatus>;
 
 const queue = new PQueue({ concurrency: 1 });
+const clearListeners = new Set<() => void>();
 
 interface ApprovalQueueItem {
   readonly payload: ApprovalPayload;
@@ -93,6 +94,13 @@ const INTERRUPT: ApprovalDecision = {
   accepted: false,
   userMessage: 'Session interrupted.',
 };
+
+export function onApprovalsCleared(listener: () => void): () => void {
+  clearListeners.add(listener);
+  return () => {
+    clearListeners.delete(listener);
+  };
+}
 
 function statusKindForPayload(
   payload: ApprovalPayload,
@@ -218,6 +226,14 @@ export function enqueueApproval(
 export function clearApprovals(): void {
   queue.clear();
   CURRENT.set(undefined);
+  for (const listener of clearListeners) {
+    try {
+      listener();
+    } catch {
+      // Clear hooks invalidate surrounding async state only; approval
+      // interruption must continue even if a hook fails.
+    }
+  }
   const items = [...pendingItems];
   pendingItems.clear();
   syncApprovalStatus();
