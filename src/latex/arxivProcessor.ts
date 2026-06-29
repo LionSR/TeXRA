@@ -4,7 +4,7 @@ import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import { createGunzip } from 'node:zlib';
 
-import contentDisposition from 'content-disposition';
+import { parse as parseContentDisposition } from 'content-disposition';
 import { StatusCodes } from 'http-status-codes';
 import * as arxivIdentifiers from 'identifiers-arxiv';
 import pRetry, { AbortError } from 'p-retry';
@@ -206,7 +206,7 @@ class ArxivSourceProcessor {
       if (disposition) {
         let filename: string | undefined;
         try {
-          filename = contentDisposition.parse(disposition).parameters.filename;
+          filename = parseContentDisposition(disposition).parameters.filename;
         } catch (error) {
           // Malformed header — fall through to content-type fallback below.
           logger.debug(

@@ -598,9 +598,6 @@ importers:
       glob:
         specifier: ^13.0.6
         version: 13.0.6
-      he:
-        specifier: ^1.2.0
-        version: 1.2.0
       highlight.js:
         specifier: ^11.11.1
         version: 11.11.1
@@ -698,9 +695,6 @@ importers:
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
-      '@types/he':
-        specifier: ^1.2.3
-        version: 1.2.3
       '@types/identifiers-arxiv':
         specifier: ^0.1.2
         version: 0.1.2
@@ -2358,9 +2352,6 @@ packages:
   '@types/fs-extra@9.0.13':
     resolution: {integrity: sha512-nEnwB++1u5lVDM2UI4c1+5R+FYaKfaAzS4OococimjVm3nQw3TuzH5UNsocrcTBbhnerblyHj4A49qXbIiZdpA==}
 
-  '@types/he@1.2.3':
-    resolution: {integrity: sha512-q67/qwlxblDzEDvzHhVkwc1gzVWxaNxeyHUBF4xElrvjL11O+Ytze+1fGpBHlr/H9myiBUaUXNnNPmBHxxfAcA==}
-
   '@types/http-cache-semantics@4.2.0':
     resolution: {integrity: sha512-L3LgimLHXtGkWikKnsPg0/VFx9OGZaC+eN1u4r+OB1XRqH3meBIAVC2zr1WdMH+RHmnRkqliQAOHNJ/E0j/e0Q==}
 
@@ -3956,10 +3947,6 @@ packages:
   hasown@2.0.4:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
-
-  he@1.2.0:
-    resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
-    hasBin: true
 
   highlight.js@10.7.3:
     resolution: {integrity: sha512-tzcUFauisWKNHaRkN4Wjl/ZA07gENAjFl3J/c480dprkGTg5EQstgaNFqBfUqCq54kZRIEcreTsAgF/m2quD7A==}
@@ -7693,8 +7680,6 @@ snapshots:
     dependencies:
       '@types/node': 22.19.17
 
-  '@types/he@1.2.3': {}
-
   '@types/http-cache-semantics@4.2.0': {}
 
   '@types/identifiers-arxiv@0.1.2': {}
@@ -9533,8 +9518,6 @@ snapshots:
   hasown@2.0.4:
     dependencies:
       function-bind: 1.1.2
-
-  he@1.2.0: {}
 
   highlight.js@10.7.3: {}
 
