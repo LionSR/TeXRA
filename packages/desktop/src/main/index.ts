@@ -609,6 +609,24 @@ function createWindow(options: {
       shell.showItemInFolder(filePath);
     },
     openExternalUrl: (url) => previewHost.openExternal(url),
+    presentChatGptSignInUrl: async (url) => {
+      // `openExternal` opens the system default browser. Offer the raw link so
+      // a user whose ChatGPT subscription is signed in elsewhere can open it in
+      // that browser — the loopback callback accepts the redirect from any one.
+      const result = await dialog.showMessageBox(window, {
+        type: 'info',
+        message: 'Signing in with ChatGPT',
+        detail:
+          'Opened your default browser. Using a different browser for ChatGPT? ' +
+          'Copy the link and open it there.',
+        buttons: ['Copy Sign-in Link', 'Close'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      if (result.response === 0) {
+        clipboard.writeText(url);
+      }
+    },
     installToolExtension: async (extensionId) => {
       // The desktop shell can't host VS Code extensions, so opening the
       // marketplace URL was misleading. Surface an info dialog that names
