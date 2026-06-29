@@ -321,6 +321,7 @@ const SCENARIOS = [
     expectExit: true,
     expect: [
       'TeXRA',
+      'v0.0.0-harness',
       'Choose how to start this CLI session.',
       'api: personal API keys',
       'auth: signed out',

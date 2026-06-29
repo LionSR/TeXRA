@@ -103,7 +103,6 @@ export function orchestrationModelAccessView(
 
 const MAX_RECENT_RESUME_ITEMS = 3;
 const MAX_RECENT_AGENT_ITEMS = 3;
-const MAX_PRESET_ITEMS = 6;
 
 export function buildCliOrchestrationItems(
   input: BuildCliOrchestrationItemsInput,
@@ -170,15 +169,17 @@ function recentAgentItems(
   return items;
 }
 
-// Lists every available team (capped at MAX_PRESET_ITEMS) so the user can pick
-// — and switch — among them in the launcher, rather than being pinned to one.
+// Lists every available team (built-in and custom) so the user can pick — and
+// switch — among them in the launcher, rather than being pinned to one. The
+// Select component windows and scrolls the visible rows, so the full team list
+// is offered without an artificial data cap that would hide extra custom teams.
 function presetItems(
   plans: readonly CliMultiAgentPresetRunPlan[],
   options: {
     readonly includeLoginHint?: boolean;
   },
 ): CliOrchestrationItem[] {
-  return plans.slice(0, MAX_PRESET_ITEMS).map((plan) => ({
+  return plans.map((plan) => ({
     value: { kind: 'preset', preset: plan.preset.id },
     label: `Team ${plan.preset.name}`,
     description: formatCliMultiAgentPresetLauncherSummary(plan),
