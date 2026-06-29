@@ -93,8 +93,7 @@ import {
   issuePollingSource,
 } from '@tools/github';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
-import { setAddCriticismSink } from '@tools/AddCriticismTool';
-import { setLinterProvider } from '@tools/DiagnosticsTool';
+import { setAddCriticismSink, setLinterProvider } from '@tools/DiagnosticsTool';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { StorageFS } from '@utils/files';

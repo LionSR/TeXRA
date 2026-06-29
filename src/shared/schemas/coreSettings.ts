@@ -314,7 +314,7 @@ export const CoreSettingsShape = {
     .strictObject({
       enabled: boolField(
         DEFAULT_CORE_SETTINGS.inlineCriticism.enabled,
-        'Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.',
+        'Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the diagnostics tool\'s "add" command.',
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.inlineCriticism),

@@ -15,12 +15,10 @@ settings:
     - edit_file
     - glob
     - grep
+    # Read/write diagnostics: list/count linter diagnostics, or push a critique
+    # as a VS Code diagnostic via the "add" command (gated on the experimental
+    # texra.inlineCriticism.enabled setting).
     - diagnostics
-    # Inline criticism — push a critique as a VS Code diagnostic (squiggle +
-    # Problems panel) instead of inserting a literal \criticize{...} macro.
-    # Experimental: no-ops unless texra.inlineCriticism.enabled is on. Read the
-    # resulting diagnostics back with the `diagnostics` tool above.
-    - add_criticism
     # LaTeX & document production
     - texcount
     - extract_figures
