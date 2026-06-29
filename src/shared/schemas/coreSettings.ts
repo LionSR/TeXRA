@@ -92,6 +92,7 @@ export const DEFAULT_CORE_SETTINGS = {
   },
   chatgptCodex: {
     preferSubscription: false,
+    subscriptionToolUseOnly: true,
   },
   files: {
     included: {
@@ -405,6 +406,10 @@ export const CoreSettingsShape = {
       preferSubscription: boolField(
         DEFAULT_CORE_SETTINGS.chatgptCodex.preferSubscription,
         'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental.',
+      ),
+      subscriptionToolUseOnly: boolField(
+        DEFAULT_CORE_SETTINGS.chatgptCodex.subscriptionToolUseOnly,
+        'Use the ChatGPT subscription for tool-use agents only. Workflow agents fall back to your OpenAI API key or relay, because the Codex backend has no background mode and is less stable for long workflow runs.',
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex),
@@ -722,6 +727,7 @@ export const CORE_SETTING_PATHS = [
   'model.retry.maxAttempts',
   'model.retry.backoffMs',
   'chatgptCodex.preferSubscription',
+  'chatgptCodex.subscriptionToolUseOnly',
   'files.included.mediaExtensions',
   'files.included.inputExtensions',
   'files.included.contextExtensions',

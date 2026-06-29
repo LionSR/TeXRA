@@ -22,6 +22,8 @@ export const ChatGptAuthEvents = {
   signOut: () => createEvent('chatgpt-sign-out', {}),
   setPreferSubscription: (detail: { enabled: boolean }) =>
     createEvent('chatgpt-prefer-subscription-set', detail),
+  setSubscriptionToolUseOnly: (detail: { enabled: boolean }) =>
+    createEvent('chatgpt-subscription-tool-use-only-set', detail),
 } as const;
 
 export const ProviderKeyEvents = {

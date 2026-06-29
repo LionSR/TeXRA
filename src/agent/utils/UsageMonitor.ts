@@ -189,6 +189,9 @@ export class UsageMonitor {
         cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         cost: roundCost,
+        // Free ChatGPT-subscription round: still logged (cost is 0), but marked
+        // so analytics can tell it apart from any other zero-cost row.
+        viaChatGptSubscription: latestUsage?.viaChatGptSubscription ?? false,
       });
     } catch (error) {
       logger.error(
@@ -229,6 +232,7 @@ export class UsageMonitor {
       cacheCreationInputTokens?: number;
       reasoningTokens?: number;
       cost: number;
+      viaChatGptSubscription?: boolean;
     },
   ): Promise<void> {
     try {
@@ -264,6 +268,9 @@ export class UsageMonitor {
         cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usedRelay,
+        ...(usage.viaChatGptSubscription && {
+          viaChatGptSubscription: true,
+        }),
         streamId: this.context.streamId,
       });
 

@@ -216,6 +216,8 @@ export class ModelsTab extends LitElement {
   private renderChatGptSection(): TemplateResult {
     const signedIn = this.chatgptAuth?.signedIn ?? false;
     const preferSubscription = this.chatgptAuth?.preferSubscription ?? false;
+    const subscriptionToolUseOnly =
+      this.chatgptAuth?.subscriptionToolUseOnly ?? true;
     const account =
       this.chatgptAuth?.email ?? this.chatgptAuth?.accountId ?? 'your account';
     return html`
@@ -239,6 +241,21 @@ export class ModelsTab extends LitElement {
             }}
           >
             Prefer ChatGPT subscription
+          </wa-switch>
+        </div>
+        <div class="chatgpt-subscription__setting">
+          <wa-switch
+            ?checked=${subscriptionToolUseOnly}
+            ?disabled=${!preferSubscription}
+            hint="Workflow agents use your API key or relay instead — the Codex backend has no background mode and is less stable for long runs."
+            @change=${(event: Event) => {
+              const enabled = (event.target as WaSwitch).checked;
+              this.dispatchEvent(
+                ChatGptAuthEvents.setSubscriptionToolUseOnly({ enabled }),
+              );
+            }}
+          >
+            Use subscription for tool-use agents only
           </wa-switch>
         </div>
         ${signedIn

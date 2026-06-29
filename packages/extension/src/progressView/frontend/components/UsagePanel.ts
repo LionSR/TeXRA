@@ -68,6 +68,11 @@ export class UsagePanel extends LitElement {
         opacity: var(--opacity-subtle);
       }
 
+      .run-summary__free {
+        color: var(--color-success);
+        font-weight: var(--wa-font-weight-semibold);
+      }
+
       /* Context gauge bar */
       .context-gauge {
         display: inline-flex;
@@ -230,7 +235,14 @@ export class UsagePanel extends LitElement {
           title="Output tokens"
           aria-hidden="true"
         ></wa-icon
-        >${formatCompactTokenCount(outputTokens)} · $${cost.toFixed(3)}
+        >${formatCompactTokenCount(outputTokens)} ·
+        ${cost > 0
+          ? html`$${cost.toFixed(3)}`
+          : html`<span
+              class="run-summary__free"
+              title="No charge — e.g. covered by your ChatGPT subscription"
+              >Free</span
+            >`}
       </span>
     `;
   }

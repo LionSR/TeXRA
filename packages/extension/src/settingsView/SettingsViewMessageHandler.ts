@@ -452,6 +452,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.chatgptHandlers.handleSignOutChatGpt(),
       [SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION]: (data) =>
         this.chatgptHandlers.handleSetPreferSubscription(data.enabled),
+      [SETTINGS_VIEW_COMMANDS.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY]: (data) =>
+        this.chatgptHandlers.handleSetSubscriptionToolUseOnly(data.enabled),
       [SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS]: () =>
         this.withActiveWebview((w) =>
           this.githubHandlers.sendPRSubscriptions(w),

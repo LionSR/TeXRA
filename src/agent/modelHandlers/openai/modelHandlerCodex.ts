@@ -34,8 +34,10 @@ import {
   CODEX_BETA_VALUE,
   CODEX_ORIGINATOR,
   CODEX_ORIGINATOR_HEADER,
+  CODEX_SUBSCRIPTION_CONTEXT_WINDOW,
   CodexAuthError,
   codexCoordinator,
+  isCodexSubscriptionToolUseOnly,
   isPreferCodexSubscription,
 } from '@auth/codex';
 import { toErrorMessage } from '@common/errors';
@@ -43,6 +45,7 @@ import * as logger from '@logger/logUtils';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type {
   ResponseCreateParamsBase,
   ResponseUsage,
@@ -202,6 +205,22 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   }
 
   /**
+   * Clamp the effective context window to the subscription ceiling
+   * ({@link CODEX_SUBSCRIPTION_CONTEXT_WINDOW}) while the subscription drives the
+   * request. Without it the handler trusts the larger llm-zoo `contextWindow`,
+   * so its own token accounting never trips and the first signal of overflow is
+   * the backend's opaque `400 context_length_exceeded`. {@link Math.min} keeps
+   * it a floor so a model already below the cap is left untouched, and the clamp
+   * lifts on the API-key fallback like every other subscription-gated override.
+   */
+  public override getEffectiveContextWindow(): number {
+    const base = super.getEffectiveContextWindow();
+    return this.usingSubscription()
+      ? Math.min(CODEX_SUBSCRIPTION_CONTEXT_WINDOW, base)
+      : base;
+  }
+
+  /**
    * Whether this handler should still drive the ChatGPT subscription. Re-read
    * per request (not cached at construction) so that turning the preference off
    * mid-run — e.g. via the "Use your own API key" retry switch after a
@@ -220,9 +239,20 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
    * (Sign-in is intentionally not re-checked: the switch flips this preference,
    * not the stored session, and an auth lapse still surfaces as an actionable
    * error from {@link resolveAccessToken}.)
+   *
+   * Also gated on agent category: when {@link isCodexSubscriptionToolUseOnly} is
+   * on (the default), only tool-use agents drive the subscription — workflow
+   * agents fall back to the base handler's API-key / relay path. The Codex
+   * backend has no background mode (which workflow runs lean on) and is less
+   * stable for long runs, so workflows stay on the more robust path until the
+   * subscription backend proves itself. The category is set on the handler at
+   * launch (`AgentLaunchContext.setAgentCategory`), so `isWorkflowMode()` is
+   * authoritative by request time.
    */
   private usingSubscription(): boolean {
-    return isPreferCodexSubscription();
+    if (!isPreferCodexSubscription()) return false;
+    if (this.isWorkflowMode() && isCodexSubscriptionToolUseOnly()) return false;
+    return true;
   }
 
   // The Codex backend is streaming-only (`400 Stream must be set to true`
@@ -308,6 +338,23 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
    *  once switched to the API key, fall back to real per-token pricing. */
   public override computePrice(responseUsage: ResponseUsage): number {
     return this.usingSubscription() ? 0 : super.computePrice(responseUsage);
+  }
+
+  /**
+   * Tag subscription rounds so downstream usage logging and the UI can record
+   * them while making clear they are free (the cost above is already 0). The
+   * flag rides {@link NormalizedUsage} through `latestUsage` to
+   * {@link UsageMonitor}; on the API-key fallback it is omitted and real cost
+   * applies.
+   */
+  public override normalizeUsage(
+    rawUsage: ResponseUsage,
+    responseTimeMs: number,
+  ): NormalizedUsage {
+    const usage = super.normalizeUsage(rawUsage, responseTimeMs);
+    return this.usingSubscription()
+      ? { ...usage, viaChatGptSubscription: true }
+      : usage;
   }
 
   /** OAuth access token in place of an API key (becomes the Bearer header),

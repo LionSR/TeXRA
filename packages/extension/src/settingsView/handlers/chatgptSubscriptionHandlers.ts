@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import {
   codexCoordinator,
   getChatGptAuthStatus,
+  setCodexSubscriptionToolUseOnly,
   setPreferCodexSubscription,
 } from '@auth/codex';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
@@ -71,6 +72,25 @@ export class ChatGptSubscriptionHandlers {
       await showLoggedErrorMessage(
         this.ctx.channel,
         'Could not update the ChatGPT subscription preference',
+        error,
+      );
+    } finally {
+      await this.refreshChatGptState();
+    }
+  }
+
+  async handleSetSubscriptionToolUseOnly(enabled: boolean): Promise<void> {
+    try {
+      const update = await setCodexSubscriptionToolUseOnly(enabled);
+      if (update.effective !== enabled) {
+        void vscode.window.showWarningMessage(
+          `A more specific setting still keeps "subscription for tool-use only" ${update.effective ? 'enabled' : 'disabled'}.`,
+        );
+      }
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        'Could not update the ChatGPT subscription scope',
         error,
       );
     } finally {

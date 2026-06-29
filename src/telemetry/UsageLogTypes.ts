@@ -9,6 +9,13 @@ const UsageLogMetadataSchema = z.object({
   agentName: z.string().optional(),
   agentCategory: z.enum(AgentCategory).optional(),
   usedRelay: z.boolean().optional(),
+  /**
+   * True when the round ran on the user's ChatGPT subscription (Codex backend):
+   * recorded so analytics can account for subscription usage even though its
+   * `cost` is 0. Distinguishes a free subscription round from any other
+   * zero-cost row.
+   */
+  viaChatGptSubscription: z.boolean().optional(),
   streamId: z.string().optional(),
 });
 
