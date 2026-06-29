@@ -112,7 +112,7 @@ describe('XmlOutputManager', () => {
     );
   });
 
-  it('recovers documents from percent filename headers as a last-resort fallback', async () => {
+  it('recovers documents from percent filename headers', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
       [
@@ -141,6 +141,71 @@ describe('XmlOutputManager', () => {
     await expect(
       AbsoluteFS.read('/tmp/run/sections/appendix.tex'),
     ).resolves.toBe('Appendix text.\n');
+  });
+
+  it('removes surrounding markdown fences from percent filename output', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '```latex',
+        '% main.tex',
+        '\\documentclass{article}',
+        '\\begin{document}',
+        'Recovered.',
+        '\\end{document}',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        'Recovered.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('prefers percent filename headers over single-document input recovery', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '% declared.tex',
+        '\\documentclass{article}',
+        '\\begin{document}',
+        'Recovered.',
+        '\\end{document}',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual(['declared.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/declared.tex')).resolves.toBe(
+      [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        'Recovered.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    );
+    await expect(AbsoluteFS.exists('/tmp/run/paper.tex')).resolves.toBe(false);
   });
 
   it('recovers hyphenated percent filename headers', async () => {

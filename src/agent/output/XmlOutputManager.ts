@@ -69,6 +69,10 @@ const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
 const PERCENT_FILENAME_HEADER_REGEX =
   /^%\s+([A-Za-z0-9][A-Za-z0-9._/-]*\.[A-Za-z0-9]+)\s*$/;
 
+function isMarkdownFenceDelimiter(line: string): boolean {
+  return /^(?:`{3,}|~{3,})(?:\s+\S.*)?\s*$/.test(line.trim());
+}
+
 export class XmlOutputManager {
   constructor(
     private readonly agentSetting: AgentSetting,
@@ -203,6 +207,9 @@ export class XmlOutputManager {
       }
 
       if (currentName) {
+        if (isMarkdownFenceDelimiter(line)) {
+          continue;
+        }
         currentLines.push(line);
       }
     }
@@ -250,6 +257,13 @@ export class XmlOutputManager {
     }
 
     if (!documents) {
+      documents = this.extractPercentHeaderDocuments(
+        rawOutputContent,
+        getFileDirectory(outputLocation),
+      );
+    }
+
+    if (!documents) {
       // Single-input agents whose model regressed to a legacy single-doc shape
       // (<latex_document>, ```latex fence, or bare \documentclass) can still
       // be recovered: pass the primary input filename so the fallback can
@@ -266,11 +280,6 @@ export class XmlOutputManager {
         preferredName,
       );
     }
-
-    documents ??= this.extractPercentHeaderDocuments(
-      rawOutputContent,
-      getFileDirectory(outputLocation),
-    );
 
     if (!documents) {
       this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);
