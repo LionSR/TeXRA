@@ -92,14 +92,10 @@ export const RunContextSchema = z.discriminatedUnion('kind', [
 export type RunContext = z.infer<typeof RunContextSchema>;
 
 /** The launch variant: all run-identifying fields are required. */
-export type LaunchRunContext = z.infer<typeof RunContextSchema> & {
-  kind: 'launch';
-};
+export type LaunchRunContext = Extract<RunContext, { kind: 'launch' }>;
 
 /** The bare variant: only runtimeHost is required. */
-export type BareRunContext = z.infer<typeof RunContextSchema> & {
-  kind: 'bare';
-};
+export type BareRunContext = Extract<RunContext, { kind: 'bare' }>;
 
 // ---------------------------------------------------------------------------
 // CreateRunContextOptions — the input side.  Uses a discriminated union so
@@ -121,15 +117,22 @@ export interface CreateRunContextBase {
   session?: SessionHandle;
 }
 
+type CreateLaunchRunContextFields = Required<
+  Pick<
+    CreateRunContextBase,
+    'streamId' | 'executionId' | 'coordinators' | 'agentName' | 'session'
+  >
+>;
+
 export type CreateRunContextOptions = CreateRunContextBase &
   (
-    | {
+    | (CreateLaunchRunContextFields & {
         /** Discriminator — live model provider (launch contexts). */
         modelSource: 'live';
         getModel: () => string | undefined;
         /** Static fallback used when getModel() returns undefined. */
         model?: string;
-      }
+      })
     | {
         /** Discriminator — static model string (manual / test contexts). */
         modelSource?: 'static';
@@ -159,7 +162,8 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
           model: options.model,
         };
 
-  const base = Object.freeze({
+  return Object.freeze({
+    kind,
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
@@ -174,9 +178,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
     session: options.session,
-  });
-
-  return Object.freeze({ kind, ...base }) as unknown as RunContext;
+  }) as unknown as RunContext;
 }
 
 // ---------------------------------------------------------------------------
