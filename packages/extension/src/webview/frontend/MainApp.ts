@@ -810,8 +810,8 @@ export class MainApp extends MainAppBase {
     currentValue: string,
     preferEnabled = false,
   ): string {
-    // Exact match
-    if (options.some((opt) => opt.value === currentValue)) {
+    const current = options.find((opt) => opt.value === currentValue);
+    if (current && (!preferEnabled || !current.disabled)) {
       return currentValue;
     }
 
@@ -820,6 +820,7 @@ export class MainApp extends MainAppBase {
       const firstEnabled = options.find((opt) => !opt.disabled);
       if (firstEnabled) return firstEnabled.value;
     }
+    if (current) return currentValue;
     return options[0]?.value ?? '';
   }
 

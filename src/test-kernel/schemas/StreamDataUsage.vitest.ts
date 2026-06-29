@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { sumUsageStats, UsageDataSchema } from '@shared/schemas';
+import {
+  emptyUsageStats,
+  sumUsageStats,
+  UsageDataSchema,
+} from '@shared/schemas';
 
 describe('stream data usage parsing', () => {
   it('coerces persisted usage fields and defaults missing cache counters', () => {
@@ -57,6 +61,7 @@ describe('stream data usage parsing', () => {
   it('marks accumulated usage as subscription usage only when every round is subscription usage', () => {
     expect(
       sumUsageStats([
+        emptyUsageStats(),
         {
           inputTokens: 10,
           outputTokens: 2,

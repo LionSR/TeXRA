@@ -27,15 +27,25 @@ export function emptyUsageStats(): Required<TokenUsageStats> {
   };
 }
 
+function hasUsageActivity(usage: TokenUsageStats): boolean {
+  return (
+    usage.inputTokens !== 0 ||
+    usage.outputTokens !== 0 ||
+    usage.cost !== 0 ||
+    (usage.cacheReadInputTokens ?? 0) !== 0 ||
+    (usage.cacheMissInputTokens ?? 0) !== 0 ||
+    (usage.cacheCreationInputTokens ?? 0) !== 0
+  );
+}
+
 /** Accumulates usage stats from an iterable into a single total. */
 export function sumUsageStats(
   items: Iterable<TokenUsageStats>,
 ): TokenUsageStats {
   const total = emptyUsageStats();
-  let sawUsage = false;
+  let sawUsageActivity = false;
   let allRoundsViaChatGptSubscription = true;
   for (const usage of items) {
-    sawUsage = true;
     total.inputTokens += usage.inputTokens;
     total.outputTokens += usage.outputTokens;
     total.cost += usage.cost;
@@ -46,12 +56,17 @@ export function sumUsageStats(
     total.cacheCreationInputTokens =
       (total.cacheCreationInputTokens ?? 0) +
       (usage.cacheCreationInputTokens ?? 0);
-    allRoundsViaChatGptSubscription =
-      allRoundsViaChatGptSubscription && usage.viaChatGptSubscription === true;
+    if (hasUsageActivity(usage)) {
+      sawUsageActivity = true;
+      allRoundsViaChatGptSubscription =
+        allRoundsViaChatGptSubscription &&
+        usage.viaChatGptSubscription === true;
+    }
   }
-  // Only true when every accumulated round used the subscription; any
-  // API-key or relay round makes the total mixed rather than free.
-  total.viaChatGptSubscription = sawUsage && allRoundsViaChatGptSubscription;
+  // Only true when every non-empty accumulated round used the subscription;
+  // zero baselines are neutral, while API-key or relay rounds make the total mixed.
+  total.viaChatGptSubscription =
+    sawUsageActivity && allRoundsViaChatGptSubscription;
   return total;
 }
 
