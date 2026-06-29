@@ -67,10 +67,25 @@ const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
 };
 
 const PERCENT_FILENAME_HEADER_REGEX =
-  /^%\s+([A-Za-z0-9][A-Za-z0-9._/-]*\.[A-Za-z0-9]+)\s*$/;
+  /^%\s+((?:\.\/)*[A-Za-z0-9][A-Za-z0-9._/-]*\.[A-Za-z0-9]+)\s*$/;
+const LATEX_DOCUMENT_BEGIN_REGEX = /\\begin\s*\{\s*document\s*\}/;
+const LATEX_DOCUMENT_END_REGEX = /\\end\s*\{\s*document\s*\}/;
 
 function isMarkdownFenceDelimiter(line: string): boolean {
-  return /^(?:`{3,}|~{3,})(?:\s+\S.*)?\s*$/.test(line.trim());
+  return /^(?:`{3,}|~{3,})(?:\S.*)?\s*$/.test(line.trim());
+}
+
+function isInsideLatexDocument(lines: readonly string[]): boolean {
+  let depth = 0;
+  for (const line of lines) {
+    if (LATEX_DOCUMENT_BEGIN_REGEX.test(line)) {
+      depth += 1;
+    }
+    if (LATEX_DOCUMENT_END_REGEX.test(line) && depth > 0) {
+      depth -= 1;
+    }
+  }
+  return depth > 0;
 }
 
 export class XmlOutputManager {
@@ -200,7 +215,7 @@ export class XmlOutputManager {
       .split('\n');
     for (const line of lines) {
       const match = PERCENT_FILENAME_HEADER_REGEX.exec(line.trim());
-      if (match) {
+      if (match && !isInsideLatexDocument(currentLines)) {
         flushCurrent();
         currentName = match[1];
         continue;
@@ -253,6 +268,13 @@ export class XmlOutputManager {
       debugInternal(
         this.logger,
         `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
+      );
+    }
+
+    if (!documents) {
+      documents = this.extractMultipleDocumentsbyRegex(
+        outputContent,
+        documentTag,
       );
     }
 

@@ -176,6 +176,74 @@ describe('XmlOutputManager', () => {
     );
   });
 
+  it('removes compact markdown fence info strings after percent headers', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '% main.tex',
+        '```latex',
+        '\\documentclass{article}',
+        '\\begin{document}',
+        'Recovered.',
+        '\\end{document}',
+        '```',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        'Recovered.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('prefers named document fallback over percent filename comments', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '<document name="main.tex">',
+        'Main body.',
+        '% notes.tex',
+        'Still main body.',
+        '</document>',
+        '<document name="appendix.tex">',
+        'Appendix body.',
+        '</document>',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'main.tex',
+      'appendix.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      'Main body.\n% notes.tex\nStill main body.\n',
+    );
+    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
+      'Appendix body.\n',
+    );
+    await expect(AbsoluteFS.exists('/tmp/run/notes.tex')).resolves.toBe(false);
+  });
+
   it('prefers percent filename headers over single-document input recovery', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
@@ -208,6 +276,36 @@ describe('XmlOutputManager', () => {
     await expect(AbsoluteFS.exists('/tmp/run/paper.tex')).resolves.toBe(false);
   });
 
+  it('recovers dot-prefixed relative percent filename headers', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '% ./main.tex',
+        'Main text.',
+        '% ./sections/appendix.tex',
+        'Appendix text.',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'main.tex',
+      'sections/appendix.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      'Main text.\n',
+    );
+    await expect(
+      AbsoluteFS.read('/tmp/run/sections/appendix.tex'),
+    ).resolves.toBe('Appendix text.\n');
+  });
+
   it('recovers hyphenated percent filename headers', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
@@ -235,6 +333,47 @@ describe('XmlOutputManager', () => {
     );
     await expect(AbsoluteFS.read('/tmp/run/sections/part-1.tex')).resolves.toBe(
       'Part text.\n',
+    );
+  });
+
+  it('keeps percent filename comments inside a LaTeX document body', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '% main.tex',
+        '\\documentclass{article}',
+        '\\begin{document}',
+        '% notes.tex',
+        'Still the main document.',
+        '\\end{document}',
+        '% appendix.tex',
+        'Appendix text.',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'main.tex',
+      'appendix.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        '% notes.tex',
+        'Still the main document.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    );
+    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
+      'Appendix text.\n',
     );
   });
 
