@@ -22,6 +22,16 @@ export function implicitDefaultToolUseAgents<
   return agents.filter((agent) => isImplicitDefaultEligible(agent.name));
 }
 
+// Priority for the implicit default: the built-in default first, then the shared
+// preferred order with the built-in removed so it isn't re-checked (it already
+// appears in PREFERRED_TOOL_USE_AGENTS). Built once at module load.
+const DEFAULT_AGENT_PRIORITY: readonly string[] = [
+  BUILTIN_DEFAULT_CHAT_AGENT,
+  ...PREFERRED_TOOL_USE_AGENTS.filter(
+    (name) => name !== BUILTIN_DEFAULT_CHAT_AGENT,
+  ),
+];
+
 /**
  * Pick the implicit default tool-use agent from the visible roster, so the
  * default follows whatever single agent or team the user applied:
@@ -47,10 +57,7 @@ export function pickDefaultToolUseAgent<T extends { readonly name: string }>(
   const candidates = agents ? implicitDefaultToolUseAgents(agents) : [];
   const findByName = (name: string): T | undefined =>
     candidates.find((candidate) => agentName(candidate.name) === name);
-  for (const name of [
-    BUILTIN_DEFAULT_CHAT_AGENT,
-    ...PREFERRED_TOOL_USE_AGENTS,
-  ]) {
+  for (const name of DEFAULT_AGENT_PRIORITY) {
     const found = findByName(name);
     if (found) return found.name;
   }
