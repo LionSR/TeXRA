@@ -315,27 +315,27 @@ function boundedLines(
 }
 
 // Slice raw text to a tail window before wrapping: ~2 screen widths per
-// visible row covers worst-case wrapping without making the wrap O(text)
-// on every streaming delta. Shared by the live renderers and the viewport
-// row estimator so the cap stays consistent.
-export function tailWindow(
-  text: string,
-  cols: number,
-  tailRows: number,
-): string {
+// visible row covers worst-case wrapping without making the wrap O(text) on
+// every streaming delta. liveAssistantDisplayLines applies this window and is
+// shared by the live renderers and viewport row estimator.
+function tailWindow(text: string, cols: number, tailRows: number): string {
   const budget = Math.max(1, cols) * tailRows * 2;
   return text.length > budget ? text.slice(-budget) : text;
 }
 
-function plainWrapTailLines(
-  text: string,
-  cols: number,
-  tailRows: number,
-): readonly string[] {
-  const c = Math.max(1, cols);
-  return wrapAnsiToWidth(tailWindow(text, c, tailRows), c)
+export function liveAssistantDisplayLines({
+  rows,
+  text,
+  width,
+}: {
+  readonly rows: number;
+  readonly text: string;
+  readonly width?: number;
+}): readonly string[] {
+  const cols = Math.max(1, Math.floor(width ?? 80));
+  return wrapAnsiToWidth(tailWindow(text, cols, rows), cols)
     .split('\n')
-    .slice(-Math.max(1, tailRows));
+    .slice(-Math.max(1, rows));
 }
 
 export function boundedAssistantDisplayLines({
@@ -353,7 +353,7 @@ export function boundedAssistantDisplayLines({
 }): readonly string[] {
   const cols = Math.max(1, Math.floor(width ?? 80));
   if (!finalized) {
-    return plainWrapTailLines(text, cols, rows);
+    return liveAssistantDisplayLines({ rows, text, width: cols });
   }
   return boundedLines(
     renderAnsiMarkdown(text, { width: cols, colorEnabled }).split('\n'),
@@ -484,7 +484,11 @@ export const LiveTranscriptEntry = memo(function LiveTranscriptEntry({
   readonly width?: number;
 }): React.JSX.Element {
   const cols = Math.max(1, Math.floor(width ?? 80));
-  const rows = plainWrapTailLines(entry.text, cols, LIVE_TAIL_ROWS);
+  const rows = liveAssistantDisplayLines({
+    rows: LIVE_TAIL_ROWS,
+    text: entry.text,
+    width: cols,
+  });
   return (
     <Box flexDirection="column">
       <Text>{fillRows(rows.join('\n'), cols)}</Text>
