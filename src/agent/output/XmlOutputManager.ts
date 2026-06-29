@@ -10,7 +10,10 @@ import {
 } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentSetting } from '@agent/core/definition/AgentDataclass';
-import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
+import {
+  getExtractedDocOutputFileName,
+  getSafeDocumentRelativePath,
+} from '@agent/utils/outputFileUtils';
 import { toErrorMessage } from '@common/errors';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
@@ -62,6 +65,155 @@ const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
   markdown: 'from markdown code block',
   latex: 'from \\documentclass block',
 };
+
+const PERCENT_FILENAME_HEADER_REGEX =
+  /^%\s+((?:\.[/\\])*[A-Za-z0-9_][A-Za-z0-9._/\\-]*\.[A-Za-z0-9]+)\s*$/;
+const LATEX_DOCUMENTCLASS_REGEX = /\\documentclass\b/;
+const LATEX_DOCUMENT_BEGIN_REGEX = /\\begin\s*\{\s*document\s*\}/;
+const LATEX_DOCUMENT_END_REGEX = /\\end\s*\{\s*document\s*\}/;
+const LIKELY_LATEX_CONTENT_REGEX =
+  /^\\(?:chapter|section|subsection|subsubsection|paragraph|begin|end|input|include|documentclass|usepackage|newcommand|renewcommand|[([])/;
+
+type MarkdownFence = {
+  marker: '`' | '~';
+  length: number;
+};
+
+function parseMarkdownFenceDelimiter(line: string): MarkdownFence | null {
+  const match = /^(`{3,}|~{3,})(?:\s*\S.*)?\s*$/.exec(line.trim());
+  if (!match) {
+    return null;
+  }
+  const delimiter = match[1];
+  return {
+    marker: delimiter[0] as '`' | '~',
+    length: delimiter.length,
+  };
+}
+
+function isMarkdownFenceDelimiter(line: string): boolean {
+  return parseMarkdownFenceDelimiter(line) !== null;
+}
+
+function isClosingMarkdownFence(
+  line: string,
+  openingFence: MarkdownFence,
+): boolean {
+  const closingFence = parseMarkdownFenceDelimiter(line);
+  return (
+    closingFence !== null &&
+    closingFence.marker === openingFence.marker &&
+    closingFence.length >= openingFence.length
+  );
+}
+
+function stripSurroundingMarkdownFence(lines: readonly string[]): string[] {
+  const firstContentIndex = lines.findIndex((line) => line.trim() !== '');
+  if (firstContentIndex === -1) {
+    return [];
+  }
+
+  const lastContentIndex = lines.findLastIndex((line) => line.trim() !== '');
+  if (
+    firstContentIndex < lastContentIndex &&
+    isMarkdownFenceDelimiter(lines[firstContentIndex]) &&
+    isMarkdownFenceDelimiter(lines[lastContentIndex])
+  ) {
+    return [
+      ...lines.slice(0, firstContentIndex),
+      ...lines.slice(firstContentIndex + 1, lastContentIndex),
+      ...lines.slice(lastContentIndex + 1),
+    ];
+  }
+
+  return [...lines];
+}
+
+function getLatexDocumentContext(lines: readonly string[]): {
+  insideDocumentBody: boolean;
+  inDocumentPreamble: boolean;
+} {
+  let depth = 0;
+  let sawDocumentclassWithoutBody = false;
+  for (const line of lines) {
+    if (line.trim().startsWith('%')) {
+      continue;
+    }
+    if (LATEX_DOCUMENTCLASS_REGEX.test(line)) {
+      sawDocumentclassWithoutBody = true;
+    }
+    if (LATEX_DOCUMENT_BEGIN_REGEX.test(line)) {
+      depth += 1;
+      sawDocumentclassWithoutBody = false;
+    }
+    if (LATEX_DOCUMENT_END_REGEX.test(line) && depth > 0) {
+      depth -= 1;
+      if (depth === 0) {
+        sawDocumentclassWithoutBody = false;
+      }
+    }
+  }
+  return {
+    insideDocumentBody: depth > 0,
+    inDocumentPreamble: sawDocumentclassWithoutBody,
+  };
+}
+
+function hasDocumentBeginInCurrentPreamble(
+  lines: readonly string[],
+  startIndex: number,
+): boolean {
+  for (const line of lines.slice(startIndex + 1)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('%')) {
+      continue;
+    }
+    if (LATEX_DOCUMENTCLASS_REGEX.test(line)) {
+      return false;
+    }
+    if (LATEX_DOCUMENT_BEGIN_REGEX.test(line)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function shouldKeepPercentHeaderAsLatexComment(
+  linesBeforeHeader: readonly string[],
+  allLines: readonly string[],
+  headerIndex: number,
+): boolean {
+  const context = getLatexDocumentContext(linesBeforeHeader);
+  if (context.insideDocumentBody) {
+    return true;
+  }
+  return (
+    context.inDocumentPreamble &&
+    hasDocumentBeginInCurrentPreamble(allLines, headerIndex)
+  );
+}
+
+function hasLikelyLatexContent(lines: readonly string[]): boolean {
+  return lines.some((line) => LIKELY_LATEX_CONTENT_REGEX.test(line.trim()));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stripXmlTagBlocks(content: string, tagName: string): string {
+  const trimmedTag = tagName.trim();
+  if (!trimmedTag) {
+    return content;
+  }
+  return content.replaceAll(
+    new RegExp(
+      `<${escapeRegExp(trimmedTag)}\\b[^>]*>[\\s\\S]*?<\\/${escapeRegExp(trimmedTag)}>`,
+      'gi',
+    ),
+    '',
+  );
+}
 
 export class XmlOutputManager {
   constructor(
@@ -130,13 +282,175 @@ export class XmlOutputManager {
     });
   }
 
+  private makeUniquePercentHeaderName(
+    source: string,
+    reservedFinalPaths: Set<string>,
+    roundDir: string,
+  ): string {
+    const normalized = source.replaceAll('\\', '/');
+    const safeName = getSafeDocumentRelativePath(normalized).replaceAll(
+      '\\',
+      '/',
+    );
+    let candidate = safeName;
+    let suffix = 2;
+
+    const finalPathKey = (name: string) =>
+      getExtractedDocOutputFileName(name, roundDir).replaceAll('\\', '/');
+
+    while (reservedFinalPaths.has(finalPathKey(candidate))) {
+      const parsed = path.posix.parse(safeName);
+      candidate = path.posix.join(
+        parsed.dir,
+        `${parsed.name}-${suffix}${parsed.ext}`,
+      );
+      suffix += 1;
+    }
+
+    reservedFinalPaths.add(finalPathKey(candidate));
+    return candidate;
+  }
+
+  private extractPercentHeaderDocuments(
+    outputContent: string,
+    roundDir: string,
+    thinkingTag: string,
+  ): Array<{ content: string; name: string }> | null {
+    const documents: Array<{ content: string; name: string }> = [];
+    const reservedFinalPaths = new Set<string>();
+    let currentName: string | null = null;
+    let currentLines: string[] = [];
+    let preHeaderLines: string[] = [];
+    let pendingPrefacedMarkdownFence: MarkdownFence | null = null;
+    let currentMarkdownFence: MarkdownFence | null = null;
+    let ignoreProseUntilNextHeader = false;
+    let synthesizedSingleInputFromPrefix = false;
+
+    const flushCurrent = (): MarkdownFence | null => {
+      if (!currentName) return null;
+      const content = stripSurroundingMarkdownFence(currentLines)
+        .join('\n')
+        .trim();
+      const carriedFence = content ? null : currentMarkdownFence;
+      if (content) {
+        documents.push({
+          name: this.makeUniquePercentHeaderName(
+            currentName,
+            reservedFinalPaths,
+            roundDir,
+          ),
+          content,
+        });
+      }
+      currentLines = [];
+      currentMarkdownFence = null;
+      return carriedFence;
+    };
+
+    const lines = stripSurroundingMarkdownFence(
+      stripXmlTagBlocks(outputContent, thinkingTag)
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .split('\n'),
+    );
+    for (const [index, line] of lines.entries()) {
+      const fence = parseMarkdownFenceDelimiter(line);
+
+      if (!currentName && fence) {
+        if (
+          pendingPrefacedMarkdownFence &&
+          isClosingMarkdownFence(line, pendingPrefacedMarkdownFence)
+        ) {
+          pendingPrefacedMarkdownFence = null;
+        } else {
+          pendingPrefacedMarkdownFence = fence;
+        }
+        ignoreProseUntilNextHeader = false;
+        continue;
+      }
+
+      if (
+        currentName &&
+        currentMarkdownFence &&
+        isClosingMarkdownFence(line, currentMarkdownFence) &&
+        !getLatexDocumentContext(currentLines).insideDocumentBody
+      ) {
+        flushCurrent();
+        currentName = null;
+        preHeaderLines = [];
+        pendingPrefacedMarkdownFence = null;
+        ignoreProseUntilNextHeader = true;
+        synthesizedSingleInputFromPrefix = false;
+        continue;
+      }
+
+      const match = PERCENT_FILENAME_HEADER_REGEX.exec(line.trim());
+      if (match && synthesizedSingleInputFromPrefix) {
+        currentLines.push(line);
+        continue;
+      }
+
+      const linesBeforeHeader = currentName ? currentLines : preHeaderLines;
+      if (
+        match &&
+        !shouldKeepPercentHeaderAsLatexComment(linesBeforeHeader, lines, index)
+      ) {
+        if (!currentName && hasLikelyLatexContent(preHeaderLines)) {
+          if (this.agentConfig.inputFiles.length === 1) {
+            currentName = this.agentConfig.inputFiles[0];
+            currentLines = [...preHeaderLines, line];
+            currentMarkdownFence = pendingPrefacedMarkdownFence;
+            pendingPrefacedMarkdownFence = null;
+            preHeaderLines = [];
+            ignoreProseUntilNextHeader = false;
+            synthesizedSingleInputFromPrefix = true;
+            continue;
+          }
+          preHeaderLines = [];
+        }
+        const carriedFence = flushCurrent();
+        currentName = match[1];
+        currentMarkdownFence = pendingPrefacedMarkdownFence ?? carriedFence;
+        pendingPrefacedMarkdownFence = null;
+        preHeaderLines = [];
+        ignoreProseUntilNextHeader = false;
+        synthesizedSingleInputFromPrefix = false;
+        continue;
+      }
+
+      if (currentName) {
+        if (
+          fence &&
+          !currentMarkdownFence &&
+          !currentLines.some((currentLine) => currentLine.trim() !== '')
+        ) {
+          currentMarkdownFence = fence;
+          continue;
+        }
+        currentLines.push(line);
+      } else if (!ignoreProseUntilNextHeader) {
+        preHeaderLines.push(line);
+      }
+    }
+    flushCurrent();
+
+    if (documents.length === 0) return null;
+
+    logInternal(
+      this.logger,
+      `Recovered ${this.agentSetting.documentTag} from % filename headers (${formatResultCount(documents.length, 'document')})`,
+    );
+    return documents;
+  }
+
   async splitScratchpadMultipleOutputXml(
     outputLocation: FileLocation,
     documentTag: string,
     round: number,
     thinkingTag: string = 'scratchpad',
   ): Promise<OutputFileInfo[]> {
-    let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
+    const rawOutputContent = await AbsoluteFS.read(outputLocation.absolutePath);
+    let outputContent = rawOutputContent;
     const expectedDocumentCount = this.countDocumentTags(outputContent);
 
     const tagsToWrap = [thinkingTag, 'document'];
@@ -158,6 +472,21 @@ export class XmlOutputManager {
       debugInternal(
         this.logger,
         `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
+      );
+    }
+
+    if (!documents) {
+      documents = this.extractMultipleDocumentsbyRegex(
+        outputContent,
+        documentTag,
+      );
+    }
+
+    if (!documents) {
+      documents = this.extractPercentHeaderDocuments(
+        rawOutputContent,
+        getFileDirectory(outputLocation),
+        thinkingTag,
       );
     }
 
