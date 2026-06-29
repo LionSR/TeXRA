@@ -330,19 +330,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private static readonly BACKGROUND_PENDING_STATUSES: readonly ResponseStatus[] =
     ['queued', 'in_progress'];
 
-  /** Shared polling collaborator, created lazily on first use. */
-  private _backgroundPoller?: BackgroundPoller<Response>;
-  private get backgroundPoller(): BackgroundPoller<Response> {
-    if (!this._backgroundPoller) {
-      this._backgroundPoller = new BackgroundPoller({
-        pollIntervalMs: 15000,
-        maxDurationMs: 3 * 60 * 60 * 1000, // 3 hours
-        isPending: (r) => this.isBackgroundPending(r),
-        logger: () => this.logger,
-      });
-    }
-    return this._backgroundPoller;
-  }
+  private readonly backgroundPoller = new BackgroundPoller<Response>({
+    pollIntervalMs: 15000,
+    maxDurationMs: 3 * 60 * 60 * 1000, // 3 hours
+    isPending: (r) => this.isBackgroundPending(r),
+    logger: () => this.logger,
+  });
 
   private previousResponseId: string | null = null;
 

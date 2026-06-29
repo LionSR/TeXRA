@@ -317,19 +317,13 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   private static readonly BACKGROUND_PENDING_STATUSES: readonly InteractionStatus[] =
     ['in_progress'];
 
-  /** Shared polling collaborator, created lazily on first use. */
-  private _backgroundPoller?: BackgroundPoller<GoogleGenAIInteraction>;
-  private get backgroundPoller(): BackgroundPoller<GoogleGenAIInteraction> {
-    if (!this._backgroundPoller) {
-      this._backgroundPoller = new BackgroundPoller({
-        pollIntervalMs: 5000,
-        maxDurationMs: 3 * 60 * 60 * 1000, // 3 hours
-        isPending: (r) => this.isBackgroundPending(r),
-        logger: () => this.logger,
-      });
-    }
-    return this._backgroundPoller;
-  }
+  private readonly backgroundPoller =
+    new BackgroundPoller<GoogleGenAIInteraction>({
+      pollIntervalMs: 5000,
+      maxDurationMs: 3 * 60 * 60 * 1000, // 3 hours
+      isPending: (r) => this.isBackgroundPending(r),
+      logger: () => this.logger,
+    });
 
   /**
    * Id of the background interaction currently being polled, so an abort handler
