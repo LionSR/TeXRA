@@ -2779,8 +2779,9 @@ already-tracked:
   `src/logger/channelTrace.ts:10` (`import { TraceEmitter, type AgentTrace } from '@agent/trace'`).
   Latent, low; for the eventual package-extraction step.
 - **N4** — `ModelHandler` still defaults `this.logger = createChannelTrace('Agent')`
-  (`ModelHandler.ts:160`, import `:40`), always overwritten by `setLogger`; the noop-default tidy is still
-  open (low, touches the import graph).
+  (`ModelHandler.ts:160`, import `:40`). Normal launch handlers overwrite it through `setLogger`, but
+  helper-model handlers do not yet have a separate logger injection path; the default-logger tidy is still
+  open (low, touches the import graph and helper-model logging behavior).
 - **§21 remainder** — `ToolSessionState` empty schema (`TaskState.ts:11`/`:33`/`:55`/`:63`), the
   `TaskState` refine-vs-discriminated split, and the `AgentState.recordRound` 3-field forwarder
   (`AgentState.ts:48`) — all unchanged.
@@ -2946,7 +2947,7 @@ documented traps — all re-rebutted or already-tracked:
 
 None is a zero-risk dead-shim/barrel delete, so none was applied this confirmation-only pass:
 
-- **N5 — `ModelFactory` compatibility-key side-channel** _(MEDIUM, behavior-touching)_. Every handler is
+- **P25-1 — `ModelFactory` compatibility-key side-channel** _(MEDIUM, behavior-touching)_. Every handler is
   branded post-construction via `Object.defineProperty(handler, '__texraModelHandlerCompatibilityKey', …)`
   (`ModelFactory.ts:51`, `withModelHandlerCompatibilityKey` `:305`), read back by
   `activeModelHandlerCompatibilityKey()` (`:297`) at the one mid-session model-switch detector
@@ -2955,21 +2956,21 @@ None is a zero-risk dead-shim/barrel delete, so none was applied this confirmati
   `readonly compatibilityKey` field set in the constructor (the Codex override — `ModelHandlerOpenAIResponse`
   from a non-Responses config — must keep its distinct key, so derive-from-config is not a pure swap).
   Touches the handler construction path; not mechanical.
-- **N6 — `@agent/types/index.ts` pass-through shim over `@shared/schemas`** _(LOW-MEDIUM)_. Re-exports 7
+- **P25-2 — `@agent/types/index.ts` pass-through shim over `@shared/schemas`** _(LOW-MEDIUM)_. Re-exports 7
   symbols straight from `@shared/schemas`, adding only the local `NormalizedUsage`; **2** files import the
   barrel. Candidate: move `NormalizedUsage` to `@shared/schemas` and drop the shim, or stop re-exporting the
   `@shared` symbols. Surface-curation decision, deferred.
-- **N7 — `core/usage/ResponseUsage.ts:58-66` provider-SDK type re-export block** _(LOW)_. A bare
+- **P25-3 — `core/usage/ResponseUsage.ts:58-66` provider-SDK type re-export block** _(LOW)_. A bare
   `export type { CompletionUsage, AnthropicUsage, … }` pass-through couples a `core/` module to four vendor
   SDK type surfaces purely to forward them; handlers could import these from their own SDK. Keep the
   TeXRA-owned `NativeUsagePayload` union (which legitimately needs the imports); trim only the forwarding block.
-- **N8 — `@logger/index.ts` exposes one symbol** _(LOW, cosmetic)_. `export { createChannelTrace }` only,
+- **P25-4 — `@logger/index.ts` exposes one symbol** _(LOW, cosmetic)_. `export { createChannelTrace }` only,
   while the real functional API lives at the deep path `@logger/logUtils` (~70 callers). Either drop the
   index (2 callers deep-import `@logger/channelTrace`) or widen it to the curated entry.
-- **N9 — Anthropic compaction-threshold config read duplicated** _(LOW)_. `modelHandlerAnthropic.ts:501`
+- **P25-5 — Anthropic compaction-threshold config read duplicated** _(LOW)_. `modelHandlerAnthropic.ts:501`
   re-reads `texra.model.compactionThresholdPercent` inline instead of calling the base
   `getCompactionThresholdPercent()` (`ModelHandler.ts:822`). One-line DRY when next touching the file.
-- **N10 — registry one-time migrations on the lookup hot-path** _(LOW)_. `agentRegistry.ts` embeds three
+- **P25-6 — registry one-time migrations on the lookup hot-path** _(LOW)_. `agentRegistry.ts` embeds three
   `migrateLegacy*` routines (~250 LOC) writing `workspaceState`; extracting to `agentRegistry.migrations.ts`
   (called once from `doLoad`) isolates VS-Code-era persisted-key baggage from the SDK-facing lookup surface.
 
@@ -2985,9 +2986,14 @@ None is a zero-risk dead-shim/barrel delete, so none was applied this confirmati
 - **§4** `UsageMonitor` two-sink fan-out — unchanged (sidebar vs. transcript, agentCategory-gated, intentional).
 - **§5 / Step 7** — still no `delegateTo(...)` primitive (`grep` empty); delegation remains a tool call; the
   per-category flow-runner pre-work (`d32be3b`/`a15dd86`) is in-tree. The one structurally-open item, multi-day by design.
+- **§16 #1** — the `agentRegistry` UI-altitude residue is still present only as the thin
+  `computeAgentOptionsData` orchestrator beside the SDK-exported core. Close to closed, but still open until
+  that last view-model helper moves out of the registry surface.
 - **§16 #4** (`@logger`↔`@agent/trace` value coupling, `channelTrace.ts:10`) — unchanged; latent, low.
-- **N4** `ModelHandler` noop-default `createChannelTrace('Agent')` (`:160`, always overwritten by `setLogger`)
-  — unchanged; low, touches the import graph.
+- **N4** `ModelHandler` default `createChannelTrace('Agent')` (`:160`) — unchanged; normal launch handlers
+  overwrite it through `setLogger`, but helper-model handlers created by `createHelperModelKit()` still use
+  this path unless an explicit helper-model logger is added. Low, but live; touches the import graph and
+  helper-model logging behavior.
 - **§21 remainder** — `ToolSessionState` empty schema, the `TaskState` refine-vs-discriminated split, and the
   `AgentState.recordRound` 3-field forwarder — all unchanged.
 - **`@agent/index` barrel curation** + **`PlatformAgentDirectoryBootstrapOptions`** export — deliberate
@@ -3018,6 +3024,6 @@ continues across settings/model-handlers/runtime, none adding a layer. Three ind
 re-reached the standing verdict and re-surfaced the recurring traps (the `IModelHandler` width/removal for the
 thirteenth time, the rejected `ModelHandler` auth-extraction, the tracked `@agent/index` barrel) — all
 re-rebutted or already-tracked; one new false positive (`isOReasoningModel`/`isGrokReasoningModel` "dead
-getters" — verified used 6×) is recorded. Six genuinely-new micro-candidates (N5–N10) are all
+getters" — verified used 6×) is recorded. Six genuinely-new micro-candidates (P25-1–P25-6) are all
 behavior-touching and recorded for a future tidy pass. Guardrails intact; no dead shim/barrel remains, so no
 refactor was applied to the codebase this pass — only the §25 ledger reconciliation.
