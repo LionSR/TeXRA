@@ -1,6 +1,7 @@
 import { platform } from '@platform/platform';
 import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import { writeTextStderr } from './logSinks';
 
@@ -29,4 +30,17 @@ export async function seedCliRosterFromDefaultTeam(): Promise<boolean> {
     );
     return false;
   }
+}
+
+export async function clearCliSeededRoster(): Promise<void> {
+  await Promise.all([
+    platform().workspaceState.update(
+      WorkspaceStateKey.ENABLED_AGENTS,
+      undefined,
+    ),
+    platform().workspaceState.update(
+      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      undefined,
+    ),
+  ]);
 }

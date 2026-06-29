@@ -35,6 +35,7 @@ import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
+import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch/usage';
@@ -125,6 +126,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
   const history = await listCliHistoryEntries();
   const presets = readCliMultiAgentPresets();
   const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
+  await seedCliRosterFromDefaultTeam();
   const items = buildCliOrchestrationItems({
     presetPlans: presetPlanSet.plans,
     history,

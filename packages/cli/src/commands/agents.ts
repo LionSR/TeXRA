@@ -1,5 +1,7 @@
 import { defineCommand } from 'citty';
 
+import { loadAgents } from '@agent/index';
+
 import {
   AGENT_NAME_DESCRIPTION,
   CLI_AGENT_CATEGORY_FILTER_VALUES,
@@ -12,6 +14,7 @@ import {
   resolveCliAgent,
   type CliAgentListOptions,
 } from '../runtime/agents';
+import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -27,6 +30,10 @@ export async function listAgents(
   options: CliAgentListOptions = {},
 ): Promise<number> {
   await initLocalCliPlatform(context);
+  if (options.includeHidden !== true) {
+    await loadAgents({ includeRemote: false });
+    await seedCliRosterFromDefaultTeam();
+  }
   const result = await loadCliAgentList(options);
 
   if (!context.quietLogs) {
