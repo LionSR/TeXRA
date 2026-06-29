@@ -85,7 +85,7 @@ export const ToolResultPayloadSchema = z.discriminatedUnion('status', [
   z.looseObject({
     status: z.literal('error'),
     /** Error message if tool execution failed */
-    error: z.string(),
+    error: z.string().min(1),
     ...ToolResultPayloadSharedFields,
   }),
 ]);
@@ -115,8 +115,9 @@ function isToolFileAttachment(value: unknown): value is ToolFileAttachment {
  * Extracts file attachments from a tool result and returns a typed payload.
  * Binary data (base64Data, bytes) is stripped from the result.
  *
- * Uses a Zod looseObject schema so parsing never fails - unknown fields
- * are preserved for forward compatibility.
+ * Uses a Zod looseObject schema so unknown fields are preserved for forward
+ * compatibility. The computed discriminator is stamped after raw fields so a
+ * stray raw `status` key cannot invalidate the normalized payload.
  *
  * @param result - Raw tool result (may contain binary data)
  * @returns Extracted attachments and typed payload (without binary data)
@@ -130,16 +131,32 @@ export function extractToolAttachments(
     ? attachmentsCandidate.filter(isToolFileAttachment)
     : [];
 
-  // Determine the discriminator before parsing.  Note: output takes priority
-  // over error for status (mirrors formatToolResultAsText priority).
+  // Determine the discriminator before parsing. Explicit tool failure status
+  // wins; otherwise output takes priority over error text for compatibility
+  // with formatToolResultAsText.
   const hasError = isNonEmptyString(result.error);
   const hasOutput = isNonEmptyString(result.output);
+  const isError = result.isError === true;
   const status =
-    hasError && !hasOutput ? ('error' as const) : ('executed' as const);
+    isError || (hasError && !hasOutput)
+      ? ('error' as const)
+      : ('executed' as const);
 
   // Stamp the discriminator onto the raw result so the discriminated union
   // schema validates the correct variant.
-  const parsed = ToolResultPayloadSchema.parse({ status, ...result });
+  const parsed = ToolResultPayloadSchema.parse({
+    ...result,
+    ...(status === 'error'
+      ? {
+          error: hasError
+            ? result.error
+            : hasOutput
+              ? result.output
+              : 'Tool failed',
+        }
+      : {}),
+    status,
+  });
 
   // Build sanitized result, stripping binary data, undefined values, and redundant fields
   const sanitizedResult: Record<string, unknown> = { status };
@@ -150,8 +167,15 @@ export function extractToolAttachments(
     if (key === 'base64Data' || key === 'bytes') {
       continue;
     }
-    // Skip isError when error message is present (redundant)
-    if (key === 'isError' && hasError) {
+    // Skip legacy isError once the normalized status discriminator is present.
+    if (key === 'isError') {
+      continue;
+    }
+    // Keep runtime values aligned with the discriminated union shape.
+    if (status === 'executed' && key === 'error') {
+      continue;
+    }
+    if (status === 'error' && (key === 'output' || key === 'summary')) {
       continue;
     }
     // Simplify diagnostics: keep validation error details, remove verbose stack traces
@@ -183,7 +207,10 @@ export function extractToolAttachments(
     delete sanitizedResult.files;
   }
 
-  return { attachments, sanitizedResult: sanitizedResult as ToolResultPayload };
+  return {
+    attachments,
+    sanitizedResult: ToolResultPayloadSchema.parse(sanitizedResult),
+  };
 }
 
 export function describeAttachments(

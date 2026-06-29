@@ -7,6 +7,7 @@ import { describe, it } from 'vitest';
 // Local imports - utils
 import {
   checkToolResultTextLimit,
+  extractToolAttachments,
   formatToolResultAsText,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
@@ -113,5 +114,50 @@ describe('formatToolResultAsText', () => {
       output: normalOutput,
     });
     assert.equal(result, normalOutput);
+  });
+});
+
+describe('extractToolAttachments', () => {
+  it('treats isError results with output as error payloads', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      isError: true,
+      output: 'kill failed',
+    });
+
+    assert.equal(sanitizedResult.status, 'error');
+    assert.equal(sanitizedResult.error, 'kill failed');
+    assert.equal(Object.hasOwn(sanitizedResult, 'isError'), false);
+    assert.equal(Object.hasOwn(sanitizedResult, 'output'), false);
+  });
+
+  it('lets the computed discriminator override raw status fields', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      status: 'completed',
+      output: 'done',
+    } as never);
+
+    assert.equal(sanitizedResult.status, 'executed');
+    assert.equal(sanitizedResult.output, 'done');
+  });
+
+  it('drops error from executed payloads when output takes priority', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      output: 'usable output',
+      error: 'secondary warning',
+    });
+
+    assert.equal(sanitizedResult.status, 'executed');
+    assert.equal(sanitizedResult.output, 'usable output');
+    assert.equal(Object.hasOwn(sanitizedResult, 'error'), false);
+  });
+
+  it('uses a non-empty fallback error for empty failing results', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      isError: true,
+      error: '',
+    });
+
+    assert.equal(sanitizedResult.status, 'error');
+    assert.equal(sanitizedResult.error, 'Tool failed');
   });
 });
