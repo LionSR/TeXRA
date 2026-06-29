@@ -1,7 +1,7 @@
 import { UsageLogService } from '@telemetry/UsageLogService';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentRunStateSnapshot } from '@agent/core/execution/AgentState';
+import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';

@@ -1,4 +1,4 @@
-import type { TaskState } from '@agent/core/execution/TaskState';
+import type { TaskState } from '@agent/core/state/TaskState';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { isNonEmptyString } from '@utils/core';

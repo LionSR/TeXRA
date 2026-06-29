@@ -1,5 +1,5 @@
 // Local imports - agent
-import type { TaskState } from '@agent/core/execution/TaskState';
+import type { TaskState } from '@agent/core/state/TaskState';
 import {
   buildFileContextFromTaskState,
   polishTextWithAI,

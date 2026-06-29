@@ -10,7 +10,7 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';

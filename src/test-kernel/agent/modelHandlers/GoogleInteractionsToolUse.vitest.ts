@@ -6,7 +6,7 @@ import {
 } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
-import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import type { GoogleToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ToolResultPayload } from '@agent/modelHandlers/utils/toolAttachmentUtils';

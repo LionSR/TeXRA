@@ -13,7 +13,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   isToolUseTaskState,
   isWorkflowTaskState,
-} from '@agent/core/execution/TaskState';
+} from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - shared

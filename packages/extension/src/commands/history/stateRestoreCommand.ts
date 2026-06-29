@@ -6,10 +6,7 @@ import * as vscode from 'vscode';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 
 // Local imports
-import {
-  TaskStateSchema,
-  type TaskState,
-} from '@agent/core/execution/TaskState';
+import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { setPendingState } from '@common/state';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';

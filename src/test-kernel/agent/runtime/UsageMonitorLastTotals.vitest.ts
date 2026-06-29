@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
-import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   AgentCategory,
