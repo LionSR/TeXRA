@@ -63,17 +63,21 @@ export class LatexDiffManager {
   }
 
   /**
-   * Directory of the document's live workspace source. `resolveBaseFilesForDiff`
-   * rewrites the base to its `executions/<id>/original/<rel>` snapshot, which
-   * holds only the snapshotted `.tex` files — not the `figures/` and `.bib`
-   * dependencies the diff still `\input`s. Map the workspace-relative path back
-   * onto the workspace root so the diff compile finds them; fall back to the
-   * file's own directory for external bases or when no workspace is open.
+   * Directory of the document's live workspace source — the one place that
+   * carries the `figures/` and `.bib` dependencies the diff still `\input`s.
+   * The base location is never the live workspace file: `resolveBaseFilesForDiff`
+   * rewrites a round diff base to its `executions/<id>/original/<rel>` snapshot,
+   * and a between-round diff base is the prior round's output at `r<N>/<rel>`.
+   * Both keep the path workspace-relative apart from a leading run-storage
+   * `r<N>/` round segment, so strip that and map onto the workspace root; fall
+   * back to the file's own directory for external bases or when no workspace is
+   * open.
    */
   private resolveWorkspaceSourceDir(location: FileLocation): string {
     const workspaceRoot = WorkspaceFS.getPath();
     if (workspaceRoot && location.kind !== 'external') {
-      return path.join(workspaceRoot, path.dirname(location.relativePath));
+      const workspaceRelative = location.relativePath.replace(/^r\d+[/\\]/, '');
+      return path.join(workspaceRoot, path.dirname(workspaceRelative));
     }
     return path.dirname(location.absolutePath);
   }

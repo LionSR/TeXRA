@@ -84,8 +84,9 @@ export function buildLatexSearchParts(input: {
   workspacePath?: string | null;
   tikzInputDirectory?: string | null;
 }): { texInputParts: string[]; bibSearchParts: string[] } {
-  const { documentDir, workspacePath, tikzInputDirectory } = input;
-  const sourceDirs = [documentDir, ...(input.extraInputDirs ?? [])];
+  const { documentDir, extraInputDirs, workspacePath, tikzInputDirectory } =
+    input;
+  const sourceDirs = [documentDir, ...(extraInputDirs ?? [])];
   const workspaceParts = workspacePath ? [workspacePath] : [];
   const tikzParts = tikzInputDirectory?.trim() ? [tikzInputDirectory] : [];
   return {
