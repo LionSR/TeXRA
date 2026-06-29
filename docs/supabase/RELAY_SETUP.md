@@ -132,8 +132,12 @@ curl -X POST \
 To update the relay function after changes:
 
 ```bash
-supabase functions deploy relay
+supabase functions deploy relay --no-verify-jwt
 ```
+
+Always pass `--no-verify-jwt` — the relay validates the JWT (and CI tokens)
+itself, so omitting the flag flips the gateway to `verify_jwt=true` and breaks
+every relay call. This applies to all TeXRA edge functions.
 
 Changes take effect immediately. Client caches expire after 5 minutes.
 
