@@ -41,19 +41,20 @@ describe('buildLatexInputEnv', () => {
 });
 
 describe('buildLatexSearchParts', () => {
-  it('puts the document dir first, then extra source dirs, then workspace/tikz', () => {
+  it('ranks document + extra source dirs ahead of cwd, workspace, and tikz', () => {
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({
       documentDir: '/run/diff/r1',
       extraInputDirs: ['/ws/Draft/LeanMPSPaper'],
       workspacePath: '/ws',
       tikzInputDirectory: '/tikz',
     });
-    // Source dirs (document + extra) rank above the workspace root so a revised
-    // sibling in run storage wins over the original-source fallback.
+    // Source dirs precede "." (cwd = workspace root) so a subfolder document's
+    // relative \input resolves against its own tree; the document dir precedes
+    // the extra source dir so a revised sibling beats the original fallback.
     expect(texInputParts).toEqual([
-      '.',
       '/run/diff/r1',
       '/ws/Draft/LeanMPSPaper',
+      '.',
       '/ws',
       '/tikz',
     ]);
@@ -70,7 +71,7 @@ describe('buildLatexSearchParts', () => {
       documentDir: '/run/r0/Draft/LeanMPSPaper',
       workspacePath: null,
     });
-    expect(texInputParts).toEqual(['.', '/run/r0/Draft/LeanMPSPaper']);
+    expect(texInputParts).toEqual(['/run/r0/Draft/LeanMPSPaper', '.']);
     expect(bibSearchParts).toEqual(['/run/r0/Draft/LeanMPSPaper']);
   });
 
@@ -80,6 +81,6 @@ describe('buildLatexSearchParts', () => {
       workspacePath: '/ws',
       tikzInputDirectory: '   ',
     });
-    expect(texInputParts).toEqual(['.', '/doc', '/ws']);
+    expect(texInputParts).toEqual(['/doc', '.', '/ws']);
   });
 });

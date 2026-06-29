@@ -22,6 +22,7 @@ import {
   createWorkspaceLocation,
   flexibleFS,
   TaskRunFileService,
+  WorkspaceFS,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 import { getComparablePath } from '@utils/files/taskRunStorage';
@@ -59,6 +60,22 @@ export class LatexDiffManager {
       .fs.realPath(location.absolutePath)
       .catch(() => location.absolutePath);
     return path.dirname(resolved);
+  }
+
+  /**
+   * Directory of the document's live workspace source. `resolveBaseFilesForDiff`
+   * rewrites the base to its `executions/<id>/original/<rel>` snapshot, which
+   * holds only the snapshotted `.tex` files — not the `figures/` and `.bib`
+   * dependencies the diff still `\input`s. Map the workspace-relative path back
+   * onto the workspace root so the diff compile finds them; fall back to the
+   * file's own directory for external bases or when no workspace is open.
+   */
+  private resolveWorkspaceSourceDir(location: FileLocation): string {
+    const workspaceRoot = WorkspaceFS.getPath();
+    if (workspaceRoot && location.kind !== 'external') {
+      return path.join(workspaceRoot, path.dirname(location.relativePath));
+    }
+    return path.dirname(location.absolutePath);
   }
 
   private logLatexdiffResult(
@@ -376,10 +393,10 @@ export class LatexDiffManager {
       ),
     );
     // The diff `.tex` is written to `diff/r{round}/` rather than alongside the
-    // document's `\input`/`\bibliography` targets, so add the original source
-    // directory to the search path; otherwise `\input{figures/…}` and
+    // document's `\input`/`\bibliography` targets, so add the live workspace
+    // source directory to the search path; otherwise `\input{figures/…}` and
     // `\bibliography{…}` fail to resolve when the source lives in a subfolder.
-    const sourceDir = await this.getWorkingDirectory(referenceLocation);
+    const sourceDir = this.resolveWorkspaceSourceDir(referenceLocation);
     const ok = await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,

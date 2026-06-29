@@ -69,10 +69,14 @@ export function buildLatexInputEnv(
 
 /**
  * Compose the kpathsea search-path parts for a compile. The document's own
- * directory and any caller-supplied source directories come first (so a revised
- * sibling in run storage beats an original-source fallback), then the workspace
- * root, then the TikZ input dir. Bibliography search omits `.` and TikZ — only
- * directories that can hold `.bib`/`.bst` matter there.
+ * directory and any caller-supplied source directories come first — ahead of
+ * `.` (the compiler's cwd, which is the workspace root, not the document's
+ * folder) so a subfolder document's relative `\input{…}` resolves against its
+ * own tree rather than a same-named file at the workspace root; the document
+ * dir also precedes the extra source dirs so a revised sibling in run storage
+ * beats the original-source fallback. The workspace root and TikZ dir follow.
+ * Bibliography search omits `.` and TikZ — only directories that can hold
+ * `.bib`/`.bst` matter there.
  */
 export function buildLatexSearchParts(input: {
   documentDir: string;
@@ -85,7 +89,7 @@ export function buildLatexSearchParts(input: {
   const workspaceParts = workspacePath ? [workspacePath] : [];
   const tikzParts = tikzInputDirectory?.trim() ? [tikzInputDirectory] : [];
   return {
-    texInputParts: ['.', ...sourceDirs, ...workspaceParts, ...tikzParts],
+    texInputParts: [...sourceDirs, '.', ...workspaceParts, ...tikzParts],
     bibSearchParts: [...sourceDirs, ...workspaceParts],
   };
 }
