@@ -207,7 +207,7 @@ export function formatCostUsd(cost: number): string {
 }
 
 /**
- * Format a timestamp (number of ms since epoch, or ISO-8601 string) for
+ * Format a timestamp (number of ms since epoch, or a date-parsable string) for
  * locale-aware display using the system locale and timezone.
  */
 export function formatLocaleTimestamp(ts: number | string): string {
