@@ -11,7 +11,7 @@
 
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { createKey, getAgent } from '@agent/index';
+import { resolveAgentForLaunch } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
@@ -23,17 +23,20 @@ import { getHelperModelName } from './helperModelName';
  * assistive and that helper model is both usable and tool-capable; return
  * `config` unchanged otherwise so the selected model stays in place.
  *
- * Resolves the agent the same way {@link executeAgent} will (honoring a pinned
- * `agentSource`) so detection inspects the entry that actually launches, not a
- * same-name agent from another source.
+ * Resolves the agent through {@link resolveAgentForLaunch} — the identical call
+ * {@link executeAgent} makes — so the entry whose `assistive` flag is read is
+ * exactly the entry that launches. A category-blind lookup could pick a hidden
+ * same-name shadow (e.g. a disabled custom `latexFixer`) that launch would never
+ * choose, switching the wrong runs (or missing the right ones).
  */
 export async function preferHelperModelForAssistive(
   config: AgentConfig,
 ): Promise<AgentConfig> {
-  const entry =
-    (config.agentSource
-      ? getAgent(createKey(config.agentSource, config.agent))
-      : undefined) ?? getAgent(config.agent, config.agentCategory);
+  const entry = resolveAgentForLaunch(
+    config.agentCategory,
+    config.agent,
+    config.agentSource,
+  )?.entry;
   if (!entry?.assistive) return config;
 
   const helperModel = getHelperModelName();

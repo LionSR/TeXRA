@@ -4,14 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
-const getAgent = vi.hoisted(() => vi.fn());
-const createKey = vi.hoisted(
-  () => (source: string, name: string) => `${source}:${name}`,
-);
+const resolveAgentForLaunch = vi.hoisted(() => vi.fn());
 const getHelperModelName = vi.hoisted(() => vi.fn());
 const getModelUnavailableReason = vi.hoisted(() => vi.fn());
 
-vi.mock('@agent/index', () => ({ getAgent, createKey }));
+vi.mock('@agent/index', () => ({ resolveAgentForLaunch }));
 vi.mock('@agent/runtime/helperModelName', () => ({ getHelperModelName }));
 vi.mock('@model/computeModelOptions', () => ({ getModelUnavailableReason }));
 vi.mock('llm-zoo', () => ({
@@ -37,10 +34,15 @@ function configFor(
 describe('preferHelperModelForAssistive', () => {
   beforeEach(() => {
     vi.resetModules();
-    getAgent.mockReset();
+    resolveAgentForLaunch.mockReset();
     getHelperModelName.mockReset();
     getModelUnavailableReason.mockReset();
   });
+
+  // resolveAgentForLaunch returns a ResolvedAgent ({ entry, ... }); only .entry
+  // is read here.
+  const resolved = (entry: Record<string, unknown> | undefined) =>
+    entry ? { entry } : undefined;
 
   async function resolve(config: AgentConfig): Promise<AgentConfig> {
     const { preferHelperModelForAssistive } = await import(
@@ -50,11 +52,9 @@ describe('preferHelperModelForAssistive', () => {
   }
 
   it('swaps an assistive agent onto the available helper model', async () => {
-    getAgent.mockReturnValue({
-      name: 'latexFixer',
-      category: 'toolUse',
-      assistive: true,
-    });
+    resolveAgentForLaunch.mockReturnValue(
+      resolved({ name: 'latexFixer', category: 'toolUse', assistive: true }),
+    );
     getHelperModelName.mockReturnValue('deepseek');
     getModelUnavailableReason.mockResolvedValue(undefined);
 
@@ -65,7 +65,9 @@ describe('preferHelperModelForAssistive', () => {
   });
 
   it('leaves a non-assistive agent on its selected model', async () => {
-    getAgent.mockReturnValue({ name: 'coder', category: 'toolUse' });
+    resolveAgentForLaunch.mockReturnValue(
+      resolved({ name: 'coder', category: 'toolUse' }),
+    );
     getHelperModelName.mockReturnValue('deepseek');
 
     const result = await resolve(configFor('coder', 'opus'));
@@ -76,11 +78,9 @@ describe('preferHelperModelForAssistive', () => {
   });
 
   it('falls back to the selected model when the helper model is unavailable', async () => {
-    getAgent.mockReturnValue({
-      name: 'latexFixer',
-      category: 'toolUse',
-      assistive: true,
-    });
+    resolveAgentForLaunch.mockReturnValue(
+      resolved({ name: 'latexFixer', category: 'toolUse', assistive: true }),
+    );
     getHelperModelName.mockReturnValue('deepseek');
     getModelUnavailableReason.mockResolvedValue('No API key configured.');
 
@@ -90,11 +90,9 @@ describe('preferHelperModelForAssistive', () => {
   });
 
   it('keeps the model when the helper model already equals it', async () => {
-    getAgent.mockReturnValue({
-      name: 'latexFixer',
-      category: 'toolUse',
-      assistive: true,
-    });
+    resolveAgentForLaunch.mockReturnValue(
+      resolved({ name: 'latexFixer', category: 'toolUse', assistive: true }),
+    );
     getHelperModelName.mockReturnValue('opus');
 
     const result = await resolve(configFor('latexFixer', 'opus'));
@@ -105,11 +103,9 @@ describe('preferHelperModelForAssistive', () => {
   });
 
   it('keeps the selected model when the helper model cannot call tools', async () => {
-    getAgent.mockReturnValue({
-      name: 'latexFixer',
-      category: 'toolUse',
-      assistive: true,
-    });
+    resolveAgentForLaunch.mockReturnValue(
+      resolved({ name: 'latexFixer', category: 'toolUse', assistive: true }),
+    );
     getHelperModelName.mockReturnValue('chatonly');
 
     const result = await resolve(configFor('latexFixer', 'opus'));
@@ -119,11 +115,9 @@ describe('preferHelperModelForAssistive', () => {
     expect(getModelUnavailableReason).not.toHaveBeenCalled();
   });
 
-  it('honors a pinned agent source when detecting assistiveness', async () => {
-    getAgent.mockImplementation((identifier: string) =>
-      identifier === 'builtInToolUse:latexFixer'
-        ? { name: 'latexFixer', category: 'toolUse', assistive: true }
-        : { name: 'latexFixer', category: 'toolUse', assistive: undefined },
+  it('detects assistiveness through the launch resolver, honoring agentSource', async () => {
+    resolveAgentForLaunch.mockReturnValue(
+      resolved({ name: 'latexFixer', category: 'toolUse', assistive: true }),
     );
     getHelperModelName.mockReturnValue('deepseek');
     getModelUnavailableReason.mockResolvedValue(undefined);
@@ -132,14 +126,18 @@ describe('preferHelperModelForAssistive', () => {
       configFor('latexFixer', 'opus', { agentSource: 'builtInToolUse' }),
     );
 
-    // The source-pinned built-in entry is assistive even though the bare-name
-    // lookup would resolve a non-assistive same-name agent.
-    expect(getAgent).toHaveBeenCalledWith('builtInToolUse:latexFixer');
+    // Resolution goes through the same launch resolver, with the pinned source
+    // threaded through, so detection cannot diverge from the launched entry.
+    expect(resolveAgentForLaunch).toHaveBeenCalledWith(
+      'toolUse',
+      'latexFixer',
+      'builtInToolUse',
+    );
     expect(result.model).toBe('deepseek');
   });
 
-  it('leaves the model unchanged when the agent is not in the registry', async () => {
-    getAgent.mockReturnValue(undefined);
+  it('leaves the model unchanged when the agent does not resolve for launch', async () => {
+    resolveAgentForLaunch.mockReturnValue(undefined);
 
     const result = await resolve(configFor('latexFixer', 'opus'));
 
