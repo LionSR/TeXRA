@@ -71,12 +71,13 @@ export class ListApiKeysTool extends defineTool({
     if (providerKeys.length > 0) {
       lines.push('', 'Provider API keys stored:');
       for (const p of providerKeys) lines.push(`  ${p}`);
-      if (missingProviders.length > 0) {
-        lines.push('', 'Providers without a stored key:');
-        for (const p of missingProviders) lines.push(`  ${p}`);
-      }
     } else {
       lines.push('', 'No provider API keys stored.');
+    }
+
+    if (missingProviders.length > 0) {
+      lines.push('', 'Providers without a stored key:');
+      for (const p of missingProviders) lines.push(`  ${p}`);
     }
 
     if (unknownApiKeys.length > 0) {

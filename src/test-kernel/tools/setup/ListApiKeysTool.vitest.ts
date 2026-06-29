@@ -119,6 +119,16 @@ describe('list_api_keys tool', () => {
     assert.equal(result.summary, '2 stored secrets: 2/2 provider keys');
   });
 
+  it('shows missing providers even when no provider keys are stored', async () => {
+    installPlatformWithKeys([GITHUB_TOKEN_STORAGE_KEY]);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.match(result.output ?? '', /No provider API keys stored/);
+    assert.match(result.output ?? '', /Providers without a stored key/);
+    assert.match(result.output ?? '', /anthropic/);
+    assert.match(result.output ?? '', /openai/);
+  });
+
   it('summary reads "no provider keys" when only non-provider secrets are stored', async () => {
     installPlatformWithKeys(['texra.supabase.session']);
     const result = await tool.call({});
