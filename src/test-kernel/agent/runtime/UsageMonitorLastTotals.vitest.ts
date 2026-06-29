@@ -94,7 +94,10 @@ describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
       (event) => event.event === 'updateStreamUsage',
     );
     expect(usageEvent?.payload).toMatchObject({
-      usage: { viaChatGptSubscription: true },
+      usage: {
+        viaChatGptSubscription: true,
+        usageRoute: 'chatgpt-subscription',
+      },
     });
   });
 });
