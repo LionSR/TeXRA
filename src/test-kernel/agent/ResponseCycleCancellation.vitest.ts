@@ -31,8 +31,8 @@ import type { ReflectionServices } from '@agent/implementations/flows/reflection
 import {
   AgentRunStateSnapshotSchema,
   ConversationRoundStateSnapshotSchema,
-} from '@agent/core/execution/AgentState';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+} from '@agent/core/state/AgentState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 
 // Local imports - shared schemas
 import type { AgentFileLocation } from '@shared/schemas';

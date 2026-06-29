@@ -20,8 +20,8 @@ import type {
   AgentPrompt,
   AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
-import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
 import {
   createToolUseRoundFlow,

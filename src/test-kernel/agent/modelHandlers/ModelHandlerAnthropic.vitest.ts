@@ -30,7 +30,7 @@ import {
   AgentCategory,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 import {
   enforceCacheControlLimit,

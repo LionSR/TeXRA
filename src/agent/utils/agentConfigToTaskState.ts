@@ -4,7 +4,7 @@ import {
   type TaskState,
   type ToolUseTaskState,
   type WorkflowTaskState,
-} from '@agent/core/execution/TaskState';
+} from '@agent/core/state/TaskState';
 
 /**
  * Converts an AgentConfig object to a TaskState object.

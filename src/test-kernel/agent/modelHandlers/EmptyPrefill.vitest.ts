@@ -20,7 +20,7 @@ import {
   AgentCategory,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';

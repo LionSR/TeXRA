@@ -3,8 +3,8 @@
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
-} from '@agent/core/execution/AgentState';
-import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+} from '@agent/core/state/AgentState';
+import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';

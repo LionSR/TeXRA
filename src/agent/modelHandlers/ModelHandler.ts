@@ -20,8 +20,8 @@ import {
 import type {
   ConversationRoundStateSnapshot,
   AgentRunStateSnapshot,
-} from '@agent/core/execution/AgentState';
-import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+} from '@agent/core/state/AgentState';
+import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { StandardPricingConfig } from '@agent/utils/priceUtils';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';

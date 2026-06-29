@@ -7,7 +7,7 @@ import {
   isToolUseTaskState,
   isWorkflowTaskState,
   type TaskState,
-} from '@agent/core/execution/TaskState';
+} from '@agent/core/state/TaskState';
 
 // Local imports - shared schemas
 import {

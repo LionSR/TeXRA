@@ -14,7 +14,7 @@ import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteract
 import type {
   FileInteractionState,
   WorkPlanState,
-} from '@agent/core/execution/AgentWorkspaceState';
+} from '@agent/core/state/AgentWorkspaceState';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging

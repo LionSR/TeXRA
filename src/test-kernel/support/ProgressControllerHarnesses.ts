@@ -15,12 +15,9 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { ExecutionRequest } from '@agent/core/execution/executionRequests';
+import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 
-import type {
-  TaskState,
-  WorkflowTaskState,
-} from '@agent/core/execution/TaskState';
+import type { TaskState, WorkflowTaskState } from '@agent/core/state/TaskState';
 
 // Local imports - shared
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';

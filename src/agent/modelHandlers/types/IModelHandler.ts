@@ -8,8 +8,8 @@ import {
 import type {
   ConversationRoundStateSnapshot,
   AgentRunStateSnapshot,
-} from '@agent/core/execution/AgentState';
-import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+} from '@agent/core/state/AgentState';
+import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { ToolResultPayload } from '@agent/modelHandlers/utils/toolAttachmentUtils';

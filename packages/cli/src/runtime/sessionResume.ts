@@ -6,7 +6,7 @@
 // a full snapshot (messages + state slices) from it. Only tool-use agents
 // resume this way — workflows are not continuable here.
 
-import { isToolUseTaskState } from '@agent/core/execution/TaskState';
+import { isToolUseTaskState } from '@agent/core/state/TaskState';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';

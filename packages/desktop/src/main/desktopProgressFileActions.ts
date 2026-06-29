@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
+import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { DiffViewHost } from '@hosts/uiHosts';
 import {
   buildAcceptConfirmMessage,
@@ -102,7 +102,7 @@ export class DesktopProgressFileActions {
     const [{ getHelperModelName }, { validateExecutionRequest }] =
       await Promise.all([
         import('@agent/runtime/helperModelName'),
-        import('@agent/core/execution/executionRequests'),
+        import('@agent/core/state/executionRequests'),
       ]);
     const validation = validateExecutionRequest({
       config: {

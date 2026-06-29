@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent
-import type { TaskState } from '@agent/core/execution/TaskState';
+import type { TaskState } from '@agent/core/state/TaskState';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - shared

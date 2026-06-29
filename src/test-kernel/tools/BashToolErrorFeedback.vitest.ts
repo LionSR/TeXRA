@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent state
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 
 // Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
