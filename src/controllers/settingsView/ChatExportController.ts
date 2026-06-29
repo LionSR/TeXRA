@@ -6,21 +6,24 @@
  * handler calls this controller and performs only host UI actions (opening
  * a file, showing a message, opening a browser).
  *
- * This module is VS Code-free — all platform wiring lives in the caller.
+ * This module is VS Code-free — all platform wiring lives in the caller. The
+ * LaTeX document preamble is a host-supplied asset (the `.tex` template lives
+ * under the extension's `resources/`), so the host injects it via the
+ * constructor instead of the controller importing `@resources`.
  */
 
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 
-// Local imports - commands (VS Code-free modules)
+// Local imports - host-neutral chat-export formatters
 import {
   formatChatAsMarkdown,
   formatChatAsLatex,
   generateExportFilename,
   generateExportFolderName,
   type ChatExportInput,
-} from '@commands/history/chatExportFormatter';
+} from '@agent/export/chatExportFormatter';
 
 export type { ChatExportInput };
 
@@ -68,7 +71,17 @@ export interface HtmlExportResult extends ChatExportResult {
 // Controller
 // ============================================================
 
+export interface ChatExportControllerDeps {
+  /**
+   * LaTeX document preamble prepended to `.tex` exports. Host-supplied because
+   * the template lives under the extension's `resources/` tree.
+   */
+  readonly latexPreamble: string;
+}
+
 export class ChatExportController {
+  constructor(private readonly deps: ChatExportControllerDeps) {}
+
   /**
    * Load execution data and construct the format-agnostic {@link ChatExportInput}.
    *
@@ -138,7 +151,7 @@ export class ChatExportController {
   ): Promise<LatexExportResult> {
     const filename = generateExportFilename(exportInput, 'tex');
     const storagePath = `executions/${historyId}/${filename}`;
-    const content = formatChatAsLatex(exportInput);
+    const content = formatChatAsLatex(exportInput, this.deps.latexPreamble);
     await StorageFS.write(storagePath, content);
 
     const absolutePath = StorageFS.fullPath(storagePath);
@@ -165,7 +178,7 @@ export class ChatExportController {
     assetsSrc: string,
   ): Promise<HtmlExportResult> {
     const { formatChatAsHtml } =
-      await import('@commands/history/htmlExport/htmlFormatter');
+      await import('@agent/export/htmlExport/htmlFormatter');
     const fsExtra = (await import('fs-extra')).default;
 
     const folderName = generateExportFolderName(exportInput);
