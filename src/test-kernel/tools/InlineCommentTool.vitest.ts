@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  formatThread,
   InlineCommentInputSchema,
   InlineCommentTool,
   setInlineCommentProvider,
   type InlineCommentProvider,
-  type InlineCommentThreadView,
 } from '@tools/comment/InlineCommentTool';
 
 /** Minimal in-memory provider so the tool can be exercised without VS Code. */
@@ -64,39 +62,6 @@ describe('InlineCommentInputSchema', () => {
   });
 });
 
-describe('formatThread', () => {
-  it('renders a single-line range with its comments', () => {
-    const thread: InlineCommentThreadView = {
-      threadId: 'c2',
-      path: '/abs/paper.tex',
-      line: 5,
-      endLine: 5,
-      resolved: false,
-      comments: [
-        { author: 'TeXRA', body: 'unclear' },
-        { author: 'You', body: 'fixed' },
-      ],
-    };
-    expect(formatThread(thread)).toBe(
-      '[c2] /abs/paper.tex:5 (open)\n  TeXRA: unclear\n  You: fixed',
-    );
-  });
-
-  it('renders a multi-line range and resolved state', () => {
-    const thread: InlineCommentThreadView = {
-      threadId: 'c3',
-      path: '/abs/paper.tex',
-      line: 5,
-      endLine: 9,
-      resolved: true,
-      comments: [{ author: 'TeXRA', body: 'see below' }],
-    };
-    expect(formatThread(thread)).toBe(
-      '[c3] /abs/paper.tex:5-9 (resolved)\n  TeXRA: see below',
-    );
-  });
-});
-
 describe('InlineCommentTool.call', () => {
   beforeEach(() => setInlineCommentProvider(fakeProvider()));
 
@@ -123,7 +88,7 @@ describe('InlineCommentTool.call', () => {
     expect(result.summary).toBe('Thread not found');
   });
 
-  it('lists threads via the provider', async () => {
+  it('lists threads via the provider, rendering each range and state', async () => {
     setInlineCommentProvider(
       fakeProvider({
         list: () => [
@@ -133,14 +98,28 @@ describe('InlineCommentTool.call', () => {
             line: 2,
             endLine: 2,
             resolved: false,
-            comments: [{ author: 'TeXRA', body: 'reword' }],
+            comments: [
+              { author: 'TeXRA', body: 'reword' },
+              { author: 'You', body: 'done' },
+            ],
+          },
+          {
+            threadId: 'c2',
+            path: '/abs/paper.tex',
+            line: 5,
+            endLine: 9,
+            resolved: true,
+            comments: [{ author: 'TeXRA', body: 'see below' }],
           },
         ],
       }),
     );
     const result = await tool.call({ command: 'list' });
-    expect(result.summary).toBe('1 comment thread');
-    expect(result.output).toContain('[c1] /abs/paper.tex:2 (open)');
-    expect(result.output).toContain('TeXRA: reword');
+    // Plural summary plus single-line/open and multi-line/resolved rendering.
+    expect(result.summary).toBe('2 comment threads');
+    expect(result.output).toBe(
+      '[c1] /abs/paper.tex:2 (open)\n  TeXRA: reword\n  You: done\n\n' +
+        '[c2] /abs/paper.tex:5-9 (resolved)\n  TeXRA: see below',
+    );
   });
 });
