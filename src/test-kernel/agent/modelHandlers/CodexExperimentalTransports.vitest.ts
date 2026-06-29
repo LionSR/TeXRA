@@ -49,6 +49,9 @@ async function initPlatformWith(opts: {
     createFakePlatform({
       config: {
         'texra.chatgptCodex.preferSubscription': true,
+        // These tests exercise the subscription's transport mechanics with a
+        // workflow handler, so keep the "tool-use only" restriction off.
+        'texra.chatgptCodex.subscriptionToolUseOnly': false,
         ...opts.config,
       },
       globalState: opts.globalState,

@@ -5,9 +5,10 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   isCodexSignedIn,
   isPreferCodexSubscription,
-  shouldUseCodexSubscription,
+  shouldUseCodexSubscriptionForAgentCategory,
 } from '@auth/codex';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
@@ -41,6 +42,11 @@ export interface ModelOptionsAccess {
   readonly secrets: PlatformSecrets;
   readonly useOpenRouter: boolean;
   readonly serverSideKeyService: ModelOptionsServerAccess;
+  readonly agentCategory?: AgentCategory;
+}
+
+export interface ModelOptionsComputationOptions {
+  readonly agentCategory?: AgentCategory;
 }
 
 interface ModelAvailabilityStatus {
@@ -137,6 +143,7 @@ interface ModelAvailabilityContext {
   /** Whether the user is signed in with ChatGPT (only resolved when the
    * "prefer subscription" switch is on). */
   codexSignedIn: boolean;
+  agentCategory?: AgentCategory;
   serverSideKeyService: ModelOptionsServerAccess;
 }
 
@@ -163,7 +170,11 @@ async function resolveModelAvailability(
   // so the switch cannot disable models that are otherwise runnable.
   if (
     ctx.codexSignedIn &&
-    shouldUseCodexSubscription(config, ctx.useOpenRouter)
+    shouldUseCodexSubscriptionForAgentCategory(
+      config,
+      ctx.useOpenRouter,
+      ctx.agentCategory,
+    )
   ) {
     return availabilityStatus('subscription-access');
   }
@@ -223,18 +234,30 @@ async function buildAvailabilityContext(
     useOpenRouter: access.useOpenRouter,
     useIncludedAccess,
     codexSignedIn,
+    agentCategory: access.agentCategory,
     serverSideKeyService,
   };
 }
 
-function buildDefaultModelOptionsAccess(): ModelOptionsAccess {
+function buildDefaultModelOptionsAccess(
+  options: ModelOptionsComputationOptions = {},
+): ModelOptionsAccess {
   const host = platform();
   return {
     visibleModels: getVisibleModels(host.globalState),
     secrets: host.secrets,
     useOpenRouter: getUseOpenRouter(),
     serverSideKeyService: getServerSideKeyService(),
+    agentCategory: options.agentCategory,
   };
+}
+
+function applyModelOptionsComputationOptions(
+  access: ModelOptionsAccess,
+  options: ModelOptionsComputationOptions,
+): ModelOptionsAccess {
+  if (options.agentCategory === undefined) return access;
+  return { ...access, agentCategory: options.agentCategory };
 }
 
 /** Build synchronous fallback options from the current host-visible model list. */
@@ -248,11 +271,15 @@ export function buildVisibleBasicModelOptionsData(
 export async function getModelUnavailableReason(
   model: string,
   access?: ModelOptionsAccess,
+  options: ModelOptionsComputationOptions = {},
 ): Promise<string | null> {
   const config = MODEL_CONFIGS[model];
   if (!config) return `Model "${model}" is not recognized.`;
 
-  const effectiveAccess = access ?? buildDefaultModelOptionsAccess();
+  const effectiveAccess = applyModelOptionsComputationOptions(
+    access ?? buildDefaultModelOptionsAccess(options),
+    options,
+  );
   const ctx = await buildAvailabilityContext(effectiveAccess, access == null);
   const availability = await resolveModelAvailability(model, config, ctx);
   if (availability.available) return null;
@@ -335,12 +362,17 @@ export function invalidateModelOptionsCache(): void {
 export async function computeModelOptionsData(
   models?: readonly string[],
   access?: ModelOptionsAccess,
+  options: ModelOptionsComputationOptions = {},
 ): Promise<ModelOptionData[]> {
   if (access) {
-    return computeModelOptionsDataUncached(models, access, false);
+    return computeModelOptionsDataUncached(
+      models,
+      applyModelOptionsComputationOptions(access, options),
+      false,
+    );
   }
 
-  const cacheKey = getModelOptionsCacheKey(models);
+  const cacheKey = getModelOptionsCacheKey(models, options);
   const cached = resolvedModelOptions.get(cacheKey);
   if (cached && Date.now() < cached.expiry) return cached.data;
 
@@ -349,7 +381,7 @@ export async function computeModelOptionsData(
 
   const request = computeModelOptionsDataUncached(
     models,
-    buildDefaultModelOptionsAccess(),
+    buildDefaultModelOptionsAccess(options),
     true,
   );
   pendingModelOptions.set(cacheKey, request);
@@ -371,10 +403,17 @@ export async function computeModelOptionsData(
   }
 }
 
-function getModelOptionsCacheKey(models?: readonly string[]): string {
-  return models == null
-    ? VISIBLE_MODELS_CACHE_KEY
-    : `${EXPLICIT_MODELS_CACHE_PREFIX}${JSON.stringify(models)}`;
+function getModelOptionsCacheKey(
+  models: readonly string[] | undefined,
+  options: ModelOptionsComputationOptions,
+): string {
+  const listKey =
+    models == null
+      ? VISIBLE_MODELS_CACHE_KEY
+      : `${EXPLICIT_MODELS_CACHE_PREFIX}${JSON.stringify(models)}`;
+  return options.agentCategory === undefined
+    ? listKey
+    : `${listKey}:category:${options.agentCategory}`;
 }
 
 async function computeModelOptionsDataUncached(

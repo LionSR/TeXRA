@@ -4,6 +4,7 @@ import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
+import { AgentCategory } from '@shared/schemas/agent';
 import type { ModelConfig } from 'llm-zoo';
 import type { Response } from 'openai/resources/responses/responses';
 
@@ -42,6 +43,7 @@ function baseHandler(): ModelHandlerOpenAIResponse {
 
 function codexHandler(): ModelHandlerCodex {
   const h = new ModelHandlerCodex(config());
+  h.setAgentCategory(AgentCategory.ToolUse);
   h.setLogger(loggerStub());
   return h;
 }

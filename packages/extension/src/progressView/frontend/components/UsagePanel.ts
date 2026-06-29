@@ -69,6 +69,11 @@ export class UsagePanel extends LitElement {
         opacity: var(--opacity-subtle);
       }
 
+      .run-summary__free {
+        color: var(--color-success);
+        font-weight: var(--wa-font-weight-semibold);
+      }
+
       /* Context gauge bar */
       .context-gauge {
         display: inline-flex;
@@ -231,7 +236,14 @@ export class UsagePanel extends LitElement {
           title="Output tokens"
           aria-hidden="true"
         ></wa-icon
-        >${formatCompactTokenCount(outputTokens)} · ${formatCostUsd(cost)}
+        >${formatCompactTokenCount(outputTokens)} ·
+        ${this.usage.viaChatGptSubscription === true && cost === 0
+          ? html`<span
+              class="run-summary__free"
+              title="No charge — covered by your ChatGPT subscription"
+              >Free</span
+            >`
+          : html`${formatCostUsd(cost)}`}
       </span>
     `;
   }
@@ -273,7 +285,12 @@ export class UsagePanel extends LitElement {
 
   private buildUsageLabel(): string {
     if (!this.usage) return '';
-    const { inputTokens, outputTokens, cost } = this.usage;
-    return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, ${formatCostUsd(cost)}`;
+    const { inputTokens, outputTokens, cost, viaChatGptSubscription } =
+      this.usage;
+    const costLabel =
+      viaChatGptSubscription === true && cost === 0
+        ? 'Free'
+        : formatCostUsd(cost);
+    return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, ${costLabel}`;
   }
 }

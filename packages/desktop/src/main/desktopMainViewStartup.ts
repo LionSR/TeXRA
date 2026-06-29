@@ -5,6 +5,7 @@ import {
 import { computeAgentOptionsData } from '@agent/index/agentRegistry';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { AgentCategory } from '@shared/schemas/agent';
 import { getConfig } from '@utils/config/configUtils';
 
 import {
@@ -38,11 +39,24 @@ export function createDesktopMainViewStartup({
     loadOptions: async () => {
       await modelListRefresh;
       if (loadOptions != null) return loadOptions();
-      const [agentOptions, modelOptions] = await Promise.all([
-        computeAgentOptionsData(),
-        computeModelOptionsData(),
-      ]);
-      return { agentOptions, modelOptions };
+      const [agentOptions, workflowModelOptions, toolUseModelOptions] =
+        await Promise.all([
+          computeAgentOptionsData(),
+          computeModelOptionsData(undefined, undefined, {
+            agentCategory: AgentCategory.Workflow,
+          }),
+          computeModelOptionsData(undefined, undefined, {
+            agentCategory: AgentCategory.ToolUse,
+          }),
+        ]);
+      return {
+        agentOptions,
+        modelOptions: workflowModelOptions,
+        modelOptionsByCategory: {
+          workflow: workflowModelOptions,
+          toolUse: toolUseModelOptions,
+        },
+      };
     },
     getAuthStatus: getAuthStatus ?? defaultGetAuthStatus,
   });

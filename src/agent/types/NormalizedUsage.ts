@@ -59,6 +59,13 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
   toolUsePromptTokens: TokenCountSchema.optional(),
   /** Number of server-side tool executions (Anthropic web search) */
   serverToolRequests: TokenCountSchema.optional(),
+  /**
+   * True when this round ran on the user's ChatGPT subscription (Codex
+   * backend), so `cost` is 0 because the tokens are covered by the
+   * subscription rather than billed. Carried through to usage logging and the
+   * UI so subscription rounds are recorded but clearly shown as free.
+   */
+  viaChatGptSubscription: z.boolean().optional(),
   /** Original API response payload (for debugging) */
   _native: z.unknown().optional(),
 });

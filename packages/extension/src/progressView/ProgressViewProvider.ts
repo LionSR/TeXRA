@@ -329,9 +329,9 @@ export class ProgressViewProvider
       return raw.map((opt) => ({ ...opt, value: agentName(opt.value) }));
     };
     const [modelOptions, agentOptions] = await Promise.all([
-      computeModelOptionsData().catch(() =>
-        buildVisibleBasicModelOptionsData(),
-      ),
+      computeModelOptionsData(undefined, undefined, {
+        agentCategory: proposal.agentCategory,
+      }).catch(() => buildVisibleBasicModelOptionsData()),
       loadAgentOptions().catch(() => undefined),
     ]);
     if (!this.agentProposalHandler.get(proposal.proposalId)) return;

@@ -8,11 +8,7 @@ import {
   internalValidationModelHandlerEnvName,
   shouldUseInternalValidationModelHandler,
 } from '@agent/runtime/internalValidationOverride';
-import {
-  codexBackendModelId,
-  isCodexSignedIn,
-  shouldUseCodexSubscription,
-} from '@auth/codex';
+import { isCodexSignedIn, shouldUseCodexSubscription } from '@auth/codex';
 import * as logger from '@logger/logUtils';
 import { isGpt5ModelName } from '@model/modelNames';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -372,16 +368,8 @@ export async function createModelHandler(
     logger.debug(CHANNEL, 'Using ChatGPT subscription (Codex) Handler');
     const { ModelHandlerCodex } =
       await import('@agent/modelHandlers/openai/modelHandlerCodex');
-    // The Codex backend keys on the bare model id (e.g. `gpt-5.5`), not the
-    // date-pinned `fullName` (`gpt-5.5-2026-04-23`), so always send it
-    // regardless of the "prefer short model names" setting. Same derivation
-    // eligibility uses, so the dispatched id matches what was judged eligible.
-    const codexConfig = {
-      ...config,
-      fullName: codexBackendModelId(config),
-    };
     return withModelHandlerCompatibilityKey(
-      withReasoningOverride(new ModelHandlerCodex(codexConfig)),
+      withReasoningOverride(new ModelHandlerCodex(config)),
       'ModelHandlerOpenAIResponse',
     );
   }
