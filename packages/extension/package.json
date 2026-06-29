@@ -309,7 +309,7 @@
           "texra.chatgptCodex.preferSubscription": {
             "type": "boolean",
             "default": false,
-            "description": "Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental.",
+            "description": "Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing currently uses a 272,000-token Codex context cap, not the full 1,000,000-token API context.",
             "scope": "resource"
           },
           "texra.chatgptCodex.subscriptionToolUseOnly": {

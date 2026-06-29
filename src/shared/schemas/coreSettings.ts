@@ -405,7 +405,7 @@ export const CoreSettingsShape = {
     .strictObject({
       preferSubscription: boolField(
         DEFAULT_CORE_SETTINGS.chatgptCodex.preferSubscription,
-        'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental.',
+        'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing currently uses a 272,000-token Codex context cap, not the full 1,000,000-token API context.',
       ),
       subscriptionToolUseOnly: boolField(
         DEFAULT_CORE_SETTINGS.chatgptCodex.subscriptionToolUseOnly,

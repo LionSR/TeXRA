@@ -70,6 +70,18 @@ export class ModelsTab extends LitElement {
         opacity: 0.8;
         font-size: 0.9em;
       }
+      .chatgpt-subscription__limit {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.4rem;
+        margin: 0 0 0.6rem;
+        opacity: 0.85;
+        font-size: 0.9em;
+      }
+      .chatgpt-subscription__limit wa-icon {
+        flex: 0 0 auto;
+        margin-top: 0.1rem;
+      }
       .chatgpt-subscription__row {
         display: flex;
         align-items: center;
@@ -229,6 +241,13 @@ export class ModelsTab extends LitElement {
         <p class="chatgpt-subscription__hint">
           Use your own ChatGPT Plus/Pro/Team subscription for Codex models
           instead of an API key.
+        </p>
+        <p class="chatgpt-subscription__limit">
+          ${waIcon('circle-info')}
+          <span>
+            Subscription routing currently uses a 272,000-token Codex context
+            cap, not the full 1,000,000-token API context.
+          </span>
         </p>
         <div class="chatgpt-subscription__setting">
           <wa-switch
