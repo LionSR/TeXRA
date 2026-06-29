@@ -51,7 +51,7 @@ Design rules in `CLAUDE.md` → "Schema and Type Guidelines" / "Backward Compati
 - **Webview providers/handlers not extending `BaseViewContentProvider` / `BaseViewMessageHandler`** (`src/common/webview/`).
 - **String literals for webview commands** → constants in `src/common/webview/commands.ts`.
 - **New shared module path referenced without updating `localResourceRoots`** → 401 at runtime.
-- **The same action exposed from two UI surfaces** → one home per action. Flag an `*Events.<name>(` creator dispatched from 2+ components (e.g. `ProviderKeyEvents.setKey`), the same config/state/message key edited in 2+ tabs or views, or a command and a webview button wired to one effect. Secondary surfaces show **read-only status**, not a second control. Legit: global default vs per-item override; a command plus a single UI button for one stable action. See `CLAUDE.md` → "Duplicate UI Controls".
+- **The same action exposed from two UI surfaces** → one home per action. Flag an `*Events.<name>(` creator dispatched from 2+ components, the same config/state/message key edited in 2+ tabs or views, or multiple UI controls wired to the same command/effect. Secondary surfaces show **read-only status**, not a second control. Legit: global default vs per-item override; a command plus a single UI button for one stable action. See `CLAUDE.md` → "Duplicate UI Controls".
 
 ## 6. Error handling and logging
 
