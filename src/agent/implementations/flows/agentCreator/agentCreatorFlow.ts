@@ -70,15 +70,7 @@ export interface ToolGroup {
 export const TOOL_GROUPS: Record<string, ToolGroup> = {
   'File Operations': {
     description: 'Read, write, edit, search files and run shell commands',
-    tools: [
-      'bash',
-      'read_file',
-      'write_file',
-      'edit_file',
-      'glob',
-      'grep',
-      'ls',
-    ],
+    tools: ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
     keywords: ['file', 'edit', 'code', 'write', 'read', 'script', 'shell'],
   },
   'Web & Search': {

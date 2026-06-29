@@ -12,7 +12,6 @@ settings:
     - edit_file
     - glob
     - grep
-    - ls
     - bash
     - extract_figures
     - extract_bib_entries

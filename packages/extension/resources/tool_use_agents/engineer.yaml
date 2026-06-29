@@ -17,7 +17,6 @@ settings:
     - bash
     - glob
     - grep
-    - ls
     - diagnostics
 
 prompts:
@@ -61,7 +60,7 @@ prompts:
     ## How to work
 
     1. **Understand first.** Read what already exists before changing anything:
-       skim the project layout (`ls`, `glob`), the build/test setup, the README,
+       skim the project layout (`glob`), the build/test setup, the README,
        and recent `git log`. On a vague or early-stage request, use the `plan`
        tool to outline your interpretation and proposed approach, then wait for
        approval before launching subagents. A wrong delegation costs far more

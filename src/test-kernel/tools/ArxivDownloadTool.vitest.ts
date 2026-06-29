@@ -6,10 +6,9 @@ import { describe, it, afterEach } from 'vitest';
 
 // Local imports - tools
 import * as arxivModule from '@latex/arxivProcessor';
-import { LsTool } from '@tools/ls';
-import type { ToolResult } from '@shared/schemas/toolResult';
 import { ArxivDownloadTool } from '@tools/arxiv/ArxivDownloadTool';
 import { WorkspaceFS } from '@utils/files';
+import { FileType } from '@platform/interfaces/filesystem';
 
 declare module '@latex/arxivProcessor' {
   interface ArxivSourceProcessor {
@@ -28,25 +27,23 @@ const processor = arxivModule.arxivProcessor as {
 };
 const wsFS = WorkspaceFS as unknown as {
   relativePath: typeof WorkspaceFS.relativePath;
-};
-const lsProto = LsTool.prototype as unknown as {
-  call: typeof LsTool.prototype.call;
+  readDir: typeof WorkspaceFS.readDir;
 };
 
 describe('ArxivDownloadTool', () => {
   const originalValidateId = processor.validateId;
   const originalDownloadSource = processor.downloadSource;
   const originalRelativePath = wsFS.relativePath;
-  const originalLsCall = lsProto.call;
+  const originalReadDir = wsFS.readDir;
 
   afterEach(() => {
     processor.validateId = originalValidateId;
     processor.downloadSource = originalDownloadSource;
     wsFS.relativePath = originalRelativePath;
-    lsProto.call = originalLsCall;
+    wsFS.readDir = originalReadDir;
   });
 
-  it('returns download summary and listing from ls tool', async () => {
+  it('returns download summary and a listing of the extracted files', async () => {
     let receivedId: string | undefined;
     let receivedAutoIndent: boolean | undefined;
     let validateCalls = 0;
@@ -64,10 +61,10 @@ describe('ArxivDownloadTool', () => {
 
     wsFS.relativePath = () => 'sample';
 
-    lsProto.call = async (): Promise<ToolResult> => ({
-      summary: 'Listing for sample',
-      output: 'dir src\nfile main.tex',
-    });
+    wsFS.readDir = async () => [
+      ['main.tex', FileType.File],
+      ['src', FileType.Directory],
+    ];
 
     const tool = new ArxivDownloadTool();
     const result = await tool.call({ id: '2401.12345v2', autoIndent: false });

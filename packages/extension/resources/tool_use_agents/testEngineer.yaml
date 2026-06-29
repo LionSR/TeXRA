@@ -10,7 +10,6 @@ settings:
     - edit_file
     - glob
     - grep
-    - ls
     - bash
     - diagnostics
     - todo_write
@@ -25,7 +24,7 @@ prompts:
 
     Discover the project's testing setup first: the framework and runner (e.g.
     `pytest`, `vitest`, `cargo test`, `go test`), where tests live, the naming
-    pattern, fixtures/helpers, and how the suite is invoked. Use `ls`, `glob`,
+    pattern, fixtures/helpers, and how the suite is invoked. Use `glob`,
     `grep`, and a look at existing tests. Match that style — do not introduce a
     second framework or a parallel layout.
 

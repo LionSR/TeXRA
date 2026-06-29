@@ -12,7 +12,6 @@ settings:
     - edit_file
     - glob
     - grep
-    - ls
     - web_search
     - web_fetch
     - arxiv_search
