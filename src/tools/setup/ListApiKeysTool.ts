@@ -67,9 +67,7 @@ export class ListApiKeysTool extends defineTool({
       (p) => !providerKeys.includes(p),
     );
 
-    const lines: string[] = [
-      `Stored secrets (${storedKeys.length} total):`,
-    ];
+    const lines: string[] = [`Stored secrets (${storedKeys.length} total):`];
 
     if (providerKeys.length > 0) {
       lines.push('', 'Provider API keys stored:');
