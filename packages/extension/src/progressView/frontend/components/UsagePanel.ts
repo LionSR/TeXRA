@@ -12,6 +12,7 @@ import { designTokens } from '@shared/styles';
 import type { TokenUsageStats } from '@shared/schemas';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { clamp, formatCompactTokenCount } from '@utils/core';
+import { formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - progress view
 import { ELEMENT_IDS } from '../constants';
@@ -230,7 +231,7 @@ export class UsagePanel extends LitElement {
           title="Output tokens"
           aria-hidden="true"
         ></wa-icon
-        >${formatCompactTokenCount(outputTokens)} · $${cost.toFixed(3)}
+        >${formatCompactTokenCount(outputTokens)} · ${formatCostUsd(cost)}
       </span>
     `;
   }
@@ -273,6 +274,6 @@ export class UsagePanel extends LitElement {
   private buildUsageLabel(): string {
     if (!this.usage) return '';
     const { inputTokens, outputTokens, cost } = this.usage;
-    return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, $${cost.toFixed(3)}`;
+    return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, ${formatCostUsd(cost)}`;
   }
 }
