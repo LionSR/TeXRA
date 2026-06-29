@@ -742,7 +742,13 @@ export function createDesktopSettingsIpc(
         coordinator: codexCoordinator(),
         openBrowser: async (url) => {
           await openExternalUrl(url);
-          await options.presentChatGptSignInUrl?.(url);
+          // Fire-and-forget: the dialog is informational, so don't await it.
+          // `loginWithLoopback` awaits `openBrowser` before it waits for the
+          // OAuth callback, so awaiting a modal here would block sign-in
+          // completion until the user dismisses a dialog that the completed
+          // browser tab has already made redundant (matches the extension's
+          // non-blocking notification).
+          void options.presentChatGptSignInUrl?.(url);
         },
       });
       // The onboarding welcome card's "Sign in with ChatGPT" implies the user
