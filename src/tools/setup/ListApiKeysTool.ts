@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { API_PROVIDERS, apiKeySecretName } from '@model/apiProviders';
+import { apiKeySecretName } from '@model/apiProviders';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 
@@ -18,10 +18,6 @@ const ListApiKeysInputSchema = z
 
 type ListApiKeysInput = z.infer<typeof ListApiKeysInputSchema>;
 
-const KNOWN_PROVIDER_KEY_MAP = new Map(
-  API_PROVIDERS.map((p) => [apiKeySecretName(p), p] as const),
-);
-
 /**
  * List all secret key *names* in SecretStorage (values are never read).
  *
@@ -31,7 +27,7 @@ const KNOWN_PROVIDER_KEY_MAP = new Map(
  */
 export class ListApiKeysTool extends defineTool({
   name: 'list_api_keys',
-  description: `Return all secret key names currently stored in TeXRA's SecretStorage (values are never read or surfaced). Use this to audit which API keys and tokens are present, detect stale or unexpected entries, and plan set_api_key / unset_api_key calls. Prefer probe_environment for a fuller overview that also covers tool installations and auth status.`,
+  description: `Audit TeXRA's SecretStorage — lists all stored secret names (values are never read or surfaced). Known provider keys are shown by provider name (e.g. \`anthropic\`); unrecognised \`apiKey.*\` entries and other secrets are shown by their raw SecretStorage key name. Use this to check which providers have a key configured, detect stale or unexpected entries, and plan set_api_key / unset_api_key calls. Prefer probe_environment for a fuller overview that also covers tool installations and auth status.`,
   schema: ListApiKeysInputSchema,
 }) {
   protected async execute(_input: ListApiKeysInput): Promise<ToolResult> {
@@ -45,13 +41,18 @@ export class ListApiKeysTool extends defineTool({
       };
     }
 
+    const { providers } = platform.secrets;
+    const knownProviderKeyMap = new Map(
+      providers.map((p) => [apiKeySecretName(p), p] as const),
+    );
+
     const providerKeys: string[] = [];
     const unknownApiKeys: string[] = [];
     let hasGithubToken = false;
     const otherKeys: string[] = [];
 
     for (const key of storedKeys) {
-      const provider = KNOWN_PROVIDER_KEY_MAP.get(key);
+      const provider = knownProviderKeyMap.get(key);
       if (provider !== undefined) {
         providerKeys.push(provider);
       } else if (key === GITHUB_TOKEN_STORAGE_KEY) {
@@ -63,7 +64,7 @@ export class ListApiKeysTool extends defineTool({
       }
     }
 
-    const missingProviders = API_PROVIDERS.filter(
+    const missingProviders = providers.filter(
       (p) => !providerKeys.includes(p),
     );
 
@@ -97,7 +98,7 @@ export class ListApiKeysTool extends defineTool({
     const providerSummary =
       providerKeys.length === 0
         ? 'no provider keys'
-        : `${providerKeys.length}/${API_PROVIDERS.length} provider keys`;
+        : `${providerKeys.length}/${providers.length} provider keys`;
 
     return {
       summary: `${storedKeys.length} stored secret${storedKeys.length === 1 ? '' : 's'}: ${providerSummary}`,
