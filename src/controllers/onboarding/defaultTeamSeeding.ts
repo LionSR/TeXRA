@@ -8,6 +8,11 @@
  * follows them into every new project. If no user-level default has been
  * recorded yet, fresh workspaces start from the built-in Physicist team so
  * startup menus do not expose the full agent catalog by default.
+ *
+ * Hosts can override that fallback via `fallbackTeamId`. The CLI passes `null`
+ * so a fresh terminal session keeps every agent enabled (the full catalog)
+ * instead of scoping down to a discipline; a recorded default team is still
+ * honored on both surfaces.
  */
 
 import {
@@ -26,7 +31,7 @@ import { getDefaultTeamId } from './onboardingFunnel';
 
 import type { StateStore } from '@platform/interfaces/state';
 
-export const DEFAULT_STARTUP_TEAM_ID = 'physicist';
+const DEFAULT_STARTUP_TEAM_ID = 'physicist';
 
 /** Resolve a team id to its built-in preset (the hidden 'starter' included). */
 export function resolveTeamPreset(teamId: string): AgentModePreset | undefined {
@@ -58,13 +63,21 @@ export function registryPresetRosterState(
 
 /**
  * Seed this workspace's agent roster from the user-level default team.
- * No-op unless BOTH roster keys are unset (never configured) AND the selected
- * team resolves to a known preset. Returns whether seeding happened.
+ * No-op unless BOTH roster keys are unset (never configured) AND a team
+ * resolves to a known preset. Returns whether seeding happened.
+ *
+ * `options.fallbackTeamId` is the team applied when no user-level default has
+ * been recorded. It defaults to the built-in Physicist team (extension
+ * behavior); pass `null` to skip the fallback so a never-configured workspace
+ * keeps every agent enabled (CLI behavior).
  */
-export async function seedRosterFromDefaultTeam(stores: {
-  globalState: StateStore;
-  workspaceState: StateStore;
-}): Promise<boolean> {
+export async function seedRosterFromDefaultTeam(
+  stores: {
+    globalState: StateStore;
+    workspaceState: StateStore;
+  },
+  options: { readonly fallbackTeamId?: string | null } = {},
+): Promise<boolean> {
   const { globalState, workspaceState } = stores;
   if (
     workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS) !== undefined ||
@@ -72,9 +85,15 @@ export async function seedRosterFromDefaultTeam(stores: {
   ) {
     return false;
   }
-  const teamId = getDefaultTeamId(globalState) ?? DEFAULT_STARTUP_TEAM_ID;
+  const fallbackTeamId =
+    options.fallbackTeamId === undefined
+      ? DEFAULT_STARTUP_TEAM_ID
+      : options.fallbackTeamId;
+  const teamId = getDefaultTeamId(globalState) ?? fallbackTeamId;
+  if (!teamId) return false;
   const preset =
-    resolveTeamPreset(teamId) ?? resolveTeamPreset(DEFAULT_STARTUP_TEAM_ID);
+    resolveTeamPreset(teamId) ??
+    (fallbackTeamId ? resolveTeamPreset(fallbackTeamId) : undefined);
   if (!preset) return false;
   await applyPresetRoster(registryPresetRosterState(workspaceState), preset);
   return true;

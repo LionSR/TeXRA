@@ -320,15 +320,17 @@ describe('CLI orchestration items', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [],
       history: [
-        historyEntry('aaaaaaaaaaaa', { agent: 'research' }),
+        historyEntry('aaaaaaaaaaaa', { agent: 'assistant' }),
         historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
       ],
-      toolUseAgents: [toolUseAgent('research'), toolUseAgent('review')],
+      toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
     });
 
     expect(items.map((item) => item.label)).toContain('New chat');
     expect(items.map((item) => item.label)).toContain('Chat with review');
-    expect(items.map((item) => item.label)).not.toContain('Chat with research');
+    expect(items.map((item) => item.label)).not.toContain(
+      'Chat with assistant',
+    );
   });
 
   it('lists team presets as runnable orchestration actions', () => {
@@ -350,7 +352,7 @@ describe('CLI orchestration items', () => {
     );
   });
 
-  it('shows only the preferred team preset when it is available', () => {
+  it('lists every team preset so the user can switch between teams', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [
         readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),
@@ -359,31 +361,13 @@ describe('CLI orchestration items', () => {
       ],
       history: [],
       toolUseAgents: [],
-      preferredPresetId: 'physicist',
-    });
-
-    expect(items.map((item) => item.label)).toEqual([
-      'New chat',
-      'Team Physicist',
-      'Help',
-    ]);
-  });
-
-  it('falls back to the capped team preset list when the preferred team is missing', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [
-        readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),
-        readyPresetPlan({ id: 'physicist', name: 'Physicist' }),
-      ],
-      history: [],
-      toolUseAgents: [],
-      preferredPresetId: 'obsolete-team',
     });
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
       'Team Lean Project',
       'Team Physicist',
+      'Team Mathematician',
       'Help',
     ]);
   });

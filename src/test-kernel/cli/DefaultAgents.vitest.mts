@@ -7,8 +7,8 @@ import {
 } from '@cli/runtime/defaultAgents';
 
 describe('CLI implicit default agent policy', () => {
-  it('keeps research as the built-in default chat agent', () => {
-    expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('research');
+  it('uses assistant as the built-in default chat agent', () => {
+    expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('assistant');
   });
 
   it('filters implicit default candidates without mutating explicit options', () => {

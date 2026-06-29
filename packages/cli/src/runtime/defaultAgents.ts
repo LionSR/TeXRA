@@ -1,6 +1,6 @@
 import { agentName } from '@shared/schemas';
 
-export const BUILTIN_DEFAULT_CHAT_AGENT = 'research';
+export const BUILTIN_DEFAULT_CHAT_AGENT = 'assistant';
 
 const NON_IMPLICIT_DEFAULT_TOOL_USE_AGENTS = new Set(['simplifier']);
 

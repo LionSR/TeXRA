@@ -57,7 +57,6 @@ export interface BuildCliOrchestrationItemsInput {
   readonly presetPlans: readonly CliMultiAgentPresetRunPlan[];
   readonly history: readonly CliHistoryEntry[];
   readonly toolUseAgents: readonly AgentEntry[];
-  readonly preferredPresetId?: string;
   readonly includeMultiAgentLoginHint?: boolean;
 }
 
@@ -122,7 +121,6 @@ export function buildCliOrchestrationItems(
   items.push(...recentAgentItems(userStartedHistory, input.toolUseAgents));
   items.push(
     ...presetItems(input.presetPlans, {
-      preferredPresetId: input.preferredPresetId,
       includeLoginHint: input.includeMultiAgentLoginHint,
     }),
   );
@@ -172,15 +170,15 @@ function recentAgentItems(
   return items;
 }
 
+// Lists every available team (capped at MAX_PRESET_ITEMS) so the user can pick
+// — and switch — among them in the launcher, rather than being pinned to one.
 function presetItems(
   plans: readonly CliMultiAgentPresetRunPlan[],
   options: {
-    readonly preferredPresetId?: string;
     readonly includeLoginHint?: boolean;
   },
 ): CliOrchestrationItem[] {
-  const visiblePlans = preferredPresetPlans(plans, options.preferredPresetId);
-  return visiblePlans.map((plan) => ({
+  return plans.slice(0, MAX_PRESET_ITEMS).map((plan) => ({
     value: { kind: 'preset', preset: plan.preset.id },
     label: `Team ${plan.preset.name}`,
     description: formatCliMultiAgentPresetLauncherSummary(plan),
@@ -189,14 +187,4 @@ function presetItems(
       includeLoginHint: options.includeLoginHint,
     }),
   }));
-}
-
-function preferredPresetPlans(
-  plans: readonly CliMultiAgentPresetRunPlan[],
-  preferredPresetId: string | undefined,
-): readonly CliMultiAgentPresetRunPlan[] {
-  const preferredPlan = preferredPresetId
-    ? plans.find((plan) => plan.preset.id === preferredPresetId)
-    : undefined;
-  return preferredPlan ? [preferredPlan] : plans.slice(0, MAX_PRESET_ITEMS);
 }

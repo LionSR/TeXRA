@@ -1,17 +1,12 @@
 import { defineCommand, showUsage } from 'citty';
 
 import { platform } from '@platform/platform';
-import { DEFAULT_STARTUP_TEAM_ID } from '@controllers/onboarding/defaultTeamSeeding';
-import {
-  getDefaultTeamId,
-  getFirstRunDone,
-} from '@controllers/onboarding/onboardingFunnel';
+import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { getVisibleAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';
-import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
 import { listCliHistoryEntries } from '../runtime/history';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -129,19 +124,11 @@ async function runOrchestration(context: CliContext): Promise<number> {
   }
   const history = await listCliHistoryEntries();
   const presets = readCliMultiAgentPresets();
-  const defaultTeamId = getDefaultTeamId(platform().globalState);
-  const preferredPresetId = presets.some(
-    (preset) => preset.id === defaultTeamId,
-  )
-    ? defaultTeamId
-    : DEFAULT_STARTUP_TEAM_ID;
   const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
-  await seedCliRosterFromDefaultTeam();
   const items = buildCliOrchestrationItems({
     presetPlans: presetPlanSet.plans,
     history,
     toolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
-    preferredPresetId,
     includeMultiAgentLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
   });
   // Load the model registry up front so the launcher can offer a model pick

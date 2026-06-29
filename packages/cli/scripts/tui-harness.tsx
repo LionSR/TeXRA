@@ -13,7 +13,6 @@ import { getAgentsByCategory, loadAgents } from '@agent/index';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@common/errors';
-import { DEFAULT_STARTUP_TEAM_ID } from '@controllers/onboarding/defaultTeamSeeding';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { platform, tryPlatform } from '@platform/platform';
 import {
@@ -306,7 +305,6 @@ const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   }),
   history: harnessOrchestrationHistory(),
   toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
-  preferredPresetId: DEFAULT_STARTUP_TEAM_ID,
 });
 
 function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
