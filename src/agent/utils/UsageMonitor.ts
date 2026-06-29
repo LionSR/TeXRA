@@ -123,6 +123,8 @@ export class UsageMonitor {
       const roundReasoningTokens = latestUsage?.reasoningTokens ?? 0;
       const roundCost = latestUsage?.cost ?? 0;
       const toolUseTokens = latestUsage?.toolUsePromptTokens ?? 0;
+      const viaChatGptSubscription =
+        latestUsage?.viaChatGptSubscription ?? false;
 
       const { capabilities } = this.modelInfo;
       const supportsCaching =
@@ -157,6 +159,7 @@ export class UsageMonitor {
           reasoningTokens: roundReasoningTokens,
         }),
         ...(toolUseTokens > 0 && { toolUseTokens }),
+        ...(viaChatGptSubscription && { viaChatGptSubscription: true }),
       };
 
       // Two surfaces for usage: the progress-view sidebar (via runtimeHost
@@ -169,10 +172,14 @@ export class UsageMonitor {
         usage: payload,
       });
       if (agentCategory === AgentCategory.Workflow) {
+        const transcriptPayload: Record<string, number> = {};
+        for (const [key, value] of Object.entries(payload)) {
+          if (typeof value === 'number') transcriptPayload[key] = value;
+        }
         // The round stage's AsyncLocalStorage scope already stamps the active
         // round id (r0/r1...) onto emitted events; fall back to storageKey for
         // any usage logged outside a round stage.
-        logger.usage(payload, {
+        logger.usage(transcriptPayload, {
           stageId: logger.activeStageId() ?? storageKey,
         });
       }
@@ -189,6 +196,9 @@ export class UsageMonitor {
         cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         cost: roundCost,
+        // Free ChatGPT-subscription round: still logged (cost is 0), but marked
+        // so analytics can tell it apart from any other zero-cost row.
+        viaChatGptSubscription,
       });
     } catch (error) {
       logger.error(
@@ -229,6 +239,7 @@ export class UsageMonitor {
       cacheCreationInputTokens?: number;
       reasoningTokens?: number;
       cost: number;
+      viaChatGptSubscription?: boolean;
     },
   ): Promise<void> {
     try {
@@ -242,6 +253,7 @@ export class UsageMonitor {
         Math.max(0, usage.inputTokens - cachedInputTokens);
 
       const usedRelay =
+        !usage.viaChatGptSubscription &&
         !shouldUseOpenRouter(config) &&
         getServerSideKeyService().shouldUseServerSideKeysSync(
           config.provider,
@@ -264,6 +276,9 @@ export class UsageMonitor {
         cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usedRelay,
+        ...(usage.viaChatGptSubscription && {
+          viaChatGptSubscription: true,
+        }),
         streamId: this.context.streamId,
       });
 

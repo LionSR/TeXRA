@@ -12,6 +12,7 @@ import {
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
 import { selectCliRootModel } from '@cli/runtime/rootModelSelection';
+import { AgentCategory } from '@shared/schemas/agent';
 
 const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
@@ -180,6 +181,7 @@ describe('resolveCliRunModel precedence', () => {
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith(
       CLI_BUILTIN_DEFAULT_MODEL,
       {
+        agentCategory: AgentCategory.Workflow,
         apiMode: 'personal',
         fallbackSource: 'builtin',
       },
@@ -229,6 +231,7 @@ describe('resolveCliRunModel precedence', () => {
       CliUsageError,
     );
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
+      agentCategory: AgentCategory.Workflow,
       apiMode: 'personal',
       fallbackSource: 'override',
     });
@@ -243,6 +246,7 @@ describe('resolveCliRunModel precedence', () => {
     await resolveCliRunModel(context, undefined, 'run');
 
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
+      agentCategory: AgentCategory.Workflow,
       apiMode: 'personal',
       fallbackSource: 'env',
     });

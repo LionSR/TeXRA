@@ -15,7 +15,10 @@ import {
   type CodexSessionCoordinator,
   type CodexSessionStatus,
 } from './CodexSessionCoordinator';
-import { isPreferCodexSubscription } from './codexPreference';
+import {
+  isCodexSubscriptionToolUseOnly,
+  isPreferCodexSubscription,
+} from './codexPreference';
 
 const CHANNEL = 'codexAuth';
 
@@ -68,10 +71,14 @@ export async function isCodexSignedIn(): Promise<boolean> {
  * `ChatGptAuthStatusSchema` at each host's boundary).
  */
 export async function getChatGptAuthStatus(): Promise<
-  CodexSessionStatus & { preferSubscription: boolean }
+  CodexSessionStatus & {
+    preferSubscription: boolean;
+    subscriptionToolUseOnly: boolean;
+  }
 > {
   return {
     ...(await getCodexStatus()),
     preferSubscription: isPreferCodexSubscription(),
+    subscriptionToolUseOnly: isCodexSubscriptionToolUseOnly(),
   };
 }

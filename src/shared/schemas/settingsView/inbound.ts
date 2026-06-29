@@ -325,6 +325,10 @@ const SetChatGptPreferSubscriptionMessageSchema = z.object({
   command: z.literal(CMD.SET_CHATGPT_PREFER_SUBSCRIPTION),
   enabled: z.boolean(),
 });
+const SetChatGptSubscriptionToolUseOnlyMessageSchema = z.object({
+  command: z.literal(CMD.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY),
+  enabled: z.boolean(),
+});
 
 const GetDesktopCrashReportingMessageSchema = commandOnly(
   CMD.GET_DESKTOP_CRASH_REPORTING,
@@ -549,6 +553,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SignInChatGptMessageSchema,
     SignOutChatGptMessageSchema,
     SetChatGptPreferSubscriptionMessageSchema,
+    SetChatGptSubscriptionToolUseOnlyMessageSchema,
     GetDesktopCrashReportingMessageSchema,
     SetDesktopCrashReportingEnabledMessageSchema,
     SetDesktopCrashReportingDsnMessageSchema,

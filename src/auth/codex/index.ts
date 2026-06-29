@@ -58,10 +58,15 @@ export {
 } from './codexAuthAccess';
 export {
   isPreferCodexSubscription,
+  isCodexSubscriptionToolUseOnly,
   setPreferCodexSubscription,
+  setCodexSubscriptionToolUseOnly,
   type CodexSubscriptionPreferenceUpdate,
 } from './codexPreference';
-export { shouldUseCodexSubscription } from './codexRouting';
+export {
+  shouldUseCodexSubscription,
+  shouldUseCodexSubscriptionForAgentCategory,
+} from './codexRouting';
 export { isCodexSubscriptionActive } from './codexActive';
 export {
   loginWithLoopback,

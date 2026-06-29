@@ -70,6 +70,18 @@ export class ModelsTab extends LitElement {
         opacity: 0.8;
         font-size: 0.9em;
       }
+      .chatgpt-subscription__limit {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.4rem;
+        margin: 0 0 0.6rem;
+        opacity: 0.85;
+        font-size: 0.9em;
+      }
+      .chatgpt-subscription__limit wa-icon {
+        flex: 0 0 auto;
+        margin-top: 0.1rem;
+      }
       .chatgpt-subscription__row {
         display: flex;
         align-items: center;
@@ -216,6 +228,8 @@ export class ModelsTab extends LitElement {
   private renderChatGptSection(): TemplateResult {
     const signedIn = this.chatgptAuth?.signedIn ?? false;
     const preferSubscription = this.chatgptAuth?.preferSubscription ?? false;
+    const subscriptionToolUseOnly =
+      this.chatgptAuth?.subscriptionToolUseOnly ?? false;
     const account =
       this.chatgptAuth?.email ?? this.chatgptAuth?.accountId ?? 'your account';
     return html`
@@ -228,6 +242,13 @@ export class ModelsTab extends LitElement {
           Use your own ChatGPT Plus/Pro/Team subscription for Codex models
           instead of an API key.
         </p>
+        <p class="chatgpt-subscription__limit">
+          ${waIcon('circle-info')}
+          <span>
+            Subscription routing currently uses a 272,000-token Codex context
+            cap, not the full 1,000,000-token API context.
+          </span>
+        </p>
         <div class="chatgpt-subscription__setting">
           <wa-switch
             ?checked=${preferSubscription}
@@ -239,6 +260,21 @@ export class ModelsTab extends LitElement {
             }}
           >
             Prefer ChatGPT subscription
+          </wa-switch>
+        </div>
+        <div class="chatgpt-subscription__setting">
+          <wa-switch
+            ?checked=${subscriptionToolUseOnly}
+            ?disabled=${!preferSubscription}
+            hint="Workflow agents use your API key or relay instead — the Codex backend has no background mode and is less stable for long runs."
+            @change=${(event: Event) => {
+              const enabled = (event.target as WaSwitch).checked;
+              this.dispatchEvent(
+                ChatGptAuthEvents.setSubscriptionToolUseOnly({ enabled }),
+              );
+            }}
+          >
+            Use subscription for tool-use agents only
           </wa-switch>
         </div>
         ${signedIn

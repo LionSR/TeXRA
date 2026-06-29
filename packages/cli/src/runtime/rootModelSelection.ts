@@ -1,3 +1,5 @@
+import type { AgentCategory } from '@shared/schemas/agent';
+
 import { setCliHelperModel } from './initPlatform';
 import {
   resolveCliRunnableModel,
@@ -11,15 +13,18 @@ export async function selectCliRootModel({
   model,
   modelSource,
   noAvailableModelsMessage,
+  agentCategory,
 }: {
   readonly apiMode?: CliApiMode;
   readonly model: string;
   readonly modelSource: CliModelSelectionSource;
   readonly noAvailableModelsMessage?: string;
+  readonly agentCategory?: AgentCategory;
 }): Promise<CliRunnableModelResolution> {
   const selection = await resolveCliRunnableModel(model, {
     fallbackSource: modelSource,
     apiMode,
+    agentCategory,
     ...(noAvailableModelsMessage == null ? {} : { noAvailableModelsMessage }),
   });
   await setCliHelperModel(selection.model);

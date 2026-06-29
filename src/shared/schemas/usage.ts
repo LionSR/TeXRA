@@ -9,6 +9,7 @@ export const TokenUsageStatsSchema = z.strictObject({
   cacheReadInputTokens: TokenCountSchema.optional(),
   cacheMissInputTokens: TokenCountSchema.optional(),
   cacheCreationInputTokens: TokenCountSchema.optional(),
+  viaChatGptSubscription: z.boolean().optional(),
 });
 
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
@@ -22,7 +23,19 @@ export function emptyUsageStats(): Required<TokenUsageStats> {
     cacheReadInputTokens: 0,
     cacheMissInputTokens: 0,
     cacheCreationInputTokens: 0,
+    viaChatGptSubscription: false,
   };
+}
+
+function hasUsageActivity(usage: TokenUsageStats): boolean {
+  return (
+    usage.inputTokens !== 0 ||
+    usage.outputTokens !== 0 ||
+    usage.cost !== 0 ||
+    (usage.cacheReadInputTokens ?? 0) !== 0 ||
+    (usage.cacheMissInputTokens ?? 0) !== 0 ||
+    (usage.cacheCreationInputTokens ?? 0) !== 0
+  );
 }
 
 /** Accumulates usage stats from an iterable into a single total. */
@@ -30,6 +43,8 @@ export function sumUsageStats(
   items: Iterable<TokenUsageStats>,
 ): TokenUsageStats {
   const total = emptyUsageStats();
+  let sawUsageActivity = false;
+  let allRoundsViaChatGptSubscription = true;
   for (const usage of items) {
     total.inputTokens += usage.inputTokens;
     total.outputTokens += usage.outputTokens;
@@ -41,7 +56,17 @@ export function sumUsageStats(
     total.cacheCreationInputTokens =
       (total.cacheCreationInputTokens ?? 0) +
       (usage.cacheCreationInputTokens ?? 0);
+    if (hasUsageActivity(usage)) {
+      sawUsageActivity = true;
+      allRoundsViaChatGptSubscription =
+        allRoundsViaChatGptSubscription &&
+        usage.viaChatGptSubscription === true;
+    }
   }
+  // Only true when every non-empty accumulated round used the subscription;
+  // zero baselines are neutral, while API-key or relay rounds make the total mixed.
+  total.viaChatGptSubscription =
+    sawUsageActivity && allRoundsViaChatGptSubscription;
   return total;
 }
 

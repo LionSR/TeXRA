@@ -10,11 +10,16 @@
  */
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
+import { AgentCategory } from '@shared/schemas/agent';
+
 import {
   codexBackendModelId,
   isCodexSubscriptionEligible,
 } from './codexConstants';
-import { isPreferCodexSubscription } from './codexPreference';
+import {
+  isCodexSubscriptionToolUseOnly,
+  isPreferCodexSubscription,
+} from './codexPreference';
 
 /**
  * Whether this model, under the current routing context, should go through the
@@ -32,4 +37,14 @@ export function shouldUseCodexSubscription(
   // Match the bare id the Codex backend keys on (`gpt-5.5`), not the date-pinned
   // llm-zoo `fullName` (`gpt-5.5-2026-04-23`) — the same derivation dispatch uses.
   return isCodexSubscriptionEligible(codexBackendModelId(config));
+}
+
+export function shouldUseCodexSubscriptionForAgentCategory(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+  agentCategory: AgentCategory | undefined,
+): boolean {
+  if (!shouldUseCodexSubscription(config, useOpenRouter)) return false;
+  if (!isCodexSubscriptionToolUseOnly()) return true;
+  return agentCategory === AgentCategory.ToolUse;
 }

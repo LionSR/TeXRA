@@ -11,6 +11,10 @@ import type { MainViewAuthStatus } from './MainViewTypes';
 
 export interface MainViewStartupOptions {
   modelOptions: ModelOptionData[];
+  modelOptionsByCategory?: {
+    workflow?: ModelOptionData[];
+    toolUse?: ModelOptionData[];
+  };
   agentOptions: {
     workflow?: AgentOptionData[];
     toolUse?: AgentOptionData[];
@@ -49,10 +53,8 @@ export class MainViewStartupController {
   }
 
   async getOptionsAndLoginMessages(): Promise<MainViewStartupMessage[]> {
-    const [{ modelOptions, agentOptions }, authStatus] = await Promise.all([
-      this.deps.loadOptions(),
-      this.deps.getAuthStatus(),
-    ]);
+    const [{ modelOptions, modelOptionsByCategory, agentOptions }, authStatus] =
+      await Promise.all([this.deps.loadOptions(), this.deps.getAuthStatus()]);
 
     const showLoginBanner =
       !authStatus.authenticated &&
@@ -62,6 +64,9 @@ export class MainViewStartupController {
       {
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
         optionsData: modelOptions,
+        ...(modelOptionsByCategory && {
+          optionsDataByCategory: modelOptionsByCategory,
+        }),
       },
       {
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,

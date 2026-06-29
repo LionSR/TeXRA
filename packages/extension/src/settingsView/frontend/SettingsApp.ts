@@ -214,6 +214,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly chatgptAuth = signal<ChatGptAuthStatus>({
     signedIn: false,
     preferSubscription: false,
+    subscriptionToolUseOnly: false,
   });
   private readonly desktopCrashReportingEnabled = signal(false);
   private readonly desktopCrashReportingConfigured = signal(false);
@@ -723,6 +724,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
   );
 
+  private handleSetChatGptSubscriptionToolUseOnly = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY,
+  );
+
   private handleDesktopCrashReportingToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
   );
@@ -985,6 +990,8 @@ export class SettingsApp extends SettingsAppBase {
               @chatgpt-sign-out=${this.handleChatGptSignOut}
               @chatgpt-prefer-subscription-set=${this
                 .handleSetChatGptPreferSubscription}
+              @chatgpt-subscription-tool-use-only-set=${this
+                .handleSetChatGptSubscriptionToolUseOnly}
             ></models-tab>
           </wa-tab-panel>
 

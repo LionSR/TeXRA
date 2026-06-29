@@ -15,6 +15,7 @@ import {
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/modelAccess';
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { AgentCategory } from '@shared/schemas/agent';
 import { Select, selectIndexForHotkeyInput } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
 import {
@@ -40,6 +41,7 @@ const TUI_MODEL_EMPTY_RECOVERY = {
 export interface ModelListFormProps {
   readonly currentModel: string;
   readonly apiMode: CliApiMode;
+  readonly agentCategory?: AgentCategory;
   readonly availableRows?: number;
   readonly selectable: boolean;
   readonly getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
@@ -91,7 +93,11 @@ function EmptyModelListState(props: {
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const { data, loading, error, pendingInput, clearPendingInput } =
     useAsyncListForm<readonly CliModelAccess[]>({
-      load: () => getCliModelAccessList({ apiMode: props.apiMode }),
+      load: () =>
+        getCliModelAccessList({
+          apiMode: props.apiMode,
+          agentCategory: props.agentCategory,
+        }),
       onClose: props.onClose,
       isEmpty: (models) => !models.some((model) => model.available),
     });

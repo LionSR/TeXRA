@@ -1,3 +1,4 @@
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   formatCliApiMode,
   parseCliApiMode,
@@ -34,6 +35,7 @@ async function reconcileRootModelAfterApiModeChange(
       apiMode,
       CHAT_API_MODE_MODEL_RECOVERY,
     ),
+    agentCategory: AgentCategory.ToolUse,
   });
   if (selection.model === currentModel) return undefined;
 

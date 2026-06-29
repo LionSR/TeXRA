@@ -253,23 +253,29 @@ const FiniteNumber = z.coerce
   .number()
   .transform((n) => (Number.isFinite(n) ? n : 0));
 
-type TokenUsageStatKey = keyof typeof TokenUsageStatsSchema.shape;
-
-const TokenUsageStatsParsingShape = {} as Record<
-  TokenUsageStatKey,
-  z.ZodType<number>
->;
-for (const [key, schema] of Object.entries(TokenUsageStatsSchema.shape) as [
-  TokenUsageStatKey,
-  z.ZodType,
-][]) {
-  TokenUsageStatsParsingShape[key] = schema.isOptional()
-    ? FiniteNumber.optional().prefault(0)
-    : FiniteNumber;
+function isNumericUsageField(schema: z.ZodType): boolean {
+  const inner = schema instanceof z.ZodOptional ? schema.unwrap() : schema;
+  return inner instanceof z.ZodNumber;
 }
 
+const numericUsageParsingShape = Object.fromEntries(
+  Object.entries(TokenUsageStatsSchema.shape)
+    .filter(([, schema]) => isNumericUsageField(schema))
+    .map(([key, schema]) => [
+      key,
+      schema instanceof z.ZodOptional
+        ? FiniteNumber.optional().prefault(0)
+        : FiniteNumber,
+    ]),
+);
+
 /** Parsing schema with safe number coercion. */
-const TokenUsageStatsParsingBaseSchema = z.object(TokenUsageStatsParsingShape);
+const TokenUsageStatsParsingBaseSchema = z.object({
+  ...numericUsageParsingShape,
+  viaChatGptSubscription: z.boolean().catch(false).prefault(false),
+  // The numeric fields are derived from `TokenUsageStatsSchema.shape` above;
+  // TypeScript cannot recover the required keys through `Object.fromEntries`.
+}) as unknown as z.ZodType<TokenUsageStats>;
 
 export const TokenUsageStatsParsingSchema =
   TokenUsageStatsParsingBaseSchema.catch(emptyUsageStats());

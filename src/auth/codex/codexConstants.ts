@@ -67,6 +67,17 @@ export const CODEX_ORIGINATOR = 'texra';
  */
 export const CODEX_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 
+/**
+ * Context window the ChatGPT-subscription (Codex) backend enforces, regardless
+ * of the model's own (larger) API context window in llm-zoo — e.g. gpt-5.5
+ * declares 1,050,000 over the OpenAI API but the subscription backend caps the
+ * request at 272,000 and answers `400 context_length_exceeded` past it. Matches
+ * the Codex CLI's hardcoded `model_context_window`. Applied as a cap (never
+ * inflates a smaller model) via the handler's effective-context-window override,
+ * gated on the subscription path so the API-key fallback keeps the full window.
+ */
+export const CODEX_SUBSCRIPTION_CONTEXT_WINDOW = 272_000;
+
 /** Non-auth request headers for the Codex backend. */
 export const CODEX_ACCOUNT_ID_HEADER = 'chatgpt-account-id';
 export const CODEX_ORIGINATOR_HEADER = 'originator';
@@ -93,6 +104,16 @@ export const CODEX_TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 /** Config key for the "prefer my ChatGPT subscription" switch (off by default). */
 export const CODEX_PREFER_SUBSCRIPTION_KEY =
   'texra.chatgptCodex.preferSubscription';
+
+/**
+ * Config key for the "subscription for tool-use agents only" switch (off by
+ * default). When on, only tool-use agents route through the ChatGPT
+ * subscription; workflow agents fall back to the user's API key / relay, because
+ * the Codex backend has no background mode (which workflow runs lean on) and is
+ * less stable for long runs.
+ */
+export const CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY =
+  'texra.chatgptCodex.subscriptionToolUseOnly';
 
 /**
  * OpenAI models the Codex backend currently serves to ChatGPT subscribers. This
