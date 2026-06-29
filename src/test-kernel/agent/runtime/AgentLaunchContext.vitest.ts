@@ -48,10 +48,15 @@ describe('AgentLaunchContext', () => {
     const ctx = {
       runtimeHost: explicit.host,
       logger: noopTrace,
+      streamId: 'launch-context-stream' as AgentLaunchContext['streamId'],
+      executionId:
+        'launch-context-execution' as AgentLaunchContext['executionId'],
+      coordinators: {} as AgentLaunchContext['coordinators'],
       config: {
         agent: 'chat',
         model: 'deepseekT',
       },
+      session: {} as AgentLaunchContext['session'],
     } as unknown as AgentLaunchContext;
 
     await withExecutionRunContext(ctx, async () => {

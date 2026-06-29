@@ -141,6 +141,7 @@ function agentContextToRunContext(
     streamId: ctx.streamId,
     executionId: ctx.executionId,
     coordinators: ctx.coordinators,
+    modelSource: 'live' as const,
     getModel: () => ctx.config.model,
     agentName: ctx.config.agent,
     workingDirectory: ctx.workingDirectory,
