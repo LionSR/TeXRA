@@ -39,6 +39,11 @@ export interface SetupSecretsAdapter {
   gitHubTokenExists(): Promise<'secret' | 'env' | 'none'>;
   /** List of provider names known to TeXRA (matches SecretManager.API_PROVIDERS). */
   providers: readonly ApiProvider[];
+  /**
+   * All secret key names currently stored in SecretStorage. Values are never
+   * returned — only names. Added in VS Code 1.105 (`SecretStorage.keys()`).
+   */
+  listStoredKeys(): Promise<readonly string[]>;
 }
 
 /** Per-command surface. */
