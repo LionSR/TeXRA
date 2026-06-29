@@ -48,9 +48,10 @@ merges to main, rebase the remaining stack onto main.
 - [ ] **SDK-1a conversions** - drive `check:alias-leaks` to zero (27 CONVERT +
       2 RE-TYPE; the 17 delete-wholesale exports are GS-3's), then wire the gate into
       `ci.yml`. Full disposition + patterns in `SDK-1a-alias-closure.md`.
-- [ ] **SDK-1b import-direction** - lint rule forbidding deep `@agent/runtime/*`
-      in the UIs' run-driver tier + make the 3 UIs import `@texra/core` (today: zero
-      do).
+- [ ] **SDK-1b import-direction** - **forbidden import specifiers added to
+      `check-runtime-boundaries.mjs`** (not a new rule/file): forbid deep
+      `@agent/runtime/*` + `@eventBus` in the UIs' run-driver tier + make the 3 UIs
+      import `@texra/core` (today: zero do).
 - [ ] **P0 drift bugs** - the 3 in `00-overview.md` (desktop delete-all,
       `warning` severity, workflow auto-open).
 
@@ -61,8 +62,10 @@ merges to main, rebase the remaining stack onto main.
       alongside today's context. The Step-1 phase gate (`FlowRecord` never
       references descriptor fields) IS the SDK serialization fence.
 - [ ] **SDK-1c bus-promotion** - promote `ProgressEventPayloads` ->
-      `RuntimeEventPayloads`/`HostUiEventPayloads`; seal the run `bus`; `HostUiBus`
-      for non-run signals (preserve the `MAX_BUFFER_SIZE` replay).
+      `RuntimeEventPayloads`/`HostUiEventPayloads`; seal the one `bus` (export-fence +
+      add `@eventBus` to `check-runtime-boundaries.mjs`; no `HostUiBus`); run
+      emissions via `SessionHandle.hostChannel`; non-run signals stay on the one
+      `bus` with its existing `MAX_BUFFER_SIZE` replay.
 - [ ] **CH-07-slice (sub-PRD 07 Phase A)** - status + display-identity projection
       (consumes #6722 + the carried name); fixes the renderer-reload parity bug.
 - [ ] **S1 simplifier** over Phase A+B changed files.
@@ -71,19 +74,23 @@ merges to main, rebase the remaining stack onto main.
 
 - [ ] **GS-2 ModelCell** - route model / `withModelClient` / `switchModel` through
       it; lockstep-swap the 2 bridge-node `{...this.services}` spreads.
-- [ ] **GS-3 PendingRequests** - 3 coordinators -> one registry + config table +
-      slim `(kind,id)->session` routing index. **Supersedes** sub-PRD 06's
-      coordinator slice. Collapses only the inquiry _coordinator plumbing_ (one of
-      the 3 deferred coordinators); the host-aware inquiry decision policy stays
+- [ ] **GS-3 PendingRequests** - fold 3 coordinator subclasses into
+      `BasePromiseCoordinator` (typed `PendingRequests<T>` instances) + the slim
+      `(kind,id)->session` routing index (the real reduction). **Supersedes** sub-PRD
+      06's coordinator slice. Collapses only the inquiry _coordinator plumbing_ (one
+      of the 3 deferred coordinators); the host-aware inquiry decision policy stays
       owned by sub-PRD 05 (CH-05), not absorbed.
 - [ ] **GS-4 retry-two-owners** - `RetryPolicy` + `RetryGate`; human wait stays
       in-node; touches the shared `ModelInvocationNode` (both flow families, one
       commit).
 - [ ] **S2 simplifier** over Phase C so far.
-- [ ] **GS-5 RoundFlow** - unify `PersistedFlow`/`RoundPersistedFlow`; `FlowRecord`
-      versioning + replay shim (highest risk; 5a/5b/5c, resume-migration gated).
+- [ ] **GS-5 RoundFlow** - keep `PersistedFlow` as the single engine; express
+      round-looping as a composition helper / loop-edge (NO PersistedFlow/
+      RoundPersistedFlow merge, no `FlowRecord` versioning, no replay shim - dropped
+      per the abstraction-overhead ruling).
 - [ ] **GS-6 Descriptor + ambient-shrink** - `RunDescriptor` as the `Svc` SSOT;
-      5-field `ToolRunContext`; restrict `currentSession()` to host-entry; delete
+      narrow `ToolRunContext` (~8 tool-facing fields); restrict `currentSession()`
+      to host-entry; delete
       `agentContextToRunContext`. **Absorbs** only 04's resolved-name field-carry
       (`config.agent` stays raw); 04's branding / display-repoints / resume-id trap
       ship as CH-04.
@@ -94,9 +101,10 @@ merges to main, rebase the remaining stack onto main.
 ### Phase D - SDK packaging + the remainder
 
 - [ ] **SDK-1d package** - real build (`.d.ts` via `tsc-alias`/`tsup`), drop
-      `private`, subpath `exports`, `createNodePlatform()` at `./node`, author the
-      `AgentRunHandle` interface. (Sequencing per this runbook: 1d lands last, after
-      the internal migration settles - supersedes the SDK PRD's "all-four-first"
+      `private`, subpath `exports` (`.` / `./commands` / `./node`; no `./agents` -
+      discovery lives on the Tier-1 root), `createNodePlatform()` at `./node`, author
+      the `AgentRunHandle` interface. (Sequencing per this runbook: 1d lands last,
+      after the internal migration settles - supersedes the SDK PRD's "all-four-first"
       framing.)
 - [ ] **CH-05 (sub-PRD 05)** - the host-aware external-inquiry decision policy
       (`onEmpty: keepOpen | drop`), consuming #6723's `mode` union. After #6723 and

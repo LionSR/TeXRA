@@ -72,16 +72,29 @@ to zero. The conversions fall into four patterns, with the adversary's caveats:
   agentConfig-bearing - inline, not `Pick`), `RuntimeAgentOptionsData` (publish the
   full `AgentOptionsDataPayload` - consumer reads both fields, no honest narrowing),
   `RuntimeAgentLoadOptions` (publish `LoadAgentsOptions`).
-- **Author a value-only projection / re-type** (inline INVALID - the boundary lint
-  bans the host import, or it carries a flow-internal): the `RuntimeToolEditApproval*`
-  trio (author `{path,originalContent,proposedContent,sourceTool,streamId}` in
-  `approvalCommands.ts` - `@tools/approval` is host-banned), `RuntimeHistoryExecutionMeta`
-  (`Pick<ExecutionMeta, ...>` - `@agent/storage` banned), `RuntimeHistoryResultMeta`
+- **Relocate a coupling-free Zod schema to `@shared`, then `z.infer` both sides**
+  (the trio's correct fix - inline INVALID because `@tools/approval` is host-banned,
+  but the type is coupling-free): the `RuntimeToolEditApproval*` trio is a
+  coupling-free Zod type, so do **not** hand-author a parallel interface. RELOCATE its
+  schema into the publishable `@shared` zone (`src/shared/approval/` already exists)
+  and derive **both** the tool internal and the SDK surface via `z.infer<typeof
+  Schema>` - zero duplication, drift impossible, and the boundary lint is satisfied
+  because the import becomes `@shared`, not host-banned `@tools/approval`. Worked
+  RELOCATION example: `ToolEditApprovalRequestSchema` (a 5-field coupling-free Zod
+  object in `src/tools/approval/toolEditApproval.ts`) moves to `src/shared/approval/`;
+  `approvalCommands.ts` and the tool both `z.infer` it. Disposition for the trio:
+  **relocate schema to `@shared` + `z.infer`** (not "author value-only interface").
+- **Author a value-only projection only for genuinely host-coupled types** (inline
+  INVALID - the boundary lint bans the host import, or it carries a flow-internal):
+  `RuntimeHistoryExecutionMeta` (`Pick<ExecutionMeta, ...>` of a **published** type,
+  not re-typed field-by-hand - `@agent/storage` banned), `RuntimeHistoryResultMeta`
   (opaque-by-`JSON.stringify`), `RuntimeAgentCreator{Category,Config,UI}` (target the
   published `AgentCategory` SSOT; the UI callback is the Area-3 `onBeforeWaiting`),
   `RuntimeExternalInquiryResolution` (value-only local shape). `RuntimeToolUseSessionSnapshot`
   -> an opaque branded token typed **symmetrically** at produce (`:38`) and consume
-  (`:82`) or it compile-breaks.
+  (`:82`) or it compile-breaks. Reserve hand-authored projections for these
+  genuinely host-coupled types, and `Pick<>` a PUBLISHED type rather than re-typing
+  fields by hand.
 - **The 2 RE-TYPEs:** `RunAgentOptions.onBeforeWaiting` (+ `ExecuteAgentOptions`) ->
   `(interimText?, touchedFiles?) => boolean | void | Promise<...>`, `runAgent` adapts;
   `AgentRunHandle` -> a real interface dropping `runtimeHost` (SDK correction #4).

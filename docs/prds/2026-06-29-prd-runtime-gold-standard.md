@@ -17,6 +17,13 @@ never counted as a reduction. Where logic moves rather than disappears, it is sa
 so. Two metrics are reported separately and never multiplied together: orchestration
 **call depth** (host event -> flow node) and **injection/threading depth**.
 
+**Accounting discipline (PRD gate).** Every claimed deletion must name the
+file/symbol that ceases to exist. A rename, or a field that reappears on another
+object, is logged in a separate "relocated" column and may **not** be netted
+against additions. The acceptance ledger after the overhead ruling is **net -5
+named concepts / -4 drift surfaces**; a revision that pushes net concepts back
+toward zero is overhead, not progress.
+
 ## Thesis
 
 The runtime core today has two structural defects, both named by the maintainer:
@@ -36,13 +43,15 @@ value passed to `flow.setServices(descriptor)`. PocketFlow propagates it by
 reference to every cloned node (`node/index.ts` `clone()` shares `_services`), so
 injection **depth is one handoff** regardless of node nesting.
 
-**Honest field accounting.** The descriptor is **not** a shrink of the 14-field
-`RunContext`. It is the _union_ of today's `AgentCore` (20 fields) and `RunContext`
-(14 fields) minus their ~8-field overlap and minus the rename projection - landing
-near ~25 immutable run-level fields. Earlier design drafts undercounted (omitting
-`setting`, `prompt`, `logger`, `streamStatus`, `userVarChannels`,
-`getActiveChildren`, and the reflection-specific `outputState`/`xmlManager`/
-`diffManager`/`promptBuilder`/`fileService`); those are carried explicitly.
+**Honest field accounting.** The descriptor **relocates run identity to the
+descriptor; flow-implementation handles live in `shared`.** It groups today's
+`AgentCore`/`RunContext` run-level deps into **~8 grouped slots** (identity / agent /
+model / tools / retry / host / session / flags), not 25 flat fields. The run-level
+immutables earlier drafts undercounted (`setting`, `prompt`, `logger`,
+`streamStatus`, `userVarChannels`, `getActiveChildren`) fold into those slots. The
+reflection-specific `outputState`/`xmlManager`/`diffManager`/`promptBuilder`/
+`fileService` are **not** descriptor fields - they are flow-implementation handles
+that move to the flow-local PocketFlow `shared` store.
 
 The genuine, defensible wins:
 
@@ -58,7 +67,8 @@ The genuine, defensible wins:
    usage refs remain as `descriptor.host.emit(...)` field reads; the _threading_
    collapses, not the _usage_).
 
-**Field list (kept on the frozen descriptor; immutable except the one cell):**
+**Field list - ~8 grouped slots (kept on the frozen descriptor; immutable except
+the one cell):**
 
 ```
 identity:  { agent (RAW - resume-id contract), agentSource, agentCategory,
@@ -66,13 +76,14 @@ identity:  { agent (RAW - resume-id contract), agentSource, agentCategory,
 agent:     ResolvedAgent      // setting + prompts, parsed once
 model:     ModelCell          // { handler, client, modelId } - the ONE mutable seam
 tools:     ResolvedToolSet    // resolved once
-retry:     RetryPolicy        // budget read once
-host:      AgentRuntimeHost ; streamStatus
-session:   SessionHandle      // field, not currentSession()
-requests:  RetryGate / PendingRequests port   // narrow interface == session.requests
+retry:     RetryPolicy        // budget read once (SSOT only, not the clamp)
+host:      AgentRuntimeHost ; streamStatus ; logger ; userVarChannels ;
+           getActiveChildren
+session:   SessionHandle      // field, not currentSession(); requests == session.requests
 flags:     { approvalPromptsUnavailable, runtimeUnavailableTools, stopAfterCycle }
-services:  setting, prompt, logger, userVarChannels, getActiveChildren,
-           outputState, xmlManager, diffManager, promptBuilder, fileService
+// flow-implementation handles (outputState / xmlManager / diffManager /
+// promptBuilder / fileService) are NOT descriptor fields - they live in the
+// flow-local PocketFlow `shared` store.
 ```
 
 **Deleted outright:** `RunContext.model` live getter; the `agentName`/`model`
@@ -81,19 +92,21 @@ rename projection; `withModelClient` getters; the `AgentCore`/`RunContext` overl
 
 **Round-scoped state does NOT go on the descriptor (normative rule).** A frozen
 run-level descriptor cannot carry per-round mutable state. Round/cycle-scoped
-mutable state (`round`, per-round `fileService` scratch, `run`, `workspace`) lives
+mutable state (`round`, `run`, `workspace`, and the reflection-flow handles
+`outputState`/`xmlManager`/`diffManager`/`promptBuilder`/`fileService`) lives
 in the PocketFlow `shared` store (mutable, persisted, `structuredClone`-safe -
 never a handler/client/socket). Only immutable run-level deps live on the
 descriptor (`Svc`). This is what makes the bridge-node deletion a real subtraction
 rather than a relocation.
 
-**Ambient survives in exactly one narrow form.** A 5-field `ToolRunContext`
-`{ streamId, executionId, workingDirectory, delegationDepth, model }` read only by
-`src/tools/*` code that is dispatched by name with model-supplied args and
-genuinely cannot take a descriptor parameter. `model` is a reference to the
-`ModelCell` read as `cell.modelId` - one stable-pointer indirection, **not** a
-re-resolve - so a delegation tool spawned after a mid-session switch still sees the
-new model. Nodes hold the descriptor by reference but are typed
+**Ambient survives in two narrow ALS readers.** The tool-facing context is **~8
+tool-facing fields** read only by `src/tools/*` code that is dispatched by name with
+model-supplied args and genuinely cannot take a descriptor parameter; `model` is a
+reference to the `ModelCell` read as `cell.modelId` - one stable-pointer
+indirection, **not** a re-resolve - so a delegation tool spawned after a mid-session
+switch still sees the new model. After the shrink exactly **two** ALS readers
+survive - `tryUseRunContext` and `currentSession` - with no parallel ambient channel
+for run/flow code. Nodes hold the descriptor by reference but are typed
 `Pick<RunDescriptor, ...>` per their declared deps, so "a node needs <= its actual
 deps" holds at the type level even though the runtime object is shared.
 
@@ -120,8 +133,11 @@ resume.
 
 ## 3. The retry model: two owners, by concern
 
-All five current mechanisms collapse to **two owners**, split machine-transient vs
-human-decision.
+This is an **ownership recount, not a concept-count reduction**: the named retry
+concepts tick **up** by ~1 (a `RetryPolicy` SSOT value object plus a relocated
+decision surface join the existing loop), and the win is **correctness + the SDK
+clamp (Step 0)**, not a smaller count. Today's mechanisms re-home onto **two
+owners**, split machine-transient vs human-decision.
 
 **Owner-1, transient-retry executor (the only loop)** lives inside the PocketFlow
 node's `_exec` (the native `pRetry` loop), configured by a `RetryPolicy` value
@@ -135,7 +151,7 @@ policy _input_ (relay->own-key / subscription->API-key) feeding the same
 | #   | Current mechanism                                        | New home                                                                                                                                                | Disposition                                                                                    |
 | --- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | 1   | PocketFlow `Node._exec` pRetry                           | Owner-1, the engine                                                                                                                                     | kept                                                                                           |
-| 2   | `RetryableInvocationNode` (`RetryState`)                 | loop config + `shouldAutoRetry` + relay-401 `onRetry` -> `RetryPolicy`; value-mapping -> node `post`; human wait stays in-node via the `RetryGate` port | **relocated** (honest: logic moves, not deleted)                                               |
+| 2   | `RetryableInvocationNode` (`RetryState`)                 | loop config + `shouldAutoRetry` + relay-401 `onRetry` -> `RetryPolicy`; value-mapping -> node `post`; human wait stays in-node via the injected `waitForRetry` callback | **relocated** (honest: logic moves, not deleted)                                               |
 | 3   | `RetryRequestCoordinatorImpl` + `BasePromiseCoordinator` | Owner-2 = `PendingRequests` 'retry' entry                                                                                                               | the `loggers` + bridge `retries` maps deleted                                                  |
 | 4   | Per-provider SDK retry (default 2)                       | **clamped to `attempts:1` everywhere**, Owner-1 the sole transient retrier                                                                              | **deleted** (the silent SDK x flow double-retry) - the strongest genuine, verifiable reduction |
 | 5   | `ProgressApiKeyRetryController` + `userRetryable`        | policy input to Owner-2; `userRetryable` stays the `errors.ts` SSOT                                                                                     | survives as a distinct controller (not counted as deleted)                                     |
@@ -146,11 +162,15 @@ PocketFlow's only human-retry mechanism is `retryPrompt()` returning `true` to
 call, preserving the prepped context. Moving the wait out of the node converts an
 in-place restart into a graph re-entry that re-runs `prep` - a behavior change. So:
 **keep the human-retry wait in-node**; sever the inverted `core/flows` ->
-`@runtime`/`@auth` layering by **type-move plus a narrow `RetryGate` port the
-descriptor satisfies, not behavior-move.** `RetryDecision` as a returned value is
-reserved for the transient/unrecoverable path only.
+`@runtime`/`@auth` layering by a **type-move, not a behavior-move and not a new
+port**. `RetryGate` is therefore not a port: it reduces to a type-move (relocate
+`RetryResult`/`RetryRequestOptions` into `core/flows`) plus the already-injected
+`waitForRetry` callback, optionally typed `Pick<PendingRequests, 'wait'>`. The
+transient/unrecoverable decision is part of `RetryPolicy`'s surface, not a
+separately listed `RetryDecision` concept.
 
-**Two guards before the SDK clamp ships (else it is a resilience loss, not dedup):**
+**Two guards before the SDK clamp (Step 0) ships (else it is a resilience loss, not
+dedup):**
 (1) broaden `userRetryable`/`isRetryableStatusCode` to cover status-less transport
 errors (ECONNRESET, socket hangup), and have Owner-1 honor server `Retry-After` +
 add jitter (the native loop is `factor:1`, no jitter); (2) keep background-resume a
@@ -158,6 +178,9 @@ poll-specific retryable marker, not a stripped status code. **Relay-401 one-shot
 cap kept explicit:** 401/403 stay excluded from the generic auto-retry set; the
 refresh is a distinct `RetryPolicy.onRetry` with a hard one-shot cap that does not
 decrement the transient budget. Final-failure classification unifies in `runRun`.
+The clamp is **Step 0** - zero structural change, verifiable by attempt count,
+shipping against existing code; it is the genuine reduction and is **not** credited
+to `RetryPolicy` (which stays the read-once SSOT only).
 
 ## 4. The lifecycle model: five nested rings, one owner each
 
@@ -238,28 +261,41 @@ reported separately, never multiplied with call depth).
 
 ## 7. Net deletions and the honest LOC direction
 
-**Collapsed/deleted:** `RunCoordinatorBridge`'s x3 near-identical Maps -> one
-`PendingRequests<T>` + slim routing index; `runCoordinatorCommands`,
-`executionQueries`, `streamControl`, `modelSwitch` pass-through shims;
-`PlanApprovalCoordinator`/`AgentProposalCoordinator`/`RetryRequestCoordinatorImpl`
-3 classes -> one `PendingRequests` + a `{kind -> config}` table; `withModelClient`
--> `ModelCell`; `RetryableInvocationNode` as a layer; `agentContextToRunContext`;
-`RoundPersistedFlow` merged into one `RoundFlow`; `RunContext` ALS as a god-context;
-the SDK retry defaults; `ExecutionHandle.coordinators`; the `_hasAttemptedTokenRefresh`/
-`_persistent401Error` flag machine; `core/flows` imports of `@agent/runtime`/`@auth`.
+Per the **accounting discipline** above, deletions and relocations are tallied in
+separate columns and never netted together.
+
+**Genuinely deleted (a named file/symbol ceases to exist):** `RunContext` ALS as a
+god-context; the `agentName`/`model` rename projection; `agentContextToRunContext`;
+the `RunContext.model` live getter + `withModelClient` getters; `useRunCoordinators()`;
+`ExecutionHandle.coordinators`; the per-provider SDK retry defaults (the latent
+double-retry; the Step-0 clamp); `RunCoordinatorBridge`'s triple-map + registry
+fallback + cleanup sprawl (~220 LOC); the `runCoordinatorCommands` /
+`executionQueries` / `streamControl` / `modelSwitch` pass-through shims; the
+`_hasAttemptedTokenRefresh`/`_persistent401Error` flag machine; `core/flows` imports
+of `@agent/runtime`/`@auth` (severed by type-move).
+
+**Relocated, not deleted (logic moves; a field/concept reappears elsewhere - NOT
+netted against the deletions):** the `*Services` bag -> the frozen `RunDescriptor`
+(one channel survives, the fields survive); the 3 thin coordinator subclasses ->
+the existing `BasePromiseCoordinator` made concrete as typed `PendingRequests<T>`
+instances; the five/six retry mechanisms -> two owners (`RetryableInvocationNode`'s
+classification -> `RetryPolicy` + node `post`; `RetryResult`/`RetryRequestOptions`
+-> `core/flows`); `RoundPersistedFlow`'s round loop -> a composition helper /
+loop-edge over the single `PersistedFlow`.
 
 **Honest net-LOC: modestly negative, driven by structure not lines.** Genuine
 deletions (coordinator Map bookkeeping, shim files, SDK retry defaults, dual config
-read, triple request maps, rename projection, `withModelClient`) net against real
-new code (`ModelCell`, `PendingRequests<T>` + config table, `RetryPolicy`,
-`RetryGate`, `ToolRunContext`, the routing index, `FlowRecord` versioning + a resume
-replay shim) and acknowledged relocations (the `RetryState` classification logic,
-round orchestration into loop-boundary nodes). **The decisive reduction is in
-surfaces and ownerships, not raw line count:** two injection channels -> one, four
-coordinator ownerships -> one, five/six retry mechanisms -> two owners, ~10 resolve
-patterns -> ~2 survivors, a 5-layer coordinator stack -> one, threading depth 6-8 ->
-
-1.
+read, the bridge's triple request maps, rename projection, `withModelClient`) net
+against real new code (`ModelCell`, typed `PendingRequests<T>` instances,
+`RetryPolicy`, `ToolRunContext`, the `(kind,id)->session` routing index) - with no
+`FlowRecord` versioning, replay shim, or `{kind -> config}` table in the ledger
+(those were dropped by the overhead ruling). **The decisive reduction is in surfaces
+and ownerships, not raw line count:** two injection channels -> one; four
+coordinator ownerships -> one; the bridge's triple-map + registry fallback + cleanup
+sprawl -> one `(kind,id)->session` routing index; five/six retry mechanisms -> two
+owners; ~10 resolve patterns -> ~2 survivors; a 5-layer coordinator stack -> one;
+threading depth 6-8 -> 1. **Acceptance ledger after the overhead ruling: net -5
+named concepts / -4 drift surfaces.**
 
 ## 8. The five new sub-PRDs (the replacement set)
 
@@ -272,13 +308,21 @@ surfaces:
      lowest-risk first commit.
 2. **ModelCell** - introduce `ModelCell`; route `RunContext.model`/`withModelClient`/
    `switchModel` through it; persist `shared.modelId`; reconstruct on resume.
-3. **PendingRequests** - 3 coordinators -> one registry + config table; bridge x3
-   Maps -> the slim routing index; delete `ExecutionHandle.coordinators`.
-4. **RoundFlow** - unify `PersistedFlow`/`RoundPersistedFlow` into one
-   graph-parameterized class; version `FlowRecord`; ship the replay shim; re-home
-   round orchestration to loop-boundary nodes; migrate reflection then tool-use.
+3. **PendingRequests** - fold the 3 thin coordinator subclasses into the existing
+   `BasePromiseCoordinator` (typed `PendingRequests<TResult, TPayload>` instances,
+   e.g. `new PendingRequests(RETRY_CONFIG)`, preserving static result typing); the
+   **actual reduction** is the bridge's triple-map + registry fallback + cleanup
+   sprawl (~220 LOC) -> one `(kind,id)->session` routing index; delete
+   `ExecutionHandle.coordinators`.
+4. **RoundFlow** - keep `PersistedFlow` as the single persistence engine (freeze the
+   persisted format: no `FlowRecord` version field, no replay shim, no resume
+   migration); express round-looping as a thin composition helper / graph loop-edge
+   over it, or inline `RoundPersistedFlow`'s loop into the one reflection runner;
+   re-home round orchestration to loop-boundary nodes; migrate reflection then
+   tool-use.
 5. **Descriptor + ambient-shrink** - introduce `RunDescriptor` as the `Svc` SSOT;
-   type nodes `Pick<RunDescriptor,...>`; introduce the 5-field `ToolRunContext`;
+   type nodes `Pick<RunDescriptor,...>`; introduce the narrow `ToolRunContext`
+   (~8 tool-facing fields, two surviving ALS readers);
    restrict `currentSession()` to host-entry; delete `agentContextToRunContext`.
 
 ## 9. Relation to the cross-host consolidation (01-07)
@@ -334,35 +378,34 @@ Each step is independently shippable and preserves the resume-id contract
   in-node via `RetryGate`; sever `core/flows` -> `@runtime`/`@auth` by type-move.
   Touches the shared `ModelInvocationNode`, so both flow families change in one
   commit; gate behind both retry suites.
-- **Step 5** (RoundFlow unification, highest risk, decomposed): (5a) `RoundFlow`
-  behind `PersistedFlow`'s API + `FlowRecord` versioning + replay shim; (5b) migrate
-  reflection, re-home stage/interruption/reset to loop-boundary nodes; (5c) migrate
-  tool-use; delete the bridge nodes. `RoundPersistedFlow` deletion gated on
-  persisted-run drain.
+- **Step 5** (round-looping over the single engine): keep `PersistedFlow` as the
+  single persistence engine and **freeze the persisted format** - no `FlowRecord`
+  version field, no replay shim, no resume migration, no crash-resume contract
+  change. Express round-looping as a thin composition helper / graph loop-edge over
+  `PersistedFlow`, or inline `RoundPersistedFlow`'s loop into the one reflection
+  runner; re-home stage/interruption/reset to loop-boundary nodes and delete the
+  bridge nodes.
 - **Step 6** (ambient shrink): convert run/flow reads to `descriptor.X`; introduce
   `ToolRunContext`; restrict `currentSession()` to host-entry; delete
   `agentContextToRunContext`. Last, the widest mechanical change.
 
 ## 11. Ranked residual risks
 
-1. **Resume-replay contract regression (Step 5).** `FlowRecord` has no version field
-   today; folding the inner flows changes persistence granularity and the
-   action-history shape, so pre-change `flow_{runId}` records may not replay.
-   Mitigation: version `FlowRecord`, ship the replay shim, gate 5b/5c behind a
-   resume-migration test against real persisted runs, document the finer crash-resume
-   granularity as an intended contract change.
-2. **Model-switch / relay-401 atomicity and tool-boundary liveness (Steps 2, 4).**
+1. **Model-switch / relay-401 atomicity and tool-boundary liveness (Steps 2, 4).**
    `ModelCell.swap` must produce a new object read by reference (no field mutation);
    the node captures the current object at `exec` start; `ToolRunContext.model` reads
    `cell.modelId` through the live pointer. The relay-401 `onRetry` needs a hard
    one-shot cap and must not decrement the transient budget. A torn read or frozen
    tool snapshot is a silent capability regression.
-3. **Non-serializable state leaking into `shared`, and the round-state split
+2. **Non-serializable state leaking into `shared`, and the round-state split
    (Steps 2, 5).** `PersistedFlow` `structuredClone`s `shared`; a handler/client/
    socket there crashes the clone. Keep handler/client/descriptor in `Svc` (never
    serialized); only the model **id** and round-scoped _data_ go in `shared`. Getting
    this split wrong turns the bridge-node deletion from a real subtraction into a
-   hidden relocation.
+   hidden relocation. (The former #1 risk - `FlowRecord` resume-replay versioning -
+   is removed: §10 Step 5 freezes the persisted format and expresses round-looping as
+   a composition helper / loop-edge over the single `PersistedFlow`, so there is no
+   versioning, shim, or migration to regress.)
 
 ## Relation to existing documents
 

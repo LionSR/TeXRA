@@ -52,11 +52,13 @@ Promise<...>`; the internal `runAgent` adapts.
    `Pick<...|'runtimeHost'|...>`). A host must not read its own port back off the
    handle. **Author a real interface that drops it.**
 5. **The `bus` is dual-purpose with a load-bearing replay buffer**
-   (`MAX_BUFFER_SIZE=1000` + replay, `ProgressEventBus.ts:61,294-334`). Forbidding
-   all `@eventBus` strands ~a dozen non-run host signals and drops late-subscriber
-   replay; the trace channel (`AgentEvent`, ~12 keys) cannot observe the rails
-   (`ProgressEventPayloads`, 60 keys). **Seal only the _run_ bus; keep a host-local
-   `HostUiBus` for non-run signals; preserve replay.**
+   (`MAX_BUFFER_SIZE=1000` + replay, `ProgressEventBus.ts:61,294-334`). There is
+   **one** `bus`, not two: run emissions go through `SessionHandle.hostChannel` (the
+   F-1 fix), while the ~dozen non-run host signals stay on that same `bus` with its
+   existing replay buffer. **Seal it by export-fencing** - never exported from any
+   subpath, and `@eventBus` added to `check-runtime-boundaries.mjs`'s forbidden
+   deep-imports so the run-driver tier cannot reach it. **No second `EventEmitter` /
+   replay buffer** (`HostUiBus` is not introduced).
 
 ## Package shape
 
@@ -69,9 +71,8 @@ layered by subpath `exports`** (every candidate is already in the host-agnostic
 ```jsonc
 // packages/core/package.json
 "exports": {
-  ".":          "./dist/index.js",      // Tier 1: run-driver (semver-stable)
+  ".":          "./dist/index.js",      // Tier 1: run-driver + discovery (semver-stable)
   "./commands": "./dist/commands.js",   // Tier 2: management protocol
-  "./agents":   "./dist/agents.js",     // discovery
   "./node":     "./dist/node.js"        // createNodePlatform preset (opt-in node coupling)
 }
 ```
@@ -86,11 +87,13 @@ published module, **split into `RuntimeEventPayloads`** (Tier-1 essential stream
 **and `HostUiEventPayloads`** (Tier-2 frontend-bound: `requestOpenFile`,
 `requestShowError`, `requestEnsureProgressView`, `showAgentConfigBanner`,
 `*SubscriptionsChanged`, `toolAvailabilityChanged`). The published port keys `emit`
-over `RuntimeEventPayloads` only; hosts opt into Tier-2 via
-`HostUiAgentRuntimeHost extends AgentRuntimeHost`. The runtime `bus` singleton stays
-sealed. This converts the two-tier contract from a doc-comment into a type-level
-boundary. A host-local `HostUiBus` (re-homing today's `bus`) keeps the ~dozen non-run
-UI signals with replay - explicitly not SDK surface.
+over `RuntimeEventPayloads` only; hosts opt into Tier-2 via an **optional mixin on
+the single `AgentRuntimeHost`** keyed over `RuntimeEventPayloads` (the type-map split
+already does the tiering - a second named port would serve only `noop`). The runtime
+`bus` singleton stays sealed. This converts the two-tier contract from a doc-comment
+into a type-level boundary. The single `bus` keeps the ~dozen non-run UI signals with
+its existing replay buffer - never exported from any subpath, so explicitly not SDK
+surface; no second `EventEmitter` is introduced.
 
 The gold-standard internals (`RunDescriptor`, `ModelCell`, `RoundFlow`, `runRun`,
 `RetryPolicy`/`RetryGate`/`PendingRequests`, the routing index, `ToolRunContext`, the
@@ -114,9 +117,9 @@ const noopAgentRuntimeHost: AgentRuntimeHost = { emit: () => {} };
 ```
 
 One method. The type boundary is `RuntimeEventPayloads` (Tier-1, host-neutral - no
-`vscode`/Electron/Ink types). A host wanting the frontend group implements
-`HostUiAgentRuntimeHost`. `noopAgentRuntimeHost` is a valid host - **headless parity
-made structural**: the run completes identically with zero subscribers.
+`vscode`/Electron/Ink types). A host wanting the frontend group opts into the
+optional Tier-2 mixin on the same `AgentRuntimeHost` (no second named port).
+`noopAgentRuntimeHost` is a valid host - **headless parity made structural**: the run completes identically with zero subscribers.
 Approval/human-input is the outbound counterpart of the same channel: an interactive
 host intercepts the `show*`/`resolve*` pairs inside its `emit` body and routes to
 `humanInputCommands`/`approvalCommands`; a headless host drops them and policy
@@ -161,7 +164,7 @@ AgentTrace, AgentTraceSubscriber, AgentEvent, ResultEvent, TraceEmitter, noopTra
 AgentFlowResult, AgentFlowResultSchema
 // Control
 AgentRunHandle, SessionHandle, defaultSession, SessionHandleInit
-// Discover  (also @texra/core/agents)
+// Discover (Tier-1 root only)
 loadAgents, getAgent, resolveAgent, getAgentsByCategory, AgentEntry, ResolvedAgent
 // Compose (host-neutral only)
 initPlatform, platform, tryPlatform, Platform
@@ -183,8 +186,8 @@ browser/webview embedder never drags node coupling.
 
 All three already do the same five-step dance (boot platform -> build validated
 request -> construct `AgentRuntimeHost` -> `runAgent` -> drive via `*Commands`).
-Adoption = redirect imports to `@texra/core`, author a real `emit`, seal the _run_
-bus (keep `HostUiBus`).
+Adoption = redirect imports to `@texra/core`, author a real `emit`, seal the one
+`bus` (export-fence + `@eventBus` forbidden; no `HostUiBus`).
 
 - **CLI - the reference client (least change).** `createCliRuntimeHost` (the `emit`
   switch: approval -> ndjson -> renderer -> logger) **is** the conformance example.
@@ -244,19 +247,24 @@ sub-PRD 04).
 
 `check-runtime-boundaries.mjs` is already the executable "host-agnostic = SDK-eligible"
 fence (40+ forbidden deep-imports, ~30 deleted-export guards, the
-`CORE_PUBLIC_SURFACE_*` check). Three fitness functions the regex lint structurally
-cannot do turn it into a published boundary:
+`CORE_PUBLIC_SURFACE_*` check). Two checks the regex lint structurally cannot do,
+plus a set of forbidden-specifier additions, turn it into a published boundary:
 
 1. **ts-morph type-alias-leak rule (PREREQUISITE, not parallel).** The regex lint
    cannot see `export type RuntimeTaskState = TaskState` re-exporting an internal
    through an allowed path; **25 of 45 `Runtime*` exports are such aliases** (verified;
    e.g. `streamControl.ts:18`). This gates Tier-2 publication: convert the 25 aliases
    to real projections, and re-type `onBeforeWaiting`, **before** the barrel is
-   load-bearing. Until it lands, the green lint is a fiction at the type level.
-2. **Import-direction rule.** UIs' run-driver tier must import from `@texra/core`,
-   not deep `@agent/runtime/*`; add the _run_ bus (not all `@eventBus`) to the
-   forbidden list. Converts the barrel from aspirational (today: zero UI imports) to
-   load-bearing.
+   load-bearing. Until it lands, the green lint is a fiction at the type level. Its
+   value is contingent on SDK-1d actually shipping the package (a green alias-leak
+   check guards a surface no one imports until then); consolidate its compiler-API
+   (`tsc`) program with the boundary + serialization passes into one invocation to
+   minimize CI spend.
+2. **Import-direction (added to the existing lint, not a new rule/file).** The UIs'
+   run-driver tier must import from `@texra/core`, not deep `@agent/runtime/*`; this
+   is just **forbidden import specifiers added to `check-runtime-boundaries.mjs`**
+   (`@agent/runtime/*` and `@eventBus` for the run-driver tier). Converts the barrel
+   from aspirational (today: zero UI imports) to load-bearing.
 3. **Serialization + event-tier contract test.** Enforces the gold-standard PRD's
    Svc/shared serialization invariant (its sections 1 and 11): the published wire
    types must be `structuredClone`-safe (no handlers cross). The NDJSON contract
@@ -291,10 +299,12 @@ byte-parity-gated, **declinable** decision).
 
 1. **First / independent of the gold-standard (1a-1c):** (a) the ts-morph
    alias-closure rule + convert the 25 `Runtime*` aliases + re-type `onBeforeWaiting`
-   (the acceptance gate); (b) the import-direction lint + make the 3 UIs consume
-   `@texra/core`; (c) promote `ProgressEventPayloads` ->
-   `RuntimeEventPayloads`/`HostUiEventPayloads`, seal the _run_ bus, re-home non-run
-   signals to `HostUiBus`, preserve replay. 1d (the real `.d.ts` package build via
+   (the acceptance gate); (b) the import-direction specifiers added to
+   `check-runtime-boundaries.mjs` + make the 3 UIs consume `@texra/core`; (c) promote
+   `ProgressEventPayloads` -> `RuntimeEventPayloads`/`HostUiEventPayloads`, seal the
+   one `bus` (export-fence + add `@eventBus` to `check-runtime-boundaries.mjs`; no
+   `HostUiBus`), route run emissions through `SessionHandle.hostChannel`, keep non-run
+   signals on the one `bus` with its existing replay. 1d (the real `.d.ts` package build via
    `tsc-alias`/`tsup`, drop `private`, subpath `exports`, `createNodePlatform()` at
    `@texra/core/node`, author `AgentRunHandle`) is sequenced last per EXECUTION.md.
 2. **In lockstep with PRD Step 1 + Step 5:** the serialization fence + published-DTO
@@ -312,12 +322,14 @@ byte-parity-gated, **declinable** decision).
    passes green while the type surface leaks. Alias-closure is a **prerequisite gate**
    for declaring Tier-1 frozen, not parallel work. Highest risk: it is the no-leak
    premise and it is currently violated.
-2. **Bus-seal scope error breaks rails + replay if executed as "forbid all
-   `@eventBus`."** Seal only the _run_ bus; `HostUiBus` for non-run signals; rails
-   keep session-scoped `emit`-forwarding with replay; verify progress-view-opened-
-   mid-run before deleting subscriptions. Note `src/tools` has grandfathered direct
-   `bus.emit` sites (until the gold-standard cleanup migrates them), so step 1(c) is
-   not fully independent of that work.
+2. **Bus-seal scope: one `bus`, export-fenced, not a second emitter.** Run emissions
+   move to `SessionHandle.hostChannel` (F-1); non-run host signals stay on the one
+   `bus` with its existing `MAX_BUFFER_SIZE` replay, reached through host-side wiring,
+   not a deep `@eventBus` import from the run-driver tier. Verify progress-view-
+   opened-mid-run before deleting subscriptions. Note `src/tools` has grandfathered
+   direct `bus.emit` sites (until the gold-standard cleanup migrates them), so adding
+   `@eventBus` to the forbidden list and step 1(c) are not fully independent of that
+   work.
 3. **F-1 multi-session correctness** is unsound until `session.hostChannel` wires the
    5 off-ALS emits; the fix changes headless NDJSON. Ship single-session first; gate
    the guarantee behind the byte-parity test, with the option to decline.
