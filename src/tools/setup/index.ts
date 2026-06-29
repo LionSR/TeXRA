@@ -5,6 +5,7 @@
  *   - probe_environment — read-only environment snapshot
  *   - verify_setup — re-check dependencies
  *   - set_api_key / unset_api_key — SecretStorage writes
+ *   - list_api_keys — enumerate stored secret key names for auditing
  *   - invoke_command — bridge to allowlisted VS Code commands
  *   - install_vscode_extension — install LaTeX Workshop / Lean 4
  *   - send_to_terminal — type into VS Code's integrated terminal for
@@ -23,6 +24,7 @@ export { ProbeEnvironmentTool } from './ProbeEnvironmentTool';
 export { VerifySetupTool } from './VerifySetupTool';
 export { SetApiKeyTool } from './SetApiKeyTool';
 export { UnsetApiKeyTool } from './UnsetApiKeyTool';
+export { ListApiKeysTool } from './ListApiKeysTool';
 export { InvokeCommandTool } from './InvokeCommandTool';
 export { InstallVscodeExtensionTool } from './InstallVscodeExtensionTool';
 export { ReadConfigTool, UpdateConfigTool } from './ConfigTools';

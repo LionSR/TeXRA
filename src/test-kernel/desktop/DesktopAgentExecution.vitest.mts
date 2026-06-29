@@ -77,6 +77,7 @@ type RunExecutionRequest = (
         subscribe(fn: (event: unknown) => void): unknown;
       }): () => void;
     };
+    runtimeUnavailableTools?: readonly string[];
   },
 ) => Promise<void>;
 
@@ -1279,6 +1280,7 @@ describe('DesktopProgressBridge', () => {
         request,
         expect.objectContaining({
           openWorkflowOutput: expect.any(Function),
+          runtimeUnavailableTools: ['list_api_keys'],
         }),
       );
     } finally {
