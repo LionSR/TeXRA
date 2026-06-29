@@ -27,3 +27,13 @@ export function resolveImplicitToolUseAgentDefault(
   }
   return trimmed;
 }
+
+export function resolveDefaultToolUseAgent<T extends { readonly name: string }>(
+  agents: readonly T[] | undefined,
+): string {
+  const candidates = agents ? implicitDefaultToolUseAgents(agents) : [];
+  const builtIn = candidates.find(
+    (candidate) => agentName(candidate.name) === BUILTIN_DEFAULT_CHAT_AGENT,
+  );
+  return builtIn?.name ?? candidates[0]?.name ?? BUILTIN_DEFAULT_CHAT_AGENT;
+}

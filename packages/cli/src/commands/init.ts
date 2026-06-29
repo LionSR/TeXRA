@@ -1,11 +1,13 @@
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+import { platform } from '@platform/platform';
+import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
 import {
-  BUILTIN_DEFAULT_CHAT_AGENT,
   implicitDefaultToolUseAgents,
+  resolveDefaultToolUseAgent,
 } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -44,6 +46,10 @@ async function gatherOptions(apiMode: CliApiMode): Promise<{
   models: CliModelAccess[];
 }> {
   await loadAgents({ includeRemote: false });
+  await seedRosterFromDefaultTeam({
+    globalState: platform().globalState,
+    workspaceState: platform().workspaceState,
+  });
   const agents = defaultInitAgentOptions(
     getVisibleAgents(AgentCategory.ToolUse),
   );
@@ -54,10 +60,13 @@ async function gatherOptions(apiMode: CliApiMode): Promise<{
   return { agents, models };
 }
 
-function defaultAnswers(models: readonly CliModelAccess[]): InitAnswers {
+function defaultAnswers(
+  models: readonly CliModelAccess[],
+  agents: readonly InitAgentOption[],
+): InitAnswers {
   const firstAvailable = models.find((model) => model.available);
   return {
-    agent: BUILTIN_DEFAULT_CHAT_AGENT,
+    agent: resolveDefaultToolUseAgent(agents),
     model: firstAvailable?.model.value ?? CLI_BUILTIN_DEFAULT_MODEL,
     // Match the runtime default (see buildCliContext). `ask` prompts in
     // interactive runs and safely denies in headless ones — unlike `never`,
@@ -140,7 +149,7 @@ async function runInit(
     answers = result.answers;
     gitignore = result.gitignore;
   } else {
-    answers = defaultAnswers(models);
+    answers = defaultAnswers(models, agents);
     gitignore = opts.gitignore ?? false;
   }
 

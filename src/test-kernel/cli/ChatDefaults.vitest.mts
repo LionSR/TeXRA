@@ -63,6 +63,20 @@ describe('CLI chat defaults', () => {
     });
   });
 
+  it('uses the first visible tool-use agent when assistant is hidden by a roster', async () => {
+    await expect(
+      resolveChatDefaults({
+        cwd: '/tmp/no-such-texra-workspace',
+        visibleToolUseAgents: [{ name: 'research' }, { name: 'review' }],
+      }),
+    ).resolves.toMatchObject({
+      agent: 'research',
+      model: 'deepseekproT',
+      source: 'builtin',
+      agentSource: 'builtin',
+    });
+  });
+
   it('ignores non-llm-zoo model ids in workspace defaults', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
     await mkdir(join(workspace, '.texra'), { recursive: true });

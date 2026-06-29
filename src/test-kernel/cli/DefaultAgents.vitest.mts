@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_DEFAULT_CHAT_AGENT,
   implicitDefaultToolUseAgents,
+  resolveDefaultToolUseAgent,
   resolveImplicitToolUseAgentDefault,
 } from '@cli/runtime/defaultAgents';
 
@@ -35,5 +36,15 @@ describe('CLI implicit default agent policy', () => {
     ).toBeUndefined();
     expect(resolveImplicitToolUseAgentDefault('   ')).toBeUndefined();
     expect(resolveImplicitToolUseAgentDefault(undefined)).toBeUndefined();
+  });
+
+  it('selects the built-in default only when it is visible', () => {
+    expect(
+      resolveDefaultToolUseAgent([{ name: 'research' }, { name: 'review' }]),
+    ).toBe('research');
+    expect(
+      resolveDefaultToolUseAgent([{ name: 'research' }, { name: 'assistant' }]),
+    ).toBe('assistant');
+    expect(resolveDefaultToolUseAgent([])).toBe('assistant');
   });
 });

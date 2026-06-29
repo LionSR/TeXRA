@@ -12,7 +12,7 @@ import {
   type CliConfigValues,
 } from './cliConfig';
 import {
-  BUILTIN_DEFAULT_CHAT_AGENT,
+  resolveDefaultToolUseAgent,
   resolveImplicitToolUseAgentDefault,
 } from './defaultAgents';
 import type { CliModelSelectionSource } from './modelAccess';
@@ -116,11 +116,12 @@ function buildChatDefaults(init: {
   readonly model: string | undefined;
   readonly agentSource: ChatDefaultValueSource | undefined;
   readonly modelSource: ChatDefaultValueSource | undefined;
+  readonly visibleToolUseAgents?: readonly { readonly name: string }[];
 }): ChatDefaults {
   const agentSource = init.agentSource ?? 'builtin';
   const modelSource = init.modelSource ?? 'builtin';
   return {
-    agent: init.agent ?? BUILTIN_DEFAULT_CHAT_AGENT,
+    agent: init.agent ?? resolveDefaultToolUseAgent(init.visibleToolUseAgents),
     model: init.model ?? BUILTIN_DEFAULT_CHAT_MODEL,
     source: deriveSource({ agent: agentSource, model: modelSource }),
     agentSource,
@@ -134,6 +135,7 @@ export interface ResolveChatDefaultsInit {
   readonly modelOverride?: string;
   readonly envAgent?: string;
   readonly envModel?: string;
+  readonly visibleToolUseAgents?: readonly { readonly name: string }[];
 }
 
 /**
@@ -156,7 +158,13 @@ export async function resolveChatDefaults(
   let modelSource = sourceForOverride(overrideModel, envModel);
 
   if (agent && model) {
-    return buildChatDefaults({ agent, model, agentSource, modelSource });
+    return buildChatDefaults({
+      agent,
+      model,
+      agentSource,
+      modelSource,
+      visibleToolUseAgents: init.visibleToolUseAgents,
+    });
   }
 
   // Tiers are independent I/O — fan out in parallel.
@@ -187,5 +195,11 @@ export async function resolveChatDefaults(
     if (agent && model) break;
   }
 
-  return buildChatDefaults({ agent, model, agentSource, modelSource });
+  return buildChatDefaults({
+    agent,
+    model,
+    agentSource,
+    modelSource,
+    visibleToolUseAgents: init.visibleToolUseAgents,
+  });
 }

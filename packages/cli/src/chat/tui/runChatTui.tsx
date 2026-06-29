@@ -19,8 +19,9 @@ import {
   StreamSnapshotStore,
 } from '@transcript';
 import { platform, tryPlatform } from '@platform/platform';
+import { getVisibleAgents, loadAgents } from '@agent/index';
+import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
-import { loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -273,12 +274,18 @@ export async function runChat(
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
   await loadAgents();
+  await seedRosterFromDefaultTeam({
+    globalState: platform().globalState,
+    workspaceState: platform().workspaceState,
+  });
+  const visibleToolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
     agentOverride: explicitAgent ?? setupAgentOverride,
     modelOverride: initialResume?.resolution.config.model ?? init.modelOverride,
     envAgent: context.envAgent,
     envModel: context.envModel,
+    visibleToolUseAgents,
   });
   const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
   if (agentUsageError) {
