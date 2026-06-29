@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Shared (all surfaces)
+
+#### Improvements
+
+- **Helper agents run on the helper model by default** — when you launch latexFixer or latexDiff directly (the Fix Compilation command, a progress-view follow-up, or the webview Run button), they now run on your configured helper model instead of whatever heavyweight model you have selected, since they do lightweight support work. They fall back to the selected model when the helper model isn't available in the active API mode. Agents an orchestrator delegates to are unaffected — they keep the model the orchestrator chose.
+
+#### Bug Fixes
+
+- **latexFixer no longer overwrites your workspace files with generated output** — latexFixer could use `bash` to copy a workflow's generated `.tex` files out of execution storage and replace existing workspace files (for example your `Draft.tex` / `preamble.tex`) without asking. Its instructions now forbid promoting `/executions/*` or any generated/temp file into the workspace and forbid overwriting existing files; it makes only minimal, targeted in-place edits, and when a compile failure is a build-environment issue (wrong working directory, missing `TEXINPUTS`, or a support file absent from the compile sandbox) it reports the diagnosis instead of restructuring or copying files.
+
 ### Extension (VS Code) and Desktop
 
 #### Improvements

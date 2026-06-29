@@ -3,6 +3,7 @@ import { registerExecution } from '@agent/storage';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
+import { preferHelperModelForAssistive } from './assistiveModel';
 import { executeAgent } from './executeAgent';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
@@ -50,17 +51,23 @@ export async function runAgent(
   const shouldRegister =
     options.registerExecution ?? request.executionId === undefined;
 
+  // Root (user-initiated) launches route through here; orchestrator delegations
+  // call executeAgent directly. So an assistive agent prefers the helper model
+  // only when the user starts it, never when an orchestrator delegates to it.
+  // Resolved before registerExecution so the stored record and the run agree.
+  const config = await preferHelperModelForAssistive(request.config);
+
   if (shouldRegister) {
     await registerExecution(
       executionId,
-      request.config,
-      request.config.agent,
+      config,
+      config.agent,
       undefined,
-      request.config.agentCategory,
+      config.agentCategory,
     );
   }
 
-  const result = await executeAgent(request.config, executionId, {
+  const result = await executeAgent(config, executionId, {
     runtimeHost: options.runtimeHost,
     enforceCategory: options.enforceCategory,
     stopAfterCycle: options.stopAfterCycle,

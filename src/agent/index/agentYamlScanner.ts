@@ -212,6 +212,7 @@ function scanYaml(
         : AgentCategory.Workflow;
 
     const internal = rawSettings.internal === true || undefined;
+    const assistive = rawSettings.assistive === true || undefined;
     let rounds: number | undefined;
     if (
       category === AgentCategory.Workflow &&
@@ -238,6 +239,7 @@ function scanYaml(
         : undefined,
       rounds,
       internal,
+      assistive,
     };
   } catch (err) {
     logger.warn(

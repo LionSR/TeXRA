@@ -33,6 +33,15 @@ export const AgentSettingBaseSchema = z.strictObject({
   tools: z.array(ToolDefinitionSchema).prefault([]),
   /** Registry metadata: hides the agent from default launcher listings. */
   internal: z.boolean().optional(),
+  /**
+   * Registry metadata: marks a support/helper agent (e.g. latexFixer). When an
+   * assistive agent is launched directly by the user — the Fix-Compilation
+   * command, a progress-view follow-up, or the webview Run button — it prefers
+   * the configured helper model over the currently selected model, since it
+   * performs lightweight auxiliary work. Orchestrator-delegated launches are
+   * unaffected and keep the model their orchestrator chose.
+   */
+  assistive: z.boolean().optional(),
 });
 
 /** Tool reference that may be a raw name string (YAML) or a resolved definition. */
