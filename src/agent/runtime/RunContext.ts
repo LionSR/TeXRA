@@ -14,70 +14,59 @@ export interface RunCoordinators {
   readonly retry: RetryRequestCoordinatorImpl;
 }
 
-/**
- * Ambient per-run context stored in an {@link AsyncLocalStorage} scope.
- *
- * Tools and utilities that cannot take explicit parameters reach host services
- * via `tryUseRunContext()`. The canonical source of truth for these fields is
- * {@link AgentLaunchContext} / {@link AgentCore}; the ambient context exposes
- * the subset that tool-side code needs without importing the full launch
- * context.
- *
- * **Why the field names differ from AgentCore.** This is a *flat* ambient
- * projection, not a copy of the nested launch context, so the names describe
- * the run directly rather than mirror `AgentCore`'s shape:
- *   - `AgentConfig.agent`  → `agentName` (`AgentConfig` nests it; here it is flat)
- *   - `AgentConfig.model`  → `model`     (flat + live; see below)
- *
- * The one place that maps `AgentLaunchContext` onto these fields is
- * `agentContextToRunContext` (in `AgentLaunchContext.ts`), so the projection
- * has a single owner and cannot drift across the codebase.
- *
- * `model` is a live property when the context is projected from an
- * {@link AgentLaunchContext}, so mid-session model switches are visible to
- * delegation tools that inherit the parent model.
- */
-export interface RunContext {
+interface RunContextCommon {
   readonly runtimeHost: AgentRuntimeHost;
+  /** Current model short name for this run (e.g. "opus46T"). */
+  readonly model?: string;
+  readonly workingDirectory?: string;
+  readonly delegationDepth?: number;
+  readonly approvalPromptsUnavailable?: boolean;
+  readonly runtimeUnavailableTools?: readonly string[];
+  readonly stopAfterCycle?: boolean;
+}
+
+interface LaunchRunContext extends RunContextCommon {
+  readonly kind: 'launch';
+  readonly streamId: StreamTabId;
+  readonly executionId: ExecutionId;
+  readonly coordinators: RunCoordinators;
+  /** Agent name (e.g. "orchestrator", "search-agent"). */
+  readonly agentName: string;
+  /** Session that owns this run's coordination state. */
+  readonly session: SessionHandle;
+}
+
+interface BareRunContext extends RunContextCommon {
+  readonly kind: 'bare';
   readonly streamId?: StreamTabId;
   readonly executionId?: ExecutionId;
   readonly coordinators?: RunCoordinators;
-  /** Current model short name for this run (e.g. "opus46T"). */
-  readonly model?: string;
   /** Agent name (e.g. "orchestrator", "search-agent"). */
   readonly agentName?: string;
-  /** Working directory override for tool calls (e.g. a git worktree path). */
-  readonly workingDirectory?: string;
-  /**
-   * Delegation depth: 0 for root (user-initiated), N for a subagent N levels
-   * deep. Read by delegation tools to compute the child's depth.
-   */
-  readonly delegationDepth?: number;
-  /** Whether approval or user prompts cannot be answered by the current host. */
-  readonly approvalPromptsUnavailable?: boolean;
-  /** Tools unavailable because the current host/runtime cannot support them. */
-  readonly runtimeUnavailableTools?: readonly string[];
-  /** Whether this run should stop after one tool-use cycle instead of idling. */
-  readonly stopAfterCycle?: boolean;
-  /**
-   * The session that owns this run's coordination state (interrupts,
-   * executions, coordinators, subscriptions). Run-scoped code resolves it via
-   * `currentSession()` (`tryUseRunContext()?.session ?? defaultSession`);
-   * when omitted the default session — which wraps the process singletons by
-   * identity — is used, so reads are byte-identical to direct singleton access.
-   */
+  /** Session that owns this run's coordination state. */
   readonly session?: SessionHandle;
 }
 
-export interface CreateRunContextOptions {
+/**
+ * Per-run ambient context.
+ *
+ * The `launch` variant is projected from AgentLaunchContext and guarantees the
+ * run-identifying fields. The `bare` variant is for manually constructed test
+ * and one-shot tool contexts where only a runtime host is required.
+ */
+export type RunContext = LaunchRunContext | BareRunContext;
+
+// ---------------------------------------------------------------------------
+// CreateRunContextOptions — the input side.  Uses a discriminated union so
+// the model source is explicit: either a live getter (launch path) or a
+// static string (manual / test path).
+// ---------------------------------------------------------------------------
+
+interface CreateRunContextBase {
   runtimeHost: AgentRuntimeHost;
   streamId?: StreamTabId;
   executionId?: ExecutionId;
   coordinators?: RunCoordinators;
-  /** Static model fallback for manually-created run contexts. */
-  model?: string;
-  /** Live model provider for contexts backed by mutable launch state. */
-  getModel?: () => string | undefined;
   agentName?: string;
   workingDirectory?: string;
   delegationDepth?: number;
@@ -87,22 +76,78 @@ export interface CreateRunContextOptions {
   session?: SessionHandle;
 }
 
+type CreateLaunchRunContextFields = Required<
+  Pick<
+    CreateRunContextBase,
+    'streamId' | 'executionId' | 'coordinators' | 'agentName' | 'session'
+  >
+>;
+
+export type CreateRunContextOptions = CreateRunContextBase &
+  (
+    | (CreateLaunchRunContextFields & {
+        /** Discriminator — live model provider (launch contexts). */
+        modelSource: 'live';
+        getModel: () => string | undefined;
+        /** Static fallback used when getModel() returns undefined. */
+        model?: string;
+      })
+    | {
+        /** Discriminator — static model string (manual / test contexts). */
+        modelSource?: 'static';
+        model?: string;
+      }
+  );
+
 const runContextScope = new AsyncLocalStorage<RunContext>();
 
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a run context from caller-facing model-source options.
+ *
+ * The input discriminator describes how the model value is read:
+ * `modelSource: 'live'` produces a `launch` context with full run identity and
+ * a live model getter, while the default `static` path produces a `bare`
+ * context for tests and one-shot tool environments.
+ */
 export function createRunContext(options: CreateRunContextOptions): RunContext {
   if (options.runtimeHost == null) {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
-  const { getModel, model } = options;
+  if (options.modelSource === 'live') {
+    const { getModel, model } = options;
+    return Object.freeze({
+      kind: 'launch',
+      runtimeHost: options.runtimeHost,
+      streamId: options.streamId,
+      executionId: options.executionId,
+      coordinators: options.coordinators,
+      get model() {
+        return getModel() ?? model;
+      },
+      agentName: options.agentName,
+      workingDirectory: options.workingDirectory,
+      delegationDepth: options.delegationDepth,
+      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      runtimeUnavailableTools: options.runtimeUnavailableTools,
+      stopAfterCycle: options.stopAfterCycle,
+      session: options.session,
+    });
+  }
 
-  return Object.freeze<RunContext>({
+  const { model } = options;
+  return Object.freeze({
+    kind: 'bare',
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
     coordinators: options.coordinators,
     get model() {
-      return getModel?.() ?? model;
+      return model;
     },
     agentName: options.agentName,
     workingDirectory: options.workingDirectory,
@@ -113,6 +158,10 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     session: options.session,
   });
 }
+
+// ---------------------------------------------------------------------------
+// ALS helpers
+// ---------------------------------------------------------------------------
 
 /**
  * Run code with an active per-run context.
