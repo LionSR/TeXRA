@@ -47,6 +47,7 @@ describe('stream data usage parsing', () => {
         cost: '0',
         cacheReadInputTokens: '3',
         viaChatGptSubscription: true,
+        usageRoute: 'chatgpt-subscription',
       },
     });
 
@@ -55,6 +56,7 @@ describe('stream data usage parsing', () => {
       cacheMissInputTokens: 0,
       cacheCreationInputTokens: 0,
       viaChatGptSubscription: true,
+      usageRoute: 'chatgpt-subscription',
     });
   });
 
@@ -87,5 +89,53 @@ describe('stream data usage parsing', () => {
         },
       ]).viaChatGptSubscription,
     ).toBe(true);
+  });
+
+  it('keeps route badges only for unambiguous accumulated usage', () => {
+    expect(
+      sumUsageStats([
+        emptyUsageStats(),
+        {
+          inputTokens: 10,
+          outputTokens: 2,
+          cost: 0,
+          usageRoute: 'relay',
+        },
+        {
+          inputTokens: 1,
+          outputTokens: 1,
+          cost: 0.001,
+          usageRoute: 'relay',
+        },
+      ]).usageRoute,
+    ).toBe('relay');
+
+    expect(
+      sumUsageStats([
+        {
+          inputTokens: 10,
+          outputTokens: 2,
+          cost: 0,
+          usageRoute: 'relay',
+        },
+        {
+          inputTokens: 1,
+          outputTokens: 1,
+          cost: 0.001,
+          usageRoute: 'api-key',
+        },
+      ]),
+    ).not.toHaveProperty('usageRoute');
+
+    expect(
+      sumUsageStats([
+        {
+          inputTokens: 10,
+          outputTokens: 2,
+          cost: 0,
+          viaChatGptSubscription: true,
+        },
+      ]).usageRoute,
+    ).toBe('chatgpt-subscription');
   });
 });
