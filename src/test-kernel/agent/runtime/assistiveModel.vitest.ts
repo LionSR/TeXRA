@@ -45,9 +45,8 @@ describe('preferHelperModelForAssistive', () => {
     entry ? { entry } : undefined;
 
   async function resolve(config: AgentConfig): Promise<AgentConfig> {
-    const { preferHelperModelForAssistive } = await import(
-      '@agent/runtime/assistiveModel'
-    );
+    const { preferHelperModelForAssistive } =
+      await import('@agent/runtime/assistiveModel');
     return preferHelperModelForAssistive(config);
   }
 

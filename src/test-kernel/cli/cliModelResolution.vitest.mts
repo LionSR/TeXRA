@@ -75,7 +75,7 @@ describe('selectCliRootModel', () => {
     }));
   });
 
-  it('resolves the runnable model and persists the selected helper model', async () => {
+  it('resolves the runnable model without changing the helper model by default', async () => {
     resolveCliRunnableModelMock.mockResolvedValueOnce({
       model: 'deepseekT',
       notice: 'Using deepseekT instead.',
@@ -101,6 +101,22 @@ describe('selectCliRootModel', () => {
         noAvailableModelsMessage: 'No personal models.',
       },
     );
+    expect(mocks.setCliHelperModel).not.toHaveBeenCalled();
+  });
+
+  it('persists the selected helper model when requested', async () => {
+    resolveCliRunnableModelMock.mockResolvedValueOnce({
+      model: 'deepseekT',
+      notice: 'Using deepseekT instead.',
+    });
+
+    await selectCliRootModel({
+      model: 'staleConfiguredModel',
+      modelSource: 'config',
+      apiMode: 'personal',
+      persistAsHelperModel: true,
+    });
+
     expect(mocks.setCliHelperModel).toHaveBeenCalledWith('deepseekT');
   });
 });
@@ -186,9 +202,7 @@ describe('resolveCliRunModel precedence', () => {
         fallbackSource: 'builtin',
       },
     );
-    expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
-      CLI_BUILTIN_DEFAULT_MODEL,
-    );
+    expect(mocks.setCliHelperModel).not.toHaveBeenCalled();
   });
 
   it('checks active API-mode access before returning the model', async () => {
@@ -214,7 +228,7 @@ describe('resolveCliRunModel precedence', () => {
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'Using deepseekT instead.',
     );
-    expect(mocks.setCliHelperModel).toHaveBeenCalledWith('deepseekT');
+    expect(mocks.setCliHelperModel).not.toHaveBeenCalled();
   });
 
   it('does not fall back from an explicit unavailable model', async () => {
@@ -250,15 +264,19 @@ describe('resolveCliRunModel precedence', () => {
       apiMode: 'personal',
       fallbackSource: 'env',
     });
-    expect(mocks.setCliHelperModel).toHaveBeenCalledWith('opus48T');
+    expect(mocks.setCliHelperModel).not.toHaveBeenCalled();
   });
 });
 
 describe('buildHeadlessRunContext', () => {
-  it('sets the helper model, quiet logs, and enables progress for text output', () => {
-    const context = makeContext({ outputFormat: 'text', quietLogs: false });
+  it('preserves the helper model, quiets logs, and enables progress for text output', () => {
+    const context = makeContext({
+      helperModel: 'configured-helper',
+      outputFormat: 'text',
+      quietLogs: false,
+    });
     const runContext = buildHeadlessRunContext(context, KNOWN_MODEL);
-    expect(runContext.helperModel).toBe(KNOWN_MODEL);
+    expect(runContext.helperModel).toBe('configured-helper');
     expect(runContext.quietLogs).toBe(true);
     expect(runContext.renderRunProgress).toBe(true);
   });

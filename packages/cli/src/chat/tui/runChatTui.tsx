@@ -304,6 +304,7 @@ export async function runChat(
         CHAT_STARTUP_MODEL_RECOVERY,
       ),
       agentCategory: AgentCategory.ToolUse,
+      persistAsHelperModel: true,
     });
   } catch (error: unknown) {
     writeTextStderr(toErrorMessage(error));
@@ -569,6 +570,7 @@ export async function runChat(
             CHAT_API_MODE_MODEL_RECOVERY,
           ),
           agentCategory: AgentCategory.ToolUse,
+          persistAsHelperModel: true,
         });
         if (session.stopRequested) {
           markChatTuiRunCompleted(session);
