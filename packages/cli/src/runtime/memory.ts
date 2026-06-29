@@ -9,7 +9,10 @@ import {
   toDisplayPath,
 } from '@tools/memory/memoryUtils';
 import { filterNotNullish } from '@utils/core';
-import { formatLocaleTimestamp, truncateSummary } from '@utils/text/stringUtils';
+import {
+  formatLocaleTimestamp,
+  truncateSummary,
+} from '@utils/text/stringUtils';
 
 export const CLI_MEMORY_LIST_LIMIT = 50;
 const MEMORY_DESCRIPTION_MAX = 72;
