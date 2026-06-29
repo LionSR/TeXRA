@@ -1,6 +1,4 @@
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
-import { platform } from '@platform/platform';
-import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
@@ -10,6 +8,7 @@ import {
   resolveDefaultToolUseAgent,
 } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
+import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
@@ -46,10 +45,7 @@ async function gatherOptions(apiMode: CliApiMode): Promise<{
   models: CliModelAccess[];
 }> {
   await loadAgents({ includeRemote: false });
-  await seedRosterFromDefaultTeam({
-    globalState: platform().globalState,
-    workspaceState: platform().workspaceState,
-  });
+  await seedCliRosterFromDefaultTeam();
   const agents = defaultInitAgentOptions(
     getVisibleAgents(AgentCategory.ToolUse),
   );

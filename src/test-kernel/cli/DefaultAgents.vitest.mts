@@ -47,4 +47,21 @@ describe('CLI implicit default agent policy', () => {
     ).toBe('assistant');
     expect(resolveDefaultToolUseAgent([])).toBe('assistant');
   });
+
+  it('prefers the team lead order over registry file order when scoped', () => {
+    // A scoped roster that hides `assistant`: pick the lead by
+    // PREFERRED_TOOL_USE_AGENTS order (engineer) rather than whichever agent
+    // sorts first in the registry's file order (codeReviewer).
+    expect(
+      resolveDefaultToolUseAgent([
+        { name: 'codeReviewer' },
+        { name: 'engineer' },
+        { name: 'coder' },
+      ]),
+    ).toBe('engineer');
+    // No preferred agent present → fall back to the first visible candidate.
+    expect(
+      resolveDefaultToolUseAgent([{ name: 'codeReviewer' }, { name: 'coder' }]),
+    ).toBe('codeReviewer');
+  });
 });
