@@ -7,9 +7,15 @@ import { when } from 'lit/directives/when.js';
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
+// Local imports - shared schemas
+import {
+  resolveUsageRoute,
+  type TokenUsageStats,
+  type UsageRoute,
+} from '@shared/schemas';
+
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
-import type { TokenUsageStats } from '@shared/schemas';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { clamp, formatCompactTokenCount } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
@@ -24,11 +30,49 @@ import type { ContextStateData } from '../store';
  */
 const COMPACTION_THRESHOLD = 75;
 
+type UsageRouteBadge = {
+  label: string;
+  title: string;
+};
+
 /** Solid fill color based on context utilization. */
 function fillColor(percent: number): string {
   if (percent <= 65) return 'var(--color-success)';
   if (percent <= 80) return 'var(--color-warning)';
   return 'var(--color-status-error)';
+}
+
+function usageRouteBadge(
+  route: UsageRoute | undefined,
+): UsageRouteBadge | undefined {
+  switch (route) {
+    case 'chatgpt-subscription':
+      return {
+        label: 'ChatGPT',
+        title: 'No charge; covered by your ChatGPT subscription',
+      };
+    case 'relay':
+      return {
+        label: 'relay',
+        title: 'Routed through the TeXRA relay',
+      };
+    case 'api-key':
+      return {
+        label: 'your key',
+        title: 'Billed through your configured API key',
+      };
+    default:
+      return undefined;
+  }
+}
+
+function usageCostLabel(cost: number, route: UsageRoute | undefined): string {
+  const badge = usageRouteBadge(route);
+  if (!badge) return formatCostUsd(cost);
+  if (route === 'chatgpt-subscription' && cost === 0) {
+    return `Free via ${badge.label}`;
+  }
+  return `${formatCostUsd(cost)} via ${badge.label}`;
 }
 
 @customElement('usage-panel')
@@ -69,9 +113,12 @@ export class UsagePanel extends LitElement {
         opacity: var(--opacity-subtle);
       }
 
-      .run-summary__free {
-        color: var(--color-success);
+      .run-summary__route {
         font-weight: var(--wa-font-weight-semibold);
+      }
+
+      .run-summary__route--free {
+        color: var(--color-success);
       }
 
       /* Context gauge bar */
@@ -237,15 +284,28 @@ export class UsagePanel extends LitElement {
           aria-hidden="true"
         ></wa-icon
         >${formatCompactTokenCount(outputTokens)} ·
-        ${this.usage.viaChatGptSubscription === true && cost === 0
-          ? html`<span
-              class="run-summary__free"
-              title="No charge — covered by your ChatGPT subscription"
-              >Free</span
-            >`
-          : html`${formatCostUsd(cost)}`}
+        ${this.renderCostRoute(cost)}
       </span>
     `;
+  }
+
+  private renderCostRoute(cost: number): TemplateResult {
+    const route = resolveUsageRoute(this.usage);
+    const badge = usageRouteBadge(route);
+    if (!badge) return html`${formatCostUsd(cost)}`;
+
+    if (route === 'chatgpt-subscription' && cost === 0) {
+      return html`<span
+        class="run-summary__route run-summary__route--free"
+        title=${badge.title}
+        >Free · ${badge.label}</span
+      >`;
+    }
+
+    return html`${formatCostUsd(cost)} ·
+      <span class="run-summary__route" title=${badge.title}>
+        ${badge.label}
+      </span>`;
   }
 
   private renderContext(): TemplateResult | typeof nothing {
@@ -285,12 +345,8 @@ export class UsagePanel extends LitElement {
 
   private buildUsageLabel(): string {
     if (!this.usage) return '';
-    const { inputTokens, outputTokens, cost, viaChatGptSubscription } =
-      this.usage;
-    const costLabel =
-      viaChatGptSubscription === true && cost === 0
-        ? 'Free'
-        : formatCostUsd(cost);
+    const { inputTokens, outputTokens, cost } = this.usage;
+    const costLabel = usageCostLabel(cost, resolveUsageRoute(this.usage));
     return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, ${costLabel}`;
   }
 }
