@@ -23,12 +23,9 @@ describe('desktop settings surface', () => {
     expect(settingsApp).not.toContain(
       'History is not available in desktop yet',
     );
-    expect(desktopSettingsIpc).toContain(
-      'SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA',
-    );
-    expect(desktopSettingsIpc).toContain(
-      'SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA',
-    );
+    expect(desktopSettingsIpc).toContain('createSettingsViewCommandHandlers');
+    expect(desktopSettingsIpc).toContain('getMemoryData');
+    expect(desktopSettingsIpc).toContain('getHistoryData');
     expect(settingsApp).toContain(
       'SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS',
     );
