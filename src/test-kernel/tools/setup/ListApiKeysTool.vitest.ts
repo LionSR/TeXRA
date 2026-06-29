@@ -1,0 +1,139 @@
+// Standard library imports
+import { strict as assert } from 'node:assert';
+
+// Third-party imports
+import { describe, it } from 'vitest';
+
+// Local imports
+import { apiKeySecretName } from '@model/apiProviders';
+import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
+import { ListApiKeysTool } from '@tools/setup/ListApiKeysTool';
+import { setSetupPlatform } from '@tools/setup/platform';
+
+// Local file imports
+import { createFakeSetupPlatform } from './fixtures';
+
+const FAKE_PROVIDERS = ['anthropic', 'openai'] as const;
+
+function installPlatformWithKeys(keys: readonly string[]): void {
+  const base = createFakeSetupPlatform();
+  setSetupPlatform({
+    ...base,
+    secrets: {
+      ...base.secrets,
+      providers: FAKE_PROVIDERS,
+      async listStoredKeys() {
+        return keys;
+      },
+    },
+  });
+}
+
+const tool = new ListApiKeysTool();
+
+describe('list_api_keys tool', () => {
+  it('reports empty SecretStorage', async () => {
+    installPlatformWithKeys([]);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.equal(result.summary, 'No secrets stored');
+    assert.match(result.output ?? '', /SecretStorage is empty/);
+  });
+
+  it('shows known provider keys by provider name, not raw SecretStorage key', async () => {
+    installPlatformWithKeys([apiKeySecretName('anthropic')]);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.match(result.output ?? '', /Provider API keys stored/);
+    assert.match(result.output ?? '', /^\s+anthropic$/m);
+    assert.doesNotMatch(result.output ?? '', /apiKey\.anthropic/);
+  });
+
+  it('lists providers without a stored key', async () => {
+    installPlatformWithKeys([apiKeySecretName('anthropic')]);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.match(result.output ?? '', /Providers without a stored key/);
+    assert.match(result.output ?? '', /openai/);
+  });
+
+  it('recognises the GitHub token', async () => {
+    installPlatformWithKeys([GITHUB_TOKEN_STORAGE_KEY]);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.match(result.output ?? '', /GitHub token: stored/);
+  });
+
+  it('reports stale apiKey.* entries as diagnostic rather than removable providers', async () => {
+    installPlatformWithKeys(['apiKey.oldprovider']);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.match(result.output ?? '', /diagnostic only/);
+    assert.match(result.output ?? '', /not unset_api_key providers/);
+    assert.match(result.output ?? '', /apiKey\.oldprovider/);
+  });
+
+  it('redacts non-provider non-github secret key names under Other', async () => {
+    installPlatformWithKeys(['texra.supabase.session']);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.match(
+      result.output ?? '',
+      /Other stored secrets: 1 redacted key name/,
+    );
+    assert.doesNotMatch(result.output ?? '', /texra\.supabase\.session/);
+  });
+
+  it('categorises all key types simultaneously', async () => {
+    installPlatformWithKeys([
+      apiKeySecretName('anthropic'),
+      GITHUB_TOKEN_STORAGE_KEY,
+      'apiKey.oldprovider',
+      'texra.supabase.session',
+    ]);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.match(result.output ?? '', /Provider API keys stored/);
+    assert.match(result.output ?? '', /GitHub token: stored/);
+    assert.match(result.output ?? '', /Unrecognised apiKey\.\*/);
+    assert.match(
+      result.output ?? '',
+      /Other stored secrets: 1 redacted key name/,
+    );
+    assert.doesNotMatch(result.output ?? '', /texra\.supabase\.session/);
+  });
+
+  it('summary counts reflect platform.secrets.providers, not the global import', async () => {
+    installPlatformWithKeys([apiKeySecretName('anthropic')]);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.equal(result.summary, '1 stored secret: 1/2 provider keys');
+  });
+
+  it('summary uses plural form for multiple secrets', async () => {
+    installPlatformWithKeys([
+      apiKeySecretName('anthropic'),
+      apiKeySecretName('openai'),
+    ]);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.equal(result.summary, '2 stored secrets: 2/2 provider keys');
+  });
+
+  it('shows missing providers even when no provider keys are stored', async () => {
+    installPlatformWithKeys([GITHUB_TOKEN_STORAGE_KEY]);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.match(result.output ?? '', /No provider API keys stored/);
+    assert.match(result.output ?? '', /Providers without a stored key/);
+    assert.match(result.output ?? '', /anthropic/);
+    assert.match(result.output ?? '', /openai/);
+  });
+
+  it('summary reads "no provider keys" when only non-provider secrets are stored', async () => {
+    installPlatformWithKeys(['texra.supabase.session']);
+    const result = await tool.call({});
+    assert.ok(!result.isError, result.output);
+    assert.match(result.summary ?? '', /no provider keys/);
+  });
+});

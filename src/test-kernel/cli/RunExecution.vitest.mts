@@ -125,7 +125,7 @@ describe('executeCliRequest', () => {
     );
   });
 
-  it('hides async inquiry in non-TUI CLI execution', async () => {
+  it('hides host-unavailable tools in CLI execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = {
       config: {},
@@ -141,7 +141,7 @@ describe('executeCliRequest', () => {
       request,
       expect.objectContaining({
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: ['inquiry'],
+        runtimeUnavailableTools: ['inquiry', 'list_api_keys'],
       }),
     );
   });
@@ -160,7 +160,7 @@ describe('executeCliRequest', () => {
     expect(mocks.runAgent).toHaveBeenCalledWith(
       request,
       expect.objectContaining({
-        runtimeUnavailableTools: ['inquiry', 'custom_tool'],
+        runtimeUnavailableTools: ['inquiry', 'list_api_keys', 'custom_tool'],
       }),
     );
   });
