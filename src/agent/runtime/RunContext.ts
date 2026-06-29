@@ -62,7 +62,7 @@ export type RunContext = LaunchRunContext | BareRunContext;
 // static string (manual / test path).
 // ---------------------------------------------------------------------------
 
-export interface CreateRunContextBase {
+interface CreateRunContextBase {
   runtimeHost: AgentRuntimeHost;
   streamId?: StreamTabId;
   executionId?: ExecutionId;
@@ -105,6 +105,14 @@ const runContextScope = new AsyncLocalStorage<RunContext>();
 // Factory
 // ---------------------------------------------------------------------------
 
+/**
+ * Build a run context from caller-facing model-source options.
+ *
+ * The input discriminator describes how the model value is read:
+ * `modelSource: 'live'` produces a `launch` context with full run identity and
+ * a live model getter, while the default `static` path produces a `bare`
+ * context for tests and one-shot tool environments.
+ */
 export function createRunContext(options: CreateRunContextOptions): RunContext {
   if (options.runtimeHost == null) {
     throw new Error('createRunContext requires an explicit runtimeHost');
