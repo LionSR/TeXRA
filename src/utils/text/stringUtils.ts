@@ -197,3 +197,19 @@ export function splitOutputLines(text: string): string[] {
   if (!text) return [];
   return normalizeLineEndings(text).split('\n').filter(Boolean);
 }
+
+/**
+ * Format a USD cost value as a display string with three decimal places.
+ * e.g. `0.012` → `'$0.012'`
+ */
+export function formatCostUsd(cost: number): string {
+  return `$${cost.toFixed(3)}`;
+}
+
+/**
+ * Format a timestamp (number of ms since epoch, or a date-parsable string) for
+ * locale-aware display using the system locale and timezone.
+ */
+export function formatLocaleTimestamp(ts: number | string): string {
+  return new Date(ts).toLocaleString();
+}

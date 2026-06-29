@@ -7,6 +7,7 @@
  */
 
 import { normalizeConversationForExport as normalizeMessages } from '@agent/export/normalizeConversation';
+import { formatLocaleTimestamp } from '@utils/text/stringUtils';
 import type {
   ChatExportInput,
   DocumentMeta,
@@ -51,7 +52,7 @@ function collectFiles(config: ExportConfig): Array<[string, string]> {
 
 export function extractMeta(input: ChatExportInput): DocumentMeta {
   return {
-    date: new Date(input.timestamp).toLocaleString(),
+    date: formatLocaleTimestamp(input.timestamp),
     agent: input.config.agent,
     model: input.config.model,
     description: input.description,
