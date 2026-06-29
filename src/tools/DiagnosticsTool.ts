@@ -1,10 +1,11 @@
 // Third-party imports
-import { z } from 'zod';
+import { toJSONSchema, z } from 'zod';
 
 // Internal imports
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import type { ToolDefinition } from '@model';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
@@ -63,17 +64,28 @@ export function setAddCriticismSink(provider: AddCriticismSink): void {
   criticismSink = provider;
 }
 
-export const DiagnosticsInputSchema = z.strictObject({
+const DiagnosticsPathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .describe('Workspace-relative or absolute file path.');
+
+export const DiagnosticsReadInputSchema = z.strictObject({
+  command: z
+    .enum(['list', 'count'])
+    .describe('Use "list" for full diagnostics or "count" for a summary.'),
+  path: DiagnosticsPathSchema,
+});
+
+const DIAGNOSTICS_READ_ONLY_DESCRIPTION =
+  'Inspect diagnostics for a file. Use "list" to retrieve linter diagnostics or "count" for a severity summary.';
+
+export const DiagnosticsInputSchema = DiagnosticsReadInputSchema.extend({
   command: z
     .enum(['list', 'count', 'add'])
     .describe(
       'Use "list" for full diagnostics, "count" for a summary, or "add" to push a critique annotation as a diagnostic (squiggle + Problems panel) without inserting a literal \\criticize{...}{...}{...} macro into the document.',
     ),
-  path: z
-    .string()
-    .trim()
-    .min(1)
-    .describe('Workspace-relative or absolute file path.'),
   line: z
     .int()
     .min(1)
@@ -103,6 +115,22 @@ export const DiagnosticsInputSchema = z.strictObject({
 });
 
 export type DiagnosticsInput = z.infer<typeof DiagnosticsInputSchema>;
+
+export function withoutDiagnosticsAddCommand(
+  tool: ToolDefinition,
+): ToolDefinition {
+  if (tool.name !== 'diagnostics') return tool;
+  return {
+    ...tool,
+    description: DIAGNOSTICS_READ_ONLY_DESCRIPTION,
+    parameters: toJSONSchema(DiagnosticsReadInputSchema, {
+      target: 'draft-2020-12',
+      unrepresentable: 'any',
+      io: 'input',
+    }) as Record<string, unknown>,
+    zodSchema: DiagnosticsReadInputSchema,
+  };
+}
 
 export class DiagnosticsTool extends defineTool({
   name: 'diagnostics',

@@ -5,6 +5,8 @@ import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import type { ToolDefinition } from '@model';
 import type { ToolResult } from '@shared/schemas/toolResult';
+import { DiagnosticsTool } from '@tools/DiagnosticsTool';
+import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 
 const logger = { warn: () => {} };
 
@@ -148,6 +150,38 @@ describe('tool-use tool resolution', () => {
       'grep',
       'write_file',
     ]);
+  });
+
+  it('narrows diagnostics to read-only commands when add is host-unavailable', async () => {
+    const diagnostics = new DiagnosticsTool();
+    const registry = new MapToolRegistry({ diagnostics });
+
+    const { tools } = await resolveAgentTools({
+      tools: [diagnostics.definition],
+      registry,
+      logger,
+      toolInjections,
+      runtimeUnavailableTools: [DIAGNOSTICS_ADD_RUNTIME_CAPABILITY],
+      approvalPromptsUnavailable: false,
+      delegationBlocked: false,
+    });
+
+    const [tool] = tools;
+    expect(tool?.name).toBe('diagnostics');
+    expect(
+      tool?.zodSchema?.safeParse({ command: 'list', path: 'paper.tex' })
+        .success,
+    ).toBe(true);
+    expect(
+      tool?.zodSchema?.safeParse({
+        command: 'add',
+        path: 'paper.tex',
+        line: 1,
+        message: 'tighten this claim',
+        severity: 3,
+        confidence: 4,
+      }).success,
+    ).toBe(false);
   });
 
   it('still reports delegation tools trimmed by delegation depth separately', async () => {
