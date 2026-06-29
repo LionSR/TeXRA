@@ -178,6 +178,7 @@ class ArxivSourceProcessor {
     timeout: number,
   ): Promise<string> {
     let destPath = destBasePath;
+    let usedDispositionFilename = false;
     let shouldCleanup = true;
     try {
       // AbortSignal.timeout covers both connection establishment and body streaming.
@@ -225,9 +226,10 @@ class ArxivSourceProcessor {
             path.dirname(destBasePath),
             path.basename(filename),
           );
+          usedDispositionFilename = true;
         }
       }
-      if (destPath === destBasePath) {
+      if (!usedDispositionFilename) {
         const contentType = response.headers.get('content-type') ?? '';
         const extension = this.getExtensionFromContentType(contentType);
         destPath = destBasePath + extension;
