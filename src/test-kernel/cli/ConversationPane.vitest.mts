@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
+  LIVE_TAIL_ROWS,
   boundedAssistantDisplayLines,
   compactPrefixedDisplayRows,
+  liveAssistantDisplayLines,
 } from '@cli/chat/tui/panes/TranscriptEntry';
 import { formatRenderError } from '@cli/chat/tui/panes/EntryErrorBoundary';
 import {
@@ -349,6 +351,33 @@ describe('CLI conversation transcript splitting', () => {
     expect(finalizedTail).toContain('bold tail marker');
     expect(finalizedTail).not.toContain('**bold tail marker**');
     expect(streamingTail).toContain('**bold tail marker**');
+  });
+
+  it('budgets live assistant display-math rows with the live renderer', () => {
+    const text = [
+      'The sum evaluates to 1.6449290668357264.',
+      'For reference, the exact value is',
+      '\\[',
+      '  \\frac{\\pi^2}{6} \\approx 1.6449340668482264',
+      '\\]',
+      'So the partial sum up to $n = 199,\\!999$ is only off by about $5 \\times 10^{-6}$.',
+    ].join('\n');
+    const assistant = entry('a1', 'assistant', text, false);
+    const width = 52;
+    const liveRows = liveAssistantDisplayLines({
+      rows: LIVE_TAIL_ROWS,
+      text,
+      width,
+    }).length;
+
+    const selected = selectTranscriptEntriesForViewport(
+      [assistant],
+      100,
+      width,
+    );
+
+    expect(selected.usedRows).toBe(liveRows);
+    expect(selected.rowLimits.has('a1')).toBe(false);
   });
 
   it('pads compact prefixed rows to the viewport width', () => {

@@ -8,7 +8,7 @@ import {
   PROCESS_ENTRY_MARGIN_BOTTOM_ROWS,
   USER_ENTRY_MARGIN_BOTTOM_ROWS,
   USER_ENTRY_MARGIN_TOP_ROWS,
-  tailWindow,
+  liveAssistantDisplayLines,
 } from './TranscriptEntry';
 import {
   isInquiryContinuationText,
@@ -91,10 +91,11 @@ function estimateLiveTranscriptEntryRows(
   if (entry.role === 'assistant') {
     return estimateEntryRows(() => {
       const cols = Math.max(1, width);
-      return Math.min(
-        LIVE_TAIL_ROWS,
-        estimateWrappedRows(tailWindow(entry.text, cols, LIVE_TAIL_ROWS), cols),
-      );
+      return liveAssistantDisplayLines({
+        rows: LIVE_TAIL_ROWS,
+        text: entry.text,
+        width: cols,
+      }).length;
     });
   }
   return estimateTranscriptEntryRows(entry, width);
