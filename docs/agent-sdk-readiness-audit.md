@@ -2573,11 +2573,12 @@ candidate is behavior-touching, so each is recorded for a future tidy pass, not 
   spots. The two-interface split buys little — the four callbacks could live on `AgentCore` itself.
   Interface-only (no runtime cost); the closest thing to redundant layering in `core/`, but
   type-shape-touching, so deferred.
-- **N4 (LOW) — `ModelHandler` constructs a throwaway channel-trace logger.** `ModelHandler.ts:160`
-  defaults `this.logger = createChannelTrace('Agent')`, always overwritten by `setLogger` before any
-  real use (`AgentLaunchContext` injects the run trace). Default to the existing shared `noopTrace`
-  (`@agent/trace`) instead — removes a per-handler allocation and the only reason the base imports
-  `@logger` (`ModelHandler.ts:40`). Behavior-neutral but touches the import graph; trivial.
+- **N4 (LOW) — `ModelHandler` constructs a base channel-trace logger.** `ModelHandler.ts:160`
+  defaults `this.logger = createChannelTrace('Agent')`. Normal launch handlers overwrite it with
+  `setLogger` (`AgentLaunchContext` injects the run trace), but helper-model handlers created by
+  `createHelperModelKit()` currently run without a later `setLogger()` call. Therefore this is not a
+  pure noop-default tidy: either exclude helper-model handlers from the change or first add an explicit
+  helper-model logger path. Deferred; touches the import graph and live helper-model logging behavior.
 - **N5 (LOW) — stale JSDoc.** `types/IModelHandler.ts:379` says `createBatchedToolUseFollowUpMessages` is
   "optional and primarily used by Google handlers"; it now has three implementers (Google, OpenAI,
   OpenRouter) and GLM explicitly opts _out_. Fix the comment when next touching the file.
@@ -2975,7 +2976,9 @@ None is a zero-risk dead-shim/barrel delete, so none was applied this confirmati
 ### Open ledger at HEAD `e1bfb60` (still present unless noted)
 
 - **§24's three #6671 items — now CLOSED** (see above); the **public→protected** visibility track — also
-  **CLOSED** (above). The model-handler design-track backlog is now drained except port-width.
+  **CLOSED** (above). The model-handler design-track backlog is not fully drained: §2.6
+  `modelHandlerValidation.ts` still sits under `src/agent/modelHandlers/` and is still imported by
+  `ModelFactory` for the validation route; keep that relocation item open alongside the port-width work.
 - **§9/§21 trim the over-wide `IModelHandler` port** — still the one model-handler item of substance:
   458 LOC, the flattened `SdkToolCall` union + the load-bearing optional `createBatchedToolUseFollowUpMessages?`.
   Behavior-touching (the non-optional-with-base-default sequencing); unapplied.
