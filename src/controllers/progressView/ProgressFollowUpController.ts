@@ -68,6 +68,10 @@ export type ProgressFollowUpPlan =
       taskState: TaskState;
       executeImmediately: boolean;
     }
+  // Produced only by planCompileFixer (latexFixer today). The progress view
+  // opts every 'execute' plan into the helper-model preference, so any new
+  // 'execute'-plan producer must be an assistive agent (or the swap must be
+  // gated more narrowly).
   | { kind: 'execute'; request: ExecutionRequest };
 
 export interface ToolUseFollowUpInput {
