@@ -23,6 +23,7 @@ import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { createChannelTrace } from '@logger';
 import {
   ExternalInquiryThreadIdSchema,
+  type ExternalInquiryPermission,
   type ExternalInquiryThreadSummary,
   type InquiryActionMessage,
   type StreamTabId,
@@ -370,21 +371,32 @@ export class ExternalInquiryTool extends defineTool({
     runtimeHost.emit('requestEnsureProgressView', {});
     runtimeHost.emit('setActiveStream', { streamId });
     const isFollowUp = !!input.thread_id;
-
-    runtimeHost.emit('showExternalInquiry', {
+    const basePermission = {
       requestId: persisted.threadId, // legacy field — panel addresses by threadId now
-      mode: isFollowUp ? 'followUp' : 'new',
       question: input.question,
       threadId: persisted.threadId,
       context: input.context ?? undefined,
       suggestSearch: input.suggestSearch ?? undefined,
       attachFiles: input.attachFiles ?? undefined,
-      sessionLinks: isFollowUp ? collectKnownSessionLinks(manifest) : null,
-      draft: isFollowUp ? getOpenTurnDraft(manifest) : null,
-      transcript: isFollowUp ? manifestToTranscript(manifest) : null,
       allowBypass: false,
       streamId,
-    });
+    };
+    const permission: ExternalInquiryPermission = isFollowUp
+      ? {
+          ...basePermission,
+          mode: 'followUp',
+          sessionLinks: collectKnownSessionLinks(manifest),
+          draft: getOpenTurnDraft(manifest),
+          transcript: manifestToTranscript(manifest),
+        }
+      : {
+          ...basePermission,
+          mode: 'new',
+          sessionLinks: null,
+          draft: null,
+          transcript: null,
+        };
+    runtimeHost.emit('showExternalInquiry', permission);
 
     // Background Tasks panel: announce the open thread.
     const summary = await getThreadSummary(persisted.threadId);
