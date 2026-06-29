@@ -362,7 +362,7 @@ export function formatToolResultAsText(
       textPieces.push(result.summary);
     }
   } else {
-    // Error variant — error is required (z.string()), no output/summary
+    // Error variant — error is required (non-empty string), no output/summary
     if (result.userPatch) {
       textPieces.push(
         `User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``,

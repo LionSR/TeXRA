@@ -253,6 +253,124 @@ describe('BashTool', () => {
     assert.equal(receivedSignal.aborted, false);
   });
 
+  it('keeps result status out of visible tool log output', async () => {
+    const runTrace = createRunTrace('ToolStatusLogTest' as StreamTabId);
+    const events: AgentEvent[] = [];
+    const unsubscribe = runTrace.trace.subscribe((event) => {
+      events.push(event);
+    });
+
+    try {
+      const handler = new BashMockHandler(testModelConfig);
+      const workspaceState = AgentWorkspaceState.create();
+      const run = AgentRunStateSnapshotSchema.parse({});
+      const options: ToolUseRoundServices<OpenAI> = {
+        modelHandler: handler,
+        config: testModelConfig as any,
+        setting: {
+          agentCategory: AgentCategory.ToolUse,
+          documentTag: 'doc',
+          temperature: 0,
+          endTag: '</doc>',
+          requiredFiles: {},
+          requiredFilesInternal: {},
+          defaultOutputFiles: [],
+          filePatternsContain: [],
+          tools: [{ name: 'empty' }],
+        } satisfies AgentSetting,
+        prompt: {
+          systemPrompt: '',
+          userPrefix: '',
+          userRequest: '',
+        } satisfies AgentPrompt,
+        userVarChannels: { input: {}, transient: {} },
+        logger: runTrace.trace,
+        runtimeHost: noopAgentRuntimeHost,
+        streamStatus: new StreamStatusRegistry(),
+        client: {} as OpenAI,
+        fileService: new TaskRunFileService('test-execution-id'),
+        toolRegistry: new MapToolRegistry({}),
+        checkInterruption: () => false,
+        setAbortController: () => {},
+        streamId: 'tool-status-log' as StreamTabId,
+        executionId: 'test-execution-id',
+        run,
+        workspace: workspaceState,
+        getActiveChildren: () => ({ subagents: [], processes: [] }),
+        waitForRetry: vi.fn(),
+      };
+
+      const call = {
+        provider: 'openai',
+        callId: 'empty-1',
+        name: 'empty',
+        input: {},
+        raw: {
+          type: 'function_call',
+          call_id: 'empty-1',
+          name: 'empty',
+          arguments: '{}',
+        },
+      } as SdkToolCall;
+      const messages: ProviderMessage[] = [];
+      const shared: ToolUseRoundShared = {
+        messages,
+        shouldStop: false,
+        endTurn: false,
+        response: undefined,
+        responseTimeMs: undefined,
+        stopReason: undefined,
+        lastError: undefined,
+        toolCalls: undefined,
+        text: undefined,
+        roundIndex: 0,
+        roundResponseTimeMs: 0,
+        roundNormalizedUsage: undefined,
+      };
+
+      const node = new ToolUseDispatchNode<OpenAI>();
+      node.setServices(options);
+      await node.post(
+        shared,
+        [call],
+        [
+          {
+            call,
+            result: {},
+            parsedInput: {},
+            extracted: {
+              attachments: [],
+              sanitizedResult: { status: 'executed' },
+            },
+            editedFiles: [],
+            logRef: {
+              logId: undefined,
+              groupId: runTrace.trace.activeStageId(),
+            },
+          } as any,
+        ],
+      );
+
+      const completedEvent = events.findLast(
+        (event) => event.type === 'tool.end' && event.status === 'completed',
+      );
+      assert.ok(completedEvent, 'Tool completion event should be emitted');
+      const logPayload =
+        completedEvent?.type === 'tool.end'
+          ? (completedEvent.result as Record<string, unknown>)
+          : {};
+      assert.equal(Object.hasOwn(logPayload, 'output'), false);
+
+      const toolOutputMessage = messages.find(
+        (msg) => (msg as any).type === 'function_call_output',
+      ) as any;
+      assert.equal(toolOutputMessage?.output, 'OK');
+    } finally {
+      unsubscribe();
+      runTrace.dispose();
+    }
+  });
+
   it('accepts optional command descriptions without passing them to the shell', async () => {
     vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: true,
