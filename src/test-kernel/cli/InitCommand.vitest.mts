@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { defaultInitAgentOptions, initCommand } from '@cli/commands/init';
-import { initWizardModelSelectItems } from '@cli/init/runInitWizard';
+import {
+  defaultInitAgentOptions,
+  defaultInitAnswers,
+  initCommand,
+} from '@cli/commands/init';
+import {
+  initWizardDefaultAgentIndex,
+  initWizardModelSelectItems,
+} from '@cli/init/runInitWizard';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
 
 function modelAccess(
@@ -47,6 +54,30 @@ describe('CLI init command', () => {
     const options = defaultInitAgentOptions(registryAgents);
 
     expect(options).toEqual([{ name: 'chat' }, { name: 'review' }]);
+  });
+
+  it('defaults non-interactive init to the visible team lead', () => {
+    const answers = defaultInitAnswers(
+      [{ name: 'research' }, { name: 'review' }],
+      [modelAccess('sonnet46T')],
+    );
+
+    expect(answers.agent).toBe('research');
+    expect(answers.model).toBe('sonnet46T');
+  });
+
+  it('highlights the visible team lead in the interactive init wizard', () => {
+    expect(
+      initWizardDefaultAgentIndex([
+        { name: 'research' },
+        { name: 'review' },
+        { name: 'assistant' },
+      ]),
+    ).toBe(2);
+
+    expect(
+      initWizardDefaultAgentIndex([{ name: 'research' }, { name: 'review' }]),
+    ).toBe(0);
   });
 
   it('disables init model rows unavailable in the active API mode', () => {

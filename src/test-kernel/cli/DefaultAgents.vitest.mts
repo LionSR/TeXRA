@@ -3,12 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_DEFAULT_CHAT_AGENT,
   implicitDefaultToolUseAgents,
-  resolveImplicitToolUseAgentDefault,
+  isImplicitDefaultEligible,
+  pickDefaultToolUseAgent,
 } from '@cli/runtime/defaultAgents';
 
 describe('CLI implicit default agent policy', () => {
-  it('keeps research as the built-in default chat agent', () => {
-    expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('research');
+  it('uses assistant as the built-in default chat agent', () => {
+    expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('assistant');
   });
 
   it('filters implicit default candidates without mutating explicit options', () => {
@@ -26,14 +27,38 @@ describe('CLI implicit default agent policy', () => {
     ]);
   });
 
-  it('normalizes only allowed implicit default values', () => {
-    expect(resolveImplicitToolUseAgentDefault(' review ')).toBe('review');
-    expect(resolveImplicitToolUseAgentDefault('simplifier')).toBeUndefined();
-    expect(resolveImplicitToolUseAgentDefault('SIMPLIFIER')).toBeUndefined();
+  it('recognizes which agents may be the implicit default', () => {
+    expect(isImplicitDefaultEligible('review')).toBe(true);
+    expect(isImplicitDefaultEligible(' review ')).toBe(true);
+    expect(isImplicitDefaultEligible('simplifier')).toBe(false);
+    expect(isImplicitDefaultEligible('SIMPLIFIER')).toBe(false);
+    expect(isImplicitDefaultEligible('builtInToolUse:simplifier')).toBe(false);
+  });
+
+  it('selects the built-in default only when it is visible', () => {
     expect(
-      resolveImplicitToolUseAgentDefault('builtInToolUse:simplifier'),
-    ).toBeUndefined();
-    expect(resolveImplicitToolUseAgentDefault('   ')).toBeUndefined();
-    expect(resolveImplicitToolUseAgentDefault(undefined)).toBeUndefined();
+      pickDefaultToolUseAgent([{ name: 'research' }, { name: 'review' }]),
+    ).toBe('research');
+    expect(
+      pickDefaultToolUseAgent([{ name: 'research' }, { name: 'assistant' }]),
+    ).toBe('assistant');
+    expect(pickDefaultToolUseAgent([])).toBe('assistant');
+  });
+
+  it('prefers the team lead order over registry file order when scoped', () => {
+    // A scoped roster that hides `assistant`: pick the lead by
+    // PREFERRED_TOOL_USE_AGENTS order (engineer) rather than whichever agent
+    // sorts first in the registry's file order (codeReviewer).
+    expect(
+      pickDefaultToolUseAgent([
+        { name: 'codeReviewer' },
+        { name: 'engineer' },
+        { name: 'coder' },
+      ]),
+    ).toBe('engineer');
+    // No preferred agent present → fall back to the first visible candidate.
+    expect(
+      pickDefaultToolUseAgent([{ name: 'codeReviewer' }, { name: 'coder' }]),
+    ).toBe('codeReviewer');
   });
 });

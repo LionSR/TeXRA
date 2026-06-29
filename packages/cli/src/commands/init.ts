@@ -4,11 +4,14 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
 import {
-  BUILTIN_DEFAULT_CHAT_AGENT,
   implicitDefaultToolUseAgents,
+  pickDefaultToolUseAgent,
 } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
-import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
+import {
+  clearCliSeededRoster,
+  seedCliRosterFromDefaultTeam,
+} from '../runtime/defaultTeamRoster';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
@@ -43,8 +46,10 @@ export function defaultInitAgentOptions(
 async function gatherOptions(apiMode: CliApiMode): Promise<{
   agents: InitAgentOption[];
   models: CliModelAccess[];
+  seededRoster: boolean;
 }> {
   await loadAgents({ includeRemote: false });
+  const seededRoster = await seedCliRosterFromDefaultTeam();
   const agents = defaultInitAgentOptions(
     getVisibleAgents(AgentCategory.ToolUse),
   );
@@ -52,13 +57,16 @@ async function gatherOptions(apiMode: CliApiMode): Promise<{
     apiMode,
     agentCategory: AgentCategory.ToolUse,
   });
-  return { agents, models };
+  return { agents, models, seededRoster };
 }
 
-function defaultAnswers(models: readonly CliModelAccess[]): InitAnswers {
+export function defaultInitAnswers(
+  agents: readonly InitAgentOption[],
+  models: readonly CliModelAccess[],
+): InitAnswers {
   const firstAvailable = models.find((model) => model.available);
   return {
-    agent: BUILTIN_DEFAULT_CHAT_AGENT,
+    agent: pickDefaultToolUseAgent(agents),
     model: firstAvailable?.model.value ?? CLI_BUILTIN_DEFAULT_MODEL,
     // Match the runtime default (see buildCliContext). `ask` prompts in
     // interactive runs and safely denies in headless ones — unlike `never`,
@@ -116,7 +124,9 @@ async function runInit(
     return CliExitCode.Usage;
   }
 
-  const { agents, models } = await gatherOptions(effectiveCliApiMode(context));
+  const { agents, models, seededRoster } = await gatherOptions(
+    effectiveCliApiMode(context),
+  );
 
   const interactive =
     !opts.yes &&
@@ -135,26 +145,23 @@ async function runInit(
       colorEnabled: context.stdoutColorEnabled ?? context.colorEnabled,
     });
     if (!result) {
+      if (seededRoster) await clearCliSeededRoster();
       writeTextStderr('Cancelled. No config written.');
       return CliExitCode.Success;
     }
     answers = result.answers;
     gitignore = result.gitignore;
   } else {
-    answers = defaultAnswers(models);
+    answers = defaultInitAnswers(agents, models);
     gitignore = opts.gitignore ?? false;
   }
 
-  await writeInitConfig(filePath, buildInitConfig(answers));
-
-  // Seed a never-configured workspace's agent roster from the user-level
-  // default team (written by the setup agent's apply_team) — the CLI
-  // counterpart of the extension's activation-time seeding. The registry is
-  // already loaded by gatherOptions (includeRemote: false). Best-effort:
-  // a seeding failure must not fail `texra init`, but say so on stderr
-  // (the extension counterpart logs a warning) so a missing roster is
-  // explainable when troubleshooting.
-  await seedCliRosterFromDefaultTeam();
+  try {
+    await writeInitConfig(filePath, buildInitConfig(answers));
+  } catch (error: unknown) {
+    if (seededRoster) await clearCliSeededRoster();
+    throw error;
+  }
 
   if (gitignore) {
     const outcome = await ensureTexraGitignored(context.cwd);

@@ -1586,8 +1586,8 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
-  it('accepts the documented multi-agent inspect command', async () => {
-    const result = await runCli(['multi-agent', 'inspect', 'mathematician']);
+  it('accepts the documented multi-agent show command', async () => {
+    const result = await runCli(['multi-agent', 'show', 'mathematician']);
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('Mathematician (mathematician)');
     expect(stdout).toContain('Team root agent:');
@@ -1599,7 +1599,6 @@ describe('runCli usage output stream routing', () => {
   it('prints recovery hints for unknown multi-agent presets', async () => {
     const commands = [
       ['multi-agent', 'show', 'does-not-exist'],
-      ['multi-agent', 'inspect', 'does-not-exist'],
       [
         'multi-agent',
         'run',
@@ -1617,7 +1616,7 @@ describe('runCli usage output stream routing', () => {
 
       expect(result.exitCode).toBe(2);
       expect(stripAnsi(stderr)).toContain(
-        'Multi-agent preset not found: does-not-exist. Use `texra multi-agent list` for available team presets, then run `texra multi-agent inspect <preset>` to check a team before launch.',
+        'Multi-agent preset not found: does-not-exist. Use `texra multi-agent list` for available team presets, then run `texra multi-agent show <preset>` to check a team before launch.',
       );
       expect(stdout).toBe('');
     }

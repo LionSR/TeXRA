@@ -47,19 +47,33 @@ vi.mock('@utils/files/storageFS', () => ({
 const mockedReadJson = vi.mocked(GlobalStorageFS.readJson);
 
 describe('CLI chat defaults', () => {
-  it('uses research and DeepSeek as the built-in chat defaults', async () => {
-    expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('research');
+  it('uses assistant and DeepSeek as the built-in chat defaults', async () => {
+    expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('assistant');
     expect(BUILTIN_DEFAULT_CHAT_MODEL).toBe('deepseekproT');
     expect(MODEL_CONFIGS[BUILTIN_DEFAULT_CHAT_MODEL]).toBeDefined();
 
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
     ).resolves.toMatchObject({
-      agent: 'research',
+      agent: 'assistant',
       model: 'deepseekproT',
       source: 'builtin',
       agentSource: 'builtin',
       modelSource: 'builtin',
+    });
+  });
+
+  it('uses the first visible tool-use agent when assistant is hidden by a roster', async () => {
+    await expect(
+      resolveChatDefaults({
+        cwd: '/tmp/no-such-texra-workspace',
+        visibleToolUseAgents: [{ name: 'research' }, { name: 'review' }],
+      }),
+    ).resolves.toMatchObject({
+      agent: 'research',
+      model: 'deepseekproT',
+      source: 'builtin',
+      agentSource: 'builtin',
     });
   });
 
@@ -111,7 +125,9 @@ describe('CLI chat defaults', () => {
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
     ).resolves.toMatchObject({
-      agent: 'research',
+      // History contributes the model only; the agent stays on the built-in
+      // default rather than the history row's agent.
+      agent: 'assistant',
       model: 'sonnet46T',
       source: 'mixed',
       agentSource: 'builtin',
@@ -132,7 +148,7 @@ describe('CLI chat defaults', () => {
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
     ).resolves.toMatchObject({
-      agent: 'research',
+      agent: 'assistant',
       model: 'deepseekproT',
       source: 'builtin',
     });
@@ -141,7 +157,7 @@ describe('CLI chat defaults', () => {
   it('does not inherit stale history agent names', async () => {
     // A stale `bash` row used to win the agent tier and crash on first submit
     // with "Could not find agent: bash" — see #4397. History is now model-only,
-    // so the single-chat agent stays on the built-in `research` default.
+    // so the single-chat agent stays on the built-in `assistant` default.
     mockedListExecutions.mockResolvedValueOnce([
       historyEntry('bash', {}, '2026-05-21T08:02:00.000Z'),
       historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
@@ -150,7 +166,7 @@ describe('CLI chat defaults', () => {
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
     ).resolves.toMatchObject({
-      agent: 'research',
+      agent: 'assistant',
       model: 'sonnet46T',
       agentSource: 'builtin',
       modelSource: 'history',
@@ -172,7 +188,7 @@ describe('CLI chat defaults', () => {
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
     ).resolves.toMatchObject({
-      agent: 'research',
+      agent: 'assistant',
       model: 'sonnet46T',
       agentSource: 'builtin',
       modelSource: 'history',
@@ -188,7 +204,7 @@ describe('CLI chat defaults', () => {
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
     ).resolves.toMatchObject({
-      agent: 'research',
+      agent: 'assistant',
       model: 'sonnet46T',
       agentSource: 'builtin',
       modelSource: 'history',
@@ -206,7 +222,7 @@ describe('CLI chat defaults', () => {
     await expect(
       resolveChatDefaults({ cwd: workspace }),
     ).resolves.toMatchObject({
-      agent: 'research',
+      agent: 'assistant',
       model: 'sonnet46T',
       agentSource: 'builtin',
       modelSource: 'workspace',
@@ -221,7 +237,7 @@ describe('CLI chat defaults', () => {
         cwd: '/tmp/no-such-texra-workspace',
       }),
     ).resolves.toMatchObject({
-      agent: 'research',
+      agent: 'assistant',
       model: 'sonnet46T',
       agentSource: 'builtin',
       modelSource: 'user',
@@ -235,7 +251,7 @@ describe('CLI chat defaults', () => {
         envAgent: 'simplifier',
       }),
     ).resolves.toMatchObject({
-      agent: 'research',
+      agent: 'assistant',
       agentSource: 'builtin',
     });
   });

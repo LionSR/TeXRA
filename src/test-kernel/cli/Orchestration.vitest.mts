@@ -178,7 +178,11 @@ describe('CLI orchestration items', () => {
           status: CLI_HISTORY_RESUMABLE_STATUS,
         }),
       ],
-      toolUseAgents: [toolUseAgent('review'), toolUseAgent('orchestrator')],
+      toolUseAgents: [
+        toolUseAgent('assistant'),
+        toolUseAgent('review'),
+        toolUseAgent('orchestrator'),
+      ],
     });
 
     expect(items.map((item) => item.label)).toEqual([
@@ -214,6 +218,7 @@ describe('CLI orchestration items', () => {
         }),
       ],
       toolUseAgents: [
+        toolUseAgent('assistant'),
         toolUseAgent('search'),
         toolUseAgent('review'),
         toolUseAgent('orchestrator'),
@@ -235,7 +240,11 @@ describe('CLI orchestration items', () => {
         historyEntry('aaaaaaaaaaaa', { agent: 'review' }),
         historyEntry('bbbbbbbbbbbb', { agent: 'orchestrator' }),
       ],
-      toolUseAgents: [toolUseAgent('review'), toolUseAgent('orchestrator')],
+      toolUseAgents: [
+        toolUseAgent('assistant'),
+        toolUseAgent('review'),
+        toolUseAgent('orchestrator'),
+      ],
     });
 
     expect(items.map((item) => item.label)).toEqual([
@@ -292,7 +301,7 @@ describe('CLI orchestration items', () => {
         historyEntry('bbbbbbbbbbbb', { agent: 'missing' }),
         historyEntry('cccccccccccc', { agent: 'review' }),
       ],
-      toolUseAgents: [toolUseAgent('review')],
+      toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
     });
 
     expect(items.map((item) => item.label)).toContain('Chat with review');
@@ -307,7 +316,11 @@ describe('CLI orchestration items', () => {
         historyEntry('aaaaaaaaaaaa', { agent: 'simplifier' }),
         historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
       ],
-      toolUseAgents: [toolUseAgent('simplifier'), toolUseAgent('review')],
+      toolUseAgents: [
+        toolUseAgent('assistant'),
+        toolUseAgent('simplifier'),
+        toolUseAgent('review'),
+      ],
     });
 
     expect(items.map((item) => item.label)).toContain('Chat with review');
@@ -317,6 +330,26 @@ describe('CLI orchestration items', () => {
   });
 
   it('does not duplicate the default chat agent in startup recent agents', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [
+        historyEntry('aaaaaaaaaaaa', { agent: 'assistant' }),
+        historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
+      ],
+      toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
+    });
+
+    expect(items.map((item) => item.label)).toContain('New chat');
+    expect(items.map((item) => item.label)).toContain('Chat with review');
+    expect(items.map((item) => item.label)).not.toContain(
+      'Chat with assistant',
+    );
+  });
+
+  it('does not duplicate the roster default when assistant is hidden', () => {
+    // A scoped roster hides `assistant`, so New chat starts the roster-resolved
+    // default (`research`). It must not also appear as a "Chat with research"
+    // recent row, while a non-default recent agent still does.
     const items = buildCliOrchestrationItems({
       presetPlans: [],
       history: [
@@ -350,7 +383,7 @@ describe('CLI orchestration items', () => {
     );
   });
 
-  it('shows only the preferred team preset when it is available', () => {
+  it('lists every team preset so the user can switch between teams', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [
         readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),
@@ -359,31 +392,13 @@ describe('CLI orchestration items', () => {
       ],
       history: [],
       toolUseAgents: [],
-      preferredPresetId: 'physicist',
-    });
-
-    expect(items.map((item) => item.label)).toEqual([
-      'New chat',
-      'Team Physicist',
-      'Help',
-    ]);
-  });
-
-  it('falls back to the capped team preset list when the preferred team is missing', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [
-        readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),
-        readyPresetPlan({ id: 'physicist', name: 'Physicist' }),
-      ],
-      history: [],
-      toolUseAgents: [],
-      preferredPresetId: 'obsolete-team',
     });
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
       'Team Lean Project',
       'Team Physicist',
+      'Team Mathematician',
       'Help',
     ]);
   });
@@ -412,7 +427,7 @@ describe('CLI orchestration items', () => {
         disabled: true,
         description: 'unavailable; no team root; 1/2 tools',
         footerHints: [
-          'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
+          'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
           'Researcher Access sign-in may unlock more remote team agents.',
         ],
       }),
@@ -430,7 +445,7 @@ describe('CLI orchestration items', () => {
     });
 
     expect(orchestrationFooterHints(items)).toEqual([
-      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
+      'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
       'Researcher Access sign-in may unlock more remote team agents.',
     ]);
   });
@@ -444,7 +459,7 @@ describe('CLI orchestration items', () => {
     });
 
     expect(orchestrationFooterHints(items)).toEqual([
-      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
+      'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
     ]);
   });
 
@@ -473,7 +488,7 @@ describe('CLI orchestration items', () => {
             status: CLI_HISTORY_RESUMABLE_STATUS,
           }),
         ],
-        toolUseAgents: [toolUseAgent('review')],
+        toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
       }),
       [modelAccess('deepseekT', 'provider-key', false)],
       'personal',

@@ -23,6 +23,9 @@ export interface OrchestrationAppProps {
    *  a known list with no runnable model disables chat/team starts. */
   readonly models: readonly CliModelAccess[];
   readonly apiMode: CliApiMode;
+  /** CLI version, shown in the launcher header (matches the chat session
+   *  header) so a directly-launched `texra` reports which build is running. */
+  readonly version: string;
   readonly statusLines?: readonly string[];
   readonly allowDefaultModelLaunch?: boolean;
   readonly onResolve: (action: CliOrchestrationAction) => void;
@@ -167,9 +170,12 @@ export function OrchestrationApp(
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text bold color="cyan">
-        TeXRA
-      </Text>
+      <Box gap={1}>
+        <Text bold color="cyan">
+          TeXRA
+        </Text>
+        <Text dimColor>v{props.version}</Text>
+      </Box>
       <Text dimColor>Choose how to start this CLI session.</Text>
       {statusLines.length > 0 ? (
         <Box marginTop={1} flexDirection="column">
@@ -213,6 +219,7 @@ export interface RunOrchestrationTuiOptions {
    *  hidden configured model. */
   readonly models: readonly CliModelAccess[];
   readonly apiMode: CliApiMode;
+  readonly version: string;
   readonly statusLines?: readonly string[];
   readonly allowDefaultModelLaunch?: boolean;
   readonly colorEnabled?: boolean;
@@ -234,6 +241,7 @@ export async function runOrchestrationTui(
         items={items}
         models={options.models}
         apiMode={options.apiMode}
+        version={options.version}
         statusLines={options.statusLines}
         allowDefaultModelLaunch={options.allowDefaultModelLaunch}
         onResolve={record}
