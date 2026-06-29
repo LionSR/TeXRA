@@ -127,7 +127,6 @@ export class UsageMonitor {
       const viaChatGptSubscription =
         latestUsage?.viaChatGptSubscription ?? false;
       const usageRoute = this.resolveUsageRoute(viaChatGptSubscription);
-      const usedRelay = usageRoute === 'relay';
 
       const { capabilities } = this.modelInfo;
       const supportsCaching =
@@ -163,7 +162,7 @@ export class UsageMonitor {
         }),
         ...(toolUseTokens > 0 && { toolUseTokens }),
         ...(viaChatGptSubscription && { viaChatGptSubscription: true }),
-        usageRoute,
+        ...(usageRoute != null && { usageRoute }),
       };
 
       // Two surfaces for usage: the progress-view sidebar (via runtimeHost
@@ -203,7 +202,7 @@ export class UsageMonitor {
         // Free ChatGPT-subscription round: still logged (cost is 0), but marked
         // so analytics can tell it apart from any other zero-cost row.
         viaChatGptSubscription,
-        usedRelay,
+        usageRoute,
       });
     } catch (error) {
       logger.error(
@@ -230,27 +229,29 @@ export class UsageMonitor {
     return (totals.totalCacheReadInputTokens / totalCacheableTokens) * 100;
   }
 
-  private resolveUsageRoute(viaChatGptSubscription: boolean): UsageRoute {
+  private resolveUsageRoute(
+    viaChatGptSubscription: boolean,
+  ): UsageRoute | undefined {
     if (viaChatGptSubscription) return 'chatgpt-subscription';
-    return this.usesRelayRoute() ? 'relay' : 'api-key';
-  }
-
-  private usesRelayRoute(): boolean {
     try {
-      const { config } = this.modelInfo;
-      return (
-        !shouldUseOpenRouter(config) &&
-        getServerSideKeyService().shouldUseServerSideKeysSync(
-          config.provider,
-          config.name,
-        )
-      );
+      return this.usesRelayRoute() ? 'relay' : 'api-key';
     } catch (error) {
       this.context.logger.debug(
         `Usage route relay check failed: ${toErrorMessage(error)}`,
       );
-      return false;
+      return undefined;
     }
+  }
+
+  private usesRelayRoute(): boolean {
+    const { config } = this.modelInfo;
+    return (
+      !shouldUseOpenRouter(config) &&
+      getServerSideKeyService().shouldUseServerSideKeysSync(
+        config.provider,
+        config.name,
+      )
+    );
   }
 
   /**
@@ -268,7 +269,7 @@ export class UsageMonitor {
       reasoningTokens?: number;
       cost: number;
       viaChatGptSubscription?: boolean;
-      usedRelay: boolean;
+      usageRoute?: UsageRoute;
     },
   ): Promise<void> {
     try {
@@ -281,7 +282,15 @@ export class UsageMonitor {
         usage.cacheMissInputTokens ??
         Math.max(0, usage.inputTokens - cachedInputTokens);
 
-      const { usedRelay } = usage;
+      const usedRelay =
+        usage.usageRoute != null
+          ? usage.usageRoute === 'relay'
+          : !usage.viaChatGptSubscription &&
+            !shouldUseOpenRouter(config) &&
+            getServerSideKeyService().shouldUseServerSideKeysSync(
+              config.provider,
+              config.name,
+            );
 
       UsageLogService.log({
         model: config.fullName,
