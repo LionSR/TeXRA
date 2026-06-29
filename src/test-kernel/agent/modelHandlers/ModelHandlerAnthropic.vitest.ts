@@ -315,7 +315,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     const [, resultMsg] = await handler.createToolUseFollowUpMessages(
       undefined,
       providerCall,
-      { output: 'ok' },
+      { status: 'executed', output: 'ok' },
       [],
     );
 

@@ -141,7 +141,7 @@ describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
     const messages = await handler.createToolUseFollowUpMessages(
       undefined,
       providerCall,
-      {},
+      { status: 'executed' },
       [],
     );
 
