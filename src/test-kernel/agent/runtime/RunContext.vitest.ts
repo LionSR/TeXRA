@@ -6,8 +6,11 @@ import {
   createRunContext,
   useRunContext,
   withRunContext,
+  type RunCoordinators,
 } from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 function createRuntimeHost(): AgentRuntimeHost {
   return {
@@ -47,10 +50,19 @@ describe('RunContext', () => {
     let currentModel: string | undefined = 'deepseekT';
     const context = createRunContext({
       runtimeHost: createRuntimeHost(),
+      streamId: 'live-model-stream' as StreamTabId,
+      executionId: 'live-model-execution' as ExecutionId,
+      coordinators: {} as RunCoordinators,
+      modelSource: 'live',
       model: 'fallback-model',
       getModel: () => currentModel,
+      agentName: 'test-agent',
+      session: {} as SessionHandle,
     });
 
+    expect(Object.getOwnPropertyDescriptor(context, 'model')?.get).toBeTypeOf(
+      'function',
+    );
     expect(context.model).toBe('deepseekT');
 
     currentModel = 'sonnet46T';
