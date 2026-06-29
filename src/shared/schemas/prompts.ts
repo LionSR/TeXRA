@@ -115,16 +115,19 @@ const CommonExternalInquiryFieldsSchema = z.object({
   attachFiles: z.array(z.string()).nullish(),
 });
 
-/** First inquiry in a thread — no prior transcript, draft, or session links. */
+/**
+ * First inquiry in a thread. Fresh dispatches have no prior transcript, draft,
+ * or session links, but durable hydration may carry a saved open-turn draft.
+ */
 export const NewExternalInquiryPermissionSchema = PermissionBaseSchema.extend(
   CommonExternalInquiryFieldsSchema.shape,
 ).extend({
   mode: z.literal('new'),
-  // Always null for new inquiries; included so the discriminated union
-  // produces a common surface for renderers that access these fields.
-  sessionLinks: z.null(),
-  draft: z.null(),
-  transcript: z.null(),
+  // Included so the discriminated union produces a common surface for renderers
+  // that access these fields.
+  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+  draft: InquiryDraftSchema.nullish(),
+  transcript: z.array(InquiryTranscriptTurnSchema).nullish(),
 });
 export type NewExternalInquiryPermission = z.infer<
   typeof NewExternalInquiryPermissionSchema

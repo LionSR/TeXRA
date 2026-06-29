@@ -474,6 +474,9 @@ export class ProgressViewProvider
         const lastTurn = manifest.turns.at(-1);
         if (!lastTurn || lastTurn.answer) continue;
         const isFollowUp = manifest.turns.length > 1;
+        const sessionLinks = collectKnownSessionLinks(manifest);
+        const draft = getOpenTurnDraft(manifest);
+        const transcript = manifestToTranscript(manifest);
         const basePermission = {
           requestId: manifest.threadId,
           threadId: manifest.threadId,
@@ -488,16 +491,16 @@ export class ProgressViewProvider
           ? {
               ...basePermission,
               mode: 'followUp',
-              sessionLinks: collectKnownSessionLinks(manifest),
-              draft: getOpenTurnDraft(manifest),
-              transcript: manifestToTranscript(manifest),
+              sessionLinks,
+              draft,
+              transcript,
             }
           : {
               ...basePermission,
               mode: 'new',
-              sessionLinks: null,
-              draft: null,
-              transcript: null,
+              sessionLinks,
+              draft,
+              transcript,
             };
         this.externalInquiryHandler.show(permission);
       } catch {
