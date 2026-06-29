@@ -419,6 +419,23 @@ export const commandCatalog = [
     category: 'TeXRA',
     icon: '$(clear-all)',
   },
+  {
+    id: 'texra.replyComment',
+    title: 'Reply',
+    category: 'TeXRA',
+  },
+  {
+    id: 'texra.resolveCommentThread',
+    title: 'Resolve',
+    category: 'TeXRA',
+    icon: '$(check)',
+  },
+  {
+    id: 'texra.unresolveCommentThread',
+    title: 'Reopen',
+    category: 'TeXRA',
+    icon: '$(history)',
+  },
 ] as const satisfies readonly CommandCatalogEntry[];
 
 export type CommandId = (typeof commandCatalog)[number]['id'];

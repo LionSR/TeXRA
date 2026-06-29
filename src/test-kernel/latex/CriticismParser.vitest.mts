@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseCriticismAnnotations } from '@latex/criticismParser';
-import { AddCriticismInputSchema } from '@tools/AddCriticismTool';
+import { DiagnosticsInputSchema } from '@tools/DiagnosticsTool';
 
 describe('parseCriticismAnnotations', () => {
   it('accepts whitespace before arguments and severity zero', () => {
@@ -30,10 +30,11 @@ describe('parseCriticismAnnotations', () => {
   });
 });
 
-describe('AddCriticismInputSchema', () => {
+describe('DiagnosticsInputSchema add command', () => {
   it('rejects empty paths and accepts severity zero', () => {
     expect(() =>
-      AddCriticismInputSchema.parse({
+      DiagnosticsInputSchema.parse({
+        command: 'add',
         path: '   ',
         line: 1,
         message: 'x',
@@ -43,7 +44,8 @@ describe('AddCriticismInputSchema', () => {
     ).toThrow();
 
     expect(
-      AddCriticismInputSchema.parse({
+      DiagnosticsInputSchema.parse({
+        command: 'add',
         path: 'paper.tex',
         line: 1,
         message: 'verified',

@@ -40,6 +40,8 @@ import {
   getDisabledToolNames,
   getUnavailableToolNamesCached,
 } from '@tools/toolAvailability';
+import { withoutDiagnosticsAddCommand } from '@tools/DiagnosticsTool';
+import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
 import {
   availableModelNamesFromOptions,
@@ -140,6 +142,9 @@ export async function resolveAgentTools({
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
   const runtimeUnavailable = new Set(runtimeUnavailableTools ?? []);
+  const diagnosticsAddUnavailable = runtimeUnavailable.has(
+    DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+  );
   const missingDependency: string[] = [];
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
@@ -168,7 +173,7 @@ export async function resolveAgentTools({
       continue;
     }
     if (!effectiveRegistry.has(def.name)) continue;
-    resolved.push(def);
+    resolved.push(runtimeNarrowToolDefinition(def, diagnosticsAddUnavailable));
     resolvedNames.add(def.name);
   }
   for (const injection of toolInjections.list()) {
@@ -177,7 +182,9 @@ export async function resolveAgentTools({
     if (!passesRuntimeGates(injection.toolName)) continue;
     const tool = effectiveRegistry.get(injection.toolName);
     if (tool) {
-      resolved.push(tool.definition);
+      resolved.push(
+        runtimeNarrowToolDefinition(tool.definition, diagnosticsAddUnavailable),
+      );
       resolvedNames.add(injection.toolName);
     } else {
       logger.warn(`Injected tool not found in registry: ${injection.toolName}`);
@@ -196,6 +203,16 @@ export async function resolveAgentTools({
     ),
     delegationTrimmed,
   };
+}
+
+function runtimeNarrowToolDefinition(
+  tool: ToolDefinition,
+  diagnosticsAddUnavailable: boolean,
+): ToolDefinition {
+  if (diagnosticsAddUnavailable) {
+    return withoutDiagnosticsAddCommand(tool);
+  }
+  return tool;
 }
 
 /**

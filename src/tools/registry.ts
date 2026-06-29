@@ -9,9 +9,9 @@ import {
 } from '@model/ToolDefinition';
 
 // Local imports - tools
-import { AddCriticismTool } from './AddCriticismTool';
 import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
+import { InlineCommentTool } from './comment/InlineCommentTool';
 import { ReportReviewIssueTool } from './ReportReviewIssueTool';
 import { ApplyPathTool } from './applyPath';
 import { EditFileTool } from './EditTool';
@@ -89,7 +89,7 @@ function createDefaultTools() {
   return {
     str_replace_editor: new TextEditorTool(),
     diagnostics: new DiagnosticsTool(),
-    add_criticism: new AddCriticismTool(),
+    inline_comment: new InlineCommentTool(),
     report_review_issue: new ReportReviewIssueTool(),
     bash: new BashTool(),
     read_file: new ReadFileTool(),
@@ -156,6 +156,7 @@ export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
  * so the model sees only the canonical definition.
  */
 const TOOL_ALIASES: Record<string, string> = {
+  add_criticism: 'diagnostics',
   external_inquiry: 'inquiry',
 };
 

@@ -17,6 +17,7 @@ import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -1280,7 +1281,11 @@ describe('DesktopProgressBridge', () => {
         request,
         expect.objectContaining({
           openWorkflowOutput: expect.any(Function),
-          runtimeUnavailableTools: ['list_api_keys'],
+          runtimeUnavailableTools: [
+            'list_api_keys',
+            'inline_comment',
+            DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+          ],
         }),
       );
     } finally {
