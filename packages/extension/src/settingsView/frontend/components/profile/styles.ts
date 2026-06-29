@@ -310,8 +310,8 @@ export const profileViewStyles: CSSResult = css`
   /*
    * No hover on .provider-group-header itself — only the inner
    * .provider-group-toggle button is the click target. Hovering the
-   * surrounding header (which also contains key-action buttons) would
-   * misleadingly suggest the whole row is clickable.
+   * surrounding header (which also holds the read-only key-status badge)
+   * would misleadingly suggest the whole row is clickable.
    */
 
   .provider-group-toggle {
@@ -374,10 +374,6 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-group-key-status {
-    flex-shrink: 0;
-  }
-
-  .provider-group-key-button {
     flex-shrink: 0;
   }
 
