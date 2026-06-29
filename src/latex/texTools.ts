@@ -68,6 +68,34 @@ export function buildLatexInputEnv(
 }
 
 /**
+ * Compose the kpathsea search-path parts for a compile. The document's own
+ * directory and any caller-supplied source directories come first — ahead of
+ * `.` (the compiler's cwd, which is the workspace root, not the document's
+ * folder) so a subfolder document's relative `\input{…}` resolves against its
+ * own tree rather than a same-named file at the workspace root; the document
+ * dir also precedes the extra source dirs so a revised sibling in run storage
+ * beats the original-source fallback. The workspace root and TikZ dir follow.
+ * Bibliography search omits `.` and TikZ — only directories that can hold
+ * `.bib`/`.bst` matter there.
+ */
+export function buildLatexSearchParts(input: {
+  documentDir: string;
+  extraInputDirs?: readonly string[];
+  workspacePath?: string | null;
+  tikzInputDirectory?: string | null;
+}): { texInputParts: string[]; bibSearchParts: string[] } {
+  const { documentDir, extraInputDirs, workspacePath, tikzInputDirectory } =
+    input;
+  const sourceDirs = [documentDir, ...(extraInputDirs ?? [])];
+  const workspaceParts = workspacePath ? [workspacePath] : [];
+  const tikzParts = tikzInputDirectory?.trim() ? [tikzInputDirectory] : [];
+  return {
+    texInputParts: [...sourceDirs, '.', ...workspaceParts, ...tikzParts],
+    bibSearchParts: [...sourceDirs, ...workspaceParts],
+  };
+}
+
+/**
  * Compile a LaTeX file to PDF
  * @param latexLocation FileLocation for the LaTeX file
  * @param options Compilation options (channel defaults to module CHANNEL)
@@ -80,11 +108,20 @@ export async function compileLatex2Pdf(
   // Schema provides compiler default; channel defaults to module constant
   const parsed = LaTeXCompileOptionsSchema.parse(options);
   const channel = parsed.channel ?? CHANNEL;
-  const { outputDirectory, compiler, timeout } = parsed;
+  const { outputDirectory, compiler, timeout, extraInputDirs } = parsed;
   try {
     const latexFile = latexLocation.absolutePath;
     const outDir = outputDirectory ?? path.dirname(latexFile);
     await flexibleFS.ensureDir(pathToLocation(outDir));
+
+    // TeX resolves relative `\input{…}` / `\bibliography{…}` against the
+    // compiler's cwd and TEXINPUTS, not the main file's location. When a
+    // run-storage document (round output or latexdiff) compiles from a build
+    // directory, its own folder and any caller-supplied source directories must
+    // be on the search path or `\input{preamble}`, `\input{figures/…}`, and the
+    // bibliography fail to resolve. The file's own directory comes first so a
+    // revised sibling wins over the original source fallback.
+    const documentDir = path.dirname(latexFile);
 
     // Get TikZ input directory from configuration
     const tikzInputDirectory = getConfig<string>(
@@ -100,12 +137,12 @@ export async function compileLatex2Pdf(
 
     // Build TEXINPUTS from configured paths
     const workspacePath = includeWorkspace ? WorkspaceFS.getPath() : null;
-    const texInputParts = [
-      '.',
-      ...(workspacePath ? [workspacePath] : []),
-      ...(tikzInputDirectory?.trim() ? [tikzInputDirectory] : []),
-    ];
-    const bibSearchParts = workspacePath ? [workspacePath] : [];
+    const { texInputParts, bibSearchParts } = buildLatexSearchParts({
+      documentDir,
+      extraInputDirs,
+      workspacePath,
+      tikzInputDirectory,
+    });
 
     // Build kpathsea search-path overrides, prepending workspace/TikZ dirs onto
     // any inherited values. `path.delimiter` keeps it cross-platform.
