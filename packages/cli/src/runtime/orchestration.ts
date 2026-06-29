@@ -9,8 +9,8 @@ import {
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
 import {
-  BUILTIN_DEFAULT_CHAT_AGENT,
   implicitDefaultToolUseAgents,
+  pickDefaultToolUseAgent,
 } from './defaultAgents';
 import { formatCliHistoryResumeSummary } from './historyLabels';
 import {
@@ -57,7 +57,6 @@ export interface BuildCliOrchestrationItemsInput {
   readonly presetPlans: readonly CliMultiAgentPresetRunPlan[];
   readonly history: readonly CliHistoryEntry[];
   readonly toolUseAgents: readonly AgentEntry[];
-  readonly preferredPresetId?: string;
   readonly includeMultiAgentLoginHint?: boolean;
 }
 
@@ -104,7 +103,6 @@ export function orchestrationModelAccessView(
 
 const MAX_RECENT_RESUME_ITEMS = 3;
 const MAX_RECENT_AGENT_ITEMS = 3;
-const MAX_PRESET_ITEMS = 6;
 
 export function buildCliOrchestrationItems(
   input: BuildCliOrchestrationItemsInput,
@@ -122,7 +120,6 @@ export function buildCliOrchestrationItems(
   items.push(...recentAgentItems(userStartedHistory, input.toolUseAgents));
   items.push(
     ...presetItems(input.presetPlans, {
-      preferredPresetId: input.preferredPresetId,
       includeLoginHint: input.includeMultiAgentLoginHint,
     }),
   );
@@ -153,12 +150,16 @@ function recentAgentItems(
   const toolUseNames = new Set(
     implicitDefaultToolUseAgents(toolUseAgents).map((agent) => agent.name),
   );
+  // The agent "New chat" already starts (the roster-resolved default, which is
+  // `assistant` on a full catalog but the team lead under a scoped roster), so
+  // it isn't duplicated as a redundant "Chat with …" recent row.
+  const defaultAgent = pickDefaultToolUseAgent(toolUseAgents);
   const seen = new Set<string>();
   const items: CliOrchestrationItem[] = [];
 
   for (const entry of history) {
     if (entry.category && entry.category !== AgentCategory.ToolUse) continue;
-    if (entry.agent === BUILTIN_DEFAULT_CHAT_AGENT) continue;
+    if (entry.agent === defaultAgent) continue;
     if (!toolUseNames.has(entry.agent) || seen.has(entry.agent)) continue;
     seen.add(entry.agent);
     items.push({
@@ -172,15 +173,17 @@ function recentAgentItems(
   return items;
 }
 
+// Lists every available team (built-in and custom) so the user can pick — and
+// switch — among them in the launcher, rather than being pinned to one. The
+// Select component windows and scrolls the visible rows, so the full team list
+// is offered without an artificial data cap that would hide extra custom teams.
 function presetItems(
   plans: readonly CliMultiAgentPresetRunPlan[],
   options: {
-    readonly preferredPresetId?: string;
     readonly includeLoginHint?: boolean;
   },
 ): CliOrchestrationItem[] {
-  const visiblePlans = preferredPresetPlans(plans, options.preferredPresetId);
-  return visiblePlans.map((plan) => ({
+  return plans.map((plan) => ({
     value: { kind: 'preset', preset: plan.preset.id },
     label: `Team ${plan.preset.name}`,
     description: formatCliMultiAgentPresetLauncherSummary(plan),
@@ -189,14 +192,4 @@ function presetItems(
       includeLoginHint: options.includeLoginHint,
     }),
   }));
-}
-
-function preferredPresetPlans(
-  plans: readonly CliMultiAgentPresetRunPlan[],
-  preferredPresetId: string | undefined,
-): readonly CliMultiAgentPresetRunPlan[] {
-  const preferredPlan = preferredPresetId
-    ? plans.find((plan) => plan.preset.id === preferredPresetId)
-    : undefined;
-  return preferredPlan ? [preferredPlan] : plans.slice(0, MAX_PRESET_ITEMS);
 }

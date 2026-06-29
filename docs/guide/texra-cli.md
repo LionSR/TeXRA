@@ -194,13 +194,13 @@ outputs.
 
 ## Multi-Agent Teams
 
-The CLI can list, inspect, and run the same built-in teams as the
+The CLI can list, show, and run the same built-in teams as the
 extension's Multi-Agent settings tab — Lean Project, Physicist, Mathematician,
 Computer Scientist, and Software Engineer:
 
 ```bash
 texra multi-agent list
-texra multi-agent inspect software-engineer
+texra multi-agent show software-engineer
 texra multi-agent run software-engineer --instruction "Profile and speed up scripts/simulate.py"
 ```
 
