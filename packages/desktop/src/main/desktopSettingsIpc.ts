@@ -5,6 +5,7 @@ import {
   isAllowedLatexInstallCommand,
   LatexToolingController,
 } from '@controllers/settingsView/LatexToolingController';
+import { createSettingsViewCommandHandlers } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { createSettingsMemoryController } from '@controllers/settingsView/SettingsMemoryControllerFactory';
 import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
@@ -1055,191 +1056,195 @@ export function createDesktopSettingsIpc(
 
   applyCurrentGitAuthorSettings();
 
-  // Registry of settings commands → handlers. The dispatcher parses the
-  // message, looks up the handler by `command`, and routes async rejections to
-  // `onError` (replacing the former per-case `runAsync` wrapper). WEBVIEW_READY
-  // is intentionally absent — it is a broadcast handled in `handleMessage` so
-  // sibling handlers (startup, onboarding) still receive it.
-  const settingsHandlers: SettingsViewInboundHandlerRegistry = {
-    [SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION]: () =>
-      postAgentSelectionData(),
-    [SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION]: () =>
-      postModelSelectionData(),
-    [SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA]: () => postMemoryData(),
-    [SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW]: (d) =>
-      postMemoryPreview(d.storagePath),
-    [SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED]: () => postMemoryEnabled(),
-    [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE]: (d) => openMemoryFile(d),
-    [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]: () => openMemoryFolder(),
-    [SETTINGS_VIEW_COMMANDS.DELETE_MEMORY]: (d) => deleteMemory(d),
-    [SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED]: (d) =>
-      setMemoryEnabled(d.enabled),
-    [SETTINGS_VIEW_COMMANDS.PIN_MEMORY]: (d) =>
-      setMemoryPinned(d.storagePath, true),
-    [SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY]: (d) =>
-      setMemoryPinned(d.storagePath, false),
-    [SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA]: () => postHistoryData(),
-    [SETTINGS_VIEW_COMMANDS.DELETE_AGENT]: (d) =>
-      deleteHistoryItem(d.historyId),
-    [SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY]: () => clearHistory(),
-    [SETTINGS_VIEW_COMMANDS.RERUN_AGENT]: () =>
-      showUnsupportedHistoryAction('Rerun'),
-    [SETTINGS_VIEW_COMMANDS.RESTORE_AGENT]: () =>
-      showUnsupportedHistoryAction('Setup'),
-    [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD]: () =>
-      showUnsupportedHistoryAction('Markdown export'),
-    [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX]: () =>
-      showUnsupportedHistoryAction('LaTeX export'),
-    [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML]: () =>
-      showUnsupportedHistoryAction('HTML export'),
-    [SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA]: () => postProfileData(),
-    [SETTINGS_VIEW_COMMANDS.SIGN_IN]: () => signIn(),
-    [SETTINGS_VIEW_COMMANDS.SIGN_OUT]: () => signOut(),
-    [SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE]: (d) =>
-      setApiAccessMode(d.mode),
-    [SETTINGS_VIEW_COMMANDS.GET_CHATGPT_AUTH_STATUS]: () =>
-      postChatGptAuthStatus(),
-    [SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT]: () => signInChatGpt(),
-    [SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT]: () => signOutChatGpt(),
-    [SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION]: (d) =>
-      setChatGptPreferSubscription(d.enabled),
-    [SETTINGS_VIEW_COMMANDS.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY]: (d) =>
-      setChatGptSubscriptionToolUseOnly(d.enabled),
-    [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY]: (d) =>
-      setProviderKey(d.provider, d.apiKey),
-    [SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY]: (d) =>
-      removeProviderKey(d.provider),
-    [SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL]: (d) =>
-      openProviderKeyUrl(d.provider),
-    [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING]: (d) =>
-      updateProviderStreaming({ provider: d.provider, enabled: d.enabled }),
-    [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT]: (d) =>
-      updateProviderEndpoint({ provider: d.provider, endpoint: d.endpoint }),
-    [SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING]: (d) =>
-      updateGlobalStreaming(d.enabled),
-    [SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL]: (d) =>
-      options.openExternalUrl?.(d.url) ?? Promise.resolve(),
-    [SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED]: (d) =>
-      updateModelEnabled({ modelName: d.modelName, enabled: d.enabled }),
-    [SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL]: (d) =>
-      updateHelperModel(d.modelName),
-    [SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL]: (d) =>
-      updateModelReasoningLevel({ modelName: d.modelName, level: d.level }),
-    [SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES]: (d) =>
-      updatePreferShortModelNames(d.enabled),
-    [SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS]: () =>
-      postApprovalSettings(),
-    [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () =>
-      postSuperYoloEnabled(),
-    [SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED]: () =>
-      postSuperYoloEnabled(),
-    [SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL]: (d) =>
-      updateBooleanWorkspaceSetting(
-        WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
-        d.enabled,
-      ),
-    [SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP]: (d) =>
-      updateBooleanWorkspaceSetting(
-        WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-        d.enabled,
-      ),
-    [SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_MAX_DEPTH]: (d) =>
-      updateNestedDelegationMaxDepth(d.value),
-    [SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED]: (d) =>
-      updateBashApprovalEnabled(d.enabled),
-    [SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE]: (d) =>
-      updateAgentSetting(WorkspaceStateKey.CODEX_SANDBOX_MODE, d.mode),
-    [SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT]: (d) =>
-      updateAgentSetting(WorkspaceStateKey.CODEX_REASONING_EFFORT, d.effort),
-    [SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY]: (d) =>
-      updateAgentSetting(WorkspaceStateKey.CODEX_APPROVAL_POLICY, d.policy),
-    [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_MODEL]: (d) =>
-      updateAgentSetting(WorkspaceStateKey.CLAUDE_AGENT_MODEL, d.model),
-    [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_PERMISSION_MODE]: (d) =>
-      updateAgentSetting(
-        WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-        d.mode,
-      ),
-    [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_EFFORT]: (d) =>
-      updateAgentSetting(WorkspaceStateKey.CLAUDE_AGENT_EFFORT, d.effort),
-    [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
-      postToolDashboardData(),
-    [SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL]: (d) =>
-      options.openExternalUrl?.(d.url) ?? Promise.resolve(),
-    [SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION]: (d) =>
-      options.installToolExtension?.(d.extensionId) ?? Promise.resolve(),
-    [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () => recheckToolStatus(),
-    [SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL]: (d) =>
-      setToolEnabled(d.toolId, d.enabled),
-    [SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND]: (d) =>
-      runToolCommand({ toolId: d.toolId, kind: d.kind }),
-    [SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED]: (d) =>
-      updateAgentEnabled({
-        category: d.category,
-        source: d.agentSource,
-        name: d.agentName,
-        enabled: d.enabled,
-      }),
-    [SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED]: (d) =>
-      updateAllAgentsEnabled({
-        category: d.category,
-        source: d.source,
-        enabled: d.enabled,
-      }),
-    [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML]: (d) =>
-      openAgentYaml({ source: d.agentSource, name: d.agentName }),
-    [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER]: () => openAgentFolder(),
-    [SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE]: (d) =>
-      revealAgentFile({ source: d.agentSource, name: d.agentName }),
-    [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () => postCustomAgentDir(),
-    [SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR]: () => setCustomAgentDir(),
-    [SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR]: () =>
-      resetCustomAgentDir(),
-    [SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS]: () =>
-      postAgentModePresets(),
-    [SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET]: (d) =>
-      applyAgentModePreset(d.presetId),
-    [SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET]: () =>
-      saveAgentModePreset(),
-    [SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET]: (d) =>
-      deleteAgentModePreset(d.presetId),
-    [SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS]: () =>
-      postGitAuthorSettings(),
-    [SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING]: () =>
-      postDesktopCrashReportingStatus(),
-    [SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED]: (d) =>
-      updateDesktopCrashReportingEnabled(d.enabled),
-    [SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN]: () =>
-      updateDesktopCrashReportingDsn(),
-    [SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS]: () =>
-      postLatexSettingsStatus(),
-    [SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS]: () =>
-      postLatexSettingsStatus(),
-    [SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP]: () =>
-      options.installToolExtension?.(LATEX_WORKSHOP_EXT_ID) ??
-      Promise.resolve(),
-    [SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND]: (d) => {
-      if (!isAllowedLatexInstallCommand(d.installCommand)) {
-        onError(
-          new Error(`Rejected unknown install command: ${d.installCommand}`),
-        );
-        return;
-      }
-      return options.runInstallCommand?.(d.installCommand) ?? Promise.resolve();
+  const StateKeys = WorkspaceStateKey;
+  const setGitAuthor = (key: WorkspaceStateKey, value: boolean | string) =>
+    updateGitAuthorSetting(key, value);
+  const setAgent = (key: WorkspaceStateKey, value: string) =>
+    updateAgentSetting(key, value);
+
+  // WEBVIEW_READY stays outside this registry: it is a broadcast in desktop so
+  // startup and onboarding handlers can observe it after settings handles it.
+  const settingsHandlers = createSettingsViewCommandHandlers({
+    memory: {
+      getMemoryData: () => postMemoryData(),
+      getMemoryPreview: (data) => postMemoryPreview(data.storagePath),
+      getMemoryEnabled: () => postMemoryEnabled(),
+      openMemoryFile: (data) => openMemoryFile(data),
+      openMemoryFolder: () => openMemoryFolder(),
+      deleteMemory: (data) => deleteMemory(data),
+      setMemoryEnabled: (data) => setMemoryEnabled(data.enabled),
+      pinMemory: (data) => setMemoryPinned(data.storagePath, true),
+      unpinMemory: (data) => setMemoryPinned(data.storagePath, false),
     },
-    [SETTINGS_VIEW_COMMANDS.GET_LATEX_CONFIG_VALUES]: () =>
-      postLatexConfigValues(),
-    [SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE]: (d) =>
-      updateLatexConfigValue({ field: d.field, value: d.value }),
-    [SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS]: (d) =>
-      updateGitAuthorSetting(WorkspaceStateKey.GIT_MARK_COMMITS, d.enabled),
-    [SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME]: (d) =>
-      updateGitAuthorSetting(WorkspaceStateKey.GIT_AUTHOR_NAME, d.name),
-    [SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL]: (d) =>
-      updateGitAuthorSetting(WorkspaceStateKey.GIT_AUTHOR_EMAIL, d.email),
-    [SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT]: (d) =>
-      updateGitAuthorSetting(WorkspaceStateKey.GIT_WORKTREE_SUPPORT, d.enabled),
-  };
+    history: {
+      getHistoryData: () => postHistoryData(),
+      deleteAgent: (data) => deleteHistoryItem(data.historyId),
+      clearHistory: () => clearHistory(),
+      rerunAgent: () => showUnsupportedHistoryAction('Rerun'),
+      restoreAgent: () => showUnsupportedHistoryAction('Setup'),
+      exportChatMd: () => showUnsupportedHistoryAction('Markdown export'),
+      exportChatTex: () => showUnsupportedHistoryAction('LaTeX export'),
+      exportChatHtml: () => showUnsupportedHistoryAction('HTML export'),
+    },
+    profile: {
+      getProfileData: () => postProfileData(),
+      signIn: () => signIn(),
+      signOut: () => signOut(),
+      setApiAccessMode: (data) => setApiAccessMode(data.mode),
+      setProviderKey: (data) => setProviderKey(data.provider, data.apiKey),
+      removeProviderKey: (data) => removeProviderKey(data.provider),
+      openProviderKeyUrl: (data) => openProviderKeyUrl(data.provider),
+      setProviderStreaming: (data) =>
+        updateProviderStreaming({
+          provider: data.provider,
+          enabled: data.enabled,
+        }),
+      setProviderEndpoint: (data) =>
+        updateProviderEndpoint({
+          provider: data.provider,
+          endpoint: data.endpoint,
+        }),
+      setGlobalStreaming: (data) => updateGlobalStreaming(data.enabled),
+      openExternalUrl: (data) =>
+        options.openExternalUrl?.(data.url) ?? Promise.resolve(),
+    },
+    model: {
+      getModelSelection: () => postModelSelectionData(),
+      setModelEnabled: (data) =>
+        updateModelEnabled({
+          modelName: data.modelName,
+          enabled: data.enabled,
+        }),
+      setPolishModel: (data) => updateHelperModel(data.modelName),
+      setModelReasoningLevel: (data) =>
+        updateModelReasoningLevel({
+          modelName: data.modelName,
+          level: data.level,
+        }),
+      setPreferShortModelNames: (data) =>
+        updatePreferShortModelNames(data.enabled),
+    },
+    multiAgent: {
+      getSuperYoloEnabled: () => postSuperYoloEnabled(),
+      setSuperYoloEnabled: () => postSuperYoloEnabled(),
+      setAllowOrchestratorKill: (data) =>
+        updateBooleanWorkspaceSetting(
+          StateKeys.ALLOW_ORCHESTRATOR_KILL,
+          data.enabled,
+        ),
+      setDetachSubagentsOnStop: (data) =>
+        updateBooleanWorkspaceSetting(
+          StateKeys.DETACH_SUBAGENTS_ON_STOP,
+          data.enabled,
+        ),
+      setNestedDelegationMaxDepth: (data) =>
+        updateNestedDelegationMaxDepth(data.value),
+    },
+    agent: {
+      getAgentSelection: () => postAgentSelectionData(),
+      setAgentEnabled: (data) =>
+        updateAgentEnabled({
+          category: data.category,
+          source: data.agentSource,
+          name: data.agentName,
+          enabled: data.enabled,
+        }),
+      setAllAgentsEnabled: (data) =>
+        updateAllAgentsEnabled({
+          category: data.category,
+          source: data.source,
+          enabled: data.enabled,
+        }),
+      openAgentYaml: (data) =>
+        openAgentYaml({ source: data.agentSource, name: data.agentName }),
+      openAgentFolder: () => openAgentFolder(),
+      revealAgentFile: (data) =>
+        revealAgentFile({ source: data.agentSource, name: data.agentName }),
+      getCustomAgentDir: () => postCustomAgentDir(),
+      setCustomAgentDir: () => setCustomAgentDir(),
+      resetCustomAgentDir: () => resetCustomAgentDir(),
+      getAgentModePresets: () => postAgentModePresets(),
+      applyAgentModePreset: (data) => applyAgentModePreset(data.presetId),
+      saveAgentModePreset: () => saveAgentModePreset(),
+      deleteAgentModePreset: (data) => deleteAgentModePreset(data.presetId),
+    },
+    git: {
+      getGitAuthorSettings: () => postGitAuthorSettings(),
+      setGitMarkCommits: (data) =>
+        setGitAuthor(StateKeys.GIT_MARK_COMMITS, data.enabled),
+      setGitAuthorName: (data) =>
+        setGitAuthor(StateKeys.GIT_AUTHOR_NAME, data.name),
+      setGitAuthorEmail: (data) =>
+        setGitAuthor(StateKeys.GIT_AUTHOR_EMAIL, data.email),
+      setGitWorktreeSupport: (data) =>
+        setGitAuthor(StateKeys.GIT_WORKTREE_SUPPORT, data.enabled),
+    },
+    chatGpt: {
+      getChatGptAuthStatus: () => postChatGptAuthStatus(),
+      signInChatGpt: () => signInChatGpt(),
+      signOutChatGpt: () => signOutChatGpt(),
+      setChatGptPreferSubscription: (data) =>
+        setChatGptPreferSubscription(data.enabled),
+      setChatGptSubscriptionToolUseOnly: (data) =>
+        setChatGptSubscriptionToolUseOnly(data.enabled),
+    },
+    approval: {
+      getApprovalSettings: () => postApprovalSettings(),
+      setBashApprovalEnabled: (data) => updateBashApprovalEnabled(data.enabled),
+      setCodexSandboxMode: (data) =>
+        setAgent(StateKeys.CODEX_SANDBOX_MODE, data.mode),
+      setCodexReasoningEffort: (data) =>
+        setAgent(StateKeys.CODEX_REASONING_EFFORT, data.effort),
+      setCodexApprovalPolicy: (data) =>
+        setAgent(StateKeys.CODEX_APPROVAL_POLICY, data.policy),
+      setClaudeAgentModel: (data) =>
+        setAgent(StateKeys.CLAUDE_AGENT_MODEL, data.model),
+      setClaudeAgentPermissionMode: (data) =>
+        setAgent(StateKeys.CLAUDE_AGENT_PERMISSION_MODE, data.mode),
+      setClaudeAgentEffort: (data) =>
+        setAgent(StateKeys.CLAUDE_AGENT_EFFORT, data.effort),
+    },
+    tools: {
+      getToolDashboardData: () => postToolDashboardData(),
+      openToolInstallUrl: (data) =>
+        options.openExternalUrl?.(data.url) ?? Promise.resolve(),
+      installToolExtension: (data) =>
+        options.installToolExtension?.(data.extensionId) ?? Promise.resolve(),
+      recheckToolStatus: () => recheckToolStatus(),
+      toggleTool: (data) => setToolEnabled(data.toolId, data.enabled),
+      runToolCommand: (data) =>
+        runToolCommand({ toolId: data.toolId, kind: data.kind }),
+    },
+    latex: {
+      getLatexSettingsStatus: () => postLatexSettingsStatus(),
+      applyLatexSettings: () => postLatexSettingsStatus(),
+      installLatexWorkshop: () =>
+        options.installToolExtension?.(LATEX_WORKSHOP_EXT_ID) ??
+        Promise.resolve(),
+      runInstallCommand: (data) => {
+        if (!isAllowedLatexInstallCommand(data.installCommand)) {
+          onError(
+            new Error(
+              `Rejected unknown install command: ${data.installCommand}`,
+            ),
+          );
+          return;
+        }
+        return (
+          options.runInstallCommand?.(data.installCommand) ?? Promise.resolve()
+        );
+      },
+      getLatexConfigValues: () => postLatexConfigValues(),
+      setLatexConfigValue: (data) =>
+        updateLatexConfigValue({ field: data.field, value: data.value }),
+    },
+    desktopCrashReporting: {
+      getDesktopCrashReporting: () => postDesktopCrashReportingStatus(),
+      setDesktopCrashReportingEnabled: (data) =>
+        updateDesktopCrashReportingEnabled(data.enabled),
+      setDesktopCrashReportingDsn: () => updateDesktopCrashReportingDsn(),
+    },
+  });
 
   return {
     refreshAuthDependentData,
