@@ -68,6 +68,7 @@ async function canLaunchWithDefaultModel(
       fallbackSource: defaults.modelSource,
       apiMode,
       accessList: models,
+      agentCategory: AgentCategory.ToolUse,
     });
     return true;
   } catch {
@@ -148,9 +149,10 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // launches with the default model instead of blocking the launcher.
   const apiMode = effectiveCliApiMode(context);
   const [models, statusLines] = await Promise.all([
-    getCliModelAccessList({ apiMode }).catch(
-      (): readonly CliModelAccess[] => [],
-    ),
+    getCliModelAccessList({
+      apiMode,
+      agentCategory: AgentCategory.ToolUse,
+    }).catch((): readonly CliModelAccess[] => []),
     loadCliApiStatusLines({ apiMode, includeActionHint: true }),
   ]);
   const allowDefaultModelLaunch = await canLaunchWithDefaultModel(

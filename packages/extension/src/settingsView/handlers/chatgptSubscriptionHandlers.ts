@@ -84,7 +84,7 @@ export class ChatGptSubscriptionHandlers {
       const update = await setCodexSubscriptionToolUseOnly(enabled);
       if (update.effective !== enabled) {
         void vscode.window.showWarningMessage(
-          `A more specific setting still keeps "subscription for tool-use only" ${update.effective ? 'enabled' : 'disabled'}.`,
+          `The effective "subscription for tool-use only" setting remains ${update.effective ? 'enabled' : 'disabled'}.`,
         );
       }
     } catch (error) {

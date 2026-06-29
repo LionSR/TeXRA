@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   ModelProvider,
@@ -85,6 +85,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     await initFakePlatformWithSubscription();
 
     const handler = new ModelHandlerCodex(config);
+    handler.setAgentCategory(AgentCategory.ToolUse);
     expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
     expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
   });
@@ -93,6 +94,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     await initFakePlatformWithSubscription();
 
     const handler = new ModelHandlerCodex(config);
+    handler.setAgentCategory(AgentCategory.ToolUse);
     expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
 
     // The "Use your own API key" switch flips this preference; the same handler
@@ -107,6 +109,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     await initFakePlatformWithSubscription();
 
     const handler = new ModelHandlerCodex(largeWindowConfig);
+    handler.setAgentCategory(AgentCategory.ToolUse);
     // The model's own 1.05M API window must not leak through on the
     // subscription path, where the backend rejects requests past the ceiling.
     expect(handler.getEffectiveContextWindow()).toBe(
@@ -118,6 +121,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     await initFakePlatformWithSubscription();
 
     const handler = new ModelHandlerCodex(largeWindowConfig);
+    handler.setAgentCategory(AgentCategory.ToolUse);
     expect(handler.getEffectiveContextWindow()).toBe(
       CODEX_SUBSCRIPTION_CONTEXT_WINDOW,
     );
@@ -134,7 +138,17 @@ describe('ModelHandlerCodex subscription fallback', () => {
 
     // The clamp is a floor (Math.min), so a sub-ceiling window is unchanged.
     const handler = new ModelHandlerCodex(config);
+    handler.setAgentCategory(AgentCategory.ToolUse);
     expect(handler.getEffectiveContextWindow()).toBe(config.contextWindow);
+  });
+
+  it('routes untagged helper handlers to the API-key path while the tool-use-only switch is on', async () => {
+    await initFakePlatformWithSubscription();
+
+    const handler = new ModelHandlerCodex(config);
+
+    expect(handler.getBaseUrl()).not.toBe(CODEX_BACKEND_BASE_URL);
+    expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBeGreaterThan(0);
   });
 
   it('keeps tool-use agents on the subscription while the tool-use-only switch is on', async () => {
@@ -161,6 +175,29 @@ describe('ModelHandlerCodex subscription fallback', () => {
     expect(handler.getEffectiveContextWindow()).toBe(1_050_000);
   });
 
+  it('fails locally when a subscription request cannot fit the Codex cap without reducing output budget', async () => {
+    await initFakePlatformWithSubscription();
+
+    const handler = new ModelHandlerCodex(largeWindowConfig);
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    const requestSpy = vi.fn();
+    (
+      handler as unknown as {
+        conversationState: { cumulativeInputTokens: number };
+      }
+    ).conversationState.cumulativeInputTokens =
+      CODEX_SUBSCRIPTION_CONTEXT_WINDOW - 10;
+
+    await expect(
+      handler.createResponse({
+        client: { responses: { create: requestSpy } } as never,
+        messages: [],
+        temperature: 0,
+      }),
+    ).rejects.toThrow(/cannot enforce a reduced output budget locally/);
+    expect(requestSpy).not.toHaveBeenCalled();
+  });
+
   it('keeps workflow agents on the subscription when the tool-use-only switch is off', async () => {
     await initFakePlatformWithSubscription({
       'texra.chatgptCodex.subscriptionToolUseOnly': false,
@@ -177,6 +214,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     await initFakePlatformWithSubscription();
 
     const handler = new ModelHandlerCodex(config);
+    handler.setAgentCategory(AgentCategory.ToolUse);
     const usage = handler.normalizeUsage(RAW_USAGE, 1000);
 
     // Recorded (tokens present) but free and marked, so logging/UI can tell it
@@ -190,6 +228,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     await initFakePlatformWithSubscription();
 
     const handler = new ModelHandlerCodex(config);
+    handler.setAgentCategory(AgentCategory.ToolUse);
     await setPreferCodexSubscription(false);
     const usage = handler.normalizeUsage(RAW_USAGE, 1000);
 

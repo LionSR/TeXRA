@@ -1149,6 +1149,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Some Responses-compatible routes deliberately omit `max_output_tokens` from
+   * the wire request. When token counting is unavailable, a fallback estimate
+   * can detect that the requested output budget would exceed the context window,
+   * but such routes cannot enforce a reduced budget. They should fail locally
+   * instead of sending a request that the backend will reject opaquely.
+   */
+  protected shouldFailWhenFallbackOutputBudgetIsReduced(): boolean {
+    return false;
+  }
+
+  /**
    * Estimates token count using OpenAI's native /responses/input_tokens endpoint.
    * This provides exact pre-flight token counts for the Responses API.
    *
@@ -1190,6 +1201,49 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     this.logger.debug(`Token count of message: ${tokenCount.input_tokens}`);
     return tokenCount.input_tokens;
+  }
+
+  private applyTokenCountFailureFallback(maxOutputTokens: number): number {
+    const inputEstimate = this.getBestInputTokenEstimate();
+    if (inputEstimate <= 0) return maxOutputTokens;
+
+    const buffer = this.getTokenSafetyBuffer();
+    const contextWindow = this.getEffectiveContextWindow();
+    const validation = this.validateTokenLimits(
+      inputEstimate,
+      maxOutputTokens,
+      contextWindow,
+      buffer,
+    );
+    const capped = clamp(validation.adjustedMaxTokens, 0, maxOutputTokens);
+    if (capped === maxOutputTokens) return maxOutputTokens;
+
+    if (this.shouldFailWhenFallbackOutputBudgetIsReduced()) {
+      throw new Error(
+        `Token estimate (${inputEstimate}) + output budget (${maxOutputTokens}) exceeds context window (${contextWindow}), and this route cannot enforce a reduced output budget locally.`,
+      );
+    }
+
+    this.logger.debug(
+      `Fallback: max_output_tokens ${maxOutputTokens} → ${capped} (estimate: ${inputEstimate})`,
+    );
+    logContextManagementEvent(
+      this.logger,
+      `Estimated token count (${inputEstimate}) + max output tokens (${maxOutputTokens}) exceeds context window (${contextWindow}). Reducing to ${capped}.`,
+      {
+        action: 'max_tokens_reduced',
+        tokensBefore: inputEstimate,
+        contextWindow,
+        utilizationBefore:
+          validation.utilizationPercent ??
+          (inputEstimate / contextWindow) * 100,
+        originalMaxTokens: maxOutputTokens,
+        reducedMaxTokens: capped,
+        details:
+          'OpenAI Response: max_output_tokens reduced from fallback estimate',
+      },
+    );
+    return capped;
   }
 
   /**
@@ -1364,6 +1418,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // NOTE: When previous_response_id is set, the API includes server-side history
     // (per OpenAI docs). However, there may be edge cases where token counting
     // doesn't match actual context usage. See PRD Known Issues for investigation.
+    if (!this.supportsTokenCounting) {
+      maxOutputTokens = this.applyTokenCountFailureFallback(maxOutputTokens);
+    }
+
     await this.applyTokenCountLimit({
       // Reuse built params for token counting (build once principle).
       // IMPORTANT: Pass tools and systemPrompt for accurate count.
@@ -1411,21 +1469,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.logger.debug(
           `Token counting failed: ${getSdkErrorMessage(err)}. Applying fallback cap.`,
         );
-        // Fallback: cap output based on best available estimate.
-        // Skip on first turn (no history to overflow).
-        const inputEstimate = this.getBestInputTokenEstimate();
-        if (inputEstimate > 0) {
-          const buffer = this.getTokenSafetyBuffer();
-          const available =
-            this.getEffectiveContextWindow() - inputEstimate - buffer;
-          const capped = clamp(available, 0, maxOutputTokens);
-          if (capped !== maxOutputTokens) {
-            this.logger.debug(
-              `Fallback: max_output_tokens ${maxOutputTokens} → ${capped} (estimate: ${inputEstimate})`,
-            );
-            maxOutputTokens = capped;
-          }
-        }
+        maxOutputTokens = this.applyTokenCountFailureFallback(maxOutputTokens);
       },
     });
 

@@ -750,6 +750,7 @@ describe('desktop settings IPC', () => {
       status: {
         signedIn: false,
         preferSubscription: false,
+        subscriptionToolUseOnly: true,
       },
     });
 
@@ -773,6 +774,30 @@ describe('desktop settings IPC', () => {
       status: {
         signedIn: false,
         preferSubscription: true,
+        subscriptionToolUseOnly: true,
+      },
+    });
+    posted.length = 0;
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY,
+        enabled: false,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(2);
+    expect(
+      posted.findLast(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+      ),
+    ).toMatchObject({
+      status: {
+        signedIn: false,
+        preferSubscription: true,
+        subscriptionToolUseOnly: false,
       },
     });
     expect(

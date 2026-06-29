@@ -253,23 +253,16 @@ const FiniteNumber = z.coerce
   .number()
   .transform((n) => (Number.isFinite(n) ? n : 0));
 
-type TokenUsageStatKey = keyof typeof TokenUsageStatsSchema.shape;
-
-const TokenUsageStatsParsingShape = {} as Record<
-  TokenUsageStatKey,
-  z.ZodType<number>
->;
-for (const [key, schema] of Object.entries(TokenUsageStatsSchema.shape) as [
-  TokenUsageStatKey,
-  z.ZodType,
-][]) {
-  TokenUsageStatsParsingShape[key] = schema.isOptional()
-    ? FiniteNumber.optional().prefault(0)
-    : FiniteNumber;
-}
-
 /** Parsing schema with safe number coercion. */
-const TokenUsageStatsParsingBaseSchema = z.object(TokenUsageStatsParsingShape);
+const TokenUsageStatsParsingBaseSchema = z.object({
+  inputTokens: FiniteNumber,
+  outputTokens: FiniteNumber,
+  cost: FiniteNumber,
+  cacheReadInputTokens: FiniteNumber.optional().prefault(0),
+  cacheMissInputTokens: FiniteNumber.optional().prefault(0),
+  cacheCreationInputTokens: FiniteNumber.optional().prefault(0),
+  viaChatGptSubscription: z.boolean().catch(false).prefault(false),
+});
 
 export const TokenUsageStatsParsingSchema =
   TokenUsageStatsParsingBaseSchema.catch(emptyUsageStats());

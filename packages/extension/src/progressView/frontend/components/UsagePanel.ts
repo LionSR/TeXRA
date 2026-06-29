@@ -236,13 +236,13 @@ export class UsagePanel extends LitElement {
           aria-hidden="true"
         ></wa-icon
         >${formatCompactTokenCount(outputTokens)} ·
-        ${cost > 0
-          ? html`$${cost.toFixed(3)}`
-          : html`<span
+        ${this.usage.viaChatGptSubscription === true && cost === 0
+          ? html`<span
               class="run-summary__free"
-              title="No charge — e.g. covered by your ChatGPT subscription"
+              title="No charge — covered by your ChatGPT subscription"
               >Free</span
-            >`}
+            >`
+          : html`$${cost.toFixed(3)}`}
       </span>
     `;
   }
@@ -284,7 +284,12 @@ export class UsagePanel extends LitElement {
 
   private buildUsageLabel(): string {
     if (!this.usage) return '';
-    const { inputTokens, outputTokens, cost } = this.usage;
-    return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, $${cost.toFixed(3)}`;
+    const { inputTokens, outputTokens, cost, viaChatGptSubscription } =
+      this.usage;
+    const costLabel =
+      viaChatGptSubscription === true && cost === 0
+        ? 'Free'
+        : `$${cost.toFixed(3)}`;
+    return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, ${costLabel}`;
   }
 }

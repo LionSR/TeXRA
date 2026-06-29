@@ -32,6 +32,10 @@ import { formatFollowUpInstruction } from '@tools/subagentResults';
 import { subagentDeliveryRegistry } from '@tools/subagentDeliveryState';
 import { defineTool } from '@tools/core/define';
 
+// Local imports - utils
+import { WorkspaceFS } from '@utils/files';
+import { isNonEmptyString } from '@utils/core/stringCore';
+
 // Local imports - delegation
 import {
   proposeAndExecute,
@@ -47,10 +51,6 @@ import {
   WorkflowAgentInputSchema,
   type WorkflowAgentInput,
 } from './delegation/inputFields';
-
-// Local imports - utils
-import { WorkspaceFS } from '@utils/files';
-import { isNonEmptyString } from '@utils/core/stringCore';
 
 export { rejectOversizedBibAttachments } from './delegation/inputFields';
 export type { WorkflowAgentInput };
@@ -101,6 +101,7 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
     const model = await resolveAvailableDelegationModel({
       requestedModel: input.model,
       parentModel: ctx.model,
+      agentCategory: AgentCategory.Workflow,
     });
 
     // Validate all file paths exist (parallel for performance)
@@ -240,6 +241,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
     const model = await resolveAvailableDelegationModel({
       requestedModel: input.model,
       parentModel: ctx.model,
+      agentCategory: AgentCategory.ToolUse,
     });
 
     // Construct tool-use proposal (no file fields)

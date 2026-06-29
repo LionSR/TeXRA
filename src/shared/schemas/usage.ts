@@ -9,6 +9,7 @@ export const TokenUsageStatsSchema = z.strictObject({
   cacheReadInputTokens: TokenCountSchema.optional(),
   cacheMissInputTokens: TokenCountSchema.optional(),
   cacheCreationInputTokens: TokenCountSchema.optional(),
+  viaChatGptSubscription: z.boolean().optional(),
 });
 
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
@@ -22,6 +23,7 @@ export function emptyUsageStats(): Required<TokenUsageStats> {
     cacheReadInputTokens: 0,
     cacheMissInputTokens: 0,
     cacheCreationInputTokens: 0,
+    viaChatGptSubscription: false,
   };
 }
 
@@ -41,6 +43,8 @@ export function sumUsageStats(
     total.cacheCreationInputTokens =
       (total.cacheCreationInputTokens ?? 0) +
       (usage.cacheCreationInputTokens ?? 0);
+    total.viaChatGptSubscription =
+      total.viaChatGptSubscription || (usage.viaChatGptSubscription ?? false);
   }
   return total;
 }

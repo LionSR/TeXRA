@@ -27,6 +27,7 @@
  */
 import OpenAI from 'openai';
 
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   CODEX_ACCOUNT_ID_HEADER,
   CODEX_BACKEND_BASE_URL,
@@ -36,6 +37,7 @@ import {
   CODEX_ORIGINATOR_HEADER,
   CODEX_SUBSCRIPTION_CONTEXT_WINDOW,
   CodexAuthError,
+  codexBackendModelId,
   codexCoordinator,
   isCodexSubscriptionToolUseOnly,
   isPreferCodexSubscription,
@@ -45,7 +47,6 @@ import * as logger from '@logger/logUtils';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type {
   ResponseCreateParamsBase,
   ResponseUsage,
@@ -109,6 +110,9 @@ export function rewriteCodexRequestBody(
   body: Record<string, unknown>,
 ): Record<string, unknown> {
   const rewritten: Record<string, unknown> = { ...body };
+  if (typeof rewritten.model === 'string') {
+    rewritten.model = codexBackendModelId({ fullName: rewritten.model });
+  }
   delete rewritten.max_output_tokens;
   delete rewritten.background;
   rewritten.store = false;
@@ -241,17 +245,18 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
    * error from {@link resolveAccessToken}.)
    *
    * Also gated on agent category: when {@link isCodexSubscriptionToolUseOnly} is
-   * on (the default), only tool-use agents drive the subscription — workflow
-   * agents fall back to the base handler's API-key / relay path. The Codex
-   * backend has no background mode (which workflow runs lean on) and is less
-   * stable for long runs, so workflows stay on the more robust path until the
-   * subscription backend proves itself. The category is set on the handler at
-   * launch (`AgentLaunchContext.setAgentCategory`), so `isWorkflowMode()` is
-   * authoritative by request time.
+   * on (the default), only handlers explicitly tagged as tool-use drive the
+   * subscription. Workflow and untagged helper handlers fall back to the base
+   * API-key / relay path. The Codex backend has no background mode (which
+   * workflow runs lean on) and is less stable for long runs, so workflows stay
+   * on the more robust path until the subscription backend proves itself. The
+   * category is set on launched agents at activation
+   * (`AgentLaunchContext.setAgentCategory`); helpers that never launch as
+   * agents remain untagged and therefore outside the scoped subscription.
    */
   private usingSubscription(): boolean {
     if (!isPreferCodexSubscription()) return false;
-    if (this.isWorkflowMode() && isCodexSubscriptionToolUseOnly()) return false;
+    if (isCodexSubscriptionToolUseOnly()) return this.isToolUseMode();
     return true;
   }
 
@@ -301,6 +306,10 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   // the fallback to the OpenAI API key the base capabilities are restored.
   public override get supportsTokenCounting(): boolean {
     return this.usingSubscription() ? false : super.supportsTokenCounting;
+  }
+
+  protected override shouldFailWhenFallbackOutputBudgetIsReduced(): boolean {
+    return this.usingSubscription();
   }
 
   public override get supportsManualCompaction(): boolean {

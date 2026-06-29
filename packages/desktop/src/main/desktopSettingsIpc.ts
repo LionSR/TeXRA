@@ -27,6 +27,7 @@ import {
   codexCoordinator,
   getChatGptAuthStatus,
   loginWithLoopback,
+  setCodexSubscriptionToolUseOnly,
   setPreferCodexSubscription,
 } from '@auth/codex';
 import { toErrorMessage } from '@common/errors';
@@ -788,6 +789,26 @@ export function createDesktopSettingsIpc(
     }
   }
 
+  async function setChatGptSubscriptionToolUseOnly(
+    enabled: boolean,
+  ): Promise<void> {
+    try {
+      const update = await setCodexSubscriptionToolUseOnly(enabled);
+      if (update.effective !== enabled) {
+        await options.showInfoMessage?.(
+          `The effective "subscription for tool-use only" setting remains ${update.effective ? 'enabled' : 'disabled'}.`,
+        );
+      }
+    } catch (error) {
+      await options.showErrorMessage?.(
+        `ChatGPT subscription scope update failed: ${toErrorMessage(error)}`,
+      );
+      onError(error);
+    } finally {
+      await refreshAfterChatGptAuthChange();
+    }
+  }
+
   async function updateDesktopCrashReportingEnabled(
     enabled: boolean,
   ): Promise<void> {
@@ -1051,6 +1072,8 @@ export function createDesktopSettingsIpc(
     [SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT]: () => signOutChatGpt(),
     [SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION]: (d) =>
       setChatGptPreferSubscription(d.enabled),
+    [SETTINGS_VIEW_COMMANDS.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY]: (d) =>
+      setChatGptSubscriptionToolUseOnly(d.enabled),
     [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY]: (d) =>
       setProviderKey(d.provider, d.apiKey),
     [SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY]: (d) =>

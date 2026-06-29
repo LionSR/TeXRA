@@ -1,6 +1,7 @@
 // Local imports - model surfaces
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
+import type { AgentCategory } from '@shared/schemas/agent';
 
 import { resolveKnownCliModelId } from './cliConfig';
 import { getCliAuthProvider } from './supabaseAuth';
@@ -31,6 +32,7 @@ export interface CliRunnableModelOptions {
   /** Source category that owns unavailable-model fallback behavior. */
   readonly fallbackSource: CliModelSelectionSource;
   readonly apiMode?: CliApiMode;
+  readonly agentCategory?: AgentCategory;
   /** Optional preloaded list, used by launchers that already fetched access. */
   readonly accessList?: readonly CliModelAccess[];
   readonly noAvailableModelsMessage?: string;
@@ -63,6 +65,19 @@ const CLI_MODEL_FALLBACK_MODE_BY_SOURCE = {
 export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
   readonly models?: readonly string[];
+  readonly agentCategory?: AgentCategory;
+}
+
+function computeCliModelOptionsData(
+  models: readonly string[] | undefined,
+  agentCategory: AgentCategory | undefined,
+): Promise<ModelOptionData[]> {
+  if (agentCategory === undefined) {
+    return models === undefined
+      ? computeModelOptionsData()
+      : computeModelOptionsData(models);
+  }
+  return computeModelOptionsData(models, undefined, { agentCategory });
 }
 
 export interface CliModelListOptions {
@@ -366,7 +381,10 @@ async function includedAccessRequiresLogin(
 export async function getCliModelAccessList(
   options: CliModelAccessListOptions = {},
 ): Promise<CliModelAccess[]> {
-  const models = await computeModelOptionsData(options.models);
+  const models = await computeCliModelOptionsData(
+    options.models,
+    options.agentCategory,
+  );
   const access = models.map((model) =>
     toCliModelAccess(model, options.apiMode),
   );
@@ -518,7 +536,10 @@ export async function resolveCliModelAccessEntry(
 ): Promise<CliModelAccess | undefined> {
   const models =
     options.accessList ??
-    (await getCliModelAccessList({ apiMode: options.apiMode }));
+    (await getCliModelAccessList({
+      apiMode: options.apiMode,
+      agentCategory: options.agentCategory,
+    }));
   const trimmed = model.trim();
   const listedEntry = findCliModelAccessEntry(models, trimmed);
   if (listedEntry || trimmed.length === 0) return listedEntry;
@@ -526,7 +547,9 @@ export async function resolveCliModelAccessEntry(
   const hiddenModelId = resolveKnownCliModelId(trimmed);
   if (hiddenModelId == null) return undefined;
 
-  const hiddenModelOption = (await computeModelOptionsData([hiddenModelId]))[0];
+  const hiddenModelOption = (
+    await computeCliModelOptionsData([hiddenModelId], options.agentCategory)
+  )[0];
   if (!hiddenModelOption) {
     throw new Error(
       `Model "${hiddenModelId}" is configured but has no option data.`,
@@ -608,10 +631,14 @@ export async function resolveCliRunnableModel(
 ): Promise<CliRunnableModelResolution> {
   const models =
     options.accessList ??
-    (await getCliModelAccessList({ apiMode: options.apiMode }));
+    (await getCliModelAccessList({
+      apiMode: options.apiMode,
+      agentCategory: options.agentCategory,
+    }));
   const trimmed = model.trim();
   const modelEntry = await resolveCliModelAccessEntry(trimmed, {
     apiMode: options.apiMode,
+    agentCategory: options.agentCategory,
     accessList: models,
   });
 
