@@ -12,6 +12,7 @@ Central home for all TeXRA Product Requirement Documents, plans, and design audi
 | [PRD: Runtime Gold-Standard - The SDK Core](./2026-06-29-prd-runtime-gold-standard.md)                                                   | 2026-06-29 | 2026-06-29 |
 | [PRD: The Agent-SDK Boundary - Publishing the Runtime](./2026-06-29-prd-agent-sdk-boundary.md)                                           | 2026-06-29 | 2026-06-29 |
 | [Architecture Map: The Couplings Now](./cross-host-consolidation/ARCHITECTURE-MAP.md)                                                    | 2026-06-29 | 2026-06-29 |
+| [SDK-1a: Alias-Closure - the @texra/core no-leak gate](./cross-host-consolidation/SDK-1a-alias-closure.md)                               | 2026-06-29 | 2026-06-29 |
 | [PRD: Industry-Tested Patterns for the Runtime/Host Boundary](./2026-06-28-prd-architecture-patterns.md)                                 | 2026-06-28 | 2026-06-29 |
 | [Cross-Host Consolidation: Overview](./cross-host-consolidation/00-overview.md)                                                          | 2026-06-28 | 2026-06-29 |
 | [PRD: Runtime/Host Decoupling by Deep Modules](./2026-06-27-prd-runtime-host-decoupling.md)                                              | 2026-06-27 | 2026-06-29 |

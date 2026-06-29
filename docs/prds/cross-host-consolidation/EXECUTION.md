@@ -42,12 +42,12 @@ merges to main, rebase the remaining stack onto main.
 - [ ] **GS-0 retry-clamp** - broaden `errors.ts` transport-error retryability +
       honor `Retry-After`/jitter, then clamp every model-handler SDK to
       `attempts:1`. Zero structural change; verifiable by attempt count; ship first.
-- [ ] **SDK-1a alias-closure** - author the ts-morph alias-leak lint rule and
-      reconcile the 25-of-45 `Runtime*` exports: **delete-wholesale** the shims the
-      gold-standard removes (`runCoordinatorCommands`, `executionQueries`,
-      `streamControl`, `modelSwitch`) vs **convert-to-projection** the ones the SDK
-      surface publishes; re-type `RunAgentOptions.onBeforeWaiting`. THE no-leak
-      gate; blocks the SDK Tier-2 freeze. (See the dedicated reconciliation pass.)
+- [x] **SDK-1a gate** - the alias-leak lint rule `scripts/check-alias-leaks.mjs`
+      (+ `npm run check:alias-leaks`) is **landed** (29 leak-lines today). THE
+      no-leak gate; blocks the SDK Tier-2 freeze.
+- [ ] **SDK-1a conversions** - drive `check:alias-leaks` to zero (27 CONVERT +
+      2 RE-TYPE; the 17 delete-wholesale exports are GS-3's), then wire the gate into
+      `ci.yml`. Full disposition + patterns in `SDK-1a-alias-closure.md`.
 - [ ] **SDK-1b import-direction** - lint rule forbidding deep `@agent/runtime/*`
       in the UIs' run-driver tier + make the 3 UIs import `@texra/core` (today: zero
       do).
