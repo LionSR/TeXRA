@@ -102,7 +102,7 @@ export class ReadConfigTool extends defineTool({
   name: 'read_config',
   description: `Read the effective value of a TeXRA configuration key.
 
-Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls — read first, explain, then propose a change with \`update_config\`. For settings outside this tool's reach (which is most of them), open the settings UI via \`invoke_command\` with \`texra.openSettings\` or \`texra.showSettingsView\`.`,
+Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls — read first, explain, then propose a change with \`update_config\`. For settings outside this tool's reach (which is most of them), open the settings UI via \`invoke_command\` with \`texra.openSettings\` or \`texra.showDashboard\`.`,
   schema: ReadConfigInputSchema,
 }) {
   protected async execute(input: ReadConfigInput): Promise<ToolResult> {
@@ -145,7 +145,7 @@ Use this AFTER calling \`read_config\` and explaining to the user what the setti
 Allowlisted keys:
 ${describeAllowlist()}
 
-Anything outside this list must be changed through the settings UI — invoke \`texra.openSettings\` (native VS Code Settings, filtered to texra.*) or \`texra.showSettingsView\` (TeXRA dashboard).`,
+Anything outside this list must be changed through the settings UI — invoke \`texra.openSettings\` (native VS Code Settings, filtered to texra.*) or \`texra.showDashboard\` (TeXRA dashboard).`,
   schema: UpdateConfigInputSchema,
 }) {
   protected async execute(input: UpdateConfigInput): Promise<ToolResult> {
