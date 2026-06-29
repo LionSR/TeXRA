@@ -1361,7 +1361,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       type: 'function_result',
       call_id: call.callId,
       name: call.name,
-      ...(result.isError ? { is_error: true } : {}),
+      ...(result.status === 'error' ? { is_error: true } : {}),
       result: resultContent,
     } satisfies FunctionResultStep;
   }

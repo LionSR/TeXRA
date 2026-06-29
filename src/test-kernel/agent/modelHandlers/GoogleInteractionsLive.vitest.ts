@@ -290,7 +290,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
     const followUp = await handler.createToolUseFollowUpMessages(
       client as never,
       toolCalls[0],
-      { output: 'Sunny, 22C' },
+      { status: 'executed', output: 'Sunny, 22C' },
       [],
       fakeWorkspace(),
     );
