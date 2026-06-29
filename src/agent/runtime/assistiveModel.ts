@@ -9,7 +9,10 @@
  * never reach `runAgent`, so a delegated subagent keeps its orchestrator's model.
  */
 
-import { getAgent } from '@agent/index';
+import { MODEL_CONFIGS } from 'llm-zoo';
+
+import { createKey, getAgent } from '@agent/index';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
 
@@ -17,18 +20,35 @@ import { getHelperModelName } from './helperModelName';
 
 /**
  * Swap `config`'s model for the configured helper model when the agent is
- * assistive and that helper model is available in the active API mode; return
- * `config` unchanged otherwise (a non-assistive agent, an unloaded registry, or
- * an unavailable helper model all leave the selected model in place).
+ * assistive and that helper model is both usable and tool-capable; return
+ * `config` unchanged otherwise so the selected model stays in place.
+ *
+ * Resolves the agent the same way {@link executeAgent} will (honoring a pinned
+ * `agentSource`) so detection inspects the entry that actually launches, not a
+ * same-name agent from another source.
  */
 export async function preferHelperModelForAssistive(
   config: AgentConfig,
 ): Promise<AgentConfig> {
-  const entry = getAgent(config.agent, config.agentCategory);
+  const entry =
+    (config.agentSource
+      ? getAgent(createKey(config.agentSource, config.agent))
+      : undefined) ?? getAgent(config.agent, config.agentCategory);
   if (!entry?.assistive) return config;
 
   const helperModel = getHelperModelName();
   if (helperModel === config.model) return config;
+
+  // A tool-use assistive agent (latexFixer, latexDiff) needs its bash/read_file/
+  // edit_file tools; the tool-use flow strips every tool from a model that can't
+  // call functions, so keep the selected model rather than switch to a helper
+  // model that would leave the agent unable to do its repair/diff work.
+  if (
+    entry.category === AgentCategory.ToolUse &&
+    MODEL_CONFIGS[helperModel]?.capabilities.supportsFunctionCalling === false
+  ) {
+    return config;
+  }
 
   const unavailable = await getModelUnavailableReason(helperModel);
   if (unavailable) return config;
