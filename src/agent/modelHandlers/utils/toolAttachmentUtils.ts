@@ -56,6 +56,15 @@ const ToolResultPayloadSharedFields = {
   attachmentSummary: z.string().optional(),
 };
 
+const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
+  'output',
+  'summary',
+  'lineChanges',
+  'edits',
+  'files',
+  'editedFiles',
+]);
+
 /**
  * Schema for strongly-typed tool result payloads sent to model handlers.
  * Uses a discriminated union on `status` so callers can narrow on
@@ -178,7 +187,7 @@ export function extractToolAttachments(
     if (status === 'executed' && key === 'error') {
       continue;
     }
-    if (status === 'error' && (key === 'output' || key === 'summary')) {
+    if (status === 'error' && ERROR_PAYLOAD_STRIPPED_KEYS.has(key)) {
       continue;
     }
     // Simplify diagnostics: keep validation error details, remove verbose stack traces
@@ -197,7 +206,7 @@ export function extractToolAttachments(
   }
 
   // Strip binary data from file references, keep metadata
-  if (attachments.length > 0) {
+  if (status === 'executed' && attachments.length > 0) {
     sanitizedResult.files = attachments.map(
       ({ base64Data, bytes, ...rest }): FileReference => ({
         path: rest.path,

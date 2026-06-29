@@ -174,4 +174,23 @@ describe('extractToolAttachments', () => {
     );
     assert.equal(Object.hasOwn(sanitizedResult, 'summary'), false);
   });
+
+  it('keeps extracted attachments out of error payloads', () => {
+    const { attachments, sanitizedResult } = extractToolAttachments({
+      isError: true,
+      error: 'The operation failed.',
+      files: [
+        {
+          path: 'plot.png',
+          mimeType: 'image/png',
+          base64Data: 'aW1hZ2U=',
+        },
+      ],
+    });
+
+    assert.equal(attachments.length, 1);
+    assert.equal(sanitizedResult.status, 'error');
+    assert.equal(sanitizedResult.error, 'The operation failed.');
+    assert.equal(Object.hasOwn(sanitizedResult, 'files'), false);
+  });
 });
