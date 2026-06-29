@@ -112,8 +112,8 @@ Fable 5  included access`; personal mode prints `api key set` /
 - `texra tools list` → SIX columns `ID NAME CATEGORY ENABLED DETECTED NOTE`,
   booleans as `yes`/`no`/`-`; subcommands `show|status|enable|disable|
 install [--run]|auth`
-- `texra multi-agent list|show|inspect|run` — teams: Lean Project, Physicist,
-  Mathematician, Computer Scientist, Software Engineer; inspect shows lead +
+- `texra multi-agent list|show|run` — teams: Lean Project, Physicist,
+  Mathematician, Computer Scientist, Software Engineer; show resolves lead +
   specialists
 - `texra doctor` → grouped PASS/WARN/FAIL rows (Node, dirs, auth, model
   access, LaTeX toolchain: latexmk, pdflatex, latexdiff, latexindent…)

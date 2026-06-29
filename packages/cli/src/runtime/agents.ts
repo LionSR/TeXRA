@@ -25,7 +25,7 @@ export type CliAgentLaunchMode = 'chat' | 'run' | 'agentsRun';
 const AGENT_LOOKUP_HINT =
   'Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.';
 const MULTI_AGENT_PRESET_LOOKUP_HINT =
-  'Use `texra multi-agent list` for available team presets, then run `texra multi-agent inspect <preset>` to check a team before launch.';
+  'Use `texra multi-agent list` for available team presets, then run `texra multi-agent show <preset>` to check a team before launch.';
 
 const CLI_AGENT_LAUNCH_TARGETS = {
   chat: {
