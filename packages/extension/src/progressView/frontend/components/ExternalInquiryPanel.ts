@@ -272,7 +272,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   private renderHeader(data: ExternalInquiryPermission): TemplateResult {
     return html`
       <div class="external-inquiry-request__mode-badge">
-        ${data.threadId ? 'follow-up' : 'new question'}
+        ${data.mode === 'followUp' ? 'follow-up' : 'new question'}
       </div>
     `;
   }
