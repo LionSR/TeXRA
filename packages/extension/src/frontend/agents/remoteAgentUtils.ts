@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 
 import { createKey, getAgent, type AgentSource } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { toErrorMessage } from '@common/errors';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -79,8 +80,7 @@ export async function selectAgentInMainView(
       message: `Agent "${agentName}" selected successfully`,
     };
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = toErrorMessage(error);
     logger.error(CHANNEL, `Failed to select agent: ${errorMessage}`);
     return handleFallback(
       agentName,

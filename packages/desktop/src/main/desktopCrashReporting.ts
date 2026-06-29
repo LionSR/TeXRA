@@ -1,5 +1,6 @@
 import escapeRegExp from 'escape-string-regexp';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { unique } from '@utils/core/typeGuards';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { StateStore } from '@platform/interfaces/state';
 
@@ -39,7 +40,7 @@ function pathVariants(path: string): string[] {
   if (!trimmed) return [];
   const forward = trimmed.replaceAll('\\', '/');
   const backward = forward.replaceAll('/', '\\');
-  return [...new Set([trimmed, forward, backward])];
+  return unique([trimmed, forward, backward]);
 }
 
 function buildPathScrubbers(paths: readonly (string | undefined)[]): RegExp[] {

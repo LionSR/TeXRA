@@ -9,7 +9,7 @@ import {
   toDisplayPath,
 } from '@tools/memory/memoryUtils';
 import { filterNotNullish } from '@utils/core';
-import { truncateSummary } from '@utils/text/stringUtils';
+import { formatLocaleTimestamp, truncateSummary } from '@utils/text/stringUtils';
 
 export const CLI_MEMORY_LIST_LIMIT = 50;
 const MEMORY_DESCRIPTION_MAX = 72;
@@ -22,7 +22,7 @@ function parseIsoTimestamp(value: string): number | undefined {
 function formatModifiedDate(value: string): string {
   const timestamp = parseIsoTimestamp(value);
   if (timestamp == null) return 'modified: unknown';
-  return `modified: ${new Date(timestamp).toLocaleString()}`;
+  return `modified: ${formatLocaleTimestamp(timestamp)}`;
 }
 
 export function cliMemoryItemDescription(item: MemoryViewItem): string {
