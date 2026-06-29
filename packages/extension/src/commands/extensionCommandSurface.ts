@@ -111,80 +111,86 @@ const CHATGPT_SIGN_IN_CHANNEL = 'ChatGptSubscription';
 /**
  * Subset of `CommandId` whose registration is now driven by the shared
  * `dispatchCommandFromRegistry` helper. Any new entry must also exist in
- * `commandCatalog` so the shared catalog stays the source of truth.
+ * `commandCatalog` so the shared catalog stays the source of truth. Hidden
+ * compatibility aliases are the exception: they stay callable by command id
+ * but are intentionally absent from the public command catalog and manifest.
  *
  * The desktop registry (`packages/desktop/src/desktopCommandSurface.ts`)
  * dispatches the same IDs through the same helper — this is deliberate
  * so adding a new view-routing command is a single registry entry per
  * host, not a parallel `vscode.commands.registerCommand` call site.
  */
-export type ExtensionRegistryCommandId = Extract<
-  CommandId,
-  | 'texra.showDashboard'
-  | 'texra.showMemory'
-  | 'texra.showAgentHistory'
-  | 'texra.showModels'
-  | 'texra.showAgents'
-  | 'texra.showTools'
-  | 'texra.showMultiAgent'
-  | 'texra.showGitSettings'
-  | 'texra.openSettings'
-  | 'texra.mainView.reset'
-  | 'texra.cleanOutput'
-  | 'texra.cleanBuild'
-  | 'texra.indentTeX'
-  | 'texra.auth.signIn'
-  | 'texra.auth.chatgpt.signIn'
-  | 'texra.auth.signOut'
-  | 'texra.auth.viewProfile'
-  | 'texra.runSetupAssistant'
-  | 'texra.openGettingStarted'
-  | 'texra.createSampleProject'
-  | 'texra.downloadArXivSource'
-  | 'texra.testConnection'
-  | 'texra.testAgentLoading'
-  | 'texra.loadSpecificAgent'
-  | 'texra.openProgressViewInTab'
-  | 'texra.openDoc'
-  | 'texra.stopAgent'
-  | 'texra.compactResponse'
-  // Batch 2 (#3775) — no-arg host-context commands. These read from
-  // the active editor or fixed UI surfaces; their args are not
-  // serializable, so they ride the legacy no-arg handler shape.
-  | 'texra.parseXml'
-  | 'texra.parseYaml'
-  | 'texra.testTextEditor'
-  | 'texra.indentCurrentTeX'
-  | 'texra.applyReplacements'
-  | 'texra.fixCompilation'
-  | 'texra.getTeXCount'
-  | 'texra.countPdfPages'
-  | 'texra.showLinterMessages'
-  | 'texra.countLinterMessages'
-  | 'texra.extractFigurePaths'
-  // Batch 3 (#3781) — additional no-arg commands. Each handler runs
-  // its own user prompt internally (file picker, input box) so the
-  // VS Code call site doesn't pass arguments. The `cloneOverleafProject`
-  // entry needs `vscode.ExtensionContext` for `secrets` access; that's
-  // captured as a closure inside the action factory below.
-  | 'texra.encodeImageToBase64'
-  | 'texra.convertPdfToImages'
-  | 'texra.extractTikzFigures'
-  | 'texra.compileTikzFigures'
-  | 'texra.cloneOverleafProject'
-  // Batch 4 (#3781) — settings/api/agent surface follow-ups. The
-  // typed handlers carry a Zod schema for their argument so the dispatcher
-  // can parse the optional provider / category / inPlace / config flag
-  // before the handler runs. The remaining no-arg entries (toggleView,
-  // showImportOptions, removeApiKey) drive interactive UI flows internally.
-  | 'texra.removeApiKey'
-  | 'texra.showImportOptions'
-  | 'texra.toggleView'
-  | 'texra.showProgressView'
-  | 'texra.setApiKey'
-  | 'texra.createAgentWithAI'
-  | 'texra.execute'
->;
+type HiddenExtensionRegistryCommandId = 'texra.showSettingsView';
+
+export type ExtensionRegistryCommandId =
+  | Extract<
+      CommandId,
+      | 'texra.showDashboard'
+      | 'texra.showMemory'
+      | 'texra.showAgentHistory'
+      | 'texra.showModels'
+      | 'texra.showAgents'
+      | 'texra.showTools'
+      | 'texra.showMultiAgent'
+      | 'texra.showGitSettings'
+      | 'texra.openSettings'
+      | 'texra.mainView.reset'
+      | 'texra.cleanOutput'
+      | 'texra.cleanBuild'
+      | 'texra.indentTeX'
+      | 'texra.auth.signIn'
+      | 'texra.auth.chatgpt.signIn'
+      | 'texra.auth.signOut'
+      | 'texra.auth.viewProfile'
+      | 'texra.runSetupAssistant'
+      | 'texra.openGettingStarted'
+      | 'texra.createSampleProject'
+      | 'texra.downloadArXivSource'
+      | 'texra.testConnection'
+      | 'texra.testAgentLoading'
+      | 'texra.loadSpecificAgent'
+      | 'texra.openProgressViewInTab'
+      | 'texra.openDoc'
+      | 'texra.stopAgent'
+      | 'texra.compactResponse'
+      // Batch 2 (#3775) — no-arg host-context commands. These read from
+      // the active editor or fixed UI surfaces; their args are not
+      // serializable, so they ride the legacy no-arg handler shape.
+      | 'texra.parseXml'
+      | 'texra.parseYaml'
+      | 'texra.testTextEditor'
+      | 'texra.indentCurrentTeX'
+      | 'texra.applyReplacements'
+      | 'texra.fixCompilation'
+      | 'texra.getTeXCount'
+      | 'texra.countPdfPages'
+      | 'texra.showLinterMessages'
+      | 'texra.countLinterMessages'
+      | 'texra.extractFigurePaths'
+      // Batch 3 (#3781) — additional no-arg commands. Each handler runs
+      // its own user prompt internally (file picker, input box) so the
+      // VS Code call site doesn't pass arguments. The `cloneOverleafProject`
+      // entry needs `vscode.ExtensionContext` for `secrets` access; that's
+      // captured as a closure inside the action factory below.
+      | 'texra.encodeImageToBase64'
+      | 'texra.convertPdfToImages'
+      | 'texra.extractTikzFigures'
+      | 'texra.compileTikzFigures'
+      | 'texra.cloneOverleafProject'
+      // Batch 4 (#3781) — settings/api/agent surface follow-ups. The
+      // typed handlers carry a Zod schema for their argument so the dispatcher
+      // can parse the optional provider / category / inPlace / config flag
+      // before the handler runs. The remaining no-arg entries (toggleView,
+      // showImportOptions, removeApiKey) drive interactive UI flows internally.
+      | 'texra.removeApiKey'
+      | 'texra.showImportOptions'
+      | 'texra.toggleView'
+      | 'texra.showProgressView'
+      | 'texra.setApiKey'
+      | 'texra.createAgentWithAI'
+      | 'texra.execute'
+    >
+  | HiddenExtensionRegistryCommandId;
 
 /*
  * Duplicate-registration audit (#3787 follow-up):
@@ -352,6 +358,7 @@ export function createExtensionCommandActions(
 
 const EXTENSION_COMMAND_HANDLERS = {
   'texra.showDashboard': (actions) => awaitTrue(actions.showSettings()),
+  'texra.showSettingsView': (actions) => awaitTrue(actions.showSettings()),
   'texra.showMemory': (actions) =>
     awaitTrue(actions.showSettings(SETTINGS_TAB.MEMORY)),
   'texra.showAgentHistory': (actions) =>
