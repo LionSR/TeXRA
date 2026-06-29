@@ -55,7 +55,7 @@ import {
   normalizePlatform,
 } from '@shared/constants/latex';
 import type { LatexConfigField } from '@shared/constants/latex';
-import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
+import { AgentCategory, type AgentSource } from '@shared/schemas/agent';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
@@ -316,11 +316,22 @@ export function createDesktopSettingsIpc(
   }
 
   async function postMainModelOptionsData(): Promise<void> {
+    const visibleModels = modelSelectionController.getVisibleModels();
+    const [workflowModelOptions, toolUseModelOptions] = await Promise.all([
+      computeModelOptionsData(visibleModels, undefined, {
+        agentCategory: AgentCategory.Workflow,
+      }),
+      computeModelOptionsData(visibleModels, undefined, {
+        agentCategory: AgentCategory.ToolUse,
+      }),
+    ]);
     options.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsData: await computeModelOptionsData(
-        modelSelectionController.getVisibleModels(),
-      ),
+      optionsData: workflowModelOptions,
+      optionsDataByCategory: {
+        workflow: workflowModelOptions,
+        toolUse: toolUseModelOptions,
+      },
     });
   }
 

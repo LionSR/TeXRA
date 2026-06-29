@@ -40,6 +40,10 @@ describe('MainViewStartupController', () => {
       getConfig: (_key, defaultValue) => defaultValue,
       loadOptions: async () => ({
         modelOptions: [{ value: 'gemini', label: 'Gemini' }],
+        modelOptionsByCategory: {
+          workflow: [{ value: 'gemini', label: 'Gemini' }],
+          toolUse: [{ value: 'gpt', label: 'GPT' }],
+        },
         agentOptions: {
           workflow: [{ value: 'correct', label: 'Correct' }],
           toolUse: [{ value: 'orchestrator', label: 'Orchestrator' }],
@@ -52,6 +56,10 @@ describe('MainViewStartupController', () => {
       {
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
         optionsData: [{ value: 'gemini', label: 'Gemini' }],
+        optionsDataByCategory: {
+          workflow: [{ value: 'gemini', label: 'Gemini' }],
+          toolUse: [{ value: 'gpt', label: 'GPT' }],
+        },
       },
       {
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
