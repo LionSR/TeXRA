@@ -19,6 +19,7 @@ describe('stream data usage parsing', () => {
       cacheReadInputTokens: 0,
       cacheMissInputTokens: 0,
       cacheCreationInputTokens: 0,
+      viaChatGptSubscription: false,
     });
   });
 
