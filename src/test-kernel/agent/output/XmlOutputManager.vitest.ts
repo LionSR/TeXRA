@@ -48,7 +48,7 @@ function createXmlManager(documentTag = 'document'): XmlOutputManager {
     {
       inputFiles: ['paper.tex'],
     } as AgentConfig,
-    { debug: vi.fn() } as unknown as AgentTrace,
+    { debug: vi.fn(), info: vi.fn() } as unknown as AgentTrace,
     new TaskRunFileService(),
   );
 }
@@ -109,6 +109,62 @@ describe('XmlOutputManager', () => {
 
     await expect(AbsoluteFS.read('/tmp/run/sections/main.tex')).resolves.toBe(
       'Nested section.\n',
+    );
+  });
+
+  it('recovers documents from percent filename headers as a last-resort fallback', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        'Here is the output:',
+        '% main.tex',
+        '\\section{Recovered}',
+        '% sections/appendix.tex',
+        'Appendix text.',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'main.tex',
+      'sections/appendix.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      '\\section{Recovered}\n',
+    );
+    await expect(
+      AbsoluteFS.read('/tmp/run/sections/appendix.tex'),
+    ).resolves.toBe('Appendix text.\n');
+  });
+
+  it('makes duplicate percent filename headers unique before writing', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      ['% chunk.tex', 'First.', '% chunk.tex', 'Second.'].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'chunk.tex',
+      'chunk-2.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/chunk.tex')).resolves.toBe(
+      'First.\n',
+    );
+    await expect(AbsoluteFS.read('/tmp/run/chunk-2.tex')).resolves.toBe(
+      'Second.\n',
     );
   });
 

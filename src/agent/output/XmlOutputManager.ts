@@ -63,6 +63,9 @@ const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
   latex: 'from \\documentclass block',
 };
 
+const PERCENT_FILENAME_HEADER_REGEX =
+  /^%\s+([A-Za-z0-9][A-Za-z0-9._/-]*\.[A-Za-z0-9]+)\s*$/;
+
 export class XmlOutputManager {
   constructor(
     private readonly agentSetting: AgentSetting,
@@ -130,13 +133,72 @@ export class XmlOutputManager {
     });
   }
 
+  private makeUniquePercentHeaderName(
+    source: string,
+    seen: Map<string, number>,
+  ): string {
+    const normalized = source.replaceAll('\\', '/');
+    const count = (seen.get(normalized) ?? 0) + 1;
+    seen.set(normalized, count);
+    if (count === 1) return normalized;
+
+    const parsed = path.posix.parse(normalized);
+    const fileName = `${parsed.name}-${count}${parsed.ext}`;
+    return parsed.dir ? path.posix.join(parsed.dir, fileName) : fileName;
+  }
+
+  private extractPercentHeaderDocuments(
+    outputContent: string,
+  ): Array<{ content: string; name: string }> | null {
+    const documents: Array<{ content: string; name: string }> = [];
+    const seenNames = new Map<string, number>();
+    let currentName: string | null = null;
+    let currentLines: string[] = [];
+
+    const flushCurrent = () => {
+      if (!currentName) return;
+      const content = currentLines.join('\n').trim();
+      if (content) {
+        documents.push({ name: currentName, content });
+      }
+      currentLines = [];
+    };
+
+    const lines = outputContent
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .split('\n');
+    for (const line of lines) {
+      const match = PERCENT_FILENAME_HEADER_REGEX.exec(line.trim());
+      if (match) {
+        flushCurrent();
+        currentName = this.makeUniquePercentHeaderName(match[1], seenNames);
+        continue;
+      }
+
+      if (currentName) {
+        currentLines.push(line);
+      }
+    }
+    flushCurrent();
+
+    if (documents.length === 0) return null;
+
+    logInternal(
+      this.logger,
+      `Recovered ${this.agentSetting.documentTag} from % filename headers (${formatResultCount(documents.length, 'document')})`,
+    );
+    return documents;
+  }
+
   async splitScratchpadMultipleOutputXml(
     outputLocation: FileLocation,
     documentTag: string,
     round: number,
     thinkingTag: string = 'scratchpad',
   ): Promise<OutputFileInfo[]> {
-    let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
+    const rawOutputContent = await AbsoluteFS.read(outputLocation.absolutePath);
+    let outputContent = rawOutputContent;
     const expectedDocumentCount = this.countDocumentTags(outputContent);
 
     const tagsToWrap = [thinkingTag, 'document'];
@@ -178,6 +240,8 @@ export class XmlOutputManager {
         preferredName,
       );
     }
+
+    documents ??= this.extractPercentHeaderDocuments(rawOutputContent);
 
     if (!documents) {
       this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);
