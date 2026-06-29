@@ -49,6 +49,8 @@ export function sumUsageStats(
     allRoundsViaChatGptSubscription =
       allRoundsViaChatGptSubscription && usage.viaChatGptSubscription === true;
   }
+  // Only true when every accumulated round used the subscription; any
+  // API-key or relay round makes the total mixed rather than free.
   total.viaChatGptSubscription = sawUsage && allRoundsViaChatGptSubscription;
   return total;
 }

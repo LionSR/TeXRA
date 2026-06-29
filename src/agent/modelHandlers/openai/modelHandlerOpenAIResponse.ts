@@ -1216,8 +1216,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       contextWindow,
       buffer,
     );
+    const validationAdjustedMaxTokens = Math.min(
+      validation.adjustedMaxTokens,
+      maxOutputTokens,
+    );
     const capped = Math.min(
-      clamp(validation.adjustedMaxTokens, 0, maxOutputTokens),
+      clamp(validationAdjustedMaxTokens, 0, maxOutputTokens),
       clamp(bufferedMaxTokens, 0, maxOutputTokens),
     );
     if (capped === maxOutputTokens) return maxOutputTokens;
