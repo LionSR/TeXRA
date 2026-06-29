@@ -168,6 +168,72 @@ describe('XmlOutputManager', () => {
     );
   });
 
+  it('avoids percent filename suffix collisions with explicit headers', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '% chunk.tex',
+        'First.',
+        '% chunk-2.tex',
+        'Explicit suffix.',
+        '% chunk.tex',
+        'Second duplicate.',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'chunk.tex',
+      'chunk-2.tex',
+      'chunk-3.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/chunk.tex')).resolves.toBe(
+      'First.\n',
+    );
+    await expect(AbsoluteFS.read('/tmp/run/chunk-2.tex')).resolves.toBe(
+      'Explicit suffix.\n',
+    );
+    await expect(AbsoluteFS.read('/tmp/run/chunk-3.tex')).resolves.toBe(
+      'Second duplicate.\n',
+    );
+  });
+
+  it('deduplicates percent filename headers after safe-path normalization', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '% sections/main.tex',
+        'Plain path.',
+        '% sections/./main.tex',
+        'Equivalent safe path.',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'sections/main.tex',
+      'sections/main-2.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/sections/main.tex')).resolves.toBe(
+      'Plain path.\n',
+    );
+    await expect(AbsoluteFS.read('/tmp/run/sections/main-2.tex')).resolves.toBe(
+      'Equivalent safe path.\n',
+    );
+  });
+
   it('does not auto-format extracted workflow outputs', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',

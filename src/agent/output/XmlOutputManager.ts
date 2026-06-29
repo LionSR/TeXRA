@@ -10,7 +10,10 @@ import {
 } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentSetting } from '@agent/core/definition/AgentDataclass';
-import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
+import {
+  getExtractedDocOutputFileName,
+  getSafeDocumentRelativePath,
+} from '@agent/utils/outputFileUtils';
 import { toErrorMessage } from '@common/errors';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
@@ -135,23 +138,34 @@ export class XmlOutputManager {
 
   private makeUniquePercentHeaderName(
     source: string,
-    seen: Map<string, number>,
+    reservedNames: Set<string>,
   ): string {
     const normalized = source.replaceAll('\\', '/');
-    const count = (seen.get(normalized) ?? 0) + 1;
-    seen.set(normalized, count);
-    if (count === 1) return normalized;
+    const safeName = getSafeDocumentRelativePath(normalized).replaceAll(
+      '\\',
+      '/',
+    );
+    let candidate = safeName;
+    let suffix = 2;
 
-    const parsed = path.posix.parse(normalized);
-    const fileName = `${parsed.name}-${count}${parsed.ext}`;
-    return parsed.dir ? path.posix.join(parsed.dir, fileName) : fileName;
+    while (reservedNames.has(candidate)) {
+      const parsed = path.posix.parse(safeName);
+      candidate = path.posix.join(
+        parsed.dir,
+        `${parsed.name}-${suffix}${parsed.ext}`,
+      );
+      suffix += 1;
+    }
+
+    reservedNames.add(candidate);
+    return candidate;
   }
 
   private extractPercentHeaderDocuments(
     outputContent: string,
   ): Array<{ content: string; name: string }> | null {
     const documents: Array<{ content: string; name: string }> = [];
-    const seenNames = new Map<string, number>();
+    const reservedNames = new Set<string>();
     let currentName: string | null = null;
     let currentLines: string[] = [];
 
@@ -172,7 +186,7 @@ export class XmlOutputManager {
       const match = PERCENT_FILENAME_HEADER_REGEX.exec(line.trim());
       if (match) {
         flushCurrent();
-        currentName = this.makeUniquePercentHeaderName(match[1], seenNames);
+        currentName = this.makeUniquePercentHeaderName(match[1], reservedNames);
         continue;
       }
 
