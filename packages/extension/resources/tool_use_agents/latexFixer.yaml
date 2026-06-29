@@ -3,8 +3,10 @@ description: Diagnoses and fixes LaTeX compilation errors, warnings, and bad box
 
 settings:
   agentCategory: toolUse
-  # Support/repair helper: on a direct (non-orchestrator) launch it prefers the
-  # configured helper model over the currently selected model.
+  # Support/repair helper: the "fix LaTeX" actions (Fix-Compilation command and
+  # the progress-view compile fixer) run it on the configured helper model
+  # instead of the selected one; direct main-view, CLI, and orchestrator launches
+  # keep their chosen model.
   assistive: true
   tools:
     - bash

@@ -35,11 +35,11 @@ export const AgentSettingBaseSchema = z.strictObject({
   internal: z.boolean().optional(),
   /**
    * Registry metadata: marks a support/helper agent (e.g. latexFixer). When an
-   * assistive agent is launched directly by the user — the Fix-Compilation
-   * command, a progress-view follow-up, or the webview Run button — it prefers
-   * the configured helper model over the currently selected model, since it
-   * performs lightweight auxiliary work. Orchestrator-delegated launches are
-   * unaffected and keep the model their orchestrator chose.
+   * assistive agent is launched by the dedicated "fix LaTeX" actions — the
+   * Fix-Compilation command or the progress-view compile fixer — it prefers the
+   * configured helper model over the currently selected model, since it performs
+   * lightweight auxiliary work. A direct main-view/webview Run launch, the CLI,
+   * and orchestrator-delegated launches are unaffected and keep the chosen model.
    */
   assistive: z.boolean().optional(),
 });
