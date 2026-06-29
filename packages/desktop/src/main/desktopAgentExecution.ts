@@ -65,6 +65,7 @@ import {
 import { GoalStore } from '@tools/goal';
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import { handleUserQuestionAction } from '@tools/userQuestion';
+import type { RegisteredToolName } from '@tools/registry';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { getConfig } from '@utils/config/configUtils';
@@ -85,6 +86,10 @@ import {
   type DesktopProgressEventBridge,
 } from './desktopProgressEventBridge.js';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
+
+const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
+  'list_api_keys',
+];
 
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
@@ -895,6 +900,7 @@ export class DesktopProgressBridge {
         try {
           await resumeToolUseFromSnapshot(resume.snapshot, this.runtimeHost, {
             session: this.session,
+            runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
             setupSession: (session) => {
               for (const item of queuedFollowUps) {
                 session.appendFollowUp(item);
@@ -1110,6 +1116,7 @@ export class DesktopProgressBridge {
     await runAgent(request, {
       runtimeHost: this.runtimeHost,
       session: this.session,
+      runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
       openWorkflowOutput: async (result) => {
         // Match the extension's auto-open contract: only a completed workflow
         // opens its final output — cancelled runs may carry partial outputs

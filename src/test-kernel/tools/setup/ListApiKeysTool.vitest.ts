@@ -64,11 +64,12 @@ describe('list_api_keys tool', () => {
     assert.match(result.output ?? '', /GitHub token: stored/);
   });
 
-  it('flags stale apiKey.* entries by raw key name', async () => {
+  it('reports stale apiKey.* entries as diagnostic rather than removable providers', async () => {
     installPlatformWithKeys(['apiKey.oldprovider']);
     const result = await tool.call({});
     assert.ok(!result.isError, result.output);
-    assert.match(result.output ?? '', /Unrecognised apiKey\.\* entries/);
+    assert.match(result.output ?? '', /diagnostic only/);
+    assert.match(result.output ?? '', /not unset_api_key providers/);
     assert.match(result.output ?? '', /apiKey\.oldprovider/);
   });
 

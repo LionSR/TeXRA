@@ -81,7 +81,10 @@ export class ListApiKeysTool extends defineTool({
     }
 
     if (unknownApiKeys.length > 0) {
-      lines.push('', 'Unrecognised apiKey.* entries (stale?):');
+      lines.push(
+        '',
+        'Unrecognised apiKey.* entries (diagnostic only, not unset_api_key providers):',
+      );
       for (const k of unknownApiKeys) lines.push(`  ${k}`);
     }
 
