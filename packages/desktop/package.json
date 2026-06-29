@@ -33,10 +33,10 @@
     "vite": "^8.0.16"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.185",
-    "@fortawesome/free-solid-svg-icons": "^7.2.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.195",
+    "@fortawesome/free-solid-svg-icons": "^7.3.0",
     "@openai/codex-sdk": "^0.141.0",
-    "@sentry/electron": "^7.13.0",
+    "@sentry/electron": "^7.14.0",
     "fix-path": "^5.0.0"
   }
 }
