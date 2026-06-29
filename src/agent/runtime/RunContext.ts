@@ -1,7 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { z } from 'zod';
 
-import { ExecutionIdSchema, StreamTabIdSchema } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -16,86 +14,47 @@ export interface RunCoordinators {
   readonly retry: RetryRequestCoordinatorImpl;
 }
 
-// ---------------------------------------------------------------------------
-// Zod schemas for runtime objects (z.custom — these are live instances, not
-// serializable data, so the validation predicate only guards against nullish)
-// ---------------------------------------------------------------------------
+interface RunContextCommon {
+  readonly runtimeHost: AgentRuntimeHost;
+  /** Current model short name for this run (e.g. "opus46T"). */
+  readonly model?: string;
+  readonly workingDirectory?: string;
+  readonly delegationDepth?: number;
+  readonly approvalPromptsUnavailable?: boolean;
+  readonly runtimeUnavailableTools?: readonly string[];
+  readonly stopAfterCycle?: boolean;
+}
 
-const AgentRuntimeHostSchema = z.custom<AgentRuntimeHost>(
-  (val): val is AgentRuntimeHost =>
-    val != null &&
-    typeof val === 'object' &&
-    typeof (val as AgentRuntimeHost).emit === 'function',
-);
+interface LaunchRunContext extends RunContextCommon {
+  readonly kind: 'launch';
+  readonly streamId: StreamTabId;
+  readonly executionId: ExecutionId;
+  readonly coordinators: RunCoordinators;
+  /** Agent name (e.g. "orchestrator", "search-agent"). */
+  readonly agentName: string;
+  /** Session that owns this run's coordination state. */
+  readonly session: SessionHandle;
+}
 
-const RunCoordinatorsSchema = z.custom<RunCoordinators>(
-  (val): val is RunCoordinators => val != null && typeof val === 'object',
-);
+interface BareRunContext extends RunContextCommon {
+  readonly kind: 'bare';
+  readonly streamId?: StreamTabId;
+  readonly executionId?: ExecutionId;
+  readonly coordinators?: RunCoordinators;
+  /** Agent name (e.g. "orchestrator", "search-agent"). */
+  readonly agentName?: string;
+  /** Session that owns this run's coordination state. */
+  readonly session?: SessionHandle;
+}
 
-const SessionHandleSchema = z.custom<SessionHandle>(
-  (val): val is SessionHandle => val != null && typeof val === 'object',
-);
-
-// ---------------------------------------------------------------------------
-// Shared optional fields (present in both variants)
-// ---------------------------------------------------------------------------
-
-const sharedOptionalFields = {
-  workingDirectory: z.string().optional(),
-  delegationDepth: z.int().nonnegative().optional(),
-  approvalPromptsUnavailable: z.boolean().optional(),
-  runtimeUnavailableTools: z.array(z.string()).optional(),
-  stopAfterCycle: z.boolean().optional(),
-};
-
-// ---------------------------------------------------------------------------
-// Discriminated union schema
-//
-// 'launch' — projected from AgentLaunchContext; all run-identifying fields
-//           are guaranteed present.
-// 'bare'   — manually constructed (tests, one-shot tool environments, etc.);
-//           only runtimeHost is required.
-// ---------------------------------------------------------------------------
-
-export const RunContextSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('launch'),
-    runtimeHost: AgentRuntimeHostSchema,
-    streamId: StreamTabIdSchema,
-    executionId: ExecutionIdSchema,
-    coordinators: RunCoordinatorsSchema,
-    /** Current model short name resolved from a live getter (see createRunContext). */
-    model: z.string().optional(),
-    /** Agent name (e.g. "orchestrator", "search-agent"). */
-    agentName: z.string(),
-    /** Session that owns this run's coordination state. */
-    session: SessionHandleSchema,
-    ...sharedOptionalFields,
-  }),
-  z.object({
-    kind: z.literal('bare'),
-    runtimeHost: AgentRuntimeHostSchema,
-    streamId: StreamTabIdSchema.optional(),
-    executionId: ExecutionIdSchema.optional(),
-    coordinators: RunCoordinatorsSchema.optional(),
-    /** Current model short name for this run (e.g. "opus46T"). */
-    model: z.string().optional(),
-    /** Agent name (e.g. "orchestrator", "search-agent"). */
-    agentName: z.string().optional(),
-    /** Session that owns this run's coordination state. */
-    session: SessionHandleSchema.optional(),
-    ...sharedOptionalFields,
-  }),
-]);
-
-/** RunContext discriminated union — derived from the Zod schema. */
-export type RunContext = z.infer<typeof RunContextSchema>;
-
-/** The launch variant: all run-identifying fields are required. */
-export type LaunchRunContext = Extract<RunContext, { kind: 'launch' }>;
-
-/** The bare variant: only runtimeHost is required. */
-export type BareRunContext = Extract<RunContext, { kind: 'bare' }>;
+/**
+ * Per-run ambient context.
+ *
+ * The `launch` variant is projected from AgentLaunchContext and guarantees the
+ * run-identifying fields. The `bare` variant is for manually constructed test
+ * and one-shot tool contexts where only a runtime host is required.
+ */
+export type RunContext = LaunchRunContext | BareRunContext;
 
 // ---------------------------------------------------------------------------
 // CreateRunContextOptions — the input side.  Uses a discriminated union so
@@ -151,25 +110,36 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
-  const kind: RunContext['kind'] =
-    options.modelSource === 'live' ? 'launch' : 'bare';
+  if (options.modelSource === 'live') {
+    const { getModel, model } = options;
+    return Object.freeze({
+      kind: 'launch',
+      runtimeHost: options.runtimeHost,
+      streamId: options.streamId,
+      executionId: options.executionId,
+      coordinators: options.coordinators,
+      get model() {
+        return getModel() ?? model;
+      },
+      agentName: options.agentName,
+      workingDirectory: options.workingDirectory,
+      delegationDepth: options.delegationDepth,
+      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      runtimeUnavailableTools: options.runtimeUnavailableTools,
+      stopAfterCycle: options.stopAfterCycle,
+      session: options.session,
+    });
+  }
 
-  const { getModel, model } =
-    options.modelSource === 'live'
-      ? { getModel: options.getModel, model: options.model }
-      : {
-          getModel: undefined as (() => string | undefined) | undefined,
-          model: options.model,
-        };
-
+  const { model } = options;
   return Object.freeze({
-    kind,
+    kind: 'bare',
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
     coordinators: options.coordinators,
     get model() {
-      return getModel?.() ?? model;
+      return model;
     },
     agentName: options.agentName,
     workingDirectory: options.workingDirectory,
@@ -178,7 +148,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
     session: options.session,
-  }) as unknown as RunContext;
+  });
 }
 
 // ---------------------------------------------------------------------------
