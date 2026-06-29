@@ -37,7 +37,6 @@ function transcriptDedupeText(text: string): string {
     .replaceAll(/\\\\\[[^\]]*\]/g, '')
     .replaceAll('\\checkmark', '✓')
     .normalize('NFKC')
-    .replaceAll(/[‐‑‒–—−]/g, '-')
     .replaceAll(/[`*_~#>$\\{}[\]()]/g, '')
     .replaceAll(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
