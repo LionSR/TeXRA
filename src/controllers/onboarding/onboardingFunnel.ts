@@ -50,13 +50,6 @@ export interface OnboardingFunnelTransition {
   state: OnboardingFunnelState;
   /** Select the setup agent in the launcher (entering State 1). */
   selectSetupAgent: boolean;
-  /**
-   * Auto-start the setup conversation — only on the in-session
-   * State 0 → 1 transition (a credential landed while the welcome card was
-   * up), never on plain activation in State 1. Hosts additionally guard
-   * with a per-session "already kicked off" flag.
-   */
-  kickoffSetup: boolean;
   /** Configuring a credential clears a previous skip (PRD edge case). */
   clearDeclined: boolean;
 }
@@ -65,6 +58,12 @@ export interface OnboardingFunnelTransition {
  * Pure transition planner for hosts that recompute the funnel in-session
  * (webview ready, credential-changed events, skip). `previous` is the state
  * from the host's last computation, or `undefined` on the first one.
+ *
+ * Entering State 1 only *selects* the setup agent and shows the setup card; it
+ * never auto-starts the setup conversation. The setup agent runs an
+ * environment probe that may install tools, so launching it is an explicit,
+ * consented action — the user clicks "Run setup assistant" on the setup card
+ * (or invokes the command) to start it. There is deliberately no auto-kickoff.
  */
 export function planOnboardingFunnelTransition(
   previous: OnboardingFunnelState | undefined,
@@ -77,9 +76,6 @@ export function planOnboardingFunnelTransition(
     // the setup agent; a refresh already in State 1 must not stomp a user
     // who deliberately switched agents mid-session.
     selectSetupAgent: state === 'setup' && previous !== 'setup',
-    // 'setup' already implies !firstRunDone (see deriveOnboardingFunnelState),
-    // so the transition alone gates the one-time auto-kickoff.
-    kickoffSetup: previous === 'needs-credential' && state === 'setup',
     clearDeclined: inputs.declined && inputs.hasCredential,
   };
 }

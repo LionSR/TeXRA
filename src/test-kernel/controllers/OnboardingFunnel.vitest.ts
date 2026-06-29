@@ -84,7 +84,7 @@ describe('deriveOnboardingFunnelState', () => {
 });
 
 describe('planOnboardingFunnelTransition', () => {
-  it('in-session State 0 → 1: selects the setup agent, kicks off, clears the skip', () => {
+  it('in-session State 0 → 1: selects the setup agent but never auto-runs', () => {
     expect(
       planOnboardingFunnelTransition('needs-credential', {
         hasCredential: true,
@@ -94,7 +94,6 @@ describe('planOnboardingFunnelTransition', () => {
     ).toEqual({
       state: 'setup',
       selectSetupAgent: true,
-      kickoffSetup: true,
       clearDeclined: false,
     });
   });
@@ -109,7 +108,6 @@ describe('planOnboardingFunnelTransition', () => {
     ).toEqual({
       state: 'setup',
       selectSetupAgent: true,
-      kickoffSetup: false,
       clearDeclined: false,
     });
   });
@@ -124,7 +122,6 @@ describe('planOnboardingFunnelTransition', () => {
     ).toEqual({
       state: 'setup',
       selectSetupAgent: false,
-      kickoffSetup: false,
       clearDeclined: false,
     });
   });
@@ -139,7 +136,6 @@ describe('planOnboardingFunnelTransition', () => {
     ).toEqual({
       state: 'setup',
       selectSetupAgent: true,
-      kickoffSetup: false,
       clearDeclined: true,
     });
   });
@@ -154,7 +150,6 @@ describe('planOnboardingFunnelTransition', () => {
     ).toEqual({
       state: 'done',
       selectSetupAgent: false,
-      kickoffSetup: false,
       clearDeclined: false,
     });
   });
@@ -169,7 +164,6 @@ describe('planOnboardingFunnelTransition', () => {
     ).toEqual({
       state: 'done',
       selectSetupAgent: false,
-      kickoffSetup: false,
       clearDeclined: false,
     });
   });
@@ -184,7 +178,6 @@ describe('planOnboardingFunnelTransition', () => {
     ).toEqual({
       state: 'needs-credential',
       selectSetupAgent: false,
-      kickoffSetup: false,
       clearDeclined: false,
     });
   });
@@ -199,7 +192,6 @@ describe('planOnboardingFunnelTransition', () => {
     ).toEqual({
       state: 'done',
       selectSetupAgent: false,
-      kickoffSetup: false,
       clearDeclined: false,
     });
   });

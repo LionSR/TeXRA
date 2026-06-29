@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Extension (VS Code) and Desktop
+
+#### Improvements
+
+- **First-run setup no longer launches itself** — after a new user connects a credential, TeXRA now selects the setup assistant and shows a "Run setup assistant" card instead of silently starting it. The setup assistant inspects your environment and may install tools, so it now runs only when you explicitly click to start it.
+
 ## [0.39.0] - 2026-06-28
 
 ### Shared (all surfaces)
