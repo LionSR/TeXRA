@@ -2994,12 +2994,18 @@ None is a zero-risk dead-shim/barrel delete, so none was applied this confirmati
   overwrite it through `setLogger`, but helper-model handlers created by `createHelperModelKit()` still use
   this path unless an explicit helper-model logger is added. Low, but live; touches the import graph and
   helper-model logging behavior.
-- **§21 remainder** — `ToolSessionState` empty schema, the `TaskState` refine-vs-discriminated split, and the
-  `AgentState.recordRound` 3-field forwarder — all unchanged.
+- **§21 remainder** — `ToolSessionState` empty schema, the `TaskState` refine-vs-discriminated split, the
+  base `FlowParams` / `CycleParams` placeholder bags (the §21 re-export aliases are closed, but the base
+  placeholders remain), and the `AgentState.recordRound` 3-field forwarder — all unchanged.
 - **`@agent/index` barrel curation** + **`PlatformAgentDirectoryBootstrapOptions`** export — deliberate
   surface decisions, deferred (re-surfaced this pass as logger-agent 6–7).
-- **Carried from §23** (`platform().agentResume` near-single-use required port; §13 #1 `AgentRuntimeHost.emit`
-  mixes UI + essential events; §3.1 no `@agent/runtime/index.ts`) — unchanged. **SDK-008** — CLOSED (§19).
+- **§23 backlog still open** — N2 `resumeToolUseFromSnapshot` remains a third launch entry duplicating much
+  of `executeAgent`'s lifecycle/result assembly; N3 `BaseFlowContextInit extends AgentCore` remains a
+  near-empty services split; N5 stale `createBatchedToolUseFollowUpMessages` JSDoc and N6 core-flow
+  micro-tidies remain low-priority. All are behavior- or type-shape-touching; none was applied here.
+- **Carried from §23 / §21** (`platform().agentResume` near-single-use required port; §13 #1
+  `AgentRuntimeHost.emit` mixes UI + essential events; §3.1 no `@agent/runtime/index.ts`) — unchanged.
+  **SDK-008** — CLOSED (§19).
 
 ### Subagent split points — unchanged and reconfirmed
 
