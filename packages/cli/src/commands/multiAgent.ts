@@ -177,7 +177,7 @@ export async function runMultiAgentPreset(
   // (tool-use) model config rather than `run` (workflow agents). Resolve the
   // model after agent validation so usage errors stay focused on bad agents.
   const model = await resolveCliRunModel(context, init.model, 'chat');
-  const runContext = buildHeadlessRunContext(context, model);
+  const runContext = buildHeadlessRunContext(context);
   return withExpandedRunInputs(
     init.inputFiles,
     init.contextFiles,

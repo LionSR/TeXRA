@@ -36,6 +36,7 @@ async function reconcileRootModelAfterApiModeChange(
       CHAT_API_MODE_MODEL_RECOVERY,
     ),
     agentCategory: AgentCategory.ToolUse,
+    persistAsHelperModel: true,
   });
   if (selection.model === currentModel) return undefined;
 

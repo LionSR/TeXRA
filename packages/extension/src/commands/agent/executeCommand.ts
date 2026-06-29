@@ -36,7 +36,11 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
   try {
     const wrapped =
       input !== null && typeof input === 'object' && 'config' in input
-        ? (input as { config: unknown; executionId?: ExecutionId })
+        ? (input as {
+            config: unknown;
+            executionId?: ExecutionId;
+            preferHelperModel?: boolean;
+          })
         : null;
     const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
 
@@ -45,6 +49,10 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       {
         runtimeHost: extensionAgentRuntimeHost,
         openWorkflowOutput: openFinalOutputIfAvailable,
+        // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
+        // progress-view compile fixer); a direct main-view launch omits it and
+        // keeps the user's selected model.
+        preferHelperModel: wrapped?.preferHelperModel === true,
       },
     );
   } catch (error) {

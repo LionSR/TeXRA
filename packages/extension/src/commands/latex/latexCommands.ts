@@ -18,6 +18,7 @@ import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
+import { AgentCategory } from '@shared/schemas';
 import { delay, filterNotNull } from '@utils/core';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 
@@ -86,11 +87,18 @@ export async function handleFixCompilation(): Promise<void> {
       );
 
       await vscode.commands.executeCommand('texra.execute', {
-        agent: 'latexFixer',
-        instruction: await buildFixCompilationInstruction(
-          editor.document.fileName,
-          relativePath,
-        ),
+        config: {
+          agent: 'latexFixer',
+          // latexFixer is a tool-use agent; without this the config category
+          // prefaults to workflow and resolveAgentForLaunch can't find it.
+          agentCategory: AgentCategory.ToolUse,
+          instruction: await buildFixCompilationInstruction(
+            editor.document.fileName,
+            relativePath,
+          ),
+        },
+        // This is a "run latexFixer" command, so prefer the helper model.
+        preferHelperModel: true,
       });
     },
   );
