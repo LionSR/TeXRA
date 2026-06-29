@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { TaskState } from '@agent/core/execution/TaskState';
+import type { TaskState } from '@agent/core/state/TaskState';
 import type {
   ActiveChildInfo,
   AgentProposalPermission,

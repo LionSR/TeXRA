@@ -5,7 +5,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
-} from '@agent/core/execution/executionRequests';
+} from '@agent/core/state/executionRequests';
 
 // Local imports - shared schemas
 import type { MainViewExecuteMessage } from '@shared/mainView';

@@ -6,7 +6,7 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 
-import type { TaskState } from '@agent/core/execution/TaskState';
+import type { TaskState } from '@agent/core/state/TaskState';
 
 // Local imports - shared
 import type { AgentProposal, AgentProposalPermission } from '@shared/schemas';

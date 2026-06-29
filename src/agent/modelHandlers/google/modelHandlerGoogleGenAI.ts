@@ -29,7 +29,7 @@ import type {
   OpenAIAPIResponseUsage,
   GenerateContentResponseUsageMetadata,
 } from '@agent/core/usage/ResponseUsage';
-import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';

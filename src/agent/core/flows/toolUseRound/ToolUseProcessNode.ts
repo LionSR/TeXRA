@@ -1,7 +1,7 @@
 // Local imports - core flow primitives
 import { BaseNode } from '@agent/node';
 import { logWebFetch, logWebSearch } from '@agent/trace';
-import { recordCycleMetrics } from '@agent/core/execution/AgentState';
+import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import { extractModelResponse } from '@agent/core/flows/CommonCycleTypes';
 import { appendFollowUpAsUserMessage } from '@agent/followUp/followUpMessages';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';

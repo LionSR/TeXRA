@@ -14,7 +14,7 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 
 // Local imports - latex
 import { LatexMediaManager } from '@latex/LatexMediaManager';

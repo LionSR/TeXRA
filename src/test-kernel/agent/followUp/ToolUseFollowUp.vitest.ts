@@ -7,8 +7,8 @@ import { describe, it, afterEach } from 'vitest';
 // Local imports - agent
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
-import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   AgentExecutionHandle,

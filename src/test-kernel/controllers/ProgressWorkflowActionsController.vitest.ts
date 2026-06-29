@@ -8,7 +8,7 @@ import { describe, it } from 'vitest';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
-import type { TaskState } from '@agent/core/execution/TaskState';
+import type { TaskState } from '@agent/core/state/TaskState';
 
 // Local imports - test support
 import {

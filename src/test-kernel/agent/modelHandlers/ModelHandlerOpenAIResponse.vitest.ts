@@ -27,7 +27,7 @@ import {
   AgentCategory,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 
 // Type imports
