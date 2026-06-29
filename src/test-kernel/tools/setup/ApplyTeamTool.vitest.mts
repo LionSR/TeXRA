@@ -202,40 +202,4 @@ describe('seedRosterFromDefaultTeam', () => {
     expect(workspaceRoster().toolUse).toEqual(['builtInToolUse:review']);
     expect(workspaceRoster().workflow).toBeUndefined();
   });
-
-  it('leaves the roster unset with fallbackTeamId null and no recorded team', async () => {
-    // CLI behavior: a fresh terminal session keeps every agent enabled (roster
-    // keys stay unset) instead of falling back to the Physicist team.
-    const seeded = await seedRosterFromDefaultTeam(
-      {
-        globalState: platform().globalState,
-        workspaceState: platform().workspaceState,
-      },
-      { fallbackTeamId: null },
-    );
-
-    expect(seeded).toBe(false);
-    expect(workspaceRoster().workflow).toBeUndefined();
-    expect(workspaceRoster().toolUse).toBeUndefined();
-  });
-
-  it('still honors a recorded default team with fallbackTeamId null', async () => {
-    await setDefaultTeamId(platform().globalState, 'starter');
-
-    const seeded = await seedRosterFromDefaultTeam(
-      {
-        globalState: platform().globalState,
-        workspaceState: platform().workspaceState,
-      },
-      { fallbackTeamId: null },
-    );
-
-    expect(seeded).toBe(true);
-    const roster = workspaceRoster();
-    expect(roster.workflow?.toSorted()).toEqual([
-      'builtInWorkflow:correct',
-      'builtInWorkflow:polish',
-    ]);
-    expect(roster.toolUse).toContain('builtInToolUse:setup');
-  });
 });

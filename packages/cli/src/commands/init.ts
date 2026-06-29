@@ -8,7 +8,6 @@ import {
   implicitDefaultToolUseAgents,
 } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
-import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
@@ -146,15 +145,6 @@ async function runInit(
   }
 
   await writeInitConfig(filePath, buildInitConfig(answers));
-
-  // Seed a never-configured workspace's agent roster from the user-level
-  // default team (written by the setup agent's apply_team) — the CLI
-  // counterpart of the extension's activation-time seeding. The registry is
-  // already loaded by gatherOptions (includeRemote: false). Best-effort:
-  // a seeding failure must not fail `texra init`, but say so on stderr
-  // (the extension counterpart logs a warning) so a missing roster is
-  // explainable when troubleshooting.
-  await seedCliRosterFromDefaultTeam();
 
   if (gitignore) {
     const outcome = await ensureTexraGitignored(context.cwd);

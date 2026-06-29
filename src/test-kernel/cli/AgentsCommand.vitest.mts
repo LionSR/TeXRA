@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   initLocalCliPlatform: vi.fn(),
   loadAgents: vi.fn(),
   resolveCliAgent: vi.fn(),
-  seedCliRosterFromDefaultTeam: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
@@ -24,10 +23,6 @@ vi.mock('@agent/index', () => ({
 
 vi.mock('@cli/runtime/initPlatform', () => ({
   initLocalCliPlatform: mocks.initLocalCliPlatform,
-}));
-
-vi.mock('@cli/runtime/defaultTeamRoster', () => ({
-  seedCliRosterFromDefaultTeam: mocks.seedCliRosterFromDefaultTeam,
 }));
 
 vi.mock('@cli/runtime/logSinks', () => ({
@@ -113,7 +108,6 @@ describe('CLI agents command', () => {
     const exitCode = await listAgents(cliContext());
 
     expect(exitCode).toBe(0);
-    expect(mocks.seedCliRosterFromDefaultTeam).toHaveBeenCalledTimes(1);
     expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
     expect(mocks.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),
@@ -382,7 +376,6 @@ describe('CLI agents command', () => {
     const exitCode = await listAgents(cliContext(), { includeHidden: true });
 
     expect(exitCode).toBe(0);
-    expect(mocks.seedCliRosterFromDefaultTeam).not.toHaveBeenCalled();
     expect(mocks.loadAgents).toHaveBeenCalledWith(undefined);
     expect(mocks.getVisibleAgents).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).not.toHaveBeenCalled();

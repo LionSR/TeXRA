@@ -29,7 +29,6 @@ import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
-import { seedCliRosterFromDefaultTeam } from '@cli/runtime/defaultTeamRoster';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import {
@@ -274,7 +273,6 @@ export async function runChat(
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
   await loadAgents();
-  await seedCliRosterFromDefaultTeam();
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
     agentOverride: explicitAgent ?? setupAgentOverride,

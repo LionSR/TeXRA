@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
-- **The terminal starts with every agent enabled, not a single discipline** — a fresh `texra` session now exposes the full agent catalog instead of seeding the Physicist roster the way the VS Code extension does, so `texra agents list`, the `/agent` picker, and orchestrator delegation can reach any built-in agent out of the box. A team you pick with the setup agent is still honored; otherwise nothing is hidden.
+- **The terminal starts with every agent enabled, not a single discipline** — the CLI no longer seeds a discipline roster the way the VS Code extension does, so a fresh `texra` session exposes the full agent catalog (`texra agents list`, the `/agent` picker, and orchestrator delegation reach any built-in agent out of the box). Applying a team with the setup agent still scopes that workspace; otherwise nothing is hidden.
 - **`assistant` is the default chat agent** — bare `texra chat` (and the launcher's "New chat") now starts the general-purpose `assistant` rather than `research`, a better fit for the now-unrestricted agent roster. Explicit `--agent`, `TEXRA_AGENT`, and `.texra/config.json` choices still win.
 - **Switch teams from the launcher** — `texra orchestrate` (the default screen on bare `texra` in a TTY) now lists every available multi-agent team so you can pick — and switch — among them, instead of being pinned to a single default team. Single-agent chats and resumes are still offered alongside.
 - **The launcher header shows the CLI version** — the bare-`texra` launcher now prints `TeXRA v<version>` in its header, the same way the chat session header does, so you can see which build you are on before starting a session.
