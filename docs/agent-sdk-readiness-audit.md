@@ -1,6 +1,6 @@
 # Agent SDK Readiness Audit
 
-_Audit date: 2026-05-28 · Re-verified through 2026-06-27 (§24) · Scope: `src/agent/**`, `src/logger/**`, `src/eventBus/**`, `src/platform/**`, `packages/core/src/**`, plus extension/CLI entrypoints._
+_Audit date: 2026-05-28 · Re-verified through 2026-06-29 (§25) · Scope: `src/agent/**`, `src/logger/**`, `src/eventBus/**`, `src/platform/**`, `packages/core/src/**`, plus extension/CLI entrypoints._
 
 This is a **review + refactoring plan**, not an applied refactor. It identifies the
 texra agent core, model handlers, logger, and surface areas; flags abstractions
@@ -2845,3 +2845,176 @@ executing the plan, all moving _with_ the audit. The seven post-checkpoint commi
   `protected` visibility track, §2.6 handler relocation, the §21 remainder, the `@agent/index` barrel curation,
   the typed `delegateTo`) is behavior-touching. Guardrails intact; no dead shim/barrel remains, so no refactor
   was applied to the codebase this pass — only the §24 ledger correction recording #6671's closures.
+
+## 25. Re-verification addendum — 2026-06-29 (twentieth pass — re-pin to a HEAD containing #6671; three documented-open items moved open → closed; confirmation-only, no refactor applied)
+
+A twentieth pass against branch `claude/eager-noether-bfxlhs` at HEAD **`e1bfb60`** (2026-06-29) — a fresh
+three-agent fan-out (independent, source-only, not given this document): an `agent/core` + runtime
+abstraction audit (definition / execution / usage / tools / flows + runtime entrypoints), a
+`modelHandlers/` audit (the `IModelHandler` port + base class + OpenAI-compatible subclasses + `support/`
+/ `utils/` / `ModelFactory`), and a logger + `agent/trace` + `agent/index` + `platform` surface audit —
+plus a direct re-check of every open-ledger item, the guardrail greps, and a first-hand reconciliation
+against the parallel `docs/proposals/agent-sdk-readiness*` checkpoint series. **All 2026-05-28 → 06-27
+findings hold or have been actively closed by the team; no new structural over-abstraction surfaced; the
+standing verdict is reaffirmed for the twentieth time** — TeXRA is well-architected and SDK-aligned, the
+gaps are incremental not structural. Confirmation-only pass — **no refactor applied** (the one candidate
+that looked like zero-caller dead code was verified live, every other still-open candidate is
+behavior-touching, and no dead shim/barrel remains; greps below).
+
+### §24's instruction executed — re-pinned to a post-#6671 HEAD; three items moved open → closed
+
+§24 was pinned to `d594ed3` (its branch's fork point, **before** #6671) and recorded — in the post-write
+drift note — that **#6671 `357182d`** had since landed on `main`, closing three items §24 still listed as
+open, with the explicit instruction: _"the next §-pass should re-pin to a HEAD containing #6671 and move
+these from 'open' to the closed-items reconciliation."_ This pass does exactly that. HEAD `e1bfb60`
+contains #6671; each closure verified **GONE/landed first-hand**:
+
+- **`RetryState` collapse (the §24 HIGH item) — CLOSED.** `grep -c "interface RetryState"
+  src/agent/core/flows/RetryState.ts` → **0**. The one-field `lastError?` bag is gone; the sole caller is
+  now the single-`shared` form `handleInvocationResult(execRes, shared, { logger, operationName })`
+  (`ModelInvocationNode.ts:123`), and `handleInvocationResult`'s signature is `(result, state: { …;
+  lastError? }, options)` (`RetryState.ts:342`) — the proposed collapse applied verbatim.
+- **`IModelHandler` four-member port narrowing — CLOSED.** `grep -c` for `getAgentCategory` /
+  `canProcessToolResultAttachments` / `createMediaContent(` / `createAssistantMessage(` on
+  `types/IModelHandler.ts` → **0**. The four members that only had `this.` callers are off the port.
+- **`createResponse` template dedup — CLOSED.** Both override handlers now supply only the single-turn
+  `inFlight` guard via the `protected createResponseImpl` hook (`modelHandlerOpenAIResponse.ts:349/1210`,
+  `modelHandlerGoogleInteractions.ts:368/1460`); the base keeps owning the `withSdkErrorTag` wrap. The
+  copied error-tag template body is gone.
+
+**One further item the 06-26 checkpoint listed as open is also already CLOSED at HEAD:** the **three
+`public` → `protected` base-method visibility tightenings** — `getApiKey` (`ModelHandler.ts:357`),
+`createMediaMessage` (`:591`), `containCutOffMessage` (`:672`) are all `protected` at HEAD (no `public`
+declaration remains). Move from open → closed.
+
+### Guardrails intact at `e1bfb60`
+
+- `find src/agent -name index.ts` → the **same seven** pre-existing barrels (`features`, `goal`, `index`,
+  `node`, `storage`, `trace`, `types`); no new barrel; `src/agent/runtime/index.ts` still **absent** (§3.1).
+- `grep` for `vscode` imports over
+  `src/agent`/`src/model`/`src/latex`/`src/tools`/`src/controllers`/`src/shared`/`src/eventBus`/`src/hosts`
+  → **clean**.
+- `packages/core/src/index.ts` → **16** `export` statements (unchanged — no surface added or removed).
+- The SDK-idiomatic spine re-confirmed in-tree: `Node.exec → createFlow().run`, the `AgentTrace`
+  emit/subscribe channel, the `platform()` 10-port composition root, the `createModelHandler`
+  (`PROVIDER_HANDLER_ROUTES`) factory, and the lead-and-specialists delegation model.
+
+### Drift since the §24 pin — fix/SSOT/DRY wave continuing, none adds a layer
+
+Recent commits over the audited dirs (`git log` over `src/agent src/logger src/platform packages/core`):
+`#6738` route state-backed reads through the catalog schema (SSOT), `#6731` unify model-handler output
+cleanup + dedupe end-tag + finalize-on-error (DRY + robustness), `#6730` centralize helper-model one-shot
+calls (the SSOT/DRY wave — cf. §18/§22 maintained-helper consolidation), plus behavior fixes
+(`#6715`/`#6711`/`#6709`/`#6708`). All moving **with** the audit; the guardrail greps back the conclusion.
+
+### The three fresh-eyes agents re-reached the standing verdict and re-surfaced the recurring traps
+
+Consistent with §14/§16/§17/§20–§24, the source-only agents re-converged on "well-layered, incremental
+not structural" (the core and surface agents explicitly self-concluding "keep") and re-surfaced the
+documented traps — all re-rebutted or already-tracked:
+
+- **`IModelHandler` width / "delete the redundant single-impl interface" (the thirteenth re-surfacing)** —
+  still load-bearing: `types/IModelHandler.ts:174` `SdkToolCall` union + the **optional**
+  `createBatchedToolUseFollowUpMessages?` (`:385`, feature-detected by `ToolUseDispatchNode`) make the
+  interface non-removable (deletion breaks `tsc`, proposal "Rejected findings" line 44). The agents'
+  "promote the missing methods / split into provider-local tool-call types" is the **§9/§21 trim-the-port
+  track** — behavior-touching, still the correct unapplied path. Not re-flagged for deletion.
+- **"Extract auth/relay/billing out of base `ModelHandler` into an `ApiCredentialResolver`"** — re-surfaced
+  (model-handler agent finding 4); **already adversarially rejected** (proposal "Rejected findings" line 46;
+  §23 N1 retraction): `ModelHandler` + `@auth/*` are already vscode-free, the relay/tier logic is shared
+  core consumed identically by CLI + extension, and `getServerSideKeyService()` is already a swappable
+  test-mocked singleton — the "extract a port" adds indirection over a working injectable seam. Re-rebutted.
+- **`@agent/index` barrel dead type re-exports / dual registry surface** (logger-surface agent findings
+  6–7) — this is the §21 / 06-26 "over-wide `@agent/index` barrel" item: trimming the ~10 zero-consumer
+  `AgentDirectory*` type re-exports and resolving the barrel-vs-deep-import duality. **Tracked, deferred —
+  barrel curation is a deliberate surface decision, not a mechanical delete** (06-26 checkpoint). Unchanged.
+- **`agentResume` near-single-use required port; `buildAgentLaunchContext → assembleAgentLaunchContext`
+  two-layer split; config-only OpenAI subclasses; node-runs-subflow "wrapper"** — re-surfaced, re-rebutted
+  exactly as §21–§24 (the `assemble*` split is the documented saga-compensation high/low; the cycle
+  factories _are_ the prescribed `Node.exec → createFlow → flow.run` shape).
+
+### New false positive recorded (so it is not re-flagged next pass)
+
+- **"`isOReasoningModel` / `isGrokReasoningModel` are unused dead getters on the base" — VERIFIED FALSE.**
+  The model-handler agent's scoped grep missed the OpenAI subclass. Both are read **6×** in
+  `modelHandlerOpenAI.ts` (`:276`, `:281`, `:602`, `:608`, `:615`) and `modelHandlerOpenAIResponse.ts`
+  (`:1459`) — they gate reasoning-param shape and the `max_tokens`/`max_completion_tokens` key choice. Not
+  dead; recorded in the §8 false-positive discipline.
+
+### Genuinely-new micro-candidates (not in any prior doc) — all behavior-touching, recorded for a future tidy pass
+
+None is a zero-risk dead-shim/barrel delete, so none was applied this confirmation-only pass:
+
+- **N5 — `ModelFactory` compatibility-key side-channel** _(MEDIUM, behavior-touching)_. Every handler is
+  branded post-construction via `Object.defineProperty(handler, '__texraModelHandlerCompatibilityKey', …)`
+  (`ModelFactory.ts:51`, `withModelHandlerCompatibilityKey` `:305`), read back by
+  `activeModelHandlerCompatibilityKey()` (`:297`) at the one mid-session model-switch detector
+  (`runToolUseFlow.ts`). The same key is computable from the handler's own `config` via the pure
+  `modelHandlerCompatibilityKey(config)`. Candidate: replace the non-enumerable monkey-patch with a plain
+  `readonly compatibilityKey` field set in the constructor (the Codex override — `ModelHandlerOpenAIResponse`
+  from a non-Responses config — must keep its distinct key, so derive-from-config is not a pure swap).
+  Touches the handler construction path; not mechanical.
+- **N6 — `@agent/types/index.ts` pass-through shim over `@shared/schemas`** _(LOW-MEDIUM)_. Re-exports 7
+  symbols straight from `@shared/schemas`, adding only the local `NormalizedUsage`; **2** files import the
+  barrel. Candidate: move `NormalizedUsage` to `@shared/schemas` and drop the shim, or stop re-exporting the
+  `@shared` symbols. Surface-curation decision, deferred.
+- **N7 — `core/usage/ResponseUsage.ts:58-66` provider-SDK type re-export block** _(LOW)_. A bare
+  `export type { CompletionUsage, AnthropicUsage, … }` pass-through couples a `core/` module to four vendor
+  SDK type surfaces purely to forward them; handlers could import these from their own SDK. Keep the
+  TeXRA-owned `NativeUsagePayload` union (which legitimately needs the imports); trim only the forwarding block.
+- **N8 — `@logger/index.ts` exposes one symbol** _(LOW, cosmetic)_. `export { createChannelTrace }` only,
+  while the real functional API lives at the deep path `@logger/logUtils` (~70 callers). Either drop the
+  index (2 callers deep-import `@logger/channelTrace`) or widen it to the curated entry.
+- **N9 — Anthropic compaction-threshold config read duplicated** _(LOW)_. `modelHandlerAnthropic.ts:501`
+  re-reads `texra.model.compactionThresholdPercent` inline instead of calling the base
+  `getCompactionThresholdPercent()` (`ModelHandler.ts:822`). One-line DRY when next touching the file.
+- **N10 — registry one-time migrations on the lookup hot-path** _(LOW)_. `agentRegistry.ts` embeds three
+  `migrateLegacy*` routines (~250 LOC) writing `workspaceState`; extracting to `agentRegistry.migrations.ts`
+  (called once from `doLoad`) isolates VS-Code-era persisted-key baggage from the SDK-facing lookup surface.
+
+### Open ledger at HEAD `e1bfb60` (still present unless noted)
+
+- **§24's three #6671 items — now CLOSED** (see above); the **public→protected** visibility track — also
+  **CLOSED** (above). The model-handler design-track backlog is now drained except port-width.
+- **§9/§21 trim the over-wide `IModelHandler` port** — still the one model-handler item of substance:
+  458 LOC, the flattened `SdkToolCall` union + the load-bearing optional `createBatchedToolUseFollowUpMessages?`.
+  Behavior-touching (the non-optional-with-base-default sequencing); unapplied.
+- **§4** `UsageMonitor` two-sink fan-out — unchanged (sidebar vs. transcript, agentCategory-gated, intentional).
+- **§5 / Step 7** — still no `delegateTo(...)` primitive (`grep` empty); delegation remains a tool call; the
+  per-category flow-runner pre-work (`d32be3b`/`a15dd86`) is in-tree. The one structurally-open item, multi-day by design.
+- **§16 #4** (`@logger`↔`@agent/trace` value coupling, `channelTrace.ts:10`) — unchanged; latent, low.
+- **N4** `ModelHandler` noop-default `createChannelTrace('Agent')` (`:160`, always overwritten by `setLogger`)
+  — unchanged; low, touches the import graph.
+- **§21 remainder** — `ToolSessionState` empty schema, the `TaskState` refine-vs-discriminated split, and the
+  `AgentState.recordRound` 3-field forwarder — all unchanged.
+- **`@agent/index` barrel curation** + **`PlatformAgentDirectoryBootstrapOptions`** export — deliberate
+  surface decisions, deferred (re-surfaced this pass as logger-agent 6–7).
+- **Carried from §23** (`platform().agentResume` near-single-use required port; §13 #1 `AgentRuntimeHost.emit`
+  mixes UI + essential events; §3.1 no `@agent/runtime/index.ts`) — unchanged. **SDK-008** — CLOSED (§19).
+
+### Subagent split points — unchanged and reconfirmed
+
+No change to §5 + the 06-26 ranking. Config-driven YAML agents over the two flows (reflection,
+`ToolUseRoundFlow`) + the `delegate_*` tools / `executeSubagent` remain the existing isolated-context
+subagent mechanism (own `RunContext`, KV store, usage accumulator, depth-gating, async result delivery);
+the `agentCategory` dispatch in `executeAgent` is the cleanest internal seam; `ModelInvocationNode` and
+`ToolUseDispatchNode` remain the two cleanest node-level extraction points (serializable I/O; only obstacle
+is the shared mutable `shared` + ambient `RunContext`). Ranked value/effort order unchanged: (1) wire the
+existing `review` tool-use agent as a post-draft **Verifier** delegation (lowest risk, reuses
+`executeSubagent`, no new flow code); (2) introduce a typed `delegateTo(subagent, input, { maxDepth, tools })`
+over the existing plumbing; (3) formalize the workflow agents (`polish`/`correct`/`merge`) as SDK actors with
+typed I/O; (4) **relocate** the module-global registries onto the per-session handle (_relocate, never delete
+— load-bearing_) to gate concurrent in-process sessions; (5) decompose the multi-phase workflow agents —
+gated by #4.
+
+**Net for 2026-06-29:** thesis reaffirmed for the twentieth pass — incremental, not structural. The material
+development since §24 is the **reconciliation §24 asked for**: re-pinned to a HEAD containing #6671 and moved
+its three closures (RetryState HIGH collapse, four-member `IModelHandler` port narrowing, `createResponse`
+template dedup) plus the `public→protected` visibility track from open → closed. The fix/SSOT/DRY wave
+continues across settings/model-handlers/runtime, none adding a layer. Three independent fresh-eyes agents
+re-reached the standing verdict and re-surfaced the recurring traps (the `IModelHandler` width/removal for the
+thirteenth time, the rejected `ModelHandler` auth-extraction, the tracked `@agent/index` barrel) — all
+re-rebutted or already-tracked; one new false positive (`isOReasoningModel`/`isGrokReasoningModel` "dead
+getters" — verified used 6×) is recorded. Six genuinely-new micro-candidates (N5–N10) are all
+behavior-touching and recorded for a future tidy pass. Guardrails intact; no dead shim/barrel remains, so no
+refactor was applied to the codebase this pass — only the §25 ledger reconciliation.
