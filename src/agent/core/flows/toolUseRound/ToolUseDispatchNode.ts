@@ -147,7 +147,7 @@ export class ToolUseDispatchNode<C> extends BatchNode<
         result: { error: DUPLICATE_CALL_ERROR, isError: true as const },
         parsedInput: call.input,
         extracted: {
-          sanitizedResult: { error: DUPLICATE_CALL_ERROR },
+          sanitizedResult: { status: 'error', error: DUPLICATE_CALL_ERROR },
           attachments: [],
         },
         editedFiles: [],
@@ -342,18 +342,20 @@ export class ToolUseDispatchNode<C> extends BatchNode<
     const options = this.services;
     const { workspace } = options;
 
-    // Spread sanitizedResult so editedFiles in the log don't leak into
-    // extracted.sanitizedResult (which is reused for model messages in post).
-    const logOutput = editedFiles.length
-      ? { ...extracted.sanitizedResult, editedFiles }
-      : extracted.sanitizedResult;
+    // The status discriminator belongs to model-facing tool results. Progress
+    // logs should expose only visible tool content.
+    const { status: _status, ...logOutputBase } = extracted.sanitizedResult;
+    const logOutput = {
+      ...logOutputBase,
+      ...(editedFiles.length ? { editedFiles } : {}),
+    };
 
     const toolUseLog = {
       toolName: call.name,
       input: parsedInput ?? call.raw,
-      output: logOutput,
+      ...(Object.keys(logOutput).length > 0 ? { output: logOutput } : {}),
       ...(editedFiles.length && { files: editedFiles }),
-      isError: Boolean(result.isError),
+      isError: extracted.sanitizedResult.status === 'error',
     };
 
     // Update in-progress log (slow tools) or create new log (fast tools)

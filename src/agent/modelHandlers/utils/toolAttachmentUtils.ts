@@ -43,36 +43,61 @@ const EditedFileRecordSchema = z.object({
 });
 
 /**
- * Schema for strongly-typed tool result payloads sent to model handlers.
- * This is what gets passed to handlers - no binary data, properly typed fields.
- * Uses looseObject to allow additional properties for forward compatibility.
+ * Shared fields present in every tool result payload variant.
  */
-export const ToolResultPayloadSchema = z.looseObject({
-  /** Brief summary of the tool execution result */
-  summary: z.string().optional(),
-  /** Detailed output from the tool */
-  output: z.string().optional(),
-  /** Error message if tool execution failed */
-  error: z.string().optional(),
+const ToolResultPayloadSharedFields = {
   /** User instruction that was processed */
   userInstruction: z.string().optional(),
   /** User-provided patch content */
   userPatch: z.string().optional(),
-  /** Whether this result represents an error */
-  isError: z.boolean().optional(),
-  /** Statistics about line changes made */
-  lineChanges: LineChangesSchema.optional(),
   /** Additional diagnostic information (type varies by context) */
   diagnostics: z.unknown().optional(),
-  /** Records of edits made during tool execution */
-  edits: z.array(EditRecordSchema).optional(),
-  /** File references (binary data stripped) */
-  files: z.array(FileReferenceSchema).optional(),
-  /** Files edited during tool execution (for logging/tracking) */
-  editedFiles: z.array(EditedFileRecordSchema).optional(),
   /** Summary added by handlers when attachments are available */
   attachmentSummary: z.string().optional(),
-});
+};
+
+const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
+  'output',
+  'summary',
+  'lineChanges',
+  'edits',
+  'files',
+  'editedFiles',
+]);
+
+/**
+ * Schema for strongly-typed tool result payloads sent to model handlers.
+ * Uses a discriminated union on `status` so callers can narrow on
+ * `result.status === 'error'` vs `'executed'` and get the right fields.
+ * Each variant is a looseObject to preserve unknown keys for forward
+ * compatibility.
+ *
+ * This is what gets passed to handlers — no binary data, properly typed fields.
+ */
+export const ToolResultPayloadSchema = z.discriminatedUnion('status', [
+  z.looseObject({
+    status: z.literal('executed'),
+    /** Brief summary of the tool execution result */
+    summary: z.string().optional(),
+    /** Detailed output from the tool */
+    output: z.string().optional(),
+    /** Statistics about line changes made */
+    lineChanges: LineChangesSchema.optional(),
+    /** Records of edits made during tool execution */
+    edits: z.array(EditRecordSchema).optional(),
+    /** File references (binary data stripped) */
+    files: z.array(FileReferenceSchema).optional(),
+    /** Files edited during tool execution (for logging/tracking) */
+    editedFiles: z.array(EditedFileRecordSchema).optional(),
+    ...ToolResultPayloadSharedFields,
+  }),
+  z.looseObject({
+    status: z.literal('error'),
+    /** Error message if tool execution failed */
+    error: z.string().min(1),
+    ...ToolResultPayloadSharedFields,
+  }),
+]);
 
 export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
 
@@ -99,8 +124,9 @@ function isToolFileAttachment(value: unknown): value is ToolFileAttachment {
  * Extracts file attachments from a tool result and returns a typed payload.
  * Binary data (base64Data, bytes) is stripped from the result.
  *
- * Uses a Zod looseObject schema so parsing never fails - unknown fields
- * are preserved for forward compatibility.
+ * Uses a Zod looseObject schema so unknown fields are preserved for forward
+ * compatibility. The computed discriminator is stamped after raw fields so a
+ * stray raw `status` key cannot invalidate the normalized payload.
  *
  * @param result - Raw tool result (may contain binary data)
  * @returns Extracted attachments and typed payload (without binary data)
@@ -114,12 +140,38 @@ export function extractToolAttachments(
     ? attachmentsCandidate.filter(isToolFileAttachment)
     : [];
 
-  // Parse with Zod - looseObject ensures this never fails
-  const parsed = ToolResultPayloadSchema.parse(result);
+  // Determine the discriminator before parsing. Explicit tool failure status
+  // wins; otherwise output takes priority over error text for compatibility
+  // with formatToolResultAsText.
+  const hasError = isNonEmptyString(result.error);
+  const hasOutput = isNonEmptyString(result.output);
+  const hasSummary = isNonEmptyString(result.summary);
+  const isError = result.isError === true;
+  const status =
+    isError || (hasError && !hasOutput)
+      ? ('error' as const)
+      : ('executed' as const);
 
-  // Build sanitized result, stripping binary data, undefined values, and redundant error fields
-  const sanitizedResult: ToolResultPayload = {};
-  const hasError = isNonEmptyString(parsed.error);
+  // Stamp the discriminator onto the raw result so the discriminated union
+  // schema validates the correct variant.
+  const parsed = ToolResultPayloadSchema.parse({
+    ...result,
+    ...(status === 'error'
+      ? {
+          error: hasError
+            ? result.error
+            : hasOutput
+              ? result.output
+              : hasSummary
+                ? result.summary
+                : 'Tool failed',
+        }
+      : {}),
+    status,
+  });
+
+  // Build sanitized result, stripping binary data, undefined values, and redundant fields
+  const sanitizedResult: Record<string, unknown> = { status };
 
   for (const [key, value] of Object.entries(parsed)) {
     if (value === undefined) continue;
@@ -127,8 +179,15 @@ export function extractToolAttachments(
     if (key === 'base64Data' || key === 'bytes') {
       continue;
     }
-    // Skip isError when error message is present (redundant)
-    if (key === 'isError' && hasError) {
+    // Skip legacy isError once the normalized status discriminator is present.
+    if (key === 'isError') {
+      continue;
+    }
+    // Keep runtime values aligned with the discriminated union shape.
+    if (status === 'executed' && key === 'error') {
+      continue;
+    }
+    if (status === 'error' && ERROR_PAYLOAD_STRIPPED_KEYS.has(key)) {
       continue;
     }
     // Simplify diagnostics: keep validation error details, remove verbose stack traces
@@ -147,7 +206,7 @@ export function extractToolAttachments(
   }
 
   // Strip binary data from file references, keep metadata
-  if (attachments.length > 0) {
+  if (status === 'executed' && attachments.length > 0) {
     sanitizedResult.files = attachments.map(
       ({ base64Data, bytes, ...rest }): FileReference => ({
         path: rest.path,
@@ -160,7 +219,10 @@ export function extractToolAttachments(
     delete sanitizedResult.files;
   }
 
-  return { attachments, sanitizedResult };
+  return {
+    attachments,
+    sanitizedResult: ToolResultPayloadSchema.parse(sanitizedResult),
+  };
 }
 
 export function describeAttachments(
@@ -291,26 +353,37 @@ export function formatToolResultAsText(
 ): string {
   const textPieces: string[] = [];
 
-  if (isNonEmptyString(result.output)) {
-    textPieces.push(result.output);
-  }
-  // userPatch captures user modifications to tool proposals (distinct from userDiffNote
-  // which only shows merge conflicts). Include when user modified the proposed edit.
-  if (result.userPatch) {
-    textPieces.push(
-      `User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``,
-    );
-  }
-  if (result.userInstruction) {
-    textPieces.push(`User feedback: ${result.userInstruction}`);
-  }
-  // Include error when no meaningful output - check for non-empty error string
-  // rather than isError flag (which may be stripped by extractToolAttachments)
-  if (isNonEmptyString(result.error) && !isNonEmptyString(result.output)) {
+  if (result.status === 'executed') {
+    // Primary output text (the tool's result)
+    if (isNonEmptyString(result.output)) {
+      textPieces.push(result.output);
+    }
+    // userPatch captures user modifications to tool proposals (distinct from
+    // userDiffNote which only shows merge conflicts). Include when user modified
+    // the proposed edit.
+    if (result.userPatch) {
+      textPieces.push(
+        `User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``,
+      );
+    }
+    if (result.userInstruction) {
+      textPieces.push(`User feedback: ${result.userInstruction}`);
+    }
+    // Fallback to summary when no output text was produced
+    if (textPieces.length === 0 && result.summary) {
+      textPieces.push(result.summary);
+    }
+  } else {
+    // Error variant — error is required (non-empty string), no output/summary
+    if (result.userPatch) {
+      textPieces.push(
+        `User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``,
+      );
+    }
+    if (result.userInstruction) {
+      textPieces.push(`User feedback: ${result.userInstruction}`);
+    }
     textPieces.push(result.error);
-  }
-  if (textPieces.length === 0 && result.summary) {
-    textPieces.push(result.summary);
   }
   if (attachmentSummary) {
     textPieces.push(attachmentSummary);
