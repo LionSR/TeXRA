@@ -30,6 +30,9 @@ export function createFakeSetupPlatform(
       async gitHubTokenExists() {
         return 'none';
       },
+      async listStoredKeys() {
+        return [] as readonly string[];
+      },
       providers: [],
       ...overrides.secrets,
     },

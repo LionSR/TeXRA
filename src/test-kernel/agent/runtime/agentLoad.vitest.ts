@@ -8,8 +8,55 @@ import { describe, it, beforeEach, afterEach } from 'vitest';
 // Local imports - agent runtime
 import type { ResolvedAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import {
+  loadAgentSettingAndPrompts,
+  validateAgentYamlContent,
+} from '@agent/runtime/agentLoad';
 import { AbsoluteFS } from '@utils/files';
+
+describe('validateAgentYamlContent', () => {
+  it('rejects root settings that only satisfy the partial YAML schema', () => {
+    assert.throws(() =>
+      validateAgentYamlContent({
+        name: 'bad_tool_use_root',
+        settings: {
+          agentCategory: AgentCategory.ToolUse,
+          rounds: 2,
+        },
+      }),
+    );
+  });
+
+  it('keeps inherited child settings partial before parent merging', () => {
+    const result = validateAgentYamlContent({
+      name: 'child',
+      inherits: 'parent',
+      settings: {
+        rounds: 2,
+      },
+      prompts: {
+        userRequest: 'Override the parent request.',
+      },
+    });
+
+    assert.deepStrictEqual(result.settings, { rounds: 2 });
+    assert.deepStrictEqual(result.prompts, {
+      userRequest: 'Override the parent request.',
+    });
+  });
+
+  it('validates root agents after resolving raw tool names', () => {
+    const result = validateAgentYamlContent({
+      name: 'root_tool_use',
+      settings: {
+        agentCategory: AgentCategory.ToolUse,
+        tools: ['grep'],
+      },
+    });
+
+    assert.deepStrictEqual(result.settings.tools, ['grep']);
+  });
+});
 
 describe('loadAgentSettingAndPrompts', () => {
   const absoluteFsAny = AbsoluteFS as unknown as {

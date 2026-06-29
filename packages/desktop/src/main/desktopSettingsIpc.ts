@@ -141,6 +141,13 @@ export interface DesktopSettingsIpcOptions {
   openPath?: (filePath: string) => Promise<void>;
   revealPath?: (filePath: string) => Promise<void>;
   openExternalUrl?: (url: string) => Promise<void>;
+  /**
+   * Offer the ChatGPT sign-in URL as a copyable link. `openExternalUrl` only
+   * targets the system default browser; this lets a user whose ChatGPT
+   * subscription lives in a different browser open the same link there (the
+   * loopback callback accepts the redirect from any browser).
+   */
+  presentChatGptSignInUrl?: (url: string) => void | Promise<void>;
   installToolExtension?: (extensionId: string) => Promise<void>;
   promptSecret?: (input: {
     title: string;
@@ -731,9 +738,22 @@ export function createDesktopSettingsIpc(
         );
         return;
       }
+      const openExternalUrl = options.openExternalUrl;
       const session = await loginWithLoopback({
         coordinator: codexCoordinator(),
-        openBrowser: options.openExternalUrl,
+        openBrowser: async (url) => {
+          await openExternalUrl(url);
+          // Fire-and-forget: the dialog is informational, so don't await it.
+          // `loginWithLoopback` awaits `openBrowser` before it waits for the
+          // OAuth callback, so awaiting a modal here would block sign-in
+          // completion until the user dismisses a dialog that the completed
+          // browser tab has already made redundant (matches the extension's
+          // non-blocking notification). Route a rejection through `onError`
+          // instead of letting it surface as an unhandled rejection.
+          void Promise.resolve(options.presentChatGptSignInUrl?.(url)).catch(
+            onError,
+          );
+        },
       });
       // The onboarding welcome card's "Sign in with ChatGPT" implies the user
       // wants subscription routing, so enable the preference after a successful

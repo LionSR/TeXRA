@@ -12,6 +12,7 @@ import { designTokens } from '@shared/styles';
 import type { TokenUsageStats } from '@shared/schemas';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { clamp, formatCompactTokenCount } from '@utils/core';
+import { formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - progress view
 import { ELEMENT_IDS } from '../constants';
@@ -242,7 +243,7 @@ export class UsagePanel extends LitElement {
               title="No charge — covered by your ChatGPT subscription"
               >Free</span
             >`
-          : html`$${cost.toFixed(3)}`}
+          : html`${formatCostUsd(cost)}`}
       </span>
     `;
   }
@@ -289,7 +290,7 @@ export class UsagePanel extends LitElement {
     const costLabel =
       viaChatGptSubscription === true && cost === 0
         ? 'Free'
-        : `$${cost.toFixed(3)}`;
+        : formatCostUsd(cost);
     return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, ${costLabel}`;
   }
 }

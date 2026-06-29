@@ -77,6 +77,9 @@ function setupApiKeyToolPlatform(store: Map<string, string>): void {
       async gitHubTokenExists() {
         return 'none';
       },
+      async listStoredKeys() {
+        return [...store.keys()] as readonly string[];
+      },
     },
     commands: {
       async invoke() {},

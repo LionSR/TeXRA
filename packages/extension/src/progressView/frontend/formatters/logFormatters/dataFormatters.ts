@@ -22,6 +22,7 @@ import {
 import { getBasename } from '@shared/utils/path';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { formatCompactTokenCount } from '@utils/core';
+import { formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - shared schemas
 import { html, ifDefined, type FormatResult } from '../litTemplates';
@@ -158,7 +159,7 @@ const STAT_FIELDS: readonly StatFieldConfig[] = [
   ],
   ['toolUseTokens', 'tools', 'Tool tokens', formatCompactTokenCount],
   ['elapsedTime', 'clock', 'Elapsed time', (v) => `${v}s`],
-  ['cost', 'rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
+  ['cost', 'rocket', 'Cost', formatCostUsd],
 ];
 
 /** Format statistics entry as TemplateResult. */
