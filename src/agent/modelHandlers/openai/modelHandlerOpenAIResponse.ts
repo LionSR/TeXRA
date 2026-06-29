@@ -39,7 +39,7 @@ import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Local imports - utils
-import { clamp, delay, filterNotNullish, roundTo } from '@utils/core';
+import { clamp, filterNotNullish, roundTo } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import {
   getWebSocketEnabled,
@@ -81,6 +81,10 @@ import {
 } from '../types/ServerToolTypes';
 import { ResponseStreamProcessor } from './ResponseStreamProcessor';
 import { OpenAIResponseWebSocketTransport } from './OpenAIResponseWebSocketTransport';
+import {
+  BackgroundPoller,
+  type BackgroundPollStats,
+} from '../support/BackgroundPoller';
 import { isResponseFunctionToolCallItem } from './responseStreamEvents';
 import {
   createInputText,
@@ -322,11 +326,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return isGptFamilyModelName(this.config.name) && this.isWorkflowMode();
   }
 
-  private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
-  private static readonly BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
   /** Statuses indicating the background response is still processing. */
   private static readonly BACKGROUND_PENDING_STATUSES: readonly ResponseStatus[] =
     ['queued', 'in_progress'];
+
+  private readonly backgroundPoller = new BackgroundPoller<Response>({
+    pollIntervalMs: 15000,
+    maxDurationMs: 3 * 60 * 60 * 1000, // 3 hours
+    isPending: (r) => this.isBackgroundPending(r),
+    logger: () => this.logger,
+  });
+
   private previousResponseId: string | null = null;
 
   /**
@@ -2015,168 +2025,88 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return initialResponse;
     }
 
-    let current = initialResponse;
-    const responseId = initialResponse.id;
-
     // Track which response is being polled so retry logic can resume via
     // tryResumeBackgroundResponse instead of creating a new request.
-    this.pendingBackgroundResponseId = responseId;
-    const pollInterval = ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS;
-    const startTime = Date.now();
-    let pollCount = 0;
-    const initialStatus = current.status ?? 'unknown';
+    this.pendingBackgroundResponseId = initialResponse.id;
 
-    this.logger.debug(
-      `Background polling started for response ${responseId} (status: ${initialStatus})`,
-      {
-        data: {
-          responseId,
-          status: current.status,
-        },
-      },
-    );
-
-    while (this.isBackgroundPending(current)) {
-      pollCount += 1;
-      this.logger.debug(
-        `Waiting ${pollInterval}ms before poll ${pollCount} for response ${responseId}`,
-        {
-          data: {
+    let pollStats: BackgroundPollStats | undefined;
+    const polled = (await this.backgroundPoller.poll({
+      initialResponse,
+      retrieve: async (responseId, sig) => {
+        try {
+          return (await client.responses.retrieve(
             responseId,
-            pollCount,
-            waitMs: pollInterval,
-          },
-        },
-      );
-      try {
-        await delay(pollInterval, { signal });
-      } catch (err) {
-        if (isUserAbort(err)) {
-          this.logger.debug(
-            `Background polling aborted for response ${responseId} while waiting to poll.`,
-            {
-              data: {
-                responseId,
-                pollCount,
-                elapsedMs: Date.now() - startTime,
-              },
-            },
-          );
-          // User cancelled - clear pending ID to prevent ghost-resume on next call.
-          // The background job keeps running on OpenAI's side but we won't try to
-          // resume it since the user explicitly cancelled.
-          this.clearPendingBackgroundResponse();
-        }
-        throw err;
-      }
-
-      const elapsedMs = Date.now() - startTime;
-      if (elapsedMs > ModelHandlerOpenAIResponse.BACKGROUND_MAX_DURATION_MS) {
-        this.logger.error(
-          `Background response ${responseId} exceeded maximum polling duration while pending`,
-          {
-            data: {
+            undefined,
+            sig ? { signal: sig } : undefined,
+          )) as T;
+        } catch (err) {
+          // Tag before checking: retrieve() throws the SDK's APIUserAbortError,
+          // not a DOMException, when the signal fires.
+          tagOpenAISdkError(err, this.config.provider);
+          if (isUserAbort(err)) {
+            // User cancelled during retrieve — clear pending ID to prevent
+            // ghost-resume on next call.
+            this.clearPendingBackgroundResponse();
+            throw err;
+          }
+          // 404 "response not found" during polling means the response is truly
+          // gone server-side. Clear the pending ID so the next retry creates a
+          // fresh background request instead of routing through
+          // tryResumeBackgroundResponse to rediscover the 404.
+          const statusCode = detectStatusCode(err);
+          if (statusCode === 404) {
+            this.clearPendingBackgroundResponse();
+            throw createOpenAIBackgroundPollingError(
               responseId,
-              status: current.status,
-              pollCount,
-              elapsedMs,
-            },
-          },
-        );
-        throw new Error(
-          `Background response ${responseId} exceeded maximum polling duration of ${ModelHandlerOpenAIResponse.BACKGROUND_MAX_DURATION_MS} ms. Retry later or cancel the job with client.responses.cancel("${responseId}").`,
-        );
-      }
-
-      const requestOptions = signal ? { signal } : undefined;
-      try {
-        // Cast is safe: retrieve returns the same response structure, just without parsed output typing
-        current = (await client.responses.retrieve(
-          responseId,
-          undefined,
-          requestOptions,
-        )) as T;
-      } catch (err) {
-        // Tag before checking: retrieve() throws the SDK's APIUserAbortError,
-        // not a DOMException, when the signal fires.
-        tagOpenAISdkError(err, this.config.provider);
-        if (isUserAbort(err)) {
-          // User cancelled during retrieve - clear pending ID
-          this.clearPendingBackgroundResponse();
+              err,
+              this.config.provider,
+            );
+          }
+          // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
+          // so downstream handlers (relay 401 token refresh, retryability checks,
+          // non-retryable classification) work correctly with full HTTP metadata.
+          // The ID is intentionally NOT cleared — retry may resume the same response.
           throw err;
         }
-        // 404 "response not found" during polling means the response is truly
-        // gone server-side. Clear the pending ID so the next retry creates a
-        // fresh background request instead of routing through
-        // tryResumeBackgroundResponse to rediscover the 404. The wrapping
-        // below strips the 404 status so the provider-error normalizer
-        // classifies the error as retryable (network-like), keeping the retry
-        // loop engaged rather than bailing out on a non-retryable 4xx.
-        //
-        // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
-        // so downstream handlers (relay 401 token refresh, retryability checks,
-        // non-retryable classification) work correctly with full HTTP metadata.
-        const statusCode = detectStatusCode(err);
-        if (statusCode === 404) {
-          this.clearPendingBackgroundResponse();
-          throw createOpenAIBackgroundPollingError(
-            responseId,
-            err,
-            this.config.provider,
-          );
-        }
-        throw err;
-      }
-
-      this.logger.debug(
-        `Background poll ${pollCount} for response ${responseId}: status=${
-          current.status ?? 'unknown'
-        }`,
-        {
-          data: {
-            responseId,
-            status: current.status,
-            pollCount,
-          },
-        },
-      );
-    }
-
-    const elapsedMs = Date.now() - startTime;
-    this.logger.debug(
-      `Background polling finished for response ${responseId} with status=${
-        current.status ?? 'unknown'
-      } after ${pollCount} polls (${elapsedMs} ms)`,
-      {
-        data: {
-          responseId,
-          status: current.status,
-          pollCount,
-          elapsedMs,
-          usage: current.usage ?? undefined,
-        },
       },
-    );
+      extractId: (r) => r.id,
+      extractStatus: (r) => r.status ?? 'unknown',
+      signal,
+      resourceLabel: 'response',
+      providerLabel: 'OpenAI',
+      onAbort: () => this.clearPendingBackgroundResponse(),
+      formatTimeoutError: ({ responseId, maxDurationMs }) =>
+        `OpenAI response ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms. ` +
+        `Retry later or cancel the job with client.responses.cancel("${responseId}").`,
+      extraFinishData: (response) => ({
+        usage: response.usage ?? undefined,
+      }),
+      onFinished: (_response, stats) => {
+        pollStats = stats;
+      },
+    })) as T;
 
-    if (current.status === 'completed') {
-      return current;
+    if (polled.status === 'completed') {
+      return polled;
     }
 
-    const fallbackStatus = current.status ?? 'unknown';
+    // Terminal failure — the background response ended with a non-completed,
+    // non-pending status (failed / cancelled / incomplete).
+    const fallbackStatus = polled.status ?? 'unknown';
     this.logger.error(
-      `Background response ${responseId} ended with status ${fallbackStatus}`,
+      `Background response ${polled.id} ended with status ${fallbackStatus}`,
       {
         data: {
-          responseId,
-          status: current.status,
-          pollCount,
-          elapsedMs,
-          error: current.error ?? undefined,
-          incomplete: current.incomplete_details ?? undefined,
+          responseId: polled.id,
+          status: polled.status,
+          pollCount: pollStats?.pollCount,
+          elapsedMs: pollStats?.elapsedMs,
+          error: polled.error ?? undefined,
+          incomplete: polled.incomplete_details ?? undefined,
         },
       },
     );
-    throw createOpenAIBackgroundTerminalError(current, this.config.provider);
+    throw createOpenAIBackgroundTerminalError(polled, this.config.provider);
   }
 
   /** Adds continuation instructions for models without prefill support. */
