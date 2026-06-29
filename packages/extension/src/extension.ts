@@ -74,6 +74,10 @@ import {
   pushManualCriticism,
   registerInlineCriticism,
 } from '@frontend/latex/inlineCriticism';
+import {
+  getInlineCommentProvider,
+  registerInlineComments,
+} from '@frontend/comments/inlineComments';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
 import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
@@ -93,8 +97,8 @@ import {
   issuePollingSource,
 } from '@tools/github';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
-import { setAddCriticismSink } from '@tools/AddCriticismTool';
-import { setLinterProvider } from '@tools/DiagnosticsTool';
+import { setAddCriticismSink, setLinterProvider } from '@tools/DiagnosticsTool';
+import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { StorageFS } from '@utils/files';
@@ -606,6 +610,8 @@ export async function activate(context: vscode.ExtensionContext) {
   setLinterProvider(getLinterMessages);
   setOpenBuildDisplay(openBuildDisplayIfTex);
   registerInlineCriticism(context);
+  registerInlineComments(context);
+  setInlineCommentProvider(getInlineCommentProvider());
   setAddCriticismSink((payload) => {
     const accepted = pushManualCriticism({
       absolutePath: payload.absolutePath,

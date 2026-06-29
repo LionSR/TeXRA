@@ -59,10 +59,11 @@ import {
   handleProgressViewBashApprovalAction,
   releaseStreamResources,
 } from '@tools/approval';
+import type { RegisteredToolName } from '@tools/registry';
+import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { GoalStore } from '@tools/goal';
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import { handleUserQuestionAction } from '@tools/userQuestion';
-import type { RegisteredToolName } from '@tools/registry';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { getConfig } from '@utils/config/configUtils';
@@ -84,8 +85,14 @@ import {
 } from './desktopProgressEventBridge.js';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
-const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
+type DesktopUnavailableTool =
+  | RegisteredToolName
+  | typeof DIAGNOSTICS_ADD_RUNTIME_CAPABILITY;
+
+const DESKTOP_UNAVAILABLE_TOOLS: readonly DesktopUnavailableTool[] = [
   'list_api_keys',
+  'inline_comment',
+  DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
 ];
 
 export interface DesktopAgentExecutionOptions {
