@@ -81,7 +81,10 @@ import {
 } from '../types/ServerToolTypes';
 import { ResponseStreamProcessor } from './ResponseStreamProcessor';
 import { OpenAIResponseWebSocketTransport } from './OpenAIResponseWebSocketTransport';
-import { BackgroundPoller } from '../support/BackgroundPoller';
+import {
+  BackgroundPoller,
+  type BackgroundPollStats,
+} from '../support/BackgroundPoller';
 import { isResponseFunctionToolCallItem } from './responseStreamEvents';
 import {
   createInputText,
@@ -335,7 +338,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         pollIntervalMs: 15000,
         maxDurationMs: 3 * 60 * 60 * 1000, // 3 hours
         isPending: (r) => this.isBackgroundPending(r),
-        logger: this.logger,
+        logger: () => this.logger,
       });
     }
     return this._backgroundPoller;
@@ -2033,6 +2036,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // tryResumeBackgroundResponse instead of creating a new request.
     this.pendingBackgroundResponseId = initialResponse.id;
 
+    let pollStats: BackgroundPollStats | undefined;
     const polled = (await this.backgroundPoller.poll({
       initialResponse,
       retrieve: async (responseId, sig) => {
@@ -2075,8 +2079,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       extractId: (r) => r.id,
       extractStatus: (r) => r.status ?? 'unknown',
       signal,
+      resourceLabel: 'response',
       providerLabel: 'OpenAI',
       onAbort: () => this.clearPendingBackgroundResponse(),
+      formatTimeoutError: ({ responseId, maxDurationMs }) =>
+        `OpenAI response ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms. ` +
+        `Retry later or cancel the job with client.responses.cancel("${responseId}").`,
+      extraFinishData: (response) => ({
+        usage: response.usage ?? undefined,
+      }),
+      onFinished: (_response, stats) => {
+        pollStats = stats;
+      },
     })) as T;
 
     if (polled.status === 'completed') {
@@ -2092,6 +2106,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         data: {
           responseId: polled.id,
           status: polled.status,
+          pollCount: pollStats?.pollCount,
+          elapsedMs: pollStats?.elapsedMs,
           error: polled.error ?? undefined,
           incomplete: polled.incomplete_details ?? undefined,
         },

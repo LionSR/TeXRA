@@ -53,7 +53,10 @@ import {
   computeGoogleInteractionsPrice,
   normalizeGoogleInteractionsUsage,
 } from './googleInteractionsUsage';
-import { BackgroundPoller } from '../support/BackgroundPoller';
+import {
+  BackgroundPoller,
+  type BackgroundPollStats,
+} from '../support/BackgroundPoller';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
@@ -322,7 +325,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         pollIntervalMs: 5000,
         maxDurationMs: 3 * 60 * 60 * 1000, // 3 hours
         isPending: (r) => this.isBackgroundPending(r),
-        logger: this.logger,
+        logger: () => this.logger,
       });
     }
     return this._backgroundPoller;
@@ -1770,6 +1773,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         void this.cancelBackgroundInteraction(client, interactionId);
       };
 
+      let pollStats: BackgroundPollStats | undefined;
       const polled = await this.backgroundPoller.poll({
         initialResponse: initial,
         retrieve: async (id, sig) => {
@@ -1792,8 +1796,19 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         extractId: (r) => r.id,
         extractStatus: (r) => r.status ?? 'unknown',
         signal,
+        resourceLabel: 'interaction',
         providerLabel: 'Google Interactions',
         onAbort,
+        formatTimeoutError: ({ responseId, maxDurationMs }) =>
+          `Google Interactions background interaction ${responseId} exceeded ` +
+          `maximum polling duration of ${maxDurationMs} ms. Cancel it with ` +
+          `client.interactions.cancel("${responseId}").`,
+        extraFinishData: (interaction) => ({
+          usage: interaction.usage ?? undefined,
+        }),
+        onFinished: (_interaction, stats) => {
+          pollStats = stats;
+        },
       });
 
       // `completed` and `requires_action` are both serviceable terminals: the
@@ -1814,6 +1829,14 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       const status = polled.status ?? 'unknown';
       this.logger.error(
         `Background interaction ${interactionId} ended with status "${status}".`,
+        {
+          data: {
+            interactionId,
+            status,
+            pollCount: pollStats?.pollCount,
+            elapsedMs: pollStats?.elapsedMs,
+          },
+        },
       );
       const err = new Error(
         `Google Interactions background interaction ${interactionId} ended with ` +

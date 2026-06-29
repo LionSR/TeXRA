@@ -1,8 +1,25 @@
 // Local imports - utils
 import { delay } from '@utils/core';
+import { isUserAbort } from '@common/errors/sdkErrorUtils';
 
 // Type imports
 import type { AgentTrace } from '@agent/trace';
+
+export interface BackgroundPollStats {
+  readonly responseId: string;
+  readonly status: string;
+  readonly pollCount: number;
+  readonly elapsedMs: number;
+}
+
+export interface BackgroundPollTimeoutContext<
+  TResponse,
+> extends BackgroundPollStats {
+  readonly maxDurationMs: number;
+  readonly response: TResponse;
+}
+
+type BackgroundPollLogger = AgentTrace | (() => AgentTrace);
 
 /**
  * Configuration for a {@link BackgroundPoller} instance.
@@ -16,8 +33,8 @@ export interface BackgroundPollerConfig<TResponse> {
   readonly maxDurationMs: number;
   /** Predicate: is the given response still being processed? */
   readonly isPending: (response: TResponse) => boolean;
-  /** Logger for debug/progress output. */
-  readonly logger: AgentTrace;
+  /** Logger for debug/progress output, or a supplier for handlers with mutable loggers. */
+  readonly logger: BackgroundPollLogger;
 }
 
 /**
@@ -47,11 +64,43 @@ export interface BackgroundPollOptions<TResponse> {
    * cancel the in-flight job server-side or clear local tracking state.
    */
   readonly onAbort?: (responseId: string) => void;
+  /** Resource noun for logs and timeout messages. Defaults to `response`. */
+  readonly resourceLabel?: string;
   /**
    * Human-readable label for log messages (e.g. `'OpenAI'`,
    * `'Google Interactions'`). Defaults to `'Background'`.
    */
   readonly providerLabel?: string;
+  /** Provider-specific timeout error text with cancellation guidance. */
+  readonly formatTimeoutError?: (
+    context: BackgroundPollTimeoutContext<TResponse>,
+  ) => string;
+  /** Provider-specific fields to append to the final polling-finished log. */
+  readonly extraFinishData?: (
+    response: TResponse,
+    stats: BackgroundPollStats,
+  ) => Record<string, unknown>;
+  /** Observe final poll stats without changing the returned response. */
+  readonly onFinished?: (
+    response: TResponse,
+    stats: BackgroundPollStats,
+  ) => void;
+}
+
+function resolveLogger(logger: BackgroundPollLogger): AgentTrace {
+  return typeof logger === 'function' ? logger() : logger;
+}
+
+function safeExtraData<TResponse>(
+  options: BackgroundPollOptions<TResponse>,
+  response: TResponse,
+  stats: BackgroundPollStats,
+): Record<string, unknown> {
+  try {
+    return options.extraFinishData?.(response, stats) ?? {};
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -111,6 +160,7 @@ export class BackgroundPoller<TResponse> {
       extractStatus,
       signal,
       onAbort,
+      resourceLabel = 'response',
       providerLabel = 'Background',
     } = options;
 
@@ -119,14 +169,15 @@ export class BackgroundPoller<TResponse> {
       return initialResponse;
     }
 
-    const { pollIntervalMs, maxDurationMs, isPending, logger } = this.config;
+    const { pollIntervalMs, maxDurationMs, isPending } = this.config;
+    const logger = () => resolveLogger(this.config.logger);
     const startTime = Date.now();
     let current = initialResponse;
     let pollCount = 0;
 
     const initialStatus = extractStatus(current);
-    logger.debug(
-      `${providerLabel} polling started for response ${responseId} (status: ${initialStatus})`,
+    logger().debug(
+      `${providerLabel} polling started for ${resourceLabel} ${responseId} (status: ${initialStatus})`,
       { data: { responseId, status: initialStatus } },
     );
 
@@ -147,37 +198,52 @@ export class BackgroundPoller<TResponse> {
     try {
       while (isPending(current)) {
         pollCount += 1;
-        logger.debug(
-          `Waiting ${pollIntervalMs}ms before poll ${pollCount} for ${providerLabel} response ${responseId}`,
+        logger().debug(
+          `Waiting ${pollIntervalMs}ms before poll ${pollCount} for ${providerLabel} ${resourceLabel} ${responseId}`,
           {
             data: { responseId, pollCount, waitMs: pollIntervalMs },
           },
         );
 
-        await delay(pollIntervalMs, { signal });
+        try {
+          await delay(pollIntervalMs, { signal });
+        } catch (err) {
+          if (isUserAbort(err)) {
+            logger().debug(
+              `${providerLabel} background polling aborted for ${resourceLabel} ${responseId} while waiting (poll ${pollCount}).`,
+              { data: { responseId, pollCount } },
+            );
+          }
+          throw err;
+        }
 
         const elapsedMs = Date.now() - startTime;
+        const status = extractStatus(current);
         if (elapsedMs > maxDurationMs) {
-          logger.error(
-            `${providerLabel} response ${responseId} exceeded maximum polling duration while pending`,
+          const stats = { responseId, status, pollCount, elapsedMs };
+          logger().error(
+            `${providerLabel} ${resourceLabel} ${responseId} exceeded maximum polling duration while pending`,
             {
               data: {
-                responseId,
-                status: extractStatus(current),
-                pollCount,
-                elapsedMs,
+                ...stats,
+                maxDurationMs,
               },
             },
           );
           throw new Error(
-            `${providerLabel} response ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms.`,
+            options.formatTimeoutError?.({
+              ...stats,
+              maxDurationMs,
+              response: current,
+            }) ??
+              `${providerLabel} ${resourceLabel} ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms.`,
           );
         }
 
         current = await retrieve(responseId, signal);
 
-        logger.debug(
-          `${providerLabel} poll ${pollCount} for response ${responseId}: status=${extractStatus(current)}`,
+        logger().debug(
+          `${providerLabel} poll ${pollCount} for ${resourceLabel} ${responseId}: status=${extractStatus(current)}`,
           {
             data: {
               responseId,
@@ -189,17 +255,22 @@ export class BackgroundPoller<TResponse> {
       }
 
       const elapsedMs = Date.now() - startTime;
-      logger.debug(
-        `${providerLabel} polling finished for response ${responseId} with status=${extractStatus(current)} after ${pollCount} polls (${elapsedMs} ms)`,
+      const stats = {
+        responseId,
+        status: extractStatus(current),
+        pollCount,
+        elapsedMs,
+      };
+      logger().debug(
+        `${providerLabel} polling finished for ${resourceLabel} ${responseId} with status=${stats.status} after ${pollCount} polls (${elapsedMs} ms)`,
         {
           data: {
-            responseId,
-            status: extractStatus(current),
-            pollCount,
-            elapsedMs,
+            ...stats,
+            ...safeExtraData(options, current, stats),
           },
         },
       );
+      options.onFinished?.(current, stats);
 
       return current;
     } finally {
