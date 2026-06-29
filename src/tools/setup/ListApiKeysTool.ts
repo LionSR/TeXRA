@@ -13,21 +13,21 @@ import { getSetupPlatform } from './platform';
 const ListApiKeysInputSchema = z
   .strictObject({})
   .describe(
-    'No inputs — returns all secret key names stored in TeXRA SecretStorage.',
+    'No inputs — audits secret key names stored in TeXRA SecretStorage.',
   );
 
 type ListApiKeysInput = z.infer<typeof ListApiKeysInputSchema>;
 
 /**
- * List all secret key *names* in SecretStorage (values are never read).
+ * Audit secret key *names* in SecretStorage (values are never read).
  *
  * Uses `SecretStorage.keys()` (stable since VS Code 1.105). The result
- * is categorised: known provider keys, GitHub token, and any other entries
- * stored by TeXRA (auth sessions, etc.) or left over from previous installs.
+ * is categorised: known provider keys, GitHub token, unrecognised apiKey.*
+ * entries, and a redacted count for other stored secrets.
  */
 export class ListApiKeysTool extends defineTool({
   name: 'list_api_keys',
-  description: `Audit TeXRA's SecretStorage — lists all stored secret names (values are never read or surfaced). Known provider keys are shown by provider name (e.g. \`anthropic\`); unrecognised \`apiKey.*\` entries and other secrets are shown by their raw SecretStorage key name. Use this to check which providers have a key configured, detect stale or unexpected entries, and plan set_api_key / unset_api_key calls. Prefer probe_environment for a fuller overview that also covers tool installations and auth status.`,
+  description: `Audit TeXRA's SecretStorage without reading secret values. Known provider keys are shown by provider name (e.g. \`anthropic\`); unrecognised \`apiKey.*\` entries are shown by raw key name so stale provider keys can be removed; other secret key names are counted but redacted because they may contain user-derived identifiers. Use this to check which providers have a key configured, detect stale API-key entries, and plan set_api_key / unset_api_key calls. Prefer probe_environment for a fuller overview that also covers tool installations and auth status.`,
   schema: ListApiKeysInputSchema,
 }) {
   protected async execute(_input: ListApiKeysInput): Promise<ToolResult> {
@@ -89,8 +89,10 @@ export class ListApiKeysTool extends defineTool({
     }
 
     if (otherKeys.length > 0) {
-      lines.push('', 'Other stored secrets:');
-      for (const k of otherKeys) lines.push(`  ${k}`);
+      lines.push(
+        '',
+        `Other stored secrets: ${otherKeys.length} redacted key name${otherKeys.length === 1 ? '' : 's'}`,
+      );
     }
 
     const providerSummary =

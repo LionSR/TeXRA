@@ -72,12 +72,15 @@ describe('list_api_keys tool', () => {
     assert.match(result.output ?? '', /apiKey\.oldprovider/);
   });
 
-  it('shows non-provider non-github secrets under Other', async () => {
+  it('redacts non-provider non-github secret key names under Other', async () => {
     installPlatformWithKeys(['texra.supabase.session']);
     const result = await tool.call({});
     assert.ok(!result.isError, result.output);
-    assert.match(result.output ?? '', /Other stored secrets/);
-    assert.match(result.output ?? '', /texra\.supabase\.session/);
+    assert.match(
+      result.output ?? '',
+      /Other stored secrets: 1 redacted key name/,
+    );
+    assert.doesNotMatch(result.output ?? '', /texra\.supabase\.session/);
   });
 
   it('categorises all key types simultaneously', async () => {
@@ -92,7 +95,11 @@ describe('list_api_keys tool', () => {
     assert.match(result.output ?? '', /Provider API keys stored/);
     assert.match(result.output ?? '', /GitHub token: stored/);
     assert.match(result.output ?? '', /Unrecognised apiKey\.\*/);
-    assert.match(result.output ?? '', /Other stored secrets/);
+    assert.match(
+      result.output ?? '',
+      /Other stored secrets: 1 redacted key name/,
+    );
+    assert.doesNotMatch(result.output ?? '', /texra\.supabase\.session/);
   });
 
   it('summary counts reflect platform.secrets.providers, not the global import', async () => {
