@@ -68,6 +68,8 @@ export interface StateSettingEntry {
    * when the key is absent. `schema.parse(undefined)` yields that default.
    */
   readonly schema: z.ZodType;
+  /** Short label for compact settings UIs; falls back to the stripped key. */
+  readonly title?: string;
   /** Human-readable description, shared across every host that renders it. */
   readonly description: string;
   /** Grouping label for settings UIs. */
@@ -147,6 +149,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: WorkspaceStateKey.GIT_MARK_COMMITS,
     schema: z.boolean().prefault(DEFAULT_GIT_MARK_COMMITS),
+    title: 'Mark agent commits',
     description:
       'Attribute agent-authored git commits to the TeXRA identity so they are distinguishable from your own commits.',
     category: 'git',
@@ -159,6 +162,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: WorkspaceStateKey.GIT_AUTHOR_NAME,
     schema: z.string().prefault(DEFAULT_GIT_AUTHOR_NAME),
+    title: 'Agent commit author',
     description:
       'Author and committer name used for agent-authored commits when commit marking is enabled.',
     category: 'git',
@@ -171,6 +175,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: WorkspaceStateKey.GIT_AUTHOR_EMAIL,
     schema: z.string().prefault(DEFAULT_GIT_AUTHOR_EMAIL),
+    title: 'Agent commit email',
     description:
       'Author and committer email used for agent-authored commits when commit marking is enabled.',
     category: 'git',
@@ -183,6 +188,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
     schema: z.boolean().prefault(DEFAULT_GIT_WORKTREE_SUPPORT),
+    title: 'Subagent worktrees',
     description:
       'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
     category: 'git',
@@ -201,6 +207,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompile),
+    title: 'Auto-compile outputs',
     description:
       'Compile the LaTeX project automatically after an agent writes its output.',
     category: 'workflow',
@@ -215,6 +222,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       .number()
       .min(LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min)
       .prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs),
+    title: 'Auto-compile timeout',
     description:
       'Maximum time (in milliseconds) to wait for an automatic post-output compile before giving up.',
     category: 'workflow',
@@ -239,6 +247,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z
       .boolean()
       .prefault(LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure),
+    title: 'Reject compile failures',
     description:
       'Reject an agent edit when the automatic post-output compile fails, so broken LaTeX is not accepted.',
     category: 'workflow',
@@ -329,6 +338,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: GlobalStateKey.WEBSOCKET_OPENAI,
     schema: z.boolean().prefault(false),
+    title: 'OpenAI WebSocket',
     description:
       'EXPERIMENTAL: use the persistent WebSocket transport for OpenAI Responses requests (lower latency for tool-use loops), and let the ChatGPT-subscription Codex backend attempt WebSocket. Off by default.',
     category: 'model',
