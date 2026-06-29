@@ -13,6 +13,8 @@
  */
 
 // Third-party imports
+import * as path from 'node:path';
+
 import * as vscode from 'vscode';
 
 // Local imports
@@ -27,6 +29,8 @@ const CONTROLLER_ID = 'texra.inlineComments';
 const CONTROLLER_LABEL = 'TeXRA';
 const AGENT_AUTHOR = 'TeXRA';
 const USER_AUTHOR = 'You';
+const THREAD_CONTEXT_OPEN = 'texraInlineCommentOpen';
+const THREAD_CONTEXT_RESOLVED = 'texraInlineCommentResolved';
 
 let controller: vscode.CommentController | undefined;
 const threads = new Map<string, vscode.CommentThread>();
@@ -47,6 +51,23 @@ function appendComment(
 ): void {
   // VS Code only re-renders when `comments` is reassigned, not mutated.
   thread.comments = [...thread.comments, makeComment(author, body)];
+}
+
+function comparableFsPath(fsPath: string): string {
+  const normalized = path.normalize(fsPath);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function setThreadResolved(
+  thread: vscode.CommentThread,
+  resolved: boolean,
+): void {
+  thread.state = resolved
+    ? vscode.CommentThreadState.Resolved
+    : vscode.CommentThreadState.Unresolved;
+  thread.contextValue = resolved
+    ? THREAD_CONTEXT_RESOLVED
+    : THREAD_CONTEXT_OPEN;
 }
 
 function toView(
@@ -87,7 +108,7 @@ const provider: InlineCommentProvider = {
     thread.label = threadId;
     thread.canReply = true;
     thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
-    thread.state = vscode.CommentThreadState.Unresolved;
+    setThreadResolved(thread, false);
     threads.set(threadId, thread);
     return { threadId, resolvedPath: absolutePath };
   },
@@ -102,16 +123,21 @@ const provider: InlineCommentProvider = {
   setResolved: ({ threadId, resolved }) => {
     const thread = threads.get(threadId);
     if (!thread) return false;
-    thread.state = resolved
-      ? vscode.CommentThreadState.Resolved
-      : vscode.CommentThreadState.Unresolved;
+    setThreadResolved(thread, resolved);
     return true;
   },
 
   list: ({ absolutePath }) => {
+    const comparablePath =
+      absolutePath == null ? undefined : comparableFsPath(absolutePath);
     const views: InlineCommentThreadView[] = [];
     for (const [threadId, thread] of threads) {
-      if (absolutePath && thread.uri.fsPath !== absolutePath) continue;
+      if (
+        comparablePath &&
+        comparableFsPath(thread.uri.fsPath) !== comparablePath
+      ) {
+        continue;
+      }
       views.push(toView(threadId, thread));
     }
     return views;
@@ -137,13 +163,13 @@ function enable(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       'texra.resolveCommentThread',
       (thread: vscode.CommentThread) => {
-        thread.state = vscode.CommentThreadState.Resolved;
+        setThreadResolved(thread, true);
       },
     ),
     vscode.commands.registerCommand(
       'texra.unresolveCommentThread',
       (thread: vscode.CommentThread) => {
-        thread.state = vscode.CommentThreadState.Unresolved;
+        setThreadResolved(thread, false);
       },
     ),
   );

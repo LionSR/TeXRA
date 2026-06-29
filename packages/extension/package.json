@@ -1834,12 +1834,12 @@
         {
           "command": "texra.resolveCommentThread",
           "group": "inline@1",
-          "when": "commentController == texra.inlineComments && commentThreadIsResolved == false"
+          "when": "commentController == texra.inlineComments && commentThread == texraInlineCommentOpen"
         },
         {
           "command": "texra.unresolveCommentThread",
           "group": "inline@1",
-          "when": "commentController == texra.inlineComments && commentThreadIsResolved == true"
+          "when": "commentController == texra.inlineComments && commentThread == texraInlineCommentResolved"
         }
       ]
     },

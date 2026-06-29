@@ -1280,7 +1280,7 @@ describe('DesktopProgressBridge', () => {
         request,
         expect.objectContaining({
           openWorkflowOutput: expect.any(Function),
-          runtimeUnavailableTools: ['list_api_keys'],
+          runtimeUnavailableTools: ['list_api_keys', 'inline_comment'],
         }),
       );
     } finally {

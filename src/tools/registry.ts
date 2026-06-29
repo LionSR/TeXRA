@@ -156,6 +156,7 @@ export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
  * so the model sees only the canonical definition.
  */
 const TOOL_ALIASES: Record<string, string> = {
+  add_criticism: 'diagnostics',
   external_inquiry: 'inquiry',
 };
 

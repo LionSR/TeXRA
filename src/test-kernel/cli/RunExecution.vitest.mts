@@ -141,7 +141,7 @@ describe('executeCliRequest', () => {
       request,
       expect.objectContaining({
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: ['inquiry', 'list_api_keys'],
+        runtimeUnavailableTools: ['inquiry', 'list_api_keys', 'inline_comment'],
       }),
     );
   });
@@ -160,7 +160,12 @@ describe('executeCliRequest', () => {
     expect(mocks.runAgent).toHaveBeenCalledWith(
       request,
       expect.objectContaining({
-        runtimeUnavailableTools: ['inquiry', 'list_api_keys', 'custom_tool'],
+        runtimeUnavailableTools: [
+          'inquiry',
+          'list_api_keys',
+          'inline_comment',
+          'custom_tool',
+        ],
       }),
     );
   });

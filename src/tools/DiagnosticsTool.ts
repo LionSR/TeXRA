@@ -79,7 +79,11 @@ export const DiagnosticsInputSchema = z.strictObject({
     .min(1)
     .nullish()
     .describe('add: 1-based line number where the issue occurs.'),
-  message: z.string().min(1).nullish().describe('add: description of the issue.'),
+  message: z
+    .string()
+    .min(1)
+    .nullish()
+    .describe('add: description of the issue.'),
   severity: z
     .int()
     .min(0)
@@ -115,15 +119,18 @@ export class DiagnosticsTool extends defineTool({
 
   private async readDiagnostics(input: DiagnosticsInput): Promise<ToolResult> {
     const { command, path } = input;
+    const workingDirectory = tryUseRunContext()?.workingDirectory;
+    const resolved = resolveWorkspaceRelativePath(path, workingDirectory);
+    const diagnosticsPath = resolved.absolute;
 
     try {
-      const messages = await linterProvider(path);
+      const messages = await linterProvider(diagnosticsPath);
       const counts = countBySeverity(messages);
-      const header = `${path}: ${formatCounts(counts)}`;
-      const summary = `Diagnostics ${command} for ${path}`;
+      const header = `${diagnosticsPath}: ${formatCounts(counts)}`;
+      const summary = `Diagnostics ${command} for ${diagnosticsPath}`;
 
       const baseDiagnostics = {
-        path,
+        path: diagnosticsPath,
         command,
         severity: counts,
       };
@@ -143,7 +150,7 @@ export class DiagnosticsTool extends defineTool({
       const detail = toErrorMessage(error);
       logger.error(
         CHANNEL,
-        `Failed to collect diagnostics for ${path}: ${detail}`,
+        `Failed to collect diagnostics for ${diagnosticsPath}: ${detail}`,
       );
       throw new ToolError(`Failed to collect diagnostics: ${detail}`);
     }

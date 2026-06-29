@@ -59,6 +59,7 @@ import {
   handleProgressViewBashApprovalAction,
   releaseStreamResources,
 } from '@tools/approval';
+import type { RegisteredToolName } from '@tools/registry';
 import { GoalStore } from '@tools/goal';
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import { handleUserQuestionAction } from '@tools/userQuestion';
@@ -86,6 +87,7 @@ import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
   'list_api_keys',
+  'inline_comment',
 ];
 
 export interface DesktopAgentExecutionOptions {
