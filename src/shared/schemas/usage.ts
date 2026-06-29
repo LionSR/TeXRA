@@ -2,6 +2,14 @@ import { z } from 'zod';
 
 export const TokenCountSchema = z.int().nonnegative();
 
+export const UsageRouteSchema = z.enum([
+  'chatgpt-subscription',
+  'relay',
+  'api-key',
+]);
+
+export type UsageRoute = z.infer<typeof UsageRouteSchema>;
+
 export const TokenUsageStatsSchema = z.strictObject({
   inputTokens: TokenCountSchema,
   outputTokens: TokenCountSchema,
@@ -10,12 +18,21 @@ export const TokenUsageStatsSchema = z.strictObject({
   cacheMissInputTokens: TokenCountSchema.optional(),
   cacheCreationInputTokens: TokenCountSchema.optional(),
   viaChatGptSubscription: z.boolean().optional(),
+  usageRoute: UsageRouteSchema.optional(),
 });
 
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
 
+type UsageRouteInput = Pick<
+  TokenUsageStats,
+  'usageRoute' | 'viaChatGptSubscription'
+>;
+
+type EmptyUsageStats = Required<Omit<TokenUsageStats, 'usageRoute'>> &
+  Pick<TokenUsageStats, 'usageRoute'>;
+
 /** Returns zero-initialized usage stats. */
-export function emptyUsageStats(): Required<TokenUsageStats> {
+export function emptyUsageStats(): EmptyUsageStats {
   return {
     inputTokens: 0,
     outputTokens: 0,
@@ -38,6 +55,17 @@ function hasUsageActivity(usage: TokenUsageStats): boolean {
   );
 }
 
+export function resolveUsageRoute(
+  usage: UsageRouteInput | null | undefined,
+): UsageRoute | undefined {
+  return (
+    usage?.usageRoute ??
+    (usage?.viaChatGptSubscription === true
+      ? 'chatgpt-subscription'
+      : undefined)
+  );
+}
+
 /** Accumulates usage stats from an iterable into a single total. */
 export function sumUsageStats(
   items: Iterable<TokenUsageStats>,
@@ -45,6 +73,9 @@ export function sumUsageStats(
   const total = emptyUsageStats();
   let sawUsageActivity = false;
   let allRoundsViaChatGptSubscription = true;
+  let commonUsageRoute: UsageRoute | undefined;
+  let sawUsageRoute = false;
+  let hasMixedOrMissingUsageRoute = false;
   for (const usage of items) {
     total.inputTokens += usage.inputTokens;
     total.outputTokens += usage.outputTokens;
@@ -61,12 +92,31 @@ export function sumUsageStats(
       allRoundsViaChatGptSubscription =
         allRoundsViaChatGptSubscription &&
         usage.viaChatGptSubscription === true;
+
+      const usageRoute = resolveUsageRoute(usage);
+      if (usageRoute == null) {
+        hasMixedOrMissingUsageRoute = true;
+      } else if (!sawUsageRoute) {
+        commonUsageRoute = usageRoute;
+        sawUsageRoute = true;
+      } else if (commonUsageRoute !== usageRoute) {
+        hasMixedOrMissingUsageRoute = true;
+        commonUsageRoute = undefined;
+      }
     }
   }
   // Only true when every non-empty accumulated round used the subscription;
   // zero baselines are neutral, while API-key or relay rounds make the total mixed.
   total.viaChatGptSubscription =
     sawUsageActivity && allRoundsViaChatGptSubscription;
+  if (
+    sawUsageActivity &&
+    sawUsageRoute &&
+    !hasMixedOrMissingUsageRoute &&
+    commonUsageRoute
+  ) {
+    total.usageRoute = commonUsageRoute;
+  }
   return total;
 }
 

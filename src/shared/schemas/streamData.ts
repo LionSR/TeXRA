@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import {
   TokenUsageStatsSchema,
+  UsageRouteSchema,
   emptyUsageStats,
   type TokenUsageStats,
 } from './usage';
@@ -273,6 +274,7 @@ const numericUsageParsingShape = Object.fromEntries(
 const TokenUsageStatsParsingBaseSchema = z.object({
   ...numericUsageParsingShape,
   viaChatGptSubscription: z.boolean().catch(false).prefault(false),
+  usageRoute: UsageRouteSchema.optional().catch(undefined),
   // The numeric fields are derived from `TokenUsageStatsSchema.shape` above;
   // TypeScript cannot recover the required keys through `Object.fromEntries`.
 }) as unknown as z.ZodType<TokenUsageStats>;

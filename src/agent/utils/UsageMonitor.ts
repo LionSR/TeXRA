@@ -13,6 +13,7 @@ import type {
   StorageKey,
   StreamTabId,
   TokenUsageStats,
+  UsageRoute,
 } from '@shared/schemas';
 import { roundTo } from '@utils/core';
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
@@ -125,6 +126,7 @@ export class UsageMonitor {
       const toolUseTokens = latestUsage?.toolUsePromptTokens ?? 0;
       const viaChatGptSubscription =
         latestUsage?.viaChatGptSubscription ?? false;
+      const usageRoute = this.resolveUsageRoute(viaChatGptSubscription);
 
       const { capabilities } = this.modelInfo;
       const supportsCaching =
@@ -160,6 +162,7 @@ export class UsageMonitor {
         }),
         ...(toolUseTokens > 0 && { toolUseTokens }),
         ...(viaChatGptSubscription && { viaChatGptSubscription: true }),
+        ...(usageRoute != null && { usageRoute }),
       };
 
       // Two surfaces for usage: the progress-view sidebar (via runtimeHost
@@ -199,6 +202,7 @@ export class UsageMonitor {
         // Free ChatGPT-subscription round: still logged (cost is 0), but marked
         // so analytics can tell it apart from any other zero-cost row.
         viaChatGptSubscription,
+        usageRoute,
       });
     } catch (error) {
       logger.error(
@@ -225,6 +229,31 @@ export class UsageMonitor {
     return (totals.totalCacheReadInputTokens / totalCacheableTokens) * 100;
   }
 
+  private resolveUsageRoute(
+    viaChatGptSubscription: boolean,
+  ): UsageRoute | undefined {
+    if (viaChatGptSubscription) return 'chatgpt-subscription';
+    try {
+      return this.usesRelayRoute() ? 'relay' : 'api-key';
+    } catch (error) {
+      this.context.logger.debug(
+        `Usage route relay check failed: ${toErrorMessage(error)}`,
+      );
+      return undefined;
+    }
+  }
+
+  private usesRelayRoute(): boolean {
+    const { config } = this.modelInfo;
+    return (
+      !shouldUseOpenRouter(config) &&
+      getServerSideKeyService().shouldUseServerSideKeysSync(
+        config.provider,
+        config.name,
+      )
+    );
+  }
+
   /**
    * Log per-round usage to backend for analytics/billing.
    * Errors are caught and logged, never thrown.
@@ -240,6 +269,7 @@ export class UsageMonitor {
       reasoningTokens?: number;
       cost: number;
       viaChatGptSubscription?: boolean;
+      usageRoute?: UsageRoute;
     },
   ): Promise<void> {
     try {
@@ -253,12 +283,14 @@ export class UsageMonitor {
         Math.max(0, usage.inputTokens - cachedInputTokens);
 
       const usedRelay =
-        !usage.viaChatGptSubscription &&
-        !shouldUseOpenRouter(config) &&
-        getServerSideKeyService().shouldUseServerSideKeysSync(
-          config.provider,
-          config.name,
-        );
+        usage.usageRoute != null
+          ? usage.usageRoute === 'relay'
+          : !usage.viaChatGptSubscription &&
+            !shouldUseOpenRouter(config) &&
+            getServerSideKeyService().shouldUseServerSideKeysSync(
+              config.provider,
+              config.name,
+            );
 
       UsageLogService.log({
         model: config.fullName,
