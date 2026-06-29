@@ -515,6 +515,7 @@ export async function activate(context: vscode.ExtensionContext) {
       },
       anyUsableCredentialExists: () => hasAnyUsableSetupCredential(),
       gitHubTokenExists: () => SecretManager.gitHubTokenExists(),
+      listStoredKeys: () => SecretManager.listKeys(),
     },
     commands: {
       invoke: (cmd, ...args) =>

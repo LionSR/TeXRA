@@ -47,6 +47,10 @@ export class SecretManager {
     return `apiKey.${provider}`;
   }
 
+  public static async listKeys(): Promise<readonly string[]> {
+    return this.storage.keys();
+  }
+
   public static async gitHubTokenExists(): Promise<'secret' | 'env' | 'none'> {
     const stored = await this.get(this.GITHUB_TOKEN_KEY);
     if (stored) return 'secret';

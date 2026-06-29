@@ -23,6 +23,7 @@ export { ProbeEnvironmentTool } from './ProbeEnvironmentTool';
 export { VerifySetupTool } from './VerifySetupTool';
 export { SetApiKeyTool } from './SetApiKeyTool';
 export { UnsetApiKeyTool } from './UnsetApiKeyTool';
+export { ListApiKeysTool } from './ListApiKeysTool';
 export { InvokeCommandTool } from './InvokeCommandTool';
 export { InstallVscodeExtensionTool } from './InstallVscodeExtensionTool';
 export { ReadConfigTool, UpdateConfigTool } from './ConfigTools';
