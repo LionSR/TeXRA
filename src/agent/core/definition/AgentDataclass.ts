@@ -139,6 +139,7 @@ const RawAgentSettingInputSchema = z.strictObject({
     .optional(),
   tools: z.array(AgentToolInputSchema).optional(),
   internal: z.boolean().optional(),
+  assistive: z.boolean().optional(),
   isRewrite: z.boolean().optional(),
   rounds: z.int().positive().optional(),
   prefills: z.array(z.string()).optional(),

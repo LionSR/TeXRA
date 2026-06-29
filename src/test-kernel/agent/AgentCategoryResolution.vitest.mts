@@ -170,6 +170,14 @@ describe('cross-category agent resolution', () => {
     expect(getCategoryAgent('toolUse', 'correct')).toBeUndefined();
   });
 
+  it('surfaces the assistive flag on the built-in latexFixer', () => {
+    // Regression guard: the `assistive: true` setting must survive YAML parsing
+    // (it has to be in the strict settings input schema), or latexFixer would be
+    // silently dropped from the registry and the helper-model preference would
+    // never fire.
+    expect(getCategoryAgent('toolUse', 'latexFixer')?.assistive).toBe(true);
+  });
+
   it('hides internal agents from dropdowns but keeps them launchable by name', () => {
     // Internal agents are excluded from the visible/dropdown set…
     expect(getVisibleAgent('toolUse', 'secretAgent')).toBeUndefined();

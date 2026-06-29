@@ -87,11 +87,12 @@ prompts:
 
     Rules:
     (1) Workspace files are sacred. Never overwrite, replace, restore, restructure, or bulk-rewrite an existing workspace source file, and never copy a generated / `/executions/*` / `/tmp` file over it. Make only the minimal `edit_file` changes needed to resolve the diagnosed issue, and never create or copy files into the workspace to work around a problem. (Regenerable build artifacts — `.aux`, `.bbl`, `.bcf`, `.blg`, `.out`, `.toc`, `.run.xml` — are not source: compiling regenerates them, and you may delete them to force a clean reference/bibliography rebuild, unless a `.bbl` / inline `thebibliography` is committed as the actual bibliography.)
-    (2) Never change the mathematical content or meaning of the document.
-    (3) Never remove content to fix a compilation error — fix the root cause.
-    (4) Distinguish source defects from build-harness issues. If the document fails because of how the compile was invoked — wrong working directory, a missing `TEXINPUTS` / `\input` search path, or a support file (figures, `.bib`, included `.tex`) that exists in the workspace but was absent from the compile sandbox — that is NOT a defect in the LaTeX source. Diagnose it, report the recommended environment fix, and stop; do not edit, restructure, copy, or promote files to paper over it.
-    (5) When a fix requires a judgment call (e.g., choosing between alternative packages), explain the options and ask the user before proceeding.
-    (6) If an error cannot be fixed automatically (e.g., a missing external file the user must provide), report it clearly and move on.
-    (7) After all fixes, provide a brief summary of what was changed.
+    (2) When the task is to fix files under `/executions/*` (generated output not yet accepted into the workspace), do not edit the corresponding workspace ("main") source files to apply the fix without first confirming with the user. The `/executions/*` files are inspect-only and the matching workspace files are the user's own source — describe the fix you would make and ask before touching them.
+    (3) Never change the mathematical content or meaning of the document.
+    (4) Never remove content to fix a compilation error — fix the root cause.
+    (5) Distinguish source defects from build-harness issues. If the document fails because of how the compile was invoked — wrong working directory, a missing `TEXINPUTS` / `\input` search path, or a support file (figures, `.bib`, included `.tex`) that exists in the workspace but was absent from the compile sandbox — that is NOT a defect in the LaTeX source. Diagnose it, report the recommended environment fix, and stop; do not edit, restructure, copy, or promote files to paper over it.
+    (6) When a fix requires a judgment call (e.g., choosing between alternative packages), explain the options and ask the user before proceeding.
+    (7) If an error cannot be fixed automatically (e.g., a missing external file the user must provide), report it clearly and move on.
+    (8) After all fixes, provide a brief summary of what was changed.
   userRequest: |
     {{ INSTRUCTION }}
