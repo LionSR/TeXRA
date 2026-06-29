@@ -1214,12 +1214,6 @@
         "icon": "$(gear)"
       },
       {
-        "command": "texra.showSettingsView",
-        "title": "Show Settings",
-        "category": "TeXRA",
-        "icon": "$(gear)"
-      },
-      {
         "command": "texra.agentReview.run",
         "title": "Find Issues (Agent Review)",
         "shortTitle": "Find Issues",
@@ -1791,10 +1785,6 @@
         },
         {
           "command": "texra.showDashboard",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.showSettingsView",
           "when": "texra.activated"
         }
       ]
