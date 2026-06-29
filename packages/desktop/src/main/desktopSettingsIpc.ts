@@ -747,8 +747,11 @@ export function createDesktopSettingsIpc(
           // OAuth callback, so awaiting a modal here would block sign-in
           // completion until the user dismisses a dialog that the completed
           // browser tab has already made redundant (matches the extension's
-          // non-blocking notification).
-          void options.presentChatGptSignInUrl?.(url);
+          // non-blocking notification). Route a rejection through `onError`
+          // instead of letting it surface as an unhandled rejection.
+          void Promise.resolve(options.presentChatGptSignInUrl?.(url)).catch(
+            onError,
+          );
         },
       });
       // The onboarding welcome card's "Sign in with ChatGPT" implies the user
