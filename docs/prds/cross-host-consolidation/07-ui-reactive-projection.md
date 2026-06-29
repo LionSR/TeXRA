@@ -4,6 +4,16 @@ created: 2026-06-28
 
 # Sub-PRD 07: UI as a Pure Reactive Projection of the Runtime
 
+> **Re-scoped by the unified design pass (2026-06-29).** Phase A (the **status +
+> display-identity projection slice**) lands now: fold status, pending approvals,
+> and ephemeral counters into one projection, delete the desktop fork, and fix the
+> renderer-reload prompt-parity bug. Phase B (the `ProgressViewDelta` patch type
+> and the frontend mirror-reducer deletion) is the **medium-term direction**, not
+> a quick win - the record-store delta type does not exist yet and must ship
+> first. The status slice consumes #6722's tool-result union and 04's carried
+> `resolvedAgentName`. CLI keeps its Ink-native signal on the same status
+> authority (not charged to the store). See `00-overview.md`.
+
 ## Context
 
 The runtime emits through exactly one typed channel, `AgentRuntimeHost.emit<K>(event, payload)` (`src/hosts/AgentRuntimeHost.ts:28-37`), carrying the `ProgressEventPayloads` map (`src/eventBus/ProgressEventBus.ts:79-272`), with `noopAgentRuntimeHost` (`AgentRuntimeHost.ts:35-37`) as the Null Object for headless. That 37-event protocol is correct and stays verbatim; it is the only cross-process wire (the `bus` is an in-process `EventEmitter` and never crosses host to webview).

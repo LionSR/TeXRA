@@ -61,6 +61,42 @@ layer to delete. The success metric is layer-depth per concern trending toward
 three, alongside the decoupling PRD's "fewer public runtime exports than
 baseline".
 
+### The gold-standard bar, and the three smells it rejects
+
+"Fewest layers" has a sharper statement: an absolutely clean design with **almost
+no resolution** and **shallow injection**. Three named smells are rejected
+outright, each a symptom the patterns below are meant to remove:
+
+- **Retry sprawl.** Retry must have **one owner per concern**, not five. Today it
+  is spread across PocketFlow node-level retry, the flow `RetryState`, the
+  `RetryRequestCoordinator`, per-provider API retry in every model handler, and
+  the api-key retry controller (counts owned by the gold-standard PRD's Thesis).
+  Collapsing to one owner per concern is Pattern 2
+  (deep modules) and Pattern 4 (errors as values) applied to failure handling.
+- **Deep injection.** A dependency should reach its use site in **one hop**, not
+  be threaded through N layers or smuggled in a god-context. `RunContext` carrying
+  fourteen fields and three coordinators, with `runtimeHost` threaded ~184 times
+  through `src/agent` (counts owned by the gold-standard PRD's Thesis), is the
+  anti-pattern. Shrinking the ambient surface to what
+  genuinely cannot be passed explicitly is Pattern 6 (session-scoped ownership)
+  plus this objective.
+- **Spaghetti.** The flow <-> runtime <-> host <-> coordinator <-> lifecycle
+  tangle. Each lifecycle gets one owner with a clear create / own / end; a cross
+  reference that exists only to reach a service is deleted, not routed.
+
+**Renaming is cheating.** Reducing a `resolve*` surface by renaming to `get*` is
+not a reduction. The only real reductions are **deleting a layer** (a wrapper or
+indirection) or **deleting a re-derivation** (storing the resolved value at its
+single source of truth). A field audit of this repo found the data model already
+SSOT-clean, so the `resolve*` reduction here is layer-deletion, not new stores
+(sub-PRD 06).
+
+**The runtime is the SDK.** The end state is one runtime that the multiple UIs
+(extension, desktop, CLI) sit on top of as thin adapters; the typed protocol
+(Pattern 1) is the agent-SDK surface. A gold-standard runtime is publishable as an
+SDK precisely because its boundary is minimal and typed - so every layer the UIs
+do not need, and every dependency the core does not expose to them, is removed.
+
 ## Problem Statement
 
 We keep hitting the same seven problems. Stated plainly:
@@ -246,22 +282,16 @@ Thomas, the Pragmatic Programmers): tell the runtime to act, do not ask it for t
 aggregate and re-derive state in the host.
 
 **How it maps to TeXRA.** This is our least mature pattern, and the work is to
-convert a known, counted set of aliases rather than to invent a capability. The
-module already knows how to publish DTOs: of 45 `export type Runtime*` exports
-across the runtime command modules, about 20 are genuine purpose-built
-projections (`RuntimeFollowUpResult` at `followUpCommands.ts:36-44`,
-`RuntimeModelSwitchResult`, `RuntimeHistoryDeleteExecutionResult`, the goal
-projections), and `goalCommands.ts:9-74` is the textbook published-DTO /
-parse-don't-validate shape: hand-authored projection interfaces, `toRuntimeGoal*`
-narrow the persisted `Goal` to only the fields a host needs, and `GoalStore`
-never leaves the module. `listRuntimeQueuedFollowUpMessages` returns `string[]`
-(`followUpCommands.ts:54-58`), never the queue item type.
+convert a known set of internal-type aliases into published projections rather
+than to invent a capability. The module already knows how to publish DTOs:
+`goalCommands.ts:9-74` is the textbook published-DTO / parse-don't-validate shape:
+hand-authored projection interfaces, `toRuntimeGoal*` narrow the persisted `Goal`
+to only the fields a host needs, and `GoalStore` never leaves the module.
 
-The leak is the other 25: pure single-line structural aliases. The densest site
-is `executionRequests.ts:25-42` (eight aliases, including `RuntimeAgentConfig = AgentConfig`,
-`RuntimeTaskState = TaskState`); more sit in `historyCommands.ts:28-31`,
-`resumeCommands.ts:28`, `agentResolution.ts:33`, and `streamControl.ts:18`. The
-precise failure is a Pattern 8 blind spot: the import lint forbids host imports
+The leak is the residual `export type Runtime* = InternalType` structural aliases
+(for example `RuntimeTaskState = TaskState`). The live Runtime\* census + file
+inventory lives in the agent-SDK boundary PRD. The precise failure is a Pattern 8
+blind spot: the import lint forbids host imports
 of `@agent/core/execution/TaskState` and `@agent/core/definition/AgentConfig`
 (`check-runtime-boundaries.mjs:123,129,141`), but `RuntimeTaskState = TaskState`
 re-exports those same shapes through an allowed path. Honest at the import line,
@@ -280,6 +310,25 @@ of an internal type. If a host only reads three fields, publish those three
 fields; if a host needs an action, give it a command, not the aggregate to
 rebuild. The import lint cannot see a type alias; this must be enforced by review
 and, eventually, type-aware checks (Pattern 8).
+
+**Rule (single source of truth: resolve once, store the resolved value).** A
+`resolve*` / `get*` call that re-derives a fact the system already knew upstream
+is a data-model defect, not a naming one. When a reference (a raw id, a short
+name, a config seed, a base path) enters the system, resolve it **once** at that
+boundary and **store the resolved value** as the canonical field; downstream code
+reads the field, it does not re-resolve. A sprawling `resolve*` surface (see sub-PRD 06's resolve* audit) is the signal that references are stored where
+resolved values should be - so the fix is subtractive (one field at the source, N
+re-resolutions deleted), never a rename. Two exceptions keep it honest: a
+genuinely **live** fact (e.g. the current model after a mid-session switch) keeps
+exactly one live accessor to the source, not a stored snapshot, or it goes stale;
+and a single **pure registry lookup** (one canonical resolver reading one
+registry) is fine - the smell is N consumers re-resolving the same key. The test
+for store-vs-accessor: *is the resolved value fixed once the storing object
+exists?\* If yes, store it; if it can change underneath, expose one accessor.
+Sub-PRD 04 (carry `resolvedAgentName`, delete ~10 re-resolutions, keep
+`RunContext.model` a live getter) is the template; Sub-PRD 06 generalizes it.
+This is the same impulse as the render-time-workaround ban (Pattern 7) - store
+the fact once at the source - applied to the whole data model, not just renderers.
 
 ## Pattern 4: Errors as Values, Defined Out of Existence
 

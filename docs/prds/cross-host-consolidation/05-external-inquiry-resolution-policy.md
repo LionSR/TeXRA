@@ -4,6 +4,18 @@ created: 2026-06-28
 
 # Sub-PRD 05: External-Inquiry Resolution Policy Into the Runtime
 
+> **Re-scoped by the unified design pass (2026-06-29).** This consumes #6723's
+> `mode`-bearing `ExternalInquiryPermission` discriminated union (it does not
+> redefine inquiry shapes), and the empty-answer policy is **host-aware**, not
+> decided by fiat - the single-owner review flagged that a blanket
+> empty -> drop rule would silently flatten the webview's keep-open affordance.
+> Lands after #6723. See `00-overview.md` (Two sequenced tracks).
+>
+> **05 stays a live standalone unit (CH-05).** The gold-standard GS-3 PendingRequests
+> collapses only the inquiry _coordinator plumbing_; the host-aware empty-answer
+> decision policy here is host presentation, outside the gold-standard's charter,
+> and is **not** absorbed by it.
+
 ## Context
 
 When the user answers a durable external-inquiry turn, the host decides whether
@@ -27,28 +39,49 @@ durable-thread invariant can diverge per host.
 
 ## Design
 
+- **Consume #6723's `mode` union; do not redefine inquiry shapes.** The
+  decision command takes the discriminated `ExternalInquiryPermission`
+  (`mode: 'new' | 'followUp'`) as parsed input (parse-don't-validate); it does
+  not re-derive the `data.threadId ?` heuristic.
+- **One verb set.** Collapse to `submit` / `drop` / `draft` (the inbound enum and
+  the runtime primitive). Retire `{ answerText, rejected }` and the
+  `submit/reject/skip` triplet; map `reject` and `skip` onto `drop`.
 - Push the decision into `humanInputCommands` as one host-neutral command, e.g.
-  `resolveRuntimeExternalInquiryDecision({ threadId, answerText, rejected,
-draft, session })`, which owns the text/empty/reject branching, draft
-  persistence, and the drop-vs-submit transition on the durable thread.
-- The webview hosts route the `EXTERNAL_INQUIRY_ACTION` command through the
-  shared progress factory (folding the special-case back in); the CLI calls the
-  same command from its modal handler.
-- Hosts keep only their input collection and result rendering.
+  `resolveRuntimeExternalInquiryDecision({ threadId, answerText, draft,
+onEmpty, session })`, which owns the text -> submit / draft-persist / drop
+  branching and the durable-thread transition.
+- **Empty-answer policy is host-aware via an explicit `onEmpty: 'keepOpen' |
+'drop'` argument**, not a runtime fiat. The webview sets `keepOpen` (its
+  debounced-textarea affordance: an empty accept must not destroy the open
+  turn); the CLI sets `drop` (its one-shot prompt). Delete the per-host empty
+  guards, but the behavior each host had is preserved by the argument it passes.
+- The `runtimeExternalInquiryPermissionFromManifest` `mode`-stamp fix is **owned
+  by the second-lander of {#6697, #6723}** (the symbol is a #6697 symbol; the
+  compile-break only materializes when both are in one tree), **not by 05.** 05
+  _generalizes_ it: route the live emit (`ExternalInquiryTool.ts:372-384`) and
+  the resume projection through **one shared `isFollowUp` / `mode` helper**.
+- Hosts keep only their input collection and result rendering. **Preserve the
+  CLI no-draft affordance** (the TUI modal has no debounced draft to persist).
 
 ## Scope
 
 - `src/agent/runtime/humanInputCommands.ts`: the decision command (it already
-  owns inquiry resolution/draft persistence; this consolidates the branch).
+  owns inquiry resolution/draft persistence; this consolidates the branch) plus
+  the shared `isFollowUp` / `mode` helper.
 - Fold the webview wiring into `createProgressViewCommandHandlers`.
-- Repoint extension, desktop, and CLI to the one command.
+- Repoint extension, desktop, and CLI to the one command, each passing its
+  `onEmpty` policy.
 
 ## Acceptance
 
-- The submit/drop/empty-answer branching exists once, in `humanInputCommands`.
+- The submit/drop/draft branching exists once, in `humanInputCommands`, over the
+  single verb set; `reject`/`skip` map to `drop`.
 - No host contains the policy; all three call the command.
-- A test proves empty-answer drops and non-empty submits, with the durable
-  thread state asserted.
+- **The webview keep-open behavior is preserved** - an empty webview accept does
+  not drop the durable thread (no silent warn-and-return -> drop flip), and the
+  webview disables empty submit. A test proves each host's empty accept yields
+  its declared `onEmpty` outcome (webview keeps open, CLI drops), and that a
+  non-empty answer submits, with the durable thread state asserted.
 
 ## Risk
 

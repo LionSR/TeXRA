@@ -1,6 +1,6 @@
 ---
 created: 2026-06-21
-updated: 2026-06-28
+updated: 2026-06-29
 ---
 
 # PRD Index
@@ -9,9 +9,12 @@ Central home for all TeXRA Product Requirement Documents, plans, and design audi
 
 | Document                                                                                                                                 | Created    | Updated    |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
-| [PRD: Industry-Tested Patterns for the Runtime/Host Boundary](./2026-06-28-prd-architecture-patterns.md)                                 | 2026-06-28 | 2026-06-28 |
-| [Cross-Host Consolidation: Overview](./cross-host-consolidation/00-overview.md)                                                          | 2026-06-28 | 2026-06-28 |
-| [PRD: Runtime/Host Decoupling by Deep Modules](./2026-06-27-prd-runtime-host-decoupling.md)                                              | 2026-06-27 | 2026-06-28 |
+| [PRD: Runtime Gold-Standard - The SDK Core](./2026-06-29-prd-runtime-gold-standard.md)                                                   | 2026-06-29 | 2026-06-29 |
+| [PRD: The Agent-SDK Boundary - Publishing the Runtime](./2026-06-29-prd-agent-sdk-boundary.md)                                           | 2026-06-29 | 2026-06-29 |
+| [Architecture Map: The Couplings Now](./cross-host-consolidation/ARCHITECTURE-MAP.md)                                                    | 2026-06-29 | 2026-06-29 |
+| [PRD: Industry-Tested Patterns for the Runtime/Host Boundary](./2026-06-28-prd-architecture-patterns.md)                                 | 2026-06-28 | 2026-06-29 |
+| [Cross-Host Consolidation: Overview](./cross-host-consolidation/00-overview.md)                                                          | 2026-06-28 | 2026-06-29 |
+| [PRD: Runtime/Host Decoupling by Deep Modules](./2026-06-27-prd-runtime-host-decoupling.md)                                              | 2026-06-27 | 2026-06-29 |
 | [PRD: Non-blocking `inquiry` — Async Q&A with the User](./2026-05-15-prd-external-inquiry-async.md)                                      | 2026-05-15 | 2026-06-20 |
 | [PRD: Largest Dual-Systems Consolidation Audit (2026-06)](./2026-06-14-dual-systems-consolidation-2026-06.md)                            | 2026-06-14 | 2026-06-14 |
 | [PRD: Team-First Launcher and Onboarding](./2026-04-30-launcher-and-onboarding.md)                                                       | 2026-04-30 | 2026-06-13 |
