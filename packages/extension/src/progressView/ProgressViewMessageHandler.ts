@@ -903,8 +903,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         );
         return;
       case 'execute':
-        // Follow-up 'execute' plans are the compile fixer (latexFixer), so opt
-        // into the helper-model preference; it no-ops for non-assistive agents.
+        // Follow-up 'execute' plans are the compile fixer (latexFixer), so run
+        // them on the configured helper model.
         await this.executeValidated(plan.request, { preferHelperModel: true });
     }
   }

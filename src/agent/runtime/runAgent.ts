@@ -3,7 +3,7 @@ import { registerExecution } from '@agent/storage';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
-import { preferHelperModelForAssistive } from './assistiveModel';
+import { preferHelperModel } from './helperModelPreference';
 import { executeAgent } from './executeAgent';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
@@ -19,12 +19,12 @@ export interface RunAgentOptions {
   approvalPromptsUnavailable?: boolean;
   runtimeUnavailableTools?: readonly string[];
   /**
-   * Opt-in set by the "run latexFixer" buttons/commands (Fix-Compilation, the
-   * progress-view compile fixer): prefer the configured helper model for an
-   * assistive agent over the launched model. Off for a direct main-view launch,
+   * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
+   * progress-view compile fixer): run the launched agent on the configured
+   * helper model instead of the selected one. Off for a direct main-view launch,
    * the CLI, and orchestrator delegations, which all keep the chosen model.
    */
-  preferHelperModelForAssistive?: boolean;
+  preferHelperModel?: boolean;
   /** Session owning this run's coordination state. Defaults to the process session. */
   session?: SessionHandle;
   /**
@@ -58,12 +58,12 @@ export async function runAgent(
   const shouldRegister =
     options.registerExecution ?? request.executionId === undefined;
 
-  // Only the "run latexFixer" buttons/commands opt in (preferHelperModelForAssistive):
-  // an assistive agent then prefers the configured helper model. A direct
-  // main-view launch keeps the model the user picked. Resolved before
-  // registerExecution so the stored record and the run agree.
-  const config = options.preferHelperModelForAssistive
-    ? await preferHelperModelForAssistive(request.config)
+  // Only the "fix LaTeX" VS Code actions opt in (preferHelperModel); the agent
+  // then runs on the configured helper model. A direct main-view launch keeps the
+  // model the user picked. Resolved before registerExecution so the stored record
+  // and the run agree.
+  const config = options.preferHelperModel
+    ? await preferHelperModel(request.config)
     : request.config;
 
   if (shouldRegister) {

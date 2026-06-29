@@ -3,11 +3,6 @@ description: Generates a visual diff PDF between two LaTeX versions using latexd
 
 settings:
   agentCategory: toolUse
-  # Support/diff helper: eligible for the helper-model preference, but no launch
-  # path opts latexDiff in yet (only the latexFixer "fix LaTeX" actions set the
-  # flag), so this is dormant today — kept so a dedicated latexDiff action can
-  # pick it up.
-  assistive: true
   tools:
     - bash
     - read_file

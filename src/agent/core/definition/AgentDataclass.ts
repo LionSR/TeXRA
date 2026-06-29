@@ -33,15 +33,6 @@ export const AgentSettingBaseSchema = z.strictObject({
   tools: z.array(ToolDefinitionSchema).prefault([]),
   /** Registry metadata: hides the agent from default launcher listings. */
   internal: z.boolean().optional(),
-  /**
-   * Registry metadata: marks a support/helper agent (e.g. latexFixer). When an
-   * assistive agent is launched by the dedicated "fix LaTeX" actions — the
-   * Fix-Compilation command or the progress-view compile fixer — it prefers the
-   * configured helper model over the currently selected model, since it performs
-   * lightweight auxiliary work. A direct main-view/webview Run launch, the CLI,
-   * and orchestrator-delegated launches are unaffected and keep the chosen model.
-   */
-  assistive: z.boolean().optional(),
 });
 
 /** Tool reference that may be a raw name string (YAML) or a resolved definition. */
@@ -139,7 +130,6 @@ const RawAgentSettingInputSchema = z.strictObject({
     .optional(),
   tools: z.array(AgentToolInputSchema).optional(),
   internal: z.boolean().optional(),
-  assistive: z.boolean().optional(),
   isRewrite: z.boolean().optional(),
   rounds: z.int().positive().optional(),
   prefills: z.array(z.string()).optional(),

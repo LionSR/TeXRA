@@ -101,43 +101,6 @@ describe('agent YAML scanner', () => {
     ).toBeUndefined();
   });
 
-  it('surfaces the assistive flag from settings', async () => {
-    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
-    await writeFile(
-      resolve(agentDir, 'helper.yaml'),
-      [
-        'name: helper',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  assistive: true',
-        'prompts:',
-        '  systemPrompt: help',
-        '',
-      ].join('\n'),
-    );
-    await writeFile(
-      resolve(agentDir, 'primary.yaml'),
-      [
-        'name: primary',
-        'settings:',
-        '  agentCategory: toolUse',
-        'prompts:',
-        '  systemPrompt: primary',
-        '',
-      ].join('\n'),
-    );
-
-    const entries = await scanDirectory(agentDir, 'custom');
-
-    expect(entries.find((entry) => entry.name === 'helper')?.assistive).toBe(
-      true,
-    );
-    // Absent flag stays undefined rather than false, matching `internal`.
-    expect(
-      entries.find((entry) => entry.name === 'primary')?.assistive,
-    ).toBeUndefined();
-  });
-
   it('uses the YAML name as the canonical registry name', async () => {
     const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
     await writeFile(

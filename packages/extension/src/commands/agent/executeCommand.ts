@@ -49,10 +49,10 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       {
         runtimeHost: extensionAgentRuntimeHost,
         openWorkflowOutput: openFinalOutputIfAvailable,
-        // Set only by the "run latexFixer" buttons/commands (see handleFixCompilation
-        // and the progress-view compile fixer); a direct main-view launch omits it
-        // and keeps the user's selected model.
-        preferHelperModelForAssistive: wrapped?.preferHelperModel === true,
+        // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
+        // progress-view compile fixer); a direct main-view launch omits it and
+        // keeps the user's selected model.
+        preferHelperModel: wrapped?.preferHelperModel === true,
       },
     );
   } catch (error) {
