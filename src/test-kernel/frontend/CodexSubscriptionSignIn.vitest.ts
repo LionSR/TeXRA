@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   showInformationMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   openExternal: vi.fn(),
+  writeText: vi.fn(),
   withProgress: vi.fn(),
 }));
 
@@ -14,7 +15,7 @@ vi.mock('vscode', () => ({
   env: {
     remoteName: undefined,
     openExternal: mocks.openExternal,
-    clipboard: { writeText: vi.fn() },
+    clipboard: { writeText: mocks.writeText },
   },
   ProgressLocation: { Notification: 15 },
   Uri: {
@@ -106,6 +107,39 @@ describe('signInWithChatGptSubscription', () => {
     expect(signedIn).toBe(false);
     expect(mocks.showWarningMessage).toHaveBeenCalledWith(
       'Signed in with ChatGPT as person@example.com, but a more specific setting kept the subscription preference disabled.',
+    );
+  });
+
+  it('opens the default browser and offers the link for a non-default browser', async () => {
+    mocks.withProgress.mockImplementation((_options, task) => task());
+    mocks.openExternal.mockResolvedValue(true);
+    mocks.showInformationMessage.mockResolvedValue('Copy Sign-in Link');
+    mocks.setPreferCodexSubscription.mockResolvedValue({
+      effective: true,
+      target: 'global',
+    });
+    mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
+      await openBrowser('https://auth.openai.com/authorize?x=1');
+      return {
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        expiresAtMs: Date.now() + 60_000,
+        email: 'person@example.com',
+      };
+    });
+
+    await signInWithChatGptSubscription('TestChannel');
+    // The deferred clipboard write is queued on a resolved-promise microtask.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1);
+    expect(mocks.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining('different browser'),
+      'Copy Sign-in Link',
+    );
+    expect(mocks.writeText).toHaveBeenCalledWith(
+      'https://auth.openai.com/authorize?x=1',
     );
   });
 

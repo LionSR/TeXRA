@@ -11,6 +11,8 @@ import {
 } from '@auth/codex';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 
+const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
+
 async function runChatGptSignIn(): Promise<CodexSession> {
   const coordinator = codexCoordinator();
   if (vscode.env.remoteName) {
@@ -38,6 +40,20 @@ async function runChatGptSignIn(): Promise<CodexSession> {
     coordinator,
     openBrowser: async (url) => {
       await vscode.env.openExternal(vscode.Uri.parse(url));
+      // `openExternal` always targets the system default browser. The loopback
+      // callback accepts the redirect from *any* browser, so offer the raw link
+      // for users whose ChatGPT subscription is signed in elsewhere (e.g. their
+      // default browser is Chrome but the subscription lives in Firefox).
+      void vscode.window
+        .showInformationMessage(
+          'Signing in with ChatGPT in your default browser. Using a different browser for ChatGPT? Copy the link and open it there.',
+          COPY_SIGN_IN_LINK,
+        )
+        .then((choice) => {
+          if (choice === COPY_SIGN_IN_LINK) {
+            void vscode.env.clipboard.writeText(url);
+          }
+        });
     },
   });
 }
