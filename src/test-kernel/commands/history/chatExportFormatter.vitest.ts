@@ -4,8 +4,8 @@ import { describe, it } from 'vitest';
 
 // Standard library imports
 
-// Local imports - commands
-import { formatChatAsMarkdown } from '@commands/history/chatExportFormatter';
+// Local imports - host-neutral chat-export formatters
+import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
 
 describe('formatChatAsMarkdown', () => {
   it('preserves function tool calls in mixed tool_calls arrays', () => {
