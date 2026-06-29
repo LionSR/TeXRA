@@ -833,7 +833,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    * Validate and execute an agent request.
    * Returns true if execution started, false if validation failed.
    */
-  private async executeValidated(request: ExecutionRequest): Promise<boolean> {
+  private async executeValidated(
+    request: ExecutionRequest,
+    options: { preferHelperModel?: boolean } = {},
+  ): Promise<boolean> {
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
       this.logger.error(this.channel, validation.message);
@@ -841,7 +844,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
     await safeExecuteCommand(
       'texra.execute',
-      [validation.request],
+      [
+        options.preferHelperModel
+          ? { ...validation.request, preferHelperModel: true }
+          : validation.request,
+      ],
       this.viewName,
     );
     return true;
@@ -896,7 +903,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         );
         return;
       case 'execute':
-        await this.executeValidated(plan.request);
+        // Follow-up 'execute' plans are the compile fixer (latexFixer), so run
+        // them on the configured helper model.
+        await this.executeValidated(plan.request, { preferHelperModel: true });
     }
   }
 }

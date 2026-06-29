@@ -3,6 +3,7 @@ import { registerExecution } from '@agent/storage';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
+import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent } from './executeAgent';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
@@ -17,6 +18,13 @@ export interface RunAgentOptions {
   stopAfterCycle?: boolean;
   approvalPromptsUnavailable?: boolean;
   runtimeUnavailableTools?: readonly string[];
+  /**
+   * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
+   * progress-view compile fixer): run the launched agent on the configured
+   * helper model instead of the selected one. Off for a direct main-view launch,
+   * the CLI, and orchestrator delegations, which all keep the chosen model.
+   */
+  preferHelperModel?: boolean;
   /** Session owning this run's coordination state. Defaults to the process session. */
   session?: SessionHandle;
   /**
@@ -50,17 +58,25 @@ export async function runAgent(
   const shouldRegister =
     options.registerExecution ?? request.executionId === undefined;
 
+  // Only the "fix LaTeX" VS Code actions opt in (preferHelperModel); the agent
+  // then runs on the configured helper model. A direct main-view launch keeps the
+  // model the user picked. Resolved before registerExecution so the stored record
+  // and the run agree.
+  const config = options.preferHelperModel
+    ? await applyHelperModelPreference(request.config)
+    : request.config;
+
   if (shouldRegister) {
     await registerExecution(
       executionId,
-      request.config,
-      request.config.agent,
+      config,
+      config.agent,
       undefined,
-      request.config.agentCategory,
+      config.agentCategory,
     );
   }
 
-  const result = await executeAgent(request.config, executionId, {
+  const result = await executeAgent(config, executionId, {
     runtimeHost: options.runtimeHost,
     enforceCategory: options.enforceCategory,
     stopAfterCycle: options.stopAfterCycle,

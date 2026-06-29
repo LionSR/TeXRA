@@ -99,7 +99,7 @@ export async function runWorkflowAgent(
       }
 
       const model = await resolveCliRunModel(context, init.model, 'run');
-      const runContext = buildHeadlessRunContext(context, model);
+      const runContext = buildHeadlessRunContext(context);
       const config: AgentConfigPayload = {
         agent: init.agent,
         model,
