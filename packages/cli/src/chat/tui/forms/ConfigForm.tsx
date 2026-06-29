@@ -21,6 +21,7 @@ import {
 } from '@shared/schemas/stateSettings';
 
 import { BaseTextInput } from '../input/BaseTextInput';
+import { isCtrlInput, type ReturnKeyInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
 import { POINTER } from '../ui/glyphs';
 import { Select, type SelectItem } from '../ui/Select';
@@ -33,6 +34,10 @@ export type SettingEditKind =
   | 'string'
   | 'number'
   | 'readonly';
+
+export type SettingInputResult =
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly message: string };
 
 /**
  * How a setting is edited in `/config`, derived from its schema: enums drill
@@ -49,19 +54,47 @@ export function settingEditKind(entry: StateSettingEntry): SettingEditKind {
 
 /**
  * Coerce raw text-editor input to the value a `string`/`number` setting
- * expects, or `null` when a number field's input is blank or non-numeric (so
- * the caller can ignore the submit rather than write `NaN`). Range/format
- * violations are left to the schema, which rejects them on write.
+ * expects. Invalid numeric input carries the user-facing error that keeps the
+ * editor open instead of silently ignoring the submit.
  */
 export function coerceSettingInput(
   raw: string,
   isNumber: boolean,
-): { value: unknown } | null {
-  if (!isNumber) return { value: raw };
+): SettingInputResult {
+  if (!isNumber) return { ok: true, value: raw };
   const trimmed = raw.trim();
-  if (trimmed === '') return null;
+  if (trimmed === '') {
+    return { ok: false, message: 'Enter a number, or press Ctrl+R to reset.' };
+  }
   const parsed = Number(trimmed);
-  return Number.isNaN(parsed) ? null : { value: parsed };
+  return Number.isFinite(parsed)
+    ? { ok: true, value: parsed }
+    : { ok: false, message: 'Enter a finite number.' };
+}
+
+/** Coerce text input, then run the setting's own schema before writing. */
+export function validateSettingInput(
+  entry: StateSettingEntry,
+  raw: string,
+  isNumber: boolean,
+): SettingInputResult {
+  const coerced = coerceSettingInput(raw, isNumber);
+  if (!coerced.ok) return coerced;
+
+  const parsed = entry.schema.safeParse(coerced.value);
+  if (parsed.success) return { ok: true, value: parsed.data };
+
+  return {
+    ok: false,
+    message: parsed.error.issues.at(0)?.message ?? 'Invalid setting value.',
+  };
+}
+
+export function isConfigResetInput(
+  input: string,
+  key: Pick<ReturnKeyInput, 'ctrl' | 'meta'>,
+): boolean {
+  return isCtrlInput(input, key, 'r');
 }
 
 export function formatSettingValue(value: unknown): string {
@@ -76,7 +109,7 @@ export function settingStoreLabel(entry: StateSettingEntry): string {
 }
 
 export function settingDisplayName(entry: StateSettingEntry): string {
-  return stripPrefix(entry.key);
+  return entry.title ?? stripPrefix(entry.key);
 }
 
 export function buildConfigListItems(
@@ -140,13 +173,16 @@ function ConfigTextEditor(props: {
   readonly entry: StateSettingEntry;
   readonly initialValue: string;
   readonly isNumber: boolean;
-  readonly onSubmit: (raw: string) => void;
+  readonly onSubmit: (raw: string) => string | undefined;
+  readonly onReset: () => void;
   readonly onCancel: () => void;
 }): React.JSX.Element {
   const [buffer, setBuffer] = useState(props.initialValue);
+  const [error, setError] = useState<string>();
   // BaseTextInput owns Enter (onSubmit) and ignores Escape, so handle Escape
   // here to back out to the list.
-  useInput((_input, key) => {
+  useInput((input, key) => {
+    if (isConfigResetInput(input, key)) props.onReset();
     if (key.escape) props.onCancel();
   });
   return (
@@ -160,14 +196,26 @@ function ConfigTextEditor(props: {
         <BaseTextInput
           value={buffer}
           placeholder={props.isNumber ? 'enter a number' : 'enter a value'}
-          onChange={setBuffer}
-          onSubmit={props.onSubmit}
+          onChange={(value) => {
+            setBuffer(value);
+            if (error) setError(undefined);
+          }}
+          onSubmit={(raw) => {
+            const submitError = props.onSubmit(raw);
+            if (submitError) setError(submitError);
+          }}
         />
       </Box>
+      {error ? (
+        <Box marginTop={1}>
+          <Text color="red">{error}</Text>
+        </Box>
+      ) : null}
       <Box marginTop={1}>
         <KeyHints
           hints={[
             { key: 'Enter', action: 'save' },
+            { key: 'Ctrl+R', action: 'reset' },
             { key: 'Esc', action: 'back' },
           ]}
           confirmCancel={false}
@@ -224,6 +272,14 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     runWrite(entry, settingDefault(entry), () => props.resetValue?.(entry));
   };
 
+  useInput((input, key) => {
+    if (mode.kind !== 'enum') return;
+    if (isConfigResetInput(input, key)) {
+      resetEntry(mode.entry);
+      setMode({ kind: 'list' });
+    }
+  });
+
   if (mode.kind === 'enum') {
     const { entry } = mode;
     const current = effective(entry);
@@ -255,6 +311,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
             hints={[
               { key: '↑/↓', action: 'navigate' },
               { key: 'Enter', action: 'select' },
+              { key: 'Ctrl+R', action: 'reset' },
               { key: 'Esc', action: 'back' },
             ]}
             confirmCancel={false}
@@ -276,10 +333,18 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
         onSubmit={(raw) => {
           if (!isNumber && raw.trim() === '') {
             resetEntry(entry);
-          } else {
-            const coerced = coerceSettingInput(raw, isNumber);
-            if (coerced) commit(entry, coerced.value);
+            setMode({ kind: 'list' });
+            return undefined;
           }
+
+          const parsed = validateSettingInput(entry, raw, isNumber);
+          if (!parsed.ok) return parsed.message;
+          commit(entry, parsed.value);
+          setMode({ kind: 'list' });
+          return undefined;
+        }}
+        onReset={() => {
+          resetEntry(entry);
           setMode({ kind: 'list' });
         }}
         onCancel={() => setMode({ kind: 'list' })}
