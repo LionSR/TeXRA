@@ -11,6 +11,7 @@ import {
 // Local imports - tools
 import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
+import { InlineCommentTool } from './comment/InlineCommentTool';
 import { ReportReviewIssueTool } from './ReportReviewIssueTool';
 import { ApplyPathTool } from './applyPath';
 import { EditFileTool } from './EditTool';
@@ -88,6 +89,7 @@ function createDefaultTools() {
   return {
     str_replace_editor: new TextEditorTool(),
     diagnostics: new DiagnosticsTool(),
+    inline_comment: new InlineCommentTool(),
     report_review_issue: new ReportReviewIssueTool(),
     bash: new BashTool(),
     read_file: new ReadFileTool(),

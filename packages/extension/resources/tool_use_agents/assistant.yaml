@@ -19,6 +19,10 @@ settings:
     # as a VS Code diagnostic via the "add" command (gated on the experimental
     # texra.inlineCriticism.enabled setting).
     - diagnostics
+    # Inline comment threads (VS Code native Comments UI): open resolvable,
+    # conversational notes anchored to a file range that the user can reply to;
+    # read replies back with the "list" command.
+    - inline_comment
     # LaTeX & document production
     - texcount
     - extract_figures

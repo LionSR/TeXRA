@@ -460,6 +460,23 @@
           "command": "texra.agentReview.clear",
           "icon": "$(clear-all)",
           "title": "Clear Agent Review Results"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.replyComment",
+          "title": "Reply"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.resolveCommentThread",
+          "icon": "$(check)",
+          "title": "Resolve"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.unresolveCommentThread",
+          "icon": "$(history)",
+          "title": "Reopen"
         }
       ],
       "configuration": [
@@ -1561,6 +1578,37 @@
           {
             "command": "texra.showDashboard",
             "when": "texra.activated"
+          },
+          {
+            "command": "texra.replyComment",
+            "when": "false"
+          },
+          {
+            "command": "texra.resolveCommentThread",
+            "when": "false"
+          },
+          {
+            "command": "texra.unresolveCommentThread",
+            "when": "false"
+          }
+        ],
+        "comments/commentThread/context": [
+          {
+            "command": "texra.replyComment",
+            "group": "inline",
+            "when": "commentController == texra.inlineComments"
+          }
+        ],
+        "comments/commentThread/title": [
+          {
+            "command": "texra.resolveCommentThread",
+            "group": "inline@1",
+            "when": "commentController == texra.inlineComments && commentThreadIsResolved == false"
+          },
+          {
+            "command": "texra.unresolveCommentThread",
+            "group": "inline@1",
+            "when": "commentController == texra.inlineComments && commentThreadIsResolved == true"
           }
         ],
         "editor/context": [
