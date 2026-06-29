@@ -7,6 +7,7 @@ import { describe, it } from 'vitest';
 // Local imports - utils
 import {
   checkToolResultTextLimit,
+  extractToolAttachments,
   formatToolResultAsText,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
@@ -41,27 +42,37 @@ describe('checkToolResultTextLimit', () => {
 
 describe('formatToolResultAsText', () => {
   it('returns output when present', () => {
-    const result = formatToolResultAsText({ output: 'test output' });
+    const result = formatToolResultAsText({
+      status: 'executed',
+      output: 'test output',
+    });
     assert.equal(result, 'test output');
   });
 
   it('returns summary when no output', () => {
-    const result = formatToolResultAsText({ summary: 'test summary' });
+    const result = formatToolResultAsText({
+      status: 'executed',
+      summary: 'test summary',
+    });
     assert.equal(result, 'test summary');
   });
 
   it('returns error when no output', () => {
-    const result = formatToolResultAsText({ error: 'test error' });
+    const result = formatToolResultAsText({
+      status: 'error',
+      error: 'test error',
+    });
     assert.equal(result, 'test error');
   });
 
   it('returns OK when all fields empty', () => {
-    const result = formatToolResultAsText({});
+    const result = formatToolResultAsText({ status: 'executed' });
     assert.equal(result, 'OK');
   });
 
   it('includes user feedback', () => {
     const result = formatToolResultAsText({
+      status: 'executed',
       output: 'test',
       userInstruction: 'do this instead',
     });
@@ -70,6 +81,7 @@ describe('formatToolResultAsText', () => {
 
   it('includes user patch', () => {
     const result = formatToolResultAsText({
+      status: 'executed',
       output: 'test',
       userPatch: '+added line',
     });
@@ -79,7 +91,7 @@ describe('formatToolResultAsText', () => {
 
   it('appends attachment summary', () => {
     const result = formatToolResultAsText(
-      { output: 'test' },
+      { status: 'executed', output: 'test' },
       'Attachments: file.pdf',
     );
     assert.ok(result.includes('Attachments: file.pdf'));
@@ -87,14 +99,98 @@ describe('formatToolResultAsText', () => {
 
   it('returns error when result exceeds limit', () => {
     const largeOutput = 'a'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH + 100);
-    const result = formatToolResultAsText({ output: largeOutput });
+    const result = formatToolResultAsText({
+      status: 'executed',
+      output: largeOutput,
+    });
     assert.ok(result.includes('Tool result too large'));
     assert.ok(!result.includes('aaa')); // Should not contain original content
   });
 
   it('returns normal result when within limit', () => {
     const normalOutput = 'a'.repeat(1000);
-    const result = formatToolResultAsText({ output: normalOutput });
+    const result = formatToolResultAsText({
+      status: 'executed',
+      output: normalOutput,
+    });
     assert.equal(result, normalOutput);
+  });
+});
+
+describe('extractToolAttachments', () => {
+  it('treats isError results with output as error payloads', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      isError: true,
+      output: 'kill failed',
+    });
+
+    assert.equal(sanitizedResult.status, 'error');
+    assert.equal(sanitizedResult.error, 'kill failed');
+    assert.equal(Object.hasOwn(sanitizedResult, 'isError'), false);
+    assert.equal(Object.hasOwn(sanitizedResult, 'output'), false);
+  });
+
+  it('lets the computed discriminator override raw status fields', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      status: 'completed',
+      output: 'done',
+    } as never);
+
+    assert.equal(sanitizedResult.status, 'executed');
+    assert.equal(sanitizedResult.output, 'done');
+  });
+
+  it('drops error from executed payloads when output takes priority', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      output: 'usable output',
+      error: 'secondary warning',
+    });
+
+    assert.equal(sanitizedResult.status, 'executed');
+    assert.equal(sanitizedResult.output, 'usable output');
+    assert.equal(Object.hasOwn(sanitizedResult, 'error'), false);
+  });
+
+  it('uses a non-empty fallback error for empty failing results', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      isError: true,
+      error: '',
+    });
+
+    assert.equal(sanitizedResult.status, 'error');
+    assert.equal(sanitizedResult.error, 'Tool failed');
+  });
+
+  it('uses summary as the error text for summary-only failures', () => {
+    const { sanitizedResult } = extractToolAttachments({
+      isError: true,
+      summary: 'The operation failed before producing output.',
+    });
+
+    assert.equal(sanitizedResult.status, 'error');
+    assert.equal(
+      sanitizedResult.error,
+      'The operation failed before producing output.',
+    );
+    assert.equal(Object.hasOwn(sanitizedResult, 'summary'), false);
+  });
+
+  it('keeps extracted attachments out of error payloads', () => {
+    const { attachments, sanitizedResult } = extractToolAttachments({
+      isError: true,
+      error: 'The operation failed.',
+      files: [
+        {
+          path: 'plot.png',
+          mimeType: 'image/png',
+          base64Data: 'aW1hZ2U=',
+        },
+      ],
+    });
+
+    assert.equal(attachments.length, 1);
+    assert.equal(sanitizedResult.status, 'error');
+    assert.equal(sanitizedResult.error, 'The operation failed.');
+    assert.equal(Object.hasOwn(sanitizedResult, 'files'), false);
   });
 });
