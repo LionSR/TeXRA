@@ -11,6 +11,8 @@ import {
 } from '@auth/codex';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 
+const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
+
 async function runChatGptSignIn(): Promise<CodexSession> {
   const coordinator = codexCoordinator();
   if (vscode.env.remoteName) {
@@ -45,10 +47,10 @@ async function runChatGptSignIn(): Promise<CodexSession> {
       void vscode.window
         .showInformationMessage(
           'Signing in with ChatGPT in your default browser. Using a different browser for ChatGPT? Copy the link and open it there.',
-          'Copy Sign-in Link',
+          COPY_SIGN_IN_LINK,
         )
         .then((choice) => {
-          if (choice === 'Copy Sign-in Link') {
+          if (choice === COPY_SIGN_IN_LINK) {
             void vscode.env.clipboard.writeText(url);
           }
         });
