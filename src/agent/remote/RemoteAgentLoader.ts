@@ -3,7 +3,7 @@ import yaml from 'yaml';
 import { z } from 'zod';
 
 import {
-  type AgentSetting,
+  type AgentSettingInput,
   AgentPromptSchema,
   AgentSettingSchema,
   AgentDefinitionSchema,
@@ -18,7 +18,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { ensureError, toErrorMessage } from '@common/errors/errorMessage';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import * as logger from '@logger/logUtils';
-import { resolveToolDefinitions } from '@tools/registry';
+import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
 
 import { filterNotNull, filterNotNullish } from '@utils/core';
 import { errorDataToString } from './errorData';
@@ -280,22 +280,25 @@ async function fetchAgentConfig(agentName: string): Promise<{
   const validated = AgentDefinitionSchema.parse(yaml.parse(configYaml));
 
   // Extract metadata before resolving tools to full definitions (for registry cache)
-  const settings: Partial<AgentSetting> = validated.settings;
-  const rawTools = settings.tools as (string | { name: string })[] | undefined;
+  const settings: AgentSettingInput = validated.settings;
+  const rawTools = settings.tools;
   const toolNames = extractToolNames(rawTools);
-  const defaultOutputFiles = settings.defaultOutputFiles as
-    | string[]
-    | undefined;
+  const defaultOutputFiles = settings.defaultOutputFiles;
 
   // Process tool definitions (remote agents are self-contained)
-  if (Array.isArray(settings.tools)) {
-    settings.tools = resolveToolDefinitions(rawTools!, (name) =>
-      logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
-    );
-  }
+  const resolvedSettings = Array.isArray(settings.tools)
+    ? {
+        ...settings,
+        tools: resolveToolDefinitions(
+          settings.tools as RawToolConfig[],
+          (name) =>
+            logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
+        ),
+      }
+    : settings;
 
   return {
-    settings: AgentSettingSchema.parse(settings),
+    settings: AgentSettingSchema.parse(resolvedSettings),
     prompts: AgentPromptSchema.parse(validated.prompts),
     description: validated.description,
     tools: toolNames?.length ? toolNames : undefined,
