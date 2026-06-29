@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_DEFAULT_CHAT_AGENT,
   implicitDefaultToolUseAgents,
-  resolveDefaultToolUseAgent,
-  resolveImplicitToolUseAgentDefault,
+  isImplicitDefaultEligible,
+  pickDefaultToolUseAgent,
 } from '@cli/runtime/defaultAgents';
 
 describe('CLI implicit default agent policy', () => {
@@ -27,25 +27,22 @@ describe('CLI implicit default agent policy', () => {
     ]);
   });
 
-  it('normalizes only allowed implicit default values', () => {
-    expect(resolveImplicitToolUseAgentDefault(' review ')).toBe('review');
-    expect(resolveImplicitToolUseAgentDefault('simplifier')).toBeUndefined();
-    expect(resolveImplicitToolUseAgentDefault('SIMPLIFIER')).toBeUndefined();
-    expect(
-      resolveImplicitToolUseAgentDefault('builtInToolUse:simplifier'),
-    ).toBeUndefined();
-    expect(resolveImplicitToolUseAgentDefault('   ')).toBeUndefined();
-    expect(resolveImplicitToolUseAgentDefault(undefined)).toBeUndefined();
+  it('recognizes which agents may be the implicit default', () => {
+    expect(isImplicitDefaultEligible('review')).toBe(true);
+    expect(isImplicitDefaultEligible(' review ')).toBe(true);
+    expect(isImplicitDefaultEligible('simplifier')).toBe(false);
+    expect(isImplicitDefaultEligible('SIMPLIFIER')).toBe(false);
+    expect(isImplicitDefaultEligible('builtInToolUse:simplifier')).toBe(false);
   });
 
   it('selects the built-in default only when it is visible', () => {
     expect(
-      resolveDefaultToolUseAgent([{ name: 'research' }, { name: 'review' }]),
+      pickDefaultToolUseAgent([{ name: 'research' }, { name: 'review' }]),
     ).toBe('research');
     expect(
-      resolveDefaultToolUseAgent([{ name: 'research' }, { name: 'assistant' }]),
+      pickDefaultToolUseAgent([{ name: 'research' }, { name: 'assistant' }]),
     ).toBe('assistant');
-    expect(resolveDefaultToolUseAgent([])).toBe('assistant');
+    expect(pickDefaultToolUseAgent([])).toBe('assistant');
   });
 
   it('prefers the team lead order over registry file order when scoped', () => {
@@ -53,7 +50,7 @@ describe('CLI implicit default agent policy', () => {
     // PREFERRED_TOOL_USE_AGENTS order (engineer) rather than whichever agent
     // sorts first in the registry's file order (codeReviewer).
     expect(
-      resolveDefaultToolUseAgent([
+      pickDefaultToolUseAgent([
         { name: 'codeReviewer' },
         { name: 'engineer' },
         { name: 'coder' },
@@ -61,7 +58,7 @@ describe('CLI implicit default agent policy', () => {
     ).toBe('engineer');
     // No preferred agent present → fall back to the first visible candidate.
     expect(
-      resolveDefaultToolUseAgent([{ name: 'codeReviewer' }, { name: 'coder' }]),
+      pickDefaultToolUseAgent([{ name: 'codeReviewer' }, { name: 'coder' }]),
     ).toBe('codeReviewer');
   });
 });

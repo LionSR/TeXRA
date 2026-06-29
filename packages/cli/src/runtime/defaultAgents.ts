@@ -3,51 +3,45 @@ import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 
 export const BUILTIN_DEFAULT_CHAT_AGENT = 'assistant';
 
-const NON_IMPLICIT_DEFAULT_TOOL_USE_AGENTS = new Set(['simplifier']);
+// Agents that exist in the catalog but must never be auto-selected as the
+// implicit chat default — e.g. `simplifier` is a code utility, not a chat
+// partner. They remain available when chosen explicitly with `--agent`.
+const NON_DEFAULT_TOOL_USE_AGENTS = new Set(['simplifier']);
 
-function isImplicitDefaultToolUseAgentAllowed(agent: string): boolean {
-  return !NON_IMPLICIT_DEFAULT_TOOL_USE_AGENTS.has(
+/** Whether `agent` may be chosen as the implicit default tool-use agent. */
+export function isImplicitDefaultEligible(agent: string): boolean {
+  return !NON_DEFAULT_TOOL_USE_AGENTS.has(
     agentName(agent.trim()).toLowerCase(),
   );
 }
 
+/** The subset of `agents` eligible to be the implicit default. */
 export function implicitDefaultToolUseAgents<
   T extends { readonly name: string },
 >(agents: readonly T[]): T[] {
-  return agents.filter((agent) =>
-    isImplicitDefaultToolUseAgentAllowed(agent.name),
-  );
-}
-
-export function resolveImplicitToolUseAgentDefault(
-  agent: string | undefined,
-): string | undefined {
-  const trimmed = agent?.trim();
-  if (!trimmed || !isImplicitDefaultToolUseAgentAllowed(trimmed)) {
-    return undefined;
-  }
-  return trimmed;
+  return agents.filter((agent) => isImplicitDefaultEligible(agent.name));
 }
 
 /**
- * Implicit default tool-use agent for the CLI, resolved against the visible
- * roster so it follows whatever single agent or team the user applied:
+ * Pick the implicit default tool-use agent from the visible roster, so the
+ * default follows whatever single agent or team the user applied:
  *
  *  1. the built-in default ({@link BUILTIN_DEFAULT_CHAT_AGENT}) when visible —
- *     i.e. a fresh, full-catalog workspace starts on `assistant`;
+ *     a fresh, full-catalog workspace starts on `assistant`;
  *  2. otherwise the highest-priority visible agent by
  *     {@link PREFERRED_TOOL_USE_AGENTS} order (team leads/orchestrators first),
- *     so a scoped discipline roster defaults to its lead rather than whichever
- *     agent happens to sort first in the registry's file order;
- *  3. otherwise any visible candidate.
+ *     so a scoped discipline roster defaults to its lead rather than whatever
+ *     sorts first in the registry's file order;
+ *  3. otherwise the first visible candidate.
  *
- * The trailing `BUILTIN_DEFAULT_CHAT_AGENT` fallback only applies when no
- * visible candidates were supplied (empty/undefined) — a degenerate case where
- * the returned name may not be in the visible set. That is deliberate and safe:
- * chat launch re-validates via `chatToolUseAgentUsageError`, so an unavailable
- * default surfaces a usage error instead of launching silently.
+ * The trailing {@link BUILTIN_DEFAULT_CHAT_AGENT} only applies when no candidate
+ * is visible at all (an empty/undefined roster — e.g. every tool-use agent
+ * disabled). That is a deliberate last resort: it keeps `texra chat` usable by
+ * falling back to the universal assistant rather than refusing to start. The
+ * returned name may then sit outside a scoped roster — `chatToolUseAgentUsageError`
+ * only rejects a name missing from the registry, not one merely hidden.
  */
-export function resolveDefaultToolUseAgent<T extends { readonly name: string }>(
+export function pickDefaultToolUseAgent<T extends { readonly name: string }>(
   agents: readonly T[] | undefined,
 ): string {
   const candidates = agents ? implicitDefaultToolUseAgents(agents) : [];

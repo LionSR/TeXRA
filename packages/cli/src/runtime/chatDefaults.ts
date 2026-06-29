@@ -12,10 +12,21 @@ import {
   type CliConfigValues,
 } from './cliConfig';
 import {
-  resolveDefaultToolUseAgent,
-  resolveImplicitToolUseAgentDefault,
+  isImplicitDefaultEligible,
+  pickDefaultToolUseAgent,
 } from './defaultAgents';
 import type { CliModelSelectionSource } from './modelAccess';
+
+/**
+ * A configured or environment agent value, trimmed and dropped if it can't be
+ * the implicit default — so e.g. `simplifier` set as the chat agent in config
+ * is ignored rather than auto-selected. An explicit `--agent` override bypasses
+ * this and is honored as-is.
+ */
+function usableConfiguredAgent(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && isImplicitDefaultEligible(trimmed) ? trimmed : undefined;
+}
 
 export const BUILTIN_DEFAULT_CHAT_MODEL = CLI_BUILTIN_DEFAULT_MODEL;
 export { BUILTIN_DEFAULT_CHAT_AGENT } from './defaultAgents';
@@ -50,9 +61,7 @@ interface PartialDefaults {
 
 function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
   return {
-    agent: resolveImplicitToolUseAgentDefault(
-      resolveConfiguredAgent(values, 'chat'),
-    ),
+    agent: usableConfiguredAgent(resolveConfiguredAgent(values, 'chat')),
     model: resolveConfiguredModel(values, 'chat'),
   };
 }
@@ -121,7 +130,7 @@ function buildChatDefaults(init: {
   const agentSource = init.agentSource ?? 'builtin';
   const modelSource = init.modelSource ?? 'builtin';
   return {
-    agent: init.agent ?? resolveDefaultToolUseAgent(init.visibleToolUseAgents),
+    agent: init.agent ?? pickDefaultToolUseAgent(init.visibleToolUseAgents),
     model: init.model ?? BUILTIN_DEFAULT_CHAT_MODEL,
     source: deriveSource({ agent: agentSource, model: modelSource }),
     agentSource,
@@ -150,7 +159,7 @@ export async function resolveChatDefaults(
 ): Promise<ChatDefaults> {
   const overrideAgent = init.agentOverride?.trim();
   const overrideModel = init.modelOverride?.trim();
-  const envAgent = resolveImplicitToolUseAgentDefault(init.envAgent);
+  const envAgent = usableConfiguredAgent(init.envAgent);
   const envModel = init.envModel?.trim();
   let agent = overrideAgent || envAgent;
   let model = overrideModel || envModel;

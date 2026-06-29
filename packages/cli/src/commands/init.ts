@@ -4,8 +4,8 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
 import {
+  BUILTIN_DEFAULT_CHAT_AGENT,
   implicitDefaultToolUseAgents,
-  resolveDefaultToolUseAgent,
 } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
 import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
@@ -45,7 +45,6 @@ async function gatherOptions(apiMode: CliApiMode): Promise<{
   models: CliModelAccess[];
 }> {
   await loadAgents({ includeRemote: false });
-  await seedCliRosterFromDefaultTeam();
   const agents = defaultInitAgentOptions(
     getVisibleAgents(AgentCategory.ToolUse),
   );
@@ -56,13 +55,10 @@ async function gatherOptions(apiMode: CliApiMode): Promise<{
   return { agents, models };
 }
 
-function defaultAnswers(
-  models: readonly CliModelAccess[],
-  agents: readonly InitAgentOption[],
-): InitAnswers {
+function defaultAnswers(models: readonly CliModelAccess[]): InitAnswers {
   const firstAvailable = models.find((model) => model.available);
   return {
-    agent: resolveDefaultToolUseAgent(agents),
+    agent: BUILTIN_DEFAULT_CHAT_AGENT,
     model: firstAvailable?.model.value ?? CLI_BUILTIN_DEFAULT_MODEL,
     // Match the runtime default (see buildCliContext). `ask` prompts in
     // interactive runs and safely denies in headless ones — unlike `never`,
@@ -145,11 +141,18 @@ async function runInit(
     answers = result.answers;
     gitignore = result.gitignore;
   } else {
-    answers = defaultAnswers(models, agents);
+    answers = defaultAnswers(models);
     gitignore = opts.gitignore ?? false;
   }
 
   await writeInitConfig(filePath, buildInitConfig(answers));
+
+  // Seed a never-configured workspace's agent roster from the user-level
+  // default team (the setup agent's apply_team) — the CLI counterpart of the
+  // extension's activation-time seeding. Runs only after the config is written,
+  // i.e. past the interactive cancel guard, so a cancelled `texra init` never
+  // mutates the roster. Best-effort: a seeding failure must not fail init.
+  await seedCliRosterFromDefaultTeam();
 
   if (gitignore) {
     const outcome = await ensureTexraGitignored(context.cwd);
