@@ -28,6 +28,9 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 // Local imports - history view styles
 import { historyStyles } from '@shared/styles/historyStyles';
 
+// Local imports - utils
+import { formatLocaleTimestamp } from '@utils/text/stringUtils';
+
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
 
@@ -268,7 +271,7 @@ export class HistoryItemElement extends LitElement {
     }
 
     const config = this.item.agentConfig;
-    const timestamp = new Date(this.item.timestamp).toLocaleString();
+    const timestamp = formatLocaleTimestamp(this.item.timestamp);
     const isToolUse = config.agentCategory === AgentCategory.ToolUse;
     const categoryVariant: 'warning' | 'brand' = isToolUse
       ? 'warning'
