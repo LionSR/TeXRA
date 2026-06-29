@@ -7,9 +7,15 @@ import { when } from 'lit/directives/when.js';
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
+// Local imports - shared schemas
+import {
+  resolveUsageRoute,
+  type TokenUsageStats,
+  type UsageRoute,
+} from '@shared/schemas';
+
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
-import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { clamp, formatCompactTokenCount } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
@@ -34,17 +40,6 @@ function fillColor(percent: number): string {
   if (percent <= 65) return 'var(--color-success)';
   if (percent <= 80) return 'var(--color-warning)';
   return 'var(--color-status-error)';
-}
-
-function resolveUsageRoute(
-  usage: TokenUsageStats | null,
-): UsageRoute | undefined {
-  return (
-    usage?.usageRoute ??
-    (usage?.viaChatGptSubscription === true
-      ? 'chatgpt-subscription'
-      : undefined)
-  );
 }
 
 function usageRouteBadge(
