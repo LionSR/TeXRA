@@ -834,8 +834,14 @@ export class MainApp extends MainAppBase {
     if (!fallbackOptions) return;
 
     this.modelOptions.set(fallbackOptions);
-    this.workflowModelOptions.set(optionsDataByCategory?.workflow);
-    this.toolUseModelOptions.set(optionsDataByCategory?.toolUse);
+    if (optionsDataByCategory) {
+      if (Object.hasOwn(optionsDataByCategory, SESSION_TYPES.WORKFLOW)) {
+        this.workflowModelOptions.set(optionsDataByCategory.workflow);
+      }
+      if (Object.hasOwn(optionsDataByCategory, SESSION_TYPES.TOOL_USE)) {
+        this.toolUseModelOptions.set(optionsDataByCategory.toolUse);
+      }
+    }
     this.refreshModelSelectionForActiveSession();
   }
 

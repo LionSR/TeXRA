@@ -7,9 +7,9 @@ import { arXivCommands } from '@commands/latex';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { gitCommands } from '@commands/git/gitCommands';
 import { toErrorMessage } from '@common/errors';
+import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 import { sampleProjectCommands } from './sampleProjectCommands';
@@ -41,10 +41,11 @@ export function registerMainViewCommands(
         if (!webview) return;
 
         try {
-          const optionsData = await computeModelOptionsData();
+          const optionsDataByCategory = await loadMainViewModelOptions();
           webview.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-            optionsData,
+            optionsData: optionsDataByCategory.workflow,
+            optionsDataByCategory,
           });
         } catch (error) {
           const message = toErrorMessage(error);
@@ -85,13 +86,14 @@ export function registerMainViewCommands(
 
         try {
           await refresh();
-          const [modelOptionsData, agentOptionsData] = await Promise.all([
-            computeModelOptionsData(),
+          const [modelOptionsByCategory, agentOptionsData] = await Promise.all([
+            loadMainViewModelOptions(),
             computeAgentOptionsData(),
           ]);
           webview.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-            optionsData: modelOptionsData,
+            optionsData: modelOptionsByCategory.workflow,
+            optionsDataByCategory: modelOptionsByCategory,
           });
           webview.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
