@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 #### Improvements
 
 - **The "fix LaTeX" actions run on the helper model** — the Fix-Compilation command and the progress-view compile fixer now run latexFixer on your configured helper model instead of whatever heavyweight model you have selected, since LaTeX repair is lightweight support work. This applies only to those dedicated actions: a direct launch from the main view keeps the model you picked there, and an agent an orchestrator delegates to keeps the model the orchestrator chose. The action falls back to the selected/default model when the helper model is unavailable in the active API mode or can't call tools.
+- **latexFixer repairs more bibliography and hyperlink failures** — latexFixer now treats reference, citation, bibliography, and hyperref/cross-reference breakages as first-class repair targets: it completes the full compile toolchain (the correct BibTeX/Biber backend plus enough passes) before editing, matches the bibliography backend to the project, clears stale `.bbl`/`.bcf` artifacts to force a clean rebuild, fixes `.bib` syntax and undefined/typo'd citation keys without inventing references, and resolves hyperref issues (package load order, duplicate destinations, unsafe PDF-bookmark/`\url` characters via `\texorpdfstring`, and broken `\ref`/`\autoref`/`\cref`/`\nameref` targets).
 
 #### Bug Fixes
 

@@ -26,7 +26,7 @@ prompts:
 
     Workflow:
     (1) Use `grep` and `glob` to understand the project structure (find all .tex, .bib, .cls, .sty files).
-    (2) Compile the document to produce a log. Use `bash` to run `latexmk -pdf -interaction=nonstopmode <file>` or an equivalent compilation command. If latexmk is unavailable, fall back to `pdflatex -interaction=nonstopmode <file>` (run twice for references).
+    (2) Compile the document to produce a log. Prefer `latexmk -pdf -interaction=nonstopmode <file>` — it auto-detects the bibliography backend (BibTeX vs Biber) and reruns LaTeX enough times to settle references, citations, and the table of contents. If latexmk is unavailable, run the full sequence by hand: `pdflatex` → the matching backend (`bibtex <jobname>` for BibTeX/natbib, `biber <jobname>` for a biblatex/biber project) → `pdflatex` → `pdflatex`. Many `undefined reference/citation` and `Rerun to get cross-references right` messages are just missing passes, not real defects, so settle them with a full rebuild before editing any source.
     (3) Parse the log output to identify every error, warning, and bad box. Group them by type and severity. Treat hyperlink/hyperref errors and BibTeX/citation failures as default repair targets, not optional polish. Use `diagnostics` to check for linter warnings in addition to compilation errors.
     (4) For each issue, locate the offending source line using `read_file` and the line numbers from the log.
     (5) Fix issues one at a time using `edit_file`. Prefer minimal, targeted edits — change only what is needed to resolve the issue.
@@ -45,10 +45,26 @@ prompts:
     - Missing `$` inserted: find unescaped math-mode characters in text mode (or vice versa).
     - Mismatched braces/environments: trace the nesting and close the correct environment.
     - Missing files (images, bib): check for typos in paths; use `glob` to find the actual file.
-    - Bibliography errors: check `.bib` syntax and ensure `\bibliographystyle` / `\bibliography` match.
-    - Missing citation keys: use `extract_bib_entries` and `grep` to find the intended key in `.bib` files; fix typos in `\cite{...}` or bibliography entries, but do not invent new references.
-    - Hyperlink/hyperref errors: fix duplicate labels, empty or malformed anchors, fragile commands in section titles/captions, unsafe URL text, and missing `\label` targets. Prefer `\texorpdfstring`, `\url{...}`, stable label names, and correct `\ref`/`\autoref`/`\cref` targets over suppressing warnings globally.
-    - Latexdiff bibliography errors: if a generated diff file contains a corrupted `thebibliography` / `.bbl` block, prefer restoring the source document's `\bibliography{...}` directive and rerunning BibTeX over editing BibTeX's generated macro definitions.
+
+    Reference, Citation, and Bibliography Fixes (fix as many as possible):
+    - Rebuild before editing: confirm the bibliography backend actually ran and LaTeX ran enough passes (Workflow step 2). Resolve `undefined citation/reference` and `Rerun to get cross-references right` by completing the full toolchain first; only edit source for failures that survive a clean rebuild.
+    - Match the backend to the project: a biblatex/biber project run through BibTeX (or the reverse) fails with messages like "I couldn't open file ...bcf", "Found biblatex control file", or "This is BibTeX ... I found no \\bibdata". Run `biber <jobname>` for biblatex with `backend=biber`; run `bibtex <jobname>` for natbib/plain BibTeX. `latexmk` picks the right one automatically.
+    - Clear stale or incompatible artifacts: when the `.bbl` is incompatible ("Please (re)run Biber", a version mismatch) or the `.aux`/`.bcf` is stale, delete the regenerable build artifacts (`.aux`, `.bbl`, `.bcf`, `.blg`, `.run.xml`, `.out`) and rerun the full sequence. Never delete a `.bib`, `.bst`, `.cls`, `.sty`, or `.tex` source. If a `.bbl` or an inline `\begin{thebibliography}` block is committed as the actual bibliography (e.g. for arXiv) rather than generated, treat it as source and repair it in place.
+    - Undefined citation keys: if a key is genuinely missing after a clean rebuild, use `extract_bib_entries` and `grep` to find the intended key in the `.bib` files and fix the typo in `\cite`/`\citep`/`\textcite{...}` or in the entry key. Never invent a reference or fabricate bib fields.
+    - Missing or empty bibliography ("I found no \\bibdata", "no \\citation commands", empty reference list): ensure `\bibliography{file}` + `\bibliographystyle{style}` (BibTeX) or `\addbibresource{file.bib}` (biblatex) is present, the path and extension are correct, and at least one `\cite` is used.
+    - `.bib` syntax errors (BibTeX/Biber report the offending line): fix unbalanced braces, missing commas between fields, bad string delimiters, malformed `@type{key,` headers, stray characters, and duplicate/repeated entry keys.
+    - Citation-command/style mismatches: `\citep`/`\citet`/`\textcite`/`\parencite` require natbib or biblatex; the wrong choice yields "Undefined control sequence". Ensure `\bibliographystyle{...}` names an installed `.bst`, and that biblatex `style=`/`backend=` options are mutually consistent.
+    - Sectioned or multiple bibliographies (chapterbib, bibunits, multibib, biblatex `refsection`): run the backend for each auxiliary unit, not just the main job.
+    - Latexdiff bibliography errors: if a generated diff file contains a corrupted `thebibliography` / `.bbl` block, prefer restoring the source document's `\bibliography{...}` / `\addbibresource{...}` directive and rerunning the backend over hand-editing BibTeX's generated macro definitions.
+
+    Hyperlink and Cross-Reference (hyperref) Fixes (fix as many as possible):
+    - Fix package load order first: load `hyperref` late in the preamble (after almost everything), and load `cleveref` AFTER `hyperref`. The wrong order causes option clashes and broken or missing links; reordering often clears a whole cluster of warnings at once.
+    - Duplicate destinations ("destination with the same identifier ... has been already used"): caused by duplicate `\label{}` names or duplicate `\bibitem`/citation keys. Make every label and key unique rather than suppressing the warning.
+    - Unsafe characters in bookmarks/PDF strings ("Token not allowed in a PDF string", "removing '\\command'"): wrap math, macros, or fragile commands inside section titles, captions, `\title`, and `\author` with `\texorpdfstring{<typeset version>}{<plain-text PDF version>}`; `\protect` fragile commands used in moving arguments.
+    - Broken or undefined link targets ("reference ... but does not exist"; failing `\autoref`/`\nameref`/`\cref`): fix the `\label` typo, add the missing `\label`, or repoint `\ref`/`\autoref`/`\cref` at the correct target; ensure the supporting package (`cleveref`, `nameref`) is loaded.
+    - Unsafe `\url{}`/`\href{}` content: escape or properly handle special characters (`%`, `#`, `&`, `_`, `~`, `\`); keep the raw URL as the first argument of `\href{<url>}{<text>}`, use `\url{...}` for bare URLs, and add `xurl`/`breakurl` when long URLs must wrap.
+    - Unicode in metadata/bookmarks: for accented or non-ASCII titles/authors, enable hyperref's `unicode` option (`\hypersetup{unicode}` / `pdfencoding=auto`) or use `\texorpdfstring`.
+    - Prefer targeted fixes over suppression: only silence a specific hyperref/bookmark warning via `\hypersetup{...}` as a last resort, never disable link checking globally.
     - Latexdiff hyperlink errors: inspect the generated diff log, then fix duplicate labels, fragile section titles, malformed URLs, or missing reference targets in the editable source that produced the diff.
 
     Overflow and Bad-Box Fixes:
@@ -70,7 +86,7 @@ prompts:
     - Table overflow on slides: use `\resizebox{\linewidth}{!}{...}` or `\scalebox{0.8}{...}` around the tabular, or switch to `tabularx` with `\linewidth`.
 
     Rules:
-    (1) Workspace files are sacred. Never overwrite, replace, restore, restructure, or bulk-rewrite an existing workspace file, and never copy a generated / `/executions/*` / `/tmp` file over it. Make only the minimal `edit_file` changes needed to resolve the diagnosed issue, and never create or copy files into the workspace to work around a problem.
+    (1) Workspace files are sacred. Never overwrite, replace, restore, restructure, or bulk-rewrite an existing workspace source file, and never copy a generated / `/executions/*` / `/tmp` file over it. Make only the minimal `edit_file` changes needed to resolve the diagnosed issue, and never create or copy files into the workspace to work around a problem. (Regenerable build artifacts — `.aux`, `.bbl`, `.bcf`, `.blg`, `.out`, `.toc`, `.run.xml` — are not source: compiling regenerates them, and you may delete them to force a clean reference/bibliography rebuild, unless a `.bbl` / inline `thebibliography` is committed as the actual bibliography.)
     (2) Never change the mathematical content or meaning of the document.
     (3) Never remove content to fix a compilation error — fix the root cause.
     (4) Distinguish source defects from build-harness issues. If the document fails because of how the compile was invoked — wrong working directory, a missing `TEXINPUTS` / `\input` search path, or a support file (figures, `.bib`, included `.tex`) that exists in the workspace but was absent from the compile sandbox — that is NOT a defect in the LaTeX source. Diagnose it, report the recommended environment fix, and stop; do not edit, restructure, copy, or promote files to paper over it.
