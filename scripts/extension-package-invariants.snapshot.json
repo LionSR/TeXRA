@@ -460,6 +460,23 @@
           "command": "texra.agentReview.clear",
           "icon": "$(clear-all)",
           "title": "Clear Agent Review Results"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.replyComment",
+          "title": "Reply"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.resolveCommentThread",
+          "icon": "$(check)",
+          "title": "Resolve"
+        },
+        {
+          "category": "TeXRA",
+          "command": "texra.unresolveCommentThread",
+          "icon": "$(history)",
+          "title": "Reopen"
         }
       ],
       "configuration": [
@@ -481,7 +498,7 @@
             },
             "texra.inlineCriticism.enabled": {
               "default": false,
-              "description": "Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.",
+              "description": "Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the diagnostics tool's \"add\" command.",
               "order": 52,
               "scope": "resource",
               "type": "boolean"
@@ -1561,6 +1578,37 @@
           {
             "command": "texra.showDashboard",
             "when": "texra.activated"
+          },
+          {
+            "command": "texra.replyComment",
+            "when": "false"
+          },
+          {
+            "command": "texra.resolveCommentThread",
+            "when": "false"
+          },
+          {
+            "command": "texra.unresolveCommentThread",
+            "when": "false"
+          }
+        ],
+        "comments/commentThread/context": [
+          {
+            "command": "texra.replyComment",
+            "group": "inline",
+            "when": "commentController == texra.inlineComments"
+          }
+        ],
+        "comments/commentThread/title": [
+          {
+            "command": "texra.resolveCommentThread",
+            "group": "inline@1",
+            "when": "commentController == texra.inlineComments && commentThread == texraInlineCommentOpen"
+          },
+          {
+            "command": "texra.unresolveCommentThread",
+            "group": "inline@1",
+            "when": "commentController == texra.inlineComments && commentThread == texraInlineCommentResolved"
           }
         ],
         "editor/context": [

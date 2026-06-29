@@ -7,8 +7,9 @@
  * Two ingest paths:
  *   1. Bus event hook on `addOutputFiles` parses each output `.tex` file.
  *      Universal — any agent that writes the macro participates.
- *   2. `add_criticism` tool routes through `pushManualCriticism` here for
- *      tool-use agents that want to flag issues without inserting the macro.
+ *   2. The `diagnostics` tool's `add` command routes through
+ *      `pushManualCriticism` here for tool-use agents that want to flag issues
+ *      without inserting the macro.
  *
  * Gated on the `INLINE_CRITICISM_ENABLED` global state key, surfaced as a
  * toggle in the LaTeX settings tab (default: false).
@@ -24,7 +25,7 @@ import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo } from '@shared/schemas';
-import type { ManualCriticismEntry } from '@tools/AddCriticismTool';
+import type { ManualCriticismEntry } from '@tools/DiagnosticsTool';
 import { AbsoluteFS } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 

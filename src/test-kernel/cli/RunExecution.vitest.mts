@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { EXECUTION_STATUS } from '@shared/schemas';
+import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -141,7 +142,12 @@ describe('executeCliRequest', () => {
       request,
       expect.objectContaining({
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: ['inquiry', 'list_api_keys'],
+        runtimeUnavailableTools: [
+          'inquiry',
+          'list_api_keys',
+          'inline_comment',
+          DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+        ],
       }),
     );
   });
@@ -160,7 +166,13 @@ describe('executeCliRequest', () => {
     expect(mocks.runAgent).toHaveBeenCalledWith(
       request,
       expect.objectContaining({
-        runtimeUnavailableTools: ['inquiry', 'list_api_keys', 'custom_tool'],
+        runtimeUnavailableTools: [
+          'inquiry',
+          'list_api_keys',
+          'inline_comment',
+          DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+          'custom_tool',
+        ],
       }),
     );
   });
