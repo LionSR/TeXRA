@@ -6,7 +6,6 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   renderSetStatusIcon,
@@ -38,7 +37,7 @@ import {
   type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
 import { profileViewStyles } from './styles';
-import { ModelSelectionEvents, ProviderKeyEvents } from './events';
+import { ModelSelectionEvents } from './events';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
@@ -271,38 +270,21 @@ export class ModelSelectionList extends LitElement {
     const enabledCount = group.current.filter((m) => m.enabled).length;
     const totalCount = group.current.length;
     const keyStatus = this.getProviderKeyStatus(group.provider);
-    const providerKeyActions = keyStatus
+    // Key status is read-only here. Setting, fetching, and removing keys all
+    // live in the API Configuration section above; mirroring those actions in
+    // this list produced two competing key UIs. Labels match that section.
+    const providerKeyStatus = keyStatus
       ? html`
           <span class="provider-group-key-status">
             ${renderSetStatusIcon({
               status: keyStatus.status,
               title: 'Key set',
               fallbacks: {
-                env: { label: 'Env key' },
-                'not-set': { label: 'No key' },
+                env: { label: 'Env' },
+                'not-set': { label: 'Not set' },
               },
             })}
           </span>
-          ${renderLabeledActionButton({
-            icon: 'key',
-            text: 'Set key',
-            label: `Set ${group.displayName} API key`,
-            className: 'provider-group-key-button',
-            onClick: () =>
-              this.dispatchEvent(
-                ProviderKeyEvents.setKey({ provider: group.provider }),
-              ),
-          })}
-          ${renderLabeledActionButton({
-            icon: 'arrow-up-right-from-square',
-            text: 'Get key',
-            label: `Get ${group.displayName} API key`,
-            className: 'provider-group-key-button',
-            onClick: () =>
-              this.dispatchEvent(
-                ProviderKeyEvents.openKeyUrl({ provider: group.provider }),
-              ),
-          })}
         `
       : nothing;
 
@@ -323,7 +305,7 @@ export class ModelSelectionList extends LitElement {
               ${enabledCount}/${totalCount} enabled
             </span>
           </button>
-          <div class="provider-group-actions">${providerKeyActions}</div>
+          <div class="provider-group-actions">${providerKeyStatus}</div>
         </div>
         ${isExpanded
           ? html`

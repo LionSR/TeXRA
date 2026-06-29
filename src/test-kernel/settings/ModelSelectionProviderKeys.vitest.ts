@@ -25,13 +25,13 @@ const deepseekModel: ModelSelectionItem = {
   isFast: true,
 };
 
-describe('ModelSelectionList provider key actions', () => {
+describe('ModelSelectionList provider key status', () => {
   useLitComponentTestDom(
     () =>
       import('@settingsView/frontend/components/profile/ModelSelectionList'),
   );
 
-  it('shows direct API-key actions in model provider groups before profile load', async () => {
+  it('shows a read-only API-key status in model provider groups before profile load', async () => {
     const list = document.createElement(
       'model-selection-list',
     ) as ModelSelectionListElement;
@@ -41,21 +41,18 @@ describe('ModelSelectionList provider key actions', () => {
     await list.updateComplete;
 
     const shadow = list.shadowRoot!;
-    expect(shadow.textContent).toContain('No key');
+    expect(shadow.textContent).toContain('Not set');
+    expect(shadow.textContent).not.toContain('No key');
 
     const setKeyButton = shadow.querySelector<HTMLElement>(
       '[title="Set DeepSeek API key"]',
     );
-    expect(setKeyButton).toBeTruthy();
+    const getKeyButton = shadow.querySelector<HTMLElement>(
+      '[title="Get DeepSeek API key"]',
+    );
 
-    const events: unknown[] = [];
-    list.addEventListener('provider-key-set', (event) => {
-      events.push((event as CustomEvent).detail);
-    });
-
-    setKeyButton!.click();
-
-    expect(events).toEqual([{ provider: 'deepseek' }]);
+    expect(setKeyButton).toBeNull();
+    expect(getKeyButton).toBeNull();
   });
 
   it('shows helper model labels together with short ids', async () => {
