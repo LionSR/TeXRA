@@ -11,6 +11,7 @@ import {
   coerceSettingInput,
   ConfigForm,
   formatSettingValue,
+  isConfigResetInput,
   settingDisplayName,
   settingEditKind,
   settingStoreLabel,
@@ -133,6 +134,12 @@ describe('ConfigForm helpers', () => {
     const invalid = validateSettingInput(timeout, '0', true);
     expect(invalid.ok).toBe(false);
     if (!invalid.ok) expect(invalid.message).not.toBe('');
+  });
+
+  it('recognizes parsed and raw Ctrl+R reset input', () => {
+    expect(isConfigResetInput('r', { ctrl: true })).toBe(true);
+    expect(isConfigResetInput('\u0012', {})).toBe(true);
+    expect(isConfigResetInput('r', { meta: true })).toBe(false);
   });
 
   it('formats values for display', () => {
