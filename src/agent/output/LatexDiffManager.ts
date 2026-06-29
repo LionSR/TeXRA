@@ -66,12 +66,18 @@ export class LatexDiffManager {
    * Directory of the document's live workspace source — the one place that
    * carries the `figures/` and `.bib` dependencies the diff still `\input`s.
    * The base location is never the live workspace file: `resolveBaseFilesForDiff`
-   * rewrites a round diff base to its `executions/<id>/original/<rel>` snapshot,
-   * and a between-round diff base is the prior round's output at `r<N>/<rel>`.
-   * Both keep the path workspace-relative apart from a leading run-storage
-   * `r<N>/` round segment, so strip that and map onto the workspace root; fall
-   * back to the file's own directory for external bases or when no workspace is
-   * open.
+   * (`snapshotResolution.ts`) rewrites a round diff base to its
+   * `executions/<id>/original/<rel>` snapshot, and a between-round diff base is
+   * the prior round's output at `r<N>/<rel>`. Both keep the path
+   * workspace-relative apart from a leading run-storage `r<N>/` round segment,
+   * so strip that and map onto the workspace root; fall back to the file's own
+   * directory for external bases or when no workspace is open.
+   *
+   * Assumption: a leading `r<digits>/` segment is a run-storage round prefix,
+   * not a real workspace folder. A document whose live source genuinely sits
+   * under a top-level `r<digits>/` folder (e.g. a "revision 1" `r1/`) would be
+   * mis-stripped — unavoidable with a relativePath-only heuristic, and rare
+   * since it collides with the round-directory naming.
    */
   private resolveWorkspaceSourceDir(location: FileLocation): string {
     const workspaceRoot = WorkspaceFS.getPath();
