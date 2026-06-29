@@ -477,6 +477,11 @@ export class ProgressViewProvider
         const sessionLinks = collectKnownSessionLinks(manifest);
         const draft = getOpenTurnDraft(manifest);
         const transcript = manifestToTranscript(manifest);
+        const hydrationFields = {
+          sessionLinks,
+          draft,
+          transcript,
+        };
         const basePermission = {
           requestId: manifest.threadId,
           threadId: manifest.threadId,
@@ -487,13 +492,17 @@ export class ProgressViewProvider
           allowBypass: false,
           streamId: manifest.parentStreamId,
         };
-        const permission: ExternalInquiryPermission = {
-          ...basePermission,
-          mode: isFollowUp ? 'followUp' : 'new',
-          sessionLinks,
-          draft,
-          transcript,
-        };
+        const permission: ExternalInquiryPermission = isFollowUp
+          ? {
+              ...basePermission,
+              ...hydrationFields,
+              mode: 'followUp',
+            }
+          : {
+              ...basePermission,
+              ...hydrationFields,
+              mode: 'new',
+            };
         this.externalInquiryHandler.show(permission);
       } catch {
         // Skip threads whose manifest can't be read; surface logs elsewhere.
