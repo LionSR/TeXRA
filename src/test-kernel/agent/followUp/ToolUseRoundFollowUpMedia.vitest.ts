@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent core
 import { createRunTrace } from '@transcript';
-import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import {
   createToolUseRoundFlow,

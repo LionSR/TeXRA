@@ -49,7 +49,7 @@ export {
   type ExecutionRequest,
   type ValidatedExecutionRequest,
   type ExecutionValidationResult,
-} from '@agent/core/execution/executionRequests';
+} from '@agent/core/state/executionRequests';
 
 // ── 4. Running an agent ──  (the section to read first)
 /**

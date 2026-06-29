@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { logContextStateSnapshot, type AgentTrace } from '@agent/trace';
 import { isRemoteAgent } from '@agent/index/agentRegistry';
-import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import {
   ProviderMessageSchema,

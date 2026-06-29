@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
-import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/execution/AgentWorkspaceState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
+import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/state/AgentWorkspaceState';
 import { UserVariableChannelsSchema } from '@agent/core/definition/AgentCycleOptions';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import { ExecutionIdSchema, StreamTabIdSchema } from '@shared/schemas';

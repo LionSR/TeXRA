@@ -80,7 +80,7 @@ needed. Re-run `texra-local:build` to refresh. Override the install dir with
 
 The core of TeXRA is its agent architecture in repo-root `src/agent/`:
 
-- **`core/`** holds the host-agnostic domain model, organized by bounded concern: `definition/` (what an agent is), `execution/` (run state), `usage/` (usage value objects), `tools/` (tool contracts), and `flows/` (reusable cycle primitives). See `src/agent/core/README.md` for the module map and dependency rules.
+- **`core/`** holds the host-agnostic domain model, organized by bounded concern: `definition/` (what an agent is), `state/` (run-state snapshots), `usage/` (usage value objects), `tools/` (tool contracts), and `flows/` (reusable cycle primitives). See `src/agent/core/README.md` for the module map and dependency rules.
 - **`implementations/flows/`** provides the PocketFlow-based flow implementations (reflection, tooluse)
 - **`modelHandlers/`** abstracts AI provider APIs (Anthropic, OpenAI, Google, OpenRouter)
 - Agents are configured via YAML files in `packages/extension/resources/agents/`

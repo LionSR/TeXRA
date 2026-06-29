@@ -1,6 +1,6 @@
 import { registerExecution } from '@agent/storage';
 
-import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
+import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 import { executeAgent } from './executeAgent';

@@ -142,7 +142,7 @@ function userStep(text: string): Step {
 }
 
 /** Minimal workspace stub for the tool follow-up (empty reasoning + resets). */
-function fakeWorkspace(): import('@agent/core/execution/AgentWorkspaceState').AgentWorkspaceState {
+function fakeWorkspace(): import('@agent/core/state/AgentWorkspaceState').AgentWorkspaceState {
   const reasoning = { thinkingBlocks: [], thinkingAdded: false };
   return {
     reasoning,

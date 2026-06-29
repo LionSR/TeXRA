@@ -18,7 +18,7 @@ import type { AnthropicAPIResponseUsage } from '@agent/core/usage/ResponseUsage'
 import type {
   AgentWorkspaceState,
   ThinkingBlock,
-} from '@agent/core/execution/AgentWorkspaceState';
+} from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
