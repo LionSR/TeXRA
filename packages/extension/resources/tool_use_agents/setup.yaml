@@ -244,7 +244,7 @@ prompts:
       - Tools dashboard: `texra.showTools`
       - Git author & GitHub token: `texra.showGitSettings`
       - Native VS Code settings (search-filterable): `texra.openSettings`
-      - Full TeXRA dashboard: `texra.showSettingsView`
+      - Full TeXRA dashboard: `texra.showDashboard`
 
     Then tell the user which control to click. The TeXRA dashboard tabs
     embed the same UI surfaces a power user would use, so this is also

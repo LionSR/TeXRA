@@ -27,7 +27,6 @@ const ALLOWED_COMMAND_IDS = [
   AUTH_COMMANDS.SIGN_IN,
   AUTH_COMMANDS.VIEW_PROFILE,
   // Settings dashboard tabs
-  'texra.showSettingsView',
   'texra.showDashboard',
   'texra.showMemory',
   'texra.showAgentHistory',

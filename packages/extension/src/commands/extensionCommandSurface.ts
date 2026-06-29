@@ -120,7 +120,6 @@ const CHATGPT_SIGN_IN_CHANNEL = 'ChatGptSubscription';
  */
 export type ExtensionRegistryCommandId = Extract<
   CommandId,
-  | 'texra.showSettingsView'
   | 'texra.showDashboard'
   | 'texra.showMemory'
   | 'texra.showAgentHistory'
@@ -352,7 +351,6 @@ export function createExtensionCommandActions(
 }
 
 const EXTENSION_COMMAND_HANDLERS = {
-  'texra.showSettingsView': (actions) => awaitTrue(actions.showSettings()),
   'texra.showDashboard': (actions) => awaitTrue(actions.showSettings()),
   'texra.showMemory': (actions) =>
     awaitTrue(actions.showSettings(SETTINGS_TAB.MEMORY)),

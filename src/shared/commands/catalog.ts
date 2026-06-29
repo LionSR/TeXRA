@@ -375,12 +375,6 @@ export const commandCatalog = [
     icon: '$(gear)',
   },
   {
-    id: 'texra.showSettingsView',
-    title: 'Show Settings',
-    category: 'TeXRA',
-    icon: '$(gear)',
-  },
-  {
     id: 'texra.agentReview.run',
     title: 'Find Issues (Agent Review)',
     shortTitle: 'Find Issues',
