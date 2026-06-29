@@ -8,7 +8,6 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
-- **The "fix LaTeX" actions run on the helper model** — the Fix-Compilation command and the progress-view compile fixer now run latexFixer on your configured helper model instead of the heavyweight model you have selected. Direct main-view launches and orchestrator delegations keep their chosen model; the action falls back to it when the helper model is unavailable or can't call tools.
 - **latexFixer repairs more bibliography and hyperlink failures** — it now treats reference, citation, bibliography, and hyperref breakages as first-class targets: completing the full BibTeX/Biber toolchain before editing, fixing `.bib` and citation-key errors without inventing references, and fixing hyperref issues (load order, duplicate destinations, unsafe PDF/URL characters, broken `\ref`/`\cref` targets).
 
 #### Bug Fixes
@@ -19,6 +18,7 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
+- **The "fix LaTeX" actions run on the helper model** — the Fix-Compilation command and the progress-view compile fixer now run latexFixer on your configured helper model instead of the heavyweight model you have selected. Direct main-view launches and orchestrator delegations keep their chosen model; the action falls back to it when the helper model is unavailable or can't call tools.
 - **Sign in with ChatGPT from a non-default browser** — the ChatGPT subscription sign-in opens your system default browser, but if your ChatGPT subscription is signed in on a different browser you can now copy the sign-in link and open it there. The VS Code extension shows a "Copy Sign-in Link" notification action and the desktop app offers a "Copy Sign-in Link" dialog button; the loopback callback accepts the redirect from whichever browser you complete it in.
 - **First-run setup no longer launches itself** — after a new user connects a credential, TeXRA now selects the setup assistant and shows a "Run setup assistant" card instead of silently starting it. The setup assistant inspects your environment and may install tools, so it now runs only when you explicitly click to start it.
 
