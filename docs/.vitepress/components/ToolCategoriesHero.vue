@@ -18,16 +18,8 @@ const categories = [
   {
     icon: 'files',
     name: 'File & Shell',
-    desc: 'Read, write, edit, search, list, and run commands in your project',
-    tools: [
-      'read_file',
-      'write_file',
-      'edit_file',
-      'glob',
-      'grep',
-      'ls',
-      'bash',
-    ],
+    desc: 'Read, write, edit, search, and run commands in your project',
+    tools: ['read_file', 'write_file', 'edit_file', 'glob', 'grep', 'bash'],
   },
   {
     icon: 'file-code',

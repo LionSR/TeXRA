@@ -15,7 +15,6 @@ recommended groups at the bottom are a good starting point.
   under read-only directories fail cleanly.
 - `edit_file` — exact string replacement in a file. More surgical than
   `write_file` for targeted changes.
-- `ls` — list files and directories with optional glob filtering.
 - `glob` — find files matching glob patterns (e.g. `**/*.tex`). Returns
   paths sorted by modification time.
 - `grep` — search file contents with regex. Supports content,
@@ -83,35 +82,35 @@ recommended groups at the bottom are a good starting point.
 Most agents should include the file-operations set as a baseline.
 
 **Research agent:**
-`bash, read_file, write_file, glob, grep, ls, web_search, web_fetch,
+`bash, read_file, write_file, glob, grep, web_search, web_fetch,
 arxiv_search, arxiv_metadata, download_arxiv_source, crossref_search,
 crossref_doi`
 
 **Code/editing agent:**
-`bash, read_file, write_file, edit_file, glob, grep, ls, diagnostics`
+`bash, read_file, write_file, edit_file, glob, grep, diagnostics`
 
 **LaTeX analysis agent:**
-`bash, read_file, write_file, glob, grep, ls, extract_figures,
+`bash, read_file, write_file, glob, grep, extract_figures,
 extract_bib_entries, extract_tikz_figures, texcount`
 
 **Literature review agent:**
-`bash, read_file, write_file, glob, grep, ls, arxiv_search, arxiv_metadata,
+`bash, read_file, write_file, glob, grep, arxiv_search, arxiv_metadata,
 crossref_search, crossref_doi, web_search, zotero_search, zotero_add,
 zotero_export`
 
 **Orchestrator agent:**
-`bash, read_file, write_file, glob, grep, ls, delegate_workflow,
+`bash, read_file, write_file, glob, grep, delegate_workflow,
 delegate_agent, executions, accept_run_files, todo_write`
 
 **Computation agent:**
-`bash, read_file, write_file, glob, grep, ls, wolfram`
+`bash, read_file, write_file, glob, grep, wolfram`
 
 **Lean 4 agent:**
-`bash, read_file, write_file, edit_file, glob, grep, ls, lean_diagnostics,
+`bash, read_file, write_file, edit_file, glob, grep, lean_diagnostics,
 lean_file, lean_project, lean_inspect, lean_loogle`
 
 **Minimal chat agent:**
-`bash, read_file, write_file, glob, grep, ls`
+`bash, read_file, write_file, glob, grep`
 
 ## System prompt best practices
 

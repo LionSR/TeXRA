@@ -9,7 +9,6 @@ settings:
     - edit_file
     - glob
     - grep
-    - ls
     - executions
 
 prompts:

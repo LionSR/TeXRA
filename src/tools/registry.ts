@@ -17,7 +17,6 @@ import { ApplyPathTool } from './applyPath';
 import { EditFileTool } from './EditTool';
 import { GlobTool } from './glob';
 import { GrepTool } from './grep';
-import { LsTool } from './ls';
 import {
   ExtractBibliographyTool,
   ExtractLatexFiguresTool,
@@ -98,7 +97,6 @@ function createDefaultTools() {
     apply_path: new ApplyPathTool(),
     glob: new GlobTool(),
     grep: new GrepTool(),
-    ls: new LsTool(),
     download_arxiv_source: new ArxivDownloadTool(),
     arxiv_metadata: new ArxivMetadataTool(),
     arxiv_search: new ArxivSearchTool(),

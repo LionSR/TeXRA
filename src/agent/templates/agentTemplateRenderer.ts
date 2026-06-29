@@ -59,7 +59,6 @@ export const DEFAULT_AGENT_TEMPLATE_TOOLS_YAML = [
   'edit_file',
   'glob',
   'grep',
-  'ls',
 ]
   .map((tool) => `    - ${tool}`)
   .join('\n');

@@ -32,7 +32,7 @@ VALUES (
   'tool_use/presenter.yaml',
   ARRAY['researcher'],
   'toolUse',
-  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'wolfram', 'arxiv_search', 'arxiv_metadata', 'web_search', 'web_fetch']
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'wolfram', 'arxiv_search', 'arxiv_metadata', 'web_search', 'web_fetch']
 );
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
@@ -42,7 +42,7 @@ VALUES (
   'tool_use/search.yaml',
   ARRAY['researcher'],
   'toolUse',
-  ARRAY['bash', 'read_file', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export', 'web_search', 'web_fetch']
+  ARRAY['bash', 'read_file', 'glob', 'grep', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export', 'web_search', 'web_fetch']
 );
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
@@ -52,7 +52,7 @@ VALUES (
   'tool_use/simplifier.yaml',
   ARRAY['researcher'],
   'toolUse',
-  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'diagnostics', 'extract_figures', 'extract_tikz_figures', 'memory']
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'diagnostics', 'extract_figures', 'extract_tikz_figures', 'memory']
 );
 
 -- =============================================================================

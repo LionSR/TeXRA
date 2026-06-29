@@ -196,7 +196,7 @@ VALUES (
   'tool-use/orchestrator.yaml',
   ARRAY['public'],
   'toolUse',
-  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'texcount', 'inquiry', 'codex', 'claude_code', 'github_subscription']
+  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'extract_figures', 'extract_bib_entries', 'texcount', 'inquiry', 'codex', 'claude_code', 'github_subscription']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -212,7 +212,7 @@ VALUES (
   'tool-use/presenter.yaml',
   ARRAY['public'],
   'toolUse',
-  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'wolfram', 'arxiv_search', 'arxiv_metadata', 'web_search', 'web_fetch']
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'wolfram', 'arxiv_search', 'arxiv_metadata', 'web_search', 'web_fetch']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -228,7 +228,7 @@ VALUES (
   'tool-use/progressCheck.yaml',
   ARRAY['public'],
   'toolUse',
-  ARRAY['executions', 'read_file', 'glob', 'grep', 'ls', 'bash', 'memory', 'github_subscription', 'web_fetch', 'inquiry']
+  ARRAY['executions', 'read_file', 'glob', 'grep', 'bash', 'memory', 'github_subscription', 'web_fetch', 'inquiry']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -244,7 +244,7 @@ VALUES (
   'tool-use/search.yaml',
   ARRAY['public'],
   'toolUse',
-  ARRAY['bash', 'read_file', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export', 'web_search', 'web_fetch']
+  ARRAY['bash', 'read_file', 'glob', 'grep', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export', 'web_search', 'web_fetch']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -260,7 +260,7 @@ VALUES (
   'tool-use/simplifier.yaml',
   ARRAY['public'],
   'toolUse',
-  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'diagnostics', 'extract_figures', 'extract_tikz_figures', 'memory']
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'diagnostics', 'extract_figures', 'extract_tikz_figures', 'memory']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -280,7 +280,7 @@ VALUES (
   'tool-use-lean/lean.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'github_subscription']
+  ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'memory', 'github_subscription']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -296,7 +296,7 @@ VALUES (
   'tool-use-lean/leanBlueprint.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export']
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -312,7 +312,7 @@ VALUES (
   'tool-use-lean/leanOrchestrator.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'codex', 'claude_code', 'lean_diagnostics', 'lean_inspect', 'lean_loogle', 'lean_file', 'lean_project', 'github_subscription']
+  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'codex', 'claude_code', 'lean_diagnostics', 'lean_inspect', 'lean_loogle', 'lean_file', 'lean_project', 'github_subscription']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -328,7 +328,7 @@ VALUES (
   'tool-use-lean/leanSearch.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source']
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -344,7 +344,7 @@ VALUES (
   'tool-use-lean/leanSimplifier.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle']
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,

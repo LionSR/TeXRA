@@ -16,7 +16,6 @@ settings:
     - bash
     - glob
     - grep
-    - ls
     - extract_figures
     - extract_bib_entries
     - texcount
