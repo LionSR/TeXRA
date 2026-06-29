@@ -18,6 +18,7 @@ import {
 } from '@cli/runtime/modelAccess';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 
 const mocks = vi.hoisted(() => ({
   authProvider: {
@@ -1058,6 +1059,26 @@ describe('CLI model access resolution', () => {
       { model: { value: 'deepseekT' }, available: true },
       { model: { value: 'openrouterOnlyT' }, available: true },
     ]);
+  });
+
+  it('threads the CLI agent category into model availability', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('gpt55', {
+        availability: 'subscription-access',
+        availabilityLabel: 'ChatGPT subscription',
+      }),
+    ]);
+
+    await getCliModelAccessList({
+      apiMode: 'personal',
+      agentCategory: AgentCategory.ToolUse,
+    });
+
+    expect(computeModelOptionsDataMock).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      { agentCategory: AgentCategory.ToolUse },
+    );
   });
 
   it('loads explicit model ids for diagnostic lists', async () => {
