@@ -45,6 +45,9 @@ const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'globalState',
 ]);
 
+const CLI_RUNTIME_COMMAND_PATTERN =
+  /^texra\s+(?:chat|run|agents run|multi-agent run|orchestrate)\b/;
+
 const CLASS_D_KEY_PATTERN = /migrated|version|onboarding|history|cache/i;
 
 /** Expected default-when-absent for each catalog key, from the real getters. */
@@ -90,6 +93,38 @@ describe('state settings catalog', () => {
       assert.ok(
         existsSync(resolve(process.cwd(), entry.cliConsumer as string)),
         `${entry.key} cliConsumer does not exist: ${entry.cliConsumer}`,
+      );
+    }
+  });
+
+  it('every CLI-host entry documents a runtime-reachability path', () => {
+    for (const entry of STATE_SETTINGS) {
+      if (!entry.hosts.includes('cli')) {
+        assert.equal(
+          entry.cliRuntimeReachability,
+          undefined,
+          `${entry.key} documents CLI reachability but is not CLI-hosted`,
+        );
+        continue;
+      }
+
+      const reachability = entry.cliRuntimeReachability;
+      assert.ok(
+        reachability,
+        `${entry.key} is surfaced to the CLI but declares no cliRuntimeReachability`,
+      );
+      assert.match(
+        reachability.command,
+        CLI_RUNTIME_COMMAND_PATTERN,
+        `${entry.key} reachability command is not a recognized runtime command: ${reachability.command}`,
+      );
+      assert.ok(
+        entry.cliConsumer,
+        `${entry.key} reachability path cannot be checked without cliConsumer`,
+      );
+      assert.ok(
+        reachability.through.includes(entry.cliConsumer),
+        `${entry.key} reachability path must mention its cliConsumer ${entry.cliConsumer}`,
       );
     }
   });

@@ -44,6 +44,19 @@ export type SettingHost = 'vscode' | 'cli' | 'desktop';
 /** Storage slot a setting is read from / written to. */
 export type SettingStore = 'config' | 'workspaceState' | 'globalState';
 
+export interface CliRuntimeReachability {
+  /**
+   * Representative CLI command that reaches this setting after it has been set.
+   * Placeholders are allowed when the command needs an installed agent/model.
+   */
+  readonly command: string;
+  /**
+   * Short manual trace from the CLI command surface to {@link cliConsumer}. This
+   * is a review checklist item, not executable wiring.
+   */
+  readonly through: string;
+}
+
 export interface StateSettingEntry {
   /**
    * Canonical `texra.*` key — identical to the WorkspaceState/GlobalState slot
@@ -77,6 +90,12 @@ export interface StateSettingEntry {
    */
   readonly cliConsumer?: string;
   /**
+   * Runtime-reachability evidence for CLI-hosted settings. **Required** whenever
+   * {@link hosts} includes `'cli'` (enforced by the guardrail suite), so marking
+   * a setting as CLI-consumed requires more than naming an existing file.
+   */
+  readonly cliRuntimeReachability?: CliRuntimeReachability;
+  /**
    * Per-value descriptions for an enum setting, aligned 1:1 with the schema's
    * enum options (see {@link settingEnumOptions}). The option *values* are
    * derived from the schema, not restated here.
@@ -90,6 +109,36 @@ export interface StateSettingEntry {
 }
 
 const GIT_AUTHOR_CONSUMER = 'packages/cli/src/runtime/gitAuthor.ts';
+const GIT_AUTHOR_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "create a git commit"',
+  through:
+    'packages/cli/src/runtime/initPlatform.ts -> packages/cli/src/runtime/gitAuthor.ts -> src/utils/system/execUtils.ts',
+} satisfies CliRuntimeReachability;
+const GIT_WORKTREE_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "delegate a task to a subagent"',
+  through:
+    'packages/cli/src/runtime/initPlatform.ts -> packages/cli/src/runtime/gitAuthor.ts -> src/tools/DelegationTools.ts',
+} satisfies CliRuntimeReachability;
+const WORKFLOW_COMPILE_RUNTIME_REACHABILITY = {
+  command:
+    'texra run <workflow-agent> --input paper.tex --instruction "revise the paper"',
+  through:
+    'packages/cli/src/commands/workflow.ts -> src/agent/output/compileCheck.ts',
+} satisfies CliRuntimeReachability;
+const WORKFLOW_REJECT_RUNTIME_REACHABILITY = {
+  command:
+    'texra run <workflow-agent> --input paper.tex --instruction "revise the paper"',
+  through:
+    'packages/cli/src/commands/workflow.ts -> src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+} satisfies CliRuntimeReachability;
+const OPENAI_WEBSOCKET_RUNTIME_REACHABILITY = {
+  command:
+    'texra run <workflow-agent> --model <openai-model> --input paper.tex --instruction "summarize the paper"',
+  through:
+    'packages/cli/src/commands/workflow.ts -> src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
+} satisfies CliRuntimeReachability;
 
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Git commit author marking ---------------------------------------------
@@ -105,6 +154,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliStore: 'config',
     hosts: ['vscode', 'cli', 'desktop'],
     cliConsumer: GIT_AUTHOR_CONSUMER,
+    cliRuntimeReachability: GIT_AUTHOR_RUNTIME_REACHABILITY,
   },
   {
     key: WorkspaceStateKey.GIT_AUTHOR_NAME,
@@ -116,6 +166,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliStore: 'config',
     hosts: ['vscode', 'cli', 'desktop'],
     cliConsumer: GIT_AUTHOR_CONSUMER,
+    cliRuntimeReachability: GIT_AUTHOR_RUNTIME_REACHABILITY,
   },
   {
     key: WorkspaceStateKey.GIT_AUTHOR_EMAIL,
@@ -127,6 +178,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliStore: 'config',
     hosts: ['vscode', 'cli', 'desktop'],
     cliConsumer: GIT_AUTHOR_CONSUMER,
+    cliRuntimeReachability: GIT_AUTHOR_RUNTIME_REACHABILITY,
   },
   {
     key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
@@ -138,6 +190,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliStore: 'config',
     hosts: ['vscode', 'cli', 'desktop'],
     cliConsumer: GIT_AUTHOR_CONSUMER,
+    cliRuntimeReachability: GIT_WORKTREE_RUNTIME_REACHABILITY,
   },
 
   // --- Workflow auto-compile -------------------------------------------------
@@ -154,6 +207,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
     cliConsumer: 'src/agent/output/compileCheck.ts',
+    cliRuntimeReachability: WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
   },
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
@@ -167,6 +221,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
     cliConsumer: 'src/agent/output/compileCheck.ts',
+    cliRuntimeReachability: WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
   },
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
@@ -191,6 +246,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['vscode', 'desktop', 'cli'],
     cliConsumer:
       'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+    cliRuntimeReachability: WORKFLOW_REJECT_RUNTIME_REACHABILITY,
   },
 
   // --- LaTeXdiff -------------------------------------------------------------
@@ -279,6 +335,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'globalState',
     hosts: ['cli'],
     cliConsumer: 'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
+    cliRuntimeReachability: OPENAI_WEBSOCKET_RUNTIME_REACHABILITY,
   },
 ] as const;
 
