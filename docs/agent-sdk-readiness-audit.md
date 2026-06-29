@@ -2870,10 +2870,10 @@ these from 'open' to the closed-items reconciliation."_ This pass does exactly t
 contains #6671; each closure verified **GONE/landed first-hand**:
 
 - **`RetryState` collapse (the §24 HIGH item) — CLOSED.** `grep -c "interface RetryState"
-  src/agent/core/flows/RetryState.ts` → **0**. The one-field `lastError?` bag is gone; the sole caller is
+src/agent/core/flows/RetryState.ts` → **0**. The one-field `lastError?` bag is gone; the sole caller is
   now the single-`shared` form `handleInvocationResult(execRes, shared, { logger, operationName })`
   (`ModelInvocationNode.ts:123`), and `handleInvocationResult`'s signature is `(result, state: { …;
-  lastError? }, options)` (`RetryState.ts:342`) — the proposed collapse applied verbatim.
+lastError? }, options)` (`RetryState.ts:342`) — the proposed collapse applied verbatim.
 - **`IModelHandler` four-member port narrowing — CLOSED.** `grep -c` for `getAgentCategory` /
   `canProcessToolResultAttachments` / `createMediaContent(` / `createAssistantMessage(` on
   `types/IModelHandler.ts` → **0**. The four members that only had `this.` callers are off the port.
