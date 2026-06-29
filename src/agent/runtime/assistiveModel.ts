@@ -2,11 +2,13 @@
  * Helper-model preference for assistive agents.
  *
  * Assistive agents (latexFixer and the other support/repair helpers, flagged
- * `settings.assistive: true`) do lightweight auxiliary work, so a direct launch
- * should prefer the configured helper model over the heavyweight model the user
- * has selected. Applied in {@link runAgent}, the root entry every host uses for
- * user-initiated runs: orchestrator delegations call `executeAgent` directly and
- * never reach `runAgent`, so a delegated subagent keeps its orchestrator's model.
+ * `settings.assistive: true`) do lightweight auxiliary work, so the dedicated
+ * "run latexFixer" buttons/commands (Fix-Compilation, the progress-view compile
+ * fixer) should run them on the configured helper model rather than a
+ * heavyweight model. {@link runAgent} applies this only when the caller opts in
+ * via `preferHelperModelForAssistive` — set by those buttons. A direct main-view
+ * launch (where the user picked the model), the CLI, and orchestrator
+ * delegations all leave that flag off and keep the chosen model.
  */
 
 import { MODEL_CONFIGS } from 'llm-zoo';

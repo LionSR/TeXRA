@@ -87,14 +87,18 @@ export async function handleFixCompilation(): Promise<void> {
       );
 
       await vscode.commands.executeCommand('texra.execute', {
-        agent: 'latexFixer',
-        // latexFixer is a tool-use agent; without this the config category
-        // prefaults to workflow and resolveAgentForLaunch can't find it.
-        agentCategory: AgentCategory.ToolUse,
-        instruction: await buildFixCompilationInstruction(
-          editor.document.fileName,
-          relativePath,
-        ),
+        config: {
+          agent: 'latexFixer',
+          // latexFixer is a tool-use agent; without this the config category
+          // prefaults to workflow and resolveAgentForLaunch can't find it.
+          agentCategory: AgentCategory.ToolUse,
+          instruction: await buildFixCompilationInstruction(
+            editor.document.fileName,
+            relativePath,
+          ),
+        },
+        // This is a "run latexFixer" command, so prefer the helper model.
+        preferHelperModel: true,
       });
     },
   );

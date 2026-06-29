@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
-- **Helper agents run on the helper model by default** — when you launch latexFixer or latexDiff directly (the Fix Compilation command, a progress-view follow-up, or the webview Run button), they now run on your configured helper model instead of whatever heavyweight model you have selected, since they do lightweight support work. They fall back to the selected model when the helper model isn't available in the active API mode. Agents an orchestrator delegates to are unaffected — they keep the model the orchestrator chose.
+- **The "fix LaTeX" actions run on the helper model** — the Fix-Compilation command and the progress-view compile fixer now run latexFixer on your configured helper model instead of whatever heavyweight model you have selected, since LaTeX repair is lightweight support work. This applies only to those dedicated actions: a direct launch from the main view keeps the model you picked there, and an agent an orchestrator delegates to keeps the model the orchestrator chose. The action falls back to the selected/default model when the helper model is unavailable in the active API mode or can't call tools.
 
 #### Bug Fixes
 

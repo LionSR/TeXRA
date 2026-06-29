@@ -18,6 +18,13 @@ export interface RunAgentOptions {
   stopAfterCycle?: boolean;
   approvalPromptsUnavailable?: boolean;
   runtimeUnavailableTools?: readonly string[];
+  /**
+   * Opt-in set by the "run latexFixer" buttons/commands (Fix-Compilation, the
+   * progress-view compile fixer): prefer the configured helper model for an
+   * assistive agent over the launched model. Off for a direct main-view launch,
+   * the CLI, and orchestrator delegations, which all keep the chosen model.
+   */
+  preferHelperModelForAssistive?: boolean;
   /** Session owning this run's coordination state. Defaults to the process session. */
   session?: SessionHandle;
   /**
@@ -51,11 +58,13 @@ export async function runAgent(
   const shouldRegister =
     options.registerExecution ?? request.executionId === undefined;
 
-  // Root (user-initiated) launches route through here; orchestrator delegations
-  // call executeAgent directly. So an assistive agent prefers the helper model
-  // only when the user starts it, never when an orchestrator delegates to it.
-  // Resolved before registerExecution so the stored record and the run agree.
-  const config = await preferHelperModelForAssistive(request.config);
+  // Only the "run latexFixer" buttons/commands opt in (preferHelperModelForAssistive):
+  // an assistive agent then prefers the configured helper model. A direct
+  // main-view launch keeps the model the user picked. Resolved before
+  // registerExecution so the stored record and the run agree.
+  const config = options.preferHelperModelForAssistive
+    ? await preferHelperModelForAssistive(request.config)
+    : request.config;
 
   if (shouldRegister) {
     await registerExecution(
