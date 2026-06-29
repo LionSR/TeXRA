@@ -304,12 +304,14 @@ describe('BashTool', () => {
         provider: 'openai',
         callId: 'empty-1',
         name: 'empty',
-        input: {},
+        input: '{}',
         raw: {
-          type: 'function_call',
-          call_id: 'empty-1',
-          name: 'empty',
-          arguments: '{}',
+          id: 'empty-1',
+          type: 'function',
+          function: {
+            name: 'empty',
+            arguments: '{}',
+          },
         },
       } as SdkToolCall;
       const messages: ProviderMessage[] = [];
