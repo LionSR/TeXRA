@@ -16,7 +16,7 @@ import {
   type CliApprovalPolicy,
   type CliOutputFormat,
 } from '../schemas/cliSettings';
-import { BUILTIN_DEFAULT_CHAT_AGENT } from '../runtime/defaultAgents';
+import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import type { InitAnswers } from '../runtime/initConfig';
 import type { CliModelAccess } from '../runtime/modelAccess';
 
@@ -128,10 +128,11 @@ export function initWizardModelSelectItems(
   }));
 }
 
-function defaultAgentIndex(agents: readonly InitWizardAgentOption[]): number {
-  const index = agents.findIndex(
-    (agent) => agent.name === BUILTIN_DEFAULT_CHAT_AGENT,
-  );
+export function initWizardDefaultAgentIndex(
+  agents: readonly InitWizardAgentOption[],
+): number {
+  const defaultAgent = pickDefaultToolUseAgent(agents);
+  const index = agents.findIndex((agent) => agent.name === defaultAgent);
   return index >= 0 ? index : 0;
 }
 
@@ -192,7 +193,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       >
         <Select
           key={step}
-          initialIndex={defaultAgentIndex(props.options.agents)}
+          initialIndex={initWizardDefaultAgentIndex(props.options.agents)}
           items={props.options.agents.map((agent) => ({
             value: agent.name,
             label: agent.name,

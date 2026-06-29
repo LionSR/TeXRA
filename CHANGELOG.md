@@ -11,6 +11,16 @@ All notable changes to this project will be documented in this file.
 - **Sign in with ChatGPT from a non-default browser** — the ChatGPT subscription sign-in opens your system default browser, but if your ChatGPT subscription is signed in on a different browser you can now copy the sign-in link and open it there. The VS Code extension shows a "Copy Sign-in Link" notification action and the desktop app offers a "Copy Sign-in Link" dialog button; the loopback callback accepts the redirect from whichever browser you complete it in.
 - **First-run setup no longer launches itself** — after a new user connects a credential, TeXRA now selects the setup assistant and shows a "Run setup assistant" card instead of silently starting it. The setup assistant inspects your environment and may install tools, so it now runs only when you explicitly click to start it.
 
+### CLI
+
+#### Improvements
+
+- **The terminal starts with every agent enabled, not a single discipline** — the CLI no longer seeds a discipline roster the way the VS Code extension does, so a fresh `texra` session exposes the full agent catalog (`texra agents list`, the `/agent` picker, and orchestrator delegation reach any built-in agent out of the box). Applying a team with the setup agent still scopes that workspace; otherwise nothing is hidden.
+- **`assistant` is the default chat agent** — bare `texra chat` (and the launcher's "New chat") now starts the general-purpose `assistant` rather than `research`, a better fit for the now-unrestricted agent roster. Explicit `--agent`, `TEXRA_AGENT`, and `.texra/config.json` choices still win.
+- **Switch teams from the launcher** — `texra orchestrate` (the default screen on bare `texra` in a TTY) now lists every available multi-agent team so you can pick — and switch — among them, instead of being pinned to a single default team. Single-agent chats and resumes are still offered alongside.
+- **The launcher header shows the CLI version** — the bare-`texra` launcher now prints `TeXRA v<version>` in its header, the same way the chat session header does, so you can see which build you are on before starting a session.
+- **One command to inspect a team** — `texra multi-agent inspect` is gone; `texra multi-agent show <team>` now resolves the team's real agents and availability (what `inspect` did), so the suite is the consistent `list` / `show` / `run` — matching `agents list` / `show` / `run` — instead of two near-identical describe commands. Note for scripts: `texra multi-agent show --output-format json|ndjson` now emits the resolved run plan (ndjson `kind: multi-agent-preset-inspection`) instead of the bare preset definition (`multi-agent-preset`); `texra multi-agent list` still emits the bare-preset records.
+
 ## [0.39.0] - 2026-06-28
 
 ### Shared (all surfaces)

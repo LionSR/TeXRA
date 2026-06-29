@@ -72,6 +72,7 @@ describe('CLI agents command', () => {
     vi.clearAllMocks();
     mocks.getAgentsByCategory.mockReturnValue([]);
     mocks.getVisibleAgents.mockReturnValue([]);
+    mocks.seedCliRosterFromDefaultTeam.mockResolvedValue(false);
   });
 
   it('parses agent category filter spellings', async () => {
@@ -114,6 +115,9 @@ describe('CLI agents command', () => {
 
     expect(exitCode).toBe(0);
     expect(mocks.seedCliRosterFromDefaultTeam).toHaveBeenCalledTimes(1);
+    expect(mocks.loadAgents.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.seedCliRosterFromDefaultTeam.mock.invocationCallOrder[0],
+    );
     expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
     expect(mocks.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),

@@ -69,7 +69,6 @@ vi.mock('@cli/runtime/multiAgentPresets', () => {
       toolUseAgents: ['orchestrator'],
       source: 'built-in',
     })),
-    formatCliMultiAgentPresetDetails: vi.fn(() => ''),
     formatCliMultiAgentPresetInspection: vi.fn(() => ''),
     formatCliMultiAgentPresetList: vi.fn(() => ''),
     formatCliMultiAgentPresetRunWarnings:
@@ -321,7 +320,7 @@ describe('CLI multi-agent run command', () => {
 
   it('reports resolved remote agent loads without implying final missing agents', async () => {
     const remoteLoadMessage =
-      'Preset mathematician loaded relay-served agents before launch. Run `texra multi-agent inspect mathematician` to view the resolved team.';
+      'Preset mathematician loaded relay-served agents before launch. Run `texra multi-agent show mathematician` to view the resolved team.';
     mocks.cliMultiAgentPlanHasGaps
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(false);
@@ -527,7 +526,7 @@ describe('CLI multi-agent run command', () => {
       toolUseAgentKeys: ['builtInToolUse:lean'],
     };
     const message =
-      'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent inspect mathematician` to see missing agents. Install or sign in for a runnable team root before launching this preset.';
+      'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent show mathematician` to see missing agents. Install or sign in for a runnable team root before launching this preset.';
     mocks.cliMultiAgentPresetCanLaunchTeam.mockReturnValueOnce(false);
     mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValueOnce(
       message,
@@ -614,7 +613,7 @@ describe('CLI multi-agent run command', () => {
       toolUseAgentKeys: ['builtInToolUse:orchestrator'],
     };
     const message =
-      'Multi-agent preset "mathematician" cannot start as a team: no available team members. Run `texra multi-agent inspect mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.';
+      'Multi-agent preset "mathematician" cannot start as a team: no available team members. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.';
     mocks.cliMultiAgentPresetCanLaunchTeam.mockReturnValueOnce(false);
     mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValueOnce(
       message,

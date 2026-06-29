@@ -19,8 +19,8 @@ import {
   StreamSnapshotStore,
 } from '@transcript';
 import { platform, tryPlatform } from '@platform/platform';
+import { getVisibleAgents, loadAgents } from '@agent/index';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
-import { loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -275,12 +275,14 @@ export async function runChat(
   });
   await loadAgents();
   await seedCliRosterFromDefaultTeam();
+  const visibleToolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
     agentOverride: explicitAgent ?? setupAgentOverride,
     modelOverride: initialResume?.resolution.config.model ?? init.modelOverride,
     envAgent: context.envAgent,
     envModel: context.envModel,
+    visibleToolUseAgents,
   });
   const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
   if (agentUsageError) {

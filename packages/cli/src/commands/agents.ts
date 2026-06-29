@@ -1,5 +1,7 @@
 import { defineCommand } from 'citty';
 
+import { loadAgents } from '@agent/index';
+
 import {
   AGENT_NAME_DESCRIPTION,
   CLI_AGENT_CATEGORY_FILTER_VALUES,
@@ -12,8 +14,8 @@ import {
   resolveCliAgent,
   type CliAgentListOptions,
 } from '../runtime/agents';
-import { CliExitCode } from '../runtime/exitCodes';
 import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
+import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 
@@ -29,6 +31,7 @@ export async function listAgents(
 ): Promise<number> {
   await initLocalCliPlatform(context);
   if (options.includeHidden !== true) {
+    await loadAgents({ includeRemote: false });
     await seedCliRosterFromDefaultTeam();
   }
   const result = await loadCliAgentList(options);
@@ -119,7 +122,7 @@ const agentsShowCommand = defineCliCommand({
 
 export const agentsCommand = defineCommand({
   meta: { name: 'agents', description: 'Inspect TeXRA agents' },
-  // Unlike `multi-agent inspect` (which resolves a team run plan), an agent has
+  // Unlike `multi-agent show` (which resolves a team run plan), an agent has
   // no separate "inspected" view — `show` already prints everything — so there
   // is just one inspection verb here.
   subCommands: {

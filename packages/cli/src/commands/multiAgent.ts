@@ -4,10 +4,7 @@ import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { approvalPromptsUnavailable } from '../runtime/approvalPolicyAvailability';
-import {
-  missingMultiAgentPresetMessage,
-  missingToolUseAgentMessage,
-} from '../runtime/agents';
+import { missingToolUseAgentMessage } from '../runtime/agents';
 import {
   CliUsageError,
   readCliStdinText,
@@ -21,9 +18,7 @@ import {
   cliMultiAgentPresetCanLaunchTeam,
   cliMultiAgentPresetNdjsonRecords,
   cliMultiAgentPresetListRecords,
-  findCliMultiAgentPreset,
   formatCliMultiAgentTeamLaunchBlockMessage,
-  formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
   readCliMultiAgentPresets,
@@ -118,26 +113,6 @@ async function runMultiAgentShow(
   context: CliContext,
   presetIdOrName: string,
 ): Promise<number> {
-  await initLocalCliPlatform(context);
-  const presets = readCliMultiAgentPresets();
-  const preset = findCliMultiAgentPreset(presets, presetIdOrName);
-  if (!preset) {
-    writeTextStderr(missingMultiAgentPresetMessage(presetIdOrName));
-    return CliExitCode.Usage;
-  }
-
-  emitCliResult(context, {
-    json: preset,
-    ndjson: { kind: 'multi-agent-preset', preset },
-    text: formatCliMultiAgentPresetDetails(preset),
-  });
-  return CliExitCode.Success;
-}
-
-async function runMultiAgentInspect(
-  context: CliContext,
-  presetIdOrName: string,
-): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
 
   const { plan, remoteAgentLoadAttempted } = await loadCliMultiAgentRunPlan({
@@ -169,7 +144,7 @@ export async function runMultiAgentPreset(
   const { plan, remoteAgentLoadAttempted } =
     await loadCliMultiAgentRunPlan(init);
   if (remoteAgentLoadAttempted) {
-    const inspectAdvice = `Run \`texra multi-agent inspect ${plan.preset.id}\` to view the resolved team.`;
+    const inspectAdvice = `Run \`texra multi-agent show ${plan.preset.id}\` to view the resolved team.`;
     // Otherwise the silent second load makes runs behave differently from a
     // signed-out shell with no visible reason.
     writeTextStderr(
@@ -284,15 +259,12 @@ const multiAgentPresetArgs = {
 } as const;
 
 const multiAgentShowCommand = defineCliCommand({
-  meta: { name: 'show', description: 'Show one multi-agent team preset' },
+  meta: {
+    name: 'show',
+    description: 'Show one multi-agent team preset and its resolved agents',
+  },
   args: multiAgentPresetArgs,
   run: (context, ctx) => runMultiAgentShow(context, ctx.args.preset),
-});
-
-const multiAgentInspectCommand = defineCliCommand({
-  meta: { name: 'inspect', description: 'Inspect one multi-agent team preset' },
-  args: multiAgentPresetArgs,
-  run: (context, ctx) => runMultiAgentInspect(context, ctx.args.preset),
 });
 
 const multiAgentRunCommand = withUsageSections(
@@ -367,12 +339,11 @@ const multiAgentRunCommand = withUsageSections(
 export const multiAgentCommand = defineCommand({
   meta: {
     name: 'multi-agent',
-    description: 'List, inspect, and run multi-agent team presets',
+    description: 'List, show, and run multi-agent team presets',
   },
   subCommands: {
     list: multiAgentListCommand,
     show: multiAgentShowCommand,
-    inspect: multiAgentInspectCommand,
     run: multiAgentRunCommand,
   },
 });
