@@ -5,6 +5,11 @@ import {
   ServerSideKeyService,
   setServerSideKeyService,
 } from '@auth/serverKeys';
+import {
+  CODEX_SESSION_SECRET_KEY,
+  resetCodexCoordinator,
+  type CodexSession,
+} from '@auth/codex';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
   computeModelOptionsData,
@@ -13,6 +18,7 @@ import {
   type ModelOptionsServerAccess,
 } from '@model/computeModelOptions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { AgentCategory } from '@shared/schemas/agent';
 
 function createServerSideKeyService(options: {
   useIncludedAccess: boolean;
@@ -63,10 +69,20 @@ function createModelOptionsAccess(
   };
 }
 
+function codexSession(): CodexSession {
+  return {
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    expiresAtMs: Date.now() + 60_000,
+    accountId: 'account-id',
+  };
+}
+
 describe('computeModelOptionsData relay quota state', () => {
   beforeEach(() => {
     invalidateApiKeyCache();
     invalidateModelOptionsCache();
+    resetCodexCoordinator();
   });
 
   beforeEach(async () => {
@@ -126,7 +142,10 @@ describe('computeModelOptionsData relay quota state', () => {
     const { initPlatform } = await import('@platform/platform');
     initPlatform(
       createFakePlatform({
-        config: { 'texra.chatgptCodex.preferSubscription': true },
+        config: {
+          'texra.chatgptCodex.preferSubscription': true,
+          'texra.chatgptCodex.subscriptionToolUseOnly': true,
+        },
         globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
       }),
     );
@@ -140,6 +159,66 @@ describe('computeModelOptionsData relay quota state', () => {
 
     expect(model.availability).toBe('provider-key');
     expect(model.disabled).toBe(false);
+  });
+
+  it('shows subscription access only for tool-use availability when the scoped switch is on', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform({
+        config: {
+          'texra.chatgptCodex.preferSubscription': true,
+          'texra.chatgptCodex.subscriptionToolUseOnly': true,
+        },
+        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+        secrets: {
+          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
+        },
+      }),
+    );
+    const access = createModelOptionsAccess({
+      useIncludedAccess: false,
+      relayQuotaExceeded: false,
+      quotaAutoSwitched: false,
+    });
+
+    const [toolUseModel] = await computeModelOptionsData(['gpt55'], access, {
+      agentCategory: AgentCategory.ToolUse,
+    });
+    const [workflowModel] = await computeModelOptionsData(['gpt55'], access, {
+      agentCategory: AgentCategory.Workflow,
+    });
+
+    expect(toolUseModel.availability).toBe('subscription-access');
+    expect(workflowModel.availability).toBe('provider-key');
+  });
+
+  it('does not advertise subscription access for untagged availability checks under the scoped switch', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform({
+        config: {
+          'texra.chatgptCodex.preferSubscription': true,
+          'texra.chatgptCodex.subscriptionToolUseOnly': true,
+        },
+        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+        secrets: {
+          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
+        },
+      }),
+    );
+    const access = createModelOptionsAccess(
+      {
+        useIncludedAccess: false,
+        relayQuotaExceeded: false,
+        quotaAutoSwitched: false,
+      },
+      {},
+    );
+
+    const [model] = await computeModelOptionsData(['gpt55'], access);
+
+    expect(model.availability).toBe('missing-key');
+    expect(model.disabled).toBe(true);
   });
 
   it('does not reuse cached provider keys for injected access', async () => {

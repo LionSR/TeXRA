@@ -7,7 +7,10 @@
  */
 import { tryPlatform } from '@platform/platform';
 
-import { CODEX_PREFER_SUBSCRIPTION_KEY } from './codexConstants';
+import {
+  CODEX_PREFER_SUBSCRIPTION_KEY,
+  CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
+} from './codexConstants';
 import type { ConfigTarget } from '@platform/interfaces/config';
 
 export interface CodexSubscriptionPreferenceUpdate {
@@ -23,10 +26,41 @@ export function isPreferCodexSubscription(): boolean {
   );
 }
 
-function codexPreferenceUpdateTarget(): ConfigTarget {
-  const inspection = tryPlatform()?.config.inspect<boolean>(
-    CODEX_PREFER_SUBSCRIPTION_KEY,
+/**
+ * Whether the ChatGPT subscription is restricted to tool-use agents (off by
+ * default). When true, workflow agents skip the subscription and route through
+ * the user's API key / relay — the Codex backend has no background mode and is
+ * less stable for long workflow runs. Read per request by the Codex handler.
+ */
+export function isCodexSubscriptionToolUseOnly(): boolean {
+  return (
+    tryPlatform()?.config.get<boolean>(
+      CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
+      false,
+    ) ?? false
   );
+}
+
+/** Update the "subscription for tool-use only" switch at the controlling scope. */
+export async function setCodexSubscriptionToolUseOnly(
+  enabled: boolean,
+): Promise<CodexSubscriptionPreferenceUpdate> {
+  const host = tryPlatform();
+  const target = codexPreferenceUpdateTarget(
+    CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
+  );
+  if (!host) return { effective: false, target };
+
+  await host.config.update(
+    CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
+    enabled,
+    target,
+  );
+  return { effective: isCodexSubscriptionToolUseOnly(), target };
+}
+
+function codexPreferenceUpdateTarget(key: string): ConfigTarget {
+  const inspection = tryPlatform()?.config.inspect<boolean>(key);
   return inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
 }
 
@@ -35,7 +69,7 @@ export async function setPreferCodexSubscription(
   enabled: boolean,
 ): Promise<CodexSubscriptionPreferenceUpdate> {
   const host = tryPlatform();
-  const target = codexPreferenceUpdateTarget();
+  const target = codexPreferenceUpdateTarget(CODEX_PREFER_SUBSCRIPTION_KEY);
   if (!host) return { effective: false, target };
 
   await host.config.update(CODEX_PREFER_SUBSCRIPTION_KEY, enabled, target);

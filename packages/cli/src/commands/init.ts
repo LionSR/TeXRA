@@ -48,7 +48,10 @@ async function gatherOptions(apiMode: CliApiMode): Promise<{
   const agents = defaultInitAgentOptions(
     getVisibleAgents(AgentCategory.ToolUse),
   );
-  const models = await getCliModelAccessList({ apiMode });
+  const models = await getCliModelAccessList({
+    apiMode,
+    agentCategory: AgentCategory.ToolUse,
+  });
   return { agents, models };
 }
 

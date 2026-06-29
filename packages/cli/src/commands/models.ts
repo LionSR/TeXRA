@@ -1,5 +1,7 @@
 import { defineCommand } from 'citty';
 
+import { AgentCategory } from '@shared/schemas/agent';
+
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -41,6 +43,7 @@ async function loadModelAccessList(
       const apiMode = effectiveCliApiMode(context);
       const models = await getCliModelAccessList({
         apiMode,
+        agentCategory: AgentCategory.ToolUse,
         models:
           options.includeUnavailable === true ? knownCliModelIds() : undefined,
       });
@@ -94,6 +97,7 @@ async function showModel(context: CliContext, id: string): Promise<number> {
     entry = await suppressCliFetchStackLogs(() =>
       resolveCliModelAccessEntry(id, {
         apiMode: result.apiMode,
+        agentCategory: AgentCategory.ToolUse,
         accessList: result.models,
       }),
     );

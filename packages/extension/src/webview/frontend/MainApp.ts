@@ -193,6 +193,12 @@ export class MainApp extends MainAppBase {
   private readonly isRecording = signal(false);
   private readonly isPolishing = signal(false);
   private readonly modelOptions = signal<ModelOptionData[]>([]);
+  private readonly workflowModelOptions = signal<ModelOptionData[] | undefined>(
+    undefined,
+  );
+  private readonly toolUseModelOptions = signal<ModelOptionData[] | undefined>(
+    undefined,
+  );
   private readonly workflowAgentOptions = signal<AgentOptionData[]>([]);
   private readonly toolUseAgentOptions = signal<AgentOptionData[]>([]);
   private readonly apiKeyBanner = signal<ApiKeyBannerState>({ visible: false });
@@ -242,7 +248,7 @@ export class MainApp extends MainAppBase {
       model: this.model.get(),
       workflowAgentOptions: this.workflowAgentOptions.get(),
       toolUseAgentOptions: this.toolUseAgentOptions.get(),
-      modelOptions: this.modelOptions.get(),
+      modelOptions: this.getModelOptionsForSession(this.sessionType.get()),
       isRecording: this.isRecording.get(),
       isPolishing: this.isPolishing.get(),
       debugMode: this.debugMode,
@@ -804,8 +810,8 @@ export class MainApp extends MainAppBase {
     currentValue: string,
     preferEnabled = false,
   ): string {
-    // Exact match
-    if (options.some((opt) => opt.value === currentValue)) {
+    const current = options.find((opt) => opt.value === currentValue);
+    if (current && (!preferEnabled || !current.disabled)) {
       return currentValue;
     }
 
@@ -814,22 +820,30 @@ export class MainApp extends MainAppBase {
       const firstEnabled = options.find((opt) => !opt.disabled);
       if (firstEnabled) return firstEnabled.value;
     }
+    if (current) return currentValue;
     return options[0]?.value ?? '';
   }
 
   private handleSetModelOptions(
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS>,
   ): void {
-    if (!message.optionsData) return;
+    const optionsDataByCategory = message.optionsDataByCategory;
+    const fallbackOptions =
+      message.optionsData ??
+      optionsDataByCategory?.workflow ??
+      optionsDataByCategory?.toolUse;
+    if (!fallbackOptions) return;
 
-    this.modelOptions.set(message.optionsData);
-    this.model.set(
-      this.validateSelection(
-        message.optionsData,
-        this.model.get(),
-        true, // preferEnabled: skip disabled models
-      ),
-    );
+    this.modelOptions.set(fallbackOptions);
+    if (optionsDataByCategory) {
+      if (Object.hasOwn(optionsDataByCategory, SESSION_TYPES.WORKFLOW)) {
+        this.workflowModelOptions.set(optionsDataByCategory.workflow);
+      }
+      if (Object.hasOwn(optionsDataByCategory, SESSION_TYPES.TOOL_USE)) {
+        this.toolUseModelOptions.set(optionsDataByCategory.toolUse);
+      }
+    }
+    this.refreshModelSelectionForActiveSession();
   }
 
   private handleSetAgentOptions(
@@ -1269,6 +1283,7 @@ export class MainApp extends MainAppBase {
 
     this.swapModeInstruction(prev, parsed);
     this.sessionType.set(parsed);
+    this.refreshModelSelectionForActiveSession();
     // Auto-open the Files <wa-details> when the user enters workflow mode,
     // and auto-close when leaving. This is the one-shot behavior the bound
     // `?open` template expression used to encode — but tracking it here
@@ -1290,6 +1305,7 @@ export class MainApp extends MainAppBase {
     }
     this.swapModeInstruction(this.sessionType.get(), sessionType);
     this.sessionType.set(sessionType);
+    this.refreshModelSelectionForActiveSession();
     this.refreshInstructionPlaceholder();
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
@@ -1545,10 +1561,30 @@ export class MainApp extends MainAppBase {
     if (this.apiKeyBanner.get().requiresKey) {
       return true;
     }
-    const option = this.modelOptions
-      .get()
-      .find((item) => item.value === this.model.get());
+    const option = this.getModelOptionsForSession(this.sessionType.get()).find(
+      (item) => item.value === this.model.get(),
+    );
     return option?.requiresKey ?? false;
+  }
+
+  private getModelOptionsForSession(
+    sessionType: SessionType,
+  ): ModelOptionData[] {
+    if (sessionType === SESSION_TYPES.WORKFLOW) {
+      return this.workflowModelOptions.get() ?? this.modelOptions.get();
+    }
+    return this.toolUseModelOptions.get() ?? this.modelOptions.get();
+  }
+
+  private refreshModelSelectionForActiveSession(): void {
+    const options = this.getModelOptionsForSession(this.sessionType.get());
+    this.model.set(
+      this.validateSelection(
+        options,
+        this.model.get(),
+        true, // preferEnabled: skip disabled models
+      ),
+    );
   }
 
   private runPanelAction(action: ActionDetail['action']): void {
