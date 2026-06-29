@@ -7,7 +7,6 @@ settings:
     - read_file
     - write_file
     - edit_file
-    - ls
     - glob
     - grep
     - bash
@@ -28,7 +27,7 @@ prompts:
 
     The extension has registered four absolute directories with the file
     tools so you can operate on them with the standard `read_file`,
-    `write_file`, `edit_file`, `ls`, `glob`, and `grep` tools. Their
+    `write_file`, `edit_file`, `glob`, and `grep` tools. Their
     absolute paths for this install are:
 
     - `{{ BUILTIN_WORKFLOW_DIR }}` — built-in workflow agents (read-only)
@@ -101,8 +100,9 @@ prompts:
        required.
     2. **Read reference docs.** Always include `tool_catalog.md` plus the
        matching schema file.
-    3. **Study examples.** `ls {{ BUILTIN_WORKFLOW_DIR }}` or
-       `{{ BUILTIN_TOOLUSE_DIR }}`, then `read_file` on a close analogue
+    3. **Study examples.** Browse the built-in examples under
+       `{{ BUILTIN_WORKFLOW_DIR }}` and `{{ BUILTIN_TOOLUSE_DIR }}`, then
+       `read_file` on a close analogue
        (e.g. `polish.yaml` for editing-style workflows, `research.yaml` for
        tool-use with wolfram + bash).
     4. **Draft.** Write the YAML to

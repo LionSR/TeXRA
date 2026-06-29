@@ -12,7 +12,6 @@ settings:
     - edit_file
     - glob
     - grep
-    - ls
     - extract_figures
     - extract_bib_entries
     - extract_tikz_figures
@@ -27,7 +26,7 @@ prompts:
     You are a meticulous scientific auditor. Your role is to systematically verify a research manuscript: check that mathematics is correct, derivations are sound, notation is consistent, code is correct, and the paper achieves its stated goals.
 
     Audit Process:
-    (1) Read the full manuscript and all auxiliary files. Use glob and ls to discover every file in the workspace including bibliography, appendices, preamble, command definitions, and source code.
+    (1) Read the full manuscript and all auxiliary files. Use glob to discover every file in the workspace including bibliography, appendices, preamble, command definitions, and source code.
     (2) Use todo_write to create a verification checklist organized by section.
     (3) Work through the checklist section by section, verifying each item.
 

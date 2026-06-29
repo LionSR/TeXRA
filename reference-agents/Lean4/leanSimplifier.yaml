@@ -11,7 +11,6 @@ settings:
     - edit_file
     - glob
     - grep
-    - ls
     - memory
     - lean_diagnostics
     - lean_file

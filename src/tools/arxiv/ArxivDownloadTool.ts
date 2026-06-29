@@ -4,12 +4,39 @@ import { z } from 'zod';
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
 import { arxivProcessor } from '@latex/arxivProcessor';
-import { LsTool } from '@tools/ls';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { formatToolOutput } from '@tools/formatting';
+import { getGitignoreMatcher } from '@tools/gitignore';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
+import { isDirectory, isFile } from '@utils/files/fsEntryType';
 import { toPosixPath } from '@utils/core/pathCore';
+
+const NO_ENTRIES_MESSAGE = '(no entries)';
+const DEFAULT_HIDDEN_NAMES = new Set(['.git', '.gitignore']);
+
+function formatDirEntry(name: string, type: number): string {
+  const label = isDirectory(type) ? 'dir' : isFile(type) ? 'file' : 'other';
+  const suffix = isDirectory(type) ? '/' : '';
+  return `${label.padEnd(4)} ${name}${suffix}`;
+}
+
+/** List the freshly-extracted source directory, skipping VCS noise. */
+async function listExtractedEntries(dirFsPath: string): Promise<string> {
+  const entries = await WorkspaceFS.readDir(dirFsPath);
+  const dirRelative = toPosixPath(WorkspaceFS.relativePath(dirFsPath) || '.');
+  const gitignore = await getGitignoreMatcher();
+  const formatted = entries
+    .filter(([name]) => {
+      if (DEFAULT_HIDDEN_NAMES.has(name)) return false;
+      const childRelative =
+        dirRelative === '.' ? name : `${dirRelative}/${name}`;
+      return !gitignore.ignores(childRelative);
+    })
+    .toSorted(([a], [b]) => a.localeCompare(b))
+    .map(([name, type]) => formatDirEntry(name, type));
+  return formatted.length > 0 ? formatted.join('\n') : NO_ENTRIES_MESSAGE;
+}
 
 const ArxivDownloadInputSchema = z.strictObject({
   id: z.string().describe('arXiv identifier or URL for the source archive.'),
@@ -55,15 +82,9 @@ export class ArxivDownloadTool extends defineTool({
     const relativePath = WorkspaceFS.relativePath(downloadResult.path) || '.';
     const displayPath = toPosixPath(relativePath);
 
-    const lsTool = new LsTool();
-    let listingOutput = '(directory listing unavailable)';
+    let listingOutput: string;
     try {
-      const listingResult = await lsTool.call({ path: relativePath });
-      if (listingResult?.output) {
-        listingOutput = listingResult.output;
-      } else if (listingResult?.error) {
-        listingOutput = `Failed to list directory: ${listingResult.error}`;
-      }
+      listingOutput = await listExtractedEntries(downloadResult.path);
     } catch (err) {
       listingOutput = `Failed to list directory: ${toErrorMessage(err)}`;
     }

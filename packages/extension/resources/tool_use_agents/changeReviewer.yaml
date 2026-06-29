@@ -11,7 +11,6 @@ settings:
     - read_file
     - glob
     - grep
-    - ls
     - diagnostics
     - todo_write
     - report_review_issue

@@ -19,7 +19,6 @@ settings:
     - write_file
     - edit_file
     - glob
-    - ls
     - arxiv_search
     - arxiv_metadata
     - download_arxiv_source

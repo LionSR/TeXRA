@@ -580,7 +580,7 @@ function seedLiveToolOnlyTranscript(): void {
       : '',
   });
   const tools = [
-    ['ls', { path: '.' }, 'Listed 36 entries in .'],
+    ['grep', { pattern: 'theorem' }, 'Found 12 matches for "theorem" in .'],
     ['glob', { pattern: '*.md' }, 'Found 7 files for "*.md" in .'],
     ['glob', { pattern: '**/*.tex' }, 'Found 6 files for "**/*.tex" in .'],
   ] as const;

@@ -113,7 +113,7 @@ const CUSTOM_AGENT_ROOT_OPTIONS = {
 /**
  * Register agent directories + bundled reference docs with the external-roots
  * allowlist so the creator tool-use agent can read/write them through the
- * standard file tools (read_file, write_file, ls, grep, glob, edit_file).
+ * standard file tools (read_file, write_file, grep, glob, edit_file).
  *
  * Call this after copyDefaultAgents(), which populates the built-in dirs.
  */

@@ -20,7 +20,6 @@ settings:
     - write_file
     - glob
     - grep
-    - ls
 
 prompts:
   systemPrompt: |
@@ -47,7 +46,7 @@ prompts:
 
 Pick only the tools the agent needs. See `tool_catalog.md` in this directory
 for the full registry and recommended tool groups by use case. Most agents
-want at least `read_file`, `write_file`, `ls`, `glob`, and `grep`; add
+want at least `read_file`, `write_file`, `glob`, and `grep`; add
 `bash` when the agent must run commands.
 
 ## Example: the `research` agent
@@ -65,7 +64,6 @@ settings:
     - write_file
     - glob
     - grep
-    - ls
     - web_search
     - web_fetch
     - arxiv_search

@@ -11,7 +11,6 @@ settings:
     - edit_file
     - glob
     - grep
-    - ls
     - memory
     - lean_diagnostics
     - lean_file
@@ -154,7 +153,7 @@ prompts:
 
     ## File Operations
 
-    - Read files to understand context. Use read_file, glob, grep, and ls to explore the user's workspace
+    - Read files to understand context. Use read_file, glob, and grep to explore the user's workspace
     - You can write and edit files when the user asks you to draft lemma statements, create import files, or scaffold formalization plans
     - Every tool receives the project root as its working directory, so use relative paths
     - For bash, prefer read-only commands (lake env printPaths, lake print-paths, etc.) but you may also run `lake build` or `lake exe cache get` when needed
