@@ -23,6 +23,10 @@ import { StreamTabIdSchema } from '@shared/schemas/identifiers';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 const HANDLERS = {
+  'texra.showDashboard': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.showSettings()),
+  'texra.showSettingsView': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.showSettings()),
   'texra.cleanOutput': (actions: ExtensionCommandActions) =>
     awaitTrue(actions.cleanOutput()),
   'texra.cleanBuild': (actions: ExtensionCommandActions) =>
@@ -208,6 +212,8 @@ function makeActions(): ExtensionCommandActions {
 
 describe('extension command surface — newly migrated commands (#3771, #3775, #3781)', () => {
   it.each([
+    ['texra.showDashboard', 'showSettings'],
+    ['texra.showSettingsView', 'showSettings'],
     ['texra.cleanOutput', 'cleanOutput'],
     ['texra.cleanBuild', 'cleanBuild'],
     ['texra.indentTeX', 'indentTeX'],
