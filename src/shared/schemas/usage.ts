@@ -23,6 +23,11 @@ export const TokenUsageStatsSchema = z.strictObject({
 
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
 
+type UsageRouteInput = Pick<
+  TokenUsageStats,
+  'usageRoute' | 'viaChatGptSubscription'
+>;
+
 type EmptyUsageStats = Required<Omit<TokenUsageStats, 'usageRoute'>> &
   Pick<TokenUsageStats, 'usageRoute'>;
 
@@ -50,12 +55,14 @@ function hasUsageActivity(usage: TokenUsageStats): boolean {
   );
 }
 
-function usageRouteForAggregation(
-  usage: TokenUsageStats,
+export function resolveUsageRoute(
+  usage: UsageRouteInput | null | undefined,
 ): UsageRoute | undefined {
   return (
-    usage.usageRoute ??
-    (usage.viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined)
+    usage?.usageRoute ??
+    (usage?.viaChatGptSubscription === true
+      ? 'chatgpt-subscription'
+      : undefined)
   );
 }
 
@@ -86,7 +93,7 @@ export function sumUsageStats(
         allRoundsViaChatGptSubscription &&
         usage.viaChatGptSubscription === true;
 
-      const usageRoute = usageRouteForAggregation(usage);
+      const usageRoute = resolveUsageRoute(usage);
       if (usageRoute == null) {
         hasMixedOrMissingUsageRoute = true;
       } else if (!sawUsageRoute) {
