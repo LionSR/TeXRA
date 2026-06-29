@@ -64,9 +64,8 @@ describe('orchestration launcher header', () => {
     const { createElement } = (
       (await import(cliRequire.resolve('react'))) as any
     ).default;
-    const { OrchestrationApp } = await import(
-      '@cli/orchestration/runOrchestrationTui'
-    );
+    const { OrchestrationApp } =
+      await import('@cli/orchestration/runOrchestrationTui');
 
     const stdout = new FakeStdout();
     const instance = ink.render(
@@ -97,7 +96,9 @@ describe('orchestration launcher header', () => {
     );
 
     try {
-      expect(await waitFor(() => stdout.buf.includes('v9.9.9-test'))).toBe(true);
+      expect(await waitFor(() => stdout.buf.includes('v9.9.9-test'))).toBe(
+        true,
+      );
       expect(stdout.buf).toContain('TeXRA');
     } finally {
       instance.unmount();
