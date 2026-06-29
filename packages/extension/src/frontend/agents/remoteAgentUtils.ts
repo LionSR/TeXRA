@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 
 import { createKey, getAgent, type AgentSource } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { toErrorMessage } from '@common/errors';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -10,6 +9,10 @@ import { delay } from '@utils/core';
 
 const CHANNEL = 'RemoteAgentUtils';
 logger.initialize(CHANNEL);
+
+function selectAgentErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown error';
+}
 
 interface SelectAgentResult {
   success: boolean;
@@ -80,7 +83,7 @@ export async function selectAgentInMainView(
       message: `Agent "${agentName}" selected successfully`,
     };
   } catch (error) {
-    const errorMessage = toErrorMessage(error);
+    const errorMessage = selectAgentErrorMessage(error);
     logger.error(CHANNEL, `Failed to select agent: ${errorMessage}`);
     return handleFallback(
       agentName,

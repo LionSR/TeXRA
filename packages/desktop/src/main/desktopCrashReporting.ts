@@ -1,6 +1,6 @@
 import escapeRegExp from 'escape-string-regexp';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { unique } from '@utils/core/typeGuards';
+import { unique } from '@utils/core';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { StateStore } from '@platform/interfaces/state';
 
