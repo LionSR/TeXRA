@@ -130,9 +130,9 @@ export function createDesktopOnboardingIpc(
       .finally(() => {
         // Clear the guard once the run settles (success or failure), not only on
         // error: while it's in flight the guard blocks a concurrent second run,
-        // but afterwards a manual "Run Setup" click or a later credential cycle
-        // must be able to launch setup again (otherwise the guard would stay
-        // stuck for the window's lifetime after the first kickoff).
+        // but afterwards another manual "Run Setup" click must be able to launch
+        // setup again (otherwise the guard would stay stuck for the window's
+        // lifetime after the first kickoff).
         setupKickoffStarted = false;
       });
   }

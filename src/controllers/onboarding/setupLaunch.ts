@@ -86,7 +86,7 @@ export async function resolveDesktopSetupModel(): Promise<string | null> {
 }
 
 /**
- * Build the execute message that auto-starts the setup conversation, or `null`
+ * Build the execute message that launches the setup conversation, or `null`
  * when no credential resolves to a runnable model. The message rides the same
  * `handleExecute` path the renderer's execute button uses.
  */
