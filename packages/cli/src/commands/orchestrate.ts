@@ -152,6 +152,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
   const action = await runOrchestrationTui(items, {
     models,
     apiMode,
+    version: context.version,
     statusLines,
     allowDefaultModelLaunch,
     colorEnabled: context.stdoutColorEnabled ?? context.colorEnabled,

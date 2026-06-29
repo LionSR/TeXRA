@@ -436,6 +436,7 @@ if (SHOW_ORCHESTRATION) {
           : []
       }
       apiMode={HARNESS_API_MODE}
+      version="0.0.0-harness"
       statusLines={
         SHOW_ORCHESTRATION_STATUS_LINES
           ? harnessOrchestrationStatusLines()
