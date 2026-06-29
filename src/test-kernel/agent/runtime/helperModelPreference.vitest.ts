@@ -47,7 +47,11 @@ describe('applyHelperModelPreference', () => {
     const result = await resolve(configFor('opus'));
 
     expect(result.model).toBe('deepseek');
-    expect(getModelUnavailableReason).toHaveBeenCalledWith('deepseek');
+    expect(getModelUnavailableReason).toHaveBeenCalledWith(
+      'deepseek',
+      undefined,
+      { agentCategory: 'toolUse' },
+    );
   });
 
   it('keeps the model when the helper model already equals it', async () => {
@@ -97,6 +101,11 @@ describe('applyHelperModelPreference', () => {
     const result = await resolve(configFor('opus', 'workflow'));
 
     expect(result.model).toBe('chatonly');
+    expect(getModelUnavailableReason).toHaveBeenCalledWith(
+      'chatonly',
+      undefined,
+      { agentCategory: 'workflow' },
+    );
   });
 
   it('falls back to the selected model when the helper model is unavailable', async () => {

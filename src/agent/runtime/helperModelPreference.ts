@@ -40,7 +40,9 @@ export async function applyHelperModelPreference(
     return config;
   }
 
-  const unavailable = await getModelUnavailableReason(helperModel);
+  const unavailable = await getModelUnavailableReason(helperModel, undefined, {
+    agentCategory: config.agentCategory,
+  });
   if (unavailable) return config;
 
   return { ...config, model: helperModel };
