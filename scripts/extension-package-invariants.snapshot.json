@@ -538,6 +538,12 @@
               "scope": "resource",
               "type": "boolean"
             },
+            "texra.chatgptCodex.subscriptionToolUseOnly": {
+              "default": true,
+              "description": "Use the ChatGPT subscription for tool-use agents only. Workflow agents fall back to your OpenAI API key or relay, because the Codex backend has no background mode and is less stable for long workflow runs.",
+              "scope": "resource",
+              "type": "boolean"
+            },
             "texra.model.compactionThresholdPercent": {
               "default": 75,
               "description": "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
