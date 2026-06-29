@@ -33,7 +33,15 @@ function normalizeTranscriptText(text: string): string {
 }
 
 function transcriptDedupeText(text: string): string {
-  return normalizeTranscriptText(text).replaceAll('\\checkmark', '✓');
+  return normalizeTranscriptText(text)
+    .replaceAll(/\\\\\[[^\]]*\]/g, '')
+    .replaceAll('\\checkmark', '✓')
+    .normalize('NFKC')
+    .replaceAll(/[‐‑‒–—−]/g, '-')
+    .replaceAll(/[`*_~#>$\\{}[\]()]/g, '')
+    .replaceAll(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 function currentTurnStartIndex(entries: readonly ConversationEntry[]): number {
