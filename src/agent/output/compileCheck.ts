@@ -63,6 +63,24 @@ function getCompileDisplayName(file: OutputFileInfo): string {
   return srcBase && !GENERIC_STEMS.has(srcBase) ? srcBase : rawBase;
 }
 
+function resolveWorkspaceSourceDir(
+  outputFile: OutputFileInfo,
+  fallbackRelativePath: string,
+): string[] {
+  const workspaceRoot = WorkspaceFS.getPath();
+  if (!workspaceRoot) return [];
+
+  const source = outputFile.source.trim();
+  const located =
+    source.length > 0 ? WorkspaceFS.locatePath(source) : undefined;
+  const sourceRelativePath =
+    located?.kind === 'workspace' ? located.relativePath : fallbackRelativePath;
+
+  return path.isAbsolute(sourceRelativePath)
+    ? []
+    : [path.join(workspaceRoot, path.dirname(sourceRelativePath))];
+}
+
 /**
  * Compile each .tex output of a round to verify the workflow produced a
  * buildable document. Success is silent; failures write the log tail to
@@ -209,15 +227,10 @@ async function compileOne(
     return { failure: null, failureLogExcerpt: '', artifact: null };
   }
 
-  // The output compiles from `buildDir`, not its original workspace folder, so
-  // relative `\input{figures/…}` / `\bibliography{…}` only resolve if the
-  // original source directory is on the search path. Derive it from the
-  // workspace-relative path (r<N>/ already stripped above).
-  const workspaceRoot = WorkspaceFS.getPath();
-  const extraInputDirs =
-    workspaceRoot && !path.isAbsolute(pathForSafeName)
-      ? [path.join(workspaceRoot, path.dirname(pathForSafeName))]
-      : [];
+  // The output compiles from `buildDir`, not its original workspace folder.
+  // For extracted outputs, the run-storage basename can be generic while
+  // outputFile.source carries the real workspace path.
+  const extraInputDirs = resolveWorkspaceSourceDir(outputFile, pathForSafeName);
 
   // execa's timeout option kills the child process on expiry, so we don't
   // orphan hanging latexmk/pdflatex runs.
