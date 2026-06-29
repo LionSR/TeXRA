@@ -12,6 +12,7 @@ import {
 
 import { commandOnly, withFilesArray } from '../messageFactories';
 import { OnboardingFunnelStateSchema } from '../onboarding';
+import { AgentCategory } from '../agent';
 import { AgentOptionDataSchema, ModelOptionDataSchema } from './state';
 
 const FileListSchema = z.array(z.string());
@@ -20,6 +21,12 @@ const SingleFileSelectedSchema = z.object({ filePath: z.string() });
 export const SetModelOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
   optionsData: z.array(ModelOptionDataSchema).optional(),
+  optionsDataByCategory: z
+    .object({
+      [AgentCategory.Workflow]: z.array(ModelOptionDataSchema).optional(),
+      [AgentCategory.ToolUse]: z.array(ModelOptionDataSchema).optional(),
+    })
+    .optional(),
 });
 
 export const SetAgentOptionsMessageSchema = z.object({

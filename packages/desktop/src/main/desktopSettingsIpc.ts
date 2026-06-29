@@ -27,6 +27,7 @@ import {
   codexCoordinator,
   getChatGptAuthStatus,
   loginWithLoopback,
+  setCodexSubscriptionToolUseOnly,
   setPreferCodexSubscription,
 } from '@auth/codex';
 import { toErrorMessage } from '@common/errors';
@@ -54,7 +55,7 @@ import {
   normalizePlatform,
 } from '@shared/constants/latex';
 import type { LatexConfigField } from '@shared/constants/latex';
-import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
+import { AgentCategory, type AgentSource } from '@shared/schemas/agent';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
@@ -315,11 +316,22 @@ export function createDesktopSettingsIpc(
   }
 
   async function postMainModelOptionsData(): Promise<void> {
+    const visibleModels = modelSelectionController.getVisibleModels();
+    const [workflowModelOptions, toolUseModelOptions] = await Promise.all([
+      computeModelOptionsData(visibleModels, undefined, {
+        agentCategory: AgentCategory.Workflow,
+      }),
+      computeModelOptionsData(visibleModels, undefined, {
+        agentCategory: AgentCategory.ToolUse,
+      }),
+    ]);
     options.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsData: await computeModelOptionsData(
-        modelSelectionController.getVisibleModels(),
-      ),
+      optionsData: workflowModelOptions,
+      optionsDataByCategory: {
+        workflow: workflowModelOptions,
+        toolUse: toolUseModelOptions,
+      },
     });
   }
 
@@ -808,6 +820,26 @@ export function createDesktopSettingsIpc(
     }
   }
 
+  async function setChatGptSubscriptionToolUseOnly(
+    enabled: boolean,
+  ): Promise<void> {
+    try {
+      const update = await setCodexSubscriptionToolUseOnly(enabled);
+      if (update.effective !== enabled) {
+        await options.showInfoMessage?.(
+          `The effective "subscription for tool-use only" setting remains ${update.effective ? 'enabled' : 'disabled'}.`,
+        );
+      }
+    } catch (error) {
+      await options.showErrorMessage?.(
+        `ChatGPT subscription scope update failed: ${toErrorMessage(error)}`,
+      );
+      onError(error);
+    } finally {
+      await refreshAfterChatGptAuthChange();
+    }
+  }
+
   async function updateDesktopCrashReportingEnabled(
     enabled: boolean,
   ): Promise<void> {
@@ -1071,6 +1103,8 @@ export function createDesktopSettingsIpc(
     [SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT]: () => signOutChatGpt(),
     [SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION]: (d) =>
       setChatGptPreferSubscription(d.enabled),
+    [SETTINGS_VIEW_COMMANDS.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY]: (d) =>
+      setChatGptSubscriptionToolUseOnly(d.enabled),
     [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY]: (d) =>
       setProviderKey(d.provider, d.apiKey),
     [SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY]: (d) =>

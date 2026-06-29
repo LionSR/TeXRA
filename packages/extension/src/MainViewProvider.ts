@@ -10,7 +10,6 @@ import {
 } from '@controllers/onboarding/onboardingFunnel';
 import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { agentKeyOf } from '@shared/schemas/agent';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - common
@@ -26,10 +25,11 @@ import { consumePendingState } from '@common/state';
 import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
 
 import { agentDirectories } from '@frontend/agents';
+import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
-import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
+import { agentKeyOf } from '@shared/schemas/agent';
 import { watchConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 
@@ -229,10 +229,11 @@ export class MainViewProvider
     const view = this.getMainModeView();
     if (!view) return;
 
-    const optionsData = await computeModelOptionsData();
+    const optionsDataByCategory = await loadMainViewModelOptions();
     view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsData,
+      optionsData: optionsDataByCategory.workflow,
+      optionsDataByCategory,
     });
   }
 

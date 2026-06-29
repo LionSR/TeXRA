@@ -21,6 +21,7 @@ import {
 import { platform, tryPlatform } from '@platform/platform';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { loadAgents } from '@agent/index';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
@@ -300,6 +301,7 @@ export async function runChat(
         apiMode,
         CHAT_STARTUP_MODEL_RECOVERY,
       ),
+      agentCategory: AgentCategory.ToolUse,
     });
   } catch (error: unknown) {
     writeTextStderr(toErrorMessage(error));
@@ -564,6 +566,7 @@ export async function runChat(
             meta.apiMode,
             CHAT_API_MODE_MODEL_RECOVERY,
           ),
+          agentCategory: AgentCategory.ToolUse,
         });
         if (session.stopRequested) {
           markChatTuiRunCompleted(session);

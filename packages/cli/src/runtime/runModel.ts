@@ -1,4 +1,5 @@
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { AgentCategory } from '@shared/schemas/agent';
 
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
@@ -72,6 +73,8 @@ export async function resolveCliRunModel(
       model: candidate.model,
       modelSource: candidate.source,
       apiMode,
+      agentCategory:
+        role === 'chat' ? AgentCategory.ToolUse : AgentCategory.Workflow,
     });
     if (resolution.notice && context.quietLogs !== true) {
       writeTextStderr(resolution.notice);

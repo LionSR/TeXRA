@@ -30,6 +30,15 @@ describe('rewriteCodexRequestBody', () => {
     });
   });
 
+  it('rewrites date-pinned OpenAI model ids to the bare Codex backend id', () => {
+    const out = rewriteCodexRequestBody({
+      model: 'gpt-5.5-2026-04-23',
+      input: [{ role: 'user', content: 'Hello' }],
+    });
+
+    expect(out.model).toBe('gpt-5.5');
+  });
+
   it('drops a non-background-mode background flag and forces store/stream', () => {
     const out = rewriteCodexRequestBody({
       background: false,

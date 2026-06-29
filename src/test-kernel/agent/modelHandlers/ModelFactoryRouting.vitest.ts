@@ -210,7 +210,7 @@ describe('OpenAI model handler routing', () => {
     }
   });
 
-  it('uses an unpinned Codex model id even when shortName is absent', async () => {
+  it('preserves the API fullName on Codex handler config even when shortName is absent', async () => {
     const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
       import('@platform/platform'),
       import('@test/support/FakePlatform'),
@@ -238,7 +238,7 @@ describe('OpenAI model handler routing', () => {
       expect(activeModelHandlerCompatibilityKey(handler)).toBe(
         'ModelHandlerOpenAIResponse',
       );
-      expect(handler.config.fullName).toBe('gpt-5.5');
+      expect(handler.config.fullName).toBe('gpt-5.5-2026-04-23');
     } finally {
       handler.dispose();
     }
