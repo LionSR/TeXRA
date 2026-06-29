@@ -13,6 +13,9 @@ vi.mock('llm-zoo', () => ({
   MODEL_CONFIGS: {
     deepseek: { capabilities: { supportsFunctionCalling: true } },
     chatonly: { capabilities: { supportsFunctionCalling: false } },
+    // Known model whose capabilities omit supportsFunctionCalling — the tool-use
+    // flow treats this as "no function calling".
+    undeclared: { capabilities: {} },
   },
 }));
 
@@ -24,7 +27,7 @@ function configFor(model: string, agentCategory = 'toolUse'): AgentConfig {
   } as unknown as AgentConfig;
 }
 
-describe('preferHelperModel', () => {
+describe('applyHelperModelPreference', () => {
   beforeEach(() => {
     vi.resetModules();
     getHelperModelName.mockReset();
@@ -32,9 +35,10 @@ describe('preferHelperModel', () => {
   });
 
   async function resolve(config: AgentConfig): Promise<AgentConfig> {
-    const { preferHelperModel } =
-      await import('@agent/runtime/helperModelPreference');
-    return preferHelperModel(config);
+    const { applyHelperModelPreference } = await import(
+      '@agent/runtime/helperModelPreference'
+    );
+    return applyHelperModelPreference(config);
   }
 
   it('swaps onto the available helper model', async () => {
@@ -67,6 +71,17 @@ describe('preferHelperModel', () => {
 
   it('keeps the selected model when the tool-use helper model is unknown to the registry', async () => {
     getHelperModelName.mockReturnValue('mysteryModel');
+
+    const result = await resolve(configFor('opus', 'toolUse'));
+
+    expect(result.model).toBe('opus');
+    expect(getModelUnavailableReason).not.toHaveBeenCalled();
+  });
+
+  it("keeps the selected model when the tool-use helper model doesn't declare function calling", async () => {
+    // capabilities present but supportsFunctionCalling omitted — the tool-use
+    // flow would strip tools, so don't swap.
+    getHelperModelName.mockReturnValue('undeclared');
 
     const result = await resolve(configFor('opus', 'toolUse'));
 

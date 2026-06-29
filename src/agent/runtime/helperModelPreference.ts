@@ -22,19 +22,22 @@ import { getHelperModelName } from './helperModelName';
  * call functions (the tool-use flow would strip its tools), or the helper model
  * is unavailable in the active API mode.
  */
-export async function preferHelperModel(
+export async function applyHelperModelPreference(
   config: AgentConfig,
 ): Promise<AgentConfig> {
   const helperModel = getHelperModelName();
   if (helperModel === config.model) return config;
 
-  // A tool-use agent (e.g. latexFixer) needs its tools; don't switch it onto a
-  // helper model that can't call functions.
-  if (config.agentCategory === AgentCategory.ToolUse) {
-    const capabilities = MODEL_CONFIGS[helperModel]?.capabilities;
-    if (!capabilities || capabilities.supportsFunctionCalling === false) {
-      return config;
-    }
+  // A tool-use agent (e.g. latexFixer) needs its tools. The tool-use flow drops
+  // every tool unless the model positively declares function calling
+  // (`responseCycleToolsForModel` returns nothing when
+  // `!capabilities.supportsFunctionCalling`), so mirror that check and bail
+  // unless the helper model declares it — not only on an explicit `=== false`.
+  if (
+    config.agentCategory === AgentCategory.ToolUse &&
+    !MODEL_CONFIGS[helperModel]?.capabilities.supportsFunctionCalling
+  ) {
+    return config;
   }
 
   const unavailable = await getModelUnavailableReason(helperModel);

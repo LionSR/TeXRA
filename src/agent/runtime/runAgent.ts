@@ -3,7 +3,7 @@ import { registerExecution } from '@agent/storage';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
-import { preferHelperModel } from './helperModelPreference';
+import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent } from './executeAgent';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
@@ -63,7 +63,7 @@ export async function runAgent(
   // model the user picked. Resolved before registerExecution so the stored record
   // and the run agree.
   const config = options.preferHelperModel
-    ? await preferHelperModel(request.config)
+    ? await applyHelperModelPreference(request.config)
     : request.config;
 
   if (shouldRegister) {
