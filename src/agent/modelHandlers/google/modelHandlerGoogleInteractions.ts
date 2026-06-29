@@ -1762,11 +1762,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
     this.pendingBackgroundInteractionId = interactionId;
     try {
-      const onAbort = () => {
-        // Fire-and-forget cancel; do NOT await inside the listener.
-        void this.cancelBackgroundInteraction(client, interactionId);
-      };
-
       let pollStats: BackgroundPollStats | undefined;
       const polled = await this.backgroundPoller.poll({
         initialResponse: initial,
@@ -1792,7 +1787,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         signal,
         resourceLabel: 'interaction',
         providerLabel: 'Google Interactions',
-        onAbort,
+        onAbort: () => {
+          // Fire-and-forget cancel; do NOT await inside the listener.
+          void this.cancelBackgroundInteraction(client, interactionId);
+        },
         formatTimeoutError: ({ responseId, maxDurationMs }) =>
           `Google Interactions background interaction ${responseId} exceeded ` +
           `maximum polling duration of ${maxDurationMs} ms. Cancel it with ` +

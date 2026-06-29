@@ -211,7 +211,13 @@ export class BackgroundPoller<TResponse> {
           if (isUserAbort(err)) {
             logger().debug(
               `${providerLabel} background polling aborted for ${resourceLabel} ${responseId} while waiting (poll ${pollCount}).`,
-              { data: { responseId, pollCount } },
+              {
+                data: {
+                  responseId,
+                  pollCount,
+                  elapsedMs: Date.now() - startTime,
+                },
+              },
             );
           }
           throw err;
