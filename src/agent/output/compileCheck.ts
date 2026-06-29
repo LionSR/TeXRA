@@ -16,6 +16,7 @@ import {
   flexibleFS,
   getComparablePath,
   pathToLocation,
+  WorkspaceFS,
   type TaskRunFileService,
 } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
@@ -208,12 +209,23 @@ async function compileOne(
     return { failure: null, failureLogExcerpt: '', artifact: null };
   }
 
+  // The output compiles from `buildDir`, not its original workspace folder, so
+  // relative `\input{figures/…}` / `\bibliography{…}` only resolve if the
+  // original source directory is on the search path. Derive it from the
+  // workspace-relative path (r<N>/ already stripped above).
+  const workspaceRoot = WorkspaceFS.getPath();
+  const extraInputDirs =
+    workspaceRoot && !path.isAbsolute(pathForSafeName)
+      ? [path.join(workspaceRoot, path.dirname(pathForSafeName))]
+      : [];
+
   // execa's timeout option kills the child process on expiry, so we don't
   // orphan hanging latexmk/pdflatex runs.
   const ok = await compileLatex2Pdf(outputFile.location, {
     channel: ctx.streamId,
     outputDirectory: buildDir,
     timeout: opts.timeoutMs,
+    extraInputDirs,
   });
 
   if (ok) {

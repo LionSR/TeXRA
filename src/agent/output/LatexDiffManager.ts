@@ -375,10 +375,16 @@ export class LatexDiffManager {
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
       ),
     );
+    // The diff `.tex` is written to `diff/r{round}/` rather than alongside the
+    // document's `\input`/`\bibliography` targets, so add the original source
+    // directory to the search path; otherwise `\input{figures/…}` and
+    // `\bibliography{…}` fail to resolve when the source lives in a subfolder.
+    const sourceDir = await this.getWorkingDirectory(referenceLocation);
     const ok = await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,
       timeout: timeoutMs,
+      extraInputDirs: [sourceDir],
     });
 
     if (!ok) {
