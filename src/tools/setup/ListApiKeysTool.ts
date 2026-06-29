@@ -64,9 +64,7 @@ export class ListApiKeysTool extends defineTool({
       }
     }
 
-    const missingProviders = providers.filter(
-      (p) => !providerKeys.includes(p),
-    );
+    const missingProviders = providers.filter((p) => !providerKeys.includes(p));
 
     const lines: string[] = [`Stored secrets (${storedKeys.length} total):`];
 
