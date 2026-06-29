@@ -146,7 +146,7 @@ function inheritedDefinitionBlock(
   block: InheritedBlockName,
   seen: ReadonlySet<string> = new Set([entry.name]),
 ): InheritedDefinitionBlock {
-  // definition[block] is typed as AgentSettingInput | AgentPrompt; widen to
+  // definition[block] is a validated raw YAML block; widen to
   // Record<string, unknown> for the lightweight metadata extraction below.
   const ownBlock: Record<string, unknown> = entry.definition[
     block

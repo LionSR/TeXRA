@@ -15,6 +15,7 @@ import {
   type AgentSetting,
   type AgentSettingInput,
   type AgentPrompt,
+  type AgentPromptInput,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
@@ -32,7 +33,7 @@ export interface ValidAgentDefinition {
 }
 
 export interface AgentYamlValidationResult extends ValidAgentDefinition {
-  prompts: AgentPrompt;
+  prompts: AgentPromptInput;
 }
 
 /**
@@ -99,7 +100,7 @@ export async function loadAgentSettingAndPrompts(
   // Initialize with own settings/prompts (spread creates a mutable copy).
   // Tools may still be raw name strings at this point — they are resolved below.
   let settings: AgentSettingInput = { ...config.settings };
-  let prompts: AgentPrompt = { ...config.prompts };
+  let prompts: AgentPromptInput = { ...config.prompts };
 
   // Merge with parent if inheritance is specified
   if (config.inherits) {
