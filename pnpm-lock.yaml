@@ -113,9 +113,6 @@ importers:
       glob:
         specifier: ^13.0.6
         version: 13.0.6
-      he:
-        specifier: ^1.2.0
-        version: 1.2.0
       highlight.js:
         specifier: ^11.11.1
         version: 11.11.1
@@ -294,9 +291,6 @@ importers:
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
-      '@types/he':
-        specifier: ^1.2.3
-        version: 1.2.3
       '@types/identifiers-arxiv':
         specifier: ^0.1.2
         version: 0.1.2
