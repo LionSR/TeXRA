@@ -88,6 +88,11 @@ export class LatexDiffManager {
     return path.dirname(location.absolutePath);
   }
 
+  private resolveRunStorageSourceDir(location: FileLocation): string | null {
+    if (location.kind !== 'runStorage') return null;
+    return path.dirname(location.absolutePath);
+  }
+
   private logLatexdiffResult(
     result: LaTeXdiffResult,
     operation: string = 'latexdiff',
@@ -402,16 +407,19 @@ export class LatexDiffManager {
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
       ),
     );
-    // The diff `.tex` is written to `diff/r{round}/` rather than alongside the
-    // document's `\input`/`\bibliography` targets, so add the live workspace
-    // source directory to the search path; otherwise `\input{figures/…}` and
-    // `\bibliography{…}` fail to resolve when the source lives in a subfolder.
-    const sourceDir = this.resolveWorkspaceSourceDir(referenceLocation);
+    // The diff `.tex` is written to `diff/r{round}/`, away from both the
+    // revised round output and the live workspace source. Search the revised
+    // round directory first so same-round sibling edits win, then fall back to
+    // the original source tree for unchanged inputs and bibliographies.
+    const extraInputDirs = [
+      this.resolveRunStorageSourceDir(sourceLocation),
+      this.resolveWorkspaceSourceDir(referenceLocation),
+    ].filter((dir): dir is string => dir !== null);
     const ok = await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,
       timeout: timeoutMs,
-      extraInputDirs: [sourceDir],
+      extraInputDirs,
     });
 
     if (!ok) {
