@@ -129,7 +129,9 @@ export class ApproveSplitButton extends LitElement {
          than a stray glyph floating beside the button. */
       .approve-split:hover .approve-split-main::part(base),
       .approve-split:hover .approve-split-trigger::part(base),
+      .approve-split:focus-within .approve-split-main::part(base),
       .approve-split:focus-within .approve-split-trigger::part(base),
+      .approve-split wa-dropdown[open] .approve-split-main::part(base),
       .approve-split wa-dropdown[open] .approve-split-trigger::part(base) {
         border-color: var(--wa-color-surface-border, var(--color-border));
       }

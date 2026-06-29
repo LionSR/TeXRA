@@ -373,7 +373,14 @@ export const requestPanelStyles: CSSResult = css`
     .diff-dropdown-trigger::part(base),
   .approval-request__actions
     .diff-dropdown:focus-within
+    .diff-main-button::part(base),
+  .approval-request__actions
+    .diff-dropdown:focus-within
     .diff-dropdown-trigger::part(base),
+  .approval-request__actions
+    .diff-dropdown
+    wa-dropdown[open]
+    .diff-main-button::part(base),
   .approval-request__actions
     .diff-dropdown
     wa-dropdown[open]
