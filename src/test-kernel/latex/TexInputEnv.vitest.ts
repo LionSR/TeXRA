@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - latex
-import { buildLatexInputEnv } from '@latex/texTools';
+import { buildLatexInputEnv, buildLatexSearchParts } from '@latex/texTools';
 
 const D = path.delimiter;
 
@@ -37,5 +37,50 @@ describe('buildLatexInputEnv', () => {
     const env = buildLatexInputEnv(['.', '/ws'], ['/ws'], {});
     expect(env.TEXINPUTS).toBe(`.${D}/ws${D}`);
     expect(env.BIBINPUTS).toBe(`/ws${D}`);
+  });
+});
+
+describe('buildLatexSearchParts', () => {
+  it('ranks document + extra source dirs ahead of cwd, workspace, and tikz', () => {
+    const { texInputParts, bibSearchParts } = buildLatexSearchParts({
+      documentDir: '/run/diff/r1',
+      extraInputDirs: ['/ws/Draft/LeanMPSPaper'],
+      workspacePath: '/ws',
+      tikzInputDirectory: '/tikz',
+    });
+    // Source dirs precede "." (cwd = workspace root) so a subfolder document's
+    // relative \input resolves against its own tree; the document dir precedes
+    // the extra source dir so a revised sibling beats the original fallback.
+    expect(texInputParts).toEqual([
+      '/run/diff/r1',
+      '/ws/Draft/LeanMPSPaper',
+      '.',
+      '/ws',
+      '/tikz',
+    ]);
+    // Bibliography search drops "." and the TikZ dir.
+    expect(bibSearchParts).toEqual([
+      '/run/diff/r1',
+      '/ws/Draft/LeanMPSPaper',
+      '/ws',
+    ]);
+  });
+
+  it('still emits the document dir when no workspace, tikz, or extras are given', () => {
+    const { texInputParts, bibSearchParts } = buildLatexSearchParts({
+      documentDir: '/run/r0/Draft/LeanMPSPaper',
+      workspacePath: null,
+    });
+    expect(texInputParts).toEqual(['/run/r0/Draft/LeanMPSPaper', '.']);
+    expect(bibSearchParts).toEqual(['/run/r0/Draft/LeanMPSPaper']);
+  });
+
+  it('ignores blank tikz dirs', () => {
+    const { texInputParts } = buildLatexSearchParts({
+      documentDir: '/doc',
+      workspacePath: '/ws',
+      tikzInputDirectory: '   ',
+    });
+    expect(texInputParts).toEqual(['/doc', '.', '/ws']);
   });
 });
