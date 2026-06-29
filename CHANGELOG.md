@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
+- **Sign in with ChatGPT from a non-default browser** — the ChatGPT subscription sign-in opens your system default browser, but if your ChatGPT subscription is signed in on a different browser you can now copy the sign-in link and open it there. The VS Code extension shows a "Copy Sign-in Link" notification action and the desktop app offers a "Copy Sign-in Link" dialog button; the loopback callback accepts the redirect from whichever browser you complete it in.
 - **First-run setup no longer launches itself** — after a new user connects a credential, TeXRA now selects the setup assistant and shows a "Run setup assistant" card instead of silently starting it. The setup assistant inspects your environment and may install tools, so it now runs only when you explicitly click to start it.
 
 ## [0.39.0] - 2026-06-28
