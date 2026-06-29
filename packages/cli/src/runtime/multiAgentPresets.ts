@@ -77,19 +77,19 @@ export const MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION =
   'Root agent for the team run (defaults to the preset orchestrator)';
 export const MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION =
   'Model for the team root agent';
-const MULTI_AGENT_INSPECT_HINT =
-  'Hint: run `texra multi-agent inspect <team-id>` to see missing agents for degraded or unavailable presets.';
+const MULTI_AGENT_SHOW_HINT =
+  'Hint: run `texra multi-agent show <team-id>` to see missing agents for degraded or unavailable presets.';
 const MULTI_AGENT_LOGIN_HINT =
   'Hint: Researcher Access sign-in may load additional remote team agents.';
 export const MULTI_AGENT_NO_TEAM_ROOT_REASON = 'no runnable team root';
-const MULTI_AGENT_LAUNCHER_INSPECT_HINT =
-  'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.';
+const MULTI_AGENT_LAUNCHER_SHOW_HINT =
+  'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.';
 const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
   'Researcher Access sign-in may unlock more remote team agents.';
 const MULTI_AGENT_LAUNCHER_NO_TEAM_ROOT_REASON = 'no team root';
 
-export function formatCliMultiAgentInspectCommand(preset: string): string {
-  return `texra multi-agent inspect ${preset}`;
+function formatCliMultiAgentShowCommand(preset: string): string {
+  return `texra multi-agent show ${preset}`;
 }
 
 export function readCliMultiAgentPresets(): CliMultiAgentPreset[] {
@@ -177,20 +177,6 @@ export function formatCliMultiAgentPresetList(
 
   const hint = cliMultiAgentPresetListHint(plans, options);
   return hint ? [...rows, '', hint].join('\n') : rows.join('\n');
-}
-
-export function formatCliMultiAgentPresetDetails(
-  preset: CliMultiAgentPreset,
-): string {
-  return [
-    `${preset.name} (${preset.id})`,
-    `Source: ${preset.source}`,
-    `Description: ${preset.description}`,
-    'Workflow agents:',
-    formatAgentNames(preset.workflowAgents),
-    'Tool-use agents:',
-    formatAgentNames(preset.toolUseAgents),
-  ].join('\n');
 }
 
 export function formatCliMultiAgentPresetInspection(
@@ -296,7 +282,7 @@ export function formatCliMultiAgentTeamLaunchBlockMessage(
   }
   const parts = [
     `Multi-agent preset "${preset}" cannot start as a team: ${reason}.`,
-    `Run \`${formatCliMultiAgentInspectCommand(plan.preset.id)}\` to see missing agents.`,
+    `Run \`${formatCliMultiAgentShowCommand(plan.preset.id)}\` to see missing agents.`,
     options.followUpAdvice,
   ];
   return parts.filter((part): part is string => !!part).join(' ');
@@ -349,7 +335,7 @@ export function formatCliMultiAgentPresetLauncherHints(
   const availability = cliMultiAgentPresetAvailability(plan);
   return [
     availability.status !== 'available'
-      ? MULTI_AGENT_LAUNCHER_INSPECT_HINT
+      ? MULTI_AGENT_LAUNCHER_SHOW_HINT
       : undefined,
     cliMultiAgentPresetShouldIncludeLoginHint(plan, options)
       ? MULTI_AGENT_LAUNCHER_LOGIN_HINT
@@ -639,7 +625,7 @@ function cliMultiAgentPresetListHint(
     (plan) => cliMultiAgentPlanStatus(plan) !== 'available',
   );
   const hints = [
-    hasIncompletePreset ? MULTI_AGENT_INSPECT_HINT : undefined,
+    hasIncompletePreset ? MULTI_AGENT_SHOW_HINT : undefined,
     plans.some((plan) =>
       cliMultiAgentPresetShouldIncludeLoginHint(plan, options),
     )

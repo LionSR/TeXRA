@@ -115,7 +115,7 @@ const agentsShowCommand = defineCliCommand({
 
 export const agentsCommand = defineCommand({
   meta: { name: 'agents', description: 'Inspect TeXRA agents' },
-  // Unlike `multi-agent inspect` (which resolves a team run plan), an agent has
+  // Unlike `multi-agent show` (which resolves a team run plan), an agent has
   // no separate "inspected" view — `show` already prints everything — so there
   // is just one inspection verb here.
   subCommands: {

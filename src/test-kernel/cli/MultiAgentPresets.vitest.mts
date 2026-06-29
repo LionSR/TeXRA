@@ -13,7 +13,6 @@ import {
   formatCliMultiAgentPresetLauncherHints,
   formatCliMultiAgentPresetLauncherSummary,
   formatCliMultiAgentTeamLaunchBlockMessage,
-  formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
   formatCliMultiAgentPresetRunWarnings,
@@ -87,7 +86,7 @@ describe('CLI multi-agent presets', () => {
       'built-in\tlean-project\tLean Project\ttool-use:2/7\tunavailable',
     );
     expect(output).not.toContain('workflow:0');
-    expect(output).toContain('texra multi-agent inspect <team-id>');
+    expect(output).toContain('texra multi-agent show <team-id>');
     expect(output).toContain(
       'Researcher Access sign-in may load additional remote team agents',
     );
@@ -110,7 +109,7 @@ describe('CLI multi-agent presets', () => {
       includeLoginHint: false,
     });
 
-    expect(output).toContain('texra multi-agent inspect <team-id>');
+    expect(output).toContain('texra multi-agent show <team-id>');
     expect(output).not.toContain('after `texra login`');
   });
 
@@ -169,7 +168,7 @@ describe('CLI multi-agent presets', () => {
       'degraded; 1/6 workflows; 2/9 tools',
     );
     expect(formatCliMultiAgentPresetLauncherHints(plan)).toEqual([
-      'Team setup: run `texra multi-agent inspect <team-id>` for unavailable or degraded teams.',
+      'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
       'Researcher Access sign-in may unlock more remote team agents.',
     ]);
   });
@@ -298,7 +297,7 @@ describe('CLI multi-agent presets', () => {
           'Install or sign in for a runnable team root before launching this preset.',
       }),
     ).toBe(
-      'Multi-agent preset "Lean Project" cannot start as a team: no runnable team root. Run `texra multi-agent inspect lean-project` to see missing agents. Install or sign in for a runnable team root before launching this preset.',
+      'Multi-agent preset "Lean Project" cannot start as a team: no runnable team root. Run `texra multi-agent show lean-project` to see missing agents. Install or sign in for a runnable team root before launching this preset.',
     );
   });
 
@@ -320,7 +319,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(message).toBe(
-      'Multi-agent preset "mathematician" cannot start as a team: team root lean is not a delegating agent. Run `texra multi-agent inspect mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
+      'Multi-agent preset "mathematician" cannot start as a team: team root lean is not a delegating agent. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
     );
     expect(message).not.toContain('cannot delegate');
   });
@@ -513,20 +512,6 @@ describe('CLI multi-agent presets', () => {
     );
     expect(findCliMultiAgentPreset(presets, 'computer-scientist')?.id).toBe(
       'cs-ml',
-    );
-  });
-
-  it('formats details without dropping empty agent categories', () => {
-    const preset = findCliMultiAgentPreset(
-      cliMultiAgentPresets(undefined),
-      'lean-project',
-    );
-
-    expect(formatCliMultiAgentPresetDetails(preset!)).toContain(
-      'Workflow agents:\n  (none)',
-    );
-    expect(formatCliMultiAgentPresetDetails(preset!)).toContain(
-      'Tool-use agents:\n  lean',
     );
   });
 
