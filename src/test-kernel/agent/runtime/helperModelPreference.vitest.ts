@@ -35,9 +35,8 @@ describe('applyHelperModelPreference', () => {
   });
 
   async function resolve(config: AgentConfig): Promise<AgentConfig> {
-    const { applyHelperModelPreference } = await import(
-      '@agent/runtime/helperModelPreference'
-    );
+    const { applyHelperModelPreference } =
+      await import('@agent/runtime/helperModelPreference');
     return applyHelperModelPreference(config);
   }
 
