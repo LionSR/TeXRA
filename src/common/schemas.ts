@@ -20,6 +20,15 @@ export const LaTeXCompileOptionsSchema = z.object({
   compiler: z.enum(['pdflatex', 'latexmk']).prefault('latexmk'),
   /** Millisecond timeout per compiler invocation. Kills the child on expiry. */
   timeout: z.int().positive().optional(),
+  /**
+   * Extra directories to prepend onto the kpathsea search path (TEXINPUTS /
+   * BIBINPUTS / BSTINPUTS), after the main file's own directory and before the
+   * workspace root. Used when a run-storage document compiles outside its
+   * original location so relative `\input{…}` / `\bibliography{…}` targets
+   * (e.g. `figures/fig.tex`, `library.bib`) still resolve against the original
+   * source directory.
+   */
+  extraInputDirs: z.array(z.string()).prefault([]),
 });
 
 /** Input type - compiler optional with default applied by schema.parse() */
