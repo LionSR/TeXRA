@@ -99,7 +99,16 @@ const provider: InlineCommentProvider = {
     const uri = vscode.Uri.file(absolutePath);
     const startLine = Math.max(0, line - 1);
     const lastLine = Math.max(startLine, endLine - 1);
-    const range = new vscode.Range(startLine, 0, lastLine, 0);
+    // Span the whole range — from the start of the first line to the end of the
+    // last (MAX_SAFE_INTEGER is clamped to the line length by VS Code). A 0-end
+    // column would leave a single-line thread zero-width and exclude the last
+    // line's content, so the highlight would disagree with the reported lines.
+    const range = new vscode.Range(
+      startLine,
+      0,
+      lastLine,
+      Number.MAX_SAFE_INTEGER,
+    );
     const thread = controller.createCommentThread(uri, range, [
       makeComment(AGENT_AUTHOR, body),
     ]);
