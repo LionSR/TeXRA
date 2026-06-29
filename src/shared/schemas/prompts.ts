@@ -106,16 +106,51 @@ import {
   ExternalInquiryThreadIdSchema,
 } from './inquiry';
 
-export const ExternalInquiryPermissionSchema = PermissionBaseSchema.extend({
+// Shared inquiry fields present in both new and follow-up permissions.
+const CommonExternalInquiryFieldsSchema = z.object({
   question: z.string(),
-  threadId: ExternalInquiryThreadIdSchema.nullish(),
+  threadId: ExternalInquiryThreadIdSchema,
   context: z.string().nullish(),
   suggestSearch: z.boolean().nullish(),
   attachFiles: z.array(z.string()).nullish(),
+});
+
+const ExternalInquiryHydrationFieldsSchema = z.object({
   sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
   draft: InquiryDraftSchema.nullish(),
   transcript: z.array(InquiryTranscriptTurnSchema).nullish(),
 });
+
+/**
+ * First inquiry in a thread. Fresh dispatches have no prior transcript, draft,
+ * or session links, but durable hydration may carry a saved open-turn draft.
+ */
+export const NewExternalInquiryPermissionSchema = PermissionBaseSchema.extend(
+  CommonExternalInquiryFieldsSchema.shape,
+).extend({
+  mode: z.literal('new'),
+  // Included so the discriminated union produces a common surface for renderers
+  // that access these fields.
+  ...ExternalInquiryHydrationFieldsSchema.shape,
+});
+export type NewExternalInquiryPermission = z.infer<
+  typeof NewExternalInquiryPermissionSchema
+>;
+
+/** Follow-up inquiry — carries thread context from prior turns. */
+export const FollowUpExternalInquiryPermissionSchema =
+  PermissionBaseSchema.extend(CommonExternalInquiryFieldsSchema.shape).extend({
+    mode: z.literal('followUp'),
+    ...ExternalInquiryHydrationFieldsSchema.shape,
+  });
+export type FollowUpExternalInquiryPermission = z.infer<
+  typeof FollowUpExternalInquiryPermissionSchema
+>;
+
+export const ExternalInquiryPermissionSchema = z.discriminatedUnion('mode', [
+  NewExternalInquiryPermissionSchema,
+  FollowUpExternalInquiryPermissionSchema,
+]);
 export type ExternalInquiryPermission = z.infer<
   typeof ExternalInquiryPermissionSchema
 >;

@@ -473,19 +473,37 @@ export class ProgressViewProvider
         if (!manifest.parentStreamId) continue;
         const lastTurn = manifest.turns.at(-1);
         if (!lastTurn || lastTurn.answer) continue;
-        this.externalInquiryHandler.show({
+        const isFollowUp = manifest.turns.length > 1;
+        const sessionLinks = collectKnownSessionLinks(manifest);
+        const draft = getOpenTurnDraft(manifest);
+        const transcript = manifestToTranscript(manifest);
+        const hydrationFields = {
+          sessionLinks,
+          draft,
+          transcript,
+        };
+        const basePermission = {
           requestId: manifest.threadId,
           threadId: manifest.threadId,
           question: lastTurn.question,
           context: lastTurn.context ?? undefined,
           suggestSearch: lastTurn.suggestSearch ?? undefined,
           attachFiles: lastTurn.attachFiles ?? undefined,
-          sessionLinks: collectKnownSessionLinks(manifest),
-          draft: getOpenTurnDraft(manifest),
-          transcript: manifestToTranscript(manifest),
           allowBypass: false,
           streamId: manifest.parentStreamId,
-        });
+        };
+        const permission: ExternalInquiryPermission = isFollowUp
+          ? {
+              ...basePermission,
+              ...hydrationFields,
+              mode: 'followUp',
+            }
+          : {
+              ...basePermission,
+              ...hydrationFields,
+              mode: 'new',
+            };
+        this.externalInquiryHandler.show(permission);
       } catch {
         // Skip threads whose manifest can't be read; surface logs elsewhere.
       }

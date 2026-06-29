@@ -183,10 +183,14 @@ describe('approval prompt hooks', () => {
       'showExternalInquiry',
       {
         requestId: 'ei_aabbccdd0011',
+        mode: 'followUp' as const,
         threadId: 'ei_aabbccdd0011',
         question: 'May I ask an external model to verify this proof?',
         allowBypass: false,
         streamId: 'root@deepseekT#abc',
+        sessionLinks: null,
+        draft: null,
+        transcript: null,
       },
       context({
         approvalPrompt: async () => {

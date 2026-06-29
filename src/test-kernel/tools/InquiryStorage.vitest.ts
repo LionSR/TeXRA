@@ -6,7 +6,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  ExternalInquiryPermissionSchema,
+  type StreamTabId,
+} from '@shared/schemas';
 import { ToolError } from '@shared/schemas/toolResult';
 import {
   getOpenTurnDraft,
@@ -116,6 +119,42 @@ describe('InquiryStorage', () => {
     expect(followUp.manifest.status).toBe('open');
     expect(followUp.manifest.turns).toHaveLength(2);
     expect(followUp.turn.question).toBe('Q2 (follow-up)');
+  });
+
+  it('keeps first-turn draft context valid for hydrated new inquiries', async () => {
+    const t = await recordOpenQuestion({
+      parentStreamId: STREAM_A,
+      question: 'Q1',
+    });
+    const draft = {
+      answer: 'partial answer',
+      sessionLinks: 'https://chat.example/thread',
+    };
+    await persistOpenTurnDraft({
+      threadId: t.threadId,
+      draft,
+    });
+
+    const manifest = await readExternalInquiryThread(t.threadId);
+    expect(manifest).not.toBeNull();
+
+    const permission = ExternalInquiryPermissionSchema.parse({
+      requestId: t.threadId,
+      threadId: t.threadId,
+      question: 'Q1',
+      allowBypass: false,
+      streamId: STREAM_A,
+      mode: 'new',
+      sessionLinks: undefined,
+      draft: getOpenTurnDraft(manifest!),
+      transcript: manifestToTranscript(manifest!),
+    });
+
+    expect(permission).toMatchObject({
+      mode: 'new',
+      draft,
+      transcript: [{ turnIndex: 1, question: 'Q1', answer: undefined }],
+    });
   });
 
   it('persists open-turn drafts and exposes transcript turns', async () => {
