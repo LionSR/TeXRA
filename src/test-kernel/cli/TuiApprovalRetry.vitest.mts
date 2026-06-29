@@ -34,34 +34,48 @@ vi.mock('@agent/runtime/runCoordinators', () => ({
   },
 }));
 
-vi.mock('@cli/runtime/approvalAdapter', () => ({
-  approvalPromptAllowed: (context: { approvalPolicy: string; mode: string }) =>
-    context.approvalPolicy === 'ask' && context.mode === 'interactive',
-  humanInputDenialFeedback: () => 'Denied by CLI approval policy.',
-  immediateDecision: (context: { approvalPolicy: string }) => {
-    if (context.approvalPolicy === 'yolo') return { accepted: true };
-    if (context.approvalPolicy === 'ask') return undefined;
-    return { accepted: false, userMessage: 'Denied by CLI approval policy.' };
-  },
-  immediateDecisionForApproval: (
-    _event: string,
-    _payload: unknown,
-    context: { approvalPolicy: string; mode: string },
-  ) => {
-    if (context.approvalPolicy === 'ask' && context.mode === 'interactive') {
-      return undefined;
-    }
-    if (context.approvalPolicy === 'yolo') return { accepted: true };
-    return { accepted: false, userMessage: 'Denied by CLI approval policy.' };
-  },
-  isCliApiSwitchableRetry: (payload: {
-    errorDetails?: { isCredentialExhausted?: boolean; isRelayError?: boolean };
-  }) =>
-    payload.errorDetails?.isCredentialExhausted === true &&
-    payload.errorDetails?.isRelayError === true,
-  isCliChatGptSubscriptionRetry: () => false,
-  markApprovalDenied: vi.fn(),
-}));
+vi.mock('@cli/runtime/approvalAdapter', () => {
+  interface RetryPayloadForMock {
+    errorDetails?: {
+      isCredentialExhausted?: boolean;
+      isRelayError?: boolean;
+      isChatGptSubscriptionLimited?: boolean;
+    };
+  }
+
+  const isChatGptSubscriptionRetry = (payload: RetryPayloadForMock) =>
+    payload.errorDetails?.isChatGptSubscriptionLimited === true;
+
+  return {
+    approvalPromptAllowed: (context: {
+      approvalPolicy: string;
+      mode: string;
+    }) => context.approvalPolicy === 'ask' && context.mode === 'interactive',
+    humanInputDenialFeedback: () => 'Denied by CLI approval policy.',
+    immediateDecision: (context: { approvalPolicy: string }) => {
+      if (context.approvalPolicy === 'yolo') return { accepted: true };
+      if (context.approvalPolicy === 'ask') return undefined;
+      return { accepted: false, userMessage: 'Denied by CLI approval policy.' };
+    },
+    immediateDecisionForApproval: (
+      _event: string,
+      _payload: unknown,
+      context: { approvalPolicy: string; mode: string },
+    ) => {
+      if (context.approvalPolicy === 'ask' && context.mode === 'interactive') {
+        return undefined;
+      }
+      if (context.approvalPolicy === 'yolo') return { accepted: true };
+      return { accepted: false, userMessage: 'Denied by CLI approval policy.' };
+    },
+    isCliApiSwitchableRetry: (payload: RetryPayloadForMock) =>
+      isChatGptSubscriptionRetry(payload) ||
+      (payload.errorDetails?.isCredentialExhausted === true &&
+        payload.errorDetails?.isRelayError === true),
+    isCliChatGptSubscriptionRetry: isChatGptSubscriptionRetry,
+    markApprovalDenied: vi.fn(),
+  };
+});
 
 vi.mock('@model/apiProviders', async (importActual) => {
   const actual = await importActual<typeof import('@model/apiProviders')>();
@@ -122,6 +136,22 @@ function relayRetry(params: {
   } as ProgressEventPayloads['showRetryRequest'];
 }
 
+function chatGptSubscriptionRetry(
+  streamId: string,
+): ProgressEventPayloads['showRetryRequest'] {
+  return {
+    streamId,
+    operation: 'model request',
+    errorMessage: 'ChatGPT subscription usage limit reached.',
+    errorDetails: {
+      message: 'ChatGPT subscription usage limit reached.',
+      isCredentialExhausted: true,
+      isChatGptSubscriptionLimited: true,
+      provider: 'openai',
+    },
+  } as ProgressEventPayloads['showRetryRequest'];
+}
+
 afterEach(() => {
   clearApprovals();
   mocks.lookupApiKey.mockReset();
@@ -176,6 +206,31 @@ describe('TUI retry approvals', () => {
         });
       });
       expect(mocks.triggerRetry).not.toHaveBeenCalled();
+    } finally {
+      unbind();
+    }
+  });
+
+  it('auto-switches ChatGPT subscription retries to an OpenAI API key', async () => {
+    mocks.lookupApiKey.mockImplementation(
+      async (_secrets, provider: ApiProvider) =>
+        provider === 'openai' ? 'sk-openai' : undefined,
+    );
+
+    const runtimeHost = host();
+    const unbind = installTuiApprovals(runtimeHost, context());
+    try {
+      runtimeHost.emit('showRetryRequest', chatGptSubscriptionRetry('s3'));
+
+      await vi.waitFor(() => {
+        expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
+        expect(mocks.setCliCodexSubscription).toHaveBeenCalledWith(false);
+        expect(mocks.triggerRetry).toHaveBeenCalledWith('s3', undefined);
+      });
+      expect(currentApproval.get()).toBeUndefined();
+      expect(mocks.lookupApiKey.mock.calls.map((call) => call[1])).toEqual([
+        'openai',
+      ]);
     } finally {
       unbind();
     }

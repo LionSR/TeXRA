@@ -74,7 +74,7 @@ async function hasUsablePersonalKey(provider: ApiProvider): Promise<boolean> {
  * When a retry is triggered by relay exhaustion or ChatGPT-subscription
  * limits, and the stored personal key is not the broken credential, switch
  * to personal keys and retry without showing the modal — matching the
- * progress-view behaviour in {@link ProgressApiKeyRetryController}.
+ * progress-view API-key retry behaviour.
  *
  * Returns the auto-switch decision, or `undefined` when the modal is needed
  * (no usable key stored, direct-key failure, or unknown provider).
