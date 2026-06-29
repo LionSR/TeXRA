@@ -15,10 +15,7 @@ import { streamDataDir } from '@transcript/streamDataPaths';
 import { readMeta } from '@transcript/streamSnapshotRead';
 import type { AgentTrace } from '@agent/trace';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
-import {
-  TaskStateSchema,
-  type TaskState,
-} from '@agent/core/state/TaskState';
+import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';

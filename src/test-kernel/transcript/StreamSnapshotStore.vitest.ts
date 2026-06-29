@@ -10,10 +10,7 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
-import {
-  TaskStateSchema,
-  type TaskState,
-} from '@agent/core/state/TaskState';
+import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { bus } from '@eventBus/ProgressEventBus';
 import type {
   ExecutionId,
