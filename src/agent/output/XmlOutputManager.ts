@@ -138,7 +138,8 @@ export class XmlOutputManager {
 
   private makeUniquePercentHeaderName(
     source: string,
-    reservedNames: Set<string>,
+    reservedFinalPaths: Set<string>,
+    roundDir: string,
   ): string {
     const normalized = source.replaceAll('\\', '/');
     const safeName = getSafeDocumentRelativePath(normalized).replaceAll(
@@ -148,7 +149,10 @@ export class XmlOutputManager {
     let candidate = safeName;
     let suffix = 2;
 
-    while (reservedNames.has(candidate)) {
+    const finalPathKey = (name: string) =>
+      getExtractedDocOutputFileName(name, roundDir).replaceAll('\\', '/');
+
+    while (reservedFinalPaths.has(finalPathKey(candidate))) {
       const parsed = path.posix.parse(safeName);
       candidate = path.posix.join(
         parsed.dir,
@@ -157,15 +161,16 @@ export class XmlOutputManager {
       suffix += 1;
     }
 
-    reservedNames.add(candidate);
+    reservedFinalPaths.add(finalPathKey(candidate));
     return candidate;
   }
 
   private extractPercentHeaderDocuments(
     outputContent: string,
+    roundDir: string,
   ): Array<{ content: string; name: string }> | null {
     const documents: Array<{ content: string; name: string }> = [];
-    const reservedNames = new Set<string>();
+    const reservedFinalPaths = new Set<string>();
     let currentName: string | null = null;
     let currentLines: string[] = [];
 
@@ -173,7 +178,14 @@ export class XmlOutputManager {
       if (!currentName) return;
       const content = currentLines.join('\n').trim();
       if (content) {
-        documents.push({ name: currentName, content });
+        documents.push({
+          name: this.makeUniquePercentHeaderName(
+            currentName,
+            reservedFinalPaths,
+            roundDir,
+          ),
+          content,
+        });
       }
       currentLines = [];
     };
@@ -186,7 +198,7 @@ export class XmlOutputManager {
       const match = PERCENT_FILENAME_HEADER_REGEX.exec(line.trim());
       if (match) {
         flushCurrent();
-        currentName = this.makeUniquePercentHeaderName(match[1], reservedNames);
+        currentName = match[1];
         continue;
       }
 
@@ -255,7 +267,10 @@ export class XmlOutputManager {
       );
     }
 
-    documents ??= this.extractPercentHeaderDocuments(rawOutputContent);
+    documents ??= this.extractPercentHeaderDocuments(
+      rawOutputContent,
+      getFileDirectory(outputLocation),
+    );
 
     if (!documents) {
       this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);

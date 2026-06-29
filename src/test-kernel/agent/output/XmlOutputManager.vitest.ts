@@ -143,6 +143,36 @@ describe('XmlOutputManager', () => {
     ).resolves.toBe('Appendix text.\n');
   });
 
+  it('recovers hyphenated percent filename headers', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '% main-file.tex',
+        'Main text.',
+        '% sections/part-1.tex',
+        'Part text.',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'main-file.tex',
+      'sections/part-1.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/main-file.tex')).resolves.toBe(
+      'Main text.\n',
+    );
+    await expect(AbsoluteFS.read('/tmp/run/sections/part-1.tex')).resolves.toBe(
+      'Part text.\n',
+    );
+  });
+
   it('makes duplicate percent filename headers unique before writing', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
@@ -204,6 +234,25 @@ describe('XmlOutputManager', () => {
     );
   });
 
+  it('does not reserve empty percent filename header blocks', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      ['% chunk.tex', '% chunk.tex', 'Actual content.'].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual(['chunk.tex']);
+    await expect(AbsoluteFS.read('/tmp/run/chunk.tex')).resolves.toBe(
+      'Actual content.\n',
+    );
+  });
+
   it('deduplicates percent filename headers after safe-path normalization', async () => {
     await AbsoluteFS.write(
       '/tmp/run/output.xml',
@@ -232,6 +281,36 @@ describe('XmlOutputManager', () => {
     await expect(AbsoluteFS.read('/tmp/run/sections/main-2.tex')).resolves.toBe(
       'Equivalent safe path.\n',
     );
+  });
+
+  it('deduplicates percent filename headers after final output path mapping', async () => {
+    await AbsoluteFS.write(
+      '/tmp/run/output.xml',
+      [
+        '% output.tex',
+        'Primary fallback.',
+        '% output_extracted.tex',
+        'Explicit extracted fallback.',
+      ].join('\n'),
+    );
+    const manager = createXmlManager('documents');
+
+    const outputs = await manager.splitScratchpadMultipleOutputXml(
+      createExternalLocation('/tmp/run/output.xml'),
+      'documents',
+      0,
+    );
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'output.tex',
+      'output_extracted-2.tex',
+    ]);
+    await expect(
+      AbsoluteFS.read('/tmp/run/output_extracted.tex'),
+    ).resolves.toBe('Primary fallback.\n');
+    await expect(
+      AbsoluteFS.read('/tmp/run/output_extracted-2.tex'),
+    ).resolves.toBe('Explicit extracted fallback.\n');
   });
 
   it('does not auto-format extracted workflow outputs', async () => {
