@@ -86,13 +86,9 @@ export async function resolveCliRunModel(
 }
 
 /** Derive the headless run context shared by every CLI runner. */
-export function buildHeadlessRunContext(
-  context: CliContext,
-  model: string,
-): CliContext {
+export function buildHeadlessRunContext(context: CliContext): CliContext {
   return {
     ...context,
-    helperModel: model,
     quietLogs: true,
     renderRunProgress: shouldRenderRunProgress(context),
   };

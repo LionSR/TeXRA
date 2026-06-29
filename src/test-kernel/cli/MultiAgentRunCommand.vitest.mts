@@ -88,9 +88,8 @@ vi.mock('@cli/runtime/multiAgentPresets', () => {
 });
 
 vi.mock('@cli/runtime/runModel', () => ({
-  buildHeadlessRunContext: vi.fn((context: CliContext, model: string) => ({
+  buildHeadlessRunContext: vi.fn((context: CliContext) => ({
     ...context,
-    helperModel: model,
     quietLogs: true,
     renderRunProgress: false,
   })),
