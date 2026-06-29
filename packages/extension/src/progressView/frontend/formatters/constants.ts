@@ -160,7 +160,6 @@ export const TOOL_ICON_MAP: Record<string, string> = {
   // Search/find
   glob: 'search',
   grep: 'search',
-  ls: 'folder-opened',
 
   // Shell
   bash: 'terminal',
