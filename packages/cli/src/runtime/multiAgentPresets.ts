@@ -64,9 +64,9 @@ export interface CliMultiAgentPresetAvailability {
 /**
  * Machine-readable `multi-agent list` record. It preserves the raw preset
  * fields so existing consumers still see a preset-shaped object, while adding
- * the planned availability that list output needs. `multi-agent show` continues
- * to emit the raw `CliMultiAgentPreset` because it is definition-focused and
- * does not load the agent registry.
+ * the planned availability that list output needs. (`multi-agent show` instead
+ * loads the agent registry and emits the resolved run plan as
+ * `multi-agent-preset-inspection`.)
  */
 export interface CliMultiAgentPresetListRecord extends CliMultiAgentPreset {
   readonly availability: CliMultiAgentPresetAvailability;
