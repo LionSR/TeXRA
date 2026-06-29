@@ -206,8 +206,18 @@ class ArxivSourceProcessor {
         let filename: string | undefined;
         try {
           filename = contentDisposition.parse(disposition).parameters.filename;
-        } catch {
+        } catch (error) {
           // Malformed header — fall through to content-type fallback below.
+          logger.debug(
+            this.channel,
+            'Ignoring malformed Content-Disposition header from arXiv source download',
+            {
+              data: {
+                header: disposition,
+                error: toErrorMessage(error),
+              },
+            },
+          );
         }
         if (filename) {
           // basename prevents path traversal from a crafted header value.
