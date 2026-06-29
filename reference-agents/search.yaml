@@ -8,7 +8,6 @@ settings:
     - read_file
     - glob
     - grep
-    - ls
     - extract_figures
     - extract_bib_entries
     - extract_tikz_figures
@@ -54,7 +53,7 @@ prompts:
 
     File Operations:
     (1) You can read files in the user's workspace but must not edit or create files there. The download and zotero tools listed above are the only ways you're allowed to write — `download_arxiv_source` writes into a designated downloads area, and `zotero_add` writes to the Zotero library.
-    (2) Use read_file, glob, grep, and ls to explore the user's workspace.
+    (2) Use read_file, glob, and grep to explore the user's workspace.
     (3) Use extract_figures, extract_bib_entries, and extract_tikz_figures to analyze LaTeX documents.
 
     Guidelines on using Tools:

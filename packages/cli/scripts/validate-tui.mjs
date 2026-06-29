@@ -126,9 +126,12 @@ const SCENARIOS = [
       HARNESS_LIVE_INVISIBLE_ASSISTANT: '1',
       HARNESS_LIVE_TOOL_ONLY: '1',
     },
-    expect: ['what is this repo about', '● ls (Listed 36 entries in .)'],
+    expect: [
+      'what is this repo about',
+      '● grep (Found 12 matches for "theorem" in .)',
+    ],
     maxBlankLinesBetween: [
-      { from: 'what is this repo about', to: '● ls', max: 0 },
+      { from: 'what is this repo about', to: '● grep', max: 0 },
     ],
   },
   {
@@ -141,18 +144,18 @@ const SCENARIOS = [
     },
     expect: [
       'what is this repo about',
-      '● ls (Listed 36 entries in .)',
+      '● grep (Found 12 matches for "theorem" in .)',
       '● glob (Found 7 files for "*.md" in .)',
       '● glob (Found 6 files for "**/*.tex" in .)',
     ],
     maxBlankLinesBetween: [
       {
         from: 'what is this repo about',
-        to: '● ls (Listed 36 entries in .)',
+        to: '● grep (Found 12 matches for "theorem" in .)',
         max: 0,
       },
       {
-        from: '● ls (Listed 36 entries in .)',
+        from: '● grep (Found 12 matches for "theorem" in .)',
         to: '● glob (Found 7 files for "*.md" in .)',
         max: 0,
       },

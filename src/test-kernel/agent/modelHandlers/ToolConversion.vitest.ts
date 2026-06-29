@@ -13,7 +13,6 @@ import { BashTool } from '@tools/bash';
 import { EditFileTool } from '@tools/EditTool';
 import { GlobTool } from '@tools/glob';
 import { GrepTool } from '@tools/grep';
-import { LsTool } from '@tools/ls';
 import { ReadFileTool } from '@tools/ReadTool';
 import { WriteFileTool } from '@tools/WriteTool';
 import { ArxivDownloadTool } from '@tools/arxiv/ArxivDownloadTool';
@@ -247,7 +246,6 @@ describe('Anthropic tool conversion', () => {
       new EditFileTool().definition,
       new GlobTool().definition,
       new GrepTool().definition,
-      new LsTool().definition,
     ];
 
     const tools = toAnthropicTools(definitions);
@@ -307,7 +305,6 @@ describe('tool schema descriptions', () => {
         fields: ['path', 'old_str', 'new_str', 'replace_all'],
       },
       { definition: new GlobTool().definition, fields: ['pattern', 'path'] },
-      { definition: new LsTool().definition, fields: ['path', 'ignore'] },
       {
         definition: new ReadFileTool().definition,
         fields: ['path', 'range'],

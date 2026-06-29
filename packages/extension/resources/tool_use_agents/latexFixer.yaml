@@ -9,7 +9,6 @@ settings:
     - edit_file
     - glob
     - grep
-    - ls
     - diagnostics
     - executions
     - extract_bib_entries
@@ -21,7 +20,7 @@ prompts:
     Context: you are usually invoked by an orchestrator after a workflow subagent has produced new .tex files. Those outputs live in task-run storage under `/executions/{id}/files/{path}` until they are accepted into the workspace. Use the `executions` tool (action=view) to inspect them — `/executions/{id}/files` lists the generated files and `/executions/{id}/files/<path>` reads one. `/executions/{id}/report` shows the producing agent's summary, `/executions/{id}/config` its settings, and `/executions/current` your own run. Once the orchestrator has run `accept_run_files`, the files are in the workspace and you edit them with `edit_file` as normal — `read_file` and `edit_file` operate only on workspace paths, never on `/executions/*`.
 
     Workflow:
-    (1) Use `grep` and `glob` to understand the project structure (find all .tex, .bib, .cls, .sty files). Use `ls` to inspect directories when file paths are unclear.
+    (1) Use `grep` and `glob` to understand the project structure (find all .tex, .bib, .cls, .sty files).
     (2) Compile the document to produce a log. Use `bash` to run `latexmk -pdf -interaction=nonstopmode <file>` or an equivalent compilation command. If latexmk is unavailable, fall back to `pdflatex -interaction=nonstopmode <file>` (run twice for references).
     (3) Parse the log output to identify every error, warning, and bad box. Group them by type and severity. Treat hyperlink/hyperref errors and BibTeX/citation failures as default repair targets, not optional polish. Use `diagnostics` to check for linter warnings in addition to compilation errors.
     (4) For each issue, locate the offending source line using `read_file` and the line numbers from the log.
