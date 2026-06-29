@@ -24,7 +24,7 @@ import {
   TaskStateSchema,
   isWorkflowTaskState,
   type TaskState,
-} from '@agent/core/execution/TaskState';
+} from '@agent/core/state/TaskState';
 import { KVStore } from '@common/storage/KVStore';
 import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
 import * as logger from '@logger/logUtils';

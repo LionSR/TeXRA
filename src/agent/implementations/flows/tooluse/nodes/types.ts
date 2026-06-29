@@ -3,11 +3,11 @@ import { z } from 'zod';
 import {
   AgentRunStateSnapshotSchema,
   type AgentRunStateSnapshot,
-} from '@agent/core/execution/AgentState';
+} from '@agent/core/state/AgentState';
 import {
   AgentWorkspaceStateSnapshotSchema,
   type AgentWorkspaceState,
-} from '@agent/core/execution/AgentWorkspaceState';
+} from '@agent/core/state/AgentWorkspaceState';
 import {
   UserVariableChannelsSchema,
   type UserVariableChannels,

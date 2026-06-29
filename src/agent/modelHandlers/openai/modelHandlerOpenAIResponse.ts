@@ -16,7 +16,7 @@ import {
   type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { type OpenAIAPIResponseUsage } from '@agent/core/usage/ResponseUsage';
-import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';

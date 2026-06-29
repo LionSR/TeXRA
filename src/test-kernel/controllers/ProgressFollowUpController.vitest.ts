@@ -13,7 +13,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { WorkflowTaskState } from '@agent/core/execution/TaskState';
+import type { WorkflowTaskState } from '@agent/core/state/TaskState';
 
 // Local imports - shared
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';

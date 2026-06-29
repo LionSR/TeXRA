@@ -20,7 +20,7 @@ import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
-} from '@agent/core/execution/executionRequests';
+} from '@agent/core/state/executionRequests';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { setPreferCodexSubscription } from '@auth/codex';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';

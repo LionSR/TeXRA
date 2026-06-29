@@ -1,6 +1,6 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import type { FileLocation } from '@shared/schemas';
 
