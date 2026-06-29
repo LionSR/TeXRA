@@ -618,7 +618,8 @@ function createWindow(options: {
         message: 'Signing in with ChatGPT',
         detail:
           'Opened your default browser. Using a different browser for ChatGPT? ' +
-          'Copy the link and open it there.',
+          'Open this link there instead:\n\n' +
+          `${url}`,
         buttons: ['Copy Sign-in Link', 'Close'],
         defaultId: 0,
         cancelId: 1,
