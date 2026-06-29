@@ -21,7 +21,7 @@ import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitio
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import * as logger from '@logger/logUtils';
 import { agentKey } from '@shared/schemas/agent';
-import { resolveToolDefinitions } from '@tools/registry';
+import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
 import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'agentLoad';
@@ -53,6 +53,11 @@ export function validateAgentYamlContent(
     throw new Error('name is empty');
   }
 
+  if (!data.inherits) {
+    AgentSettingSchema.parse(resolveAgentSettingTools(data.settings));
+    AgentPromptSchema.parse(data.prompts);
+  }
+
   return {
     name: rootName,
     settings: data.settings,
@@ -77,6 +82,16 @@ export function ensureAgentCategoryForSource<
     return { ...settings, agentCategory: AgentCategory.ToolUse };
   }
   return settings;
+}
+
+function resolveAgentSettingTools(settings: AgentSettingInput): object {
+  if (!Array.isArray(settings.tools)) return settings;
+  return {
+    ...settings,
+    tools: resolveToolDefinitions(settings.tools as RawToolConfig[], (name) =>
+      logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
+    ),
+  };
 }
 
 export async function loadAgentSettingAndPrompts(
@@ -128,15 +143,11 @@ export async function loadAgentSettingAndPrompts(
 
   settings = ensureAgentCategoryForSource(settings, entry.source);
 
-  // Resolve tool names to definitions using shared utility
-  if (Array.isArray(settings.tools)) {
-    const resolvedTools = resolveToolDefinitions(
-      settings.tools as (string | { name: string })[],
-      (name) => logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
-    );
-    settings = { ...settings, tools: resolvedTools } as AgentSettingInput;
-  }
+  const resolvedSettings = resolveAgentSettingTools(settings);
 
   // Apply defaults and validate the final settings and prompts
-  return [AgentSettingSchema.parse(settings), AgentPromptSchema.parse(prompts)];
+  return [
+    AgentSettingSchema.parse(resolvedSettings),
+    AgentPromptSchema.parse(prompts),
+  ];
 }
