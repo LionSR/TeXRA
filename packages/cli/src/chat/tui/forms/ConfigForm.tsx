@@ -21,6 +21,7 @@ import {
 } from '@shared/schemas/stateSettings';
 
 import { BaseTextInput } from '../input/BaseTextInput';
+import { isCtrlInput, type ReturnKeyInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
 import { POINTER } from '../ui/glyphs';
 import { Select, type SelectItem } from '../ui/Select';
@@ -87,6 +88,13 @@ export function validateSettingInput(
     ok: false,
     message: parsed.error.issues.at(0)?.message ?? 'Invalid setting value.',
   };
+}
+
+export function isConfigResetInput(
+  input: string,
+  key: Pick<ReturnKeyInput, 'ctrl' | 'meta'>,
+): boolean {
+  return isCtrlInput(input, key, 'r');
 }
 
 export function formatSettingValue(value: unknown): string {
@@ -174,7 +182,7 @@ function ConfigTextEditor(props: {
   // BaseTextInput owns Enter (onSubmit) and ignores Escape, so handle Escape
   // here to back out to the list.
   useInput((input, key) => {
-    if (key.ctrl && input.toLowerCase() === 'r') props.onReset();
+    if (isConfigResetInput(input, key)) props.onReset();
     if (key.escape) props.onCancel();
   });
   return (
@@ -266,7 +274,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
 
   useInput((input, key) => {
     if (mode.kind !== 'enum') return;
-    if (key.ctrl && input.toLowerCase() === 'r') {
+    if (isConfigResetInput(input, key)) {
       resetEntry(mode.entry);
       setMode({ kind: 'list' });
     }
