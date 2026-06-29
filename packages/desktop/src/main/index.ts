@@ -679,13 +679,14 @@ function createWindow(options: {
           sessionType: 'toolUse' as const,
         });
       },
-      // Auto-start the setup conversation, mirroring the extension's
-      // `launchSetupAssistant` → `handleExecute` path: resolve a model the
-      // user's credentials can call, build the setup execute message, and run
-      // it through the same desktop execute path the renderer's Execute button
-      // uses. The per-session `setupKickoffStarted` dedup guard inside the
-      // onboarding IPC keeps this one-shot; on a resolution failure it throws so
-      // that guard resets and a later credential change can retry.
+      // Launch the setup conversation when the user clicks "Run Setup" on the
+      // setup card, mirroring the extension's `launchSetupAssistant` →
+      // `handleExecute` path: resolve a model the user's credentials can call,
+      // build the setup execute message, and run it through the same desktop
+      // execute path the renderer's Execute button uses. The per-session
+      // `setupKickoffStarted` dedup guard inside the onboarding IPC keeps this
+      // one-shot; on a resolution failure it throws so that guard resets and a
+      // later "Run Setup" click can retry.
       kickoffSetup: async () => {
         const { buildDesktopSetupExecuteMessage } =
           await import('@controllers/onboarding/setupLaunch');

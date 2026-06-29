@@ -324,7 +324,7 @@ export type SetupAssistantLaunchResult =
 export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult> {
   try {
     // Every setup entry point funnels through here (command, status pill,
-    // walkthrough, onboarding auto-kickoff), so one guard covers them all:
+    // walkthrough, onboarding setup card), so one guard covers them all:
     // a second concurrent setup conversation would race the first one's
     // installs and config writes. The launcher's manual Execute path is
     // deliberately not gated — an explicit user action wins.
