@@ -54,6 +54,7 @@ import { cliState } from './cliState';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
   approvalPayloadStreamId,
+  clearRetryApprovalsForStream,
   enqueueApproval,
   type ApprovalDecision,
   type ApprovalPayload,
@@ -264,6 +265,12 @@ function routeRetry(
     payload,
     (retryPayload, decision) => {
       if (!isCurrent()) return;
+      if (
+        decision.accepted &&
+        (decision.apiMode || decision.disableChatGptSubscription)
+      ) {
+        clearRetryApprovalsForStream(retryPayload.streamId);
+      }
       dispatchRetry(retryPayload, decision, { isCurrent, onComplete: finish });
     },
     {
@@ -398,7 +405,9 @@ function dispatchRetry(
   if (decision.accepted) {
     void applyRetryDecision(payload, decision, options)
       .catch(() => {
-        runCoordinatorBridge.cancelRetry(payload.streamId);
+        if (options.isCurrent?.() ?? true) {
+          runCoordinatorBridge.cancelRetry(payload.streamId);
+        }
       })
       .finally(() => {
         options.onComplete?.();

@@ -229,4 +229,100 @@ describe('TUI retry approvals', () => {
       unbind();
     }
   });
+
+  it('clears an older retry modal when a newer retry auto-switches', async () => {
+    mocks.lookupApiKey
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce('sk-new');
+
+    const runtimeHost = host();
+    const unbind = installTuiApprovals(runtimeHost, context());
+    try {
+      runtimeHost.emit(
+        'showRetryRequest',
+        relayRetry({
+          streamId: 'same-stream',
+          provider: 'openai',
+          message: 'first retry',
+        }),
+      );
+      await vi.waitFor(() => {
+        expect(currentApproval.get()?.payload).toMatchObject({
+          kind: 'retry',
+          payload: { errorMessage: 'first retry' },
+        });
+      });
+
+      runtimeHost.emit(
+        'showRetryRequest',
+        relayRetry({
+          streamId: 'same-stream',
+          provider: 'openai',
+          message: 'second retry',
+        }),
+      );
+
+      await vi.waitFor(() => {
+        expect(mocks.triggerRetry).toHaveBeenCalledWith(
+          'same-stream',
+          undefined,
+        );
+        expect(currentApproval.get()).toBeUndefined();
+      });
+    } finally {
+      unbind();
+    }
+  });
+
+  it('does not let a stale auto-switch failure cancel a newer retry', async () => {
+    let rejectFirstModeSwitch: ((error: Error) => void) | undefined;
+    mocks.lookupApiKey.mockResolvedValue('sk-test');
+    mocks.setCliApiMode
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectFirstModeSwitch = reject;
+          }),
+      )
+      .mockResolvedValueOnce(undefined);
+
+    const runtimeHost = host();
+    const unbind = installTuiApprovals(runtimeHost, context());
+    try {
+      runtimeHost.emit(
+        'showRetryRequest',
+        relayRetry({
+          streamId: 'same-stream',
+          provider: 'openai',
+          message: 'first retry',
+        }),
+      );
+      await vi.waitFor(() => {
+        expect(mocks.setCliApiMode).toHaveBeenCalledTimes(1);
+      });
+
+      runtimeHost.emit(
+        'showRetryRequest',
+        relayRetry({
+          streamId: 'same-stream',
+          provider: 'openai',
+          message: 'second retry',
+        }),
+      );
+      await vi.waitFor(() => {
+        expect(mocks.triggerRetry).toHaveBeenCalledWith(
+          'same-stream',
+          undefined,
+        );
+      });
+
+      rejectFirstModeSwitch?.(new Error('stale mode switch failed'));
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mocks.cancelRetry).not.toHaveBeenCalled();
+    } finally {
+      unbind();
+    }
+  });
 });

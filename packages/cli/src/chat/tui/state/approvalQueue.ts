@@ -230,3 +230,26 @@ export function clearApprovals(): void {
     if (item === activeItem) advance?.();
   }
 }
+
+export function clearRetryApprovalsForStream(streamId: string): void {
+  let changed = false;
+  for (const item of [...pendingItems]) {
+    if (
+      item.payload.kind !== 'retry' ||
+      item.payload.payload.streamId !== streamId
+    ) {
+      continue;
+    }
+    if (!pendingItems.delete(item)) continue;
+    changed = true;
+    const advance = item.advance;
+    item.advance = undefined;
+    item.resolve(INTERRUPT);
+    if (currentItem === item) {
+      currentItem = undefined;
+      CURRENT.set(undefined);
+      advance?.();
+    }
+  }
+  if (changed) syncApprovalStatus();
+}
