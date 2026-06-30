@@ -1701,6 +1701,7 @@ describe('desktop settings IPC', () => {
       'custom-model',
       'gpt54pro',
       'opus46T',
+      'haiku3',
     ]);
     const errors: unknown[] = [];
 
@@ -1718,6 +1719,39 @@ describe('desktop settings IPC', () => {
     );
     const expectedDefaults = DEFAULT_MODELS.filter(
       (model) => !(MODEL_CONFIGS[model]?.deprecated ?? false),
+    );
+    expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
+      'custom-model',
+      ...expectedDefaults,
+    ]);
+  });
+
+  it('strips retired models from recent persisted model lists', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 20);
+    globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
+      'custom-model',
+      'haiku3',
+    ]);
+    const errors: unknown[] = [];
+
+    createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      postToRenderer: () => {},
+      onError: (error) => errors.push(error),
+    });
+    await flushAsyncWork();
+
+    expect(errors).toEqual([]);
+    expect(globalState.values.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
+      MODEL_LIST_VERSION,
+    );
+    const expectedDefaults = DEFAULT_MODELS.filter(
+      (model) =>
+        !(MODEL_CONFIGS[model]?.deprecated ?? false) &&
+        !(MODEL_CONFIGS[model]?.retired ?? false),
     );
     expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
       'custom-model',
