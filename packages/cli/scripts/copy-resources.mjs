@@ -6,7 +6,10 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const packageDir = path.resolve(scriptDir, '..');
 const source = path.resolve(packageDir, '../extension/resources');
 const repoRoot = path.resolve(packageDir, '../..');
-const target = path.resolve(packageDir, 'dist/resources');
+const targetInput = process.env.TEXRA_CLI_RESOURCES_OUTDIR?.trim();
+const target = targetInput
+  ? path.resolve(packageDir, targetInput)
+  : path.resolve(packageDir, 'dist/resources');
 const runtimeResourceEntries = [
   'agents',
   'docs/agent-creation',
