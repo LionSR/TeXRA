@@ -15,11 +15,10 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
-  buildAcceptConfirmMessage,
+  acceptEditedFileReplace,
   buildAcceptSuccessMessage,
   getAcceptedFileTarget,
   siblingLocation,
-  type AcceptedFileTarget,
 } from '@latex/acceptedFileTarget';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
@@ -162,51 +161,17 @@ function buildCopyTarget(
   };
 }
 
-/** Original single-confirm flow used when no run metadata is available. */
-async function confirmReplace(
-  target: AcceptedFileTarget,
-  basePath: string,
-  editedPath: string,
-): Promise<boolean> {
-  const { targetLocation, isNewFile } = target;
-  const targetExists = isNewFile && (await flexibleFS.exists(targetLocation));
-  const confirmMessage = buildAcceptConfirmMessage(
-    target,
-    basePath,
-    editedPath,
-    targetExists,
-  );
-
-  const answer = await vscode.window.showWarningMessage(
-    confirmMessage,
-    { modal: true },
-    'Yes',
-    'Cancel',
-  );
-  return answer === 'Yes';
-}
-
-/** Resolve which target to write: a quick-pick (replace vs postfixed copy)
- *  when run metadata is available, otherwise the legacy confirm dialog.
- *  Returns undefined when the user cancels. */
-async function resolveAcceptTarget(
+/** Offer a quick-pick between replacing the original and saving a postfixed
+ *  copy, used when run metadata is available. Returns undefined when the user
+ *  cancels. */
+async function pickReplaceOrCopyTarget(
   baseLocation: FileLocation,
   editedPath: string,
-  copyMeta: AcceptCopyMeta | undefined,
+  copyMeta: AcceptCopyMeta,
 ): Promise<
   { targetLocation: FileLocation; targetFileName: string } | undefined
 > {
   const replaceTarget = getAcceptedFileTarget(baseLocation, editedPath);
-
-  if (!copyMeta) {
-    const confirmed = await confirmReplace(
-      replaceTarget,
-      baseLocation.absolutePath,
-      editedPath,
-    );
-    return confirmed ? replaceTarget : undefined;
-  }
-
   const copyTarget = buildCopyTarget(baseLocation, copyMeta);
   type AcceptItem = vscode.QuickPickItem & {
     target: { targetLocation: FileLocation; targetFileName: string };
@@ -255,11 +220,35 @@ async function handleAcceptEdited(
       return false;
     }
 
-    const editedPath = editedLocation.absolutePath;
+    // No run metadata: single-confirm replace flow shared with the desktop host.
+    if (!copyMeta) {
+      return await acceptEditedFileReplace(fileToUseLocation, editedLocation, {
+        exists: (location) => flexibleFS.exists(location),
+        readFile: (location) => flexibleFS.read(location),
+        writeFile: (location, content) => flexibleFS.write(location, content),
+        confirm: async (message) => {
+          const answer = await vscode.window.showWarningMessage(
+            message,
+            { modal: true },
+            'Yes',
+            'Cancel',
+          );
+          return answer === 'Yes';
+        },
+        emitWritten: (absolutePath) =>
+          bus.emit('workspaceFilesWritten', { absolutePaths: [absolutePath] }),
+        showInfo: (message) => {
+          vscode.window.showInformationMessage(message);
+          logger.info(CHANNEL, message);
+        },
+      });
+    }
 
-    const resolved = await resolveAcceptTarget(
+    // Run metadata present: let the user replace the original or save a
+    // postfixed copy, then commit the chosen target.
+    const resolved = await pickReplaceOrCopyTarget(
       fileToUseLocation,
-      editedPath,
+      editedLocation.absolutePath,
       copyMeta,
     );
     if (!resolved) return false;
@@ -278,7 +267,7 @@ async function handleAcceptEdited(
 
     const successMessage = buildAcceptSuccessMessage(
       targetFileName,
-      editedPath,
+      editedLocation.absolutePath,
       targetExisted,
     );
     vscode.window.showInformationMessage(successMessage);

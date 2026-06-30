@@ -12,7 +12,7 @@ import {
   AgentDirectoryService,
   GlobalStorageAgentDirectoryStorage,
 } from '@agent/index';
-import type { AgentSource } from '@agent/index';
+import type { AgentDirectoryEntry, AgentSource } from '@agent/index';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
@@ -24,12 +24,6 @@ const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
 
 type AgentDirectoryEventType = 'create' | 'change' | 'delete';
-
-/** A local agent directory paired with the source it represents. */
-interface AgentDirectoryEntry {
-  directory: string;
-  source: AgentSource;
-}
 
 export interface AgentDirectoryWatcherEvent extends AgentDirectoryEntry {
   type: AgentDirectoryEventType;

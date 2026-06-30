@@ -145,7 +145,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
                 ?disabled=${agents.length === 0}
                 @change=${this.handleAgentChange}
               >
-                ${renderAgentOptions(agents, this.selectedAgent)}
+                ${renderAgentOptions(agents)}
               </wa-select>
             </label>
             <label class="followup__field">
@@ -157,7 +157,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
                 ?disabled=${models.length === 0}
                 @change=${this.handleModelChange}
               >
-                ${renderModelOptions(models, this.selectedModel)}
+                ${renderModelOptions(models)}
               </wa-select>
             </label>
           </div>
