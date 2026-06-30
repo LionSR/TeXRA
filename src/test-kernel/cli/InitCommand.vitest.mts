@@ -1,5 +1,47 @@
-import { describe, expect, it } from 'vitest';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  clearCliSeededRoster: vi.fn(),
+  getCliModelAccessList: vi.fn(),
+  getVisibleAgents: vi.fn(),
+  initCliPlatform: vi.fn(),
+  loadAgents: vi.fn(),
+  seedCliRosterFromDefaultTeam: vi.fn(),
+}));
+
+vi.mock('@agent/index', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/index')>();
+  return {
+    ...actual,
+    getVisibleAgents: mocks.getVisibleAgents,
+    loadAgents: mocks.loadAgents,
+  };
+});
+
+vi.mock('@cli/runtime/defaultTeamRoster', () => ({
+  clearCliSeededRoster: mocks.clearCliSeededRoster,
+  seedCliRosterFromDefaultTeam: mocks.seedCliRosterFromDefaultTeam,
+}));
+
+vi.mock('@cli/runtime/initPlatform', () => ({
+  initCliPlatform: mocks.initCliPlatform,
+}));
+
+vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@cli/runtime/modelAccess')>();
+  return {
+    ...actual,
+    getCliModelAccessList: mocks.getCliModelAccessList,
+  };
+});
+
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { runCli } from '@cli/commands/root';
 import {
   defaultInitAgentOptions,
   defaultInitAnswers,
@@ -23,7 +65,58 @@ function modelAccess(
   };
 }
 
+async function makeTempProject(): Promise<string> {
+  return fs.mkdtemp(path.join(os.tmpdir(), 'texra-init-test-'));
+}
+
 describe('CLI init command', () => {
+  let stdout = '';
+  let stderr = '';
+  let stdoutSpy: ReturnType<typeof vi.spyOn>;
+  let stderrSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    stdout = '';
+    stderr = '';
+    mocks.clearCliSeededRoster.mockReset().mockResolvedValue(undefined);
+    mocks.getCliModelAccessList
+      .mockReset()
+      .mockResolvedValue([modelAccess('deepseekproT')]);
+    mocks.getVisibleAgents
+      .mockReset()
+      .mockReturnValue([
+        { name: 'assistant', category: AgentCategory.ToolUse },
+      ]);
+    mocks.initCliPlatform.mockReset().mockResolvedValue(undefined);
+    mocks.loadAgents.mockReset().mockResolvedValue(undefined);
+    mocks.seedCliRosterFromDefaultTeam.mockReset().mockResolvedValue(false);
+    stdoutSpy = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
+        stdout += String(chunk);
+        const cb = rest.find((arg) => typeof arg === 'function') as
+          | ((err?: Error | null) => void)
+          | undefined;
+        cb?.(null);
+        return true;
+      }) as unknown as ReturnType<typeof vi.spyOn>;
+    stderrSpy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
+        stderr += String(chunk);
+        const cb = rest.find((arg) => typeof arg === 'function') as
+          | ((err?: Error | null) => void)
+          | undefined;
+        cb?.(null);
+        return true;
+      }) as unknown as ReturnType<typeof vi.spyOn>;
+  });
+
+  afterEach(() => {
+    stdoutSpy.mockRestore();
+    stderrSpy.mockRestore();
+  });
+
   it('accepts global CLI flags while keeping init-specific cwd help', () => {
     const args = initCommand.args as Record<
       string,
@@ -138,5 +231,95 @@ describe('CLI init command', () => {
         disabled: false,
       },
     ]);
+  });
+
+  it('emits valid NDJSON for non-interactive init', async () => {
+    const root = await makeTempProject();
+    try {
+      const workspaceRoot = await fs.realpath(root);
+      const result = await runCli([
+        '--cwd',
+        root,
+        'init',
+        '--print',
+        '--api-mode',
+        'personal',
+        '--output-format',
+        'ndjson',
+        '--gitignore',
+        '--no-color',
+      ]);
+
+      expect(result.exitCode).toBe(0);
+      expect(stderr).toBe('');
+      expect(stdout).not.toContain('Wrote ');
+      expect(stdout).not.toContain('Created .gitignore');
+      const lines = stdout.trimEnd().split('\n');
+      expect(lines).toHaveLength(1);
+      const record = JSON.parse(lines[0] ?? '{}') as {
+        readonly kind?: string;
+        readonly ts?: string;
+        readonly init?: {
+          readonly path?: string;
+          readonly agent?: string;
+          readonly model?: string;
+          readonly approvalPolicy?: string;
+          readonly outputFormat?: string;
+          readonly gitignore?: string;
+          readonly config?: unknown;
+        };
+      };
+      expect(record).toMatchObject({
+        kind: 'init-config',
+        init: {
+          path: path.join(workspaceRoot, '.texra', 'config.json'),
+          agent: 'assistant',
+          model: 'deepseekproT',
+          approvalPolicy: 'ask',
+          outputFormat: 'text',
+          gitignore: 'created',
+          config: {
+            model: 'deepseekproT',
+            outputFormat: 'text',
+            approvalPolicy: 'ask',
+            chat: { agent: 'assistant', model: 'deepseekproT' },
+          },
+        },
+      });
+      expect(record.ts).toEqual(expect.any(String));
+      await expect(
+        fs.readFile(path.join(root, '.gitignore'), 'utf8'),
+      ).resolves.toBe('.texra/\n');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps the legacy text init summary for human output', async () => {
+    const root = await makeTempProject();
+    try {
+      const workspaceRoot = await fs.realpath(root);
+      const result = await runCli([
+        '--cwd',
+        root,
+        'init',
+        '--print',
+        '--api-mode',
+        'personal',
+        '--gitignore',
+        '--no-color',
+      ]);
+
+      expect(result.exitCode).toBe(0);
+      expect(stderr).toBe('');
+      expect(stdout).toContain('Created .gitignore (.texra/ ignored).');
+      expect(stdout).toContain(
+        `Wrote ${path.join(workspaceRoot, '.texra', 'config.json')}`,
+      );
+      expect(stdout).toContain('  agent: assistant');
+      expect(stdout).toContain('Next: run `texra` for the launcher');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });
