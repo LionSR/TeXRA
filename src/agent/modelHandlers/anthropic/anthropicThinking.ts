@@ -190,11 +190,12 @@ export function buildThinkingConfig({
   const removeTemperature = requiresNoTemperatureWithThinking(fullName);
 
   if (supportsAdaptiveThinking(fullName)) {
-    // Opus 4.6/4.7/4.8, Sonnet 4.6, and the Mythos-class models (Fable 5,
-    // Mythos 5): use adaptive thinking with the effort parameter. Adaptive
-    // thinking lets the model decide when and how much to think, and
+    // Opus 4.6/4.7/4.8, Sonnet 4.6, Sonnet 5, and the Mythos-class models
+    // (Fable 5, Mythos 5): use adaptive thinking with the effort parameter.
+    // Adaptive thinking lets the model decide when and how much to think, and
     // automatically enables interleaved thinking between tool calls.
-    // budget_tokens is deprecated (and rejected on Opus 4.7+ / Mythos-class).
+    // budget_tokens is deprecated (and rejected on Opus 4.7+ / Sonnet 5 /
+    // Mythos-class).
     const effort = mapAnthropicEffort(fullName, reasoningEffort);
     // Opus 4.7+, Sonnet 5, and Mythos-class models default display to 'omitted',
     // which suppresses reasoning output (Mythos-class never returns raw CoT at
