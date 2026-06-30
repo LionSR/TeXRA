@@ -101,6 +101,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
     LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
   [WorkspaceStateKey.LATEX_FORMATTER]: LATEX_CONFIG_DEFAULTS.latexFormatter,
   [GlobalStateKey.WEBSOCKET_OPENAI]: false,
+  [GlobalStateKey.USE_OPENROUTER]: false,
 };
 
 describe('state settings catalog', () => {
@@ -370,6 +371,7 @@ describe('state settings catalog', () => {
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
         WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
         GlobalStateKey.WEBSOCKET_OPENAI,
+        GlobalStateKey.USE_OPENROUTER,
       ].sort(),
     );
   });
