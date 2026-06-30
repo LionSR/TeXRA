@@ -6,6 +6,7 @@ import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { wrapAnsiToWidth } from '../chat/tui/render/ansiWrap';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
+import { computeSelectWindowSize } from '../chat/tui/forms/_shared/selectWindow';
 import { formatCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import {
   isCliOrchestrationModelPickAction,
@@ -79,6 +80,108 @@ export function orchestrationBlockRowCost(
   );
 }
 
+export interface OrchestrationLauncherLayout {
+  readonly statusLines: readonly string[];
+  readonly footerHints: readonly string[];
+  readonly maxVisibleItems: number | undefined;
+  readonly showOverflow: boolean;
+}
+
+interface OrchestrationLauncherLayoutCandidate {
+  readonly statusLines: readonly string[];
+  readonly footerHints: readonly string[];
+}
+
+interface OrchestrationLauncherLayoutInput {
+  readonly rows: number;
+  readonly columns: number;
+  readonly itemCount: number;
+  readonly headerLines: readonly string[];
+  readonly statusLines: readonly string[];
+  readonly footerHints: readonly string[];
+}
+
+const ORCHESTRATION_SELECT_MARGIN_ROWS = 1;
+const ORCHESTRATION_KEY_HINT_ROWS = 2;
+const ORCHESTRATION_TARGET_VISIBLE_ITEMS = 4;
+
+function orchestrationLinesRowCost(
+  lines: readonly string[],
+  columns: number,
+): number {
+  return lines.reduce(
+    (rows, line) => rows + orchestrationWrappedLineRows(line, columns),
+    0,
+  );
+}
+
+function orchestrationLauncherLayoutCandidates(
+  statusLines: readonly string[],
+  footerHints: readonly string[],
+): OrchestrationLauncherLayoutCandidate[] {
+  const candidates: OrchestrationLauncherLayoutCandidate[] = [
+    { statusLines, footerHints },
+    { statusLines, footerHints: [] },
+  ];
+
+  for (let count = statusLines.length - 1; count > 0; count -= 1) {
+    candidates.push({
+      statusLines: statusLines.slice(0, count),
+      footerHints: [],
+    });
+  }
+  candidates.push({ statusLines: [], footerHints: [] });
+  return candidates;
+}
+
+export function orchestrationLauncherLayout(
+  input: OrchestrationLauncherLayoutInput,
+): OrchestrationLauncherLayout {
+  const textColumns = Math.max(1, input.columns - 2);
+  const baseRows =
+    orchestrationLinesRowCost(input.headerLines, textColumns) +
+    ORCHESTRATION_SELECT_MARGIN_ROWS +
+    ORCHESTRATION_KEY_HINT_ROWS;
+  const targetVisibleItems = Math.min(
+    ORCHESTRATION_TARGET_VISIBLE_ITEMS,
+    input.itemCount,
+  );
+
+  for (const candidate of orchestrationLauncherLayoutCandidates(
+    input.statusLines,
+    input.footerHints,
+  )) {
+    const detailRows =
+      orchestrationBlockRowCost(candidate.statusLines, textColumns) +
+      orchestrationBlockRowCost(candidate.footerHints, textColumns);
+    const selectWindow = computeSelectWindowSize({
+      availableRows: input.rows,
+      itemCount: input.itemCount,
+      chromeRows: baseRows + detailRows,
+    });
+    if (
+      (selectWindow.maxVisibleItems ?? input.itemCount) >= targetVisibleItems
+    ) {
+      return {
+        statusLines: candidate.statusLines,
+        footerHints: candidate.footerHints,
+        ...selectWindow,
+      };
+    }
+  }
+
+  const selectWindow = computeSelectWindowSize({
+    availableRows: input.rows,
+    itemCount: input.itemCount,
+    chromeRows: baseRows,
+  });
+  return {
+    statusLines: [],
+    footerHints: [],
+    ...selectWindow,
+  };
+}
+
 function modelPickKeyHints(): readonly KeyHint[] {
   return [
     { key: '↑/↓', action: 'navigate' },
@@ -105,15 +208,23 @@ export function OrchestrationApp(
   const [pending, setPending] = useState<
     CliOrchestrationModelPickAction | undefined
   >(undefined);
-  const footerHints = pending ? [] : listFooterHints;
-  const textColumns = Math.max(1, columns - 2);
-  const maxVisibleItems = Math.max(
-    4,
-    rows -
-      8 -
-      orchestrationBlockRowCost(pending ? [] : statusLines, textColumns) -
-      orchestrationBlockRowCost(footerHints, textColumns),
-  );
+  const isPendingTeam = pending?.kind === 'preset';
+  const headerLines = pending
+    ? [
+        `${isPendingTeam ? 'Lead model' : 'Model'} · ${formatCliApiMode(props.apiMode)}`,
+        isPendingTeam
+          ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
+          : 'Model for the first message.',
+      ]
+    : [`TeXRA v${props.version}`, 'Choose how to start this CLI session.'];
+  const layout = orchestrationLauncherLayout({
+    rows,
+    columns,
+    itemCount: pending ? modelItems.length : items.length,
+    headerLines,
+    statusLines: pending ? [] : statusLines,
+    footerHints: pending ? [] : listFooterHints,
+  });
 
   const finish = (action: CliOrchestrationAction): void => {
     props.onResolve(action);
@@ -138,16 +249,15 @@ export function OrchestrationApp(
   });
 
   if (pending) {
-    const isTeam = pending.kind === 'preset';
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text bold color="cyan">
-          {isTeam ? 'Lead model' : 'Model'}
+          {isPendingTeam ? 'Lead model' : 'Model'}
           {' · '}
           <Text dimColor>{formatCliApiMode(props.apiMode)}</Text>
         </Text>
         <Text dimColor>
-          {isTeam
+          {isPendingTeam
             ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
             : 'Model for the first message.'}
         </Text>
@@ -155,8 +265,8 @@ export function OrchestrationApp(
           <Select
             key="orchestration-model-picker"
             items={modelItems}
-            maxVisibleItems={maxVisibleItems}
-            showOverflow={modelItems.length > maxVisibleItems}
+            maxVisibleItems={layout.maxVisibleItems}
+            showOverflow={layout.showOverflow}
             onSelect={(model) => finish({ ...pending, model })}
             onCancel={() => setPending(undefined)}
           />
@@ -177,9 +287,9 @@ export function OrchestrationApp(
         <Text dimColor>v{props.version}</Text>
       </Box>
       <Text dimColor>Choose how to start this CLI session.</Text>
-      {statusLines.length > 0 ? (
+      {layout.statusLines.length > 0 ? (
         <Box marginTop={1} flexDirection="column">
-          {statusLines.map((line, index) => (
+          {layout.statusLines.map((line, index) => (
             <Text key={`${index}:${line}`} dimColor wrap="wrap">
               {line}
             </Text>
@@ -190,15 +300,15 @@ export function OrchestrationApp(
         <Select
           key="orchestration-launcher"
           items={items}
-          maxVisibleItems={maxVisibleItems}
-          showOverflow={items.length > maxVisibleItems}
+          maxVisibleItems={layout.maxVisibleItems}
+          showOverflow={layout.showOverflow}
           onSelect={onItemSelect}
           onCancel={() => finish({ kind: 'exit' })}
         />
       </Box>
-      {footerHints.length > 0 ? (
+      {layout.footerHints.length > 0 ? (
         <Box marginTop={1} flexDirection="column">
-          {footerHints.map((hint) => (
+          {layout.footerHints.map((hint) => (
             <Text key={hint} dimColor wrap="wrap">
               {hint}
             </Text>
