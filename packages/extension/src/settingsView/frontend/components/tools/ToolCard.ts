@@ -278,11 +278,7 @@ export class ToolCard extends LitElement {
     const label = toolStatusLabel(status, this.item.statusLabel);
 
     return html`
-      <wa-tag
-        class="tool-badge"
-        variant=${config.variant}
-        size="small"
-      >
+      <wa-tag class="tool-badge" variant=${config.variant} size="small">
         ${waIcon(config.icon)} ${label}
       </wa-tag>
     `;
