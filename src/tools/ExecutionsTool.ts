@@ -130,9 +130,16 @@ const ExecutionsToolInputSchema = z.strictObject({
   timeout: z
     .number()
     .finite()
-    .min(EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS)
-    .max(EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS)
     .nullish()
+    // Clamp in the schema so input.timeout is always a ready-to-use number:
+    // an out-of-range or missing value becomes a value inside the wait window.
+    .transform((v) =>
+      clamp(
+        v ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+        EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
+        EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
+      ),
+    )
     .describe(
       `Max seconds to wait for a status change (action="wait" only). Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
     ),
@@ -162,32 +169,6 @@ export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 interface ExecutionSummaryOptions {
   readonly suppressAutoDeliveredSubagentReport?: boolean;
 }
-
-const normalizeWaitTimeout = (timeout: number | null | undefined): number =>
-  clamp(
-    timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
-    EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-    EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
-  );
-
-const normalizeExecutionsToolInput = (input: unknown): unknown => {
-  if (input == null || typeof input !== 'object' || Array.isArray(input)) {
-    return input;
-  }
-
-  const record = input as Record<string, unknown>;
-  const { timeout } = record;
-  const outOfRange =
-    typeof timeout === 'number' &&
-    Number.isFinite(timeout) &&
-    (timeout < EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS ||
-      timeout > EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS);
-  if (!outOfRange) {
-    return input;
-  }
-
-  return { ...record, timeout: normalizeWaitTimeout(timeout) };
-};
 
 function isCallerParentOfToolUseSubagent(
   handle: unknown,
@@ -237,10 +218,6 @@ Use action: "kill" on /executions/{id} to terminate a running execution.
 Use action: "subscribe" on /executions/{id} to receive future status, progress, and termination events as <execution-activity> follow-ups (auto-disposes when the execution finishes or this stream is released). Use action: "unsubscribe" on /executions/{id} to stop them.`,
   schema: ExecutionsToolInputSchema,
 }) {
-  override validate(input: unknown): ExecutionsToolInput {
-    return ExecutionsToolInputSchema.parse(normalizeExecutionsToolInput(input));
-  }
-
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
     const segments = getPathSegments(input.path);
     const [namespace, id, resource, ...rest] = segments;
@@ -259,10 +236,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         );
       }
       if (input.action === 'wait')
-        await this.waitForAnyChange(
-          normalizeWaitTimeout(input.timeout),
-          input.ids,
-        );
+        await this.waitForAnyChange(input.timeout, input.ids);
       return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
     }
 
@@ -281,10 +255,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         return this.handleUnsubscribe(executionId);
       }
       if (input.action === 'wait')
-        await this.waitForChange(
-          executionId,
-          normalizeWaitTimeout(input.timeout),
-        );
+        await this.waitForChange(executionId, input.timeout);
       return this.showSummary(executionId, {
         suppressAutoDeliveredSubagentReport: input.action === 'wait',
       });
