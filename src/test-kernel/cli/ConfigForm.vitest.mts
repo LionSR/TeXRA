@@ -62,6 +62,7 @@ function renderConfigFormProps(): {
     value: unknown,
   ) => void | Promise<void>;
   resetValue?: (entry: StateSettingEntry) => void | Promise<void>;
+  openForm?: (formName: string) => void;
 } {
   const node = cliState.activeForm.get()?.render(() => {}, 20) as {
     type?: (props: unknown) => unknown;
@@ -94,6 +95,7 @@ describe('ConfigForm helpers', () => {
     const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
     const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
     const formatter = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
+    const tools = entryByKey(GlobalStateKey.DISABLED_TOOLS);
     const timeout = entryByKey(
       WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
     );
@@ -101,6 +103,7 @@ describe('ConfigForm helpers', () => {
     expect(settingEditKind(markCommits)).toBe('boolean');
     expect(settingEditKind(authorName)).toBe('string');
     expect(settingEditKind(formatter)).toBe('enum');
+    expect(settingEditKind(tools)).toBe('form');
     expect(settingEditKind(timeout)).toBe('number');
   });
 
@@ -196,6 +199,9 @@ describe('ConfigForm helpers', () => {
     const authorName = items.find(
       (item) => item.value === WorkspaceStateKey.GIT_AUTHOR_NAME,
     );
+    const tools = items.find(
+      (item) => item.value === GlobalStateKey.DISABLED_TOOLS,
+    );
 
     expect(markCommits).toMatchObject({
       label: 'Mark agent commits',
@@ -206,6 +212,11 @@ describe('ConfigForm helpers', () => {
     // Strings/numbers are now editable, so no row is read-only in the roster.
     expect(authorName).toMatchObject({ disabled: false });
     expect(authorName?.description).not.toContain('read-only');
+    expect(tools).toMatchObject({
+      label: 'Tool integrations',
+      description: 'open /tools · globalState',
+      disabled: false,
+    });
   });
 
   it('marks an unsupported schema kind read-only', () => {
@@ -365,5 +376,17 @@ describe('/config slash command wiring', () => {
 
     await props.resetValue?.(openRouter);
     expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(2);
+  });
+
+  it('delegates catalog form rows through the slash form registry', () => {
+    registerBuiltinSlashCommands({
+      getConfigStores: () => makeFakeSettingsStores().stores,
+    });
+    openCliSlashCommandForm('config', '');
+
+    const props = renderConfigFormProps();
+    props.openForm?.('tools');
+
+    expect(cliState.activeForm.get()?.commandName).toBe('tools');
   });
 });

@@ -105,6 +105,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [GlobalStateKey.WEBSOCKET_OPENAI]: false,
   ...PROVIDER_ENDPOINT_DEFAULTS,
   [GlobalStateKey.USE_OPENROUTER]: false,
+  [GlobalStateKey.DISABLED_TOOLS]: [],
 };
 
 describe('state settings catalog', () => {
@@ -380,6 +381,7 @@ describe('state settings catalog', () => {
         ),
         GlobalStateKey.WEBSOCKET_OPENAI,
         GlobalStateKey.USE_OPENROUTER,
+        GlobalStateKey.DISABLED_TOOLS,
       ].sort(),
     );
   });
