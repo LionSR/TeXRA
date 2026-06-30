@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
@@ -11,6 +11,7 @@ import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } f
 import type { ProgressViewProvider } from '../ProgressViewProvider';
 
 type StreamTabId = import('@shared/schemas').StreamTabId;
+type ProgressRetryCoordinator = Pick<RunCoordinatorBridge, 'clearRetryRequest'>;
 
 interface ModelOutputBackupCleaner {
   clearStreamBackups(stream: StreamTabId): void;
@@ -21,6 +22,7 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
   constructor(
     private readonly provider: ProgressViewProvider,
     private readonly backupCleaner: ModelOutputBackupCleaner,
+    private readonly coordinators: ProgressRetryCoordinator,
   ) {}
 
   getVisibleStreamIds(): StreamTabId[] {
@@ -39,7 +41,7 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
     options: { clearRetryRequest?: boolean } = {},
   ): Promise<void> {
     if (options.clearRetryRequest === true) {
-      runCoordinatorBridge.clearRetryRequest(stream);
+      this.coordinators.clearRetryRequest(stream);
     }
     await vscode.commands.executeCommand('texra.stopAgent', stream);
   }

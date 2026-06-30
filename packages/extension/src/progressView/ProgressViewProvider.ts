@@ -5,6 +5,7 @@ import { computeAgentOptionsData } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
 import type { IProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   BaseWebviewProvider,
@@ -244,6 +245,7 @@ export class ProgressViewProvider
       this,
       context,
       new VscodePromptHost(),
+      defaultSession().coordinators,
     );
 
     ProgressViewProvider._instance = this;
