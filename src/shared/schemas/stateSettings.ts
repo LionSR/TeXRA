@@ -157,6 +157,18 @@ const OPENAI_WEBSOCKET_RUNTIME_REACHABILITY = {
   through:
     'packages/cli/src/commands/workflow.ts -> src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
 } satisfies CliRuntimeReachability;
+const CODEX_AGENT_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "launch a Codex subagent"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/codex.ts -> src/tools/codexConfig.ts',
+} satisfies CliRuntimeReachability;
+const CLAUDE_AGENT_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "launch a Claude Code subagent"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/claudeAgent.ts -> src/tools/claudeAgentConfig.ts',
+} satisfies CliRuntimeReachability;
 
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Git commit author marking ---------------------------------------------
@@ -217,9 +229,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 
   // --- External coding agent controls ---------------------------------------
   // These are workspace-shared settings read by the Codex and Claude Code tool
-  // integrations. They are cataloged for the extension/desktop settings view;
-  // CLI exposure remains deferred until each value has a verified CLI consumer
-  // and runtime reachability trace.
+  // integrations. The CLI reaches them through headless tool-use runs, so the
+  // same catalog drives both the extension/desktop settings view and `/config`.
   {
     key: WorkspaceStateKey.CODEX_SANDBOX_MODE,
     schema: CodexSandboxModeSchema.prefault(CODEX_SANDBOX_MODE_DEFAULT),
@@ -227,7 +238,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Filesystem access mode used when TeXRA launches Codex.',
     category: 'ai-agents',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/tools/codexConfig.ts',
+    cliRuntimeReachability: CODEX_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Read-only', 'Workspace write', 'Full access'],
   },
   {
@@ -237,7 +250,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Reasoning effort hint passed to Codex runs.',
     category: 'ai-agents',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/tools/codexConfig.ts',
+    cliRuntimeReachability: CODEX_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high'],
   },
   {
@@ -247,7 +262,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'When Codex should ask for approval before risky actions.',
     category: 'ai-agents',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/tools/codexConfig.ts',
+    cliRuntimeReachability: CODEX_AGENT_RUNTIME_REACHABILITY,
     enumLabels: [
       'Auto approve',
       'Ask when requested',
@@ -262,7 +279,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Claude model selected for Claude Code agent sessions.',
     category: 'ai-agents',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/tools/claudeAgentConfig.ts',
+    cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Sonnet 4.6', 'Fable 5', 'Opus 4.8', 'Haiku 4.5'],
   },
   {
@@ -274,7 +293,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Permission policy used by Claude Code agent sessions.',
     category: 'ai-agents',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/tools/claudeAgentConfig.ts',
+    cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
     enumLabels: [
       'Prompt for risky actions',
       'Auto-accept edits',
@@ -289,7 +310,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Reasoning effort hint passed to Claude Code agent sessions.',
     category: 'ai-agents',
     store: 'workspaceState',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/tools/claudeAgentConfig.ts',
+    cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
   },
 
