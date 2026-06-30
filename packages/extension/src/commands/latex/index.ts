@@ -3,6 +3,5 @@ export { arXivCommands, downloadArXivSource } from './arXivCommands';
 export { registerCompareCommands } from './compareCommands';
 export { registerFigureCommands } from './figCommands';
 export { registerImageCommands } from './imageCommands';
-export { registerLatexCommands } from './latexCommands';
 export { registerLatexdiffCommands } from './latexdiffCommands';
 export { registerLinterCommands } from './linterCommands';

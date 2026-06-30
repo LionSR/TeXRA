@@ -28,6 +28,12 @@ export interface AbsoluteDirectoryAccess {
 
 export type AgentDirectoryDocsId = 'custom-agents';
 
+/** A local agent directory paired with the source it represents. */
+export interface AgentDirectoryEntry {
+  directory: string;
+  source: AgentSource;
+}
+
 export interface AgentDirectoryIssueReporter {
   report(message: string, docsId: AgentDirectoryDocsId): Promise<void>;
 }
@@ -88,9 +94,7 @@ export class AgentDirectoryService {
     }
   }
 
-  async getAllLocal(): Promise<
-    Array<{ directory: string; source: AgentSource }>
-  > {
+  async getAllLocal(): Promise<AgentDirectoryEntry[]> {
     const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
       this.custom(),
       this.builtIn(),

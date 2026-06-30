@@ -16,7 +16,7 @@ import escapeRegExp from 'escape-string-regexp';
 
 const VALID_TAG_NAME = /^[a-z][a-z0-9-]*$/i;
 
-export function sanitizeTag(tagName: string, body: string): string {
+function sanitizeTag(tagName: string, body: string): string {
   if (!VALID_TAG_NAME.test(tagName)) {
     throw new Error(`Invalid tag name for sanitizer: ${tagName}`);
   }

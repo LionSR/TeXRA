@@ -297,7 +297,7 @@ export class InstructionPanel extends LitElement {
         @focus=${this.handleAgentFocus}
         @change=${this.handleAgentChange}
       >
-        ${renderAgentOptions(agent.options, agent.value, {
+        ${renderAgentOptions(agent.options, {
           includeBrowseAll: true,
         })}
       </wa-select>
@@ -458,7 +458,7 @@ export class InstructionPanel extends LitElement {
                 @focus=${this.handleModelFocus}
                 @change=${this.handleModelChange}
               >
-                ${renderModelOptions(session.modelOptions, session.model)}
+                ${renderModelOptions(session.modelOptions)}
               </wa-select>
             </div>
           </div>
