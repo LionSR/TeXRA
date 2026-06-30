@@ -122,7 +122,6 @@ export function formatLatexdiffTemplate(
 // Statistics Formatter
 // =============================================================================
 
-/** Configuration for a statistics field: [key, icon, label, formatter]. */
 type NumericExtendedTokenUsageStatsKey = {
   [K in keyof ExtendedTokenUsageStats]-?: NonNullable<
     ExtendedTokenUsageStats[K]
@@ -131,6 +130,7 @@ type NumericExtendedTokenUsageStatsKey = {
     : never;
 }[keyof ExtendedTokenUsageStats];
 
+/** Configuration for a statistics field: [key, icon, label, formatter]. */
 type StatFieldConfig = readonly [
   key: NumericExtendedTokenUsageStatsKey,
   icon: string,

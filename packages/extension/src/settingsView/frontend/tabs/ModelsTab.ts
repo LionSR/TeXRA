@@ -135,6 +135,20 @@ export class ModelsTab extends LitElement {
   private readonly handleScrollToChatGpt = (): void =>
     this.scrollToSection('#chatgpt-subscription');
 
+  private readonly handlePreferSubscriptionChange = (event: Event): void => {
+    const enabled = (event.target as WaSwitch).checked;
+    this.dispatchEvent(ChatGptAuthEvents.setPreferSubscription({ enabled }));
+  };
+
+  private readonly handleSubscriptionToolUseOnlyChange = (
+    event: Event,
+  ): void => {
+    const enabled = (event.target as WaSwitch).checked;
+    this.dispatchEvent(
+      ChatGptAuthEvents.setSubscriptionToolUseOnly({ enabled }),
+    );
+  };
+
   private renderTabHint(): TemplateResult {
     const description =
       this.apiAccessMode === 'included'
@@ -252,12 +266,7 @@ export class ModelsTab extends LitElement {
         <div class="chatgpt-subscription__setting">
           <wa-switch
             ?checked=${preferSubscription}
-            @change=${(event: Event) => {
-              const enabled = (event.target as WaSwitch).checked;
-              this.dispatchEvent(
-                ChatGptAuthEvents.setPreferSubscription({ enabled }),
-              );
-            }}
+            @change=${this.handlePreferSubscriptionChange}
           >
             Prefer ChatGPT subscription
           </wa-switch>
@@ -267,12 +276,7 @@ export class ModelsTab extends LitElement {
             ?checked=${subscriptionToolUseOnly}
             ?disabled=${!preferSubscription}
             hint="Workflow agents use your API key or relay instead — the Codex backend has no background mode and is less stable for long runs."
-            @change=${(event: Event) => {
-              const enabled = (event.target as WaSwitch).checked;
-              this.dispatchEvent(
-                ChatGptAuthEvents.setSubscriptionToolUseOnly({ enabled }),
-              );
-            }}
+            @change=${this.handleSubscriptionToolUseOnlyChange}
           >
             Use subscription for tool-use agents only
           </wa-switch>

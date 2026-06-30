@@ -232,7 +232,7 @@ function migrateLegacyAgentNameKeys(): void {
         // keys literally, so a cross-category key would orphan the toggle).
         // Keep the original key when no agent of this category matches, rather
         // than inventing one.
-        const rewritten = key.slice(0, key.length - name.length) + alias;
+        const rewritten = withAgentName(key, alias);
         if (getAgent(rewritten)?.category === category) return rewritten;
         const canonical = getCategoryAgent(category, alias);
         return canonical ? agentKeyOf(canonical) : key;
@@ -305,8 +305,9 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
       'Migrated filename-based agent names',
       (key) => {
         const name = agentName(key);
-        const prefix = key.slice(0, key.length - name.length);
-        if (prefix) return qualified.get(key) ?? key;
+        // A source-qualified key differs from its bare name; match it in full,
+        // otherwise map the bare name.
+        if (key !== name) return qualified.get(key) ?? key;
         return bare.get(name) ?? key;
       },
     );
@@ -324,6 +325,15 @@ function singleTargetMappings(
     }
   }
   return mappings;
+}
+
+/**
+ * Replace the name part of a possibly source-qualified key while preserving its
+ * source prefix ("src:old" → "src:new", bare "old" → "new").
+ */
+function withAgentName(key: string, newName: string): string {
+  const name = agentName(key);
+  return key.slice(0, key.length - name.length) + newName;
 }
 
 /**
@@ -358,11 +368,9 @@ export function getAgent(
   // Legacy-name fallback, for both bare names ("chat") and source-qualified
   // keys ("builtInToolUse:chat"): map the name part through the alias table
   // and retry once.
-  const name = agentName(identifier);
-  const alias = LEGACY_AGENT_ALIASES[name];
+  const alias = LEGACY_AGENT_ALIASES[agentName(identifier)];
   if (alias) {
-    const prefix = identifier.slice(0, identifier.length - name.length);
-    return getAgent(`${prefix}${alias}`, lookupCategory);
+    return getAgent(withAgentName(identifier, alias), lookupCategory);
   }
   return undefined;
 }
