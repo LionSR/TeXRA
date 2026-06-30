@@ -111,12 +111,6 @@ export function fishCompletion(commands: readonly CompletionCommand[]): string {
   );
   lines.push(
     fishCompleteLine([
-      "-n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from inspect'",
-      `-a '${AGENTS_LIST_SOURCE}'`,
-    ]),
-  );
-  lines.push(
-    fishCompleteLine([
       "-n '__fish_seen_subcommand_from models; and __fish_seen_subcommand_from show'",
       `-a '${MODELS_LIST_SOURCE}'`,
     ]),
