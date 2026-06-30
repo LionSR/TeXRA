@@ -11,10 +11,7 @@ import {
   logSdkError,
 } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import {
-  hasEndTag,
-  type AgentSetting,
-} from '@agent/core/definition/AgentDataclass';
+import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
@@ -42,8 +39,10 @@ import { getConfig } from '@utils/config/configUtils';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
-import { normalizeUsage } from '../support/UsageNormalizer';
-import { computeOpenAIResponsePrice } from './openAIUsage';
+import {
+  computeOpenAIResponsePrice,
+  normalizeOpenAIResponseUsage,
+} from './openAIUsage';
 import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
 import { tagOpenAISdkError } from './openAISdkError';
 import {
@@ -60,6 +59,7 @@ import {
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { parseToolArguments } from '../utils/parseArguments';
+import { shouldContinueOnLengthStop } from '../utils/stopReasonUtils';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { toOpenAIResponseTools } from '../toolConversion';
 import { ModelHandler } from '../ModelHandler';
@@ -2021,19 +2021,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     rawUsage: ResponseUsage,
     responseTimeMs: number,
   ): NormalizedUsage {
-    return normalizeUsage(
-      {
-        provider: 'openai-response',
-        computePrice: (usage) => this.computePrice(usage),
-        extract: (usage) => ({
-          inputTokens: usage.input_tokens ?? 0,
-          outputTokens: usage.output_tokens ?? 0,
-          cachedTokens: usage.input_tokens_details?.cached_tokens ?? 0,
-          reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
-        }),
-      },
-      rawUsage,
-      responseTimeMs,
+    return normalizeOpenAIResponseUsage(rawUsage, responseTimeMs, (usage) =>
+      this.computePrice(usage),
     );
   }
 
@@ -2277,10 +2266,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    return (
-      stopReason === OPENAI_CHAT_FINISH.LENGTH &&
-      !hasEndTag(agentSetting, newResponse)
-    );
+    return shouldContinueOnLengthStop(stopReason, newResponse, agentSetting);
   }
 
   /**
