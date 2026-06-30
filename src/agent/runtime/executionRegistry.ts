@@ -50,6 +50,30 @@ export interface StopAgentStreamOptions {
   readonly runtimeHost?: AgentRuntimeHost;
 }
 
+export type StopAgentChildPolicy = 'cascade' | 'detach';
+
+export type StopAgentStreamResult =
+  | {
+      readonly kind: 'interrupted';
+      readonly streamId: StreamTabId;
+      readonly childPolicy: StopAgentChildPolicy;
+    }
+  | {
+      readonly kind: 'marked_stopped';
+      readonly streamId: StreamTabId;
+      readonly childPolicy: StopAgentChildPolicy;
+    }
+  | {
+      readonly kind: 'no_target';
+      readonly streamId: StreamTabId;
+      readonly childPolicy: StopAgentChildPolicy;
+    }
+  | {
+      readonly kind: 'missing_runtime_host';
+      readonly streamId: StreamTabId;
+      readonly childPolicy: 'detach';
+    };
+
 export interface KillExecutionOptions {
   readonly detachActiveChildren?: boolean;
 }
@@ -562,18 +586,22 @@ export class ExecutionRegistry {
   stopAgentStream(
     streamId: StreamTabId,
     options: StopAgentStreamOptions = {},
-  ): boolean {
+  ): StopAgentStreamResult {
     const rootHandle = this.getAgentHandleByStream(streamId);
     const runtimeHost = options.runtimeHost ?? rootHandle?.runtimeHost;
+    const childPolicy =
+      options.detachActiveChildren === true ? 'detach' : 'cascade';
     // Shared across the child sweep and the root cascade so each execution in
     // the chain is interrupted exactly once.
     const visited = new Set<string>();
 
     if (options.detachActiveChildren === true) {
       if (!runtimeHost) {
-        throw new Error(
-          'stopAgentStream requires a runtimeHost to detach active children',
-        );
+        return {
+          kind: 'missing_runtime_host',
+          streamId,
+          childPolicy: 'detach',
+        };
       }
       this.detachActiveChildren(streamId, runtimeHost, visited);
     } else {
@@ -590,7 +618,18 @@ export class ExecutionRegistry {
     if (!stopped && runtimeHost) {
       this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, { runtimeHost });
     }
-    return stopped;
+    if (!stopped && !runtimeHost) {
+      return {
+        kind: 'no_target',
+        streamId,
+        childPolicy,
+      };
+    }
+    return {
+      kind: stopped ? 'interrupted' : 'marked_stopped',
+      streamId,
+      childPolicy,
+    };
   }
 
   /** Get active subagent and process children for a parent stream. */
