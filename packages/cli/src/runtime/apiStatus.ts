@@ -50,28 +50,35 @@ export function formatApiKeyShadowWarning(
 
 const CLI_API_STATUS_ACTION_HINTS: Record<
   CliApiMode,
-  Record<'signedIn' | 'signedOut', string>
+  Record<'signedIn' | 'signedOut' | 'signedOutWithPersonalKey', string>
 > = {
   included: {
     signedIn:
       'actions: `texra login --select-account` changes account; `--api-mode personal` uses provider keys',
     signedOut:
       'actions: `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
+    signedOutWithPersonalKey:
+      'actions: `--api-mode personal` uses provider keys; `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
   },
   personal: {
     signedIn:
       'actions: `--api-mode included` uses relay; `texra logout` signs out',
     signedOut:
       'actions: use ChatGPT, add a provider key, or sign in with Researcher Access',
+    signedOutWithPersonalKey:
+      'actions: provider keys are configured; use ChatGPT or sign in with Researcher Access',
   },
 };
 
 export function formatCliApiStatusActionHint(
   mode: CliApiMode,
   profile: Pick<CliAuthProfile, 'authenticated'>,
+  options: { readonly hasPersonalKey?: boolean } = {},
 ): string {
+  const signedOutState =
+    options.hasPersonalKey === true ? 'signedOutWithPersonalKey' : 'signedOut';
   return CLI_API_STATUS_ACTION_HINTS[mode][
-    profile.authenticated ? 'signedIn' : 'signedOut'
+    profile.authenticated ? 'signedIn' : signedOutState
   ];
 }
 
@@ -95,15 +102,16 @@ export async function loadCliApiStatusLines(
     `api: ${formatCliApiMode(mode)}`,
     formatCliAuthStatusLine(profile),
   ];
+  const hasPersonalKey =
+    options.includeActionHint === true || profile.authenticated
+      ? await anyPersonalKeyPresent()
+      : false;
   const actionHint = options.includeActionHint
-    ? formatCliApiStatusActionHint(mode, profile)
+    ? formatCliApiStatusActionHint(mode, profile, { hasPersonalKey })
     : undefined;
 
   if (profile.authenticated) {
-    const shadowWarning = formatApiKeyShadowWarning(
-      true,
-      await anyPersonalKeyPresent(),
-    );
+    const shadowWarning = formatApiKeyShadowWarning(true, hasPersonalKey);
     if (shadowWarning) lines.push(shadowWarning);
   }
 
