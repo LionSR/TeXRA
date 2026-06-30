@@ -65,18 +65,16 @@ async function readStoragePrefix(
  */
 function buildPreview(
   content: string,
-  options?: { truncated?: boolean; exactLineCount?: boolean },
+  options: { truncated: boolean; exactLineCount: boolean },
 ): {
   preview: string;
   lineCount?: number;
 } {
   const lines = splitContentLines(content);
-  const exactLineCount = options?.exactLineCount ?? true;
-  const lineCount = exactLineCount ? lines.length : undefined;
+  const lineCount = options.exactLineCount ? lines.length : undefined;
   const previewLines = lines.slice(0, MAX_PREVIEW_LINES);
   let preview = previewLines.join('\n');
-  let truncated =
-    lines.length > MAX_PREVIEW_LINES || (options?.truncated ?? false);
+  let truncated = lines.length > MAX_PREVIEW_LINES || options.truncated;
 
   if (preview.length > MAX_PREVIEW_CHARS) {
     preview = preview.slice(0, MAX_PREVIEW_CHARS);
@@ -201,10 +199,8 @@ export async function loadMemoryItems(): Promise<MemoryViewItem[]> {
   }
 
   const items = await walkMemoryDirectory(MEMORY_STORAGE_ROOT);
-  return items.sort((a, b) => {
-    const aPinned = a.pinned ? 1 : 0;
-    const bPinned = b.pinned ? 1 : 0;
-    if (aPinned !== bPinned) return bPinned - aPinned;
-    return b.mtime.localeCompare(a.mtime);
-  });
+  return items.toSorted(
+    (a, b) =>
+      (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.mtime.localeCompare(a.mtime),
+  );
 }

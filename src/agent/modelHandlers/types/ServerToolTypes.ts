@@ -228,6 +228,31 @@ function isWebSearchResultArray(
 }
 
 /**
+ * Map a web_search_tool_result block's content to normalized result entries.
+ * Shared by the streaming (AnthropicStreamHandler) and batch
+ * (extractAnthropicWebSearchResults) extraction paths.
+ */
+export function mapAnthropicWebSearchEntries(
+  content: WebSearchToolResultBlock['content'],
+): WebSearchResultEntry[] {
+  if (!isWebSearchResultArray(content)) {
+    return [];
+  }
+  return content
+    .filter(
+      (r): r is WebSearchResultBlock =>
+        r.type === 'web_search_result' && !!r.url,
+    )
+    .map((r) => ({
+      url: r.url,
+      title: r.title,
+      snippet: r.encrypted_content,
+      pageAge: r.page_age ?? undefined,
+      domain: extractDomain(r.url),
+    }));
+}
+
+/**
  * Extract web search results from Anthropic response content.
  * Uses SDK's WebSearchToolResultBlock and WebSearchResultBlock types.
  * Correlates server_tool_use blocks (which contain the query) with
@@ -255,25 +280,7 @@ export function extractAnthropicWebSearchResults(
       continue;
     }
 
-    // block is now properly typed as WebSearchToolResultBlock
-    if (!isWebSearchResultArray(block.content)) {
-      // Content is an error, not results
-      continue;
-    }
-
-    // block.content is now properly typed as WebSearchResultBlock[]
-    const entries: WebSearchResultEntry[] = block.content
-      .filter(
-        (r): r is WebSearchResultBlock =>
-          r.type === 'web_search_result' && !!r.url,
-      )
-      .map((r) => ({
-        url: r.url,
-        title: r.title,
-        snippet: r.encrypted_content,
-        pageAge: r.page_age ?? undefined,
-        domain: extractDomain(r.url),
-      }));
+    const entries = mapAnthropicWebSearchEntries(block.content);
 
     if (entries.length > 0) {
       // Look up the query from the corresponding server_tool_use block
@@ -380,15 +387,12 @@ export function buildOpenAIWebSearchResult(
 ): WebSearchResult {
   const searchItem = item as ResponseFunctionWebSearchWithAction;
 
-  // Determine status using SDK's status type
-  let status: WebSearchResult['status'];
-  if (searchItem.status === 'completed') {
-    status = 'completed';
-  } else if (searchItem.status === 'failed') {
-    status = 'failed';
-  } else {
-    status = 'in_progress';
-  }
+  // Determine status using SDK's status type. 'completed' and 'failed' map
+  // through directly; any other SDK status is reported as in-progress.
+  const status: WebSearchResult['status'] =
+    searchItem.status === 'completed' || searchItem.status === 'failed'
+      ? searchItem.status
+      : 'in_progress';
 
   const action = searchItem.action;
 
