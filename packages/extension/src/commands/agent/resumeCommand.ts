@@ -7,6 +7,7 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { getToolUsePersistenceEnabled } from '@utils/config';
 
 interface ResumeAgentResult {
   success: boolean;
@@ -23,11 +24,18 @@ const CHANNEL = 'resumeCommand';
  * Extension wrapper around the host-neutral {@link resumeToolUseSnapshot}: it
  * supplies the extension runtime host and surfaces failures as a warning toast.
  * Used by both the `texra.resumeAgent` command and the resume orchestrator.
+ *
+ * The tool-use persistence gate is applied here (extension-only): the desktop
+ * never honored this setting, so it stays out of the shared leaf and lives in
+ * this adapter to preserve each host's pre-unification resume behavior.
  */
 export function resumeExtensionToolUseSnapshot(
   snapshot: ToolUseSessionSnapshot,
   followUp?: string,
 ): Promise<boolean> {
+  if (!getToolUsePersistenceEnabled()) {
+    return Promise.resolve(false);
+  }
   return resumeToolUseSnapshot(snapshot, {
     runtimeHost: extensionAgentRuntimeHost,
     explicitFollowUp: followUp,

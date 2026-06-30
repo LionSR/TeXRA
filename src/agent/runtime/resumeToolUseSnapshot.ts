@@ -1,17 +1,19 @@
 /**
  * Host-neutral tool-use snapshot resume.
  *
- * Gates on tool-use persistence, then drives the shared queue dance
- * (`resumeQueuedToolUseSnapshot`): acquire the follow-up queue, flip the stream
- * to RESUMING, replay drained follow-ups into the rebuilt session, and on
- * failure re-enqueue the follow-ups and settle the stream back to WAITING.
+ * Drives the shared queue dance (`resumeQueuedToolUseSnapshot`): acquire the
+ * follow-up queue, flip the stream to RESUMING, replay drained follow-ups into
+ * the rebuilt session, and on failure re-enqueue the follow-ups and settle the
+ * stream back to WAITING.
  *
  * Hosts stay thin adapters: they inject only what differs (`runtimeHost`, an
  * optional explicit follow-up typed alongside a manual resume,
  * `runtimeUnavailableTools`, their owning `session`, and a failure surface).
+ * The tool-use persistence setting stays host-injected (gated by the extension
+ * adapter, ungated on desktop) rather than being applied here, so this leaf does
+ * not change either host's pre-unification resume behavior.
  */
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import { getToolUsePersistenceEnabled } from '@utils/config';
 
 import { resumeQueuedToolUseSnapshot } from './resumeQueuedToolUse';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -40,17 +42,13 @@ export interface ResumeToolUseHostOptions {
 
 /**
  * Resume a tool-use session from its persisted snapshot. Returns `true` when the
- * resume reached the run lifecycle, and `false` when persistence is disabled or
- * the resume failed (the follow-up queue is preserved in that case).
+ * resume reached the run lifecycle, and `false` when the resume failed (the
+ * follow-up queue is preserved in that case).
  */
 export async function resumeToolUseSnapshot(
   snapshot: ToolUseSessionSnapshot,
   options: ResumeToolUseHostOptions,
 ): Promise<boolean> {
-  if (!getToolUsePersistenceEnabled()) {
-    return false;
-  }
-
   return resumeQueuedToolUseSnapshot(
     snapshot.streamId,
     snapshot,

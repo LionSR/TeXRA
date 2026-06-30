@@ -102,6 +102,15 @@ export async function resolveAndResumeStream(
       return false;
     }
 
+    // Re-check after the async retrieval window: `resumeInFlight` (held here)
+    // blocks only a second resume entry, not a concurrent non-resume run launch
+    // that flips this stream active/resuming while we awaited retrieval. If that
+    // happened, abandon the resume rather than clobbering the launched run's
+    // status.
+    if (StreamStatusService.isActiveOrResuming(streamId)) {
+      return false;
+    }
+
     if (resume.type === 'toolUse') {
       // The tool-use helper owns the RESUMING flip + follow-up dance.
       return await ports.resumeToolUseSnapshot(resume.snapshot);

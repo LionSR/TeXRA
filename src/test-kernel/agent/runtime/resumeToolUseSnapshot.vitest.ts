@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const getPersistenceEnabledMock = vi.hoisted(() => vi.fn(() => true));
 const resumeToolUseFromSnapshotMock = vi.hoisted(() => vi.fn(async () => {}));
 
-vi.mock('@utils/config', async (importActual) => ({
-  ...(await importActual<typeof import('@utils/config')>()),
-  getToolUsePersistenceEnabled: getPersistenceEnabledMock,
-}));
 vi.mock('@agent/runtime/executeAgent', () => ({
   resumeToolUseFromSnapshot: resumeToolUseFromSnapshotMock,
 }));
@@ -38,7 +33,6 @@ function capturedSetupSession(): (session: {
 
 describe('resumeToolUseSnapshot', () => {
   beforeEach(() => {
-    getPersistenceEnabledMock.mockReturnValue(true);
     resumeToolUseFromSnapshotMock.mockReset();
     resumeToolUseFromSnapshotMock.mockResolvedValue(undefined);
     runtimeHost.emit.mockReset();
@@ -93,21 +87,6 @@ describe('resumeToolUseSnapshot', () => {
       text: 'queued one',
       origin: 'user',
     });
-  });
-
-  it('refuses to resume when tool-use persistence is disabled', async () => {
-    getPersistenceEnabledMock.mockReturnValue(false);
-    ToolUseFollowUpQueue.enqueue(
-      STREAM,
-      { text: 'queued one' },
-      { force: true },
-    );
-
-    await expect(
-      resumeToolUseSnapshot(snapshot(), { runtimeHost }),
-    ).resolves.toBe(false);
-    expect(resumeToolUseFromSnapshotMock).not.toHaveBeenCalled();
-    expect(ToolUseFollowUpQueue.getAll(STREAM)).toEqual(['queued one']);
   });
 
   it('re-enqueues follow-ups, settles to WAITING, and reports on failure', async () => {

@@ -81,6 +81,21 @@ describe('resolveAndResumeStream', () => {
     );
   });
 
+  it('abandons resume when the stream becomes active during retrieval', async () => {
+    // A concurrent non-resume run flips the stream active while we await KV.
+    // `resumeInFlight` (held here) cannot catch that, so the post-retrieval
+    // re-check must bail before touching the resume ports.
+    retrieveSessionResumeDataMock.mockImplementation(async () => {
+      StreamStatusService.set(STREAM, STREAM_STATUS.RUNNING, { emit: false });
+      return { type: 'toolUse', snapshot: { streamId: STREAM } };
+    });
+    const ports = basePorts();
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.resumeToolUseSnapshot).not.toHaveBeenCalled();
+    expect(ports.executeWorkflow).not.toHaveBeenCalled();
+  });
+
   it('skips resume without resolving when the stream is already active', async () => {
     StreamStatusService.set(STREAM, STREAM_STATUS.RUNNING, { emit: false });
     const ports = basePorts();
