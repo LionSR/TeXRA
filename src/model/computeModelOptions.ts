@@ -285,10 +285,11 @@ export async function getModelUnavailableReason(
   const config = MODEL_CONFIGS[model];
   if (!config) return `Model "${model}" is not recognized.`;
 
-  const effectiveAccess = applyModelOptionsComputationOptions(
-    access ?? buildDefaultModelOptionsAccess(options),
-    options,
-  );
+  // buildDefaultModelOptionsAccess already folds in options.agentCategory, so
+  // only the caller-supplied access path needs the option override reapplied.
+  const effectiveAccess = access
+    ? applyModelOptionsComputationOptions(access, options)
+    : buildDefaultModelOptionsAccess(options);
   const ctx = await buildAvailabilityContext(effectiveAccess, access == null);
   const availability = await resolveModelAvailability(model, config, ctx);
   if (availability.available) return null;

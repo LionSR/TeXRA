@@ -1,5 +1,3 @@
-// Third-party imports
-
 // Local imports - agent
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {

@@ -286,9 +286,16 @@ export async function runReflectionFlow<C = unknown>(
       promptBuilder,
       fileService,
       getOutputFileLocation,
-      workflowOutputPolicy:
-        input.workflowOutputPolicy ??
-        createWorkspaceStateWorkflowOutputPolicy(),
+      workflowOutputPolicy: input.workflowOutputPolicy ?? {
+        shouldAutoOpenPdfOrLog: () =>
+          readPlatformSetting<boolean>(
+            WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+          ),
+        shouldRejectOnCompileFailure: () =>
+          readPlatformSetting<boolean>(
+            WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+          ),
+      },
       baseFiles,
     };
     pf.setServices(services);
@@ -316,9 +323,8 @@ export async function runReflectionFlow<C = unknown>(
       const err = new Error(shared.lastError.message);
       attachProviderError(err, toProviderErrorFromRetry(shared.lastError));
       throw err;
-    } else {
-      outcome = flowOutcome;
     }
+    outcome = flowOutcome;
   } catch (error) {
     outcome = RUN_OUTCOME.FAILED;
     throw error;
@@ -343,16 +349,5 @@ export async function runReflectionFlow<C = unknown>(
     roundOutputs: shared?.roundOutputs ?? [],
     outcome,
     ...(totalCostUsd > 0 ? { totalCostUsd } : {}),
-  };
-}
-
-function createWorkspaceStateWorkflowOutputPolicy(): WorkflowOutputPolicy {
-  return {
-    shouldAutoOpenPdfOrLog: () =>
-      readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
-    shouldRejectOnCompileFailure: () =>
-      readPlatformSetting<boolean>(
-        WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-      ),
   };
 }

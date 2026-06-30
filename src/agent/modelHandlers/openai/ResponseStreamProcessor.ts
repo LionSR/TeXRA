@@ -86,8 +86,7 @@ export class ResponseStreamProcessor {
         hasOpenAIWebSearchData(item)
       ) {
         this.closeThinkingStream();
-        this.emitWebSearch(item);
-        this.emittedWebSearchIds.add(item.id);
+        this.emitWebSearchOnce(item);
       }
     }
   }
@@ -130,9 +129,16 @@ export class ResponseStreamProcessor {
     this.thinkingStream = null;
   }
 
-  /** Emit a single web-search result to the progress view. */
-  private emitWebSearch(item: ResponseFunctionWebSearch): void {
+  /** Emit a web-search result once, deduped by item id. No-op if already emitted or missing data. */
+  private emitWebSearchOnce(item: ResponseFunctionWebSearch): void {
+    if (
+      this.emittedWebSearchIds.has(item.id) ||
+      !hasOpenAIWebSearchData(item)
+    ) {
+      return;
+    }
     this.deps.emitWebSearchResult(buildOpenAIWebSearchResult(item));
+    this.emittedWebSearchIds.add(item.id);
   }
 
   /**
@@ -147,13 +153,8 @@ export class ResponseStreamProcessor {
     }
 
     for (const item of output) {
-      if (
-        isWebSearchItem(item) &&
-        !this.emittedWebSearchIds.has(item.id) &&
-        hasOpenAIWebSearchData(item)
-      ) {
-        this.emitWebSearch(item);
-        this.emittedWebSearchIds.add(item.id);
+      if (isWebSearchItem(item)) {
+        this.emitWebSearchOnce(item);
       }
     }
   }

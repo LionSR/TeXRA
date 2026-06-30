@@ -2,13 +2,8 @@ import { z } from 'zod';
 
 import { isNonEmptyString, isObject } from '@utils/core';
 
-import { PlanSchema, type Plan } from './plan';
+import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
-
-function parsePlan(value: unknown): Plan | null {
-  const result = PlanSchema.safeParse(value);
-  return result.success ? result.data : null;
-}
 
 /** One-line label for a plan document: its first non-empty line. */
 export function planSummaryLine(objective: string): string {
@@ -23,7 +18,8 @@ function normalizeWorkPlanSnapshot(input: unknown): unknown {
   const record = isObject(input) ? input : {};
   // Legacy structured plans fail to parse and read back as "no plan";
   // their stored planSummary string still carries the one-line label.
-  const plan = parsePlan(record.plan);
+  const planResult = PlanSchema.safeParse(record.plan);
+  const plan = planResult.success ? planResult.data : null;
   let planSummary: string | null = null;
   if (plan) {
     planSummary = planSummaryLine(plan.objective);

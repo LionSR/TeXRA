@@ -444,7 +444,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         useDynamicFiltering: getAnthropicDynamicFiltering(),
       });
 
-      (options as MessageCreateParams).tool_choice = { type: 'auto' };
+      options.tool_choice = { type: 'auto' };
 
       // Models using adaptive thinking get interleaved thinking automatically.
       // Only add the beta header for older models that need it explicitly.

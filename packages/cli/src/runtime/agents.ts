@@ -122,27 +122,6 @@ export function assertCliAgentLaunch(
  */
 export async function resolveCliAgent(
   name: string,
-): Promise<AgentEntry | undefined> {
-  return resolveCliAgentEntry(name);
-}
-
-/**
- * Resolve and validate an agent for a CLI launch command.
- */
-export async function resolveCliLaunchAgent(
-  name: string,
-  mode: CliAgentLaunchMode,
-): Promise<AgentEntry> {
-  const target = CLI_AGENT_LAUNCH_TARGETS[mode];
-  return assertCliAgentLaunch(
-    name,
-    await resolveCliAgentEntry(name, target.requiredCategory),
-    mode,
-  );
-}
-
-async function resolveCliAgentEntry(
-  name: string,
   lookupCategory?: AgentCategory,
 ): Promise<AgentEntry | undefined> {
   await loadAgents({ includeRemote: false });
@@ -159,6 +138,21 @@ async function resolveCliAgentEntry(
 
   await loadAgents();
   return getAgent(name, lookupCategory);
+}
+
+/**
+ * Resolve and validate an agent for a CLI launch command.
+ */
+export async function resolveCliLaunchAgent(
+  name: string,
+  mode: CliAgentLaunchMode,
+): Promise<AgentEntry> {
+  const target = CLI_AGENT_LAUNCH_TARGETS[mode];
+  return assertCliAgentLaunch(
+    name,
+    await resolveCliAgent(name, target.requiredCategory),
+    mode,
+  );
 }
 
 export async function loadCliAgentList(

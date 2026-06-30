@@ -335,6 +335,19 @@ export class BashTool extends defineTool({
       );
     };
 
+    const deliverAndFinalize = async (
+      text: string,
+      finalizeOptions: Parameters<typeof finalizeBackground>[0],
+    ): Promise<void> => {
+      try {
+        await deliverParentFollowUp(text);
+      } catch (err: unknown) {
+        logBackgroundFailure('deliver', err);
+      } finally {
+        finalizeBackground(finalizeOptions);
+      }
+    };
+
     void (async () => {
       const outcome = await promise.then(
         (result) => ({ ok: true as const, result }),
@@ -377,17 +390,7 @@ export class BashTool extends defineTool({
           logBackgroundFailure('persist', err);
         }
 
-        try {
-          await deliverParentFollowUp(msg);
-        } catch (err: unknown) {
-          logBackgroundFailure('deliver', err);
-        } finally {
-          finalizeBackground({
-            wallTimeMs,
-            error,
-            autoClose: true,
-          });
-        }
+        await deliverAndFinalize(msg, { wallTimeMs, error, autoClose: true });
         return;
       }
 
@@ -403,16 +406,7 @@ export class BashTool extends defineTool({
         logBackgroundFailure('persist', err);
       }
 
-      try {
-        await deliverParentFollowUp(msg);
-      } catch (err: unknown) {
-        logBackgroundFailure('deliver', err);
-      } finally {
-        finalizeBackground({
-          error,
-          autoClose: true,
-        });
-      }
+      await deliverAndFinalize(msg, { error, autoClose: true });
     })();
 
     return {

@@ -14,7 +14,7 @@ import {
 function isCliOutputFormat(value: unknown): value is CliOutputFormat {
   return (
     typeof value === 'string' &&
-    CLI_OUTPUT_FORMATS.includes(value as CliOutputFormat)
+    (CLI_OUTPUT_FORMATS as readonly string[]).includes(value)
   );
 }
 
@@ -31,12 +31,11 @@ export const versionCommand = defineCommand({
   },
   async run(ctx) {
     const version = await readCliVersion();
-    const result = { version };
     emitCliResult(
       { outputFormat: parseVersionOutputFormat(ctx.args['output-format']) },
       {
-        json: result,
-        ndjson: { kind: 'version', ...result },
+        json: { version },
+        ndjson: { kind: 'version', version },
         text: version,
       },
     );

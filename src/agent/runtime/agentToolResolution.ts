@@ -90,14 +90,14 @@ export interface ResolvedAgentTools {
 async function availableDelegationModelNamesForTools(
   tools: readonly ToolDefinition[],
 ): Promise<ReadonlyMap<AgentCategory, readonly string[]> | null | undefined> {
+  if (!hasDelegationTool(tools.map((tool) => tool.name))) {
+    return undefined;
+  }
   const categories = new Set(
     tools
       .map((tool) => DELEGATION_TOOL_CATEGORY[tool.name])
       .filter((category): category is AgentCategory => category !== undefined),
   );
-  if (!hasDelegationTool(tools.map((tool) => tool.name))) {
-    return undefined;
-  }
 
   try {
     const entries = await Promise.all(

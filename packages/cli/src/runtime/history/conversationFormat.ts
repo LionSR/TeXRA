@@ -228,11 +228,9 @@ function formatTopLevelToolCall(toolCall: unknown): string {
     ? toolCall.function
     : undefined;
   const name =
-    typeof nestedFunction?.name === 'string'
-      ? nestedFunction.name
-      : typeof toolCall.name === 'string'
-        ? toolCall.name
-        : 'unknown';
+    [nestedFunction?.name, toolCall.name].find(
+      (value): value is string => typeof value === 'string',
+    ) ?? 'unknown';
   return `[tool_use: ${name}]`;
 }
 

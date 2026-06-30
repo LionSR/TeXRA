@@ -61,38 +61,42 @@ export class ChatGptSubscriptionHandlers {
   }
 
   async handleSetPreferSubscription(enabled: boolean): Promise<void> {
-    try {
-      const update = await setPreferCodexSubscription(enabled);
-      if (update.effective !== enabled) {
-        void vscode.window.showWarningMessage(
-          `A more specific setting still keeps ChatGPT subscription ${update.effective ? 'enabled' : 'disabled'}.`,
-        );
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Could not update the ChatGPT subscription preference',
-        error,
-      );
-    } finally {
-      await this.refreshChatGptState();
-    }
+    await this.applySubscriptionSetting({
+      enabled,
+      apply: setPreferCodexSubscription,
+      warning: (effective) =>
+        `A more specific setting still keeps ChatGPT subscription ${effective ? 'enabled' : 'disabled'}.`,
+      errorMessage: 'Could not update the ChatGPT subscription preference',
+    });
   }
 
   async handleSetSubscriptionToolUseOnly(enabled: boolean): Promise<void> {
+    await this.applySubscriptionSetting({
+      enabled,
+      apply: setCodexSubscriptionToolUseOnly,
+      warning: (effective) =>
+        `The effective "subscription for tool-use only" setting remains ${effective ? 'enabled' : 'disabled'}.`,
+      errorMessage: 'Could not update the ChatGPT subscription scope',
+    });
+  }
+
+  /**
+   * Apply a subscription toggle, warn when a more specific setting overrides the
+   * requested value, log failures, and always refresh the settings view.
+   */
+  private async applySubscriptionSetting(opts: {
+    enabled: boolean;
+    apply: (enabled: boolean) => Promise<{ effective: boolean }>;
+    warning: (effective: boolean) => string;
+    errorMessage: string;
+  }): Promise<void> {
     try {
-      const update = await setCodexSubscriptionToolUseOnly(enabled);
-      if (update.effective !== enabled) {
-        void vscode.window.showWarningMessage(
-          `The effective "subscription for tool-use only" setting remains ${update.effective ? 'enabled' : 'disabled'}.`,
-        );
+      const update = await opts.apply(opts.enabled);
+      if (update.effective !== opts.enabled) {
+        void vscode.window.showWarningMessage(opts.warning(update.effective));
       }
     } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Could not update the ChatGPT subscription scope',
-        error,
-      );
+      await showLoggedErrorMessage(this.ctx.channel, opts.errorMessage, error);
     } finally {
       await this.refreshChatGptState();
     }

@@ -33,7 +33,6 @@ export {
   requestDeviceUserCode,
   pollDeviceToken,
   deviceUserCode,
-  codexDeviceRedirectUri,
 } from './codexOAuthClient';
 export {
   CodexSessionCoordinator,

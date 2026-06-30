@@ -22,9 +22,23 @@ import type {
   WebFetchPayload,
   LogMessageData,
 } from '@shared/schemas';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
 import { buildBannerContent, joinWithSeparator } from './helpers';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+
+/** Wrap formatted tool content in the shared collapsible banner shell. */
+function buildToolUseDetails(opts: {
+  message: LogMessageData;
+  iconName: string;
+  label: string;
+  isError: boolean;
+  content: TemplateResult;
+  defaultOpen?: boolean;
+}): TemplateResult {
+  const bannerContentTemplate = buildBannerContent(opts.message, opts.content);
+  // prettier-ignore
+  return html`<details class=${classMap({ 'banner-details': true, 'tool-use-details': true, 'tool-use-error': opts.isError })} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title' })}${bannerContentTemplate}</details>`;
+}
 
 // Web search provider display names
 const PROVIDER_LABELS: Record<string, string> = {
@@ -90,19 +104,14 @@ export function formatWebSearchTemplate(
       ? html`<pre>Web search executed</pre>`
       : joinWithSeparator(sections);
 
-  const shouldOpen = options?.defaultOpen ?? false;
-  const bannerContentTemplate = buildBannerContent(message, contentTemplate);
-
-  // prettier-ignore
-  return html`<details class=${classMap({
-    'banner-details': true,
-    'tool-use-details': true,
-    'tool-use-error': statusKey === 'failed',
-  })} ?open=${shouldOpen}>${buildDetailsSummary({
+  return buildToolUseDetails({
+    message,
     iconName,
     label: titleText,
-    labelClass: 'tool-use-title',
-  })}${bannerContentTemplate}</details>`;
+    isError: statusKey === 'failed',
+    content: contentTemplate,
+    defaultOpen: options?.defaultOpen,
+  });
 }
 
 // Web fetch error code display labels
@@ -159,17 +168,12 @@ export function formatWebFetchTemplate(
       ? html`<pre>Web fetch executed</pre>`
       : joinWithSeparator(sections);
 
-  const shouldOpen = options?.defaultOpen ?? false;
-  const bannerContentTemplate = buildBannerContent(message, contentTemplate);
-
-  // prettier-ignore
-  return html`<details class=${classMap({
-    'banner-details': true,
-    'tool-use-details': true,
-    'tool-use-error': isFailed,
-  })} ?open=${shouldOpen}>${buildDetailsSummary({
+  return buildToolUseDetails({
+    message,
     iconName,
     label: titleText,
-    labelClass: 'tool-use-title',
-  })}${bannerContentTemplate}</details>`;
+    isError: isFailed,
+    content: contentTemplate,
+    defaultOpen: options?.defaultOpen,
+  });
 }

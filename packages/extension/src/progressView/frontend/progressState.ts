@@ -30,9 +30,11 @@ import { toNewestFirstByTimestamp } from '@utils/core';
 import { setsEqual } from './utils';
 import {
   createInitialState,
+  EMPTY_PROCESS_OUTPUTS,
   EMPTY_STREAM_LOGS,
   getStreamState,
   isToolUseState,
+  type ProcessOutputMap,
   type StreamLogs,
   type StreamState,
 } from './store';
@@ -42,7 +44,6 @@ import {
   type StreamContextValue,
   type StreamLogContextValue,
 } from './contexts/streamContexts';
-import { EMPTY_PROCESS_OUTPUTS, type ProcessOutputMap } from './store';
 import type { PermissionState } from './permissionState';
 
 // ---------------------------------------------------------------------------

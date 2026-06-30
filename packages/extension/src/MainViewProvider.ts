@@ -126,8 +126,7 @@ export class MainViewProvider
 
   /** Returns the sidebar webview, but only when in main mode. */
   private getMainModeView(): vscode.WebviewView | undefined {
-    if (this._activeMode !== 'main') return undefined;
-    return this._view as vscode.WebviewView | undefined;
+    return this._activeMode === 'main' ? this.getWebviewView() : undefined;
   }
 
   /**

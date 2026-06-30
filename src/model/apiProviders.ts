@@ -60,6 +60,18 @@ export function invalidateApiKeyCache(): void {
   lookupPending.clear();
 }
 
+/** Read the key straight from secret storage then the environment, no caching. */
+async function resolveApiKeyUncached(
+  secrets: PlatformSecrets,
+  provider: ApiProvider,
+): Promise<ResolvedApiKey> {
+  const stored = await secrets.get(apiKeySecretName(provider));
+  if (stored) return { value: stored, origin: 'secret' };
+  const envValue = process.env[apiKeyEnvName(provider)];
+  if (envValue) return { value: envValue, origin: 'env' };
+  return { value: undefined, origin: 'none' };
+}
+
 async function resolveApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
@@ -71,13 +83,7 @@ async function resolveApiKey(
   if (inFlight) return inFlight;
 
   const requestGeneration = lookupCacheGeneration;
-  const request = (async (): Promise<ResolvedApiKey> => {
-    const stored = await secrets.get(apiKeySecretName(provider));
-    if (stored) return { value: stored, origin: 'secret' };
-    const envValue = process.env[apiKeyEnvName(provider)];
-    if (envValue) return { value: envValue, origin: 'env' };
-    return { value: undefined, origin: 'none' };
-  })();
+  const request = resolveApiKeyUncached(secrets, provider);
   lookupPending.set(provider, request);
   try {
     const value = await request;
@@ -165,7 +171,5 @@ export async function apiKeyExistsUncached(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Promise<boolean> {
-  const stored = await secrets.get(apiKeySecretName(provider));
-  if (stored) return true;
-  return Boolean(process.env[apiKeyEnvName(provider)]);
+  return (await resolveApiKeyUncached(secrets, provider)).value !== undefined;
 }

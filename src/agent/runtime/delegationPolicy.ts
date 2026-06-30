@@ -38,27 +38,25 @@ export function evaluateCurrentDelegationGate(
 }
 
 /**
- * Read meta without letting filesystem/IO errors bubble up — safeParse
- * already handles malformed JSON by returning null, but the underlying
- * storage layer can throw on permission or IO failures. Resume must
- * not hard-fail on a single corrupted ancestor.
+ * Read meta without letting filesystem/IO errors bubble up. `readMeta`
+ * already maps malformed JSON to null, and an IO/permission throw maps to
+ * null here too: both are unreadable lineage that must fail closed, so the
+ * caller treats null uniformly. Log the IO case so an unreadable ancestor
+ * isn't an invisible cause of blocked delegation.
  */
 async function readMetaSafely(
   executionId: ExecutionId,
-): Promise<ExecutionMeta | null | 'error'> {
+): Promise<ExecutionMeta | null> {
   try {
     return await getExecutionStore(executionId).readMeta();
   } catch (err) {
-    // IO/permission failure (not malformed JSON, which safeParse maps to null).
-    // Return the 'error' sentinel so resume fails closed, but log so an
-    // unreadable ancestor isn't an invisible cause of blocked delegation.
     logger.warn(
       'DelegationPolicy',
       `Failed to read execution meta for ${executionId}: ${toErrorMessage(
         err,
       )}`,
     );
-    return 'error';
+    return null;
   }
 }
 
@@ -83,8 +81,7 @@ export async function computeDelegationDepthFromStorage(
   executionId: ExecutionId,
 ): Promise<number> {
   const rootMeta = await readMetaSafely(executionId);
-  if (rootMeta === 'error' || rootMeta === null)
-    return UNKNOWN_DELEGATION_DEPTH;
+  if (rootMeta === null) return UNKNOWN_DELEGATION_DEPTH;
   if (rootMeta.delegationDepth !== undefined) return rootMeta.delegationDepth;
   if (!rootMeta.parentExecutionId) return 0;
 
@@ -101,7 +98,7 @@ export async function computeDelegationDepthFromStorage(
     if (visited.has(current)) return UNKNOWN_DELEGATION_DEPTH; // cycle
     visited.add(current);
     const meta = await readMetaSafely(current);
-    if (meta === 'error' || meta === null) return UNKNOWN_DELEGATION_DEPTH;
+    if (meta === null) return UNKNOWN_DELEGATION_DEPTH;
     if (meta.delegationDepth !== undefined) return meta.delegationDepth + depth;
     const parent: ExecutionId | undefined = meta.parentExecutionId;
     if (!parent) return depth; // clean terminus

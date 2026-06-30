@@ -26,7 +26,6 @@ interface WorkspaceInfo {
 }
 
 interface GitInfo {
-  isRepo: true;
   branch: string | null;
   dirty: boolean;
 }
@@ -72,12 +71,12 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
     } as const;
 
     // Check if inside a git repo
-    const isRepo = await execa(
+    const insideWorkTree = await execa(
       'git',
       ['rev-parse', '--is-inside-work-tree'],
       opts,
     );
-    if (isRepo.exitCode !== 0) return null;
+    if (insideWorkTree.exitCode !== 0) return null;
 
     // Run branch and status checks in parallel
     const [branchResult, statusResult] = await Promise.all([
@@ -90,7 +89,7 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
     const dirty =
       statusResult.exitCode === 0 && statusResult.stdout.trim().length > 0;
 
-    return { isRepo: true, branch, dirty };
+    return { branch, dirty };
   } catch {
     // git not installed or not on PATH (ENOENT), or timed out
     return null;

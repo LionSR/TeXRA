@@ -3,8 +3,10 @@ import * as vscode from 'vscode';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
-import type { IProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
-import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
+import {
+  setProgressViewBridge,
+  type IProgressViewBridge,
+} from '@agent/runtime/ProgressViewBridge';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
@@ -456,15 +458,13 @@ export class ProgressViewProvider
     if (!this.webviewUpdater.isAvailable()) return;
     if (this.externalInquiryHandler.pendingSize > 0) return;
 
-    let open;
-    try {
-      open = await listOpenThreads();
-    } catch (error) {
+    const open = await listOpenThreads().catch((error) => {
       // A storage read failure here silently skips inquiry hydration; log
       // it so the missing panel reappearance is diagnosable.
       this.logger.debug(`Failed to list open inquiry threads: ${error}`);
-      return;
-    }
+      return undefined;
+    });
+    if (!open) return;
 
     for (const summary of open) {
       try {

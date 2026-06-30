@@ -24,7 +24,7 @@ export async function handleTestAgentLoading(): Promise<void> {
   try {
     logger.info(CHANNEL, 'Testing agent loading from registry:');
 
-    // Get first two workflow agents from registry to test loading
+    // Get the first workflow agent from the registry to test loading
     const agents = getAgentsByCategory(AgentCategory.Workflow);
     if (agents.length === 0) {
       throw new Error('No workflow agents found in registry');

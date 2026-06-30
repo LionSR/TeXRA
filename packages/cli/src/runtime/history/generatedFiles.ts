@@ -122,49 +122,42 @@ function extractWorkspaceFileToolPaths(
   return paths;
 }
 
+/**
+ * Resolve the file-path argument of a `write_file` / `edit_file` tool call, or
+ * undefined for any other tool. Shared by the per-provider extractors below,
+ * which differ only in where the tool name and arguments are stored.
+ */
+function workspaceFileToolPath(
+  name: unknown,
+  argumentsValue: unknown,
+): string | undefined {
+  if (typeof name !== 'string' || !WORKSPACE_FILE_TOOL_NAMES.has(name)) {
+    return undefined;
+  }
+  return extractToolArgumentsFilePath(argumentsValue);
+}
+
 function extractResponseFunctionCallFilePath(
   message: Record<string, unknown>,
 ): string | undefined {
   if (message.type !== 'function_call') return undefined;
-  if (
-    typeof message.name !== 'string' ||
-    !WORKSPACE_FILE_TOOL_NAMES.has(message.name)
-  ) {
-    return undefined;
-  }
-  return extractToolArgumentsFilePath(message.arguments);
+  return workspaceFileToolPath(message.name, message.arguments);
 }
 
 function extractOpenAiToolCallFilePath(toolCall: unknown): string | undefined {
   if (!isObject(toolCall)) return undefined;
   const fn = isObject(toolCall.function) ? toolCall.function : {};
-  if (typeof fn.name !== 'string' || !WORKSPACE_FILE_TOOL_NAMES.has(fn.name)) {
-    return undefined;
-  }
-  return extractToolArgumentsFilePath(fn.arguments);
+  return workspaceFileToolPath(fn.name, fn.arguments);
 }
 
 function extractContentToolUseFilePath(block: unknown): string | undefined {
   if (!isObject(block) || block.type !== 'tool_use') return undefined;
-  if (
-    typeof block.name !== 'string' ||
-    !WORKSPACE_FILE_TOOL_NAMES.has(block.name)
-  ) {
-    return undefined;
-  }
-  return extractToolArgumentsFilePath(block.input);
+  return workspaceFileToolPath(block.name, block.input);
 }
 
 function extractGoogleFunctionCallFilePath(part: unknown): string | undefined {
   if (!isObject(part) || !isObject(part.functionCall)) return undefined;
-  const { functionCall } = part;
-  if (
-    typeof functionCall.name !== 'string' ||
-    !WORKSPACE_FILE_TOOL_NAMES.has(functionCall.name)
-  ) {
-    return undefined;
-  }
-  return extractToolArgumentsFilePath(functionCall.args);
+  return workspaceFileToolPath(part.functionCall.name, part.functionCall.args);
 }
 
 function extractToolArgumentsFilePath(

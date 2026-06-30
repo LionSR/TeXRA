@@ -80,10 +80,7 @@ export async function indentLatexFilesInDirectory(
 
   let indentedCount = 0;
 
-  async function walkDirectory(
-    dirPath: string,
-    onFile: (fullPath: string, name: string) => Promise<void>,
-  ): Promise<void> {
+  async function walkDirectory(dirPath: string): Promise<void> {
     const entries = await WorkspaceFS.readDir(dirPath);
     for (const [name, type] of entries) {
       if (EXCLUDED_DIRS.has(name.toLowerCase()) || name.includes('Diffs')) {
@@ -98,16 +95,13 @@ export async function indentLatexFilesInDirectory(
       const fullPath = path.join(dirPath, name);
 
       if (isDirectory(type)) {
-        await walkDirectory(fullPath, onFile);
-      } else if (isFile(type)) {
-        await onFile(fullPath, name);
+        await walkDirectory(fullPath);
+        continue;
       }
-    }
-  }
 
-  try {
-    await walkDirectory(directory, async (fullPath, name) => {
-      if (!hasExtension(name, '.tex')) return;
+      if (!isFile(type) || !hasExtension(name, '.tex')) {
+        continue;
+      }
 
       progressCallback?.(`Indenting ${path.basename(fullPath)}...`, 0);
       logger.debug(CHANNEL, `Processing file: ${fullPath}`);
@@ -125,7 +119,11 @@ export async function indentLatexFilesInDirectory(
           `Error formatting file ${fullPath}: ${toErrorMessage(err)}`,
         );
       }
-    });
+    }
+  }
+
+  try {
+    await walkDirectory(directory);
 
     logger.info(
       CHANNEL,

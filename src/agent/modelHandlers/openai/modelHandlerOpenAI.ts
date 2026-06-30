@@ -13,7 +13,7 @@ import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
-import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
+import { K_SLICE } from '@agent/core/constants';
 import {
   getSdkErrorMessage,
   isMissingFinishReasonError,

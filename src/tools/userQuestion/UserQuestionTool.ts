@@ -38,15 +38,23 @@ interface UserQuestionResult {
   feedback?: string;
 }
 
+type PendingQuestion = {
+  streamId?: StreamTabId;
+  runtimeHost?: AgentRuntimeHost;
+  deferred: DeferredPromise<UserQuestionResult>;
+};
+
 let questionCounter = 0;
-const pendingQuestions = new Map<
-  string,
-  {
-    streamId?: StreamTabId;
-    runtimeHost?: AgentRuntimeHost;
-    deferred: DeferredPromise<UserQuestionResult>;
+const pendingQuestions = new Map<string, PendingQuestion>();
+
+/** Resolve (as declined) every pending question matching `predicate`. */
+function rejectPendingQuestions(
+  predicate: (entry: PendingQuestion) => boolean,
+): void {
+  for (const entry of pendingQuestions.values()) {
+    if (predicate(entry)) entry.deferred.resolve({ submitted: false });
   }
->();
+}
 
 async function awaitUserQuestionResponse(params: {
   requestId: string;
@@ -96,32 +104,23 @@ export async function handleUserQuestionAction(payload: {
 export function _rejectPendingUserQuestionsForStream(
   streamId: StreamTabId,
 ): void {
-  for (const entry of pendingQuestions.values()) {
-    if (entry.streamId === streamId) {
-      entry.deferred.resolve({ submitted: false });
-    }
-  }
+  rejectPendingQuestions((entry) => entry.streamId === streamId);
 }
 
 /** @internal Called by unified cleanup. */
 export function _rejectAllPendingUserQuestions(): void {
-  for (const entry of pendingQuestions.values()) {
-    entry.deferred.resolve({ submitted: false });
-  }
+  rejectPendingQuestions(() => true);
 }
 
 /** @internal Called by unified cleanup for questions with no concrete stream. */
 export function _rejectUnscopedUserQuestions(
   runtimeHost?: AgentRuntimeHost,
 ): void {
-  for (const entry of pendingQuestions.values()) {
-    if (
+  rejectPendingQuestions(
+    (entry) =>
       !entry.streamId &&
-      (runtimeHost === undefined || entry.runtimeHost === runtimeHost)
-    ) {
-      entry.deferred.resolve({ submitted: false });
-    }
-  }
+      (runtimeHost === undefined || entry.runtimeHost === runtimeHost),
+  );
 }
 
 export class AskUserQuestionTool extends defineTool({
