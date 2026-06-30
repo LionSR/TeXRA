@@ -15,6 +15,7 @@ const OPUS_46 = 'claude-opus-4-6';
 const OPUS_47 = 'claude-opus-4-7';
 const OPUS_48 = 'claude-opus-4-8';
 const SONNET_46 = 'claude-sonnet-4-6';
+const SONNET_5 = 'claude-sonnet-5';
 const FABLE_5 = 'claude-fable-5';
 const MYTHOS_5 = 'claude-mythos-5';
 const SONNET_35 = 'claude-3-5-sonnet-20241022';
@@ -28,7 +29,9 @@ describe('mapAnthropicEffort', () => {
     expect(mapAnthropicEffort(OPUS_46, ReasoningEffort.MAX)).toBe('max');
     expect(mapAnthropicEffort(OPUS_47, ReasoningEffort.MAX)).toBe('max');
     expect(mapAnthropicEffort(OPUS_48, ReasoningEffort.MAX)).toBe('max');
-    // Non-Opus models cap at "high".
+    // Sonnet 5 accepts the top "max" tier like Opus.
+    expect(mapAnthropicEffort(SONNET_5, ReasoningEffort.MAX)).toBe('max');
+    // Sonnet 4.6 and older non-Opus models cap at "high".
     expect(mapAnthropicEffort(SONNET_46, ReasoningEffort.MAX)).toBe('high');
     expect(mapAnthropicEffort(SONNET_35, ReasoningEffort.MAX)).toBe('high');
   });
@@ -38,14 +41,15 @@ describe('mapAnthropicEffort', () => {
     expect(mapAnthropicEffort(MYTHOS_5, ReasoningEffort.MAX)).toBe('max');
   });
 
-  it('maps "xhigh" to the distinct tier on Opus 4.8 and Mythos-class models', () => {
+  it('maps "xhigh" to the distinct tier on Opus 4.8, Sonnet 5, and Mythos-class models', () => {
     expect(mapAnthropicEffort(OPUS_48, ReasoningEffort.XHIGH)).toBe('xhigh');
+    expect(mapAnthropicEffort(SONNET_5, ReasoningEffort.XHIGH)).toBe('xhigh');
     expect(mapAnthropicEffort(FABLE_5, ReasoningEffort.XHIGH)).toBe('xhigh');
     expect(mapAnthropicEffort(MYTHOS_5, ReasoningEffort.XHIGH)).toBe('xhigh');
     // Opus 4.6/4.7 predate the tier split and collapse "xhigh" to "max".
     expect(mapAnthropicEffort(OPUS_46, ReasoningEffort.XHIGH)).toBe('max');
     expect(mapAnthropicEffort(OPUS_47, ReasoningEffort.XHIGH)).toBe('max');
-    // Everything else caps at "high".
+    // Sonnet 4.6 and older non-Opus models cap at "high".
     expect(mapAnthropicEffort(SONNET_46, ReasoningEffort.XHIGH)).toBe('high');
   });
 
@@ -58,12 +62,13 @@ describe('mapAnthropicEffort', () => {
 });
 
 describe('supportsAdaptiveThinking / isCompactionEligibleModel', () => {
-  it('is true for Opus 4.6/4.7/4.8, Sonnet 4.6, and Mythos-class models', () => {
+  it('is true for Opus 4.6/4.7/4.8, Sonnet 4.6, Sonnet 5, and Mythos-class models', () => {
     for (const model of [
       OPUS_46,
       OPUS_47,
       OPUS_48,
       SONNET_46,
+      SONNET_5,
       FABLE_5,
       MYTHOS_5,
     ]) {
@@ -79,9 +84,10 @@ describe('supportsAdaptiveThinking / isCompactionEligibleModel', () => {
 });
 
 describe('requiresNoTemperatureWithThinking', () => {
-  it('is true for all Claude 4 families and Mythos-class models', () => {
+  it('is true for all Claude 4 families, Sonnet 5, and Mythos-class models', () => {
     expect(requiresNoTemperatureWithThinking(OPUS_48)).toBe(true);
     expect(requiresNoTemperatureWithThinking(SONNET_46)).toBe(true);
+    expect(requiresNoTemperatureWithThinking(SONNET_5)).toBe(true);
     expect(requiresNoTemperatureWithThinking('claude-haiku-4-5')).toBe(true);
     expect(requiresNoTemperatureWithThinking(FABLE_5)).toBe(true);
     expect(requiresNoTemperatureWithThinking(MYTHOS_5)).toBe(true);
@@ -123,6 +129,23 @@ describe('buildThinkingConfig', () => {
       expect(config.outputConfig).toEqual({ effort: 'xhigh' });
       expect(config.removeTemperature).toBe(true);
     }
+  });
+
+  it('uses adaptive thinking with summarized display on Sonnet 5, accepting the top effort tiers', () => {
+    const config = buildThinkingConfig({
+      fullName: SONNET_5,
+      reasoningEffort: ReasoningEffort.MAX,
+      maxTokens: 64000,
+      useStreaming: true,
+    });
+    expect(config.thinking).toEqual({
+      type: 'adaptive',
+      display: 'summarized',
+    });
+    // Sonnet 5 accepts the full effort range, including the top "max" tier.
+    expect(config.outputConfig).toEqual({ effort: 'max' });
+    // Sonnet 5 rejects sampling parameters, so temperature must be removed.
+    expect(config.removeTemperature).toBe(true);
   });
 
   it('uses bare adaptive thinking on earlier adaptive models', () => {
