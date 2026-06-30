@@ -300,6 +300,9 @@ export async function getModelUnavailableReason(
   // Personal key mode or unauthenticated — missing provider key
   const providerName =
     PROVIDER_DISPLAY_NAMES[config.provider] ?? config.provider;
+  if (!isApiProvider(config.provider)) {
+    return `Model "${model}" is provided by ${providerName}, which does not use provider API keys. Use a host that supports ${providerName} models or choose another model.`;
+  }
   return `Model "${model}" requires your ${providerName} API key. Provide it, or enable included access.`;
 }
 
