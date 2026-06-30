@@ -11,6 +11,7 @@ import {
   TIER_CONFIG,
   ULTRA_TIER,
   isModelAllowedForTier,
+  isRetiredModelRequest,
 } from '../../../supabase/functions/relay/models';
 
 describe('relay tier model access', () => {
@@ -33,5 +34,24 @@ describe('relay tier model access', () => {
     assert.equal(isModelAllowedForTier(FREE_TIER, 'gpt-5-2025-08-07'), false);
     assert.equal(isModelAllowedForTier(FREE_TIER, 'unknown-model'), false);
     assert.equal(isModelAllowedForTier(FREE_TIER, null), false);
+  });
+
+  it('denies retired registry models for relay passthrough tiers', () => {
+    assert.equal(isRetiredModelRequest('haiku3'), true);
+    assert.equal(
+      isRetiredModelRequest('anthropic/claude-3.5-haiku-20240307:beta'),
+      true,
+    );
+    assert.equal(isRetiredModelRequest('unknown-model'), false);
+
+    assert.equal(
+      isModelAllowedForTier(MAX_TIER, 'claude-3-haiku-20240307'),
+      false,
+    );
+    assert.equal(
+      isModelAllowedForTier(ULTRA_TIER, 'anthropic/claude-3-haiku-20240307'),
+      false,
+    );
+    assert.equal(isModelAllowedForTier(ULTRA_TIER, 'unknown-model'), true);
   });
 });

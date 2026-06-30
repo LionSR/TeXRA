@@ -23,6 +23,8 @@ import { AgentCategory } from '@shared/schemas/agent';
 
 function createServerSideKeyService(options: {
   useIncludedAccess: boolean;
+  readonly canUseServerSideKeys?: boolean;
+  readonly canUseModelSync?: boolean;
   readonly relayQuotaExceeded: boolean;
   readonly quotaAutoSwitched: boolean;
   readonly autoSwitchDuringAccessCheck?: boolean;
@@ -34,13 +36,13 @@ function createServerSideKeyService(options: {
       if (options.autoSwitchDuringAccessCheck) {
         options.useIncludedAccess = false;
       }
-      return false;
+      return options.canUseServerSideKeys ?? false;
     },
     getUseIncludedModelAccess: () => options.useIncludedAccess,
     isRelayQuotaExceeded: () => options.relayQuotaExceeded,
     wasQuotaAutoSwitched: () => options.quotaAutoSwitched,
     isProviderOnServer: () => true,
-    canUseModelSync: () => false,
+    canUseModelSync: () => options.canUseModelSync ?? false,
   };
 }
 
@@ -150,6 +152,29 @@ describe('computeModelOptionsData relay quota state', () => {
 
     expect(model.availability).toBe('missing-key');
     expect(model.disabled).toBe(true);
+  });
+
+  it('marks retired models unavailable before included-access checks', async () => {
+    const access = createModelOptionsAccess({
+      useIncludedAccess: true,
+      canUseServerSideKeys: true,
+      canUseModelSync: true,
+      relayQuotaExceeded: false,
+      quotaAutoSwitched: false,
+    });
+
+    const [model] = await computeModelOptionsData(['haiku3'], access);
+    const reason = await getModelUnavailableReason('haiku3', access);
+
+    expect(model).toMatchObject({
+      availability: 'retired',
+      availabilityLabel: 'Retired',
+      disabled: true,
+      requiresKey: false,
+    });
+    expect(reason).toBe(
+      'Model "haiku3" is retired and no longer available from its provider. Choose an active model.',
+    );
   });
 
   it('does not tell users to configure API keys for keyless providers', async () => {

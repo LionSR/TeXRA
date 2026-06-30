@@ -3,6 +3,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   DEFAULT_MODELS,
   isDeprecatedModel,
+  isRetiredModel,
   MODEL_LIST_VERSION,
 } from './modelOptionsBasic';
 
@@ -58,9 +59,20 @@ function reconcileEnabledModels(
     }
   }
 
+  // Retired models are hard unavailable even for users with included relay
+  // access. Strip them whenever this refresh version is crossed.
+  if ((previousVersion ?? 0) < 21) {
+    for (const model of currentModels) {
+      if (isRetiredModel(model)) strippedSet.add(model);
+    }
+  }
+
   const kept = currentModels.filter((model) => !strippedSet.has(model));
   const added = DEFAULT_MODELS.filter(
-    (model) => !kept.includes(model) && !isDeprecatedModel(model),
+    (model) =>
+      !kept.includes(model) &&
+      !isDeprecatedModel(model) &&
+      !isRetiredModel(model),
   );
 
   return {
