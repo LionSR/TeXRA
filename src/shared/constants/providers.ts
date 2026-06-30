@@ -16,7 +16,33 @@ interface ProviderDef {
   readonly hasServerKey: boolean;
   /** URL for obtaining API keys. undefined = no standalone key page. */
   readonly keyUrl?: string;
+  /** Global-state key for this provider's streaming toggle. */
+  readonly streamingKey?: GlobalStateKey;
+  /** Global-state key for this provider's custom endpoint. */
+  readonly endpointKey?: GlobalStateKey;
+  /** Optional alternate-region metadata for endpoint/key-url derivation. */
+  readonly region?: ProviderRegionSetting;
 }
+
+export interface ProviderRegionSetting {
+  readonly key: GlobalStateKey;
+  readonly default: boolean;
+  readonly displayName?: string;
+  readonly keyUrlWhenSet?: string;
+  readonly keyUrlWhenUnset?: string;
+}
+
+export interface ProviderStateEntry {
+  readonly id: string;
+  readonly displayName: string;
+  readonly streamingKey?: GlobalStateKey;
+  readonly endpointKey?: GlobalStateKey;
+  readonly region?: ProviderRegionSetting;
+}
+
+export type ProviderEndpointStateEntry = ProviderStateEntry & {
+  readonly endpointKey: GlobalStateKey;
+};
 
 /**
  * Canonical provider registry. All provider lists are derived from this.
@@ -31,54 +57,90 @@ const PROVIDER_REGISTRY = [
     displayName: 'OpenAI',
     hasServerKey: true,
     keyUrl: 'https://platform.openai.com/api-keys',
+    streamingKey: GlobalStateKey.STREAMING_OPENAI,
+    endpointKey: GlobalStateKey.ENDPOINT_OPENAI,
   },
   {
     id: ModelProvider.ANTHROPIC,
     displayName: 'Anthropic',
     hasServerKey: true,
     keyUrl: 'https://console.anthropic.com/',
+    streamingKey: GlobalStateKey.STREAMING_ANTHROPIC,
+    endpointKey: GlobalStateKey.ENDPOINT_ANTHROPIC,
   },
   {
     id: ModelProvider.GOOGLE,
     displayName: 'Google',
     hasServerKey: true,
     keyUrl: 'https://aistudio.google.com/app/apikey',
+    streamingKey: GlobalStateKey.STREAMING_GOOGLE,
+    endpointKey: GlobalStateKey.ENDPOINT_GOOGLE,
   },
   {
     id: ModelProvider.XAI,
     displayName: 'xAI',
     hasServerKey: true,
     keyUrl: 'https://console.x.ai/',
+    streamingKey: GlobalStateKey.STREAMING_XAI,
+    endpointKey: GlobalStateKey.ENDPOINT_XAI,
   },
   {
     id: ModelProvider.DEEPSEEK,
     displayName: 'DeepSeek',
     hasServerKey: true,
     keyUrl: 'https://platform.deepseek.com/api_keys',
+    streamingKey: GlobalStateKey.STREAMING_DEEPSEEK,
+    endpointKey: GlobalStateKey.ENDPOINT_DEEPSEEK,
   },
   {
     id: ModelProvider.MOONSHOT,
     displayName: 'Moonshot',
     hasServerKey: true,
     keyUrl: 'https://platform.moonshot.cn/console',
+    streamingKey: GlobalStateKey.STREAMING_MOONSHOT,
+    endpointKey: GlobalStateKey.ENDPOINT_MOONSHOT,
   },
   {
     id: ModelProvider.DASHSCOPE,
     displayName: 'Qwen',
     hasServerKey: true,
     keyUrl: 'https://dashscope.aliyun.com/api-console/',
+    streamingKey: GlobalStateKey.STREAMING_DASHSCOPE,
+    endpointKey: GlobalStateKey.ENDPOINT_DASHSCOPE,
+    region: {
+      key: GlobalStateKey.DASHSCOPE_USE_CHINA,
+      default: false,
+      displayName: 'Bailian',
+      keyUrlWhenSet: 'https://bailian.console.aliyun.com/',
+    },
   },
   {
     id: ModelProvider.MINIMAX,
     displayName: 'MiniMax',
     hasServerKey: true,
     keyUrl: 'https://platform.minimax.io/',
+    streamingKey: GlobalStateKey.STREAMING_MINIMAX,
+    endpointKey: GlobalStateKey.ENDPOINT_MINIMAX,
+    region: {
+      key: GlobalStateKey.MINIMAX_USE_CHINA,
+      default: false,
+      keyUrlWhenSet: 'https://platform.minimaxi.com/',
+    },
   },
   {
     id: ModelProvider.GLM,
     displayName: 'GLM',
     hasServerKey: true,
     keyUrl: 'https://open.bigmodel.cn/',
+    streamingKey: GlobalStateKey.STREAMING_GLM,
+    endpointKey: GlobalStateKey.ENDPOINT_GLM,
+    // China=true is the default since bigmodel.cn is the primary platform;
+    // when toggled off (international), the key URL is z.ai.
+    region: {
+      key: GlobalStateKey.GLM_USE_CHINA,
+      default: true,
+      keyUrlWhenUnset: 'https://z.ai/',
+    },
   },
 ] as const satisfies readonly ProviderDef[];
 
@@ -128,6 +190,30 @@ export const PROVIDER_URLS: Record<string, string> = {
   ),
   openRouter: 'https://openrouter.ai/keys',
 };
+
+export const PROVIDER_STATE_ENTRIES: readonly ProviderStateEntry[] = [
+  ...PROVIDER_REGISTRY.map((provider) => ({
+    id: provider.id,
+    displayName: provider.displayName,
+    streamingKey: provider.streamingKey,
+    endpointKey: provider.endpointKey,
+    region: 'region' in provider ? provider.region : undefined,
+  })),
+  {
+    id: 'openrouter',
+    displayName: 'OpenRouter',
+    streamingKey: GlobalStateKey.STREAMING_OPENROUTER,
+  },
+];
+
+function hasEndpoint(
+  entry: ProviderStateEntry,
+): entry is ProviderEndpointStateEntry {
+  return entry.endpointKey !== undefined;
+}
+
+export const PROVIDER_ENDPOINT_STATE_ENTRIES: readonly ProviderEndpointStateEntry[] =
+  PROVIDER_STATE_ENTRIES.filter(hasEndpoint);
 
 /**
  * Default model used for auxiliary/helper tasks (polishing, agent creation,

@@ -25,6 +25,7 @@ import {
   API_ACCESS_MODE_OPTIONS,
   REASONING_LEVEL_OPTIONS,
 } from '@shared/schemas/settingsViewMessages';
+import { PROVIDER_ENDPOINT_STATE_ENTRIES } from '@shared/constants/providers';
 import {
   readSetting,
   resetSetting,
@@ -67,6 +68,9 @@ function reachabilitySegments(through: string): string[] {
 }
 
 const CLASS_D_KEY_PATTERN = /migrated|version|onboarding|history|cache/i;
+const PROVIDER_ENDPOINT_DEFAULTS = Object.fromEntries(
+  PROVIDER_ENDPOINT_STATE_ENTRIES.map(({ endpointKey }) => [endpointKey, '']),
+);
 
 /** Expected default-when-absent for each catalog key, from the real getters. */
 const EXPECTED_DEFAULTS: Record<string, unknown> = {
@@ -99,6 +103,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
     LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
   [WorkspaceStateKey.LATEX_FORMATTER]: LATEX_CONFIG_DEFAULTS.latexFormatter,
   [GlobalStateKey.WEBSOCKET_OPENAI]: false,
+  ...PROVIDER_ENDPOINT_DEFAULTS,
   [GlobalStateKey.USE_OPENROUTER]: false,
 };
 
@@ -349,6 +354,8 @@ describe('state settings catalog', () => {
     //    (the reflection flow, via OutputNode/runCompileCheck).
     //  - the OpenAI WebSocket toggle is read by the Responses handler the CLI
     //    runs (and lets the Codex backend attempt WebSocket).
+    //  - provider endpoints are read by the proxy resolver used by CLI model
+    //    handlers before falling back to provider defaults.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `hosts`.
@@ -368,6 +375,9 @@ describe('state settings catalog', () => {
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
         WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+        ...PROVIDER_ENDPOINT_STATE_ENTRIES.map(
+          ({ endpointKey }) => endpointKey,
+        ),
         GlobalStateKey.WEBSOCKET_OPENAI,
         GlobalStateKey.USE_OPENROUTER,
       ].sort(),
@@ -462,6 +472,18 @@ describe('settingsAccess', () => {
       effectiveValue: false,
     });
     assert.equal(readSetting(entry, stores, 'cli'), false);
+  });
+
+  it('routes CLI endpoint writes to global state', async () => {
+    const { stores, config, globalState } = makeFakeSettingsStores();
+    const entry = entryByKey(GlobalStateKey.ENDPOINT_GOOGLE);
+    await writeSetting(entry, 'https://example.invalid/v1', stores, 'cli');
+    assert.equal(isStored(globalState, entry.key), true);
+    assert.equal(isStored(config, entry.key), false);
+    assert.equal(
+      readSetting(entry, stores, 'cli'),
+      'https://example.invalid/v1',
+    );
   });
 
   it('rejects values that fail the entry schema', async () => {
