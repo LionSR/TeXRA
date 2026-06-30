@@ -415,6 +415,8 @@ const SCENARIOS = [
   },
   {
     name: 'orchestrate-personal-model-pick',
+    // Orchestration scenarios use harness model fixtures for provider-key
+    // availability; API-key env fixtures are only needed by the real /model list.
     env: {
       HARNESS_ORCHESTRATION: '1',
       HARNESS_API_MODE: 'personal',
@@ -593,7 +595,7 @@ const SCENARIOS = [
       'Show TeXRA login status',
       '/login',
       'Sign in to ChatGPT or Research',
-      '… 11 more',
+      '… 12 more',
     ],
     unexpect: [
       '/ap  Switch',
@@ -628,7 +630,10 @@ const SCENARIOS = [
   },
   {
     name: 'slash-palette-ctrl-u-clears-raw-control',
-    env: { HARNESS_ENTRIES: '4' },
+    env: {
+      HARNESS_ENTRIES: '4',
+      OPENAI_API_KEY: 'harness-openai-key',
+    },
     keys: ['/', `${NAK}/model\r`],
     frame: 'tail',
     expect: ['/model · personal API keys', 'Available models'],
@@ -768,7 +773,10 @@ const SCENARIOS = [
   },
   {
     name: 'model-form',
-    env: { HARNESS_ENTRIES: '4' },
+    env: {
+      HARNESS_ENTRIES: '4',
+      OPENAI_API_KEY: 'harness-openai-key',
+    },
     keys: ['/model', '\r'],
     frame: 'tail',
     expect: [
@@ -786,7 +794,10 @@ const SCENARIOS = [
   {
     name: 'no-color-model-form',
     colorEnabled: false,
-    env: { HARNESS_ENTRIES: '4' },
+    env: {
+      HARNESS_ENTRIES: '4',
+      OPENAI_API_KEY: 'harness-openai-key',
+    },
     keys: ['/model', '\r'],
     frame: 'tail',
     expect: [
@@ -802,6 +813,7 @@ const SCENARIOS = [
     env: {
       HARNESS_CAN_SELECT_MODEL: '1',
       HARNESS_ENTRIES: '4',
+      OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r'],
     frame: 'tail',
@@ -849,6 +861,7 @@ const SCENARIOS = [
     env: {
       HARNESS_CAN_SELECT_MODEL: '1',
       HARNESS_ENTRIES: '4',
+      OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r', '\r'],
     frame: 'tail',
@@ -864,6 +877,7 @@ const SCENARIOS = [
     env: {
       HARNESS_CAN_SELECT_MODEL: '1',
       HARNESS_ENTRIES: '4',
+      OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r', '21'],
     frame: 'tail',
@@ -1016,13 +1030,16 @@ const SCENARIOS = [
     name: 'compact-model-form',
     rows: 12,
     cols: 80,
-    env: { HARNESS_ENTRIES: '4' },
+    env: {
+      HARNESS_ENTRIES: '4',
+      OPENAI_API_KEY: 'harness-openai-key',
+    },
     keys: ['/model', '\r'],
     frame: 'tail',
     expect: [
       '/model · personal API keys',
       'Available models',
-      '+4 more',
+      '+1 more',
       '↑/↓ navigate',
       'Enter close',
       'Esc close',
@@ -1090,7 +1107,7 @@ const SCENARIOS = [
     expect: [
       '/tools',
       'Toggle available external integrations',
-      '+1 earlier, +5 more',
+      '+1 earlier, +4 more',
       '↑/↓ navigate',
       '1-9/a-z/Enter toggle',
       'Esc close',
@@ -1113,7 +1130,7 @@ const SCENARIOS = [
       'Switch approval policy',
       '/status',
       'Show session details',
-      '… 7 more',
+      '… 8 more',
       'Esc close',
     ],
   },
@@ -3405,6 +3422,22 @@ function cleanupFakeClipboard(fakeClipboard) {
   rmSync(fakeClipboard.dir, { recursive: true, force: true });
 }
 
+function scenarioChildEnv(scenario, cols, rows) {
+  const inheritedEnv = { ...process.env };
+  // TUI scenarios should declare provider keys explicitly instead of inheriting
+  // a developer or CI runner shell.
+  for (const key of Object.keys(inheritedEnv)) {
+    if (key.endsWith('_API_KEY')) delete inheritedEnv[key];
+  }
+  return {
+    ...inheritedEnv,
+    ...scenario.env,
+    TERM: 'xterm-256color',
+    COLUMNS: String(cols),
+    LINES: String(rows),
+  };
+}
+
 async function runScenarioWithResources(scenario, fakeClipboard, index) {
   const term = makeTerm(scenario);
   const cols = scenarioCols(scenario);
@@ -3417,13 +3450,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     await writeQueue;
     return renderFrame(term);
   };
-  const childEnv = {
-    ...process.env,
-    ...scenario.env,
-    TERM: 'xterm-256color',
-    COLUMNS: String(cols),
-    LINES: String(rows),
-  };
+  const childEnv = scenarioChildEnv(scenario, cols, rows);
   const workspaceDir = snapshotWorkspaceDir(index, scenario.name);
   if (workspaceDir && childEnv.HARNESS_CWD == null) {
     mkdirSync(workspaceDir, { recursive: true });
