@@ -5,8 +5,8 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import type { BashApprovalAction } from '@shared/schemas/prompts';
-import { requireRuntimeHost } from '@tools/contextHelpers';
 import { type ToolResult } from '@shared/schemas/toolResult';
+import { requireRuntimeHost } from '@tools/contextHelpers';
 import { getConfig } from '@utils/config/configUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 

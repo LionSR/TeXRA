@@ -19,8 +19,8 @@ import {
   StreamSnapshotStore,
 } from '@transcript';
 import { platform, tryPlatform } from '@platform/platform';
-import { getVisibleAgents, loadAgents } from '@agent/index';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
+import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
