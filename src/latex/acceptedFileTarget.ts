@@ -72,7 +72,7 @@ export function buildAcceptConfirmMessage(
 ): string {
   const action = getAcceptAction(target.isNewFile, targetExists);
   const extensionNote = target.isNewFile
-    ? `Extensions differ (${path.extname(basePath).toLowerCase()} vs ${path.extname(editedPath).toLowerCase()}). `
+    ? `Extensions differ (${getExtensionLowercase(basePath)} vs ${getExtensionLowercase(editedPath)}). `
     : '';
   return `${extensionNote}This will ${action} '${target.targetFileName}' with content from '${path.basename(editedPath)}'. Are you sure?`;
 }
