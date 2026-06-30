@@ -32,27 +32,20 @@ export class ToolUseWaitNode<C> extends Node<
 > {
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
     const { modelHandler, onBeforeWaiting } = this.services;
-    const afterError = !!(shared.lastError || shared.userCancelledRetry);
 
-    // Only extract when the callback is wired (subagent mode)
-    const previouslyDeliveredToOrchestrator =
-      shared.deliveredToOrchestrator === true;
-
-    if (!onBeforeWaiting)
-      return {
-        lastResponse: undefined,
-        touchedFiles: [],
-        afterError,
-        previouslyDeliveredToOrchestrator,
-      };
+    // Only extract response/touched-files when the callback is wired (subagent mode).
+    const wired = onBeforeWaiting !== undefined;
 
     return {
-      touchedFiles: extractTouchedFiles(shared.stateSlices),
-      lastResponse: findLastAssistantText(shared.messages, (m) =>
-        modelHandler.extractAssistantText(m),
-      ),
-      afterError,
-      previouslyDeliveredToOrchestrator,
+      afterError: !!(shared.lastError || shared.userCancelledRetry),
+      previouslyDeliveredToOrchestrator:
+        shared.deliveredToOrchestrator === true,
+      touchedFiles: wired ? extractTouchedFiles(shared.stateSlices) : [],
+      lastResponse: wired
+        ? findLastAssistantText(shared.messages, (m) =>
+            modelHandler.extractAssistantText(m),
+          )
+        : undefined,
     };
   }
 
@@ -95,8 +88,7 @@ export class ToolUseWaitNode<C> extends Node<
         await setGoalSessionBashAutoApproval(streamId, false, runtimeHost);
         runtimeHost.emit('goalPaused', { streamId });
       }
-    }
-    if (!prepRes.afterError) {
+    } else {
       const delivered = await onBeforeWaiting?.(
         prepRes.lastResponse,
         prepRes.touchedFiles,

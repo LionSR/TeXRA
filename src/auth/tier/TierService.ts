@@ -229,13 +229,14 @@ export class TierService {
     // carries auth, so they resolve to null on an anonymous fetch and on parse
     // failure — a relay-side schema drift should not silently serve stale
     // values to the quota meter / BYOK switch.
+    const record = data as Record<string, unknown>;
     const userStatus = this.parseOptionalBlock(
-      (data as Record<string, unknown>).userStatus,
+      record.userStatus,
       UserAccessStatusSchema,
       'userStatus',
     );
     const spendingStatus = this.parseOptionalBlock(
-      (data as Record<string, unknown>).spendingStatus,
+      record.spendingStatus,
       SpendingStatusSchema,
       'spendingStatus',
     );

@@ -157,12 +157,9 @@ Anything outside this list must be changed through the settings UI — invoke \`
       );
     }
 
-    const previous = getSetupPlatform().config.get(input.key);
-    await getSetupPlatform().config.update(
-      input.key,
-      parsed.data,
-      input.target,
-    );
+    const config = getSetupPlatform().config;
+    const previous = config.get(input.key);
+    await config.update(input.key, parsed.data, input.target);
 
     const before = JSON.stringify(previous);
     const after = JSON.stringify(parsed.data);

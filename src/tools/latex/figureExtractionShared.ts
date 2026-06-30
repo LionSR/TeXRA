@@ -6,22 +6,18 @@ import {
 } from '@tools/pathResolution';
 import { WorkspaceFS } from '@utils/files';
 
-// ============================================================================
-// Figure Extraction Types
-// ============================================================================
-
-export interface LatexFileResolution {
+interface LatexFileResolution {
   path: WorkspacePathResolution;
   display: string;
 }
 
-export interface AttachmentLimitResult {
+interface AttachmentLimitResult {
   attachments: ToolFileAttachment[];
   limitedPaths: string[];
   limitReached: boolean;
 }
 
-export interface AttachmentLimitOptions {
+interface AttachmentLimitOptions {
   limit: number;
   describe: (filePath: string) => string;
   mimeType?: string;
@@ -42,7 +38,7 @@ export async function buildLimitedAttachments(
   paths: string[],
   { limit, describe, mimeType }: AttachmentLimitOptions,
 ): Promise<AttachmentLimitResult> {
-  if (!Array.isArray(paths) || paths.length === 0 || limit <= 0) {
+  if (paths.length === 0 || limit <= 0) {
     return { attachments: [], limitedPaths: [], limitReached: false };
   }
 

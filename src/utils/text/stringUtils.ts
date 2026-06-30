@@ -5,6 +5,11 @@ const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: 'grapheme',
 });
 
+/** Split a string into its grapheme clusters for length-accurate slicing. */
+function toGraphemes(text: string): string[] {
+  return [...graphemeSegmenter.segment(text)].map((s) => s.segment);
+}
+
 /** Normalize CRLF line endings to LF. */
 export function normalizeLineEndings(text: string): string {
   return text.replaceAll('\r\n', '\n');
@@ -100,13 +105,10 @@ export function countLines(text: string): number {
  * truncateWithEllipsis('a very long text', 10) // 'a very lo…'
  */
 export function truncateWithEllipsis(text: string, maxLen: number): string {
-  const graphemes = [...graphemeSegmenter.segment(text)];
+  const graphemes = toGraphemes(text);
   if (graphemes.length <= maxLen) return text;
   if (maxLen <= 1) return '…';
-  return `${graphemes
-    .slice(0, maxLen - 1)
-    .map((s) => s.segment)
-    .join('')}…`;
+  return `${graphemes.slice(0, maxLen - 1).join('')}…`;
 }
 
 /**
@@ -136,15 +138,12 @@ export function truncateSummary(text: string, maxLength: number): string {
  * are never torn at the cut boundary.
  */
 export function tailWithEllipsis(text: string, maxLen: number): string {
-  const graphemes = [...graphemeSegmenter.segment(text)];
+  const graphemes = toGraphemes(text);
   if (graphemes.length <= maxLen) return text;
   // Guard maxLen <= 1: slice(-(1-1)) === slice(-0) === slice(0) would return
   // the whole array, so the ellipsis budget collapses to just "…".
   if (maxLen <= 1) return '…';
-  return `…${graphemes
-    .slice(-(maxLen - 1))
-    .map((s) => s.segment)
-    .join('')}`;
+  return `…${graphemes.slice(-(maxLen - 1)).join('')}`;
 }
 
 /**

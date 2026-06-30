@@ -68,6 +68,9 @@ const ReadInputSchema = z.strictObject({
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
 
+type AttachmentKind = 'pdf' | 'image' | 'document';
+type AttachmentConfig = { kind: AttachmentKind; label: string };
+
 export class ReadFileTool extends defineTool({
   name: 'read_file',
   description:
@@ -177,9 +180,7 @@ export class ReadFileTool extends defineTool({
     return totalLines;
   }
 
-  private getAttachmentConfig(
-    filePath: string,
-  ): { kind: 'pdf' | 'image' | 'document'; label: string } | null {
+  private getAttachmentConfig(filePath: string): AttachmentConfig | null {
     const mimeType = getMimeType(filePath)?.toLowerCase();
     // Keep extension detection case-insensitive so users can reference files regardless of casing.
     const extension = getExtensionLowercase(filePath);
@@ -210,7 +211,7 @@ export class ReadFileTool extends defineTool({
 
   private async returnBinaryAttachment(
     input: ReadInput,
-    config: { kind: 'pdf' | 'image' | 'document'; label: string },
+    config: AttachmentConfig,
     resolved: WorkspacePathResolution,
   ): Promise<ToolResult> {
     const copy = ATTACHMENT_COPY[config.kind];
@@ -248,7 +249,7 @@ const IMAGE_EXTENSIONS = new Set([
 ]);
 
 const ATTACHMENT_COPY: Record<
-  'pdf' | 'image' | 'document',
+  AttachmentKind,
   {
     rangeSummary: string;
     rangeOutput: string;

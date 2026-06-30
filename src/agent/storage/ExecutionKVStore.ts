@@ -70,14 +70,8 @@ const TodoEntrySchema = z.object({
 });
 export type TodoEntry = z.infer<typeof TodoEntrySchema>;
 
-const TodoArraySchema = z.array(TodoEntrySchema);
+const TodoArraySchema = z.array(TodoEntrySchema).catch([]);
 const WorkspaceFilePathArraySchema = z.array(z.string()).catch([]);
-
-/** Parse a raw array into validated TodoEntry[]. Returns empty on failure. */
-function parseTodoArray(raw: unknown[]): TodoEntry[] {
-  const result = TodoArraySchema.safeParse(raw);
-  return result.success ? result.data : [];
-}
 
 /** Stored data for a child execution record (without the derived `id` field). */
 const ChildRecordDataSchema = z.object({
@@ -201,9 +195,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 
   async readTodos(): Promise<TodoEntry[]> {
-    const raw = await this.read<unknown[]>(KEYS.TODOS);
-    if (!Array.isArray(raw) || raw.length === 0) return [];
-    return parseTodoArray(raw);
+    return TodoArraySchema.parse(await this.read<unknown[]>(KEYS.TODOS));
   }
 
   async readConversation(): Promise<unknown[] | null> {

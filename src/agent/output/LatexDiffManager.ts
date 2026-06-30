@@ -33,13 +33,18 @@ import {
   type CompiledPdfArtifact,
 } from './compiledPdfArtifacts';
 import { tryOperation } from './outputOperations';
-import type { RoundFileMapping } from './types';
+import type { RoundFileEntry, RoundFileMapping } from './types';
 
 interface DiffOutputDirectory {
   absolutePath: string;
   relativePath: string;
   executionId: ExecutionId;
 }
+
+type SingleDiffOutcome = {
+  diffResult: DiffResult;
+  artifact: CompiledPdfArtifact | null;
+};
 
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
@@ -189,37 +194,47 @@ export class LatexDiffManager {
 
     const aggregated: DiffResult[] = [];
     const artifacts: CompiledPdfArtifact[] = [];
+    const collect = (outcome: SingleDiffOutcome | null): void => {
+      if (!outcome) return;
+      aggregated.push(outcome.diffResult);
+      if (outcome.artifact) artifacts.push(outcome.artifact);
+    };
+    const collectPairs = (
+      pick: (entry: RoundFileEntry) => FileLocation | undefined,
+    ): [string, FileLocation][] => {
+      const pairs: [string, FileLocation][] = [];
+      for (const [outputPath, entry] of mapping) {
+        const location = pick(entry);
+        if (location) pairs.push([outputPath, location]);
+      }
+      return pairs;
+    };
 
     if (this.agentSetting.isRewrite) {
-      const basePairs: [string, FileLocation][] = [];
-      for (const [outputPath, entry] of mapping) {
-        if (entry.base) basePairs.push([outputPath, entry.base]);
-      }
+      const basePairs = collectPairs((entry) => entry.base);
       this.logPairMatches(basePairs, 'base files to output files');
 
       for (const [outputPath, baseLocation] of basePairs) {
-        const result = await this.runSingleDiff({
-          outputPath,
-          baseLocation,
-          outputByPath,
-          originalLocation: baseLocation,
-          baseRound: null,
-          runDiff: (base, revised, cwd) =>
-            this.latexdiffService.runDiffForRound(
-              base,
-              revised,
-              currRound,
-              undefined,
-              { cwd, outputDirectory: diffDirectory?.absolutePath },
-            ),
-          label: 'round-diff',
-          pdfStemSuffix: '-diff',
-          diffDirectory,
-        });
-        if (result) {
-          aggregated.push(result.diffResult);
-          if (result.artifact) artifacts.push(result.artifact);
-        }
+        collect(
+          await this.runSingleDiff({
+            outputPath,
+            baseLocation,
+            outputByPath,
+            originalLocation: baseLocation,
+            baseRound: null,
+            runDiff: (base, revised, cwd) =>
+              this.latexdiffService.runDiffForRound(
+                base,
+                revised,
+                currRound,
+                undefined,
+                { cwd, outputDirectory: diffDirectory?.absolutePath },
+              ),
+            label: 'round-diff',
+            pdfStemSuffix: '-diff',
+            diffDirectory,
+          }),
+        );
       }
     }
 
@@ -228,10 +243,7 @@ export class LatexDiffManager {
     );
 
     if (generateBetweenRoundDiffs && currRound > 0) {
-      const prevPairs: [string, FileLocation][] = [];
-      for (const [outputPath, entry] of mapping) {
-        if (entry.prev) prevPairs.push([outputPath, entry.prev]);
-      }
+      const prevPairs = collectPairs((entry) => entry.prev);
       this.logPairMatches(
         prevPairs,
         'previous round files to current round files',
@@ -239,30 +251,28 @@ export class LatexDiffManager {
 
       for (const [outputPath, prevLocation] of prevPairs) {
         const originalLocation = mapping.get(outputPath)?.origin ?? null;
-        const result = await this.runSingleDiff({
-          outputPath,
-          baseLocation: prevLocation,
-          outputByPath,
-          originalLocation,
-          baseRound: currRound - 1,
-          runDiff: (base, revised, cwd) =>
-            this.latexdiffService.runDiffBetweenRounds(
-              base,
-              revised,
-              undefined,
-              {
-                cwd,
-                outputDirectory: diffDirectory?.absolutePath,
-              },
-            ),
-          label: 'between-rounds-diff',
-          pdfStemSuffix: '-round-diff',
-          diffDirectory,
-        });
-        if (result) {
-          aggregated.push(result.diffResult);
-          if (result.artifact) artifacts.push(result.artifact);
-        }
+        collect(
+          await this.runSingleDiff({
+            outputPath,
+            baseLocation: prevLocation,
+            outputByPath,
+            originalLocation,
+            baseRound: currRound - 1,
+            runDiff: (base, revised, cwd) =>
+              this.latexdiffService.runDiffBetweenRounds(
+                base,
+                revised,
+                undefined,
+                {
+                  cwd,
+                  outputDirectory: diffDirectory?.absolutePath,
+                },
+              ),
+            label: 'between-rounds-diff',
+            pdfStemSuffix: '-round-diff',
+            diffDirectory,
+          }),
+        );
       }
     } else if (!generateBetweenRoundDiffs) {
       this.logger.debug(
@@ -311,10 +321,7 @@ export class LatexDiffManager {
     label: string;
     pdfStemSuffix: string;
     diffDirectory: DiffOutputDirectory | null;
-  }): Promise<{
-    diffResult: DiffResult;
-    artifact: CompiledPdfArtifact | null;
-  } | null> {
+  }): Promise<SingleDiffOutcome | null> {
     const {
       outputPath,
       baseLocation,

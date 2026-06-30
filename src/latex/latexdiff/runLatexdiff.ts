@@ -121,24 +121,22 @@ export async function runLatexdiffForExecution(
     }
   }
 
-  if (outputsByRound) {
-    const outcome = await runLatexdiffFromMetadata({
-      rounds: outputsByRound,
-      mathMarkup,
-      generateBetweenRoundDiffs,
-      progress,
-    });
-    return { outcome, executionId: discoveredExecutionId, source };
-  }
+  const outcome = outputsByRound
+    ? await runLatexdiffFromMetadata({
+        rounds: outputsByRound,
+        mathMarkup,
+        generateBetweenRoundDiffs,
+        progress,
+      })
+    : await runLatexdiffViaWorkspaceScan({
+        agent,
+        model,
+        inputFile,
+        outputFiles,
+        mathMarkup,
+        generateBetweenRoundDiffs,
+        progress,
+      });
 
-  const outcome = await runLatexdiffViaWorkspaceScan({
-    agent,
-    model,
-    inputFile,
-    outputFiles,
-    mathMarkup,
-    generateBetweenRoundDiffs,
-    progress,
-  });
   return { outcome, executionId: discoveredExecutionId, source };
 }

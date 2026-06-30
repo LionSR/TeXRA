@@ -254,85 +254,74 @@ export function getDesktopCommandMenuEntries(
   });
 }
 
+type DesktopCommandHandler = CommandHandler<DesktopCommandActions>;
+
+// Run an always-present action and report the command as handled.
+function requiredAction(
+  run: (actions: DesktopCommandActions) => void,
+): DesktopCommandHandler {
+  return (actions) => {
+    run(actions);
+    return true;
+  };
+}
+
+// Run an optional action when the host wired it. Report the command as
+// unhandled when the action is absent so the dispatcher can fall through.
+function optionalAction(
+  pick: (actions: DesktopCommandActions) => (() => void) | undefined,
+): DesktopCommandHandler {
+  return (actions) => {
+    const run = pick(actions);
+    if (!run) return false;
+    run();
+    return true;
+  };
+}
+
 const DESKTOP_COMMAND_HANDLERS = {
-  'texra.showMainView': (actions) => {
-    actions.showRoute('main');
-    return true;
-  },
-  'texra.showProgressView': (actions) => {
-    actions.showRoute('progress');
-    return true;
-  },
-  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: (actions) => {
-    actions.showRoute('logs');
-    return true;
-  },
-  'texra.openSettings': (actions) => {
-    actions.showSettings();
-    return true;
-  },
-  'texra.mainView.reset': (actions) => {
-    if (!actions.resetMainView) return false;
-    actions.resetMainView();
-    return true;
-  },
-  'texra.showMemory': (actions) => {
-    actions.showSettings(SETTINGS_TAB.MEMORY);
-    return true;
-  },
-  'texra.showAgentHistory': (actions) => {
-    actions.showSettings(SETTINGS_TAB.HISTORY);
-    return true;
-  },
-  'texra.showModels': (actions) => {
-    actions.showSettings(SETTINGS_TAB.MODELS);
-    return true;
-  },
-  'texra.showAgents': (actions) => {
-    actions.showSettings(SETTINGS_TAB.AGENTS);
-    return true;
-  },
-  'texra.showTools': (actions) => {
-    actions.showSettings(SETTINGS_TAB.TOOLS);
-    return true;
-  },
-  'texra.showMultiAgent': (actions) => {
-    actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
-    return true;
-  },
-  'texra.showGitSettings': (actions) => {
-    actions.showSettings(SETTINGS_TAB.GIT);
-    return true;
-  },
-  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: (actions) => {
-    if (!actions.openLogFolder) return false;
-    actions.openLogFolder();
-    return true;
-  },
-  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: (actions) => {
-    if (!actions.openWorkspaceFolder) return false;
-    actions.openWorkspaceFolder();
-    return true;
-  },
-  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW]: (actions) => {
-    if (!actions.openWorkspaceInNewWindow) return false;
-    actions.openWorkspaceInNewWindow();
-    return true;
-  },
-  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: (actions) => {
-    if (!actions.showFirstRunWalkthrough) return false;
-    actions.showFirstRunWalkthrough();
-    return true;
-  },
-  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: (actions) => {
-    if (!actions.openDesktopDocs) return false;
-    actions.openDesktopDocs();
-    return true;
-  },
-} as const satisfies Record<
-  DesktopAvailableCommandId,
-  CommandHandler<DesktopCommandActions>
->;
+  'texra.showMainView': requiredAction((a) => a.showRoute('main')),
+  'texra.showProgressView': requiredAction((a) => a.showRoute('progress')),
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: requiredAction((a) =>
+    a.showRoute('logs'),
+  ),
+  'texra.openSettings': requiredAction((a) => a.showSettings()),
+  'texra.mainView.reset': optionalAction((a) => a.resetMainView),
+  'texra.showMemory': requiredAction((a) =>
+    a.showSettings(SETTINGS_TAB.MEMORY),
+  ),
+  'texra.showAgentHistory': requiredAction((a) =>
+    a.showSettings(SETTINGS_TAB.HISTORY),
+  ),
+  'texra.showModels': requiredAction((a) =>
+    a.showSettings(SETTINGS_TAB.MODELS),
+  ),
+  'texra.showAgents': requiredAction((a) =>
+    a.showSettings(SETTINGS_TAB.AGENTS),
+  ),
+  'texra.showTools': requiredAction((a) => a.showSettings(SETTINGS_TAB.TOOLS)),
+  'texra.showMultiAgent': requiredAction((a) =>
+    a.showSettings(SETTINGS_TAB.MULTI_AGENT),
+  ),
+  'texra.showGitSettings': requiredAction((a) =>
+    a.showSettings(SETTINGS_TAB.GIT),
+  ),
+  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: optionalAction(
+    (a) => a.openLogFolder,
+  ),
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: optionalAction(
+    (a) => a.openWorkspaceFolder,
+  ),
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW]: optionalAction(
+    (a) => a.openWorkspaceInNewWindow,
+  ),
+  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: optionalAction(
+    (a) => a.showFirstRunWalkthrough,
+  ),
+  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: optionalAction(
+    (a) => a.openDesktopDocs,
+  ),
+} as const satisfies Record<DesktopAvailableCommandId, DesktopCommandHandler>;
 
 export function dispatchDesktopCommand(
   id: DesktopCommandId,
@@ -421,10 +410,11 @@ export function buildDesktopMenuTemplate(
     ],
   };
 
+  const leadingMenus: MenuItemConstructorOptions[] =
+    platform === 'darwin' ? [{ role: 'appMenu' }, fileMenu] : [fileMenu];
+
   return [
-    ...(platform === 'darwin'
-      ? ([{ role: 'appMenu' }, fileMenu] satisfies MenuItemConstructorOptions[])
-      : ([fileMenu] satisfies MenuItemConstructorOptions[])),
+    ...leadingMenus,
     customMenu,
     { role: 'editMenu' },
     { role: 'viewMenu' },

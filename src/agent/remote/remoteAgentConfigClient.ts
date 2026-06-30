@@ -1,11 +1,8 @@
-// Third-party imports
-import ky, { HTTPError } from 'ky';
 import { StatusCodes } from 'http-status-codes';
+import ky, { HTTPError } from 'ky';
 
-// Local imports - auth
 import { SUPABASE_CONFIG } from '@auth/config';
 
-// Local imports - agent
 import { errorDataToString } from './errorData';
 import { EdgeFunctionResponseSchema } from './types';
 

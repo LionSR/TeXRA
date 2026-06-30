@@ -13,14 +13,19 @@ import type { ConversationEntry, StreamSlice } from './cliState';
 /** Gutter that opens a wrapped tool-output line (corner glyph + space). */
 const CORNER_PREFIX = `${TOOL_OUTPUT_CORNER} `;
 
-function wrap(text: string, cols: number, prefix = ''): string[] {
-  const width = Math.max(1, cols - prefix.length);
-  return wrapAnsiToWidth(text, width)
+/** Soft-wrap `body` to `cols`, prefixing the first wrapped line with
+ *  `firstPrefix` and every continuation line with `contPrefix` (spaces matching
+ *  the first prefix by default, for a hanging indent). */
+function wrapWithPrefix(
+  body: string,
+  cols: number,
+  firstPrefix = '',
+  contPrefix = ' '.repeat(firstPrefix.length),
+): string[] {
+  const width = Math.max(1, cols - firstPrefix.length);
+  return wrapAnsiToWidth(body, width)
     .split('\n')
-    .map(
-      (line, index) =>
-        `${index === 0 ? prefix : ' '.repeat(prefix.length)}${line}`,
-    );
+    .map((line, index) => `${index === 0 ? firstPrefix : contPrefix}${line}`);
 }
 
 function leadingWhitespacePrefix(line: string): string {
@@ -29,22 +34,16 @@ function leadingWhitespacePrefix(line: string): string {
 
 function wrapDisplayLine(line: string, cols: number): string[] {
   if (line.startsWith(CORNER_PREFIX)) {
-    const width = Math.max(1, cols - CORNER_PREFIX.length);
-    return wrapAnsiToWidth(line.slice(CORNER_PREFIX.length), width)
-      .split('\n')
-      .map(
-        (part, index) =>
-          `${index === 0 ? CORNER_PREFIX : ' '.repeat(CORNER_PREFIX.length)}${part}`,
-      );
+    return wrapWithPrefix(
+      line.slice(CORNER_PREFIX.length),
+      cols,
+      CORNER_PREFIX,
+    );
   }
-
+  // Repeat any leading indentation on every wrapped line so nested output keeps
+  // its shape.
   const prefix = leadingWhitespacePrefix(line);
-  if (!prefix) return wrapAnsiToWidth(line, cols).split('\n');
-
-  const width = Math.max(1, cols - prefix.length);
-  return wrapAnsiToWidth(line.slice(prefix.length), width)
-    .split('\n')
-    .map((part) => `${prefix}${part}`);
+  return wrapWithPrefix(line.slice(prefix.length), cols, prefix, prefix);
 }
 
 function wrapLines(lines: readonly string[], cols: number): string[] {
@@ -92,11 +91,11 @@ function computeTranscriptEntryLines(
         ? wrapLines(completedProcessDisplayLines(entry.process), cols)
         : [];
     case 'user':
-      return wrap(entry.text, cols, '› ');
+      return wrapWithPrefix(entry.text, cols, '› ');
     case 'error':
-      return wrap(entry.text, cols, '! ');
+      return wrapWithPrefix(entry.text, cols, '! ');
     default:
-      return wrap(entry.text, cols);
+      return wrapWithPrefix(entry.text, cols);
   }
 }
 

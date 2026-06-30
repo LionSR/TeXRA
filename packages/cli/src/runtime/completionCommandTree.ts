@@ -25,14 +25,10 @@ export interface CompletionFlag {
   readonly negatedDescription?: string;
 }
 
-export interface CompletionFlagVariant {
-  readonly name: string;
-  readonly aliases: readonly string[];
-  readonly description: string;
-  readonly takesValue: boolean;
-  readonly values: readonly string[];
-  readonly valueKind?: string;
-}
+export type CompletionFlagVariant = Omit<
+  CompletionFlag,
+  'negatedName' | 'negatedDescription'
+>;
 
 function isCompletionShell(value: string): value is CliCompletionShell {
   return (CLI_COMPLETION_SHELLS as readonly string[]).includes(value);
@@ -45,7 +41,9 @@ export function parseCompletionShell(value: string): CliCompletionShell {
   );
 }
 
-async function resolveValue<T>(value: T | Promise<T> | (() => T | Promise<T>)) {
+async function resolveValue<T>(
+  value: T | Promise<T> | (() => T | Promise<T>),
+): Promise<T> {
   return typeof value === 'function'
     ? await (value as () => T | Promise<T>)()
     : await value;

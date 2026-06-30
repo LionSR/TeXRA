@@ -226,10 +226,8 @@ export class XmlOutputManager {
   async processXmlContent(content: string): Promise<string> {
     // applyNonRegex already applies all enabled non-regex categories
     // (including latex_xml), so no need to re-apply them.
-    content = replacementEngine.applyNonRegex(content);
-    content = applyReplacements(content, FENCED_LATEX_BLOCK_REPLACEMENTS);
-
-    return content;
+    const normalized = replacementEngine.applyNonRegex(content);
+    return applyReplacements(normalized, FENCED_LATEX_BLOCK_REPLACEMENTS);
   }
 
   private extractMultipleDocumentsbyRegex(

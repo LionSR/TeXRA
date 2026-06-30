@@ -7,10 +7,10 @@
 
 // Third-party imports
 import { z } from 'zod';
-import { defineTool } from '@tools/core/define';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - core
+import { defineTool } from '@tools/core/define';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - zotero
 import {
@@ -146,14 +146,14 @@ export class ZoteroSearchTool extends defineTool({
 
     // Build search params: use advanced tuple search when structured fields
     // are provided, otherwise fall back to simple quick-search string.
-    const useStructured = !!(title || author || year);
-    const searchTerms: unknown = useStructured
-      ? [
-          ...(title ? [['title', 'contains', title]] : []),
-          ...(author ? [['creator', 'contains', author]] : []),
-          ...(year ? [['date', 'is', String(year)]] : []),
-        ]
-      : query!;
+    const searchTerms: unknown =
+      title || author || year
+        ? [
+            ...(title ? [['title', 'contains', title]] : []),
+            ...(author ? [['creator', 'contains', author]] : []),
+            ...(year ? [['date', 'is', String(year)]] : []),
+          ]
+        : query!;
 
     const params: unknown[] = library ? [searchTerms, library] : [searchTerms];
 

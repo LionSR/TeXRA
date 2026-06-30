@@ -1,10 +1,10 @@
 import * as path from 'node:path';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { normalizeFilePath } from '@shared/utils/path';
 import { AbsoluteFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { byStringProp } from '@utils/core/comparators';
-import { normalizeFilePath } from '@shared/utils/path';
 
 export interface ExecutionWorkspaceFile {
   readonly path: string;
@@ -18,7 +18,7 @@ export function resolveExecutionWorkspaceFilePath(
   config: AgentConfig | null,
   filePath: string,
 ): { readonly absolutePath: string; readonly path: string } | undefined {
-  const workspaceRoot = executionWorkspaceRoot(config);
+  const workspaceRoot = config?.workingDirectory?.trim();
   const cleanedPath = filePath.trim();
   if (!workspaceRoot || !cleanedPath) return undefined;
 
@@ -64,10 +64,4 @@ export async function listExecutionWorkspaceFiles(
     });
   }
   return [...files.values()].sort(byStringProp((f) => f.path));
-}
-
-function executionWorkspaceRoot(
-  config: AgentConfig | null,
-): string | undefined {
-  return config?.workingDirectory?.trim() || undefined;
 }

@@ -43,10 +43,7 @@ export const TOOL_USE_STATUS = {
   COMPLETED: 'completed',
 } as const;
 
-const ToolUseStatusSchema = z.enum([
-  TOOL_USE_STATUS.IN_PROGRESS,
-  TOOL_USE_STATUS.COMPLETED,
-]);
+const ToolUseStatusSchema = z.enum(TOOL_USE_STATUS);
 
 export const ToolUseLogSchema = z
   .object({

@@ -1,4 +1,3 @@
-// Standard library imports
 import * as fs from 'node:fs';
 
 /**

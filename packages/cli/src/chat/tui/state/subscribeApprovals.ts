@@ -94,15 +94,15 @@ async function maybeAutoSwitchRetry(
   // ChatGPT-subscription exhaustion -> the user needs an OpenAI key.
   // Relay exhaustion -> use the provider from error details when known;
   // provider-less relay failures can use any configured personal key.
-  const providers: readonly ApiProvider[] = isCliChatGptSubscriptionRetry(
-    payload,
-  )
-    ? ['openai']
-    : details?.provider
-      ? isApiProvider(details.provider)
-        ? [details.provider]
-        : []
-      : API_PROVIDERS;
+  const isChatGptSubscription = isCliChatGptSubscriptionRetry(payload);
+  let providers: readonly ApiProvider[];
+  if (isChatGptSubscription) {
+    providers = ['openai'];
+  } else if (details?.provider) {
+    providers = isApiProvider(details.provider) ? [details.provider] : [];
+  } else {
+    providers = API_PROVIDERS;
+  }
   if (providers.length === 0) return undefined;
 
   const hasKey = (
@@ -112,7 +112,6 @@ async function maybeAutoSwitchRetry(
   ).some(Boolean);
   if (!hasKey) return undefined;
 
-  const isChatGptSubscription = isCliChatGptSubscriptionRetry(payload);
   return {
     accepted: true,
     apiMode: 'personal',

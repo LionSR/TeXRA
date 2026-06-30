@@ -43,6 +43,28 @@ export function extractDocumentBlocks(
   return documents;
 }
 
+/**
+ * Yields every document block across messages with its typed source, descending
+ * into tool_result content. Shared by source analysis and upload replacement so
+ * both walk messages identically.
+ */
+function* iterateDocumentSources(messages: MessageParam[]): Generator<{
+  block: DocumentBlockParam;
+  source: BetaRequestDocumentBlock['source'];
+}> {
+  for (const message of messages) {
+    if (!Array.isArray(message.content)) {
+      continue;
+    }
+    for (const block of extractDocumentBlocks(message.content)) {
+      yield {
+        block,
+        source: block.source as BetaRequestDocumentBlock['source'],
+      };
+    }
+  }
+}
+
 export interface DocumentSourceAnalysis {
   hasFileSource: boolean;
   hasBase64Pdf: boolean;
@@ -57,27 +79,19 @@ export function analyzeDocumentSources(
   let hasFileSource = false;
   let hasBase64Pdf = false;
 
-  for (const message of messages) {
-    const contentBlocks = message.content;
-    if (!Array.isArray(contentBlocks)) {
-      continue;
+  for (const { source } of iterateDocumentSources(messages)) {
+    if (source.type === 'file') {
+      hasFileSource = true;
+    } else if (
+      source.type === 'base64' &&
+      source.media_type === 'application/pdf' &&
+      source.data
+    ) {
+      hasBase64Pdf = true;
     }
 
-    for (const block of extractDocumentBlocks(contentBlocks)) {
-      const source = block.source as BetaRequestDocumentBlock['source'];
-      if (source.type === 'file') {
-        hasFileSource = true;
-      } else if (
-        source.type === 'base64' &&
-        source.media_type === 'application/pdf' &&
-        source.data
-      ) {
-        hasBase64Pdf = true;
-      }
-
-      if (hasFileSource && hasBase64Pdf) {
-        return { hasFileSource: true, hasBase64Pdf: true };
-      }
+    if (hasFileSource && hasBase64Pdf) {
+      return { hasFileSource: true, hasBase64Pdf: true };
     }
   }
 
@@ -136,69 +150,60 @@ export async function replaceDocumentDataWithUploads(
   let uploaded = false;
   let hasFileReference = false;
 
-  for (const message of messages) {
-    const contentBlocks = message.content;
-    if (!Array.isArray(contentBlocks)) {
+  for (const { block, source } of iterateDocumentSources(messages)) {
+    if (source.type === 'file') {
+      hasFileReference = true;
       continue;
     }
 
-    for (const block of extractDocumentBlocks(contentBlocks)) {
-      const source = block.source as BetaRequestDocumentBlock['source'];
+    if (source.type !== 'base64') {
+      continue;
+    }
 
-      if (source.type === 'file') {
-        hasFileReference = true;
-        continue;
+    const mediaType = source.media_type;
+    if (mediaType !== 'application/pdf') {
+      continue;
+    }
+
+    const base64Data = source.data;
+    if (!base64Data) {
+      continue;
+    }
+
+    const filename = (block.title ?? 'document.pdf').trim() || 'document.pdf';
+    const sanitizedFilename = sanitizeAnthropicFilename(filename);
+    let buffer: Buffer | undefined;
+    let uploadedSource: BetaRequestDocumentBlock['source'] | undefined;
+
+    try {
+      buffer = Buffer.from(base64Data, 'base64');
+
+      const pageCount = await countPdfPagesFromBuffer(buffer);
+
+      const uploadedFile = await client.beta.files.upload({
+        file: await toFile(buffer, sanitizedFilename, {
+          type: mediaType,
+        }),
+        betas: [FILES_API_BETA],
+      });
+
+      uploadedSource = {
+        type: 'file',
+        file_id: uploadedFile.id,
+      } as BetaRequestDocumentBlock['source'];
+
+      if (pageCount > 0) {
+        uploadedPdfPageCounts.set(uploadedFile.id, pageCount);
       }
+    } finally {
+      buffer = wipeBuffer(buffer);
+    }
 
-      if (source.type !== 'base64') {
-        continue;
-      }
-
-      const mediaType = source.media_type;
-      if (mediaType !== 'application/pdf') {
-        continue;
-      }
-
-      const base64Data = source.data;
-      if (!base64Data) {
-        continue;
-      }
-
-      const filename = (block.title ?? 'document.pdf').trim() || 'document.pdf';
-      const sanitizedFilename = sanitizeAnthropicFilename(filename);
-      let buffer: Buffer | undefined;
-      let uploadedSource: BetaRequestDocumentBlock['source'] | undefined;
-
-      try {
-        buffer = Buffer.from(base64Data, 'base64');
-
-        const pageCount = await countPdfPagesFromBuffer(buffer);
-
-        const uploadedFile = await client.beta.files.upload({
-          file: await toFile(buffer, sanitizedFilename, {
-            type: mediaType,
-          }),
-          betas: [FILES_API_BETA],
-        });
-
-        uploadedSource = {
-          type: 'file',
-          file_id: uploadedFile.id,
-        } as BetaRequestDocumentBlock['source'];
-
-        if (pageCount > 0) {
-          uploadedPdfPageCounts.set(uploadedFile.id, pageCount);
-        }
-      } finally {
-        buffer = wipeBuffer(buffer);
-      }
-
-      if (uploadedSource) {
-        delete (source as { data?: string }).data;
-        (block as BetaRequestDocumentBlock).source = uploadedSource;
-        uploaded = true;
-        hasFileReference = true;
-      }
+    if (uploadedSource) {
+      delete (source as { data?: string }).data;
+      (block as BetaRequestDocumentBlock).source = uploadedSource;
+      uploaded = true;
+      hasFileReference = true;
     }
   }
 

@@ -149,21 +149,17 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           this.render(true);
         }
         return true;
-      case 'updateStreamDescription':
+      case 'updateStreamDescription': {
         if (this.rootStreamTerminal) return true;
-        if (
-          this.isRootStream(
-            (payload as ProgressEventPayloads['updateStreamDescription'])
-              .streamId,
-          )
-        ) {
-          this.state.phase = (
-            payload as ProgressEventPayloads['updateStreamDescription']
-          ).description;
+        const data =
+          payload as ProgressEventPayloads['updateStreamDescription'];
+        if (this.isRootStream(data.streamId)) {
+          this.state.phase = data.description;
           this.updateHeartbeat();
           this.render(true);
         }
         return true;
+      }
       default:
         return false;
     }

@@ -26,6 +26,7 @@ export class UnsetApiKeyTool extends defineTool({
   protected async execute(input: UnsetApiKeyInput): Promise<ToolResult> {
     const platform = getSetupPlatform();
     const provider = requireApiProvider(input.provider);
+    const envVar = `${provider.toUpperCase()}_API_KEY`;
 
     const storedExists = await platform.secrets.storedApiKeyExists(provider);
     if (!storedExists) {
@@ -37,7 +38,6 @@ export class UnsetApiKeyTool extends defineTool({
       // supplying credentials.
       const envExists = await platform.secrets.hasUsableApiKey(provider);
       if (envExists) {
-        const envVar = `${provider.toUpperCase()}_API_KEY`;
         return {
           summary: `${provider} key is env-var-backed`,
           output: `No stored API key for "${provider}" to remove, but one is still active via the ${envVar} environment variable. SecretStorage has nothing to clear — unset ${envVar} in your shell (or the source that sets it) to remove this credential.`,
@@ -61,7 +61,6 @@ export class UnsetApiKeyTool extends defineTool({
     // "env var still active" branch.
     const stillPresent = await platform.secrets.hasUsableApiKey(provider);
     if (stillPresent) {
-      const envVar = `${provider.toUpperCase()}_API_KEY`;
       return {
         summary: `Removed stored ${provider} key (env var still active)`,
         output: `Removed stored API key for provider "${provider}", but the ${envVar} environment variable is still set and will continue to provide a credential. Unset ${envVar} in your shell to fully remove it.`,

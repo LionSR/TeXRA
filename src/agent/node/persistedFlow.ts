@@ -226,13 +226,7 @@ export class PersistedFlow<
   }
 
   async setShared(newShared: S): Promise<void> {
-    const key = flowKey(this.runId);
-    const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key))!;
-    this.cachedRecord = null;
-    flow.shared = this.serializeShared(newShared);
-    await this.kv.write(key, flow);
-    this.cachedRecord = flow;
-    await this.fireProjection(newShared);
+    await this.commitShared(newShared);
   }
 
   getRunId(): string {
@@ -245,10 +239,24 @@ export class PersistedFlow<
    * without embedding loop edges in the graph itself.
    */
   protected async resetNodeHistory(shared: S): Promise<void> {
+    await this.commitShared(shared, (flow) => {
+      flow.nodes = [];
+    });
+  }
+
+  /**
+   * Persist new shared state (with an optional record mutation), keeping the
+   * in-memory cache consistent. The cache is invalidated before the write so a
+   * failed write falls back to the authoritative KVStore state on the next read.
+   */
+  private async commitShared(
+    shared: S,
+    mutate?: (flow: FlowRecord) => void,
+  ): Promise<void> {
     const key = flowKey(this.runId);
     const flow = this.cachedRecord ?? (await this.kv.read<FlowRecord>(key))!;
     this.cachedRecord = null;
-    flow.nodes = [];
+    mutate?.(flow);
     flow.shared = this.serializeShared(shared);
     await this.kv.write(key, flow);
     this.cachedRecord = flow;

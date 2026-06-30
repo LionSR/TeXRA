@@ -32,6 +32,10 @@ export function parseHistoryListLimit(
   return Number.isSafeInteger(limit) && limit > 0 ? limit : undefined;
 }
 
+function storedExecutionsNoun(count: number): string {
+  return count === 1 ? 'stored execution' : 'stored executions';
+}
+
 async function runHistoryList(
   context: CliContext,
   options: { limit?: number } = {},
@@ -92,10 +96,10 @@ async function runHistoryDelete(
       yes: options.yes,
     });
     if (!preflight.proceed) {
-      const noun =
-        preflight.count === 1 ? 'stored execution' : 'stored executions';
       writeTextStderr(
-        `Refusing to delete ${preflight.count} ${noun}. Re-run with --yes to confirm.`,
+        `Refusing to delete ${preflight.count} ${storedExecutionsNoun(
+          preflight.count,
+        )}. Re-run with --yes to confirm.`,
       );
       return CliExitCode.Usage;
     }
@@ -124,8 +128,7 @@ async function runHistoryDelete(
 
   let text: string;
   if (result.deleted === 'all') {
-    const noun = result.count === 1 ? 'stored execution' : 'stored executions';
-    text = `Deleted ${result.count} ${noun}.`;
+    text = `Deleted ${result.count} ${storedExecutionsNoun(result.count)}.`;
   } else if (result.found) {
     text = `Deleted execution ${result.id}.`;
   } else {

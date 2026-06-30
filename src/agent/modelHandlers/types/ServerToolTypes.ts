@@ -136,75 +136,51 @@ export interface ServerToolExtractionResult {
 // Type Guards - Using SDK types for better type safety
 // ============================================================================
 
-/**
- * Type guard for Anthropic server tool use block.
- * Uses SDK's ServerToolUseBlock type for proper typing.
- */
+/** Shared shape check: a non-null object whose `type` matches the given tag. */
+function hasBlockType(value: unknown, type: string): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { type?: string }).type === type
+  );
+}
+
+/** Type guard for Anthropic server tool use block. */
 export function isAnthropicServerToolUse(
   block: unknown,
 ): block is ServerToolUseBlock {
-  return (
-    typeof block === 'object' &&
-    block !== null &&
-    (block as { type?: string }).type === 'server_tool_use'
-  );
+  return hasBlockType(block, 'server_tool_use');
 }
 
-/**
- * Type guard for Anthropic web search result block.
- * Uses SDK's WebSearchToolResultBlock type for proper typing.
- */
+/** Type guard for Anthropic web search result block. */
 export function isAnthropicWebSearchResult(
   block: unknown,
 ): block is WebSearchToolResultBlock {
-  return (
-    typeof block === 'object' &&
-    block !== null &&
-    (block as { type?: string }).type === 'web_search_tool_result'
-  );
+  return hasBlockType(block, 'web_search_tool_result');
 }
 
-/**
- * Type guard for Anthropic web fetch result block.
- * Uses SDK's WebFetchToolResultBlock type for proper typing.
- */
+/** Type guard for Anthropic web fetch result block. */
 export function isAnthropicWebFetchResult(
   block: unknown,
 ): block is WebFetchToolResultBlock {
-  return (
-    typeof block === 'object' &&
-    block !== null &&
-    (block as { type?: string }).type === 'web_fetch_tool_result'
-  );
+  return hasBlockType(block, 'web_fetch_tool_result');
 }
 
-/**
- * Type guard for OpenAI web search call.
- * Uses SDK's ResponseFunctionWebSearch type for proper typing.
- */
+/** Type guard for OpenAI web search call. */
 export function isOpenAIWebSearchCall(
   item: unknown,
 ): item is ResponseFunctionWebSearch {
-  return (
-    typeof item === 'object' &&
-    item !== null &&
-    (item as { type?: string }).type === 'web_search_call'
-  );
+  return hasBlockType(item, 'web_search_call');
 }
 
 /**
  * Type guard for OpenAI reasoning item.
- * Uses SDK's ResponseReasoningItem type for proper typing.
  * Reasoning items must be preserved when web_search_call references them.
  */
 export function isOpenAIReasoningItem(
   item: unknown,
 ): item is ResponseReasoningItem {
-  return (
-    typeof item === 'object' &&
-    item !== null &&
-    (item as { type?: string }).type === 'reasoning'
-  );
+  return hasBlockType(item, 'reasoning');
 }
 
 /**
@@ -409,12 +385,14 @@ export function buildOpenAIWebSearchResult(
   const searchItem = item as ResponseFunctionWebSearchWithAction;
 
   // Determine status using SDK's status type
-  const status: WebSearchResult['status'] =
-    searchItem.status === 'completed'
-      ? 'completed'
-      : searchItem.status === 'failed'
-        ? 'failed'
-        : 'in_progress';
+  let status: WebSearchResult['status'];
+  if (searchItem.status === 'completed') {
+    status = 'completed';
+  } else if (searchItem.status === 'failed') {
+    status = 'failed';
+  } else {
+    status = 'in_progress';
+  }
 
   const action = searchItem.action;
 

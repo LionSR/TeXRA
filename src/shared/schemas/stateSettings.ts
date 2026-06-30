@@ -128,6 +128,8 @@ export interface StateSettingEntry {
 }
 
 const GIT_AUTHOR_CONSUMER = 'packages/cli/src/runtime/gitAuthor.ts';
+const CODEX_CONFIG_CONSUMER = 'src/tools/codexConfig.ts';
+const CLAUDE_AGENT_CONFIG_CONSUMER = 'src/tools/claudeAgentConfig.ts';
 const GIT_AUTHOR_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "create a git commit"',
@@ -246,7 +248,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'ai-agents',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/tools/codexConfig.ts',
+    cliConsumer: CODEX_CONFIG_CONSUMER,
     cliRuntimeReachability: CODEX_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Read-only', 'Workspace write', 'Full access'],
   },
@@ -258,7 +260,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'ai-agents',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/tools/codexConfig.ts',
+    cliConsumer: CODEX_CONFIG_CONSUMER,
     cliRuntimeReachability: CODEX_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high'],
   },
@@ -270,7 +272,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'ai-agents',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/tools/codexConfig.ts',
+    cliConsumer: CODEX_CONFIG_CONSUMER,
     cliRuntimeReachability: CODEX_AGENT_RUNTIME_REACHABILITY,
     enumLabels: [
       'Auto approve',
@@ -287,7 +289,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'ai-agents',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/tools/claudeAgentConfig.ts',
+    cliConsumer: CLAUDE_AGENT_CONFIG_CONSUMER,
     cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Sonnet 4.6', 'Fable 5', 'Opus 4.8', 'Haiku 4.5'],
   },
@@ -301,7 +303,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'ai-agents',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/tools/claudeAgentConfig.ts',
+    cliConsumer: CLAUDE_AGENT_CONFIG_CONSUMER,
     cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
     enumLabels: [
       'Prompt for risky actions',
@@ -318,7 +320,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'ai-agents',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer: 'src/tools/claudeAgentConfig.ts',
+    cliConsumer: CLAUDE_AGENT_CONFIG_CONSUMER,
     cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
   },

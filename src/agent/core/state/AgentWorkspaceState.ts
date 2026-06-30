@@ -371,28 +371,14 @@ export type AgentWorkspaceSnapshot = z.output<
 >;
 
 export class AgentWorkspaceState {
-  public readonly assembly: ResponseAssemblyState;
-  public readonly media: MediaAttachmentState;
-  public readonly reasoning: ReasoningCacheState;
-  public readonly interactions: FileInteractionState;
-  public readonly serverToolContent: ServerToolContentState;
-  public readonly workPlan: WorkPlanState;
-
   private constructor(
-    assembly: ResponseAssemblyState,
-    media: MediaAttachmentState,
-    reasoning: ReasoningCacheState,
-    interactions: FileInteractionState,
-    serverToolContent: ServerToolContentState,
-    workPlan: WorkPlanState,
-  ) {
-    this.assembly = assembly;
-    this.media = media;
-    this.reasoning = reasoning;
-    this.interactions = interactions;
-    this.serverToolContent = serverToolContent;
-    this.workPlan = workPlan;
-  }
+    public readonly assembly: ResponseAssemblyState,
+    public readonly media: MediaAttachmentState,
+    public readonly reasoning: ReasoningCacheState,
+    public readonly interactions: FileInteractionState,
+    public readonly serverToolContent: ServerToolContentState,
+    public readonly workPlan: WorkPlanState,
+  ) {}
 
   static create(): AgentWorkspaceState {
     return new AgentWorkspaceState(

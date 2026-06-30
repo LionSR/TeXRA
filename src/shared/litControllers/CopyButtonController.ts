@@ -1,11 +1,8 @@
-// Third-party imports
 import {
   copyTextToClipboard,
   COPY_RESET_DELAY_MS,
 } from '@shared/utils/clipboard';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
-
-// Local imports
 
 export interface CopyButtonConfig {
   /** Default button title/tooltip */

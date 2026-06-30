@@ -35,8 +35,6 @@ export const EdgeFunctionResponseSchema = z.object({
   config: z.string().min(1, 'Server returned empty configuration'),
 });
 
-export type EdgeFunctionResponse = z.infer<typeof EdgeFunctionResponseSchema>;
-
 /** Loaded remote agent configuration (settings + prompts). */
 export const RemoteAgentConfigSchema = z.strictObject({
   settings: AgentSettingSchema,

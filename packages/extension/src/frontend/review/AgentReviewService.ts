@@ -85,6 +85,13 @@ interface ActiveReview {
   changedFiles: string[];
 }
 
+/** Pre-run results captured so a session that reports nothing can restore them. */
+interface ReviewSnapshot {
+  issues: ReviewIssue[];
+  reviewRoot: string | undefined;
+  baseDescription: string;
+}
+
 const SEVERITY_MAP: Record<ReviewSeverity, vscode.DiagnosticSeverity> = {
   critical: vscode.DiagnosticSeverity.Error,
   warning: vscode.DiagnosticSeverity.Warning,
@@ -269,7 +276,7 @@ class AgentReviewServiceImpl {
     // Snapshot the previous results (issues plus the root/base they belong
     // to) so a session that fails before reporting anything restores them
     // intact instead of leaving the panel empty.
-    const previous = {
+    const previous: ReviewSnapshot = {
       issues: this.issues,
       reviewRoot: this.reviewRoot,
       baseDescription: this.baseDescription,
@@ -384,11 +391,7 @@ class AgentReviewServiceImpl {
    * the session ended without reporting anything. Returns true when the
    * previous issues (and the root/base they belong to) were restored.
    */
-  private restorePreviousResults(previous: {
-    issues: ReviewIssue[];
-    reviewRoot: string | undefined;
-    baseDescription: string;
-  }): boolean {
+  private restorePreviousResults(previous: ReviewSnapshot): boolean {
     if (this.issues.length > 0 || previous.issues.length === 0) return false;
     this.issues = previous.issues;
     this.reviewRoot = previous.reviewRoot;

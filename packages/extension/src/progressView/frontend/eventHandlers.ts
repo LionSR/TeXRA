@@ -3,8 +3,11 @@ import { create } from 'mutative';
 // Local imports - shared webview
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { isChatGptSubscriptionLimitError } from '@shared/schemas';
-import type { GettingStartedActionDetail, StreamTabId } from '@shared/schemas';
+import {
+  isChatGptSubscriptionLimitError,
+  type GettingStartedActionDetail,
+  type StreamTabId,
+} from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
@@ -21,15 +24,16 @@ import {
 import { removePrompt, resolvedProposalIds } from './slices/permissionSlice';
 import { updateToolUseState } from './stateUtils';
 import { clearInquiryDraft } from './components/ExternalInquiryPanel';
-import { APPROVE_SESSION_ACTION, APPROVE_SUPER_YOLO_ACTION } from './events';
-import type {
-  FilterEventDetail,
-  FollowupCommandDetail,
-  FollowUpChangeDetail,
-  PermissionActionDetail,
-  ProgressFileActionDetail,
-  StreamEventDetail,
-  ToolbarCommandDetail,
+import {
+  APPROVE_SESSION_ACTION,
+  APPROVE_SUPER_YOLO_ACTION,
+  type FilterEventDetail,
+  type FollowupCommandDetail,
+  type FollowUpChangeDetail,
+  type PermissionActionDetail,
+  type ProgressFileActionDetail,
+  type StreamEventDetail,
+  type ToolbarCommandDetail,
 } from './events';
 import type {
   FrontendEventHandlerContext,

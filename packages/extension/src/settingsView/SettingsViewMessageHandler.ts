@@ -533,10 +533,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   // ============================================================
-  // Helpers
-  // ============================================================
-
-  // ============================================================
   // Public methods for external access
   // ============================================================
 
@@ -942,10 +938,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
     }
   }
-
-  // ============================================================
-  // Model selection handler implementations
-  // ============================================================
 
   // ============================================================
   // Tool dashboard handler implementations

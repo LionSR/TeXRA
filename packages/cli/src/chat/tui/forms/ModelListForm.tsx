@@ -74,7 +74,7 @@ function EmptyModelListState(props: {
   readonly models: readonly CliModelAccess[];
   readonly apiMode: CliApiMode;
   readonly onClose: () => void;
-}) {
+}): React.JSX.Element {
   useInput((input, key) => {
     if (isPlainReturnInput(input, key)) props.onClose();
   });
@@ -182,6 +182,40 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     );
   }
 
+  function footerHints(): React.JSX.Element {
+    if (props.selectable && items.length > 0) {
+      return (
+        <KeyHints
+          hints={[
+            { key: '↑/↓', action: 'navigate' },
+            { key: '1-9/a-z', action: 'select' },
+          ]}
+        />
+      );
+    }
+    if (items.length > 0) {
+      return (
+        <KeyHints
+          hints={[
+            { key: '↑/↓', action: 'navigate' },
+            { key: 'Enter', action: 'close' },
+            { key: 'Esc', action: 'close' },
+          ]}
+          confirmCancel={false}
+        />
+      );
+    }
+    return (
+      <KeyHints
+        hints={[
+          { key: 'Enter', action: 'close' },
+          { key: 'Esc', action: 'close' },
+        ]}
+        confirmCancel={false}
+      />
+    );
+  }
+
   return (
     <FormFrame
       color="cyan"
@@ -207,33 +241,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           />
         </Box>
       )}
-      <Box marginTop={1}>
-        {props.selectable && items.length > 0 ? (
-          <KeyHints
-            hints={[
-              { key: '↑/↓', action: 'navigate' },
-              { key: '1-9/a-z', action: 'select' },
-            ]}
-          />
-        ) : items.length > 0 ? (
-          <KeyHints
-            hints={[
-              { key: '↑/↓', action: 'navigate' },
-              { key: 'Enter', action: 'close' },
-              { key: 'Esc', action: 'close' },
-            ]}
-            confirmCancel={false}
-          />
-        ) : (
-          <KeyHints
-            hints={[
-              { key: 'Enter', action: 'close' },
-              { key: 'Esc', action: 'close' },
-            ]}
-            confirmCancel={false}
-          />
-        )}
-      </Box>
+      <Box marginTop={1}>{footerHints()}</Box>
     </FormFrame>
   );
 }

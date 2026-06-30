@@ -41,6 +41,12 @@ function buildPrompt(str1: string, str2: string): string {
 const SYSTEM_PROMPT =
   'You are an assistant trained to determine the most grammatically correct string in a LaTeX document context.';
 
+function logConnectionError(label: string, err: unknown): void {
+  const log =
+    classifyAgentError(err) === 'missing-api-key' ? logger.debug : logger.error;
+  log(CHANNEL, `Error in ${label}: ${getSdkErrorMessage(err)}`);
+}
+
 function getMajorityChoice(choices: string[]): ConnectionResult {
   const counts = new Map<string, number>();
   for (const choice of choices) {
@@ -127,12 +133,7 @@ export async function bestConnectionMethod(
     );
     return getMajorityChoice(choices);
   } catch (err) {
-    const message = getSdkErrorMessage(err);
-    const log =
-      classifyAgentError(err) === 'missing-api-key'
-        ? logger.debug
-        : logger.error;
-    log(CHANNEL, `Error in bestConnectionMethod: ${message}`);
+    logConnectionError('bestConnectionMethod', err);
     return DEFAULT_RESULT;
   }
 }
@@ -175,12 +176,7 @@ export async function bestConnectionMethodAnthropic(
 
     return getMajorityChoice(choices);
   } catch (err) {
-    const message = getSdkErrorMessage(err);
-    const log =
-      classifyAgentError(err) === 'missing-api-key'
-        ? logger.debug
-        : logger.error;
-    log(CHANNEL, `Error in bestConnectionMethodAnthropic: ${message}`);
+    logConnectionError('bestConnectionMethodAnthropic', err);
     return DEFAULT_RESULT;
   }
 }
