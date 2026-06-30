@@ -5,11 +5,12 @@ import * as nodePath from 'node:path';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
+  createNodePlatform,
   initNodeAgentRuntime,
-  initNodePlatform,
+  initializeNodeGoalPrompts,
 } from '@platform/defaults/nodeHost';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
-import { platform, tryPlatform } from '@platform/platform';
+import { initPlatform, platform, tryPlatform } from '@platform/platform';
 
 // Local imports - telemetry
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -189,28 +190,29 @@ export async function initCliPlatform(
         );
       },
     });
-    initNodePlatform({
-      configStores: { workspace: configStore, global: globalConfigStore },
-      globalState: stateStores.globalState,
-      workspaceState: stateStores.workspaceState,
-      storage: stateStores.storage,
-      secrets: getCliSecrets(context.storageRoot),
-      lifecycle,
-      agentResume: { tryResumeStream: async () => false },
-      getWorkspacePath: () => cliWorkspaceCwd,
-      toolAvailability: {
-        isTexraCliEntrypoint: () =>
-          isTexraCliEntrypointPath(readCliEntrypointPath()),
-      },
-    });
+    initPlatform(
+      createNodePlatform({
+        configStores: { workspace: configStore, global: globalConfigStore },
+        globalState: stateStores.globalState,
+        workspaceState: stateStores.workspaceState,
+        storage: stateStores.storage,
+        secrets: getCliSecrets(context.storageRoot),
+        lifecycle,
+        agentResume: { tryResumeStream: async () => false },
+        getWorkspacePath: () => cliWorkspaceCwd,
+        toolAvailability: {
+          isTexraCliEntrypoint: () =>
+            isTexraCliEntrypointPath(readCliEntrypointPath()),
+        },
+      }),
+    );
     if (context.installSignalHandlers !== false) {
       installCliShutdownSignalHandlers(lifecycle);
     }
     // Register the shared Node-host agent runtime: memory + goal tool
-    // injections, the direct Lean language services (errors surface via the
-    // Tools dashboard if `lake` isn't on PATH), and the packaged Goal prompt
-    // path.
-    initNodeAgentRuntime(lifecycle, context.resourcesPath);
+    // injections and the direct Lean language services (errors surface via the
+    // Tools dashboard if `lake` isn't on PATH).
+    initNodeAgentRuntime(lifecycle);
 
     // Attribute agent-authored commits to the TeXRA identity by default;
     // configurable via `.texra/config.json` `texra.git.markCommits`.
@@ -264,6 +266,7 @@ export async function initCliPlatform(
   }
   await getServerSideKeyService().setUseIncludedModelAccess(authed);
   await setCliHelperModel(context.helperModel);
+  initializeNodeGoalPrompts(context.resourcesPath);
 
   if (bootstrappedResourcesPath !== context.resourcesPath) {
     const globalState = tryPlatform()?.globalState;
