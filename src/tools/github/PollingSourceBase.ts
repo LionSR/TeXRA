@@ -181,6 +181,12 @@ export abstract class PollingSourceBase<
     this.notifyKeysChanged(runtimeHosts);
   }
 
+  /** Emit a formatted halted-subscription error, then detach the key. */
+  private emitErrorAndDetach(key: K, state: S, detail: string): void {
+    this.emit(state, this.formatErrorEvent(key, state, detail));
+    this.detach(key);
+  }
+
   private removeListener(key: K, onEvent: (text: string) => void): void {
     const state = this.subscriptions.get(key);
     if (!state) return;
@@ -305,8 +311,7 @@ export abstract class PollingSourceBase<
       this.logger.warn(
         `Permanent error for ${key} (HTTP ${err.status}); stopping subscription. ${err.message}`,
       );
-      this.emit(state, this.formatErrorEvent(key, state, err.message));
-      this.detach(key);
+      this.emitErrorAndDetach(key, state, err.message);
       return;
     }
     if (err instanceof GitHubRateLimitError) {
@@ -320,15 +325,11 @@ export abstract class PollingSourceBase<
         this.logger.warn(
           `Rate limited polling ${key} and unreachable for over 24 h; detaching.`,
         );
-        this.emit(
+        this.emitErrorAndDetach(
+          key,
           state,
-          this.formatErrorEvent(
-            key,
-            state,
-            `unreachable for over 24 h; detaching`,
-          ),
+          'unreachable for over 24 h; detaching',
         );
-        this.detach(key);
         return;
       }
       this.logger.warn(
@@ -351,15 +352,11 @@ export abstract class PollingSourceBase<
         `Poll failed for ${key} (failure #${state.consecutiveFailures}); ` +
           `unreachable for over 24 h, detaching: ${String(err)}`,
       );
-      this.emit(
+      this.emitErrorAndDetach(
+        key,
         state,
-        this.formatErrorEvent(
-          key,
-          state,
-          `unreachable for over 24 h; detaching`,
-        ),
+        'unreachable for over 24 h; detaching',
       );
-      this.detach(key);
       return;
     }
     this.logger.warn(

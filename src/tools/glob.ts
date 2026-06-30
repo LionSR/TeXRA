@@ -13,6 +13,7 @@ import {
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
+import { filterNotNull } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 import { pluralize } from '@utils/text/stringUtils';
 import { toPosixPath } from '@utils/core/pathCore';
@@ -88,18 +89,15 @@ export class GlobTool extends defineTool({
     );
 
     const results = await Promise.all(statPromises);
-    const decorated = results.filter(
-      (item): item is GlobMatchInfo => item !== null,
-    );
-
-    const sorted = decorated.sort((a, b) => {
-      if (b.mtime !== a.mtime) {
-        return b.mtime - a.mtime;
-      }
-      return a.relativePath.localeCompare(b.relativePath);
-    });
-
-    const lines = sorted.map((item) => toPosixPath(item.relativePath));
+    const lines = results
+      .filter(filterNotNull)
+      .toSorted((a, b) => {
+        if (b.mtime !== a.mtime) {
+          return b.mtime - a.mtime;
+        }
+        return a.relativePath.localeCompare(b.relativePath);
+      })
+      .map((item) => toPosixPath(item.relativePath));
     const count = lines.length;
     const header = `Found ${count} ${pluralize(count, 'file')} matching "${input.pattern}" under ${display}`;
     return {

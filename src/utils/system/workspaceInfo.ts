@@ -46,16 +46,21 @@ function detectShell(): string | undefined {
 
 /** Get a human-readable platform name. */
 function getPlatformLabel(): string {
+  let base: string;
   switch (process.platform) {
     case 'darwin':
-      return `macOS (${os.arch()})`;
+      base = 'macOS';
+      break;
     case 'win32':
-      return `Windows (${os.arch()})`;
+      base = 'Windows';
+      break;
     case 'linux':
-      return isWSL() ? `Linux/WSL (${os.arch()})` : `Linux (${os.arch()})`;
+      base = isWSL() ? 'Linux/WSL' : 'Linux';
+      break;
     default:
-      return `${process.platform} (${os.arch()})`;
+      base = process.platform;
   }
+  return `${base} (${os.arch()})`;
 }
 
 /**

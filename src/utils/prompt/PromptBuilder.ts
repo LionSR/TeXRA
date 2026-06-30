@@ -4,6 +4,7 @@ import type {
   AgentPrompt,
   AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
+import { ensureArray } from '@utils/core';
 import { loadTexraRules } from '@utils/files/rulesUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 
@@ -194,14 +195,7 @@ export class PromptBuilder {
 
   private getRoundTemplate(currRound: number): string | undefined {
     const { userRequest } = this.agentPrompt;
-    let templates: string[];
-    if (Array.isArray(userRequest)) {
-      templates = userRequest;
-    } else if (userRequest) {
-      templates = [userRequest];
-    } else {
-      templates = [];
-    }
+    const templates = userRequest ? ensureArray(userRequest) : [];
 
     const round = Math.max(0, currRound);
     if (round < templates.length) return templates[round];
