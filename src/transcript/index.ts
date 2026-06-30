@@ -16,12 +16,7 @@ export {
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
 } from './StreamLogStore';
-export {
-  StreamLog,
-  type StreamLogAppendInput,
-  type StreamLogUpdatePatch,
-} from './StreamLog';
-export { type TranscriptRecorderHandle } from './TexraTranscriptRecorder';
+export { StreamLog, type StreamLogAppendInput } from './StreamLog';
 export {
   createRunTrace,
   flushPendingRunTraces,
@@ -29,5 +24,5 @@ export {
   unregisterFlushers,
   type RunTrace,
 } from './runTrace';
-export { streamDataDir, type StreamDataKey } from './streamDataPaths';
+export { streamDataDir } from './streamDataPaths';
 export { StreamSnapshotStore } from './StreamSnapshotStore';

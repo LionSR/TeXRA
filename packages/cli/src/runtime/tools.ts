@@ -27,7 +27,7 @@ export interface CliToolStatusRecord {
   readonly note?: string;
 }
 
-export type CliToolGuideKind = 'install' | 'auth';
+type CliToolGuideKind = 'install' | 'auth';
 
 export interface CliToolGuide {
   readonly text: string;

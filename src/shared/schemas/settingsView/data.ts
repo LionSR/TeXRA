@@ -100,8 +100,6 @@ export const SetTabMessageSchema = z.object({
   agentSubTab: AgentCategorySchema.optional(),
 });
 
-export type SetTabMessage = z.infer<typeof SetTabMessageSchema>;
-
 // ============================================================
 // Agent selection data schema
 // ============================================================
@@ -126,9 +124,6 @@ export const UpdateAgentSelectionMessageSchema = z.object({
   workflow: z.array(AgentSelectionItemSchema),
   toolUse: z.array(AgentSelectionItemSchema),
 });
-export type UpdateAgentSelectionMessage = z.infer<
-  typeof UpdateAgentSelectionMessageSchema
->;
 
 // ============================================================
 // Model selection data schema
@@ -206,9 +201,6 @@ export const UpdateCustomAgentDirMessageSchema = z.object({
   path: z.string(),
   isDefault: z.boolean(),
 });
-export type UpdateCustomAgentDirMessage = z.infer<
-  typeof UpdateCustomAgentDirMessageSchema
->;
 
 // ============================================================
 // Super YOLO enabled data schema
@@ -246,9 +238,6 @@ export const UpdateAgentModePresetsMessageSchema = z.object({
    */
   orchestratorAgents: z.array(z.string()).prefault([]),
 });
-export type UpdateAgentModePresetsMessage = z.infer<
-  typeof UpdateAgentModePresetsMessageSchema
->;
 
 // ============================================================
 // Tool dashboard data schemas
@@ -312,9 +301,6 @@ export const UpdateToolDashboardMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD),
   items: z.array(ToolDashboardItemSchema),
 });
-export type UpdateToolDashboardMessage = z.infer<
-  typeof UpdateToolDashboardMessageSchema
->;
 
 // ============================================================
 // Approval settings data schema
@@ -347,9 +333,6 @@ export const UpdateGitAuthorSettingsMessageSchema = z.object({
   authorEmail: z.string(),
   worktreeSupport: z.boolean(),
 });
-export type UpdateGitAuthorSettingsMessage = z.infer<
-  typeof UpdateGitAuthorSettingsMessageSchema
->;
 
 /** Outbound: backend → frontend GitHub token status. */
 export const UpdateGitHubTokenStatusMessageSchema = z.object({
@@ -357,9 +340,6 @@ export const UpdateGitHubTokenStatusMessageSchema = z.object({
   /** 'secret' = stored in SecretStorage; 'env' = GITHUB_TOKEN env var; 'none' = missing. */
   status: z.enum(['secret', 'env', 'none']),
 });
-export type UpdateGitHubTokenStatusMessage = z.infer<
-  typeof UpdateGitHubTokenStatusMessageSchema
->;
 
 /** Outbound: backend → frontend ChatGPT-subscription sign-in status. */
 export const ChatGptAuthStatusSchema = z.object({
@@ -375,9 +355,6 @@ export const UpdateChatGptAuthStatusMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS),
   status: ChatGptAuthStatusSchema,
 });
-export type UpdateChatGptAuthStatusMessage = z.infer<
-  typeof UpdateChatGptAuthStatusMessageSchema
->;
 
 /** Outbound: backend → frontend desktop crash reporting status. */
 export const UpdateDesktopCrashReportingMessageSchema = z.object({
@@ -385,15 +362,11 @@ export const UpdateDesktopCrashReportingMessageSchema = z.object({
   enabled: z.boolean(),
   configured: z.boolean(),
 });
-export type UpdateDesktopCrashReportingMessage = z.infer<
-  typeof UpdateDesktopCrashReportingMessageSchema
->;
 
 export const PRSubscriptionOwnerSchema = z.object({
   streamId: StreamTabIdSchema,
   label: z.string(),
 });
-export type PRSubscriptionOwner = z.infer<typeof PRSubscriptionOwnerSchema>;
 
 export const PRSubscriptionEntrySchema = z.object({
   key: z.string().min(1),
@@ -406,9 +379,6 @@ export const UpdatePRSubscriptionsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS),
   subscriptions: z.array(PRSubscriptionEntrySchema),
 });
-export type UpdatePRSubscriptionsMessage = z.infer<
-  typeof UpdatePRSubscriptionsMessageSchema
->;
 
 // ============================================================
 // LaTeX settings data schemas
@@ -463,9 +433,6 @@ export const UpdateLatexSettingsStatusMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS),
   settings: LatexSettingsStatusSchema,
 });
-export type UpdateLatexSettingsStatusMessage = z.infer<
-  typeof UpdateLatexSettingsStatusMessageSchema
->;
 
 /**
  * LaTeX/compile/diff configuration values, persisted in workspace storage.
@@ -478,10 +445,8 @@ export type UpdateLatexSettingsStatusMessage = z.infer<
  * and the runtime readers all stay in lockstep.
  */
 export const LatexFormatterSchema = z.enum(LATEX_FORMATTER_VALUES);
-export type LatexFormatter = z.infer<typeof LatexFormatterSchema>;
 
 export const LatexdiffMathMarkupSchema = z.enum(LATEXDIFF_MATH_MARKUP_VALUES);
-export type LatexdiffMathMarkup = z.infer<typeof LatexdiffMathMarkupSchema>;
 
 export const LatexConfigValuesSchema = z.object({
   workflowAutoCompile: z.boolean().optional(),
@@ -508,18 +473,12 @@ export const UpdateLatexConfigValuesMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES),
   values: LatexConfigValuesSchema,
 });
-export type UpdateLatexConfigValuesMessage = z.infer<
-  typeof UpdateLatexConfigValuesMessageSchema
->;
 
 /** Outbound: backend → frontend inline criticism toggle state */
 export const UpdateInlineCriticismEnabledMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED),
   enabled: z.boolean(),
 });
-export type UpdateInlineCriticismEnabledMessage = z.infer<
-  typeof UpdateInlineCriticismEnabledMessageSchema
->;
 
 /** Outbound: pushed when the list changes or in response to GET_GOAL_LIST. */
 export const UpdateGoalListMessageSchema = z.object({

@@ -20,7 +20,6 @@ export const OptionalStreamIdSchema = z.union([
   StreamTabIdSchema,
   z.literal(''),
 ]);
-export type OptionalStreamId = z.infer<typeof OptionalStreamIdSchema>;
 
 /** Common permission request fields */
 const PermissionBaseSchema = z.strictObject({
@@ -89,9 +88,6 @@ export type WorkflowAgentProposalPermission = z.infer<
 
 export const ToolUseAgentProposalPermissionSchema =
   ProposalPermissionBaseSchema.extend(ToolUseAgentProposalSchema.shape);
-export type ToolUseAgentProposalPermission = z.infer<
-  typeof ToolUseAgentProposalPermissionSchema
->;
 
 export const AgentProposalPermissionSchema = z.discriminatedUnion(
   'agentCategory',
@@ -133,16 +129,10 @@ const ExternalInquiryPermissionBaseSchema = PermissionBaseSchema.extend(
  */
 export const NewExternalInquiryPermissionSchema =
   ExternalInquiryPermissionBaseSchema.extend({ mode: z.literal('new') });
-export type NewExternalInquiryPermission = z.infer<
-  typeof NewExternalInquiryPermissionSchema
->;
 
 /** Follow-up inquiry — carries thread context from prior turns. */
 export const FollowUpExternalInquiryPermissionSchema =
   ExternalInquiryPermissionBaseSchema.extend({ mode: z.literal('followUp') });
-export type FollowUpExternalInquiryPermission = z.infer<
-  typeof FollowUpExternalInquiryPermissionSchema
->;
 
 export const ExternalInquiryPermissionSchema = z.discriminatedUnion('mode', [
   NewExternalInquiryPermissionSchema,
@@ -157,7 +147,6 @@ export type ExternalInquiryPermission = z.infer<
 // ============================================================================
 
 export const USER_QUESTION_ACTIONS = ['submit', 'reject'] as const;
-export type UserQuestionAction = (typeof USER_QUESTION_ACTIONS)[number];
 
 export const UserQuestionOptionSchema = z.strictObject({
   label: z.string().min(1),

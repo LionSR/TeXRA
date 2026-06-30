@@ -12,7 +12,6 @@ export {
   formatCompactTokenCount,
   formatDuration,
   serializeError,
-  type SerializedError,
 } from './stringCore';
 export {
   isObject,

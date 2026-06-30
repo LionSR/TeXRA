@@ -88,7 +88,7 @@ type WorkflowAgentResult = Extract<
   { category: 'workflow' }
 >;
 
-export interface WorkflowOutputResolutionOptions {
+interface WorkflowOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];
   readonly runDirectory?: string;
   readonly terminalStatus: ExecutionStatus;
