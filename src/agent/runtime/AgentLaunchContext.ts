@@ -15,6 +15,7 @@ import {
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
+import { getExecutionStore } from '@agent/storage';
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import {
   AgentConfigSchema,
@@ -28,7 +29,13 @@ import {
   type AttachedMemoryMiss,
 } from '@agent/types/AttachedMemory';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
-import { createModelHandler } from '@agent/runtime/ModelFactory';
+import {
+  createModelHandler,
+  createModelHandlerForCompatibilityKey,
+  type ModelHandlerCompatibilityKey,
+} from '@agent/runtime/ModelFactory';
+import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
+import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
@@ -109,6 +116,8 @@ export interface AgentLaunchInput {
   suppressErrorNotification?: boolean;
   /** Session owning this run's coordination state. Defaults to the launcher's session (`currentSession()`). */
   session?: SessionHandle;
+  /** Resume using this persisted provider-message format instead of today's default route. */
+  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
 }
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -196,6 +205,23 @@ async function validateModelExists(
   throw new AgentError(`Model ${modelName} not found in MODEL_CONFIGS`);
 }
 
+async function inferLaunchModelHandlerCompatibilityKey(
+  executionId: ExecutionId,
+  model: string,
+): Promise<ModelHandlerCompatibilityKey | undefined> {
+  try {
+    const flowRecord = await getExecutionStore(executionId).read<FlowRecord>(
+      flowKey(executionId),
+    );
+    return inferPersistedFlowModelHandlerCompatibilityKey(
+      model,
+      flowRecord?.shared,
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Create a "Run:" stage, optionally logging a user instruction first.
  *
@@ -277,9 +303,16 @@ async function assembleAgentLaunchContext(
     agentCategory: setting.agentCategory,
   };
 
-  const modelHandler = await createModelHandler(
-    MODEL_CONFIGS[fullConfig.model],
-  );
+  const modelConfig = MODEL_CONFIGS[fullConfig.model];
+  const modelHandlerCompatibilityKey =
+    input.modelHandlerCompatibilityKey ??
+    (await inferLaunchModelHandlerCompatibilityKey(executionId, config.model));
+  const modelHandler = modelHandlerCompatibilityKey
+    ? await createModelHandlerForCompatibilityKey(
+        modelConfig,
+        modelHandlerCompatibilityKey,
+      )
+    : await createModelHandler(modelConfig);
 
   const streamId =
     input.streamTabIdOverride ??
