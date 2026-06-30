@@ -107,7 +107,11 @@ describe('executionRegistry', () => {
         registry.stopAgentStream(rootStreamId, {
           runtimeHost: explicit.host,
         }),
-      ).toBe(true);
+      ).toEqual({
+        kind: 'interrupted',
+        streamId: rootStreamId,
+        childPolicy: 'cascade',
+      });
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).toHaveBeenCalledOnce();
@@ -287,7 +291,11 @@ describe('executionRegistry', () => {
           detachActiveChildren: true,
           runtimeHost: explicit.host,
         }),
-      ).toBe(true);
+      ).toEqual({
+        kind: 'interrupted',
+        streamId: rootStreamId,
+        childPolicy: 'detach',
+      });
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).not.toHaveBeenCalled();
@@ -334,10 +342,53 @@ describe('executionRegistry', () => {
         registry.stopAgentStream(streamId, {
           runtimeHost: explicit.host,
         }),
-      ).toBe(true);
+      ).toEqual({
+        kind: 'interrupted',
+        streamId,
+        childPolicy: 'cascade',
+      });
 
       expect(interrupt).toHaveBeenCalledOnce();
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('marks an ownerless stream stopped when a host can publish status', () => {
+    const explicit = createRecordingHost();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const streamId = 'ownerless-stop-policy-test' as StreamTabId;
+
+    try {
+      expect(
+        registry.stopAgentStream(streamId, {
+          runtimeHost: explicit.host,
+        }),
+      ).toEqual({
+        kind: 'marked_stopped',
+        streamId,
+        childPolicy: 'cascade',
+      });
+      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('reports no target when no execution, interrupt, or host owns the stream', () => {
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const streamId = 'missing-stop-target-test' as StreamTabId;
+
+    try {
+      expect(registry.stopAgentStream(streamId)).toEqual({
+        kind: 'no_target',
+        streamId,
+        childPolicy: 'cascade',
+      });
+      expect(streamStatus.get(streamId)).toBeUndefined();
     } finally {
       registry.dispose();
     }
@@ -519,16 +570,20 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('requires a runtime host when detaching without a tracked root handle', () => {
+  it('reports a missing runtime host when detach cannot be applied', () => {
     const registry = new ExecutionRegistry();
     const streamId = 'missing-host-detach-stop-policy-test' as StreamTabId;
 
     try {
-      expect(() =>
+      expect(
         registry.stopAgentStream(streamId, {
           detachActiveChildren: true,
         }),
-      ).toThrow('requires a runtimeHost');
+      ).toEqual({
+        kind: 'missing_runtime_host',
+        streamId,
+        childPolicy: 'detach',
+      });
     } finally {
       registry.dispose();
     }
