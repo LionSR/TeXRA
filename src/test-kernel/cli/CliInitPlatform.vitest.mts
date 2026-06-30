@@ -11,7 +11,10 @@ const mocks = vi.hoisted(() => ({
     isAuthenticated: vi.fn(),
   },
   bootstrapPlatformAgentDirectories: vi.fn(),
+  createNodePlatform: vi.fn(() => ({})),
   initializeCliSupabaseAuth: vi.fn(),
+  initializeNodeGoalPrompts: vi.fn(),
+  initNodeAgentRuntime: vi.fn(),
   initializeServerSideKeyAccess: vi.fn(),
   serverSideKeyService: {
     setUseIncludedModelAccess: vi.fn(),
@@ -55,13 +58,13 @@ vi.mock('@platform/platform', () => ({
   platform: () => ({ config: { get: (_key: string, def: unknown) => def } }),
 }));
 
-// initCliPlatform delegates platform composition + the shared node-host agent
-// runtime (memory/goal injections, Lean, goal prompts) to nodeHost; stub it so
-// the test exercises only the CLI-specific wiring and feature registration does
-// not run twice across cases.
+// initCliPlatform delegates shared Node-host construction and runtime wiring to
+// nodeHost; stub it so the test exercises only the CLI-specific wiring and
+// feature registration does not run twice across cases.
 vi.mock('@platform/defaults/nodeHost', () => ({
-  initNodePlatform: vi.fn(),
-  initNodeAgentRuntime: vi.fn(),
+  createNodePlatform: mocks.createNodePlatform,
+  initNodeAgentRuntime: mocks.initNodeAgentRuntime,
+  initializeNodeGoalPrompts: mocks.initializeNodeGoalPrompts,
 }));
 
 vi.mock('@skills/index', () => ({
@@ -159,6 +162,8 @@ describe('CLI platform init', () => {
     );
 
     expect(mocks.getCliSecrets).toHaveBeenCalledWith('/tmp/texra-storage-root');
+    expect(mocks.createNodePlatform).toHaveBeenCalledOnce();
+    expect(mocks.initNodeAgentRuntime).toHaveBeenCalledOnce();
     expect(mocks.initializeCliSupabaseAuth).toHaveBeenCalledWith(
       expect.anything(),
       '/tmp/texra-storage-root',
@@ -210,6 +215,9 @@ describe('CLI platform init', () => {
       }),
     );
 
+    expect(mocks.initializeNodeGoalPrompts).toHaveBeenCalledWith(
+      '/tmp/resources-versioned',
+    );
     expect(mocks.bootstrapPlatformAgentDirectories).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: 'cli',
