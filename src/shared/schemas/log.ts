@@ -57,8 +57,6 @@ export const STREAM_LOG_ENTRY_TYPES = {
 
 export const StreamLogEntryTypeSchema = z.enum(STREAM_LOG_ENTRY_TYPES);
 
-export type StreamLogEntryType = z.infer<typeof StreamLogEntryTypeSchema>;
-
 export const FileListEntrySchema = z.object({
   path: z.string(),
   ok: z.boolean(),
@@ -100,7 +98,6 @@ export type LogMessageData = z.infer<typeof LogMessageDataSchema>;
 export const LogMessageUpdateSchema = LogMessageDataSchema.partial().required({
   id: true,
 });
-export type LogMessageUpdate = z.infer<typeof LogMessageUpdateSchema>;
 
 /**
  * Legacy log message format (from STREAM_TABS era).
