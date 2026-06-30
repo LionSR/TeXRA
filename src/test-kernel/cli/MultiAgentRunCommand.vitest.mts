@@ -146,8 +146,8 @@ function mockExpandedRunInputs(inputs: {
 describe('CLI multi-agent run command', () => {
   const approvalUnavailableWarning =
     'WARN preset mathematician may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
-  const headlessAskWarning =
-    'WARN preset mathematician may run without subagent delegation because headless approval policy "ask" cannot show delegation prompts. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
+  const headlessAskError =
+    'Cannot run multi-agent preset "mathematician" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -358,7 +358,7 @@ describe('CLI multi-agent run command', () => {
     );
   });
 
-  it('warns when headless ask cannot show delegation prompts', async () => {
+  it('refuses headless ask before launching a team run', async () => {
     const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 
     const exitCode = await runMultiAgentPreset(
@@ -372,8 +372,13 @@ describe('CLI multi-agent run command', () => {
       },
     );
 
-    expect(exitCode).toBe(0);
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(headlessAskWarning);
+    expect(exitCode).toBe(2);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(headlessAskError);
+    expect(mocks.initCliPlatform).toHaveBeenCalledOnce();
+    expect(mocks.loadAgents).toHaveBeenCalledOnce();
+    expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
+    expect(mocks.executeCliConfig).not.toHaveBeenCalled();
   });
 
   it('does not warn when yolo can auto-approve delegation', async () => {

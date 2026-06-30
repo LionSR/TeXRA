@@ -3,7 +3,6 @@ import { defineCommand } from 'citty';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
-import { approvalPromptsUnavailable } from '../runtime/approvalPolicyAvailability';
 import { missingToolUseAgentMessage } from '../runtime/agents';
 import {
   CliUsageError,
@@ -69,6 +68,10 @@ interface MultiAgentRunInit {
 
 const MULTI_AGENT_TASK_REQUIRED_MESSAGE =
   'Provide --input, --instruction, or --instruction-file for the team task. Example: texra multi-agent run physicist --instruction "Check this derivation"';
+
+function headlessAskMultiAgentMessage(presetId: string): string {
+  return `Cannot run multi-agent preset "${presetId}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`;
+}
 
 function writeMultiAgentRunResult(
   context: CliContext,
@@ -138,11 +141,20 @@ export async function runMultiAgentPreset(
   if (init.inputFiles.length === 0 && !hasInstruction) {
     throw new CliUsageError(MULTI_AGENT_TASK_REQUIRED_MESSAGE);
   }
-
   await initCliPlatform({ ...context, quietLogs: true });
 
-  const { plan, remoteAgentLoadAttempted } =
-    await loadCliMultiAgentRunPlan(init);
+  const rejectsHeadlessAsk =
+    context.mode === 'headless' && context.approvalPolicy === 'ask';
+  const { plan, remoteAgentLoadAttempted } = await loadCliMultiAgentRunPlan(
+    init,
+    {
+      reloadRemoteAgents: !rejectsHeadlessAsk,
+    },
+  );
+  if (rejectsHeadlessAsk) {
+    writeTextStderr(headlessAskMultiAgentMessage(plan.preset.id));
+    return CliExitCode.Usage;
+  }
   if (remoteAgentLoadAttempted) {
     const inspectAdvice = `Run \`texra multi-agent show ${plan.preset.id}\` to view the resolved team.`;
     // Otherwise the silent second load makes runs behave differently from a
@@ -188,13 +200,9 @@ export async function runMultiAgentPreset(
       readStdinText: readCliStdinText,
     },
     async ({ inputFiles, contextFiles }) => {
-      if (approvalPromptsUnavailable(runContext)) {
-        const reason =
-          runContext.approvalPolicy === 'never'
-            ? 'approval policy "never" denies approval-gated delegation tools'
-            : 'headless approval policy "ask" cannot show delegation prompts';
+      if (runContext.approvalPolicy === 'never') {
         writeTextStderr(
-          `WARN preset ${plan.preset.id} may run without subagent delegation because ${reason}. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+          `WARN preset ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
         );
       }
 

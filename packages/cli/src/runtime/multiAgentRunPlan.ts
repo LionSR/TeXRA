@@ -21,6 +21,10 @@ interface MultiAgentRunPlanInit {
   readonly agent?: string;
 }
 
+interface MultiAgentRunPlanLoadOptions {
+  readonly reloadRemoteAgents?: boolean;
+}
+
 interface RemoteAgentPlanReloadResult<T> {
   readonly value: T;
   readonly remoteAgentLoadAttempted: boolean;
@@ -71,10 +75,18 @@ function planLoadedCliMultiAgentPresets(
  */
 export async function loadCliMultiAgentRunPlan(
   init: MultiAgentRunPlanInit,
+  options: MultiAgentRunPlanLoadOptions = {},
 ): Promise<MultiAgentRunPlanLoadResult> {
   await loadAgents({ includeRemote: false });
+  const localPlan = planCurrentMultiAgentRun(init);
+  if (options.reloadRemoteAgents === false) {
+    return {
+      plan: localPlan,
+      remoteAgentLoadAttempted: false,
+    };
+  }
   const result = await reloadRemoteAgentsForGaps(
-    planCurrentMultiAgentRun(init),
+    localPlan,
     cliMultiAgentPlanHasGaps,
     () => planCurrentMultiAgentRun(init),
   );
