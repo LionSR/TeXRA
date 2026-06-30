@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { MODEL_CONFIGS } from 'llm-zoo';
+import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { z } from 'zod';
 
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
@@ -39,11 +39,16 @@ export interface LoadedCliConfig {
 }
 
 export function isKnownCliModel(model: string): boolean {
-  return MODEL_CONFIGS[model] != null;
+  return isCliSupportedModelId(model);
 }
 
 export function knownCliModelIds(): string[] {
-  return Object.keys(MODEL_CONFIGS);
+  return Object.keys(MODEL_CONFIGS).filter(isCliSupportedModelId);
+}
+
+function isCliSupportedModelId(model: string): boolean {
+  const config = MODEL_CONFIGS[model];
+  return config != null && config.provider !== ModelProvider.COPILOT;
 }
 
 function normalizeCliModelLookupKey(value: string): string {
@@ -63,10 +68,10 @@ function modelLookupKeys(id: string): string[] {
 export function resolveKnownCliModelId(model: string): string | undefined {
   const trimmed = model.trim();
   if (!trimmed) return undefined;
-  if (Object.hasOwn(MODEL_CONFIGS, trimmed)) return trimmed;
+  if (isCliSupportedModelId(trimmed)) return trimmed;
 
   const lower = trimmed.toLowerCase();
-  const ids = Object.keys(MODEL_CONFIGS);
+  const ids = knownCliModelIds();
   const exactIdMatch = ids.find((id) => id.toLowerCase() === lower);
   if (exactIdMatch) return exactIdMatch;
 
