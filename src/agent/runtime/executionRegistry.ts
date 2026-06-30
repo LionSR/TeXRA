@@ -615,21 +615,14 @@ export class ExecutionRegistry {
           cascadeChildren: options.detachActiveChildren !== true,
         })
       : this.interruptRegisteredStream(streamId, runtimeHost);
-    if (!stopped && runtimeHost) {
-      this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, { runtimeHost });
+    if (stopped) {
+      return { kind: 'interrupted', streamId, childPolicy };
     }
-    if (!stopped && !runtimeHost) {
-      return {
-        kind: 'no_target',
-        streamId,
-        childPolicy,
-      };
+    if (!runtimeHost) {
+      return { kind: 'no_target', streamId, childPolicy };
     }
-    return {
-      kind: stopped ? 'interrupted' : 'marked_stopped',
-      streamId,
-      childPolicy,
-    };
+    this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, { runtimeHost });
+    return { kind: 'marked_stopped', streamId, childPolicy };
   }
 
   /** Get active subagent and process children for a parent stream. */

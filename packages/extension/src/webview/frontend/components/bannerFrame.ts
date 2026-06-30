@@ -1,4 +1,4 @@
-// Side-effect imports — register the WA elements the frame renders.
+// Side-effect imports: register the WA elements the frame renders.
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { html, type TemplateResult } from 'lit';
@@ -12,7 +12,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
  * spacing live in `bannerStyles`.
  *
  * Keeping the frame in one place makes it the single source of truth for what a
- * warning banner looks like — a change to the chrome (icon, variant, row
+ * warning banner looks like. A change to the chrome (icon, variant, row
  * structure) lands here instead of in three near-identical component templates.
  */
 export function renderWarningBanner(options: {

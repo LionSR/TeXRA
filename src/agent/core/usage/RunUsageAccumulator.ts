@@ -32,7 +32,7 @@ export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 /**
  * Canonical schema for RunUsageAccumulator JSON serialization.
  *
- * `latestUsage` replaces the old unbounded `normalizedSnapshots` array —
+ * `latestUsage` replaces the old unbounded `normalizedSnapshots` array;
  * only the most-recent round's usage is needed at runtime.
  */
 const RunUsageAccumulatorCanonicalSchema = z.object({
@@ -53,17 +53,11 @@ export type RunUsageAccumulatorJSON = z.output<
  * `latestUsage`. Only the most-recent snapshot's usage is needed, so the array
  * is collapsed to its last element and the rest discarded. This arm requires
  * `normalizedSnapshots`, so it only matches genuinely-legacy data; canonical
- * and empty inputs fall through to the canonical schema below.
- *
- * A hybrid payload carrying BOTH a canonical `latestUsage` and snapshots keeps
- * its canonical value. The transform uses key-presence semantics (NOT value
- * nullish): an explicit `latestUsage` — even `null` — means the state already
- * migrated, so it wins; only an absent key falls back to the snapshot-derived
- * value. This exactly matches the prior preprocess guard (`'latestUsage' in
- * raw`) and avoids reviving stale snapshot data over a canonical value.
+ * and empty inputs fall through to the canonical schema below. Hybrid payloads
+ * that carry both keys keep their canonical `latestUsage` (see the transform).
  *
  * Each snapshot is parsed tolerantly (`.catch`): the old preprocess only ever
- * read the last element's `usage`, so a malformed *earlier* snapshot must not
+ * read the last element's `usage`, so a malformed earlier snapshot must not
  * fail the whole arm (which would drop the latest valid usage on resume). A
  * malformed `usage` degrades to `null` rather than rejecting the payload.
  */
@@ -80,10 +74,12 @@ const LegacyRunUsageAccumulatorSchema = z
   .transform(
     (legacy): RunUsageAccumulatorJSON => ({
       totals: legacy.totals,
-      // Key-presence, not value-nullish: `.nullish()` parses an absent key as
-      // `undefined` and an explicit `null` as `null`, so `!== undefined` keeps
-      // an explicit null (already-migrated state) and only an absent key falls
-      // back to the latest snapshot.
+      // Key-presence, not value-nullish: a hybrid payload carrying both an
+      // explicit `latestUsage` (even `null`, an already-migrated state) and
+      // snapshots must keep the canonical value. `.nullish()` parses an absent
+      // key as `undefined` and an explicit `null` as `null`, so `!== undefined`
+      // keeps an explicit null and only an absent key falls back to the latest
+      // snapshot. Matches the prior `'latestUsage' in raw` preprocess guard.
       latestUsage:
         legacy.latestUsage !== undefined
           ? legacy.latestUsage

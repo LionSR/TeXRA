@@ -166,7 +166,7 @@ export class ZoteroSearchTool extends defineTool({
 
     const label = describeSearch({ query, title, author, year });
 
-    if (!Array.isArray(result) || result.length === 0) {
+    if (result.length === 0) {
       return {
         summary: `No results found for ${label}`,
         output: 'No matching items in Zotero library.',
