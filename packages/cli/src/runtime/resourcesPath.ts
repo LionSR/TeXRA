@@ -21,9 +21,9 @@ export function resolveCliResourcesPath(anchorUrl = import.meta.url): string {
   const currentDir = path.dirname(fileURLToPath(anchorUrl));
   const packageDir = findCliPackageDir(currentDir);
   const candidates = [
+    path.resolve(currentDir, '../resources'),
     path.resolve(packageDir, 'dist/resources'),
     path.resolve(packageDir, '../extension/resources'),
-    path.resolve(currentDir, '../resources'),
     path.resolve(currentDir, '../../../extension/resources'),
     path.resolve(currentDir, '../../extension/resources'),
   ];
