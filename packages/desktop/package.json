@@ -25,12 +25,12 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@texra/core": "workspace:*",
-    "electron": "^42.5.0",
+    "electron": "^42.5.1",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
     "playwright": "^1.61.1",
     "typescript": "^6.0.3",
-    "vite": "^8.0.16"
+    "vite": "^8.1.1"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.195",
