@@ -10,6 +10,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
   executionRegistry,
@@ -17,12 +18,13 @@ import {
 } from '@agent/runtime/executionRegistry';
 import {
   sendFollowUp,
+  wakeQueuedFollowUpStream,
   wakeOrReleaseQueuedStream,
 } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import type { StreamTabId } from '@shared/schemas';
+import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 describe('ToolUseFollowUp', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
@@ -110,6 +112,20 @@ describe('ToolUseFollowUp', () => {
     assert.deepEqual(calls, [
       { text: 'subagent result', origin: 'subagent_result' },
     ]);
+  });
+
+  it('reports unknown streams as no session', async () => {
+    const missingStreamId = 'missing-follow-up-session' as StreamTabId;
+
+    const result = await sendFollowUp(missingStreamId, 'hello');
+
+    assert.deepEqual(result, {
+      status: 'no_session',
+      streamStatus: undefined,
+    });
+    assert.deepEqual(await wakeQueuedFollowUpStream(missingStreamId, result), {
+      kind: 'not_required',
+    });
   });
 
   it('queues follow-ups when children are still running', async () => {
@@ -312,14 +328,50 @@ describe('ToolUseFollowUp', () => {
         reason: 'children_running',
       });
 
-      assert.equal(
-        await wakeOrReleaseQueuedStream(parentStreamId, result),
-        false,
-      );
+      assert.deepEqual(await wakeQueuedFollowUpStream(parentStreamId, result), {
+        kind: 'dropped',
+      });
       assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), []);
     } finally {
       executionRegistry.untrack(executionId);
       ToolUseFollowUpQueue.release(parentStreamId);
+    }
+  });
+
+  it('reports failed waiting-stream wakes without dropping the queue', async () => {
+    const waitingStreamId = 'parent-stream-wake-waiting' as StreamTabId;
+
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform(
+        {},
+        { agentResume: { tryResumeStream: async () => false } },
+      ),
+    );
+    StreamStatusService.set(waitingStreamId, STREAM_STATUS.WAITING, {
+      emit: false,
+    });
+
+    try {
+      const result = await sendFollowUp(
+        waitingStreamId,
+        'queued while waiting',
+      );
+      assert.deepEqual(result, {
+        status: 'queued',
+        reason: 'waiting',
+      });
+
+      assert.deepEqual(
+        await wakeQueuedFollowUpStream(waitingStreamId, result),
+        { kind: 'queued_resume_failed' },
+      );
+      assert.deepEqual(ToolUseFollowUpQueue.getAll(waitingStreamId), [
+        'queued while waiting',
+      ]);
+    } finally {
+      StreamStatusService.clear(waitingStreamId, { emit: false });
+      ToolUseFollowUpQueue.release(waitingStreamId);
     }
   });
 
