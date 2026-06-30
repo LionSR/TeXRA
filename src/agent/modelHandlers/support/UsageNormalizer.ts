@@ -17,7 +17,17 @@
 
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
-import { computeCachePercentage } from '../utils/usageNormalization';
+/**
+ * Calculate cache percentage from cached and total input tokens. Returns
+ * undefined when no caching occurred (so a 0 is never stored).
+ */
+function computeCachePercentage(
+  cachedTokens: number,
+  totalInputTokens: number,
+): number | undefined {
+  if (totalInputTokens <= 0 || cachedTokens <= 0) return undefined;
+  return (cachedTokens / totalInputTokens) * 100;
+}
 
 /**
  * Token counts extracted from a provider's raw usage object.

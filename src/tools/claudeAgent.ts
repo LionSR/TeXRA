@@ -25,28 +25,18 @@
 import { z } from 'zod';
 
 // Local imports
-import { registerExecution } from '@agent/storage';
 import {
   emitToolUseCard,
   endToolUseCard,
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import {
-  requestBashApproval,
-  buildBashApprovalRejectedResult,
-} from '@tools/approval/bashApproval';
 import { isNonEmptyString } from '@utils/core';
-import { generateExecutionId } from '@utils/core/executionId';
-import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -55,12 +45,15 @@ import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from './claudeAgentImport';
-import { createChildStream, type ChildStream } from './childStream';
+import { type ChildStream } from './childStream';
 import { claudeAgentSessions } from './agentCliSessionStores';
 import {
   publishAgentCliStreamUsage,
   formatAgentCliDelivery,
   formatAgentCliError,
+  launchAgentCliSession,
+  resumeAgentCliSession,
+  withAgentCliApproval,
 } from './agentCliShared';
 import {
   runAgentCliSession,
@@ -500,36 +493,33 @@ export class ClaudeAgentTool extends defineTool({
     const model = input.model ?? config.getClaudeAgentModel();
     const effort = input.effort ?? config.getClaudeAgentEffort();
 
-    const approvalLabel = `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`;
-    const approval = await requestBashApproval({ command: approvalLabel });
-    if (!approval.accepted) {
-      return buildBashApprovalRejectedResult(
-        approvalLabel,
-        approval.userMessage,
-      );
-    }
-
-    const contexts = getCurrentToolContexts();
-    const callContext = contexts?.callContext;
-    const runContext = contexts?.runContext;
-    callContext?.onExecutionReady?.();
-
-    if (input.session_id) {
-      return resumeClaudeAgentSession(
-        input.session_id,
-        input.prompt,
-        runContext?.streamId,
-      );
-    }
-    return launchClaudeAgentSession(
-      input,
-      permissionMode,
-      model,
-      effort,
-      runContext?.streamId,
-      runContext?.executionId,
-      runContext?.workingDirectory,
-      runContext?.runtimeHost,
+    return withAgentCliApproval(
+      `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
+      (runContext) => {
+        if (input.session_id) {
+          return resumeAgentCliSession(claudeAgentSessions, {
+            id: input.session_id,
+            prompt: input.prompt,
+            callerStreamId: runContext?.streamId,
+            labels: {
+              notActiveLabel: 'Claude Code CLI session',
+              idParamName: 'session_id',
+              summaryLabel: 'Claude Code CLI',
+              queuedLabel: 'Claude Code session',
+            },
+          });
+        }
+        return launchClaudeAgentSession(
+          input,
+          permissionMode,
+          model,
+          effort,
+          runContext?.streamId,
+          runContext?.executionId,
+          runContext?.workingDirectory,
+          runContext?.runtimeHost,
+        );
+      },
     );
   }
 }
@@ -554,88 +544,35 @@ async function launchClaudeAgentSession(
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const workspace = config.buildClaudeAgentWorkspaceOptions(workingDir);
   const env = await config.buildClaudeAgentEnv();
-
-  const executionId = generateExecutionId();
-  await ensureRunDir(executionId);
-
   const agentConfig = config.buildClaudeAgentConfig(input.prompt);
+  const preview = truncateWithEllipsis(input.prompt, 60);
 
-  try {
-    await registerExecution(
-      executionId,
-      agentConfig,
-      CLAUDE_AGENT_NAME,
-      parentExecutionId,
-    );
-  } catch {
-    throw new ToolError('Failed to register Claude Code CLI execution.');
-  }
-
-  const childStream = createChildStream(executionId, parentStreamId, {
-    streamPrefix: 'claude@agent-sdk',
-    streamCategory: AgentCategory.ToolUse,
+  return launchAgentCliSession({
+    parentStreamId,
+    parentExecutionId,
+    runtimeHost,
     agentName: CLAUDE_AGENT_NAME,
+    streamPrefix: 'claude@agent-sdk',
     description: input.prompt,
     config: agentConfig,
-    toolName: CLAUDE_AGENT_NAME,
-    runtimeHost,
-  });
-
-  startClaudeAgentLoop({
-    childStream,
-    parentStreamId,
-    executionId,
-    initialPrompt: input.prompt,
-    model,
-    permissionMode,
-    effort,
-    cwd: workspace.cwd,
-    additionalDirectories: workspace.additionalDirectories,
-    env,
-    pathToClaudeCodeExecutable: await findClaudeBinaryPath(),
-    runtimeHost,
-  });
-
-  const { childStreamId } = childStream;
-  const preview = truncateWithEllipsis(input.prompt, 60);
-  return {
+    registerFailedMessage: 'Failed to register Claude Code CLI execution.',
+    startLoop: async ({ childStream, executionId }) =>
+      startClaudeAgentLoop({
+        childStream,
+        parentStreamId,
+        executionId,
+        initialPrompt: input.prompt,
+        model,
+        permissionMode,
+        effort,
+        cwd: workspace.cwd,
+        additionalDirectories: workspace.additionalDirectories,
+        env,
+        pathToClaudeCodeExecutable: await findClaudeBinaryPath(),
+        runtimeHost,
+      }),
     summary: `Launched Claude Code CLI: ${preview}`,
-    output: [
-      `Claude Code agent launched (model: ${model}, permission: ${permissionMode}).`,
-      `Execution ID: ${executionId}`,
-      `Stream tab: ${childStreamId}`,
-      `Result will be delivered as a follow-up message when the turn completes. The delivery includes the session_id — pass it back on a later call to send a follow-up.`,
-    ].join('\n'),
-  };
-}
-
-function resumeClaudeAgentSession(
-  sessionId: string,
-  prompt: string,
-  callerStreamId: StreamTabId | undefined,
-): ToolResult {
-  const stored = claudeAgentSessions.lookup(sessionId);
-  if (!stored) {
-    throw new ToolError(
-      `Claude Code CLI session '${sessionId}' is not active. It may have completed or been stopped; start a new session without session_id.`,
-    );
-  }
-
-  if (callerStreamId && stored.parentStreamId !== callerStreamId) {
-    throw new ToolError(
-      `Claude Code CLI session '${sessionId}' is owned by a different session; start a new session without session_id to run in this context.`,
-    );
-  }
-
-  const queue = ToolUseFollowUpQueue.acquire(stored.childStreamId);
-  queue.enqueue({ text: prompt });
-
-  const preview = truncateWithEllipsis(prompt, 60);
-  return {
-    summary: `Follow-up queued for Claude Code CLI: ${preview}`,
-    output: [
-      `Follow-up instruction queued for Claude Code session '${sessionId}'. The agent will process it and deliver a new result automatically.`,
-      `Execution ID: ${stored.executionId}`,
-    ].join('\n'),
-  };
+    launchedLine: `Claude Code agent launched (model: ${model}, permission: ${permissionMode}).`,
+    followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the session_id — pass it back on a later call to send a follow-up.`,
+  });
 }

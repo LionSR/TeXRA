@@ -21,7 +21,6 @@
 import { z } from 'zod';
 
 // Local imports
-import { registerExecution } from '@agent/storage';
 import {
   emitToolUseCard,
   endToolUseCard,
@@ -29,11 +28,8 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type {
   StreamTabId,
   ExecutionId,
@@ -44,24 +40,21 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import {
-  requestBashApproval,
-  buildBashApprovalRejectedResult,
-} from '@tools/approval/bashApproval';
-import { generateExecutionId } from '@utils/core/executionId';
-import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
-import { createChildStream, type ChildStream } from './childStream';
+import { type ChildStream } from './childStream';
 import { codexThreads } from './agentCliSessionStores';
 import {
   publishAgentCliStreamUsage,
   formatAgentCliDelivery,
   formatAgentCliError,
+  launchAgentCliSession,
+  resumeAgentCliSession,
+  withAgentCliApproval,
 } from './agentCliShared';
 import {
   runAgentCliSession,
@@ -486,35 +479,32 @@ export class CodexTool extends defineTool({
       input.sandbox_mode = config.getCodexSandboxMode();
     }
 
-    const approvalLabel = `[codex ${input.sandbox_mode}] ${input.prompt}`;
-    const approval = await requestBashApproval({ command: approvalLabel });
-    if (!approval.accepted) {
-      return buildBashApprovalRejectedResult(
-        approvalLabel,
-        approval.userMessage,
-      );
-    }
-
-    const contexts = getCurrentToolContexts();
-    const callContext = contexts?.callContext;
-    const runContext = contexts?.runContext;
-    callContext?.onExecutionReady?.();
-
-    if (input.thread_id && codexThreads.isActive(input.thread_id)) {
-      return resumeCodexThread(
-        input.thread_id,
-        input.prompt,
-        runContext?.streamId,
-      );
-    }
-    // Fall through when the thread's in-memory loop is gone (extension
-    // reload, crash): createCodexThread resumes via the SDK from disk.
-    return launchCodexSession(
-      input,
-      runContext?.streamId,
-      runContext?.executionId,
-      runContext?.workingDirectory,
-      runContext?.runtimeHost,
+    return withAgentCliApproval(
+      `[codex ${input.sandbox_mode}] ${input.prompt}`,
+      (runContext) => {
+        if (input.thread_id && codexThreads.isActive(input.thread_id)) {
+          return resumeAgentCliSession(codexThreads, {
+            id: input.thread_id,
+            prompt: input.prompt,
+            callerStreamId: runContext?.streamId,
+            labels: {
+              notActiveLabel: 'Codex thread',
+              idParamName: 'thread_id',
+              summaryLabel: 'Codex',
+              queuedLabel: 'Codex thread',
+            },
+          });
+        }
+        // Fall through when the thread's in-memory loop is gone (extension
+        // reload, crash): createCodexThread resumes via the SDK from disk.
+        return launchCodexSession(
+          input,
+          runContext?.streamId,
+          runContext?.executionId,
+          runContext?.workingDirectory,
+          runContext?.runtimeHost,
+        );
+      },
     );
   }
 }
@@ -534,81 +524,29 @@ async function launchCodexSession(
 
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const thread = await createCodexThread(input, workingDir);
+  const config = (await getCodexConfig()).buildCodexConfig(input.prompt);
+  const preview = truncateWithEllipsis(input.prompt, 60);
 
-  const executionId = generateExecutionId();
-  await ensureRunDir(executionId);
-
-  const codexConfig = await getCodexConfig();
-  const config = codexConfig.buildCodexConfig(input.prompt);
-
-  try {
-    await registerExecution(executionId, config, 'codex', parentExecutionId);
-  } catch {
-    throw new ToolError('Failed to register Codex execution.');
-  }
-
-  const childStream = createChildStream(executionId, parentStreamId, {
-    streamPrefix: 'codex@codex-sdk',
-    streamCategory: AgentCategory.ToolUse,
+  return launchAgentCliSession({
+    parentStreamId,
+    parentExecutionId,
+    runtimeHost,
     agentName: 'codex',
+    streamPrefix: 'codex@codex-sdk',
     description: input.prompt,
     config,
-    toolName: 'codex',
-    runtimeHost,
-  });
-
-  startCodexLoop({
-    thread,
-    childStream,
-    parentStreamId,
-    executionId,
-    initialPrompt: input.prompt,
-    runtimeHost,
-  });
-
-  const { childStreamId } = childStream;
-  const preview = truncateWithEllipsis(input.prompt, 60);
-  return {
+    registerFailedMessage: 'Failed to register Codex execution.',
+    startLoop: ({ childStream, executionId }) =>
+      startCodexLoop({
+        thread,
+        childStream,
+        parentStreamId,
+        executionId,
+        initialPrompt: input.prompt,
+        runtimeHost,
+      }),
     summary: `Launched Codex: ${preview}`,
-    output: [
-      `Codex agent launched (sandbox: ${input.sandbox_mode}).`,
-      `Execution ID: ${executionId}`,
-      `Stream tab: ${childStreamId}`,
-      `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id — pass it to codex on a later call to send a follow-up instruction.`,
-    ].join('\n'),
-  };
-}
-
-function resumeCodexThread(
-  threadId: string,
-  prompt: string,
-  callerStreamId: StreamTabId | undefined,
-): ToolResult {
-  const stored = codexThreads.lookup(threadId);
-  if (!stored) {
-    throw new ToolError(
-      `Codex thread '${threadId}' is not active. It may have completed or been stopped; start a new session without thread_id.`,
-    );
-  }
-
-  // The turn result is delivered to the stored parent stream, so refuse
-  // callers from a different stream — otherwise the sender reports "sent"
-  // while the response lands on someone else's orchestrator.
-  if (callerStreamId && stored.parentStreamId !== callerStreamId) {
-    throw new ToolError(
-      `Codex thread '${threadId}' is owned by a different session; start a new session without thread_id to run in this context.`,
-    );
-  }
-
-  const queue = ToolUseFollowUpQueue.acquire(stored.childStreamId);
-  queue.enqueue({ text: prompt });
-
-  const preview = truncateWithEllipsis(prompt, 60);
-  return {
-    summary: `Follow-up queued for Codex: ${preview}`,
-    output: [
-      `Follow-up instruction queued for Codex thread '${threadId}'. The agent will process it and deliver a new result automatically.`,
-      `Execution ID: ${stored.executionId}`,
-    ].join('\n'),
-  };
+    launchedLine: `Codex agent launched (sandbox: ${input.sandbox_mode}).`,
+    followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id — pass it to codex on a later call to send a follow-up instruction.`,
+  });
 }
