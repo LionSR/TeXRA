@@ -134,6 +134,12 @@ export class TexraDiffView extends LitElement {
       .error {
         color: var(--color-error);
       }
+
+      .loading-state {
+        min-height: 240px;
+        border: var(--border-thin) solid var(--color-border);
+        background: var(--color-bg-secondary);
+      }
     `,
   ];
 

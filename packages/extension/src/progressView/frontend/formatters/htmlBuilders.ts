@@ -126,7 +126,10 @@ export interface DetailsSummaryOptions {
   iconName: string;
   label: string;
   labelClass?: string;
-  /** Render as Web Awesome summary-slot content instead of a native summary. */
+  /**
+   * Render as `<wa-details>` summary-slot content instead of a native summary.
+   * The caller must register `<wa-details>` and rely on its built-in toggle icon.
+   */
   summarySlot?: boolean;
   timestamp?: { display: string; tooltip: string };
   copyButton?: {

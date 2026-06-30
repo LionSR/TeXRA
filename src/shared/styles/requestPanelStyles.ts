@@ -730,6 +730,7 @@ export const requestPanelStyles: CSSResult = css`
     padding: 0;
   }
 
+  /* Web Awesome's details template exposes the disclosure indicator as part="icon". */
   .external-inquiry-request__transcript::part(icon) {
     padding-inline-end: ${sp.medium};
   }
