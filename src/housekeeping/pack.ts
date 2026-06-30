@@ -64,17 +64,13 @@ export async function runPackSingle(
     }
   }
 
-  const onlyInputFilePacked =
+  // Nothing to move, and the only copy (if any) is the input document itself.
+  const noFilesToPack =
     movedFiles.length === 0 &&
-    copiedFiles.length === 1 &&
-    copiedFiles[0] === inputFile;
+    (copiedFiles.length === 0 ||
+      (copiedFiles.length === 1 && copiedFiles[0] === inputFile));
 
-  if (onlyInputFilePacked) {
-    logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
-    return { status: 'noFiles' };
-  }
-
-  if (movedFiles.length === 0 && copiedFiles.length === 0) {
+  if (noFilesToPack) {
     logger.warn(CHANNEL, `No files found to pack for ${inputFile}`);
     return { status: 'noFiles' };
   }

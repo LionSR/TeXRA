@@ -343,17 +343,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
     if (systemPrompt) {
       const role = this.capabilities.supportsSystemPrompt ? 'system' : 'user';
-      if (role === 'system') {
-        messages.push({
-          role: 'system',
-          content: [{ type: 'text', text: systemPrompt }],
-        });
-      } else {
-        messages.push({
-          role: 'user',
-          content: [{ type: 'text', text: systemPrompt }],
-        });
-      }
+      messages.push({
+        role,
+        content: [{ type: 'text', text: systemPrompt }],
+      });
     }
 
     const userContent: ChatContentItems[] = [];
@@ -393,14 +386,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         type: 'text',
         text: userRequest,
       });
-    } else if (requestRole === 'system') {
-      messages.push({
-        role: 'system',
-        content: [{ type: 'text', text: userRequest }],
-      });
     } else {
       messages.push({
-        role: 'user',
+        role: requestRole,
         content: [{ type: 'text', text: userRequest }],
       });
     }
@@ -730,17 +718,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     );
 
     const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
-    if (role === 'system') {
-      messages.push({
-        role: 'system',
-        content: [{ type: 'text', text: userMessageContinuation }],
-      });
-    } else {
-      messages.push({
-        role: 'user',
-        content: [{ type: 'text', text: userMessageContinuation }],
-      });
-    }
+    messages.push({
+      role,
+      content: [{ type: 'text', text: userMessageContinuation }],
+    });
   }
 
   // ---------------------------------------------------------------------------
