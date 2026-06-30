@@ -5,11 +5,13 @@ import { app } from 'electron';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
+  createNodePlatform,
   initNodeAgentRuntime,
-  initNodePlatform,
+  initializeNodeGoalPrompts,
 } from '@platform/defaults/nodeHost';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@common/errors';
@@ -127,24 +129,26 @@ export async function initializeElectronPlatform(
   const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
 
   repairLaunchPath();
-  initNodePlatform({
-    configStores: {
-      workspace: workspaceConfigStore,
-      global: globalConfigStore,
-    },
-    globalState: globalStateStore,
-    workspaceState: workspaceStateStore,
-    storage,
-    secrets: new ElectronSecrets(secretsStore, {
-      showWarningMessage: showSecretStorageWarningDialog,
+  initPlatform(
+    createNodePlatform({
+      configStores: {
+        workspace: workspaceConfigStore,
+        global: globalConfigStore,
+      },
+      globalState: globalStateStore,
+      workspaceState: workspaceStateStore,
+      storage,
+      secrets: new ElectronSecrets(secretsStore, {
+        showWarningMessage: showSecretStorageWarningDialog,
+      }),
+      lifecycle,
+      agentResume: {
+        tryResumeStream: tryResumeDesktopStream,
+        isResumeInFlight: isDesktopResumeInFlight,
+      },
+      getWorkspacePath: () => workspacePath,
     }),
-    lifecycle,
-    agentResume: {
-      tryResumeStream: tryResumeDesktopStream,
-      isResumeInFlight: isDesktopResumeInFlight,
-    },
-    getWorkspacePath: () => workspacePath,
-  });
+  );
 
   // Capture the prior-install signal BEFORE bootstrapElectronAgentDirectories
   // (below) writes LAST_KNOWN_VERSION via the bundled-agent directory sync.
@@ -164,11 +168,12 @@ export async function initializeElectronPlatform(
   const snapshotStore = new StreamSnapshotStore();
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => snapshotStore.flush());
 
-  // Register the shared Node-host agent runtime: memory + goal tool injections,
-  // the direct Lean language services (lake env lean --server), and the
-  // packaged Goal prompt path. Registered after the snapshot-store shutdown
-  // handler so the snapshot flush still runs before the Lean adapter dispose.
-  initNodeAgentRuntime(lifecycle, resourcesPath);
+  // Register the shared Node-host agent runtime: memory + goal tool injections
+  // and the direct Lean language services (lake env lean --server). Registered
+  // after the snapshot-store shutdown handler so the snapshot flush still runs
+  // before the Lean adapter dispose.
+  initNodeAgentRuntime(lifecycle);
+  initializeNodeGoalPrompts(resourcesPath);
 
   await bootstrapElectronAgentDirectories(resourcesPath, app.getVersion());
 

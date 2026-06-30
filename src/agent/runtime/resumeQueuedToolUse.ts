@@ -89,6 +89,11 @@ export async function resumeQueuedToolUseSnapshot(
   if (!resumeError) {
     return true;
   }
-  await options.onError(resumeError.error);
+  try {
+    await options.onError(resumeError.error);
+  } catch {
+    // A broken host error surface should not turn a handled resume failure into
+    // an unhandled rejection.
+  }
   return false;
 }
