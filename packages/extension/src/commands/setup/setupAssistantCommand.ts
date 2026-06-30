@@ -231,10 +231,12 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
   type CredentialPick = (typeof picks)[number];
   const picked = await showQuickPick<CredentialPick>({
     title: 'TeXRA Setup',
-    placeholder: 'TeXRA needs a credential before the setup assistant can run models.',
+    placeholder:
+      'TeXRA needs a credential before the setup assistant can run models.',
     // VS Code 1.108+: the four choices are not self-explanatory in isolation,
     // and the placeholder vanishes on first keystroke. The prompt persists.
-    prompt: 'ChatGPT uses your Plus/Pro subscription; Researcher Access uses your TeXRA account; API Key requires a provider key.',
+    prompt:
+      'ChatGPT uses your Plus/Pro subscription; Researcher Access uses your TeXRA account; API Key requires a provider key.',
     items: picks,
   });
 
