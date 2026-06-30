@@ -97,6 +97,23 @@ describe('CLI confirm-card key handling', () => {
     ).toContainEqual({ key: 'a', action: 'edit session' });
   });
 
+  it('keeps session-scope hints before feedback on mid-width terminals', () => {
+    const compact = confirmCardKeyHintsForWidth({
+      alwaysAllowLabel: 'approve bash for session',
+      maxColumns: 50,
+    });
+
+    expect(compact).toEqual([
+      { key: 'y', action: 'approve' },
+      { key: 'n', action: 'reject' },
+      { key: 'a', action: 'bash session' },
+      { key: 'Esc', action: 'cancel' },
+    ]);
+    expect(
+      compact.map((hint) => `${hint.key} ${hint.action}`).join(' · ').length,
+    ).toBeLessThanOrEqual(50);
+  });
+
   it('drops optional approval hints before hiding cancel on narrow terminals', () => {
     expect(
       confirmCardKeyHintsForWidth({

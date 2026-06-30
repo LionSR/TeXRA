@@ -112,8 +112,6 @@ function compactHintAction(action: string): string {
       return 'bash session';
     case 'approve edits for session':
       return 'edit session';
-    case 'approve session':
-      return 'session';
     case 'feedback':
       return 'note';
     default:
@@ -144,13 +142,13 @@ export function confirmCardKeyHintsForWidth(
     return withoutExtraActions;
   }
 
+  const withoutFeedback = compactHints.filter((hint) => hint.key !== 'e');
+  if (hintsFit(withoutFeedback, options.maxColumns)) return withoutFeedback;
+
   const withFeedback = compactHints.filter(
     (hint) => isCoreApprovalHint(hint) || hint.key === 'e',
   );
   if (hintsFit(withFeedback, options.maxColumns)) return withFeedback;
-
-  const withoutFeedback = compactHints.filter((hint) => hint.key !== 'e');
-  if (hintsFit(withoutFeedback, options.maxColumns)) return withoutFeedback;
 
   const coreHints = compactHints.filter(isCoreApprovalHint);
   if (hintsFit(coreHints, options.maxColumns)) return coreHints;

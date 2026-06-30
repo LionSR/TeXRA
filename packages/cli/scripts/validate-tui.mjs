@@ -1268,7 +1268,7 @@ const SCENARIOS = [
       'n reject',
       'Esc cancel',
     ],
-    unexpect: [' · …', 'a session'],
+    unexpect: [' · …', 'a bash session'],
   },
   {
     name: 'bash-approval-feedback',
