@@ -57,7 +57,7 @@ export function buildStreamInfo(
     hints.creationTimestamp ??
     Date.now();
 
-  const workingDirectory = config?.workingDirectory ?? undefined;
+  const workingDirectory = config?.workingDirectory;
   let worktreeInfo;
   if (workingDirectory) {
     worktreeInfo = peekWorktreeInfo(workingDirectory);
@@ -67,12 +67,7 @@ export function buildStreamInfo(
   return buildStreamTabInfo({
     streamId: id,
     config,
-    hints: {
-      agent: hints.agent,
-      agentCategory: hints.agentCategory,
-      inputFile: hints.inputFile,
-      isRemote: hints.isRemote,
-    },
+    hints,
     creationTimestamp,
     executionId: state.snapshots.getExecutionId(id) ?? hints.executionId,
     parentStreamId:

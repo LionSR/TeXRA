@@ -50,29 +50,50 @@ export function registerCleanCommands(context: vscode.ExtensionContext): void {
   ]);
 }
 
-async function handleCleanSingle(
+// Shared backing for the single- and multiple-file clean commands. Mirrors
+// `runWorkspaceClean` in `handleClean`: an empty `outputFiles` list cleans the
+// input alone, a non-empty list also sweeps the extra files.
+async function runCleanCommand(
   inputFile: string,
   agent: string,
   model: string,
+  label: string,
+  outputFiles: string[],
 ): Promise<void> {
   const data = await parseWithErrorDisplay(
     CHANNEL,
     FileOpParamsSchema,
     { inputFile, agent, model },
-    'cleanSingle params',
+    label,
   );
   if (!data) return;
 
-  const result = await runCleanSingle(data.model, data.inputFile, data.agent);
+  const result =
+    outputFiles.length > 0
+      ? await runCleanMultiple(
+          data.model,
+          data.inputFile,
+          data.agent,
+          outputFiles,
+        )
+      : await runCleanSingle(data.model, data.inputFile, data.agent);
   showCleanResult(result, data.inputFile);
   emitClearMissingOutputs({
     streamConfig: {
       agent: data.agent,
       model: data.model,
       inputFile: data.inputFile,
-      outputFiles: [],
+      outputFiles,
     },
   });
+}
+
+async function handleCleanSingle(
+  inputFile: string,
+  agent: string,
+  model: string,
+): Promise<void> {
+  await runCleanCommand(inputFile, agent, model, 'cleanSingle params', []);
 }
 
 async function handleCleanMultiple(
@@ -81,31 +102,13 @@ async function handleCleanMultiple(
   model: string,
   inputFiles: string[] = [],
 ): Promise<void> {
-  const data = await parseWithErrorDisplay(
-    CHANNEL,
-    FileOpParamsSchema,
-    { inputFile, agent, model },
+  await runCleanCommand(
+    inputFile,
+    agent,
+    model,
     'cleanMultiple params',
-  );
-  if (!data) return;
-
-  logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
-
-  const result = await runCleanMultiple(
-    data.model,
-    data.inputFile,
-    data.agent,
     inputFiles,
   );
-  showCleanResult(result, data.inputFile);
-  emitClearMissingOutputs({
-    streamConfig: {
-      agent: data.agent,
-      model: data.model,
-      inputFile: data.inputFile,
-      outputFiles: inputFiles,
-    },
-  });
 }
 
 async function handleClean(config: unknown): Promise<void> {

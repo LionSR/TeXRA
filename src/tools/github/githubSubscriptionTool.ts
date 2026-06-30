@@ -19,10 +19,8 @@
 
 import { z } from 'zod';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { toErrorMessage } from '@common/errors';
-import type { StreamTabId } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -130,14 +128,6 @@ async function requireToken(): Promise<void> {
   }
 }
 
-function requireSubscriptionContext(): {
-  streamId: StreamTabId;
-  runtimeHost: AgentRuntimeHost;
-} {
-  const { streamId, runtimeHost } = requireRunStream('github_subscription');
-  return { streamId, runtimeHost };
-}
-
 function requirePath(input: GitHubSubscriptionInput): ParsedPath {
   if (!input.path) {
     throw new ToolError(
@@ -156,10 +146,6 @@ const ANNOTATION_LEVEL_DESCRIPTIONS: Record<
   notice: 'notices, warnings, and failures',
 };
 
-function describeAnnotationLevel(level: GitHubCheckAnnotationLevel): string {
-  return ANNOTATION_LEVEL_DESCRIPTIONS[level];
-}
-
 /** Shared body sentence describing what a PR subscription delivers. */
 function prSubscriptionActivitySentence(
   annotationLevelDescription: string,
@@ -171,7 +157,7 @@ async function execSubscribe(
   input: GitHubSubscriptionInput,
 ): Promise<ToolResult> {
   await requireToken();
-  const { streamId, runtimeHost } = requireSubscriptionContext();
+  const { streamId, runtimeHost } = requireRunStream('github_subscription');
   const target = requirePath(input);
   const minAnnotationLevel =
     input.min_annotation_level ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
@@ -198,7 +184,7 @@ async function execSubscribe(
     );
     const slug = `${target.owner}/${target.repo}/pulls/${target.pullNumber}`;
     const annotationLevelDescription =
-      describeAnnotationLevel(minAnnotationLevel);
+      ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
     return {
       summary: created
         ? `Subscribed to ${slug}`
@@ -240,7 +226,7 @@ async function execSubscribe(
     );
     const wasIssuePath = !knownPR;
     const annotationLevelDescription =
-      describeAnnotationLevel(minAnnotationLevel);
+      ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
     return {
       summary: created
         ? wasIssuePath
@@ -284,7 +270,7 @@ async function resolveIssueIsPR(
 }
 
 function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
-  const { streamId, runtimeHost } = requireSubscriptionContext();
+  const { streamId, runtimeHost } = requireRunStream('github_subscription');
   const target = requirePath(input);
   if (target.kind === 'repo') {
     const removed = unbindRepoSubscription(streamId, target, runtimeHost);
@@ -326,7 +312,7 @@ function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
 }
 
 function execList(): ToolResult {
-  const { streamId } = requireSubscriptionContext();
+  const { streamId } = requireRunStream('github_subscription');
   const prKeys = listPRSubscriptionBindings(prPollingSource.activeKeys())
     .filter((b) => b.streamIds.includes(streamId))
     .map((b) => b.key);

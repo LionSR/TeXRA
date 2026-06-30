@@ -9,12 +9,7 @@ export const LOG_LEVELS = {
   DEBUG: 'debug',
 } as const;
 
-export const LogLevelSchema = z.enum([
-  LOG_LEVELS.ERROR,
-  LOG_LEVELS.WARN,
-  LOG_LEVELS.INFO,
-  LOG_LEVELS.DEBUG,
-]);
+export const LogLevelSchema = z.enum(LOG_LEVELS);
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
 /** Terminal states for finalizing log groups (subset of TaskGroupStatus) */
@@ -23,10 +18,7 @@ export const END_GROUP_STATUS = {
   STOPPED: 'stopped',
 } as const;
 
-export const EndGroupStatusSchema = z.enum([
-  END_GROUP_STATUS.ERROR,
-  END_GROUP_STATUS.STOPPED,
-]);
+export const EndGroupStatusSchema = z.enum(END_GROUP_STATUS);
 export type EndGroupStatus = z.infer<typeof EndGroupStatusSchema>;
 
 type _AssertEndGroupStatusSubset = EndGroupStatus extends TaskGroupStatus
@@ -53,25 +45,7 @@ export const MESSAGE_TYPES = {
   DEFAULT: 'default',
 } as const;
 
-export const MessageTypeSchema = z.enum([
-  MESSAGE_TYPES.THINKING,
-  MESSAGE_TYPES.SCRATCHPAD,
-  MESSAGE_TYPES.FILE_LIST,
-  MESSAGE_TYPES.MISSING_OUTPUTS,
-  MESSAGE_TYPES.LATEXDIFF,
-  MESSAGE_TYPES.STATISTICS,
-  MESSAGE_TYPES.TOOL_USE,
-  MESSAGE_TYPES.WEB_SEARCH,
-  MESSAGE_TYPES.WEB_FETCH,
-  MESSAGE_TYPES.MODEL_RESPONSE,
-  MESSAGE_TYPES.USER_MESSAGE,
-  MESSAGE_TYPES.PROGRESS_STATUS,
-  MESSAGE_TYPES.ERROR,
-  MESSAGE_TYPES.INTERNAL,
-  MESSAGE_TYPES.CONTEXT_MANAGEMENT,
-  MESSAGE_TYPES.CONTEXT_STATE,
-  MESSAGE_TYPES.DEFAULT,
-]);
+export const MessageTypeSchema = z.enum(MESSAGE_TYPES);
 
 export type MessageType = z.infer<typeof MessageTypeSchema>;
 
@@ -81,11 +55,7 @@ export const STREAM_LOG_ENTRY_TYPES = {
   GROUP_END: 'group-end',
 } as const;
 
-export const StreamLogEntryTypeSchema = z.enum([
-  STREAM_LOG_ENTRY_TYPES.LOG,
-  STREAM_LOG_ENTRY_TYPES.GROUP_START,
-  STREAM_LOG_ENTRY_TYPES.GROUP_END,
-]);
+export const StreamLogEntryTypeSchema = z.enum(STREAM_LOG_ENTRY_TYPES);
 
 export type StreamLogEntryType = z.infer<typeof StreamLogEntryTypeSchema>;
 

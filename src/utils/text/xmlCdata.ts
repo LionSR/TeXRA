@@ -33,11 +33,20 @@ export function removeCDATA(content: string): string {
 }
 
 /**
- * Wrap content of specified tags with CDATA sections
+ * Wrap the content of each tag with a CDATA section. `attrPattern` is an extra
+ * regex fragment inserted before the open-tag's `>` to optionally match
+ * attributes (empty string for a bare `<tag>`).
  */
-export function addCdataToTags(xmlData: string, tags: string[]): string {
+function wrapTagsWithCdata(
+  xmlData: string,
+  tags: string[],
+  attrPattern: string,
+): string {
   return tags.reduce((result, tag) => {
-    const pattern = new RegExp(`(<${tag}>)(.*?)(</${tag}>)`, 'gs');
+    const pattern = new RegExp(
+      `(<${tag}${attrPattern}>)(.*?)(</${tag}>)`,
+      'gs',
+    );
     return result.replace(pattern, (_, openTag, body, closeTag) =>
       isCdataWrapped(body)
         ? `${openTag}${body}${closeTag}`
@@ -47,21 +56,18 @@ export function addCdataToTags(xmlData: string, tags: string[]): string {
 }
 
 /**
+ * Wrap content of specified tags with CDATA sections
+ */
+export function addCdataToTags(xmlData: string, tags: string[]): string {
+  return wrapTagsWithCdata(xmlData, tags, '');
+}
+
+/**
  * Wrap content of specified tags with CDATA sections, handling attributes
  */
 export function addCdataToTagsMultiple(
   xmlData: string,
   tags: string[],
 ): string {
-  return tags.reduce((result, tag) => {
-    const pattern = new RegExp(
-      `(<${tag}(?:\\s+[^>]*)?>)(.*?)(</${tag}>)`,
-      'gs',
-    );
-    return result.replace(pattern, (_, openTag, body, closeTag) =>
-      isCdataWrapped(body)
-        ? `${openTag}${body}${closeTag}`
-        : `${openTag}<![CDATA[${body}]]>${closeTag}`,
-    );
-  }, xmlData);
+  return wrapTagsWithCdata(xmlData, tags, '(?:\\s+[^>]*)?');
 }

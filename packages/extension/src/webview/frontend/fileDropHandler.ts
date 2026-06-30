@@ -39,17 +39,15 @@ function decodeFileUri(value: string): string | null {
   }
 }
 
-function normalizeLocalPath(value: string | null | undefined): string | null {
+function normalizeDroppedPath(
+  value: string | null | undefined,
+  fallbackToRaw: boolean,
+): string | null {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed || trimmed.startsWith('#')) return null;
-  return decodeFileUri(trimmed) ?? trimmed;
-}
-
-function normalizeFileUri(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.startsWith('#')) return null;
-  return decodeFileUri(trimmed);
+  const decoded = decodeFileUri(trimmed);
+  return fallbackToRaw ? (decoded ?? trimmed) : decoded;
 }
 
 function hasFileUri(dataTransfer: DataTransfer, type: string): boolean {
@@ -62,7 +60,9 @@ function hasFileUri(dataTransfer: DataTransfer, type: string): boolean {
   // files, so an empty read here is safe to accept.
   const data = dataTransfer.getData(type);
   if (!data) return true;
-  return data.split(/\r?\n/).some((line) => normalizeFileUri(line) != null);
+  return data
+    .split(/\r?\n/)
+    .some((line) => normalizeDroppedPath(line, false) != null);
 }
 
 /** Return true when the drag payload appears to contain files or file URIs. */
@@ -86,7 +86,7 @@ export function extractDroppedFilePaths(
 
   const paths = new Set<string>();
   for (const file of dataTransfer.files ?? []) {
-    const path = normalizeLocalPath((file as FileWithPath).path);
+    const path = normalizeDroppedPath((file as FileWithPath).path, true);
     if (path) paths.add(path);
   }
 
@@ -94,7 +94,7 @@ export function extractDroppedFilePaths(
     const data = dataTransfer.getData(type);
     if (!data) continue;
     for (const line of data.split(/\r?\n/)) {
-      const path = normalizeFileUri(line);
+      const path = normalizeDroppedPath(line, false);
       if (path) paths.add(path);
     }
   }

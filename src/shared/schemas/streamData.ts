@@ -147,13 +147,11 @@ export function flattenLegacyRuns(
       return picked as Record<string, unknown>;
     }
   }
-  let latest: Record<string, unknown> | null = null;
-  for (const value of Object.values(raw)) {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      latest = value as Record<string, unknown>;
-    }
-  }
-  return latest ?? {};
+  const latest = Object.values(raw).findLast(
+    (value) =>
+      value != null && typeof value === 'object' && !Array.isArray(value),
+  );
+  return (latest as Record<string, unknown> | undefined) ?? {};
 }
 
 // ============================================================================
