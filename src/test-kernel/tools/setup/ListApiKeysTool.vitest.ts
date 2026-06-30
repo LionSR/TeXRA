@@ -15,18 +15,22 @@ import { createFakeSetupPlatform } from './fixtures';
 
 const FAKE_PROVIDERS = ['anthropic', 'openai'] as const;
 
-function installPlatformWithKeys(keys: readonly string[]): void {
+function installPlatform(
+  listStoredKeys: () => Promise<readonly string[]>,
+): void {
   const base = createFakeSetupPlatform();
   setSetupPlatform({
     ...base,
     secrets: {
       ...base.secrets,
       providers: FAKE_PROVIDERS,
-      async listStoredKeys() {
-        return keys;
-      },
+      listStoredKeys,
     },
   });
+}
+
+function installPlatformWithKeys(keys: readonly string[]): void {
+  installPlatform(async () => keys);
 }
 
 const tool = new ListApiKeysTool();
@@ -41,16 +45,8 @@ describe('list_api_keys tool', () => {
   });
 
   it('reports unsupported SecretStorage enumeration instead of an empty store', async () => {
-    const base = createFakeSetupPlatform();
-    setSetupPlatform({
-      ...base,
-      secrets: {
-        ...base.secrets,
-        providers: FAKE_PROVIDERS,
-        async listStoredKeys() {
-          throw new Error('SecretStorage key enumeration is not supported');
-        },
-      },
+    installPlatform(async () => {
+      throw new Error('SecretStorage key enumeration is not supported');
     });
 
     const result = await tool.call({});

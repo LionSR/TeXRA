@@ -1,5 +1,3 @@
-// Third-party imports
-
 // Standard library imports
 import { createRequire } from 'node:module';
 import { strict as assert } from 'node:assert';

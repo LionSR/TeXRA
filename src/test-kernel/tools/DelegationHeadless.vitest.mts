@@ -72,6 +72,36 @@ function runtimeHost() {
   return { emit: vi.fn() };
 }
 
+/** The shared delegation call used by nearly every case (agent name varies). */
+function callDelegateReview(agent = 'review') {
+  return new DelegateAgentTool().call({
+    agent,
+    model: null,
+    instruction: 'Check the proof.',
+    memories: [],
+    working_directory: null,
+    execution_id: null,
+  });
+}
+
+/**
+ * One-shot executeAgent mock that reports a failed child via onError and
+ * returns the same failed result, carrying the given subagent cost.
+ */
+function mockExecuteAgentErrorOnce(totalCostUsd: number): void {
+  mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+    const failed = {
+      category: 'toolUse',
+      outcome: 'failed',
+      executionId: 'child-exec',
+      streamId: 'child-stream',
+      totalCostUsd,
+    };
+    await options.onError?.(new Error('review model failed'), failed);
+    return failed;
+  });
+}
+
 describe('headless delegation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -130,15 +160,7 @@ describe('headless delegation', () => {
         model: 'deepseekT',
         stopAfterCycle: true,
       }),
-      () =>
-        new DelegateAgentTool().call({
-          agent: 'review',
-          model: null,
-          instruction: 'Check the proof.',
-          memories: [],
-          working_directory: null,
-          execution_id: null,
-        }),
+      () => callDelegateReview(),
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
@@ -174,15 +196,7 @@ describe('headless delegation', () => {
         model: 'deepseekT',
         stopAfterCycle: true,
       }),
-      () =>
-        new DelegateAgentTool().call({
-          agent: 'review',
-          model: null,
-          instruction: 'Check the proof.',
-          memories: [],
-          working_directory: null,
-          execution_id: null,
-        }),
+      () => callDelegateReview(),
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
@@ -203,15 +217,7 @@ describe('headless delegation', () => {
         executionId: 'parent-exec',
         model: 'deepseekT',
       }),
-      () =>
-        new DelegateAgentTool().call({
-          agent: 'review',
-          model: null,
-          instruction: 'Check the proof.',
-          memories: [],
-          working_directory: null,
-          execution_id: null,
-        }),
+      () => callDelegateReview(),
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
@@ -278,22 +284,7 @@ describe('headless delegation', () => {
 
   it('formats returned child error results as subagent errors', async () => {
     const recordSubagentCost = vi.fn();
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      await options.onError?.(new Error('review model failed'), {
-        category: 'toolUse',
-        outcome: 'failed',
-        executionId: 'child-exec',
-        streamId: 'child-stream',
-        totalCostUsd: 0.42,
-      });
-      return {
-        category: 'toolUse',
-        outcome: 'failed',
-        executionId: 'child-exec',
-        streamId: 'child-stream',
-        totalCostUsd: 0.42,
-      };
-    });
+    mockExecuteAgentErrorOnce(0.42);
 
     const result = await withToolFileInteractionContext(
       { tracker: {} as never, recordSubagentCost },
@@ -306,15 +297,7 @@ describe('headless delegation', () => {
             model: 'deepseekT',
             stopAfterCycle: true,
           }),
-          () =>
-            new DelegateAgentTool().call({
-              agent: 'review',
-              model: null,
-              instruction: 'Check the proof.',
-              memories: [],
-              working_directory: null,
-              execution_id: null,
-            }),
+          () => callDelegateReview(),
         ),
     );
 
@@ -351,15 +334,7 @@ describe('headless delegation', () => {
             model: 'deepseekT',
             stopAfterCycle: true,
           }),
-          () =>
-            new DelegateAgentTool().call({
-              agent: 'review',
-              model: null,
-              instruction: 'Check the proof.',
-              memories: [],
-              working_directory: null,
-              execution_id: null,
-            }),
+          () => callDelegateReview(),
         ),
     );
 
@@ -372,22 +347,7 @@ describe('headless delegation', () => {
 
   it('rolls up failed async subagent cost from the error callback', async () => {
     const recordSubagentCost = vi.fn();
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      await options.onError?.(new Error('review model failed'), {
-        category: 'toolUse',
-        outcome: 'failed',
-        executionId: 'child-exec',
-        streamId: 'child-stream',
-        totalCostUsd: 0.31,
-      });
-      return {
-        category: 'toolUse',
-        outcome: 'failed',
-        executionId: 'child-exec',
-        streamId: 'child-stream',
-        totalCostUsd: 0.31,
-      };
-    });
+    mockExecuteAgentErrorOnce(0.31);
 
     const result = await withToolFileInteractionContext(
       { tracker: {} as never, recordSubagentCost },
@@ -399,15 +359,7 @@ describe('headless delegation', () => {
             executionId: 'parent-exec',
             model: 'deepseekT',
           }),
-          () =>
-            new DelegateAgentTool().call({
-              agent: 'review',
-              model: null,
-              instruction: 'Check the proof.',
-              memories: [],
-              working_directory: null,
-              execution_id: null,
-            }),
+          () => callDelegateReview(),
         ),
     );
 
@@ -426,15 +378,7 @@ describe('headless delegation', () => {
         executionId: 'parent-exec',
         model: 'deepseekT',
       }),
-      () =>
-        new DelegateAgentTool().call({
-          agent: 'review',
-          model: null,
-          instruction: 'Check the proof.',
-          memories: [],
-          working_directory: null,
-          execution_id: null,
-        }),
+      () => callDelegateReview(),
     );
 
     expect(result.summary).toBe("Launched 'review' (async)");
@@ -472,15 +416,7 @@ describe('headless delegation', () => {
         model: 'deepseekT',
         coordinators,
       }),
-      () =>
-        new DelegateAgentTool().call({
-          agent: 'review',
-          model: null,
-          instruction: 'Check the proof.',
-          memories: [],
-          working_directory: null,
-          execution_id: null,
-        }),
+      () => callDelegateReview(),
     );
 
     expect(result.summary).toBe("User rejected delegation to 'review'");
@@ -527,15 +463,7 @@ describe('headless delegation', () => {
         model: 'deepseekT',
         coordinators,
       }),
-      () =>
-        new DelegateAgentTool().call({
-          agent: 'review',
-          model: null,
-          instruction: 'Check the proof.',
-          memories: [],
-          working_directory: null,
-          execution_id: null,
-        }),
+      () => callDelegateReview(),
     );
 
     expect(result.isError).toBe(true);
@@ -578,15 +506,7 @@ describe('headless delegation', () => {
         model: 'deepseekT',
         coordinators,
       }),
-      () =>
-        new DelegateAgentTool().call({
-          agent: 'review',
-          model: null,
-          instruction: 'Check the proof.',
-          memories: [],
-          working_directory: null,
-          execution_id: null,
-        }),
+      () => callDelegateReview(),
     );
 
     expect(result.isError).toBeFalsy();
@@ -620,15 +540,7 @@ describe('headless delegation', () => {
         executionId: 'parent-exec',
         model: 'deepseekT',
       }),
-      () =>
-        new DelegateAgentTool().call({
-          agent: 'chat',
-          model: null,
-          instruction: 'Check the proof.',
-          memories: [],
-          working_directory: null,
-          execution_id: null,
-        }),
+      () => callDelegateReview('chat'),
     );
 
     expect(result.summary).toBe("Launched 'assistant' (async)");
@@ -659,15 +571,7 @@ describe('headless delegation', () => {
         executionId: 'parent-exec',
         model: 'deepseekT',
       }),
-      () =>
-        new DelegateAgentTool().call({
-          agent: 'review',
-          model: null,
-          instruction: 'Check the proof.',
-          memories: [],
-          working_directory: null,
-          execution_id: null,
-        }),
+      () => callDelegateReview(),
     );
 
     expect(onBeforeWaiting).toBeDefined();
@@ -715,15 +619,7 @@ describe('headless delegation', () => {
         executionId: 'parent-exec',
         model: 'deepseekT',
       }),
-      () =>
-        new DelegateAgentTool().call({
-          agent: 'review',
-          model: null,
-          instruction: 'Check the proof.',
-          memories: [],
-          working_directory: null,
-          execution_id: null,
-        }),
+      () => callDelegateReview(),
     );
 
     executionRegistry.detachActiveChildren(parentStreamId, host);

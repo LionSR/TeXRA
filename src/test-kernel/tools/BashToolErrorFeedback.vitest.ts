@@ -48,6 +48,13 @@ function createHandler(): TestOpenAIResponseHandler {
   });
 }
 
+function stubBashApprovalDisabled(): void {
+  vi.spyOn(agentConfig, 'getConfig').mockImplementation(
+    <T>(key: string, defaultValue?: T): T =>
+      key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
+  );
+}
+
 function createBashCall(): OpenAIResponseToolCall {
   return {
     provider: 'openai-response',
@@ -69,12 +76,7 @@ describe('BashTool error feedback', () => {
   });
 
   it('returns foreground command failures in the model tool-result payload', async () => {
-    vi.spyOn(agentConfig, 'getConfig').mockImplementation(
-      <T>(key: string, defaultValue?: T): T => {
-        if (key === BASH_APPROVAL_CONFIG_KEY) return false as T;
-        return defaultValue as T;
-      },
-    );
+    stubBashApprovalDisabled();
     vi.spyOn(execUtils, 'executeCommand').mockResolvedValueOnce({
       success: false,
       stdout: 'stdout failure guidance',
@@ -107,12 +109,7 @@ describe('BashTool error feedback', () => {
   });
 
   it('rejects shell-level backgrounding before command execution', async () => {
-    vi.spyOn(agentConfig, 'getConfig').mockImplementation(
-      <T>(key: string, defaultValue?: T): T => {
-        if (key === BASH_APPROVAL_CONFIG_KEY) return false as T;
-        return defaultValue as T;
-      },
-    );
+    stubBashApprovalDisabled();
     const executeSpy = vi.spyOn(execUtils, 'executeCommand');
 
     const result = await new BashTool().call({
@@ -127,12 +124,7 @@ describe('BashTool error feedback', () => {
   });
 
   it('does not reject ampersands in later shell command segments', async () => {
-    vi.spyOn(agentConfig, 'getConfig').mockImplementation(
-      <T>(key: string, defaultValue?: T): T => {
-        if (key === BASH_APPROVAL_CONFIG_KEY) return false as T;
-        return defaultValue as T;
-      },
-    );
+    stubBashApprovalDisabled();
     const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: true,
       stdout: 'done',

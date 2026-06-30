@@ -2,8 +2,6 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
-// Standard library imports
-
 // Local imports - auth
 import {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
@@ -20,6 +18,19 @@ import type {
   Session as SupabaseNativeSession,
   SupabaseClient as Client,
 } from '@supabase/supabase-js';
+
+function makeSession(
+  overrides: Partial<SupabaseSession> = {},
+): SupabaseSession {
+  return {
+    id: 'user-id',
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    account: { id: 'user-id', label: 'user@example.com' },
+    expiresAt: Date.now() + 120_000,
+    ...overrides,
+  };
+}
 
 function createMemoryStorage(initial?: SupabaseSession): {
   storage: SupabaseSessionStorage;
@@ -80,6 +91,14 @@ function createDeferred(): {
   return { promise, resolve };
 }
 
+const COORDINATOR_CONFIG = {
+  whenReady: async () => {},
+  tokenRefreshThresholdMs: 60_000,
+  defaultSessionExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+  githubTokenRefreshUrl: 'https://example.supabase.co/functions/v1/refresh',
+  edgeFunctionTimeoutMs: 30_000,
+};
+
 function createCoordinator(options?: {
   initialSession?: SupabaseSession;
   client?: Client;
@@ -95,13 +114,9 @@ function createCoordinator(options?: {
   );
   return {
     coordinator: new SupabaseSessionCoordinator({
+      ...COORDINATOR_CONFIG,
       storage,
       getClient: () => options?.client ?? createClient(),
-      whenReady: async () => {},
-      tokenRefreshThresholdMs: 60_000,
-      defaultSessionExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-      githubTokenRefreshUrl: 'https://example.supabase.co/functions/v1/refresh',
-      edgeFunctionTimeoutMs: 30_000,
       fetch: options?.fetch,
       onTokenExpiryChanged: options?.onTokenExpiryChanged,
     }),
@@ -117,16 +132,7 @@ describe('SupabaseSession', () => {
     });
 
     it('parses valid stored session data', () => {
-      const session: SupabaseSession = {
-        id: 'user-id',
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        account: {
-          id: 'user-id',
-          label: 'user@example.com',
-        },
-        expiresAt: Date.now() + 120_000,
-      };
+      const session = makeSession();
 
       assert.deepEqual(
         parseStoredSupabaseSession(JSON.stringify(session)),
@@ -267,16 +273,7 @@ describe('SupabaseSession', () => {
       const { coordinator, read, getReadCount } = createCoordinator({
         onTokenExpiryChanged: (expiresAt) => expiries.push(expiresAt),
       });
-      const session: SupabaseSession = {
-        id: 'user-id',
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        account: {
-          id: 'user-id',
-          label: 'user@example.com',
-        },
-        expiresAt: Date.now() + 120_000,
-      };
+      const session = makeSession();
 
       await coordinator.storeSession(session);
 
@@ -290,16 +287,7 @@ describe('SupabaseSession', () => {
     });
 
     it('reads storage once when ensuring a cached fresh token', async () => {
-      const initialSession: SupabaseSession = {
-        id: 'user-id',
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        account: {
-          id: 'user-id',
-          label: 'user@example.com',
-        },
-        expiresAt: Date.now() + 120_000,
-      };
+      const initialSession = makeSession();
       const { coordinator, getReadCount } = createCoordinator({
         initialSession,
       });
@@ -411,17 +399,12 @@ describe('SupabaseSession', () => {
     });
 
     it('refreshes custom sessions through the injected fetch boundary', async () => {
-      const initialSession: SupabaseSession = {
-        id: 'user-id',
+      const initialSession = makeSession({
         accessToken: 'old-access',
         refreshToken: 'old-refresh',
-        account: {
-          id: 'user-id',
-          label: 'user@example.com',
-        },
         expiresAt: Date.now() - 1_000,
         useCustomRefresh: true,
-      };
+      });
       const { coordinator, read, getReadCount } = createCoordinator({
         initialSession,
         fetch: async () =>
@@ -458,16 +441,10 @@ describe('SupabaseSession', () => {
     });
 
     it('force-refreshes native sessions without reloading storage', async () => {
-      const initialSession: SupabaseSession = {
-        id: 'user-id',
+      const initialSession = makeSession({
         accessToken: 'old-access',
         refreshToken: 'old-refresh',
-        account: {
-          id: 'user-id',
-          label: 'user@example.com',
-        },
-        expiresAt: Date.now() + 120_000,
-      };
+      });
       const { coordinator, getReadCount } = createCoordinator({
         initialSession,
       });
@@ -480,17 +457,12 @@ describe('SupabaseSession', () => {
     });
 
     it('returns refreshed session tokens without reloading storage', async () => {
-      const initialSession: SupabaseSession = {
-        id: 'user-id',
+      const initialSession = makeSession({
         accessToken: 'old-access',
         refreshToken: 'old-refresh',
-        account: {
-          id: 'user-id',
-          label: 'user@example.com',
-        },
         expiresAt: Date.now() - 1_000,
         useCustomRefresh: true,
-      };
+      });
       const { coordinator, getReadCount } = createCoordinator({
         initialSession,
         fetch: async () =>
@@ -517,16 +489,11 @@ describe('SupabaseSession', () => {
     });
 
     it('returns native refreshed session tokens without reloading storage', async () => {
-      const initialSession: SupabaseSession = {
-        id: 'user-id',
+      const initialSession = makeSession({
         accessToken: 'old-access',
         refreshToken: 'old-refresh',
-        account: {
-          id: 'user-id',
-          label: 'user@example.com',
-        },
         expiresAt: Date.now() - 1_000,
-      };
+      });
       const { coordinator, getReadCount } = createCoordinator({
         initialSession,
       });
@@ -539,16 +506,7 @@ describe('SupabaseSession', () => {
     });
 
     it('does not return tokens cleared while loading the session', async () => {
-      const initialSession: SupabaseSession = {
-        id: 'user-id',
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        account: {
-          id: 'user-id',
-          label: 'user@example.com',
-        },
-        expiresAt: Date.now() + 120_000,
-      };
+      const initialSession = makeSession();
       let value: string | undefined = JSON.stringify(initialSession);
       let readCount = 0;
       let clearDuringFirstRead = true;
@@ -571,14 +529,9 @@ describe('SupabaseSession', () => {
         },
       };
       const coordinator = new SupabaseSessionCoordinator({
+        ...COORDINATOR_CONFIG,
         storage,
         getClient: () => createClient(),
-        whenReady: async () => {},
-        tokenRefreshThresholdMs: 60_000,
-        defaultSessionExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-        githubTokenRefreshUrl:
-          'https://example.supabase.co/functions/v1/refresh',
-        edgeFunctionTimeoutMs: 30_000,
       });
       coordinatorRef.current = coordinator;
 
@@ -587,16 +540,7 @@ describe('SupabaseSession', () => {
     });
 
     it('does not return tokens when a clear is still pending after load', async () => {
-      const initialSession: SupabaseSession = {
-        id: 'user-id',
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        account: {
-          id: 'user-id',
-          label: 'user@example.com',
-        },
-        expiresAt: Date.now() + 120_000,
-      };
+      const initialSession = makeSession();
       let value: string | undefined = JSON.stringify(initialSession);
       let readCount = 0;
       let clearDuringFirstRead = true;
@@ -623,14 +567,9 @@ describe('SupabaseSession', () => {
         },
       };
       const coordinator = new SupabaseSessionCoordinator({
+        ...COORDINATOR_CONFIG,
         storage,
         getClient: () => createClient(),
-        whenReady: async () => {},
-        tokenRefreshThresholdMs: 60_000,
-        defaultSessionExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-        githubTokenRefreshUrl:
-          'https://example.supabase.co/functions/v1/refresh',
-        edgeFunctionTimeoutMs: 30_000,
       });
       coordinatorRef.current = coordinator;
 
@@ -643,17 +582,12 @@ describe('SupabaseSession', () => {
     });
 
     it('does not resurrect a cleared session when refresh finishes later', async () => {
-      const initialSession: SupabaseSession = {
-        id: 'user-id',
+      const initialSession = makeSession({
         accessToken: 'old-access',
         refreshToken: 'old-refresh',
-        account: {
-          id: 'user-id',
-          label: 'user@example.com',
-        },
         expiresAt: Date.now() - 1_000,
         useCustomRefresh: true,
-      };
+      });
       const refreshStarted = createDeferred();
       const allowRefresh = createDeferred();
       const { coordinator, read } = createCoordinator({
@@ -686,17 +620,12 @@ describe('SupabaseSession', () => {
     });
 
     it('does not return expired session tokens when refresh fails', async () => {
-      const initialSession: SupabaseSession = {
-        id: 'user-id',
+      const initialSession = makeSession({
         accessToken: 'old-access',
         refreshToken: 'old-refresh',
-        account: {
-          id: 'user-id',
-          label: 'user@example.com',
-        },
         expiresAt: Date.now() - 1_000,
         useCustomRefresh: true,
-      };
+      });
       const { coordinator } = createCoordinator({
         initialSession,
         fetch: async () =>

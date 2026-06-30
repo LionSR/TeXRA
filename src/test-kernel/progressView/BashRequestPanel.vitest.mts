@@ -36,6 +36,23 @@ async function mountPanel(
   return element;
 }
 
+type ApproveSplit = HTMLElement & { canBypass?: boolean };
+
+function querySplitButton(element: BashRequestPanel): ApproveSplit | null {
+  return (
+    element.shadowRoot?.querySelector<ApproveSplit>('approve-split-button') ??
+    null
+  );
+}
+
+function recordPermissionActions(element: BashRequestPanel): string[] {
+  const actions: string[] = [];
+  element.addEventListener('permission-action', (event) => {
+    actions.push((event as CustomEvent<{ action: string }>).detail.action);
+  });
+  return actions;
+}
+
 // Parity with ToolEditRequestPanel: the bash panel gets the Yolo affordance
 // entirely from shared BaseFeedbackPanel logic (`canBypass`, the `a` shortcut in
 // `handleKeyboardShortcut`, and the `<approve-split-button>` in
@@ -48,14 +65,9 @@ describe('bash-request-panel', () => {
 
   it('renders a non-bypass Approve and ignores "a" when bypass is not allowed', async () => {
     const element = await mountPanel(createPermission({ allowBypass: false }));
-    const actions: string[] = [];
-    element.addEventListener('permission-action', (event) => {
-      actions.push((event as CustomEvent<{ action: string }>).detail.action);
-    });
+    const actions = recordPermissionActions(element);
 
-    const split = element.shadowRoot?.querySelector('approve-split-button') as
-      | (HTMLElement & { canBypass?: boolean })
-      | undefined;
+    const split = querySplitButton(element);
     expect(split).toBeTruthy();
     expect(split?.canBypass).toBe(false);
     expect(element.handleKeyboardShortcut('a')).toBe(false);
@@ -67,9 +79,7 @@ describe('bash-request-panel', () => {
       createPermission({ allowBypass: true, streamId: '' }),
     );
 
-    const split = element.shadowRoot?.querySelector('approve-split-button') as
-      | (HTMLElement & { canBypass?: boolean })
-      | undefined;
+    const split = querySplitButton(element);
     expect(split?.canBypass).toBe(false);
     expect(element.handleKeyboardShortcut('a')).toBe(false);
   });
@@ -78,14 +88,9 @@ describe('bash-request-panel', () => {
     const element = await mountPanel(
       createPermission({ allowBypass: true, streamId: 'stream-1' }),
     );
-    const actions: string[] = [];
-    element.addEventListener('permission-action', (event) => {
-      actions.push((event as CustomEvent<{ action: string }>).detail.action);
-    });
+    const actions = recordPermissionActions(element);
 
-    const split = element.shadowRoot?.querySelector('approve-split-button') as
-      | (HTMLElement & { canBypass?: boolean })
-      | undefined;
+    const split = querySplitButton(element);
     expect(split?.canBypass).toBe(true);
 
     expect(element.handleKeyboardShortcut('a')).toBe(true);

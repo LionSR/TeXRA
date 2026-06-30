@@ -132,6 +132,72 @@ class BashMockHandler extends ModelHandlerOpenAIResponse {
   }
 }
 
+/**
+ * Build the tool-use round services shared by every case. Only the tool name,
+ * logger, stream id, registry, and interruption hooks vary between tests.
+ */
+function roundServices(opts: {
+  toolName: string;
+  logger: ToolUseRoundServices<OpenAI>['logger'];
+  streamId: StreamTabId;
+  toolRegistry: ToolUseRoundServices<OpenAI>['toolRegistry'];
+  checkInterruption?: () => boolean;
+  setAbortController?: (controller: AbortController | null) => void;
+}): ToolUseRoundServices<OpenAI> {
+  return {
+    modelHandler: new BashMockHandler(testModelConfig),
+    config: testModelConfig as any,
+    setting: {
+      agentCategory: AgentCategory.ToolUse,
+      documentTag: 'doc',
+      temperature: 0,
+      endTag: '</doc>',
+      requiredFiles: {},
+      requiredFilesInternal: {},
+      defaultOutputFiles: [],
+      filePatternsContain: [],
+      tools: [{ name: opts.toolName }],
+    } satisfies AgentSetting,
+    prompt: {
+      systemPrompt: '',
+      userPrefix: '',
+      userRequest: '',
+    } satisfies AgentPrompt,
+    userVarChannels: { input: {}, transient: {} },
+    logger: opts.logger,
+    runtimeHost: noopAgentRuntimeHost,
+    streamStatus: new StreamStatusRegistry(),
+    client: {} as OpenAI,
+    fileService: new TaskRunFileService('test-execution-id'),
+    toolRegistry: opts.toolRegistry,
+    checkInterruption: opts.checkInterruption ?? (() => false),
+    setAbortController: opts.setAbortController ?? (() => {}),
+    streamId: opts.streamId,
+    executionId: 'test-execution-id',
+    run: AgentRunStateSnapshotSchema.parse({}),
+    workspace: AgentWorkspaceState.create(),
+    getActiveChildren: () => ({ subagents: [], processes: [] }),
+    waitForRetry: vi.fn(),
+  };
+}
+
+function freshRoundShared(messages: ProviderMessage[]): ToolUseRoundShared {
+  return {
+    messages,
+    shouldStop: false,
+    endTurn: false,
+    response: undefined,
+    responseTimeMs: undefined,
+    stopReason: undefined,
+    lastError: undefined,
+    toolCalls: undefined,
+    text: undefined,
+    roundIndex: 0,
+    roundResponseTimeMs: 0,
+    roundNormalizedUsage: undefined,
+  };
+}
+
 describe('BashTool', () => {
   beforeAll(async () => {
     const { initPlatform } = await import('@platform/platform');
@@ -174,63 +240,15 @@ describe('BashTool', () => {
       'Bash tool should return the full stdout text',
     );
 
-    const handler = new BashMockHandler(testModelConfig);
-    const workspaceState = AgentWorkspaceState.create();
-    const run = AgentRunStateSnapshotSchema.parse({});
-    const options: ToolUseRoundServices<OpenAI> = {
-      modelHandler: handler,
-      config: testModelConfig as any,
-      setting: {
-        agentCategory: AgentCategory.ToolUse,
-        documentTag: 'doc',
-        temperature: 0,
-        endTag: '</doc>',
-        requiredFiles: {},
-        requiredFilesInternal: {},
-        defaultOutputFiles: [],
-        filePatternsContain: [],
-        tools: [{ name: 'bash' }],
-      } satisfies AgentSetting,
-      prompt: {
-        systemPrompt: '',
-        userPrefix: '',
-        userRequest: '',
-      } satisfies AgentPrompt,
-      userVarChannels: { input: {}, transient: {} },
+    const options = roundServices({
+      toolName: 'bash',
       logger: createRunTrace('BashToolTest').trace,
-      runtimeHost: noopAgentRuntimeHost,
-      streamStatus: new StreamStatusRegistry(),
-      client: {} as OpenAI,
-      fileService: new TaskRunFileService('test-execution-id'),
-      toolRegistry: new MapToolRegistry({ bash: bashTool }),
-      checkInterruption: () => false,
-      setAbortController: () => {},
       streamId: 'bash-tool' as StreamTabId,
-      executionId: 'test-execution-id',
-      run,
-      workspace: workspaceState,
-      getActiveChildren: () => ({ subagents: [], processes: [] }),
-      waitForRetry: vi.fn(),
-    };
+      toolRegistry: new MapToolRegistry({ bash: bashTool }),
+    });
 
     const messages: ProviderMessage[] = [];
-
-    // Create shared state for the round flow (flat pattern)
-    // Tool-use rounds track metrics in shared (roundIndex, etc.) instead of round object
-    const shared: ToolUseRoundShared = {
-      messages,
-      shouldStop: false,
-      endTurn: false,
-      response: undefined,
-      responseTimeMs: undefined,
-      stopReason: undefined,
-      lastError: undefined,
-      toolCalls: undefined,
-      text: undefined,
-      roundIndex: 0,
-      roundResponseTimeMs: 0,
-      roundNormalizedUsage: undefined,
-    };
+    const shared = freshRoundShared(messages);
 
     // Create and run the flow directly
     const flow = createToolUseRoundFlow();
@@ -261,44 +279,12 @@ describe('BashTool', () => {
     });
 
     try {
-      const handler = new BashMockHandler(testModelConfig);
-      const workspaceState = AgentWorkspaceState.create();
-      const run = AgentRunStateSnapshotSchema.parse({});
-      const options: ToolUseRoundServices<OpenAI> = {
-        modelHandler: handler,
-        config: testModelConfig as any,
-        setting: {
-          agentCategory: AgentCategory.ToolUse,
-          documentTag: 'doc',
-          temperature: 0,
-          endTag: '</doc>',
-          requiredFiles: {},
-          requiredFilesInternal: {},
-          defaultOutputFiles: [],
-          filePatternsContain: [],
-          tools: [{ name: 'empty' }],
-        } satisfies AgentSetting,
-        prompt: {
-          systemPrompt: '',
-          userPrefix: '',
-          userRequest: '',
-        } satisfies AgentPrompt,
-        userVarChannels: { input: {}, transient: {} },
+      const options = roundServices({
+        toolName: 'empty',
         logger: runTrace.trace,
-        runtimeHost: noopAgentRuntimeHost,
-        streamStatus: new StreamStatusRegistry(),
-        client: {} as OpenAI,
-        fileService: new TaskRunFileService('test-execution-id'),
-        toolRegistry: new MapToolRegistry({}),
-        checkInterruption: () => false,
-        setAbortController: () => {},
         streamId: 'tool-status-log' as StreamTabId,
-        executionId: 'test-execution-id',
-        run,
-        workspace: workspaceState,
-        getActiveChildren: () => ({ subagents: [], processes: [] }),
-        waitForRetry: vi.fn(),
-      };
+        toolRegistry: new MapToolRegistry({}),
+      });
 
       const call = {
         provider: 'openai',
@@ -315,20 +301,7 @@ describe('BashTool', () => {
         },
       } as SdkToolCall;
       const messages: ProviderMessage[] = [];
-      const shared: ToolUseRoundShared = {
-        messages,
-        shouldStop: false,
-        endTurn: false,
-        response: undefined,
-        responseTimeMs: undefined,
-        stopReason: undefined,
-        lastError: undefined,
-        toolCalls: undefined,
-        text: undefined,
-        roundIndex: 0,
-        roundResponseTimeMs: 0,
-        roundNormalizedUsage: undefined,
-      };
+      const shared = freshRoundShared(messages);
 
       const node = new ToolUseDispatchNode<OpenAI>();
       node.setServices(options);
@@ -421,45 +394,16 @@ describe('BashTool', () => {
 
     const node = new ToolUseDispatchNode<OpenAI>();
     const bashTool = new BashTool();
-    const workspaceState = AgentWorkspaceState.create();
-    const run = AgentRunStateSnapshotSchema.parse({});
-    const options: ToolUseRoundServices<OpenAI> = {
-      modelHandler: new BashMockHandler(testModelConfig),
-      config: testModelConfig as any,
-      setting: {
-        agentCategory: AgentCategory.ToolUse,
-        documentTag: 'doc',
-        temperature: 0,
-        endTag: '</doc>',
-        requiredFiles: {},
-        requiredFilesInternal: {},
-        defaultOutputFiles: [],
-        filePatternsContain: [],
-        tools: [{ name: 'bash' }],
-      } satisfies AgentSetting,
-      prompt: {
-        systemPrompt: '',
-        userPrefix: '',
-        userRequest: '',
-      } satisfies AgentPrompt,
-      userVarChannels: { input: {}, transient: {} },
+    const options = roundServices({
+      toolName: 'bash',
       logger: runTrace.trace,
-      runtimeHost: noopAgentRuntimeHost,
-      streamStatus: new StreamStatusRegistry(),
-      client: {} as OpenAI,
-      fileService: new TaskRunFileService('test-execution-id'),
+      streamId: 'bash-tool' as StreamTabId,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
       checkInterruption: () => activeController?.signal.aborted ?? false,
       setAbortController: (controller) => {
         activeController = controller;
       },
-      streamId: 'bash-tool' as StreamTabId,
-      executionId: 'test-execution-id',
-      run,
-      workspace: workspaceState,
-      getActiveChildren: () => ({ subagents: [], processes: [] }),
-      waitForRetry: vi.fn(),
-    };
+    });
 
     const call = {
       provider: 'google',

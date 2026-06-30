@@ -72,6 +72,21 @@ function createMessageHandler(
   return new ProgressViewMessageHandler(provider, context, host, coordinators);
 }
 
+function createCoordinatorHandler(
+  coordinators: CoordinatorBridgeFake = createCoordinatorBridge(),
+): {
+  coordinators: CoordinatorBridgeFake;
+  handler: ProgressViewMessageHandler;
+} {
+  const handler = createMessageHandler(
+    createProgressViewProvider(),
+    createExtensionContext(),
+    new FakePromptHost(),
+    coordinators,
+  );
+  return { coordinators, handler };
+}
+
 function createProgressViewProvider(): ProgressViewProviderFake {
   const snapshots = {
     getTaskState: vi.fn(),
@@ -228,15 +243,7 @@ describe('progress-view onboarding refresh wiring', () => {
   });
 
   it('routes retry request actions through the injected coordinators', async () => {
-    const context = createExtensionContext();
-    const provider = createProgressViewProvider();
-    const coordinators = createCoordinatorBridge();
-    const handler = createMessageHandler(
-      provider,
-      context,
-      new FakePromptHost(),
-      coordinators,
-    );
+    const { coordinators, handler } = createCoordinatorHandler();
 
     await handler.handleMessage(
       {
@@ -290,15 +297,7 @@ describe('progress-view onboarding refresh wiring', () => {
   });
 
   it('routes agent proposal actions through the injected coordinators', async () => {
-    const context = createExtensionContext();
-    const provider = createProgressViewProvider();
-    const coordinators = createCoordinatorBridge();
-    const handler = createMessageHandler(
-      provider,
-      context,
-      new FakePromptHost(),
-      coordinators,
-    );
+    const { coordinators, handler } = createCoordinatorHandler();
 
     await handler.handleMessage(
       {
@@ -319,15 +318,7 @@ describe('progress-view onboarding refresh wiring', () => {
   });
 
   it('routes plan approval actions through the injected coordinators', async () => {
-    const context = createExtensionContext();
-    const provider = createProgressViewProvider();
-    const coordinators = createCoordinatorBridge();
-    const handler = createMessageHandler(
-      provider,
-      context,
-      new FakePromptHost(),
-      coordinators,
-    );
+    const { coordinators, handler } = createCoordinatorHandler();
 
     await handler.handleMessage(
       {

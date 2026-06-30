@@ -1,4 +1,4 @@
-// Local imports - agent
+// Local imports - controllers
 import {
   ProgressStreamLifecycleController,
   type ProgressStreamLifecycleHost,
@@ -10,19 +10,18 @@ import {
   type WorkflowFileOperation,
   type WorkflowFileOperationRequest,
 } from '@controllers/progressView/ProgressWorkflowActionsController';
+
+// Local imports - agent
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
-
 import type { TaskState, WorkflowTaskState } from '@agent/core/state/TaskState';
 
 // Local imports - shared
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
-
-// Local imports - controllers
 
 export class ControllerCallRecorder<T = unknown> {
   readonly calls = new Map<string, T[]>();

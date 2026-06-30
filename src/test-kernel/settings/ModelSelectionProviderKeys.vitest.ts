@@ -25,6 +25,19 @@ const deepseekModel: ModelSelectionItem = {
   isFast: true,
 };
 
+async function renderModelSelectionList(
+  configure: (list: ModelSelectionListElement) => void,
+): Promise<ModelSelectionListElement> {
+  const list = document.createElement(
+    'model-selection-list',
+  ) as ModelSelectionListElement;
+  list.models = [deepseekModel];
+  configure(list);
+  document.body.append(list);
+  await list.updateComplete;
+  return list;
+}
+
 describe('ModelSelectionList provider key status', () => {
   useLitComponentTestDom(
     () =>
@@ -32,13 +45,9 @@ describe('ModelSelectionList provider key status', () => {
   );
 
   it('shows a read-only API-key status in model provider groups before profile load', async () => {
-    const list = document.createElement(
-      'model-selection-list',
-    ) as ModelSelectionListElement;
-    list.models = [deepseekModel];
-    list.providerKeyStatuses = [];
-    document.body.append(list);
-    await list.updateComplete;
+    const list = await renderModelSelectionList((el) => {
+      el.providerKeyStatuses = [];
+    });
 
     const shadow = list.shadowRoot!;
     expect(shadow.textContent).toContain('Not set');
@@ -56,13 +65,9 @@ describe('ModelSelectionList provider key status', () => {
   });
 
   it('shows helper model labels together with short ids', async () => {
-    const list = document.createElement(
-      'model-selection-list',
-    ) as ModelSelectionListElement;
-    list.models = [deepseekModel];
-    list.helperModel = 'deepseek';
-    document.body.append(list);
-    await list.updateComplete;
+    const list = await renderModelSelectionList((el) => {
+      el.helperModel = 'deepseek';
+    });
 
     const helperOption = list.shadowRoot!.querySelector(
       '.helper-model-select wa-option',

@@ -68,6 +68,18 @@ const RAW_USAGE = {
   output_tokens: 1_000_000,
 } as ResponseUsage;
 
+/** Seed the handler's running input-token tally (a private field). */
+function setCumulativeInputTokens(
+  handler: ModelHandlerCodex,
+  tokens: number,
+): void {
+  (
+    handler as unknown as {
+      conversationState: { cumulativeInputTokens: number };
+    }
+  ).conversationState.cumulativeInputTokens = tokens;
+}
+
 describe('ModelHandlerCodex subscription fallback', () => {
   beforeEach(() => {
     // The fallback path resolves the OpenAI base via the relay service; stub it
@@ -187,12 +199,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     const handler = new ModelHandlerCodex(largeWindowConfig);
     handler.setAgentCategory(AgentCategory.ToolUse);
     const requestSpy = vi.fn();
-    (
-      handler as unknown as {
-        conversationState: { cumulativeInputTokens: number };
-      }
-    ).conversationState.cumulativeInputTokens =
-      CODEX_SUBSCRIPTION_CONTEXT_WINDOW - 10;
+    setCumulativeInputTokens(handler, CODEX_SUBSCRIPTION_CONTEXT_WINDOW - 10);
 
     await expect(
       handler.createResponse({
@@ -210,12 +217,10 @@ describe('ModelHandlerCodex subscription fallback', () => {
     const handler = new ModelHandlerCodex(largeWindowConfig);
     handler.setAgentCategory(AgentCategory.ToolUse);
     const requestSpy = vi.fn();
-    (
-      handler as unknown as {
-        conversationState: { cumulativeInputTokens: number };
-      }
-    ).conversationState.cumulativeInputTokens =
-      CODEX_SUBSCRIPTION_CONTEXT_WINDOW - config.maxOutputTokens - 100;
+    setCumulativeInputTokens(
+      handler,
+      CODEX_SUBSCRIPTION_CONTEXT_WINDOW - config.maxOutputTokens - 100,
+    );
 
     await expect(
       handler.createResponse({

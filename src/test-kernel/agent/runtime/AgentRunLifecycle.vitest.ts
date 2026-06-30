@@ -142,6 +142,27 @@ function createLifecycleContext({
   };
 }
 
+function lifecycleFixture(
+  slug: string,
+  agent?: string,
+): {
+  executionId: ExecutionId;
+  streamId: StreamTabId;
+  streamStatus: StreamStatusRegistry;
+  ctx: AgentLaunchContext;
+} {
+  const executionId = `execution-${slug}` as ExecutionId;
+  const streamId = `stream-${slug}` as StreamTabId;
+  const streamStatus = new StreamStatusRegistry();
+  const ctx = createLifecycleContext({
+    executionId,
+    streamId,
+    streamStatus,
+    agent,
+  });
+  return { executionId, streamId, streamStatus, ctx };
+}
+
 describe('runFlowWithLifecycle', () => {
   // A completed session marks first-run onboarding done, except for the
   // built-in setup agent, which must leave the flag untouched.
@@ -164,15 +185,10 @@ describe('runFlowWithLifecycle', () => {
   for (const { label, slug, agent, expectedDone } of onboardingCases) {
     it(label, async () => {
       const fake = await initLifecycleTestPlatform(false);
-      const executionId = `execution-lifecycle-${slug}` as ExecutionId;
-      const streamId = `stream-lifecycle-${slug}` as StreamTabId;
-      const streamStatus = new StreamStatusRegistry();
-      const ctx = createLifecycleContext({
-        executionId,
-        streamId,
-        streamStatus,
+      const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+        `lifecycle-${slug}`,
         agent,
-      });
+      );
 
       try {
         await runFlowWithLifecycle(ctx, async () => ({
@@ -192,14 +208,9 @@ describe('runFlowWithLifecycle', () => {
   }
 
   it('finalizes the stream status owner from the launch context', async () => {
-    const executionId = 'execution-lifecycle-status-owner' as ExecutionId;
-    const streamId = 'stream-lifecycle-status-owner' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
-    const ctx = createLifecycleContext({
-      executionId,
-      streamId,
-      streamStatus,
-    });
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-status-owner',
+    );
 
     try {
       StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
@@ -225,14 +236,9 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('delivers subagent aborts through the terminal callback', async () => {
-    const executionId = 'execution-lifecycle-subagent-abort' as ExecutionId;
-    const streamId = 'stream-lifecycle-subagent-abort' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
-    const ctx = createLifecycleContext({
-      executionId,
-      streamId,
-      streamStatus,
-    });
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-subagent-abort',
+    );
     ctx.attachedMemoryMisses = [
       { path: '/memories/missing.md', reason: 'not found' },
     ];
@@ -258,16 +264,9 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('keeps subagent errors registered until terminal delivery runs', async () => {
-    const executionId =
-      'execution-lifecycle-subagent-error-registered' as ExecutionId;
-    const streamId =
-      'stream-lifecycle-subagent-error-registered' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
-    const ctx = createLifecycleContext({
-      executionId,
-      streamId,
-      streamStatus,
-    });
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-subagent-error-registered',
+    );
     const onError = vi.fn(() => {
       expect(executionRegistry.getHandle(executionId)).toBeDefined();
     });
@@ -318,15 +317,9 @@ describe('runFlowWithLifecycle', () => {
     ] as const;
 
     for (const expected of cases) {
-      const executionId =
-        `execution-outcome-${expected.outcome}` as ExecutionId;
-      const streamId = `stream-outcome-${expected.outcome}` as StreamTabId;
-      const streamStatus = new StreamStatusRegistry();
-      const ctx = createLifecycleContext({
-        executionId,
-        streamId,
-        streamStatus,
-      });
+      const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+        `outcome-${expected.outcome}`,
+      );
       const stageEnd = vi.spyOn(ctx.parentStage, 'end');
       storageMocks.writeTerminalStatus.mockClear();
 
@@ -352,14 +345,9 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('projects a thrown abort as cancelled (interrupted, neutral stage)', async () => {
-    const executionId = 'execution-outcome-thrown-abort' as ExecutionId;
-    const streamId = 'stream-outcome-thrown-abort' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
-    const ctx = createLifecycleContext({
-      executionId,
-      streamId,
-      streamStatus,
-    });
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'outcome-thrown-abort',
+    );
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
     storageMocks.writeTerminalStatus.mockClear();
 
@@ -381,14 +369,9 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('projects an unexpected throw as failed', async () => {
-    const executionId = 'execution-outcome-thrown-error' as ExecutionId;
-    const streamId = 'stream-outcome-thrown-error' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
-    const ctx = createLifecycleContext({
-      executionId,
-      streamId,
-      streamStatus,
-    });
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'outcome-thrown-error',
+    );
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
     storageMocks.writeTerminalStatus.mockClear();
 
@@ -411,15 +394,9 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('passes flow-carried terminal results to subagent error delivery', async () => {
-    const executionId =
-      'execution-lifecycle-subagent-flow-error' as ExecutionId;
-    const streamId = 'stream-lifecycle-subagent-flow-error' as StreamTabId;
-    const streamStatus = new StreamStatusRegistry();
-    const ctx = createLifecycleContext({
-      executionId,
-      streamId,
-      streamStatus,
-    });
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-subagent-flow-error',
+    );
     const carriedResult = {
       category: 'toolUse' as const,
       outcome: RUN_OUTCOME.FAILED,

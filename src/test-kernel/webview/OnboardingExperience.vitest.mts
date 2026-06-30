@@ -7,15 +7,14 @@ import { describe, expect, it } from 'vitest';
 // Local imports - test paths
 import { repoPath } from '../desktop/desktopTestPaths.mjs';
 
-function readWebviewComponent(name: string): string {
-  return readFileSync(
-    repoPath(`packages/extension/src/webview/frontend/components/${name}.ts`),
-    'utf8',
-  );
-}
-
 function readRepoFile(path: string): string {
   return readFileSync(repoPath(path), 'utf8');
+}
+
+function readWebviewComponent(name: string): string {
+  return readRepoFile(
+    `packages/extension/src/webview/frontend/components/${name}.ts`,
+  );
 }
 
 describe('extension onboarding experience', () => {
