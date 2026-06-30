@@ -25,7 +25,7 @@ type ElectronProcess = NodeJS.Process & {
  * (`defaultApp === true`) and in non-Electron runtimes (VS Code extension
  * host, plain Node.js).
  */
-export function getPackagedElectronResourcesPath(): string | undefined {
+function getPackagedElectronResourcesPath(): string | undefined {
   const electronProcess = process as ElectronProcess;
   if (electronProcess.versions.electron == null) return undefined;
   if (electronProcess.defaultApp === true) return undefined;

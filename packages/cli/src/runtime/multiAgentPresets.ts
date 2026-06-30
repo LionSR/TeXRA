@@ -635,7 +635,7 @@ function cliMultiAgentPresetListHint(
   return hints.length > 0 ? hints.join('\n') : undefined;
 }
 
-export function cliMultiAgentPresetShouldIncludeLoginHint(
+function cliMultiAgentPresetShouldIncludeLoginHint(
   plan: CliMultiAgentPresetRunPlan,
   options: CliMultiAgentPresetFormatOptions,
 ): boolean {

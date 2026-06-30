@@ -98,9 +98,9 @@ describe('desktop composition root and launch environment', () => {
 
     expect(source.indexOf('repairLaunchPath();')).toBeGreaterThanOrEqual(0);
     expect(source.indexOf('repairLaunchPath();')).toBeLessThan(
-      source.indexOf('initPlatform({'),
+      source.indexOf('initPlatform('),
     );
-    expect(source.indexOf('initPlatform({')).toBeLessThan(
+    expect(source.indexOf('initPlatform(')).toBeLessThan(
       source.indexOf('bootstrapElectronAgentDirectories('),
     );
   });

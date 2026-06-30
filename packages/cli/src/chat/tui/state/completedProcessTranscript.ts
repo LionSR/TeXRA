@@ -16,7 +16,7 @@ import type {
 
 export const COMPLETED_PROCESS_TAIL_LINES = 20;
 
-export function completedProcessTailLines(
+function completedProcessTailLines(
   tail: ProcessOutputTail | undefined,
 ): string[] {
   if (!tail) return [];

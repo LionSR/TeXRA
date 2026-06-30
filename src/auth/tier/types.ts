@@ -18,10 +18,7 @@
  */
 
 import { z } from 'zod';
-import { UserTierSchema, type UserTier } from '../sharedConfig';
-
-// Re-export for convenience
-export { UserTierSchema, type UserTier };
+import { UserTierSchema } from '../sharedConfig';
 
 /**
  * Schema for user access status including expiration.

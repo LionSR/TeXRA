@@ -1,9 +1,7 @@
-// Third-party imports
-import stripAnsi from 'strip-ansi';
-
 // Local imports - hosts
 import {
   TERMINAL_OUTPUT_MAX_CHARS,
+  truncateTerminalOutput,
   type TerminalRunner,
   type TerminalRunRequest,
 } from '@hosts/uiHosts';
@@ -46,7 +44,7 @@ export function createDesktopTerminalRunner(
 
       return {
         exitCode: result.exitCode,
-        output: tail(output || bufferedOutput),
+        output: truncateTerminalOutput(output || bufferedOutput),
         timedOut: result.timedOut ?? false,
       };
     },
@@ -62,11 +60,4 @@ function normalizeEnv(
       (entry): entry is [string, string] => entry[1] !== undefined,
     ),
   );
-}
-
-function tail(output: string): string {
-  const stripped = stripAnsi(output);
-  return stripped.length > TERMINAL_OUTPUT_MAX_CHARS
-    ? stripped.slice(-TERMINAL_OUTPUT_MAX_CHARS)
-    : stripped;
 }
