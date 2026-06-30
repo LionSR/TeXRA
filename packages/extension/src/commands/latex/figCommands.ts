@@ -148,7 +148,9 @@ export async function handleCompileTikzFigures(): Promise<void> {
           if (compiledFiles.length > 0) {
             const items = compiledFiles.map((fileLocation) => ({
               label: path.basename(fileLocation.absolutePath),
-              description: fileLocation.absolutePath,
+              description: path.dirname(fileLocation.absolutePath),
+              resourceUri: vscode.Uri.file(fileLocation.absolutePath),
+              iconPath: vscode.ThemeIcon.File,
               file: fileLocation.absolutePath,
             }));
 
