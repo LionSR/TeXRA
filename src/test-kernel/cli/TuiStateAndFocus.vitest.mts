@@ -2211,6 +2211,48 @@ describe('CLI transcript state', () => {
     }
   });
 
+  it('dedupes fallback text that already appeared before a tool row', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('Intermediate result ✓', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+      logger.info('', {
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: {
+          toolName: 'bash',
+          input: { command: 'true' },
+          output: { summary: 'Executed: true', output: 'ok' },
+          status: 'completed',
+        },
+      });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(
+        root,
+        'Intermediate result \\checkmark',
+        'final:matching',
+      );
+      appendAssistantTranscriptIfMissing(
+        root,
+        'Final answer after the tool.',
+        'final:actual',
+      );
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        'Intermediate result ✓',
+        '',
+        'Final answer after the tool.',
+      ]);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
   it('does not let a prior-turn stream assistant suppress fallback text', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();

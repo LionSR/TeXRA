@@ -60,8 +60,16 @@ export function appendAssistantTranscriptIfMissing(
       (entry, index) => index >= turnStartIndex && !entry.synthetic,
     );
     const streamLogOwnsFallback = lastStreamEntryInTurn?.role === 'assistant';
+    const streamLogAlreadyRenderedFallback = slice.entries.some(
+      (entry, index) =>
+        !entry.synthetic &&
+        index >= turnStartIndex &&
+        entry.role === 'assistant' &&
+        syntheticFallbackDedupeText(entry.text) === syntheticDedupeText,
+    );
     const alreadyRendered =
       streamLogOwnsFallback ||
+      streamLogAlreadyRenderedFallback ||
       slice.entries.some((entry) => {
         if (entry.id === entryId) return true;
         return (
