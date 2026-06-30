@@ -2063,6 +2063,33 @@ describe('CLI transcript state', () => {
     });
   });
 
+  it('dedupes synthetic checkmark aliases from the same stream anchor', () => {
+    appendAssistantTranscriptIfMissing(root, 'Done \\checkmark', 'waiting:1');
+    appendAssistantTranscriptIfMissing(root, 'Done ✓', 'final:1');
+
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual(['Done \\checkmark']);
+  });
+
+  it('keeps distinct synthetic fallback responses from the same stream anchor', () => {
+    appendAssistantTranscriptIfMissing(
+      root,
+      'The condition is x < y.',
+      'first',
+    );
+    appendAssistantTranscriptIfMissing(
+      root,
+      'The condition is x > y.',
+      'second',
+    );
+
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      'The condition is x < y.',
+      'The condition is x > y.',
+    ]);
+  });
+
   it('keeps repeated final responses from distinct turns visible', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
@@ -2142,7 +2169,7 @@ describe('CLI transcript state', () => {
     }
   });
 
-  it('dedupes fallback text against stream-log assistant text before trailing tools', () => {
+  it('does not let a pre-tool stream assistant suppress final fallback text', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
     setDefaultStreamLogStore(store);
@@ -2164,22 +2191,69 @@ describe('CLI transcript state', () => {
       syncStreamLog(root);
       appendAssistantTranscriptIfMissing(
         root,
-        '| x | Check |\n|---|---|\n| 3 | 1 \\checkmark |',
+        'Final answer after the tool.',
         'final:first',
       );
 
       const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.role)).toEqual(['assistant', 'tool']);
+      expect(entries.map((entry) => entry.role)).toEqual([
+        'assistant',
+        'tool',
+        'assistant',
+      ]);
       expect(entries.map((entry) => entry.text)).toEqual([
         '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
         '',
+        'Final answer after the tool.',
       ]);
     } finally {
       setDefaultStreamLogStore(previousStore);
     }
   });
 
-  it('does not dedupe fallback text against a matching prior-turn assistant', () => {
+  it('dedupes fallback text that already appeared before a tool row', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('Intermediate result ✓', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+      logger.info('', {
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: {
+          toolName: 'bash',
+          input: { command: 'true' },
+          output: { summary: 'Executed: true', output: 'ok' },
+          status: 'completed',
+        },
+      });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(
+        root,
+        'Intermediate result \\checkmark',
+        'final:matching',
+      );
+      appendAssistantTranscriptIfMissing(
+        root,
+        'Final answer after the tool.',
+        'final:actual',
+      );
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        'Intermediate result ✓',
+        '',
+        'Final answer after the tool.',
+      ]);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('does not let a prior-turn stream assistant suppress fallback text', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
     setDefaultStreamLogStore(store);
