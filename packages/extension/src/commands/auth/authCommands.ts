@@ -66,6 +66,20 @@ function getSignInOptions(): SignInOption[] {
   });
 }
 
+// "<prefix> <email>" info toast; the tier suffix is only fetched and
+// appended when `includeTier` is set.
+async function showSignedInMessage(
+  prefix: string,
+  includeTier: boolean,
+): Promise<void> {
+  const user = await SupabaseClient.getUser();
+  const email = user?.email || 'unknown user';
+  const tierSuffix = includeTier
+    ? ` (${await SupabaseClient.getUserTier()} tier)`
+    : '';
+  void vscode.window.showInformationMessage(`${prefix} ${email}${tierSuffix}`);
+}
+
 /**
  * Run the interactive sign-in flow.
  *
@@ -91,10 +105,7 @@ export async function signIn(): Promise<boolean> {
 
     const existing = await getExistingSession(authReady);
     if (existing) {
-      const user = await SupabaseClient.getUser();
-      void vscode.window.showInformationMessage(
-        `Already signed in as ${user?.email || 'unknown user'}`,
-      );
+      await showSignedInMessage('Already signed in as', false);
       return true;
     }
 
@@ -120,11 +131,7 @@ export async function signIn(): Promise<boolean> {
     );
 
     if (session) {
-      const user = await SupabaseClient.getUser();
-      const tier = await SupabaseClient.getUserTier();
-      void vscode.window.showInformationMessage(
-        `Signed in as ${user?.email || 'unknown user'} (${tier} tier)`,
-      );
+      await showSignedInMessage('Signed in as', true);
       return true;
     }
     return false;

@@ -83,16 +83,21 @@ export function migrateLegacyContextFileFields(input: unknown): unknown {
   return obj;
 }
 
+/** The four canonical `*Files` list fields shared by every file-fields schema. */
+const fileListFields = {
+  inputFiles: z.array(z.string()).prefault([]),
+  contextFiles: z.array(z.string()).prefault([]),
+  mediaFiles: z.array(z.string()).prefault([]),
+  outputFiles: z.array(z.string()).prefault([]),
+};
+
 /**
  * Used by AgentConfig where `editedFile` may be null. The migration
  * shim is applied at the outer schema (not here) because ZodEffects
  * doesn't compose with `.merge()`/`.extend()`.
  */
 export const NullableFileFieldsSchema = z.object({
-  inputFiles: z.array(z.string()).prefault([]),
-  contextFiles: z.array(z.string()).prefault([]),
-  mediaFiles: z.array(z.string()).prefault([]),
-  outputFiles: z.array(z.string()).prefault([]),
+  ...fileListFields,
   editedFile: z.string().nullable().prefault(null),
 });
 
@@ -109,10 +114,7 @@ const nullishString = z
  * Uses transform to coerce null/undefined → ''.
  */
 export const UIFileFieldsSchema = z.object({
-  inputFiles: z.array(z.string()).prefault([]),
-  contextFiles: z.array(z.string()).prefault([]),
-  mediaFiles: z.array(z.string()).prefault([]),
-  outputFiles: z.array(z.string()).prefault([]),
+  ...fileListFields,
   editedFile: nullishString,
 });
 

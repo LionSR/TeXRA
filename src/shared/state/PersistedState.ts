@@ -101,34 +101,38 @@ export class PersistedState<T extends Record<string, unknown>> {
     if (result.success) {
       return result.data;
     }
-    // Fall back to schema defaults via safeParse so a schema whose defaults
-    // don't cover every field can't throw out of a caller's constructor — a
-    // stale or malformed PersistedState key must never block webview
-    // activation or extension startup. Also persist the reset so the bad
-    // value is replaced and the next load doesn't keep hitting this path.
+    // Fall back to schema defaults so a schema whose defaults don't cover every
+    // field can't throw out of a caller's constructor — a stale or malformed
+    // PersistedState key must never block webview activation or extension
+    // startup. Also persist the reset so the bad value is replaced and the next
+    // load doesn't keep hitting this path.
+    console.warn(
+      `[PersistedState] Invalid stored data for ${this.key}, resetting.`,
+      {
+        storedType: describeStored(stored),
+        issues: summarizeIssues(result.error),
+      },
+    );
+    const defaults = this.resolveDefaults();
+    this.storage.set(this.key, defaults);
+    return defaults;
+  }
+
+  /**
+   * Resolve the schema's default state by parsing an empty object. Returns the
+   * parsed defaults, or an empty object (with a warning) when the schema's
+   * defaults don't cover every field.
+   */
+  private resolveDefaults(): T {
     const defaultResult = this.schema.safeParse({});
     if (defaultResult.success) {
-      console.warn(
-        `[PersistedState] Invalid stored data for ${this.key}, resetting.`,
-        {
-          storedType: describeStored(stored),
-          issues: summarizeIssues(result.error),
-        },
-      );
-      this.storage.set(this.key, defaultResult.data);
       return defaultResult.data;
     }
     console.warn(
-      `[PersistedState] Invalid stored data and no default for ${this.key}; using empty object.`,
-      {
-        storedType: describeStored(stored),
-        storedIssues: summarizeIssues(result.error),
-        defaultIssues: summarizeIssues(defaultResult.error),
-      },
+      `[PersistedState] No schema defaults for ${this.key}; using empty object.`,
+      { issues: summarizeIssues(defaultResult.error) },
     );
-    const empty = {} as T;
-    this.storage.set(this.key, empty);
-    return empty;
+    return {} as T;
   }
 
   /** Get current state (shallow copy) */
@@ -154,16 +158,7 @@ export class PersistedState<T extends Record<string, unknown>> {
 
   /** Reset to schema defaults */
   reset(): void {
-    const defaultResult = this.schema.safeParse({});
-    if (defaultResult.success) {
-      this.state = defaultResult.data;
-    } else {
-      console.warn(
-        `[PersistedState] Reset has no schema defaults for ${this.key}; using empty object.`,
-        { issues: summarizeIssues(defaultResult.error) },
-      );
-      this.state = {} as T;
-    }
+    this.state = this.resolveDefaults();
     this.storage.set(this.key, this.state);
   }
 }

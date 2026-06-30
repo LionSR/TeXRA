@@ -13,15 +13,7 @@ export const STREAM_STATUS = {
   INITIALIZING: 'initializing',
 } as const;
 
-export const StreamStatusSchema = z.enum([
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.ERROR,
-  STREAM_STATUS.STOPPED,
-  STREAM_STATUS.READY,
-  STREAM_STATUS.WAITING,
-  STREAM_STATUS.RESUMING,
-  STREAM_STATUS.INITIALIZING,
-]);
+export const StreamStatusSchema = z.enum(STREAM_STATUS);
 export type StreamStatus = z.infer<typeof StreamStatusSchema>;
 
 /**
@@ -131,11 +123,7 @@ export const EXECUTION_STATUS = {
   ERROR: 'error',
 } as const;
 
-export const ExecutionStatusSchema = z.enum([
-  EXECUTION_STATUS.COMPLETED,
-  EXECUTION_STATUS.INTERRUPTED,
-  EXECUTION_STATUS.ERROR,
-]);
+export const ExecutionStatusSchema = z.enum(EXECUTION_STATUS);
 export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
 
 /**
@@ -154,11 +142,7 @@ export const RUN_OUTCOME = {
   FAILED: 'failed',
 } as const;
 
-export const RunOutcomeSchema = z.enum([
-  RUN_OUTCOME.COMPLETED,
-  RUN_OUTCOME.CANCELLED,
-  RUN_OUTCOME.FAILED,
-]);
+export const RunOutcomeSchema = z.enum(RUN_OUTCOME);
 export type RunOutcome = z.infer<typeof RunOutcomeSchema>;
 
 export const WORKTREE_PR_STATE = {
@@ -168,12 +152,7 @@ export const WORKTREE_PR_STATE = {
   DRAFT: 'draft',
 } as const;
 
-export const WorktreePRStateSchema = z.enum([
-  WORKTREE_PR_STATE.OPEN,
-  WORKTREE_PR_STATE.MERGED,
-  WORKTREE_PR_STATE.CLOSED,
-  WORKTREE_PR_STATE.DRAFT,
-]);
+export const WorktreePRStateSchema = z.enum(WORKTREE_PR_STATE);
 export type WorktreePRState = z.infer<typeof WorktreePRStateSchema>;
 
 export const WORKTREE_CI_STATE = {
@@ -184,13 +163,7 @@ export const WORKTREE_CI_STATE = {
   UNKNOWN: 'unknown',
 } as const;
 
-export const WorktreeCIStateSchema = z.enum([
-  WORKTREE_CI_STATE.PENDING,
-  WORKTREE_CI_STATE.RUNNING,
-  WORKTREE_CI_STATE.SUCCESS,
-  WORKTREE_CI_STATE.FAILURE,
-  WORKTREE_CI_STATE.UNKNOWN,
-]);
+export const WorktreeCIStateSchema = z.enum(WORKTREE_CI_STATE);
 export type WorktreeCIState = z.infer<typeof WorktreeCIStateSchema>;
 
 export const WorktreePRInfoSchema = z.object({

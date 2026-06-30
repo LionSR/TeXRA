@@ -94,10 +94,14 @@ export interface WorkflowOutputResolutionOptions {
   readonly terminalStatus: ExecutionStatus;
 }
 
+function toPosix(p: string): string {
+  return p.replaceAll('\\', '/');
+}
+
 function outputCopyRelativePath(output: OutputFileSummary): string {
   const relativePath =
     output.relativePath || path.basename(output.absolutePath);
-  const parts = relativePath.replaceAll('\\', '/').split('/');
+  const parts = toPosix(relativePath).split('/');
   const withoutRoundDir = /^r\d+$/.test(parts[0] ?? '')
     ? parts.slice(1)
     : parts;
@@ -114,14 +118,15 @@ function outputCopyRelativePathForExpectedOutput(
     getSafeDocumentRelativePath(file),
   );
 
-  const normalizedGeneratedPath = generatedRelativePath.replaceAll('\\', '/');
+  const normalizedGeneratedPath = toPosix(generatedRelativePath);
   const generatedName = path.posix.basename(normalizedGeneratedPath);
-  const normalizedOriginalPath = output.originalPath?.replaceAll('\\', '/');
+  const normalizedOriginalPath =
+    output.originalPath == null ? undefined : toPosix(output.originalPath);
   const matchingExpectedPaths =
     normalizedOriginalPath == null
       ? []
       : expectedRelativePaths.filter((expected) => {
-          const normalizedExpected = expected.replaceAll('\\', '/');
+          const normalizedExpected = toPosix(expected);
           if (path.posix.basename(normalizedExpected) !== generatedName) {
             return false;
           }
@@ -182,23 +187,15 @@ export function expectedOutputFilesForOutputDir(
     : expectedInputOutputFiles(inputFiles);
 }
 
-function shouldUseOutputForCopy(
-  existing: OutputFileSummary | undefined,
-  candidate: OutputFileSummary,
-): boolean {
-  return existing == null || candidate.round > existing.round;
-}
-
 function latestWorkflowOutput(
   outputs: readonly OutputFileSummary[],
 ): OutputFileSummary | undefined {
-  let latest: OutputFileSummary | undefined;
-  for (const output of outputs) {
-    if (latest == null || output.round >= latest.round) {
-      latest = output;
-    }
-  }
-  return latest;
+  // `>=` keeps the later element on a round tie, matching the prior loop.
+  return outputs.reduce<OutputFileSummary | undefined>(
+    (latest, output) =>
+      latest == null || output.round >= latest.round ? output : latest,
+    undefined,
+  );
 }
 
 export async function resolveWorkflowOutput(
@@ -237,9 +234,8 @@ export async function resolveWorkflowOutput(
         output,
         expectedOutputFiles,
       );
-      if (
-        shouldUseOutputForCopy(outputsByRelativePath.get(relativePath), output)
-      ) {
+      const existing = outputsByRelativePath.get(relativePath);
+      if (existing == null || output.round > existing.round) {
         outputsByRelativePath.set(relativePath, output);
       }
     }

@@ -4,6 +4,7 @@ import { test, expect } from '@playwright/test';
 
 import {
   closeTexraApp,
+  dismissOnboarding,
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
@@ -15,31 +16,7 @@ let launched: LaunchedApp;
 
 test.beforeAll(async () => {
   launched = await launchTexraApp();
-  await launched.page.waitForFunction(
-    () => {
-      const btn = Array.from(document.querySelectorAll('wa-button')).find(
-        (b) => b.textContent?.trim() === 'Got it',
-      );
-      return btn instanceof HTMLElement;
-    },
-    undefined,
-    { timeout: 10000 },
-  );
-  const dismissed = await launched.page.evaluate(() => {
-    const btn = Array.from(document.querySelectorAll('wa-button')).find(
-      (b) => b.textContent?.trim() === 'Got it',
-    );
-    if (btn instanceof HTMLElement) {
-      btn.click();
-      return true;
-    }
-    return false;
-  });
-  if (dismissed) {
-    await launched.page
-      .locator('wa-dialog.desktop-onboarding')
-      .waitFor({ state: 'hidden', timeout: 5000 });
-  }
+  await dismissOnboarding(launched.page);
 });
 
 test.afterAll(async () => {

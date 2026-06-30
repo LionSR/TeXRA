@@ -31,6 +31,7 @@ import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import {
   registerTeXRAWebAwesomeIcons,
   waIcon,
+  type TeXRAIconName,
 } from '@shared/wa/webAwesomeIcons';
 import {
   type AgentSelectionItem,
@@ -97,6 +98,20 @@ function toSettingsTabPanelName(name: string): string {
 }
 
 const SETTINGS_TAB_PANEL_NAMES = SETTINGS_TAB_ORDER.map(toSettingsTabPanelName);
+
+/** Header tab strip: panel name, icon, and label in display order. */
+const SETTINGS_TABS = [
+  { panel: 'memory', icon: 'database', label: 'Memory' },
+  { panel: 'history', icon: 'clock-rotate-left', label: 'History' },
+  { panel: 'models', icon: 'server', label: 'Models' },
+  { panel: 'agents', icon: 'robot', label: 'Agents' },
+  { panel: 'multi-agent', icon: 'users', label: 'Multi-Agent' },
+  { panel: 'tools', icon: 'screwdriver-wrench', label: 'Tools' },
+  { panel: 'ai-agents', icon: 'robot', label: 'Integrations' },
+  { panel: 'git', icon: 'code-branch', label: 'Git' },
+  { panel: 'latex', icon: 'file-code', label: 'LaTeX' },
+  { panel: 'goal', icon: 'compass', label: 'Goal' },
+] satisfies readonly { panel: string; icon: TeXRAIconName; label: string }[];
 
 /** Create an event handler that forwards event.detail to a postMessage command. */
 function forwardDetail<T extends Record<string, unknown>>(
@@ -889,46 +904,13 @@ export class SettingsApp extends SettingsAppBase {
           'memory'}
           @wa-tab-show=${this.handleTabShow}
         >
-          <wa-tab panel="memory"
-            >${waIcon('database', { className: 'settings-tab-icon' })}
-            Memory</wa-tab
-          >
-          <wa-tab panel="history"
-            >${waIcon('clock-rotate-left', { className: 'settings-tab-icon' })}
-            History</wa-tab
-          >
-          <wa-tab panel="models"
-            >${waIcon('server', { className: 'settings-tab-icon' })}
-            Models</wa-tab
-          >
-          <wa-tab panel="agents"
-            >${waIcon('robot', { className: 'settings-tab-icon' })}
-            Agents</wa-tab
-          >
-          <wa-tab panel="multi-agent"
-            >${waIcon('users', { className: 'settings-tab-icon' })}
-            Multi-Agent</wa-tab
-          >
-          <wa-tab panel="tools"
-            >${waIcon('screwdriver-wrench', { className: 'settings-tab-icon' })}
-            Tools</wa-tab
-          >
-          <wa-tab panel="ai-agents"
-            >${waIcon('robot', { className: 'settings-tab-icon' })}
-            Integrations</wa-tab
-          >
-          <wa-tab panel="git"
-            >${waIcon('code-branch', { className: 'settings-tab-icon' })}
-            Git</wa-tab
-          >
-          <wa-tab panel="latex"
-            >${waIcon('file-code', { className: 'settings-tab-icon' })}
-            LaTeX</wa-tab
-          >
-          <wa-tab panel="goal"
-            >${waIcon('compass', { className: 'settings-tab-icon' })}
-            Goal</wa-tab
-          >
+          ${SETTINGS_TABS.map(
+            (tab) =>
+              html`<wa-tab panel=${tab.panel}
+                >${waIcon(tab.icon, { className: 'settings-tab-icon' })}
+                ${tab.label}</wa-tab
+              >`,
+          )}
 
           <wa-tab-panel name="memory">
             <memory-tab
