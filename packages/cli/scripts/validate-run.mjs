@@ -38,6 +38,21 @@ const validationProviderApiKeyEnv = [
   'GLM_API_KEY',
 ];
 
+function isolatedCliHomeEnv(home, overrides = {}) {
+  return {
+    ...Object.fromEntries(
+      validationProviderApiKeyEnv.map((name) => [name, '']),
+    ),
+    HOME: home,
+    XDG_CONFIG_HOME: path.join(home, '.config'),
+    XDG_DATA_HOME: path.join(home, '.local/share'),
+    XDG_STATE_HOME: path.join(home, '.local/state'),
+    XDG_CACHE_HOME: path.join(home, '.cache'),
+    TEXRA_NO_UPDATE_CHECK: '1',
+    ...overrides,
+  };
+}
+
 function run(command, args, options = {}) {
   const env = {
     ...process.env,
@@ -162,6 +177,16 @@ function parseNdjson(stdout, label) {
   return lines.map((line) => JSON.parse(line));
 }
 
+function parseJson(stdout, label) {
+  try {
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(
+      `${label} produced invalid JSON: ${error instanceof Error ? error.message : String(error)}\nstdout:\n${stdout}`,
+    );
+  }
+}
+
 function validateBinarySmoke() {
   const help = run(process.execPath, [binaryPath, '--help']);
   assertSuccess(help, 'texra --help');
@@ -204,17 +229,7 @@ function validateMultiAgentListAvailability() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-list-cwd-'));
   const home = mkdtempSync(path.join(tmpdir(), 'texra-cli-list-home-'));
   try {
-    const env = Object.fromEntries(
-      validationProviderApiKeyEnv.map((name) => [name, '']),
-    );
-    const listEnv = {
-      ...env,
-      HOME: home,
-      XDG_CONFIG_HOME: path.join(home, '.config'),
-      XDG_DATA_HOME: path.join(home, '.local/share'),
-      XDG_CACHE_HOME: path.join(home, '.cache'),
-      TEXRA_NO_UPDATE_CHECK: '1',
-    };
+    const listEnv = isolatedCliHomeEnv(home);
     const runList = (args = []) =>
       run(
         process.execPath,
@@ -281,6 +296,84 @@ function validateMultiAgentListAvailability() {
     assert(
       leanProjectNdjson?.preset?.availability?.toolUse?.label != null,
       `multi-agent list NDJSON should include planned availability\nstdout:\n${ndjson.stdout}`,
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+function findToolRecord(records, id) {
+  return records.find((record) => record.id === id);
+}
+
+function validateToolsCommand() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-tools-cwd-'));
+  const home = mkdtempSync(path.join(tmpdir(), 'texra-cli-tools-home-'));
+  try {
+    const env = isolatedCliHomeEnv(home);
+    const runTools = (args) =>
+      run(
+        process.execPath,
+        [binaryPath, 'tools', ...args, '--cwd', cwd, '--print', '--no-color'],
+        { cwd: repoRoot, env },
+      );
+
+    const initial = runTools(['list', '--output-format', 'json']);
+    assertSuccess(initial, 'texra tools list JSON');
+    const records = parseJson(initial.stdout, 'tools list JSON');
+    assert(Array.isArray(records), 'tools list JSON should be an array');
+    const target = records.find(
+      (record) => record.toggleable === true && record.comingSoon !== true,
+    );
+    assert(
+      target,
+      `tools list should include a toggleable integration\nstdout:\n${initial.stdout}`,
+    );
+
+    const disabled = runTools(['disable', target.id]);
+    assertSuccess(disabled, `texra tools disable ${target.id}`);
+    assert(
+      disabled.stdout.includes(`Disabled ${target.id}.`),
+      `tools disable should confirm the target id\nstdout:\n${disabled.stdout}`,
+    );
+
+    const afterDisable = runTools(['list', '--output-format', 'json']);
+    assertSuccess(afterDisable, 'texra tools list JSON after disable');
+    const disabledRecord = findToolRecord(
+      parseJson(afterDisable.stdout, 'tools list JSON after disable'),
+      target.id,
+    );
+    assert(
+      disabledRecord?.enabled === false,
+      `tools disable should persist enabled=false for ${target.id}\nstdout:\n${afterDisable.stdout}`,
+    );
+
+    const enabled = runTools(['enable', target.id]);
+    assertSuccess(enabled, `texra tools enable ${target.id}`);
+    assert(
+      enabled.stdout.includes(`Enabled ${target.id}.`),
+      `tools enable should confirm the target id\nstdout:\n${enabled.stdout}`,
+    );
+
+    const afterEnable = runTools(['list', '--output-format', 'json']);
+    assertSuccess(afterEnable, 'texra tools list JSON after enable');
+    const enabledRecord = findToolRecord(
+      parseJson(afterEnable.stdout, 'tools list JSON after enable'),
+      target.id,
+    );
+    assert(
+      enabledRecord?.enabled === true,
+      `tools enable should persist enabled=true for ${target.id}\nstdout:\n${afterEnable.stdout}`,
+    );
+
+    const ndjson = runTools(['list', '--output-format', 'ndjson']);
+    assertSuccess(ndjson, 'texra tools list NDJSON');
+    assert(
+      parseNdjson(ndjson.stdout, 'tools list NDJSON').every(
+        (record) => record.kind === 'tool-status',
+      ),
+      'tools list NDJSON records should have kind=tool-status',
     );
   } finally {
     rmSync(cwd, { recursive: true, force: true });
@@ -519,9 +612,6 @@ async function validateOrchestrateOnboardingPicker(options) {
   const root = mkdtempSync(path.join(tmpdir(), 'texra-cli-onboarding-'));
   try {
     const home = path.join(root, 'home');
-    const env = Object.fromEntries(
-      validationProviderApiKeyEnv.map((name) => [name, '']),
-    );
     let exitSent = false;
     let welcomeExitTimer;
     const sendEsc = (pty) => {
@@ -534,11 +624,7 @@ async function validateOrchestrateOnboardingPicker(options) {
       label: options.label,
       cwd: repoRoot,
       env: {
-        HOME: home,
-        XDG_CONFIG_HOME: path.join(home, '.config'),
-        XDG_DATA_HOME: path.join(home, '.local/share'),
-        XDG_STATE_HOME: path.join(home, '.local/state'),
-        ...env,
+        ...isolatedCliHomeEnv(home),
         ...options.env,
       },
       onData: (_data, pty) => {
@@ -939,6 +1025,7 @@ async function validateCliRunArtifacts(options = {}) {
   }
   validateBinarySmoke();
   validateMultiAgentListAvailability();
+  validateToolsCommand();
   validateFileFlagMissingValues();
   await validateOrchestratePreservesScrollback();
   await validateOrchestrateOnboardingPickers();
