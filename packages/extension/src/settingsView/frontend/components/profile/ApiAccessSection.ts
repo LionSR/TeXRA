@@ -14,6 +14,7 @@ import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 
 // Local imports - shared copy
 import { PROMO_NOTICE_LONG } from '@shared/copy/promoNotice';
+import { API_ACCESS_MODE_OPTIONS } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - profile view styles
 import { profileViewStyles } from './styles';
@@ -46,27 +47,18 @@ export class ApiAccessSection extends LitElement {
           .value=${this.mode}
           @change=${this.handleModeChange}
         >
-          <wa-radio class="api-access-option" value="included">
-            <span class="option-content">
-              <span class="option-title">Use Included Access</span>
-              <span class="option-description"
-                >Works automatically. No setup needed. Does not apply to
-                OpenRouter — those models always use your OpenRouter key. Bring
-                your own provider API keys to use more of your own quota and
-                avoid relay caps.</span
-              >
-            </span>
-          </wa-radio>
-          <wa-radio class="api-access-option" value="personal">
-            <span class="option-content">
-              <span class="option-title">Use My Own Keys</span>
-              <span class="option-description"
-                >Provide your own API keys from OpenAI, Anthropic, etc. This
-                uses your provider account directly for higher limits and models
-                outside Included Access.</span
-              >
-            </span>
-          </wa-radio>
+          ${API_ACCESS_MODE_OPTIONS.map(
+            (option) => html`
+              <wa-radio class="api-access-option" value=${option.value}>
+                <span class="option-content">
+                  <span class="option-title">${option.label}</span>
+                  <span class="option-description">
+                    ${option.description}
+                  </span>
+                </span>
+              </wa-radio>
+            `,
+          )}
         </wa-radio-group>
         ${this.mode === 'included'
           ? html`

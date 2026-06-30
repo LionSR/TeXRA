@@ -52,8 +52,8 @@ export const parseCodexReasoningEffort = parseEnumSetting(
 export const CodexApprovalPolicySchema = z.enum([
   'never',
   'on-request',
-  'on-failure',
   'untrusted',
+  'on-failure',
 ]);
 export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
 
