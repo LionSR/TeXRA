@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { settleQuickInput } from '@commands/_shared/quickInputUtils';
+import { settleQuickInput, showQuickPick } from '@commands/_shared/quickInputUtils';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
@@ -127,11 +127,11 @@ export async function setApiKey(provider?: ApiProvider): Promise<void> {
   }
 
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
-  const providerPick = await pickProvider(
-    providerItems,
-    'Select API provider',
-    "Keys are stored in VS Code's encrypted secret store, never on disk.",
-  );
+  const providerPick = await showQuickPick<ProviderQuickPickItem>({
+    placeholder: 'Select API provider',
+    prompt: "Keys are stored in VS Code's encrypted secret store, never on disk.",
+    items: providerItems,
+  });
 
   if (providerPick?.provider) {
     await setApiKeyForProvider(providerPick.provider, true);
@@ -142,42 +142,17 @@ type ProviderQuickPickItem = Awaited<
   ReturnType<typeof SecretManager.getApiProviderQuickPickItems>
 >[number];
 
-/** Shared provider picker with a persistent prompt hint (VS Code 1.108+). */
-async function pickProvider(
-  items: ProviderQuickPickItem[],
-  placeholder: string,
-  promptHint: string,
-): Promise<ProviderQuickPickItem | undefined> {
-  const qp = vscode.window.createQuickPick<ProviderQuickPickItem>();
-  qp.placeholder = placeholder;
-  qp.items = items;
-  const defaultItem = items[0];
-  if (defaultItem) {
-    qp.activeItems = [defaultItem];
-  }
-  if ('prompt' in qp) {
-    (
-      qp as vscode.QuickPick<ProviderQuickPickItem> & { prompt: string }
-    ).prompt = promptHint;
-  }
-  return settleQuickInput(qp, (accept) => {
-    qp.onDidAccept(() => {
-      accept(qp.activeItems[0] ?? qp.selectedItems[0]);
-    });
-  });
-}
-
 /**
  * Remove an API key after a confirmation prompt. Migrated to the shared
  * command registry in #3781 batch 4.
  */
 export async function removeApiKey(): Promise<void> {
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
-  const providerPick = await pickProvider(
-    providerItems,
-    'Select API provider to remove key',
-    'Only removes the key from TeXRA — does not delete it from the provider.',
-  );
+  const providerPick = await showQuickPick<ProviderQuickPickItem>({
+    placeholder: 'Select API provider to remove key',
+    prompt: 'Only removes the key from TeXRA — does not delete it from the provider.',
+    items: providerItems,
+  });
 
   const provider = providerPick?.provider;
   if (!provider) {
