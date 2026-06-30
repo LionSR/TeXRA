@@ -296,7 +296,7 @@ export class MediaAttachmentProcessor {
     ) {
       const entry = this.createEntry(
         path.basename(mediaFile),
-        this.getFirstItem(processed.data),
+        Array.isArray(processed.data) ? processed.data[0] : processed.data,
         processed.mediaType,
         processed.kind,
         absolutePath,
@@ -306,7 +306,7 @@ export class MediaAttachmentProcessor {
       return entry;
     }
 
-    const dataParts = this.normalizeToArray(processed.data);
+    const dataParts = ensureArray(processed.data);
     const isImage = processed.kind === 'image';
     const derivedFromConversion =
       isImage &&
@@ -367,15 +367,5 @@ export class MediaAttachmentProcessor {
 
   private isAudio(ext: string): boolean {
     return getMimeType(ext)?.startsWith('audio/') ?? false;
-  }
-
-  /** Normalize data to array for consistent processing */
-  private normalizeToArray(data: string | string[]): string[] {
-    return ensureArray(data);
-  }
-
-  /** Get the first data item (for single-item scenarios) */
-  private getFirstItem(data: string | string[]): string {
-    return Array.isArray(data) ? data[0] : data;
   }
 }

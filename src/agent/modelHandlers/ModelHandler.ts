@@ -68,7 +68,6 @@ import {
   ANTHROPIC_STOP,
   GOOGLE_FINISH,
   OPENAI_CHAT_FINISH,
-  MCP_STOP,
 } from './types/StopReasonTypes';
 import {
   computeReducedMaxTokens,
@@ -104,6 +103,14 @@ const DEFAULT_CONTINUE_LIMIT = 10;
 // Default token limits
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
+
+// Stop markers that signal a completed turn across providers.
+const END_TURN_REASONS: ProviderStopReason[] = [
+  ANTHROPIC_STOP.END_TURN,
+  ANTHROPIC_STOP.STOP_SEQUENCE,
+  OPENAI_CHAT_FINISH.STOP,
+  GOOGLE_FINISH.STOP,
+];
 
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
@@ -621,13 +628,7 @@ export abstract class ModelHandler<
     const maxOutputTokensExceeded = totals.totalOutputTokens > maxOutputTokens;
 
     // Detect stop markers in model output
-    const endTurnReasons: ProviderStopReason[] = [
-      ANTHROPIC_STOP.END_TURN,
-      ANTHROPIC_STOP.STOP_SEQUENCE,
-      OPENAI_CHAT_FINISH.STOP,
-      GOOGLE_FINISH.STOP,
-    ];
-    const endTurn = endTurnReasons.includes(stopReason ?? '');
+    const endTurn = END_TURN_REASONS.includes(stopReason ?? '');
     const encounterDocumentTag = newResponse.includes(
       `</${agentSetting.documentTag}>`,
     );
@@ -1076,12 +1077,10 @@ export abstract class ModelHandler<
 
   /** Check if stop reason signals end-turn. */
   public isEndTurnStop(reason: ProviderStopReason): boolean {
-    return (
-      reason === ANTHROPIC_STOP.END_TURN ||
-      reason === MCP_STOP.END_TURN ||
-      String(reason).toLowerCase() === 'end_turn' ||
-      String(reason).toLowerCase() === 'endturn'
-    );
+    // Covers ANTHROPIC_STOP.END_TURN ('end_turn') and MCP_STOP.END_TURN
+    // ('endTurn') plus any provider casing of the same markers.
+    const lower = String(reason).toLowerCase();
+    return lower === 'end_turn' || lower === 'endturn';
   }
 
   /**
