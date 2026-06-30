@@ -47,7 +47,11 @@ import {
   resolveWorkflowOutput,
   resumeWorkflowOutputFile,
 } from '@cli/runtime/workflowOutput';
-import { isKnownCliModel } from '@cli/runtime/cliConfig';
+import {
+  isKnownCliModel,
+  knownCliModelIds,
+  resolveKnownCliModelId,
+} from '@cli/runtime/cliConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
@@ -1110,6 +1114,13 @@ describe('CLI model flag validation contract', () => {
     expect(isKnownCliModel('deepseekT')).toBe(true);
     expect(isKnownCliModel('nonexistent-model-xyz')).toBe(false);
     expect(isKnownCliModel('')).toBe(false);
+  });
+
+  it('does not advertise host-only Copilot models as CLI models', () => {
+    expect(isKnownCliModel('copilot4o')).toBe(false);
+    expect(knownCliModelIds()).not.toContain('copilot4o');
+    expect(resolveKnownCliModelId('copilot4o')).toBeUndefined();
+    expect(resolveKnownCliModelId('Copilot GPT-4o')).toBeUndefined();
   });
 });
 
