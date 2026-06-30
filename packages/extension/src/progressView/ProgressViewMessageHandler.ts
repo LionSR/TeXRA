@@ -16,7 +16,7 @@ import { ProgressWorkflowActionsController } from '@controllers/progressView/Pro
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
@@ -65,6 +65,15 @@ type MessageFor<C extends ProgressViewInboundMessage['command']> = Extract<
   { command: C }
 >;
 
+type ProgressViewCoordinatorBridge = Pick<
+  RunCoordinatorBridge,
+  | 'cancelRetry'
+  | 'clearRetryRequest'
+  | 'resolvePlanApproval'
+  | 'resolveProposal'
+  | 'triggerRetry'
+>;
+
 /**
  * Schema-driven message handler for ProgressView.
  *
@@ -92,6 +101,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     private readonly provider: ProgressViewProvider,
     context: vscode.ExtensionContext,
     private readonly host: PromptHost,
+    private readonly coordinators: ProgressViewCoordinatorBridge,
   ) {
     super('ProgressView', { trackActiveView: true });
 
@@ -281,7 +291,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]: (data) =>
         this.handleRetryStreamRequest(data),
       [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]: (data) => {
-        runCoordinatorBridge.cancelRetry(data.stream);
+        this.coordinators.cancelRetry(data.stream);
       },
       [PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY]: (data) =>
         this.handleUseOwnApiKey(data),
@@ -451,6 +461,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       host: new ProgressStreamLifecycleHost(
         this.provider,
         this.workflowFileActionsController,
+        this.coordinators,
       ),
     });
   }
@@ -598,7 +609,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         );
       },
       resolveProposal: (proposalId, result) => {
-        runCoordinatorBridge.resolveProposal(proposalId, result);
+        this.coordinators.resolveProposal(proposalId, result);
       },
       onMissingProposal: (proposalId) => {
         this.logger.warn(
@@ -642,7 +653,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await setPreferCodexSubscription(false);
       },
       invalidateModelOptionsCache,
-      triggerRetry: (stream) => runCoordinatorBridge.triggerRetry(stream),
+      triggerRetry: (stream) => this.coordinators.triggerRetry(stream),
     });
   }
 
@@ -695,10 +706,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleRetryStreamRequest(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST>,
   ): Promise<void> {
-    const success = runCoordinatorBridge.triggerRetry(
-      data.stream,
-      data.feedback,
-    );
+    const success = this.coordinators.triggerRetry(data.stream, data.feedback);
     if (!success) {
       await this.host.info(
         'No retryable request is available for this stream yet.',
@@ -807,17 +815,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const { approvalId, action } = data;
     switch (action) {
       case 'approve':
-        runCoordinatorBridge.resolvePlanApproval(approvalId, {
+        this.coordinators.resolvePlanApproval(approvalId, {
           action: 'approve',
         });
         break;
       case 'approve_and_goal':
-        runCoordinatorBridge.resolvePlanApproval(approvalId, {
+        this.coordinators.resolvePlanApproval(approvalId, {
           action: 'approve_and_goal',
         });
         break;
       case 'reject':
-        runCoordinatorBridge.resolvePlanApproval(approvalId, {
+        this.coordinators.resolvePlanApproval(approvalId, {
           action: 'reject',
           feedback: data.feedback,
         });
