@@ -4,11 +4,7 @@ import { defineCommand } from 'citty';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import {
-  writeErrorStderr,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliToolList,
   formatCliToolMissingInstallCommandMessage,
@@ -19,12 +15,28 @@ import {
   readCliToolStatus,
   readCliToolStatuses,
   setCliToolEnabled,
+  type CliToolGuide,
 } from '../runtime/tools';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
+
+type ToolGuideOperation = 'install' | 'auth';
+
+interface CliToolToggleResult {
+  readonly id: string;
+  readonly enabled: boolean;
+  readonly action: 'enabled' | 'disabled';
+}
+
+interface CliToolGuideResult {
+  readonly id: string;
+  readonly operation: ToolGuideOperation;
+  readonly text: string;
+  readonly command?: string;
+}
 
 async function listTools(context: CliContext): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
@@ -65,7 +77,16 @@ async function toggleTool(
     writeTextStderr(formatCliToolNotToggleableMessage(id));
     return CliExitCode.Usage;
   }
-  writeTextStdout(`${enabled ? 'Enabled' : 'Disabled'} ${id}.`);
+  const result: CliToolToggleResult = {
+    id,
+    enabled,
+    action: enabled ? 'enabled' : 'disabled',
+  };
+  emitCliResult(context, {
+    json: result,
+    ndjson: { kind: 'tool-toggle', tool: result },
+    text: `${enabled ? 'Enabled' : 'Disabled'} ${id}.`,
+  });
   return CliExitCode.Success;
 }
 
@@ -80,6 +101,19 @@ function shellRun(command: string): Promise<number> {
   });
 }
 
+function toolGuideResult(
+  id: string,
+  operation: ToolGuideOperation,
+  guide: CliToolGuide,
+): CliToolGuideResult {
+  return {
+    id,
+    operation,
+    text: guide.text,
+    command: guide.command,
+  };
+}
+
 async function installTool(
   context: CliContext,
   id: string,
@@ -92,7 +126,23 @@ async function installTool(
     return CliExitCode.Usage;
   }
 
-  writeTextStdout(guide.text);
+  if (run && !guide.command && context.outputFormat !== 'text') {
+    writeTextStderr(formatCliToolMissingInstallCommandMessage(id));
+    return CliExitCode.Usage;
+  }
+  if (run && context.outputFormat !== 'text') {
+    writeTextStderr(
+      'Cannot combine --output-format json|ndjson with tools install --run running an external command; use text output to run it, or omit the run request to inspect the guide.',
+    );
+    return CliExitCode.Usage;
+  }
+
+  const result = toolGuideResult(id, 'install', guide);
+  emitCliResult(context, {
+    json: result,
+    ndjson: { kind: 'tool-guide', guide: result },
+    text: result.text,
+  });
   if (!run) return CliExitCode.Success;
   if (!guide.command) {
     writeTextStderr(formatCliToolMissingInstallCommandMessage(id));
@@ -109,8 +159,14 @@ async function authTool(context: CliContext, id: string): Promise<number> {
     return CliExitCode.Usage;
   }
 
-  writeTextStdout(guide.text);
-  if (!guide.command) return CliExitCode.Success;
+  const result = toolGuideResult(id, 'auth', guide);
+  emitCliResult(context, {
+    json: result,
+    ndjson: { kind: 'tool-guide', guide: result },
+    text: result.text,
+  });
+  if (!guide.command || context.outputFormat !== 'text')
+    return CliExitCode.Success;
   try {
     return await shellRun(guide.command);
   } catch (error) {
