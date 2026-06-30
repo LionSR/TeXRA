@@ -115,6 +115,7 @@ const RELAY_STATUS_BY_AVAILABILITY = {
   'openrouter-key': 'relay: unavailable; openrouter key set',
   'missing-key': 'relay: unavailable; missing api key',
   'subscription-access': 'chatgpt subscription',
+  retired: 'retired',
 } satisfies Record<ModelAvailabilityKind, string>;
 
 const NO_RUNNABLE_MODEL_ACCESS_COPY = {
@@ -348,7 +349,12 @@ function toCliModelAccess(
 }
 
 function toIncludedLoginRequiredAccess(entry: CliModelAccess): CliModelAccess {
-  if (entry.model.availability === 'subscription-access') return entry;
+  if (
+    entry.model.availability === 'subscription-access' ||
+    entry.model.availability === 'retired'
+  ) {
+    return entry;
+  }
   return {
     model: {
       ...entry.model,
@@ -483,6 +489,8 @@ function formatCliModelRecovery(
       return apiMode === 'personal'
         ? `${startSentence(configureKeyAction)} for personal mode.`
         : `${startSentence(configureKeyAction)}, then ${personalModeAction}.`;
+    case 'retired':
+      return 'Choose an active model.';
     default:
       return undefined;
   }

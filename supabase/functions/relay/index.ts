@@ -75,6 +75,7 @@ import {
   TIER_CONFIG,
   TIER_SPENDING_LIMITS,
   getRequestLimits,
+  isRetiredModelRequest,
   isModelAllowedForTier,
   getSpendingLimit,
   FREE_TIER_SUGGESTED_MODEL,
@@ -622,7 +623,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     }
   }
 
-  // 6. Apply tier constraints for non-Ultra tiers.
+  // 6. Apply retired-model and tier constraints for model endpoints.
   // Skip model validation for endpoints that don't require a model (e.g., file uploads)
   // - OpenAI: /v1/files
   // - Anthropic: /v1/files (same as OpenAI)
@@ -656,7 +657,9 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     requestBody = requestSize.body;
   }
 
-  if (userTier !== ULTRA_TIER && c.req.method !== 'GET' && !isModelFreePath) {
+  const isModelRequest = c.req.method !== 'GET' && !isModelFreePath;
+
+  if (isModelRequest) {
     if (requestBody === null) {
       requestBody = await c.req.text();
     } else if (requestBody instanceof Uint8Array) {
@@ -677,7 +680,16 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     if (!modelName) {
       modelName = extractModelFromPath(apiPath);
     }
+  }
 
+  if (modelName && isRetiredModelRequest(modelName)) {
+    return jsonError(
+      `Model '${modelName}' is retired and no longer available from its provider. Choose an active model.`,
+      403,
+    );
+  }
+
+  if (userTier !== ULTRA_TIER && isModelRequest) {
     if (!isModelAllowedForTier(userTier, modelName)) {
       const tierName = userTier === FREE_TIER ? 'free' : userTier;
       // Point users at a model their tier can actually use, not just an upsell.

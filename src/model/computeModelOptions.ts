@@ -100,6 +100,11 @@ const AVAILABILITY_STATUS_FIELDS: Record<
     available: false,
     requiresKey: false,
   },
+  retired: {
+    label: 'Retired',
+    available: false,
+    requiresKey: false,
+  },
 };
 
 /** Resolve a full availability status from its kind. */
@@ -165,6 +170,10 @@ async function resolveModelAvailability(
   config: ModelConfig,
   ctx: ModelAvailabilityContext,
 ): Promise<ModelAvailabilityStatus> {
+  if (config.retired) {
+    return availabilityStatus('retired');
+  }
+
   // ChatGPT subscription (Codex) is a preference, not a hard requirement. When
   // the host is not signed in, continue through the normal API-key/relay paths
   // so the switch cannot disable models that are otherwise runnable.
@@ -283,6 +292,10 @@ export async function getModelUnavailableReason(
   const ctx = await buildAvailabilityContext(effectiveAccess, access == null);
   const availability = await resolveModelAvailability(model, config, ctx);
   if (availability.available) return null;
+
+  if (availability.kind === 'retired') {
+    return `Model "${model}" is retired and no longer available from its provider. Choose an active model.`;
+  }
 
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
     return `Model "${model}" requires an OpenRouter API key.`;
