@@ -34,7 +34,16 @@ export type SendFollowUpResult =
     }
   | { status: 'no_session'; streamStatus: string | undefined };
 
-/** In-flight resume attempts per stream — see {@link wakeOrReleaseQueuedStream}. */
+export type FollowUpWakeResult =
+  | { kind: 'not_required' }
+  | { kind: 'queued_without_wake' }
+  | { kind: 'resumed' }
+  | { kind: 'resume_in_flight' }
+  | { kind: 'active_or_resuming' }
+  | { kind: 'queued_resume_failed' }
+  | { kind: 'dropped' };
+
+/** In-flight resume attempts per stream — see {@link wakeQueuedFollowUpStream}. */
 const wakeAttempts = new Map<StreamTabId, Promise<boolean>>();
 
 /**
@@ -45,18 +54,20 @@ const wakeAttempts = new Map<StreamTabId, Promise<boolean>>();
  * non-in-flight stream), re-release the force-reopened queue so late
  * deliveries don't leak into the next run on that stream.
  *
- * Returns false when the queued item was dropped by the re-release; callers
- * should treat the delivery as failed and rely on their durable copy.
+ * Returns a declarative outcome so hosts can map queue/wake policy to their
+ * own user-facing messages without reconstructing the release rules.
  */
-export async function wakeOrReleaseQueuedStream(
+export async function wakeQueuedFollowUpStream(
   streamId: StreamTabId,
   result: SendFollowUpResult,
-): Promise<boolean> {
+): Promise<FollowUpWakeResult> {
   if (
     result.status !== 'queued' ||
     (result.reason !== 'waiting' && result.reason !== 'children_running')
   ) {
-    return true;
+    return result.status === 'queued'
+      ? { kind: 'queued_without_wake' }
+      : { kind: 'not_required' };
   }
   // Serialize wakes per stream: hosts report an already-in-flight resume as
   // `false`, indistinguishable from "unresumable", and may not have set
@@ -72,16 +83,31 @@ export async function wakeOrReleaseQueuedStream(
     wakeAttempts.set(streamId, attempt);
   }
   const resumed = await attempt;
-  if (
-    resumed ||
-    result.reason !== 'children_running' ||
-    resumePort.isResumeInFlight?.(streamId) === true ||
-    StreamStatusService.isActiveOrResuming(streamId)
-  ) {
-    return true;
+  if (resumed) {
+    return { kind: 'resumed' };
+  }
+  if (resumePort.isResumeInFlight?.(streamId) === true) {
+    return { kind: 'resume_in_flight' };
+  }
+  if (StreamStatusService.isActiveOrResuming(streamId)) {
+    return { kind: 'active_or_resuming' };
+  }
+  if (result.reason !== 'children_running') {
+    return { kind: 'queued_resume_failed' };
   }
   ToolUseFollowUpQueue.release(streamId);
-  return false;
+  return { kind: 'dropped' };
+}
+
+/**
+ * Compatibility view for tool paths that only need to know whether the queued
+ * item survived. UI callers should prefer {@link wakeQueuedFollowUpStream}.
+ */
+export async function wakeOrReleaseQueuedStream(
+  streamId: StreamTabId,
+  result: SendFollowUpResult,
+): Promise<boolean> {
+  return (await wakeQueuedFollowUpStream(streamId, result)).kind !== 'dropped';
 }
 
 const logger = createChannelTrace('ToolUseFollowUp');
