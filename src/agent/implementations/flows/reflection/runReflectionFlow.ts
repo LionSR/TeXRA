@@ -181,8 +181,7 @@ export async function runReflectionFlow<C = unknown>(
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
-      runSession.coordinators.clearRetryRequest(streamId);
-      runSession.coordinators.clearPlanApprovalForStream(streamId);
+      runSession.coordinators.cleanupRequestsForStream(streamId);
     },
   };
 
@@ -332,8 +331,7 @@ export async function runReflectionFlow<C = unknown>(
       }
     }
 
-    runSession.coordinators.clearRetryRequest(streamId);
-    runSession.coordinators.clearPlanApprovalForStream(streamId);
+    runSession.coordinators.cleanupRequestsForStream(streamId);
 
     runSession.interrupts.unregister(streamId);
   }
