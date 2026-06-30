@@ -1,7 +1,5 @@
 import { css, unsafeCSS, type CSSResult } from 'lit';
 
-/** Shared selector groups that drive the :is() consolidation below. */
-
 /**
  * Single source of truth for request panel types. Each entry pairs the outer
  * container class (plural), the item class (singular, used for cards and BEM

@@ -298,11 +298,7 @@ export function extractAnthropicWebSearchResults(
 function isWebFetchBlock(
   content: WebFetchToolResultBlock['content'],
 ): content is WebFetchBlock {
-  return (
-    typeof content === 'object' &&
-    content !== null &&
-    content.type === 'web_fetch_result'
-  );
+  return hasBlockType(content, 'web_fetch_result');
 }
 
 /**

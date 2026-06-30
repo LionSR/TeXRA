@@ -145,11 +145,15 @@ export class DiagnosticsTool extends defineTool({
     return this.readDiagnostics(input);
   }
 
+  /** Resolve an input path to an absolute path against the active working directory. */
+  private resolveAbsolutePath(filePath: string): string {
+    const workingDirectory = tryUseRunContext()?.workingDirectory;
+    return resolveWorkspaceRelativePath(filePath, workingDirectory).absolute;
+  }
+
   private async readDiagnostics(input: DiagnosticsInput): Promise<ToolResult> {
     const { command, path } = input;
-    const workingDirectory = tryUseRunContext()?.workingDirectory;
-    const resolved = resolveWorkspaceRelativePath(path, workingDirectory);
-    const diagnosticsPath = resolved.absolute;
+    const diagnosticsPath = this.resolveAbsolutePath(path);
 
     try {
       const messages = await linterProvider(diagnosticsPath);
@@ -198,10 +202,9 @@ export class DiagnosticsTool extends defineTool({
     }
 
     try {
-      const workingDirectory = tryUseRunContext()?.workingDirectory;
-      const resolved = resolveWorkspaceRelativePath(path, workingDirectory);
+      const absolutePath = this.resolveAbsolutePath(path);
       const result = criticismSink({
-        absolutePath: resolved.absolute,
+        absolutePath,
         line,
         message,
         severity,
@@ -214,7 +217,7 @@ export class DiagnosticsTool extends defineTool({
             'Inline criticism diagnostics are disabled. Enable "texra.inlineCriticism.enabled" in settings to surface critiques as diagnostics.',
         };
       }
-      const where = result.resolvedPath || resolved.absolute;
+      const where = result.resolvedPath || absolutePath;
       const summary = `Added criticism for ${where}:${line} (S${severity}/C${confidence})`;
       return { summary, output: summary };
     } catch (error) {

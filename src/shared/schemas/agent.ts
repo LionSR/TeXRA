@@ -46,7 +46,7 @@ export const AgentNameSchema = z
   .string()
   .trim()
   .min(1)
-  .refine((name) => AGENT_NAME_IDENTIFIER.test(name), {
+  .regex(AGENT_NAME_IDENTIFIER, {
     message:
       'Agent names must be identifiers: letters, numbers, underscores, or hyphens.',
   });
