@@ -13,19 +13,19 @@ import { wrapAnsiToWidth } from './ansiWrap';
 import { maxScrollableRowOffset, scrollBoundedRows } from './scrollBounds';
 import { clipToWidth, fillRows, textDisplayWidth } from './terminalText';
 
-export type Hunk = StructuredPatchHunk;
+type Hunk = StructuredPatchHunk;
 
 export interface InlinePatchGroup {
   readonly fileLabel: string;
   readonly hunks: readonly Hunk[];
 }
 
-export interface DiffDisplayLine {
+interface DiffDisplayLine {
   readonly kind: 'added' | 'context' | 'header' | 'removed' | 'overflow';
   readonly text: string;
 }
 
-export interface DiffStats {
+interface DiffStats {
   readonly added: number;
   readonly removed: number;
   readonly hunks: number;
@@ -295,7 +295,7 @@ export function scrollBoundedDiffDisplayLines(
   ];
 }
 
-export interface DiffViewProps {
+interface DiffViewProps {
   readonly hunks: readonly Hunk[];
   /** Maximum total rendered diff rows before truncating; 0 = no truncation. */
   readonly maxDisplayLines?: number;

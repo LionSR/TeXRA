@@ -86,7 +86,6 @@ export const WebSearchResultItemSchema = z.object({
   title: z.string().optional(),
   domain: z.string().optional(),
 });
-export type WebSearchResultItem = z.infer<typeof WebSearchResultItemSchema>;
 
 export const WebSearchPayloadSchema = z.object({
   query: z.string().optional(),

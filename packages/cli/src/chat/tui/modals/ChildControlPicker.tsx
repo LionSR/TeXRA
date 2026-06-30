@@ -29,7 +29,7 @@ import { POINTER } from '../ui/glyphs';
 import { SELECT_LABEL_MAX_COLS } from '../ui/Select';
 import type { StreamSlice } from '../state/cliState';
 
-export interface ChildControlPickerProps {
+interface ChildControlPickerProps {
   readonly availableColumns?: number;
   readonly streamLabel: string | undefined;
   readonly activeStreamId: StreamTabId | undefined;
@@ -410,7 +410,7 @@ function metaLine(
   );
 }
 
-export interface TaskDetailLayout {
+interface TaskDetailLayout {
   readonly compact: boolean;
   readonly showCommand: boolean;
   readonly showExpandedMeta: boolean;
@@ -420,7 +420,7 @@ export interface TaskDetailLayout {
   readonly visibleLineCount: number;
 }
 
-export interface PickerListLayout {
+interface PickerListLayout {
   readonly end: number;
   readonly hiddenAfter: number;
   readonly hiddenBefore: number;
@@ -444,19 +444,19 @@ export function compactPickerOverflowText({
   return `+${more} more`;
 }
 
-export interface TaskDetailScrollState {
+interface TaskDetailScrollState {
   readonly anchor?: TaskDetailScrollAnchor;
   readonly executionId: string;
   readonly followsTail: boolean;
   readonly offset: number;
 }
 
-export interface TaskDetailScrollAnchor {
+interface TaskDetailScrollAnchor {
   readonly lineIndex: number;
   readonly wrappedRowOffset: number;
 }
 
-export interface TaskDetailScrollContext {
+interface TaskDetailScrollContext {
   readonly availableColumns?: number;
   readonly compact: boolean;
   readonly tailLines: readonly string[];
