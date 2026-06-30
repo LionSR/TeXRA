@@ -322,4 +322,52 @@ describe('CLI init command', () => {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
+
+  it('points non-interactive init at model recovery when the default model is unavailable', async () => {
+    mocks.getCliModelAccessList.mockResolvedValue([
+      modelAccess('deepseekproT', {
+        available: false,
+        status: 'missing key',
+        model: {
+          value: 'deepseekproT',
+          label: 'DeepSeek Pro',
+          availability: 'missing-key',
+          requiresKey: true,
+        },
+      }),
+    ]);
+    const root = await makeTempProject();
+    try {
+      const result = await runCli([
+        '--cwd',
+        root,
+        'init',
+        '--print',
+        '--api-mode',
+        'personal',
+        '--gitignore',
+        '--no-color',
+      ]);
+
+      expect(result.exitCode).toBe(0);
+      expect(stderr).toBe('');
+      expect(stdout).toContain(
+        'Note: "deepseekproT" is not usable in the current access mode.',
+      );
+      expect(stdout).toContain(
+        'Next: Add a provider API key with `texra setup` for personal mode',
+      );
+      expect(stdout).toContain(
+        'Run `texra models list --all` to inspect access.',
+      );
+      expect(stdout).toContain(
+        'After a model is available, run `texra` for the launcher or `texra chat` to start.',
+      );
+      expect(stdout).not.toContain(
+        'Next: run `texra` for the launcher, or `texra chat` to start.',
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
 });
