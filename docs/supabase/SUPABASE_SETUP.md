@@ -12,6 +12,10 @@ TeXRA uses Supabase for:
 
 **Important**: Users authenticate to **TeXRA's official Supabase service**, not their own. This guide is for **extension maintainers** who need to set up the TeXRA backend.
 
+For production auth operations, including SMTP outage diagnosis, Before User Created
+hook checks, and sign-up funnel alerting, see
+[`AUTH_OPERATIONS.md`](./AUTH_OPERATIONS.md).
+
 ---
 
 ## Part 1: Create Supabase Project
