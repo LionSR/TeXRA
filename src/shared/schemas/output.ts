@@ -84,8 +84,6 @@ export const CompileFailureSchema = z.strictObject({
   logRelativePath: z.string(),
 });
 
-export type OutputFile = z.infer<typeof OutputFileSchema>;
-export type FileLineage = z.infer<typeof FileLineageSchema>;
 export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
 export type OutputFileSummary = z.infer<typeof OutputFileSummarySchema>;
 export type CompileFailure = z.infer<typeof CompileFailureSchema>;
