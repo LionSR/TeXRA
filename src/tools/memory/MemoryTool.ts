@@ -8,13 +8,13 @@ import { z } from 'zod';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { debug } from '@logger/logUtils';
 import { formatRelativeTime } from '@shared/utils/string';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local imports - tool core
 import { defineTool } from '../core/define';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
   recordToolFileRead,
   requireFileReadForEdit,

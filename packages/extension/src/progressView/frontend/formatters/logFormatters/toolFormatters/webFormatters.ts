@@ -22,9 +22,9 @@ import type {
   WebFetchPayload,
   LogMessageData,
 } from '@shared/schemas';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
 import { buildBannerContent, joinWithSeparator } from './helpers';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 /** Wrap formatted tool content in the shared collapsible banner shell. */
 function buildToolUseDetails(opts: {

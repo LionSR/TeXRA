@@ -85,14 +85,15 @@ export class SettingsProfileController {
   );
 
   constructor(private readonly deps: SettingsProfileControllerDeps) {
-    this.providerSettingsByKey = new Map(
-      Object.values(deps.providerVscodeSettings)
-        .flat()
-        .map((setting): [string, ProviderVscodeSettingDef] => [
-          setting.key,
-          setting,
-        ]),
-    );
+    // Keep the first def per key: some keys (e.g. useBackgroundResponses)
+    // appear under multiple providers, and the original lookup resolved to
+    // the first match.
+    this.providerSettingsByKey = new Map();
+    for (const setting of Object.values(deps.providerVscodeSettings).flat()) {
+      if (!this.providerSettingsByKey.has(setting.key)) {
+        this.providerSettingsByKey.set(setting.key, setting);
+      }
+    }
   }
 
   async buildProfileMessage(): Promise<UpdateProfileMessage> {
