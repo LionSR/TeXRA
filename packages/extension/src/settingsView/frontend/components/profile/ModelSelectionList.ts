@@ -31,7 +31,8 @@ import {
 
 // Local imports - profile view styles and events
 import {
-  ReasoningLevelSchema,
+  REASONING_LEVEL_LABELS,
+  REASONING_LEVEL_OPTIONS,
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type ReasoningLevel,
@@ -42,18 +43,6 @@ import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
-
-/** Display labels for reasoning level options. */
-const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
-  none: 'None',
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  xhigh: 'Extra High',
-  max: 'Max',
-};
-
-const REASONING_LEVELS = ReasoningLevelSchema.options;
 
 interface ProviderGroup {
   provider: string;
@@ -192,11 +181,9 @@ export class ModelSelectionList extends LitElement {
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
       >
         <wa-option value=""> ${defaultLabel} </wa-option>
-        ${REASONING_LEVELS.map(
-          (level) => html`
-            <wa-option value=${level}>
-              ${REASONING_LEVEL_LABELS[level]}
-            </wa-option>
+        ${REASONING_LEVEL_OPTIONS.map(
+          (option) => html`
+            <wa-option value=${option.value}> ${option.label} </wa-option>
           `,
         )}
       </wa-select>
