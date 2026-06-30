@@ -191,24 +191,25 @@ function parseCallbackBody(rawBody: string): {
   fragment?: string;
   nonce?: string;
 } {
+  let json: unknown;
   try {
-    const parsed = CallbackBodySchema.safeParse(JSON.parse(rawBody));
-    if (!parsed.success) {
-      throw new RecoverableCallbackRequestError(
-        'Authentication callback request was malformed.',
-      );
-    }
-    return {
-      query: parsed.data.query ?? undefined,
-      fragment: parsed.data.fragment ?? undefined,
-      nonce: parsed.data.nonce ?? undefined,
-    };
-  } catch (error) {
-    if (isRecoverableCallbackRequestError(error)) throw error;
+    json = JSON.parse(rawBody);
+  } catch {
     throw new RecoverableCallbackRequestError(
       'Authentication callback request was malformed.',
     );
   }
+  const parsed = CallbackBodySchema.safeParse(json);
+  if (!parsed.success) {
+    throw new RecoverableCallbackRequestError(
+      'Authentication callback request was malformed.',
+    );
+  }
+  return {
+    query: parsed.data.query ?? undefined,
+    fragment: parsed.data.fragment ?? undefined,
+    nonce: parsed.data.nonce ?? undefined,
+  };
 }
 
 function trimUrlMarker(value: string | undefined, marker: '?' | '#'): string {
