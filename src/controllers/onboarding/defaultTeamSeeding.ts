@@ -82,11 +82,12 @@ export async function seedRosterFromDefaultTeam(
   ) {
     return false;
   }
+  // Prefer the user's recorded default team; fall back to the host's startup
+  // team when no default is recorded or the recorded id no longer resolves.
   const { fallbackTeamId = DEFAULT_STARTUP_TEAM_ID } = options;
-  const teamId = getDefaultTeamId(globalState) ?? fallbackTeamId;
-  if (!teamId) return false;
+  const defaultTeamId = getDefaultTeamId(globalState);
   const preset =
-    resolveTeamPreset(teamId) ??
+    (defaultTeamId ? resolveTeamPreset(defaultTeamId) : undefined) ??
     (fallbackTeamId ? resolveTeamPreset(fallbackTeamId) : undefined);
   if (!preset) return false;
   await applyPresetRoster(registryPresetRosterState(workspaceState), preset);

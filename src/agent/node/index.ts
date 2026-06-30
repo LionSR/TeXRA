@@ -221,21 +221,18 @@ class Node<
           },
         );
       } catch (e) {
-        if (e instanceof AbortError) {
-          // AbortError is thrown by our pre-attempt check above.
-          return await this.execFallback(
-            prepRes,
-            lastExecError ?? e.originalError ?? e,
-          );
-        }
-        // signal aborted during delay (p-retry rethrows signal.reason) or
-        // shouldAutoRetry returned false: forward the original exec error.
+        // User cancellation surfaces here as p-retry's aborted-delay rejection
+        // (signal.reason) or as the unwrapped error from our pre-attempt check
+        // (p-retry rethrows an AbortError's originalError, not the AbortError).
+        // Forward the recorded exec failure when one exists.
         if (this.signal?.aborted) {
           return await this.execFallback(
             prepRes,
             lastExecError ?? (e as Error),
           );
         }
+        // No abort: auto-retries are exhausted or shouldAutoRetry declined.
+        // Offer the manual retry prompt before falling back.
         const shouldRetry = await this.retryPrompt(prepRes, e as Error);
         if (shouldRetry) continue;
         return await this.execFallback(prepRes, e as Error);

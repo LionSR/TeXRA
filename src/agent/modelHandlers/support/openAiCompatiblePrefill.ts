@@ -1,6 +1,8 @@
 import type { AgentTrace } from '@agent/trace';
-import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
-import { hasEndTag } from '@agent/core/definition/AgentDataclass';
+import {
+  hasEndTag,
+  type AgentSetting,
+} from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';

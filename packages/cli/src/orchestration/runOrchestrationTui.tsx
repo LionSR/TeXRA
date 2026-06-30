@@ -209,12 +209,16 @@ export function OrchestrationApp(
     CliOrchestrationModelPickAction | undefined
   >(undefined);
   const isPendingTeam = pending?.kind === 'preset';
+  // Model-step header text, shared between the wrapped-row measurement in
+  // `headerLines` and the styled render in the `pending` branch below.
+  const modelStepTitle = isPendingTeam ? 'Lead model' : 'Model';
+  const modelStepSubtitle = isPendingTeam
+    ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
+    : 'Model for the first message.';
   const headerLines = pending
     ? [
-        `${isPendingTeam ? 'Lead model' : 'Model'} · ${formatCliApiMode(props.apiMode)}`,
-        isPendingTeam
-          ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
-          : 'Model for the first message.',
+        `${modelStepTitle} · ${formatCliApiMode(props.apiMode)}`,
+        modelStepSubtitle,
       ]
     : [`TeXRA v${props.version}`, 'Choose how to start this CLI session.'];
   const layout = orchestrationLauncherLayout({
@@ -252,15 +256,11 @@ export function OrchestrationApp(
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text bold color="cyan">
-          {isPendingTeam ? 'Lead model' : 'Model'}
+          {modelStepTitle}
           {' · '}
           <Text dimColor>{formatCliApiMode(props.apiMode)}</Text>
         </Text>
-        <Text dimColor>
-          {isPendingTeam
-            ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
-            : 'Model for the first message.'}
-        </Text>
+        <Text dimColor>{modelStepSubtitle}</Text>
         <Box marginTop={1}>
           <Select
             key="orchestration-model-picker"

@@ -34,7 +34,7 @@ export interface MainViewBaseFileSelectionPlan {
  *
  * The caller is responsible for deriving the base file path (via
  * `deriveBaseFileFromLatexDiff`) and checking disk existence (via
- * `WorkspaceFS.exists`) — this function only decides what to do with
+ * `WorkspaceFS.exists`). This function only decides what to do with
  * those results.
  *
  * @param currentOpenFile - The path of the currently open editor file.
@@ -48,7 +48,7 @@ export function planCurrentFileAsBase(
   derivedBaseFileExists: boolean,
 ): MainViewBaseFileSelectionPlan {
   if (!derivedBaseFile) {
-    // Not a latexdiff file — select the current file as-is.
+    // Not a latexdiff file, so select the current file as-is.
     return {
       filePathToSelect: currentOpenFile,
       shouldPostSetCurrentFile: true,
