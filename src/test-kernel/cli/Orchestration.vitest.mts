@@ -6,6 +6,7 @@ import {
   orchestrationBlockRowCost,
   orchestrationFooterHints,
   orchestrationKeyHints,
+  orchestrationLauncherLayout,
   orchestrationWrappedLineRows,
 } from '@cli/orchestration/runOrchestrationTui';
 import {
@@ -119,6 +120,11 @@ function readyPresetPlan(
   );
 }
 
+const ORCHESTRATION_TEST_HEADER_LINES = [
+  'TeXRA v0.0.0-test',
+  'Choose how to start this CLI session.',
+] as const;
+
 describe('CLI orchestration items', () => {
   it('advertises the full direct-open hotkey range used by Select', () => {
     expect(orchestrationKeyHints()).toContainEqual({
@@ -146,6 +152,110 @@ describe('CLI orchestration items', () => {
     expect(orchestrationBlockRowCost([accountHint], 52)).toBe(
       1 + orchestrationWrappedLineRows(accountHint, 52),
     );
+  });
+
+  it('keeps compact launcher orientation before advisory footer text', () => {
+    const layout = orchestrationLauncherLayout({
+      rows: 10,
+      columns: 80,
+      itemCount: 7,
+      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+      statusLines: [],
+      footerHints: [
+        'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
+        'Researcher Access sign-in may unlock more remote team agents.',
+      ],
+    });
+
+    expect(layout).toEqual({
+      statusLines: [],
+      footerHints: [],
+      maxVisibleItems: 3,
+      showOverflow: true,
+    });
+  });
+
+  it('keeps launcher status lines before advisory footer text', () => {
+    const statusLines = ['auth: signed out'];
+    const footerHints = [
+      'Team setup: run `texra multi-agent show <team-id>` for unavailable or degraded teams.',
+    ];
+
+    const layout = orchestrationLauncherLayout({
+      rows: 13,
+      columns: 80,
+      itemCount: 7,
+      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+      statusLines,
+      footerHints,
+    });
+
+    expect(layout).toEqual({
+      statusLines,
+      footerHints: [],
+      maxVisibleItems: 4,
+      showOverflow: true,
+    });
+  });
+
+  it('budgets wrapped launcher header rows before growing the list', () => {
+    const layout = orchestrationLauncherLayout({
+      rows: 12,
+      columns: 30,
+      itemCount: 7,
+      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+      statusLines: [],
+      footerHints: [],
+    });
+
+    expect(layout).toEqual({
+      statusLines: [],
+      footerHints: [],
+      maxVisibleItems: 4,
+      showOverflow: true,
+    });
+  });
+
+  it('preserves the longest fitting status prefix before hiding all status lines', () => {
+    const statusLines = [
+      'mode: included relay',
+      'auth: signed out',
+      'actions: `texra login` unlocks included models',
+    ];
+
+    const layout = orchestrationLauncherLayout({
+      rows: 14,
+      columns: 80,
+      itemCount: 7,
+      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+      statusLines,
+      footerHints: [],
+    });
+
+    expect(layout).toEqual({
+      statusLines: statusLines.slice(0, 2),
+      footerHints: [],
+      maxVisibleItems: 4,
+      showOverflow: true,
+    });
+  });
+
+  it('keeps visible choices instead of overflow-only output on tiny row budgets', () => {
+    const layout = orchestrationLauncherLayout({
+      rows: 7,
+      columns: 80,
+      itemCount: 7,
+      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+      statusLines: [],
+      footerHints: [],
+    });
+
+    expect(layout).toEqual({
+      statusLines: [],
+      footerHints: [],
+      maxVisibleItems: 2,
+      showOverflow: false,
+    });
   });
 
   it('starts with new chat and keeps help as the final active item', () => {
