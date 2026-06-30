@@ -56,10 +56,5 @@ export const CommonViewMessageSchema = z.discriminatedUnion('command', [
   ErrorMessageSchema,
 ]);
 
-export type SetThemeMessage = z.infer<typeof SetThemeMessageSchema>;
-export type SetDebugModeMessage = z.infer<typeof SetDebugModeMessageSchema>;
 export type StateRestoreMessage = z.infer<typeof StateRestoreMessageSchema>;
-export type WebviewReadyMessage = z.infer<typeof WebviewReadyMessageSchema>;
 export type SwitchViewMessage = z.infer<typeof SwitchViewMessageSchema>;
-export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
-export type CommonViewMessage = z.infer<typeof CommonViewMessageSchema>;

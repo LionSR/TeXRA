@@ -55,9 +55,9 @@ import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 
 type StatusBarColor = 'cyan' | 'yellow' | 'red' | 'dim';
-export type CtrlCAction = 'exit' | 'stop' | 'stop root';
+type CtrlCAction = 'exit' | 'stop' | 'stop root';
 
-export interface StatusBarSegment {
+interface StatusBarSegment {
   readonly text: string;
   readonly color?: StatusBarColor;
   readonly badge?: boolean;
@@ -121,7 +121,7 @@ export interface StatusBarDisplayInput {
   readonly foregroundEscapeAction?: string;
 }
 
-export interface StatusBarDisplay {
+interface StatusBarDisplay {
   readonly left: readonly StatusBarSegment[];
   readonly right?: string;
   readonly bindings: string;
@@ -606,7 +606,7 @@ interface StatusBarVisibleStream {
   readonly status: StreamStatus | undefined;
 }
 
-export interface StatusBarStreamTarget {
+interface StatusBarStreamTarget {
   readonly ctrlCAction: CtrlCAction;
   readonly displaySlice: StreamSlice | undefined;
 }
@@ -797,7 +797,7 @@ export function buildStatusBarDisplay(
   };
 }
 
-export interface StatusBarProps {
+interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
   readonly canStopActiveRun?: () => boolean;
   readonly canStopPendingRunWithoutStream?: () => boolean;
