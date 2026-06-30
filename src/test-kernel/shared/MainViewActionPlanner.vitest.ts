@@ -10,6 +10,18 @@ import {
 } from '@shared/mainView';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 
+function expectValid<T extends { valid: boolean }>(
+  plan: T,
+): asserts plan is Extract<T, { valid: true }> {
+  expect(plan.valid).toBe(true);
+}
+
+function expectInvalid<T extends { valid: boolean }>(
+  plan: T,
+): asserts plan is Extract<T, { valid: false }> {
+  expect(plan.valid).toBe(false);
+}
+
 // ============================================================
 // planPackClean
 // ============================================================
@@ -24,8 +36,7 @@ describe('planPackClean', () => {
 
   it('returns the PACK_SINGLE command for a single file pack', () => {
     const plan = planPackClean(validState, 'pack');
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.PACK_SINGLE);
     expect(plan.payload).toEqual({
@@ -39,8 +50,7 @@ describe('planPackClean', () => {
 
   it('returns the CLEAN_SINGLE command for a single file clean', () => {
     const plan = planPackClean(validState, 'clean');
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.CLEAN_SINGLE);
     expect(plan.payload).toEqual({
@@ -60,8 +70,7 @@ describe('planPackClean', () => {
       },
       'pack',
     );
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.PACK_MULTIPLE);
     expect(plan.payload.inputFiles).toEqual(['chapter1.tex', 'chapter2.tex']);
@@ -78,8 +87,7 @@ describe('planPackClean', () => {
       },
       'clean',
     );
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE);
     expect(plan.payload.inputFiles).toEqual(['appendix.tex']);
@@ -96,8 +104,7 @@ describe('planPackClean', () => {
       },
       'pack',
     );
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.PACK_MULTIPLE);
     expect(plan.payload.inputFiles).toEqual(['chapter1.tex']);
@@ -105,8 +112,7 @@ describe('planPackClean', () => {
 
   it('returns invalid when primaryInput is missing', () => {
     const plan = planPackClean({ ...validState, primaryInput: '' }, 'pack');
-    expect(plan.valid).toBe(false);
-    if (plan.valid) return;
+    expectInvalid(plan);
     expect(plan.message).toBe(
       'Please select all required fields (input file and model)',
     );
@@ -114,8 +120,7 @@ describe('planPackClean', () => {
 
   it('returns invalid when model is missing', () => {
     const plan = planPackClean({ ...validState, model: '' }, 'pack');
-    expect(plan.valid).toBe(false);
-    if (plan.valid) return;
+    expectInvalid(plan);
     expect(plan.message).toBe(
       'Please select all required fields (input file and model)',
     );
@@ -132,8 +137,7 @@ describe('planMerge', () => {
       primaryInput: 'main.tex',
       editedFile: 'main-edited.tex',
     });
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.MERGE);
     expect(plan.payload).toEqual({
@@ -145,8 +149,7 @@ describe('planMerge', () => {
 
   it('returns invalid when primaryInput is missing', () => {
     const plan = planMerge({ primaryInput: '', editedFile: 'edited.tex' });
-    expect(plan.valid).toBe(false);
-    if (plan.valid) return;
+    expectInvalid(plan);
     expect(plan.message).toBe(
       'Please select both input and edited files to merge',
     );
@@ -154,8 +157,7 @@ describe('planMerge', () => {
 
   it('returns invalid when editedFile is missing', () => {
     const plan = planMerge({ primaryInput: 'main.tex', editedFile: '' });
-    expect(plan.valid).toBe(false);
-    if (plan.valid) return;
+    expectInvalid(plan);
     expect(plan.message).toBe(
       'Please select both input and edited files to merge',
     );
@@ -163,8 +165,7 @@ describe('planMerge', () => {
 
   it('returns invalid when both files are missing', () => {
     const plan = planMerge({ primaryInput: '', editedFile: '' });
-    expect(plan.valid).toBe(false);
-    if (plan.valid) return;
+    expectInvalid(plan);
     expect(plan.message).toBe(
       'Please select both input and edited files to merge',
     );
@@ -181,8 +182,7 @@ describe('planCompare', () => {
       { baseFile: 'old.tex', editedFile: 'new.tex' },
       MAIN_VIEW_COMMANDS.COMPARE,
     );
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.COMPARE);
     expect(plan.payload).toEqual({
@@ -197,8 +197,7 @@ describe('planCompare', () => {
       { baseFile: 'old.tex', editedFile: 'new.tex' },
       MAIN_VIEW_COMMANDS.ACCEPT_EDITED,
     );
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.ACCEPT_EDITED);
     expect(plan.payload).toEqual({
@@ -212,8 +211,7 @@ describe('planCompare', () => {
       { baseFile: '', editedFile: 'new.tex' },
       MAIN_VIEW_COMMANDS.COMPARE,
     );
-    expect(plan.valid).toBe(false);
-    if (plan.valid) return;
+    expectInvalid(plan);
     expect(plan.message).toBe(
       'Please select both base and edited files to compare',
     );
@@ -224,8 +222,7 @@ describe('planCompare', () => {
       { baseFile: 'old.tex', editedFile: '' },
       MAIN_VIEW_COMMANDS.COMPARE,
     );
-    expect(plan.valid).toBe(false);
-    if (plan.valid) return;
+    expectInvalid(plan);
     expect(plan.message).toBe(
       'Please select both base and edited files to compare',
     );
@@ -243,8 +240,7 @@ describe('planLatexdiff', () => {
       baseFile: 'old.tex',
       editedFile: 'new.tex',
     });
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.LATEXDIFF);
     expect(plan.payload).toEqual({
@@ -269,8 +265,7 @@ describe('planLatexdiffVC', () => {
       baseFile: 'old.tex',
       commitHash: 'abc123',
     });
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.LATEXDIFFVC);
     expect(plan.payload).toEqual({
@@ -297,8 +292,7 @@ describe('planLatexdiffVCPack', () => {
 
   it('returns PACK_LATEXDIFFVC for the pack action', () => {
     const plan = planLatexdiffVCPack(state, 'pack');
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC);
     expect(plan.payload).toEqual({
@@ -314,8 +308,7 @@ describe('planLatexdiffVCPack', () => {
 
   it('returns CLEAN_LATEXDIFFVC for the clean action', () => {
     const plan = planLatexdiffVCPack(state, 'clean');
-    expect(plan.valid).toBe(true);
-    if (!plan.valid) return;
+    expectValid(plan);
 
     expect(plan.command).toBe(MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC);
     expect(plan.payload).toEqual({

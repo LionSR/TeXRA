@@ -30,26 +30,35 @@ function jsonResponse(data: unknown): Response {
   });
 }
 
+/**
+ * Stubs `fetch` so each call is captured (with its auth state) and resolves
+ * only when the test resolves the matching {@link PendingFetch}.
+ */
+function stubPendingFetch() {
+  const pending: PendingFetch[] = [];
+  const fetchMock = vi.fn(
+    (_url: string | URL | Request, init?: RequestInit): Promise<Response> =>
+      new Promise<Response>((resolve) => {
+        pending.push({
+          hasAuth: Boolean(
+            (init?.headers as Record<string, string> | undefined)
+              ?.Authorization,
+          ),
+          resolve,
+        });
+      }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  return { pending, fetchMock };
+}
+
 describe('TierService', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it('does not let stale anonymous tier fetches clear authenticated spend status', async () => {
-    const pending: PendingFetch[] = [];
-    const fetchMock = vi.fn(
-      (_url: string | URL | Request, init?: RequestInit): Promise<Response> =>
-        new Promise<Response>((resolve) => {
-          pending.push({
-            hasAuth: Boolean(
-              (init?.headers as Record<string, string> | undefined)
-                ?.Authorization,
-            ),
-            resolve,
-          });
-        }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+    const { pending } = stubPendingFetch();
 
     const service = new TierService('https://example.test');
 
@@ -81,20 +90,7 @@ describe('TierService', () => {
   });
 
   it('dedupes concurrent fetches for the same auth state', async () => {
-    const pending: PendingFetch[] = [];
-    const fetchMock = vi.fn(
-      (_url: string | URL | Request, init?: RequestInit): Promise<Response> =>
-        new Promise<Response>((resolve) => {
-          pending.push({
-            hasAuth: Boolean(
-              (init?.headers as Record<string, string> | undefined)
-                ?.Authorization,
-            ),
-            resolve,
-          });
-        }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+    const { pending, fetchMock } = stubPendingFetch();
 
     const service = new TierService('https://example.test');
 
@@ -114,20 +110,7 @@ describe('TierService', () => {
   });
 
   it('prevents an in-flight auth fetch from repopulating snapshots after clearCache', async () => {
-    const pending: PendingFetch[] = [];
-    const fetchMock = vi.fn(
-      (_url: string | URL | Request, init?: RequestInit): Promise<Response> =>
-        new Promise<Response>((resolve) => {
-          pending.push({
-            hasAuth: Boolean(
-              (init?.headers as Record<string, string> | undefined)
-                ?.Authorization,
-            ),
-            resolve,
-          });
-        }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+    const { pending } = stubPendingFetch();
 
     const service = new TierService('https://example.test');
 

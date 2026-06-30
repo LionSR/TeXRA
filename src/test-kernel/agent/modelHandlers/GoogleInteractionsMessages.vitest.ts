@@ -60,6 +60,17 @@ function textOf(step: Step): string {
     .join('');
 }
 
+/** Stub the media loader so no platform / filesystem is touched. */
+function stubImageMediaLoader(handler: ModelHandlerGoogleInteractions): void {
+  (
+    handler as unknown as {
+      createMediaMessage: (files: unknown[]) => Promise<Interactions.Content[]>;
+    }
+  ).createMediaMessage = async () => [
+    { type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' },
+  ];
+}
+
 describe('ModelHandlerGoogleInteractions message construction', () => {
   it('initializeMessages builds a single user_input step from prefix + request', async () => {
     const handler = createHandler();
@@ -95,16 +106,7 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
       { type: 'user_input', content: [{ type: 'text', text: 'caption' }] },
     ];
 
-    // Stub the media loader so no platform / filesystem is touched.
-    (
-      handler as unknown as {
-        createMediaMessage: (
-          files: unknown[],
-        ) => Promise<Interactions.Content[]>;
-      }
-    ).createMediaMessage = async () => [
-      { type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' },
-    ];
+    stubImageMediaLoader(handler);
 
     await handler.addMediaToUserMessage(steps, [
       { absolutePath: '/x/fig.png' } as never,
@@ -117,16 +119,7 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
 
   it('initializeMessages includes typed media content when mediaFiles are provided', async () => {
     const handler = createHandler();
-    // Stub the media loader so no platform / filesystem is touched.
-    (
-      handler as unknown as {
-        createMediaMessage: (
-          files: unknown[],
-        ) => Promise<Interactions.Content[]>;
-      }
-    ).createMediaMessage = async () => [
-      { type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' },
-    ];
+    stubImageMediaLoader(handler);
 
     const steps = await handler.initializeMessages('PREFIX', 'REQUEST', [
       { absolutePath: '/x/fig.png' } as never,
