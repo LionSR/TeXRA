@@ -189,9 +189,13 @@ export class SettingsProfileController {
     return defs.map((def) => ({
       ...def,
       value: def.globalStateKey
-        ? (this.deps.globalState.get<boolean>(def.globalStateKey, false) ??
+        ? (this.deps.globalState.get<boolean>(
+            def.globalStateKey,
+            def.defaultValue ?? false,
+          ) ??
+          def.defaultValue ??
           false)
-        : this.deps.getConfig<boolean>(def.key, false),
+        : this.deps.getConfig<boolean>(def.key, def.defaultValue ?? false),
     }));
   }
 }
