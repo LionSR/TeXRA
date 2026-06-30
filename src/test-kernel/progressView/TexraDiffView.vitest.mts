@@ -47,13 +47,6 @@ class MockWorker {
   terminate = vi.fn();
 }
 
-function setHostTheme(
-  element: TexraDiffView,
-  theme: (typeof DESKTOP_THEME_KIND)[keyof typeof DESKTOP_THEME_KIND],
-): void {
-  element.hostTheme = theme;
-}
-
 function installDom(): JSDOM {
   const dom = new JSDOM('<!doctype html><body class="vscode-dark"></body>', {
     url: 'http://localhost',
@@ -96,7 +89,7 @@ afterEach(() => {
 
 describe('texra-diff-view', () => {
   it('mounts with mock content and creates a read-only Monaco diff editor', async () => {
-    const dom = installDom();
+    installDom();
     const disposeOriginal = vi.fn();
     const disposeProposed = vi.fn();
     const diffEditor = {
@@ -147,13 +140,13 @@ describe('texra-diff-view', () => {
     });
     expect(setTheme).toHaveBeenCalledWith('vs-dark');
 
-    setHostTheme(element, DESKTOP_THEME_KIND.LIGHT);
+    element.hostTheme = DESKTOP_THEME_KIND.LIGHT;
     await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('vs'));
 
-    setHostTheme(element, DESKTOP_THEME_KIND.HIGH_CONTRAST);
+    element.hostTheme = DESKTOP_THEME_KIND.HIGH_CONTRAST;
     await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('hc-black'));
 
-    setHostTheme(element, DESKTOP_THEME_KIND.DARK);
+    element.hostTheme = DESKTOP_THEME_KIND.DARK;
     await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('vs-dark'));
   });
 });

@@ -37,27 +37,18 @@ function sourcedSkill(options: {
 
 describe('SkillsListForm helpers', () => {
   it('formats skill select rows with source labels and descriptions', () => {
-    expect(
-      skillSelectItemsForTui([
-        sourcedSkill({
-          name: 'proof-audit',
-          description: 'Review mathematical proof steps.',
-          scope: 'project',
-          label: 'project',
-        }),
-      ]),
-    ).toEqual([
+    const skill = sourcedSkill({
+      name: 'proof-audit',
+      description: 'Review mathematical proof steps.',
+      scope: 'project',
+      label: 'project',
+    });
+
+    expect(skillSelectItemsForTui([skill])).toEqual([
       {
         value: {
           name: 'proof-audit',
-          activationPrompt: formatSkillActivationPrompt(
-            sourcedSkill({
-              name: 'proof-audit',
-              description: 'Review mathematical proof steps.',
-              scope: 'project',
-              label: 'project',
-            }),
-          ),
+          activationPrompt: formatSkillActivationPrompt(skill),
         },
         label: 'proof-audit',
         description: 'project · Review mathematical proof steps.',

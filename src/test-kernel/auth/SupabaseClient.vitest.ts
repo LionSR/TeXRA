@@ -39,6 +39,17 @@ async function withRelayTokenEnv(
   }
 }
 
+function createTokenProvider(
+  overrides: Partial<AuthTokenProvider> = {},
+): AuthTokenProvider {
+  return {
+    whenReady: async () => {},
+    ensureFreshToken: async () => 'access-token',
+    getSessionTokens: async () => null,
+    ...overrides,
+  };
+}
+
 describe('SupabaseClient', () => {
   afterEach(() => {
     SupabaseClient.resetForTests();
@@ -46,14 +57,12 @@ describe('SupabaseClient', () => {
   });
 
   it('reads session tokens through the registered token provider', async () => {
-    const provider: AuthTokenProvider = {
-      whenReady: async () => {},
-      ensureFreshToken: async () => 'access-token',
+    const provider = createTokenProvider({
       getSessionTokens: async () => ({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       }),
-    };
+    });
 
     SupabaseClient.setAuthProvider(provider);
 
@@ -65,14 +74,13 @@ describe('SupabaseClient', () => {
 
   it('keeps session tokens separate from CI relay bearer tokens', async () => {
     const relayToken = `${RELAY_CI_TOKEN_PREFIX}abcdef`;
-    const provider: AuthTokenProvider = {
-      whenReady: async () => {},
+    const provider = createTokenProvider({
       ensureFreshToken: async () => 'session-token',
       getSessionTokens: async () => ({
         accessToken: 'session-token',
         refreshToken: 'refresh-token',
       }),
-    };
+    });
 
     await withRelayTokenEnv(relayToken, async () => {
       SupabaseClient.setAuthProvider(provider);
@@ -85,14 +93,13 @@ describe('SupabaseClient', () => {
 
   it('falls back to the session once the relay token is known-rejected', async () => {
     const relayToken = `${RELAY_CI_TOKEN_PREFIX}rejected`;
-    const provider: AuthTokenProvider = {
-      whenReady: async () => {},
+    const provider = createTokenProvider({
       ensureFreshToken: async () => 'session-token',
       getSessionTokens: async () => ({
         accessToken: 'session-token',
         refreshToken: 'refresh-token',
       }),
-    };
+    });
 
     await withRelayTokenEnv(relayToken, async () => {
       SupabaseClient.setAuthProvider(provider);
@@ -116,11 +123,9 @@ describe('SupabaseClient', () => {
 
   it('treats a relay-401 refresh as rejection of a static CI token', async () => {
     const relayToken = `${RELAY_CI_TOKEN_PREFIX}got401`;
-    const provider: AuthTokenProvider = {
-      whenReady: async () => {},
+    const provider = createTokenProvider({
       ensureFreshToken: async () => 'session-token',
-      getSessionTokens: async () => null,
-    };
+    });
 
     await withRelayTokenEnv(relayToken, async () => {
       SupabaseClient.setAuthProvider(provider);
@@ -138,13 +143,11 @@ describe('SupabaseClient', () => {
   });
 
   it('returns null when the token provider throws while reading session tokens', async () => {
-    const provider: AuthTokenProvider = {
-      whenReady: async () => {},
-      ensureFreshToken: async () => 'access-token',
+    const provider = createTokenProvider({
       getSessionTokens: async () => {
         throw new Error('storage unavailable');
       },
-    };
+    });
 
     SupabaseClient.setAuthProvider(provider);
 
@@ -153,11 +156,9 @@ describe('SupabaseClient', () => {
 
   it('waits for token provider readiness', async () => {
     const readiness = createDeferred();
-    const provider: AuthTokenProvider = {
+    const provider = createTokenProvider({
       whenReady: () => readiness.promise,
-      ensureFreshToken: async () => 'access-token',
-      getSessionTokens: async () => null,
-    };
+    });
 
     SupabaseClient.initialize('https://example.supabase.co', 'public-key');
     SupabaseClient.setAuthProvider(provider);
@@ -177,13 +178,11 @@ describe('SupabaseClient', () => {
   });
 
   it('reports not ready when token provider readiness fails', async () => {
-    const provider: AuthTokenProvider = {
+    const provider = createTokenProvider({
       whenReady: async () => {
         throw new Error('host auth unavailable');
       },
-      ensureFreshToken: async () => 'access-token',
-      getSessionTokens: async () => null,
-    };
+    });
 
     SupabaseClient.initialize('https://example.supabase.co', 'public-key');
     SupabaseClient.setAuthProvider(provider);

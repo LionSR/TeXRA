@@ -19,82 +19,53 @@ describe('CLI external inquiry modal', () => {
       .join(KEY_HINT_SEPARATOR);
   }
 
-  it('preserves the skip hint when the full hint row is one column too wide', () => {
+  it.each([
+    {
+      name: 'preserves the skip hint when the full hint row is one column too wide',
+      questionScrollable: true,
+      maxColumns: 76,
+      expected:
+        'PgUp/PgDn scroll · Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip',
+    },
+    {
+      name: 'compacts before using a hint row that exactly matches the width',
+      questionScrollable: true,
+      maxColumns: 77,
+      expected:
+        'PgUp/PgDn scroll · Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip',
+    },
+    {
+      name: 'keeps the full scrollable hint row when there is spare width',
+      questionScrollable: true,
+      maxColumns: 101,
+      expected:
+        'PgUp/PgDn question · Ctrl-Y copy question · Enter submit answer · Ctrl-R reject with note · Esc skip',
+    },
+    {
+      name: 'keeps copy and core actions before scroll in tight modals',
+      questionScrollable: true,
+      maxColumns: 58,
+      expected: 'Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip',
+    },
+    {
+      name: 'keeps core external inquiry actions visible in narrow modals',
+      questionScrollable: true,
+      maxColumns: 56,
+      expected: 'Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip',
+    },
+    {
+      name: 'continues shrinking non-scrollable hints when compact actions do not fit',
+      questionScrollable: false,
+      maxColumns: 20,
+      expected: 'Esc skip',
+    },
+  ])('$name', ({ questionScrollable, maxColumns, expected }) => {
     const text = hintText(
-      externalInquiryKeyHintsForWidth({
-        questionScrollable: true,
-        maxColumns: 76,
-      }),
+      externalInquiryKeyHintsForWidth({ questionScrollable, maxColumns }),
     );
 
-    expect(text).toBe(
-      'PgUp/PgDn scroll · Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip',
-    );
-    expect(text.length).toBeLessThan(76);
-  });
-
-  it('compacts before using a hint row that exactly matches the width', () => {
-    const text = hintText(
-      externalInquiryKeyHintsForWidth({
-        questionScrollable: true,
-        maxColumns: 77,
-      }),
-    );
-
-    expect(text).toBe(
-      'PgUp/PgDn scroll · Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip',
-    );
-    expect(text.length).toBeLessThan(77);
-  });
-
-  it('keeps the full scrollable hint row when there is spare width', () => {
-    const text = hintText(
-      externalInquiryKeyHintsForWidth({
-        questionScrollable: true,
-        maxColumns: 101,
-      }),
-    );
-
-    expect(text).toBe(
-      'PgUp/PgDn question · Ctrl-Y copy question · Enter submit answer · Ctrl-R reject with note · Esc skip',
-    );
-    expect(text.length).toBeLessThan(101);
-  });
-
-  it('keeps copy and core actions before scroll in tight modals', () => {
-    const text = hintText(
-      externalInquiryKeyHintsForWidth({
-        questionScrollable: true,
-        maxColumns: 58,
-      }),
-    );
-
-    expect(text).toBe('Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip');
-    expect(text.length).toBeLessThan(58);
-  });
-
-  it('keeps core external inquiry actions visible in narrow modals', () => {
-    const text = hintText(
-      externalInquiryKeyHintsForWidth({
-        questionScrollable: true,
-        maxColumns: 56,
-      }),
-    );
-
-    expect(text).toBe('Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip');
-    expect(text.length).toBeLessThan(56);
-  });
-
-  it('continues shrinking non-scrollable hints when compact actions do not fit', () => {
-    const text = hintText(
-      externalInquiryKeyHintsForWidth({
-        questionScrollable: false,
-        maxColumns: 20,
-      }),
-    );
-
-    expect(text).toBe('Esc skip');
-    expect(text.length).toBeLessThan(20);
+    expect(text).toBe(expected);
+    expect(text.length).toBeLessThan(maxColumns);
   });
 
   it('bounds long question text to the foreground row budget', () => {

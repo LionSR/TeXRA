@@ -5,22 +5,23 @@ import { describe, expect, it } from 'vitest';
 // Local imports - progress view
 import { processMarkdownContent } from '@progressView/frontend/formatters/markdownRenderer';
 
+function renderToDocument(markdown: string): Document {
+  const rendered = processMarkdownContent(markdown);
+  return new JSDOM(`<main>${rendered}</main>`).window.document;
+}
+
 describe('processMarkdownContent security', () => {
   it('escapes raw HTML before rendering markdown output', () => {
-    const rendered = processMarkdownContent('<script>alert(1)</script>');
-    const dom = new JSDOM(`<main>${rendered}</main>`);
+    const doc = renderToDocument('<script>alert(1)</script>');
 
-    expect(dom.window.document.querySelector('script')).toBeNull();
-    expect(dom.window.document.body.textContent).toContain(
-      '<script>alert(1)</script>',
-    );
+    expect(doc.querySelector('script')).toBeNull();
+    expect(doc.body.textContent).toContain('<script>alert(1)</script>');
   });
 
   it('escapes restored LaTeX reference labels before HTML insertion', () => {
     const label = 'bad" onclick="alert(1)<img src=x>';
-    const rendered = processMarkdownContent(`See \\ref{${label}}.`);
-    const dom = new JSDOM(`<main>${rendered}</main>`);
-    const ref = dom.window.document.querySelector('.latex-ref');
+    const doc = renderToDocument(`See \\ref{${label}}.`);
+    const ref = doc.querySelector('.latex-ref');
 
     expect(ref).not.toBeNull();
     expect(ref?.getAttribute('onclick')).toBeNull();
@@ -28,6 +29,6 @@ describe('processMarkdownContent security', () => {
     expect(ref?.getAttribute('role')).toBe('button');
     expect(ref?.getAttribute('tabindex')).toBe('0');
     expect(ref?.textContent).toBe(`\\ref{${label}}`);
-    expect(dom.window.document.querySelector('img')).toBeNull();
+    expect(doc.querySelector('img')).toBeNull();
   });
 });

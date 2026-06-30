@@ -36,6 +36,12 @@ async function readJsonFile<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, 'utf8')) as T;
 }
 
+async function readWorkspaceMarker(
+  storagePath: string,
+): Promise<{ path: string }> {
+  return readJsonFile<{ path: string }>(join(storagePath, '_workspace.json'));
+}
+
 describe('workspace storage defaults', () => {
   const tempDirs: string[] = [];
 
@@ -88,14 +94,12 @@ describe('workspace storage defaults', () => {
     expect(firstStoragePath).not.toBe(secondStoragePath);
     await expect(pathExists(firstStoragePath)).resolves.toBe(true);
     await expect(pathExists(secondStoragePath)).resolves.toBe(true);
-    await expect(
-      readJsonFile<{ path: string }>(join(firstStoragePath, '_workspace.json')),
-    ).resolves.toMatchObject({ path: '/workspace/a' });
-    await expect(
-      readJsonFile<{ path: string }>(
-        join(secondStoragePath, '_workspace.json'),
-      ),
-    ).resolves.toMatchObject({ path: '/workspace/b' });
+    await expect(readWorkspaceMarker(firstStoragePath)).resolves.toMatchObject({
+      path: '/workspace/a',
+    });
+    await expect(readWorkspaceMarker(secondStoragePath)).resolves.toMatchObject(
+      { path: '/workspace/b' },
+    );
   });
 
   it('migrates legacy hash-only workspace storage when possible', async () => {
@@ -121,9 +125,9 @@ describe('workspace storage defaults', () => {
     await expect(pathExists(join(storagePath, 'marker.txt'))).resolves.toBe(
       true,
     );
-    await expect(
-      readJsonFile<{ path: string }>(join(storagePath, '_workspace.json')),
-    ).resolves.toMatchObject({ path: workspacePath });
+    await expect(readWorkspaceMarker(storagePath)).resolves.toMatchObject({
+      path: workspacePath,
+    });
   });
 
   it('uses the same workspace storage rule for node hosts', async () => {

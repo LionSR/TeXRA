@@ -58,6 +58,37 @@ describe('LaTeXdiffService shadow output', () => {
     );
   }
 
+  // Shared setup for the two runDiff tests: write base/revised sources into a
+  // fresh workspace, install the node-backed platform, and return the source
+  // and shadow output directories.
+  async function prepareDiffWorkspace(
+    prefix: string,
+    baseContent: string,
+    revisedContent: string,
+  ): Promise<{ sourceDir: string; shadowDir: string }> {
+    const tempDir = await makeTempDir(prefix);
+    const sourceDir = path.join(tempDir, 'workspace');
+    const shadowDir = path.join(tempDir, 'executions', 'run-1', 'diff', 'r1');
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(path.join(sourceDir, 'base.tex'), baseContent);
+    await writeFile(path.join(sourceDir, 'revised.tex'), revisedContent);
+    await installNodeBackedPlatform(sourceDir, path.join(tempDir, 'storage'));
+    return { sourceDir, shadowDir };
+  }
+
+  async function runShadowDiff(sourceDir: string, shadowDir: string) {
+    const { LaTeXdiffService } = await import('@latex/latexdiff');
+    const service = new LaTeXdiffService('test');
+    return service.runDiff(
+      createExternalLocation(path.join(sourceDir, 'base.tex')),
+      createExternalLocation(path.join(sourceDir, 'revised.tex')),
+      '_diff',
+      false,
+      undefined,
+      { outputDirectory: shadowDir },
+    );
+  }
+
   beforeEach(() => {
     mocks.executeCommand.mockResolvedValue({
       success: true,
@@ -77,30 +108,13 @@ describe('LaTeXdiffService shadow output', () => {
   });
 
   it('writes generated diff sources to the requested output directory', async () => {
-    const { LaTeXdiffService } = await import('@latex/latexdiff');
-    const tempDir = await makeTempDir('texra-latexdiff-');
-    const sourceDir = path.join(tempDir, 'workspace');
-    const shadowDir = path.join(tempDir, 'executions', 'run-1', 'diff', 'r1');
-    await mkdir(sourceDir, { recursive: true });
-    await writeFile(
-      path.join(sourceDir, 'base.tex'),
+    const { sourceDir, shadowDir } = await prepareDiffWorkspace(
+      'texra-latexdiff-',
       '\\documentclass{article}\n\\begin{document}\nold\n\\end{document}\n',
-    );
-    await writeFile(
-      path.join(sourceDir, 'revised.tex'),
       '\\documentclass{article}\n\\begin{document}\nnew\n\\end{document}\n',
     );
-    await installNodeBackedPlatform(sourceDir, path.join(tempDir, 'storage'));
 
-    const service = new LaTeXdiffService('test');
-    const result = await service.runDiff(
-      createExternalLocation(path.join(sourceDir, 'base.tex')),
-      createExternalLocation(path.join(sourceDir, 'revised.tex')),
-      '_diff',
-      false,
-      undefined,
-      { outputDirectory: shadowDir },
-    );
+    const result = await runShadowDiff(sourceDir, shadowDir);
 
     expect(result).toMatchObject({ success: true });
     expect(result.diffFileName).toBe('revised_diff.tex');
@@ -113,13 +127,8 @@ describe('LaTeXdiffService shadow output', () => {
   });
 
   it('restores flattened BibTeX blocks to the source bibliography directive', async () => {
-    const { LaTeXdiffService } = await import('@latex/latexdiff');
-    const tempDir = await makeTempDir('texra-latexdiff-bib-');
-    const sourceDir = path.join(tempDir, 'workspace');
-    const shadowDir = path.join(tempDir, 'executions', 'run-1', 'diff', 'r1');
-    await mkdir(sourceDir, { recursive: true });
-    await writeFile(
-      path.join(sourceDir, 'base.tex'),
+    const { sourceDir, shadowDir } = await prepareDiffWorkspace(
+      'texra-latexdiff-bib-',
       [
         '\\documentclass{article}',
         '\\begin{document}',
@@ -129,9 +138,6 @@ describe('LaTeXdiffService shadow output', () => {
         '\\end{document}',
         '',
       ].join('\n'),
-    );
-    await writeFile(
-      path.join(sourceDir, 'revised.tex'),
       [
         '\\documentclass{article}',
         '\\begin{document}',
@@ -142,7 +148,6 @@ describe('LaTeXdiffService shadow output', () => {
         '',
       ].join('\n'),
     );
-    await installNodeBackedPlatform(sourceDir, path.join(tempDir, 'storage'));
     mocks.executeCommand.mockResolvedValueOnce({
       success: true,
       stdout: [
@@ -159,15 +164,7 @@ describe('LaTeXdiffService shadow output', () => {
       stderr: '',
     });
 
-    const service = new LaTeXdiffService('test');
-    const result = await service.runDiff(
-      createExternalLocation(path.join(sourceDir, 'base.tex')),
-      createExternalLocation(path.join(sourceDir, 'revised.tex')),
-      '_diff',
-      false,
-      undefined,
-      { outputDirectory: shadowDir },
-    );
+    const result = await runShadowDiff(sourceDir, shadowDir);
 
     expect(result).toMatchObject({ success: true });
     const diff = await readFile(

@@ -33,21 +33,28 @@ describe('normalizeWriterCategory', () => {
     expect(result.agentCategory).toBe(AgentCategory.Workflow);
   });
 
-  it('leaves a real tool-use agent untouched', () => {
-    state.ready = true;
-    const input = config('research', AgentCategory.ToolUse);
-    expect(normalizeWriterCategory(input, 'research')).toBe(input);
-  });
-
-  it('leaves Workflow configs untouched', () => {
-    state.ready = true;
-    const input = config('bash', AgentCategory.Workflow);
-    expect(normalizeWriterCategory(input, 'bash')).toBe(input);
-  });
-
-  it('does not demote when the registry is not loaded', () => {
-    state.ready = false;
-    const input = config('bash', AgentCategory.ToolUse);
-    expect(normalizeWriterCategory(input, 'bash')).toBe(input);
+  it.each([
+    {
+      name: 'leaves a real tool-use agent untouched',
+      ready: true,
+      agent: 'research',
+      category: AgentCategory.ToolUse,
+    },
+    {
+      name: 'leaves Workflow configs untouched',
+      ready: true,
+      agent: 'bash',
+      category: AgentCategory.Workflow,
+    },
+    {
+      name: 'does not demote when the registry is not loaded',
+      ready: false,
+      agent: 'bash',
+      category: AgentCategory.ToolUse,
+    },
+  ])('$name', ({ ready, agent, category }) => {
+    state.ready = ready;
+    const input = config(agent, category);
+    expect(normalizeWriterCategory(input, agent)).toBe(input);
   });
 });

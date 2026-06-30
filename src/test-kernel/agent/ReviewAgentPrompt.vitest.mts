@@ -33,10 +33,10 @@ function readReviewAgent(): ReviewAgentYaml {
 }
 
 describe('review agent prompt', () => {
-  it('returns audit reports in-band unless the user requested a file', () => {
-    const agent = readReviewAgent();
-    const systemPrompt = agent.prompts.systemPrompt;
+  const agent = readReviewAgent();
+  const systemPrompt = agent.prompts.systemPrompt;
 
+  it('returns audit reports in-band unless the user requested a file', () => {
     expect(systemPrompt).toContain('Return the report in your final response');
     expect(systemPrompt).toContain('when the user explicitly asks');
     expect(systemPrompt).toContain(
@@ -50,9 +50,6 @@ describe('review agent prompt', () => {
   });
 
   it('prefers direct review over computation for elementary facts', () => {
-    const agent = readReviewAgent();
-    const systemPrompt = agent.prompts.systemPrompt;
-
     expect(systemPrompt).toContain(
       'Prefer direct mathematical review when a claim can be checked by hand',
     );

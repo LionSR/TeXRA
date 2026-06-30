@@ -17,15 +17,30 @@ async function loadDesktopDiffHost(): Promise<
   )) as typeof import('../../../packages/desktop/src/main/desktopDiffHost');
 }
 
+async function writeDiffPair(
+  originalName: string,
+  proposedName: string,
+  originalText = 'a\n',
+  proposedText = 'b\n',
+): Promise<{ originalPath: string; proposedPath: string }> {
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
+  const originalPath = path.join(tempDir, originalName);
+  const proposedPath = path.join(tempDir, proposedName);
+  await Promise.all([
+    writeFile(originalPath, originalText, 'utf8'),
+    writeFile(proposedPath, proposedText, 'utf8'),
+  ]);
+  return { originalPath, proposedPath };
+}
+
 describe('createDesktopDiffHost', () => {
   it('falls back to a generated patch file when no renderer is wired', async () => {
-    const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
-    const originalPath = path.join(tempDir, 'original.txt');
-    const proposedPath = path.join(tempDir, 'proposed.txt');
-    await Promise.all([
-      writeFile(originalPath, 'hello\nold\n', 'utf8'),
-      writeFile(proposedPath, 'hello\nnew\n', 'utf8'),
-    ]);
+    const { originalPath, proposedPath } = await writeDiffPair(
+      'original.txt',
+      'proposed.txt',
+      'hello\nold\n',
+      'hello\nnew\n',
+    );
     const openedPaths: string[] = [];
     const { createDesktopDiffHost } = await loadDesktopDiffHost();
 
@@ -48,13 +63,12 @@ describe('createDesktopDiffHost', () => {
   });
 
   it('posts desktop:showDiff to the renderer when wired', async () => {
-    const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
-    const originalPath = path.join(tempDir, 'doc.tex');
-    const proposedPath = path.join(tempDir, 'doc.proposed.tex');
-    await Promise.all([
-      writeFile(originalPath, 'hello\nold\n', 'utf8'),
-      writeFile(proposedPath, 'hello\nnew\n', 'utf8'),
-    ]);
+    const { originalPath, proposedPath } = await writeDiffPair(
+      'doc.tex',
+      'doc.proposed.tex',
+      'hello\nold\n',
+      'hello\nnew\n',
+    );
     const posted: unknown[] = [];
     const openPath = vi.fn(async () => {
       // External fallback should not be invoked when postToRenderer is set.
@@ -93,13 +107,10 @@ describe('createDesktopDiffHost', () => {
     // wired at startup or BrowserWindow already destroyed. Bot review
     // (#3815, Copilot + Cursor): the host previously silently dropped
     // the diff in this case.
-    const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
-    const originalPath = path.join(tempDir, 'a.tex');
-    const proposedPath = path.join(tempDir, 'b.tex');
-    await Promise.all([
-      writeFile(originalPath, 'a\n', 'utf8'),
-      writeFile(proposedPath, 'b\n', 'utf8'),
-    ]);
+    const { originalPath, proposedPath } = await writeDiffPair(
+      'a.tex',
+      'b.tex',
+    );
     const openedPaths: string[] = [];
     const { createDesktopDiffHost } = await loadDesktopDiffHost();
     const host = createDesktopDiffHost({
@@ -120,13 +131,10 @@ describe('createDesktopDiffHost', () => {
   });
 
   it('falls back to the external editor when postToRenderer throws', async () => {
-    const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
-    const originalPath = path.join(tempDir, 'a.tex');
-    const proposedPath = path.join(tempDir, 'b.tex');
-    await Promise.all([
-      writeFile(originalPath, 'a\n', 'utf8'),
-      writeFile(proposedPath, 'b\n', 'utf8'),
-    ]);
+    const { originalPath, proposedPath } = await writeDiffPair(
+      'a.tex',
+      'b.tex',
+    );
     const openedPaths: string[] = [];
     const { createDesktopDiffHost } = await loadDesktopDiffHost();
     // Suppress the deliberate console.error from the host so the test
@@ -157,13 +165,10 @@ describe('createDesktopDiffHost', () => {
   });
 
   it('honors forceExternal even when postToRenderer is wired', async () => {
-    const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
-    const originalPath = path.join(tempDir, 'a.txt');
-    const proposedPath = path.join(tempDir, 'b.txt');
-    await Promise.all([
-      writeFile(originalPath, 'a\n', 'utf8'),
-      writeFile(proposedPath, 'b\n', 'utf8'),
-    ]);
+    const { originalPath, proposedPath } = await writeDiffPair(
+      'a.txt',
+      'b.txt',
+    );
     const posted: unknown[] = [];
     const openedPaths: string[] = [];
     const { createDesktopDiffHost } = await loadDesktopDiffHost();

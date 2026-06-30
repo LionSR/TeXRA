@@ -54,18 +54,14 @@ describe('CLI memory formatting', () => {
   });
 
   it('accepts display, storage, and shorthand paths', () => {
-    expect(resolveCliMemoryStoragePath('/memories/project.md')).toBe(
+    for (const input of [
+      '/memories/project.md',
       'memories/project.md',
-    );
-    expect(resolveCliMemoryStoragePath('memories/project.md')).toBe(
-      'memories/project.md',
-    );
-    expect(resolveCliMemoryStoragePath('memories\\project.md')).toBe(
-      'memories/project.md',
-    );
-    expect(resolveCliMemoryStoragePath('project.md')).toBe(
-      'memories/project.md',
-    );
+      'memories\\project.md',
+      'project.md',
+    ]) {
+      expect(resolveCliMemoryStoragePath(input)).toBe('memories/project.md');
+    }
   });
 
   it('rejects absolute paths outside the memory display root', () => {

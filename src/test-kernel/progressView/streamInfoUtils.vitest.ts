@@ -18,26 +18,21 @@ function streamInfo(name: string, creationTimestamp: number): StreamTabInfo {
 }
 
 describe('compareByNewestCreationTime', () => {
-  it('orders streams newest first by creation time', () => {
-    const streams = [streamInfo('older', 100), streamInfo('newer', 200)].sort(
-      compareByNewestCreationTime,
-    );
-
+  it.each([
+    {
+      title: 'orders streams newest first by creation time',
+      streams: [streamInfo('older', 100), streamInfo('newer', 200)],
+      expected: ['newer', 'older'],
+    },
+    {
+      title: 'uses stream name as a stable tie-breaker',
+      streams: [streamInfo('b-stream', 100), streamInfo('a-stream', 100)],
+      expected: ['a-stream', 'b-stream'],
+    },
+  ])('$title', ({ streams, expected }) => {
     assert.deepEqual(
-      streams.map((stream) => stream.name),
-      ['newer', 'older'],
-    );
-  });
-
-  it('uses stream name as a stable tie-breaker', () => {
-    const streams = [
-      streamInfo('b-stream', 100),
-      streamInfo('a-stream', 100),
-    ].sort(compareByNewestCreationTime);
-
-    assert.deepEqual(
-      streams.map((stream) => stream.name),
-      ['a-stream', 'b-stream'],
+      streams.sort(compareByNewestCreationTime).map((stream) => stream.name),
+      expected,
     );
   });
 });

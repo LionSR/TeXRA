@@ -43,6 +43,13 @@ async function loadDesktopPreviewHost(
   ) as Promise<DesktopPreviewHostModule>;
 }
 
+function makeShell(openPathResult = '') {
+  return {
+    openExternal: vi.fn(async (_url: string) => {}),
+    openPath: vi.fn(async (_path: string) => openPathResult),
+  };
+}
+
 describe('desktop preview host', () => {
   const tempDirs: string[] = [];
 
@@ -63,15 +70,24 @@ describe('desktop preview host', () => {
     return dir;
   }
 
+  async function makeOverlayFixture(): Promise<{
+    texPath: string;
+    pdfPath: string;
+  }> {
+    const dir = await makeTempDir();
+    const texPath = path.join(dir, 'paper.tex');
+    const pdfPath = path.join(dir, 'paper.pdf');
+    await writeFile(texPath, '\\documentclass{article}');
+    await writeFile(pdfPath, 'pdf');
+    return { texPath, pdfPath };
+  }
+
   it('opens existing files through Electron shell.openPath', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
     const dir = await makeTempDir();
     const filePath = path.join(dir, 'output.pdf');
     await writeFile(filePath, 'pdf');
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell });
 
@@ -83,10 +99,7 @@ describe('desktop preview host', () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
     const missingPath = path.join(await makeTempDir(), 'missing.pdf');
     const showErrorMessage = vi.fn();
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage });
 
@@ -112,10 +125,7 @@ describe('desktop preview host', () => {
     );
     const filePath = path.join(await makeTempDir(), 'blocked.pdf');
     const showErrorMessage = vi.fn();
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage });
 
@@ -134,10 +144,7 @@ describe('desktop preview host', () => {
     const filePath = path.join(dir, 'blocked.pdf');
     await writeFile(filePath, 'pdf');
     const showErrorMessage = vi.fn();
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => 'No associated application'),
-    };
+    const shell = makeShell('No associated application');
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage });
 
@@ -162,10 +169,7 @@ describe('desktop preview host', () => {
       '\\documentclass{article}\\begin{document}x\\end{document}',
     );
     await writeFile(pdfPath, 'pdf');
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell });
 
@@ -188,10 +192,7 @@ describe('desktop preview host', () => {
     const dir = await makeTempDir();
     const pdfPath = path.join(dir, 'preview.pdf');
     await writeFile(pdfPath, 'pdf');
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell });
 
@@ -216,10 +217,7 @@ describe('desktop preview host', () => {
       '\\documentclass{article}\\begin{document}x\\end{document}',
     );
     const showErrorMessage = vi.fn();
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage });
 
@@ -243,10 +241,7 @@ describe('desktop preview host', () => {
       '\\documentclass{article}\\begin{document}x\\end{document}',
     );
     const showErrorMessage = vi.fn();
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage });
 
@@ -260,10 +255,7 @@ describe('desktop preview host', () => {
 
   it('opens external URLs through Electron shell.openExternal', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const shell = makeShell();
 
     const host = createDesktopPreviewHost({ shell });
 
@@ -275,15 +267,8 @@ describe('desktop preview host', () => {
 
   it('prefers the in-app PDF overlay when postToRenderer accepts the post', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const dir = await makeTempDir();
-    const texPath = path.join(dir, 'paper.tex');
-    const pdfPath = path.join(dir, 'paper.pdf');
-    await writeFile(texPath, '\\documentclass{article}');
-    await writeFile(pdfPath, 'pdf');
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const { texPath, pdfPath } = await makeOverlayFixture();
+    const shell = makeShell();
     const postToRenderer = vi.fn((_message: unknown) => true);
 
     const host = createDesktopPreviewHost({ shell, postToRenderer });
@@ -303,15 +288,8 @@ describe('desktop preview host', () => {
 
   it('falls back to external viewer when postToRenderer returns false', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const dir = await makeTempDir();
-    const texPath = path.join(dir, 'paper.tex');
-    const pdfPath = path.join(dir, 'paper.pdf');
-    await writeFile(texPath, '\\documentclass{article}');
-    await writeFile(pdfPath, 'pdf');
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const { texPath, pdfPath } = await makeOverlayFixture();
+    const shell = makeShell();
     const postToRenderer = vi.fn((_message: unknown) => false);
 
     const host = createDesktopPreviewHost({ shell, postToRenderer });
@@ -323,15 +301,8 @@ describe('desktop preview host', () => {
 
   it('falls back to external viewer when postToRenderer throws', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const dir = await makeTempDir();
-    const texPath = path.join(dir, 'paper.tex');
-    const pdfPath = path.join(dir, 'paper.pdf');
-    await writeFile(texPath, '\\documentclass{article}');
-    await writeFile(pdfPath, 'pdf');
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const { texPath, pdfPath } = await makeOverlayFixture();
+    const shell = makeShell();
     const postToRenderer = vi.fn((_message: unknown) => {
       throw new Error('IPC bridge not ready');
     });
@@ -350,15 +321,8 @@ describe('desktop preview host', () => {
 
   it('forceExternal=true skips the overlay path entirely', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const dir = await makeTempDir();
-    const texPath = path.join(dir, 'paper.tex');
-    const pdfPath = path.join(dir, 'paper.pdf');
-    await writeFile(texPath, '\\documentclass{article}');
-    await writeFile(pdfPath, 'pdf');
-    const shell = {
-      openExternal: vi.fn(async (_url: string) => {}),
-      openPath: vi.fn(async (_path: string) => ''),
-    };
+    const { texPath, pdfPath } = await makeOverlayFixture();
+    const shell = makeShell();
     const postToRenderer = vi.fn((_message: unknown) => true);
 
     const host = createDesktopPreviewHost({

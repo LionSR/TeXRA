@@ -8,74 +8,64 @@ import { describe, it } from 'vitest';
 import { applyReplacements } from '@replacement/engine';
 import { EQUATION_STYLE_REPLACEMENTS } from '@replacement/rulesRegex';
 
+function convert(input: string): string {
+  return applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
+    processMathUnicode: false,
+  });
+}
+
+const multiLineCaption = [
+  '\\caption{',
+  '  This is a long caption',
+  '  that spans multiple lines',
+  '}',
+].join('\n');
+
+const embeddedNewlineCaption = [
+  '\\caption{  ',
+  '  First line',
+  '  Second line',
+  '  }',
+].join('\n');
+
 describe('caption spacing normalization', () => {
-  it('trims tabs in single-line caption', () => {
-    const input = '\\caption{\tMy caption\t}';
-    const expected = '\\caption{My caption}';
-    const result = applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
-  });
-
-  it('trims spaces in single-line caption', () => {
-    const input = '\\caption{  My caption  }';
-    const expected = '\\caption{My caption}';
-    const result = applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
-  });
-
-  it('trims mixed spaces and tabs in single-line caption', () => {
-    const input = '\\caption{ \tMy caption\t }';
-    const expected = '\\caption{My caption}';
-    const result = applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
-  });
-
-  it('preserves multi-line captions', () => {
-    const input = [
-      '\\caption{',
-      '  This is a long caption',
-      '  that spans multiple lines',
-      '}',
-    ].join('\n');
-    const expected = input;
-    const result = applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
-  });
-
-  it('trims caption* variants', () => {
-    const input = '\\caption*{\tSpecial caption\t}';
-    const expected = '\\caption*{Special caption}';
-    const result = applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
-  });
-
-  it('preserves nested braces within captions', () => {
-    const input = '\\caption{  Text with {nested braces}  }';
-    const expected = '\\caption{Text with {nested braces}}';
-    const result = applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
-  });
-
-  it('keeps captions with embedded newlines unchanged even with surrounding spaces', () => {
-    const input = ['\\caption{  ', '  First line', '  Second line', '  }'].join(
-      '\n',
-    );
-    const expected = input;
-    const result = applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
-    assert.strictEqual(result, expected);
+  it.each([
+    {
+      name: 'trims tabs in single-line caption',
+      input: '\\caption{\tMy caption\t}',
+      expected: '\\caption{My caption}',
+    },
+    {
+      name: 'trims spaces in single-line caption',
+      input: '\\caption{  My caption  }',
+      expected: '\\caption{My caption}',
+    },
+    {
+      name: 'trims mixed spaces and tabs in single-line caption',
+      input: '\\caption{ \tMy caption\t }',
+      expected: '\\caption{My caption}',
+    },
+    {
+      name: 'preserves multi-line captions',
+      input: multiLineCaption,
+      expected: multiLineCaption,
+    },
+    {
+      name: 'trims caption* variants',
+      input: '\\caption*{\tSpecial caption\t}',
+      expected: '\\caption*{Special caption}',
+    },
+    {
+      name: 'preserves nested braces within captions',
+      input: '\\caption{  Text with {nested braces}  }',
+      expected: '\\caption{Text with {nested braces}}',
+    },
+    {
+      name: 'keeps captions with embedded newlines unchanged even with surrounding spaces',
+      input: embeddedNewlineCaption,
+      expected: embeddedNewlineCaption,
+    },
+  ])('$name', ({ input, expected }) => {
+    assert.strictEqual(convert(input), expected);
   });
 });

@@ -1,11 +1,8 @@
-// Third-party imports
-
-// Node.js built-in imports
 import * as assert from 'node:assert';
 import * as path from 'node:path';
-import { describe, it, afterEach } from 'vitest';
 
-// Local imports - latex helpers
+import { afterEach, describe, it } from 'vitest';
+
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
@@ -13,24 +10,28 @@ import {
 } from '@latex/extractBibliography';
 import { WorkspaceFS } from '@utils/files';
 
-// Local imports - utils
-
 describe('extractBibliography helpers', () => {
   const originalRead = WorkspaceFS.read;
   const originalExists = WorkspaceFS.exists;
 
+  function stubRead(impl: typeof originalRead): void {
+    (WorkspaceFS as unknown as { read: typeof originalRead }).read = impl;
+  }
+
+  function stubExists(impl: typeof originalExists): void {
+    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists = impl;
+  }
+
   afterEach(() => {
-    (WorkspaceFS as unknown as { read: typeof originalRead }).read =
-      originalRead;
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      originalExists;
+    stubRead(originalRead);
+    stubExists(originalExists);
   });
 
   it('collects bibliography paths and citation keys', async () => {
     const texPath = path.join('chapters', 'main.tex');
     const expectedBibPath = path.join('chapters', 'references.bib');
 
-    (WorkspaceFS as unknown as { read: typeof originalRead }).read =
+    stubRead(
       async () => `
       % comment
       \\documentclass{article}
@@ -38,9 +39,9 @@ describe('extractBibliography helpers', () => {
       Some text \\cite{alpha , beta}
       More citations \\nocite{gamma}
       % \\cite{ignored}
-    `;
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async (file: string) => file === expectedBibPath;
+    `,
+    );
+    stubExists(async (file: string) => file === expectedBibPath);
 
     const result = await extractBibliographyContext(texPath);
 
@@ -62,10 +63,8 @@ describe('extractBibliography helpers', () => {
       \\nocite{*}
     `;
 
-    (WorkspaceFS as unknown as { read: typeof originalRead }).read = async () =>
-      texContent;
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async () => true;
+    stubRead(async () => texContent);
+    stubExists(async () => true);
 
     const first = await extractBibliographyContext(texPath);
     const second = await extractBibliographyContext(texPath);
@@ -82,13 +81,13 @@ describe('extractBibliography helpers', () => {
   it('marks missing bibliography files and ignores empty citations', async () => {
     const texPath = 'paper.tex';
 
-    (WorkspaceFS as unknown as { read: typeof originalRead }).read =
+    stubRead(
       async () => `
       \\bibliography{bib/one, bib/two.bib, } % trailing comma
       \\cite{first} \\cite{second, third}
-    `;
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async (file: string) => file === path.join('bib', 'two.bib');
+    `,
+    );
+    stubExists(async (file: string) => file === path.join('bib', 'two.bib'));
 
     const result = await extractBibliographyContext(texPath);
 
@@ -113,8 +112,7 @@ describe('extractBibliography helpers', () => {
   title = {Beta Book},
 }`;
 
-    (WorkspaceFS as unknown as { read: typeof originalRead }).read = async () =>
-      expectedContent;
+    stubRead(async () => expectedContent);
 
     const { entries, missingKeys } = await loadBibliographyEntries(
       ['references.bib'],
@@ -144,8 +142,7 @@ describe('extractBibliography helpers', () => {
   title = {Beta Book},
 }`;
 
-    (WorkspaceFS as unknown as { read: typeof originalRead }).read = async () =>
-      expectedContent;
+    stubRead(async () => expectedContent);
 
     const { entries, missingKeys } = await loadBibliographyEntries(
       ['references.bib'],

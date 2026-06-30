@@ -13,6 +13,19 @@ import {
   createFakePlatform,
 } from '../support/FakePlatform';
 
+type FsRecord = {
+  type: number;
+  ctime: number;
+  mtime: number;
+  content?: Uint8Array;
+};
+
+// Reaches into the in-memory provider's private record map for timestamp and
+// implicit-directory assertions.
+function fsRecords(fs: FakeFileSystemProvider): Map<string, FsRecord> {
+  return (fs as unknown as { records: Map<string, FsRecord> }).records;
+}
+
 describe('FakePlatform', () => {
   it('provides overridable platform services for tests', async () => {
     const platform = createFakePlatform({
@@ -163,12 +176,7 @@ describe('FakePlatform', () => {
     const fs = new FakeFileSystemProvider({
       '/workspace/docs/a.txt': 'A',
     });
-    const records = (
-      fs as unknown as {
-        records: Map<string, { type: number; ctime: number; mtime: number }>;
-      }
-    ).records;
-    const sourceRecord = records.get('/workspace/docs/a.txt');
+    const sourceRecord = fsRecords(fs).get('/workspace/docs/a.txt');
     assert.ok(sourceRecord);
     sourceRecord.ctime = 1;
     sourceRecord.mtime = 2;
@@ -291,12 +299,7 @@ describe('FakePlatform', () => {
       '/workspace/source/a.txt': 'A',
       '/workspace/source/nested/b.txt': 'B',
     });
-    const records = (
-      fs as unknown as {
-        records: Map<string, { type: number; ctime: number; mtime: number }>;
-      }
-    ).records;
-    for (const record of records.values()) {
+    for (const record of fsRecords(fs).values()) {
       record.ctime = 1;
       record.mtime = 1;
     }
@@ -382,15 +385,7 @@ describe('FakePlatform', () => {
   it('reports implicit readDirectory path prefixes as directories', async () => {
     const fs = new FakeFileSystemProvider();
     await fs.createDirectory('/workspace');
-    const records = (
-      fs as unknown as {
-        records: Map<
-          string,
-          { type: number; ctime: number; mtime: number; content?: Uint8Array }
-        >;
-      }
-    ).records;
-    records.set('/workspace/implicit/file.txt', {
+    fsRecords(fs).set('/workspace/implicit/file.txt', {
       type: FileType.File,
       ctime: Date.now(),
       mtime: Date.now(),

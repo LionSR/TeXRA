@@ -47,50 +47,46 @@ describe('desktop package verifier metafile paths', () => {
 });
 
 describe('desktop package verifier target inference', () => {
-  it('uses the packaged artifact path for arch-specific macOS apps', () => {
-    expect(
-      expectedCodexPlatformKeysFromLabel(
+  it.each<{ desc: string; label: string; expected: string[] }>([
+    {
+      desc: 'uses the packaged artifact path for arch-specific macOS apps (arm64)',
+      label:
         'packages/desktop/dist-packaged/mac-arm64/TeXRA.app/Contents/Resources/app.asar',
-      ),
-    ).toEqual(['darwin-arm64']);
-    expect(
-      expectedCodexPlatformKeysFromLabel(
+      expected: ['darwin-arm64'],
+    },
+    {
+      desc: 'uses the packaged artifact path for arch-specific macOS apps (x64)',
+      label:
         'packages/desktop/dist-packaged/mac-x64/TeXRA.app/Contents/Resources/app.asar',
-      ),
-    ).toEqual(['darwin-x64']);
-  });
-
-  it('keeps universal macOS apps on both Darwin Codex binaries', () => {
-    expect(
-      expectedCodexPlatformKeysFromLabel(
+      expected: ['darwin-x64'],
+    },
+    {
+      desc: 'keeps universal macOS apps on both Darwin Codex binaries',
+      label:
         'packages/desktop/dist-packaged/mac-universal/TeXRA.app/Contents/Resources/app.asar',
-      ),
-    ).toEqual(['darwin-x64', 'darwin-arm64']);
-  });
-
-  it('uses Linux and Windows architecture labels instead of the verifier host', () => {
-    expect(
-      expectedCodexPlatformKeysFromLabel(
-        'packages/desktop/dist-packaged/TeXRA-0.37.8-linux-arm64.AppImage',
-      ),
-    ).toEqual(['linux-arm64']);
-    expect(
-      expectedCodexPlatformKeysFromLabel(
-        'packages/desktop/dist-packaged/TeXRA-0.37.8-win-x64.exe',
-      ),
-    ).toEqual(['win32-x64']);
-    expect(
-      expectedCodexPlatformKeysFromLabel(
-        'packages/desktop/dist-packaged/TeXRA-0.37.8-win32-arm64.exe',
-      ),
-    ).toEqual(['win32-arm64']);
-  });
-
-  it('does not classify Darwin labels as Windows', () => {
-    expect(
-      expectedCodexPlatformKeysFromLabel(
-        'packages/desktop/dist-packaged/TeXRA-0.37.8-darwin-x64.zip',
-      ),
-    ).toEqual([]);
+      expected: ['darwin-x64', 'darwin-arm64'],
+    },
+    {
+      desc: 'uses the Linux arm64 architecture label instead of the verifier host',
+      label: 'packages/desktop/dist-packaged/TeXRA-0.37.8-linux-arm64.AppImage',
+      expected: ['linux-arm64'],
+    },
+    {
+      desc: 'uses the win-x64 architecture label instead of the verifier host',
+      label: 'packages/desktop/dist-packaged/TeXRA-0.37.8-win-x64.exe',
+      expected: ['win32-x64'],
+    },
+    {
+      desc: 'uses the win32-arm64 architecture label instead of the verifier host',
+      label: 'packages/desktop/dist-packaged/TeXRA-0.37.8-win32-arm64.exe',
+      expected: ['win32-arm64'],
+    },
+    {
+      desc: 'does not classify Darwin labels as Windows',
+      label: 'packages/desktop/dist-packaged/TeXRA-0.37.8-darwin-x64.zip',
+      expected: [],
+    },
+  ])('$desc', ({ label, expected }) => {
+    expect(expectedCodexPlatformKeysFromLabel(label)).toEqual(expected);
   });
 });

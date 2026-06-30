@@ -8,45 +8,46 @@ import { describe, it } from 'vitest';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 
 describe('stripCriticizeAnnotations', () => {
-  it('removes a whole-line \\criticize and its trailing newline', () => {
-    const input = `before\n\\criticize{a}{b}{c}\nafter`;
-    const { content, count } = stripCriticizeAnnotations(input);
-    assert.strictEqual(content, `before\nafter`);
-    assert.strictEqual(count, 1);
-  });
-
-  it('removes a whole-line \\criticize with leading indentation', () => {
-    const input = `before\n  \\criticize{a}{b}{c}\nafter`;
-    const { content, count } = stripCriticizeAnnotations(input);
-    assert.strictEqual(content, `before\nafter`);
-    assert.strictEqual(count, 1);
-  });
-
-  it('preserves trailing text when \\criticize is followed by other content on the same line', () => {
-    const input = `\\criticize{a}{b}{c} trailing text`;
-    const { content, count } = stripCriticizeAnnotations(input);
-    assert.strictEqual(content, ` trailing text`);
-    assert.strictEqual(count, 1);
-  });
-
-  it('preserves surrounding prose when \\criticize appears inline', () => {
-    const input = `This sentence \\criticize{a}{b}{c} continues on.`;
-    const { content, count } = stripCriticizeAnnotations(input);
-    assert.strictEqual(content, `This sentence  continues on.`);
-    assert.strictEqual(count, 1);
-  });
-
-  it('handles nested braces inside \\criticize arguments', () => {
-    const input = `\\criticize{note with \\textbf{bold}}{high}{0.9}\n`;
-    const { content, count } = stripCriticizeAnnotations(input);
-    assert.strictEqual(content, ``);
-    assert.strictEqual(count, 1);
-  });
-
-  it('is a no-op when content has no \\criticize', () => {
-    const input = `no annotations here`;
-    const { content, count } = stripCriticizeAnnotations(input);
-    assert.strictEqual(content, input);
-    assert.strictEqual(count, 0);
+  it.each([
+    {
+      name: 'removes a whole-line \\criticize and its trailing newline',
+      input: `before\n\\criticize{a}{b}{c}\nafter`,
+      content: `before\nafter`,
+      count: 1,
+    },
+    {
+      name: 'removes a whole-line \\criticize with leading indentation',
+      input: `before\n  \\criticize{a}{b}{c}\nafter`,
+      content: `before\nafter`,
+      count: 1,
+    },
+    {
+      name: 'preserves trailing text when \\criticize is followed by other content on the same line',
+      input: `\\criticize{a}{b}{c} trailing text`,
+      content: ` trailing text`,
+      count: 1,
+    },
+    {
+      name: 'preserves surrounding prose when \\criticize appears inline',
+      input: `This sentence \\criticize{a}{b}{c} continues on.`,
+      content: `This sentence  continues on.`,
+      count: 1,
+    },
+    {
+      name: 'handles nested braces inside \\criticize arguments',
+      input: `\\criticize{note with \\textbf{bold}}{high}{0.9}\n`,
+      content: ``,
+      count: 1,
+    },
+    {
+      name: 'is a no-op when content has no \\criticize',
+      input: `no annotations here`,
+      content: `no annotations here`,
+      count: 0,
+    },
+  ])('$name', ({ input, content, count }) => {
+    const result = stripCriticizeAnnotations(input);
+    assert.strictEqual(result.content, content);
+    assert.strictEqual(result.count, count);
   });
 });

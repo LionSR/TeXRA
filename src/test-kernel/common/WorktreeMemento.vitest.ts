@@ -36,15 +36,27 @@ describe('WorktreeMemento', () => {
   const repoRoot = '/repo/main';
   const namespacedKey = `worktree:${repoRoot}:${sharedKey}`;
 
-  it('reads and writes shared keys through repo-namespaced global state', async () => {
-    const workspaceState = new FakeMemento();
-    const globalState = new FakeMemento(new Map([[namespacedKey, ['review']]]));
+  function setup(
+    initial: {
+      workspace?: Map<string, unknown>;
+      global?: Map<string, unknown>;
+    } = {},
+  ) {
+    const workspaceState = new FakeMemento(initial.workspace);
+    const globalState = new FakeMemento(initial.global);
     const memento = new WorktreeMemento(
       workspaceState,
       globalState,
       repoRoot,
       new Set([sharedKey]),
     );
+    return { workspaceState, globalState, memento };
+  }
+
+  it('reads and writes shared keys through repo-namespaced global state', async () => {
+    const { workspaceState, globalState, memento } = setup({
+      global: new Map([[namespacedKey, ['review']]]),
+    });
 
     expect(memento.get(sharedKey, [])).toEqual(['review']);
     await memento.update(sharedKey, ['latexFixer']);
@@ -53,14 +65,9 @@ describe('WorktreeMemento', () => {
   });
 
   it('migrates legacy workspace values before returning defaults', async () => {
-    const workspaceState = new FakeMemento(new Map([[sharedKey, ['correct']]]));
-    const globalState = new FakeMemento();
-    const memento = new WorktreeMemento(
-      workspaceState,
-      globalState,
-      repoRoot,
-      new Set([sharedKey]),
-    );
+    const { workspaceState, globalState, memento } = setup({
+      workspace: new Map([[sharedKey, ['correct']]]),
+    });
 
     expect(memento.get(sharedKey, [])).toEqual(['correct']);
     expect(globalState.get(namespacedKey)).toEqual(['correct']);
@@ -69,16 +76,10 @@ describe('WorktreeMemento', () => {
   });
 
   it('clears legacy workspace values when shared keys are updated', async () => {
-    const workspaceState = new FakeMemento(new Map([[sharedKey, ['stale']]]));
-    const globalState = new FakeMemento(
-      new Map([[namespacedKey, ['current']]]),
-    );
-    const memento = new WorktreeMemento(
-      workspaceState,
-      globalState,
-      repoRoot,
-      new Set([sharedKey]),
-    );
+    const { workspaceState, globalState, memento } = setup({
+      workspace: new Map([[sharedKey, ['stale']]]),
+      global: new Map([[namespacedKey, ['current']]]),
+    });
 
     await memento.update(sharedKey, undefined);
 
@@ -88,16 +89,9 @@ describe('WorktreeMemento', () => {
   });
 
   it('leaves non-shared keys in workspace state', async () => {
-    const workspaceState = new FakeMemento(
-      new Map([[localKey, { one: true }]]),
-    );
-    const globalState = new FakeMemento();
-    const memento = new WorktreeMemento(
-      workspaceState,
-      globalState,
-      repoRoot,
-      new Set([sharedKey]),
-    );
+    const { workspaceState, globalState, memento } = setup({
+      workspace: new Map([[localKey, { one: true }]]),
+    });
 
     expect(memento.get(localKey)).toEqual({ one: true });
     await memento.update(localKey, { two: true });
@@ -106,14 +100,7 @@ describe('WorktreeMemento', () => {
   });
 
   it('reports only keys with stored values', () => {
-    const workspaceState = new FakeMemento(new Map([[localKey, true]]));
-    const globalState = new FakeMemento();
-    const memento = new WorktreeMemento(
-      workspaceState,
-      globalState,
-      repoRoot,
-      new Set([sharedKey]),
-    );
+    const { memento } = setup({ workspace: new Map([[localKey, true]]) });
 
     expect(memento.keys()).toEqual([localKey]);
   });

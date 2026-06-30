@@ -1,7 +1,12 @@
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const originalGitHubToken = process.env.GITHUB_TOKEN;
+
+beforeEach(() => {
+  vi.resetModules();
+  process.env.GITHUB_TOKEN = 'gh-env-token';
+});
 
 afterEach(() => {
   if (originalGitHubToken === undefined) {
@@ -14,18 +19,12 @@ afterEach(() => {
 
 describe('getGitHubToken', () => {
   it('uses the GITHUB_TOKEN fallback before platform initialization', async () => {
-    vi.resetModules();
-    process.env.GITHUB_TOKEN = 'gh-env-token';
-
     const { getGitHubToken } = await import('@tools/github/githubAuth');
 
     await expect(getGitHubToken()).resolves.toBe('gh-env-token');
   });
 
   it('prefers the platform secret when the platform is initialized', async () => {
-    vi.resetModules();
-    process.env.GITHUB_TOKEN = 'gh-env-token';
-
     const [{ initPlatform }, { createFakePlatform }, githubAuth] =
       await Promise.all([
         import('@platform/platform'),

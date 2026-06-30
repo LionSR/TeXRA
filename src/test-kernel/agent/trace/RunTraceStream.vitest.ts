@@ -37,12 +37,7 @@ describe('AgentTrace stream output', () => {
   it('coalesces streaming text updates and flushes on finalize', () => {
     vi.useFakeTimers();
 
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
-
-    try {
-      const logger = createRunTrace('stream').trace;
+    withStore((store, logger) => {
       const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
       stream.append('a');
@@ -71,20 +66,13 @@ describe('AgentTrace stream output', () => {
 
       vi.runOnlyPendingTimers();
       expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('abcd');
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    });
   });
 
   it('drains pending stream updates for shutdown persistence', () => {
     vi.useFakeTimers();
 
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
-
-    try {
-      const logger = createRunTrace('stream').trace;
+    withStore((store, logger) => {
       const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
       stream.append('a');
@@ -96,9 +84,7 @@ describe('AgentTrace stream output', () => {
       expect(vi.getTimerCount()).toBe(0);
 
       expect(stream.finalize()).toBe('ab');
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    });
   });
 
   it('materializes streams at stream start, before any delta', () => {
@@ -201,12 +187,7 @@ describe('AgentTrace stream output', () => {
   it('accumulates disabled progress streams without scheduled updates', () => {
     vi.useFakeTimers();
 
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
-
-    try {
-      const logger = createRunTrace('stream').trace;
+    withStore((store, logger) => {
       const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
         progressViewEnabled: false,
       });
@@ -219,9 +200,7 @@ describe('AgentTrace stream output', () => {
       expect(vi.getTimerCount()).toBe(0);
       expect(stream.finalize()).toBe('abc');
       expect(store.get('stream')).toBeUndefined();
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    });
   });
 });
 

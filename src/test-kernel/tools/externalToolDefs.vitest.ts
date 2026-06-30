@@ -1,8 +1,8 @@
-// Third-party imports
-import * as assert from 'node:assert';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
 // Node.js built-in imports
+import * as assert from 'node:assert';
+
+// Third-party imports
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform/test support/tools
 import { createFakePlatform } from '@test/support/FakePlatform';
