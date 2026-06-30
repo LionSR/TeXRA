@@ -59,6 +59,12 @@ async function flushDialogTicks(times = 5): Promise<void> {
   }
 }
 
+function pressKey(target: EventTarget, init: KeyboardEventInit): void {
+  target.dispatchEvent(
+    new KeyboardEvent('keydown', { bubbles: true, ...init }),
+  );
+}
+
 describe('desktop command palette', () => {
   // Pure-helper tests still need the Lit/JSDOM globals installed because the
   // module under test imports lit-html at top level. Sharing the same DOM
@@ -227,9 +233,7 @@ describe('desktop command palette', () => {
     const waInput = controller.element.querySelector(
       'wa-input.desktop-command-palette-input',
     )!;
-    waInput.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-    );
+    pressKey(waInput, { key: 'Enter' });
     await flushDialogTicks();
 
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
@@ -280,9 +284,7 @@ describe('desktop command palette', () => {
     const waInput = controller.element.querySelector(
       'wa-input.desktop-command-palette-input',
     )!;
-    waInput.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-    );
+    pressKey(waInput, { key: 'Enter' });
     await flushDialogTicks();
 
     expect(actions.showStream).toHaveBeenCalledWith('stream-proof');
@@ -340,15 +342,11 @@ describe('desktop command palette', () => {
     const waInput = controller.element.querySelector(
       'wa-input.desktop-command-palette-input',
     )!;
-    waInput.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
-    );
+    pressKey(waInput, { key: 'ArrowDown' });
     await flushDialogTicks();
     expect(selectedIndex()).toBe(1);
 
-    waInput.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }),
-    );
+    pressKey(waInput, { key: 'ArrowUp' });
     await flushDialogTicks();
     expect(selectedIndex()).toBe(0);
   });
@@ -367,13 +365,7 @@ describe('desktop command palette', () => {
     const trigger = document.createElement('button');
     document.body.append(trigger);
     trigger.focus();
-    trigger.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'k',
-        metaKey: true,
-        bubbles: true,
-      }),
-    );
+    pressKey(trigger, { key: 'k', metaKey: true });
     await flushDialogTicks();
 
     expect(controller.element.open).toBe(false);
@@ -392,13 +384,7 @@ describe('desktop command palette', () => {
     const search = document.createElement('input');
     document.body.append(search);
     search.focus();
-    search.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'k',
-        metaKey: true,
-        bubbles: true,
-      }),
-    );
+    pressKey(search, { key: 'k', metaKey: true });
     await flushDialogTicks();
 
     expect(controller.element.open).toBe(false);

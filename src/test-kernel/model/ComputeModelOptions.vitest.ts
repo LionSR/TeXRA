@@ -81,6 +81,22 @@ function codexSession(): CodexSession {
   };
 }
 
+async function initSubscriptionPlatform(
+  secrets: Record<string, string> = {},
+): Promise<void> {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(
+    createFakePlatform({
+      config: {
+        'texra.chatgptCodex.preferSubscription': true,
+        'texra.chatgptCodex.subscriptionToolUseOnly': true,
+      },
+      globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+      secrets,
+    }),
+  );
+}
+
 describe('computeModelOptionsData relay quota state', () => {
   beforeEach(() => {
     invalidateApiKeyCache();
@@ -192,16 +208,7 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('does not disable API-key access when ChatGPT subscription is preferred but signed out', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform({
-        config: {
-          'texra.chatgptCodex.preferSubscription': true,
-          'texra.chatgptCodex.subscriptionToolUseOnly': true,
-        },
-        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
-      }),
-    );
+    await initSubscriptionPlatform();
     const access = createModelOptionsAccess({
       useIncludedAccess: false,
       relayQuotaExceeded: false,
@@ -242,19 +249,9 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('shows subscription access only for tool-use availability when the scoped switch is on', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform({
-        config: {
-          'texra.chatgptCodex.preferSubscription': true,
-          'texra.chatgptCodex.subscriptionToolUseOnly': true,
-        },
-        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
-        secrets: {
-          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
-        },
-      }),
-    );
+    await initSubscriptionPlatform({
+      [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
+    });
     const access = createModelOptionsAccess({
       useIncludedAccess: false,
       relayQuotaExceeded: false,
@@ -273,19 +270,9 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('does not advertise subscription access for untagged availability checks under the scoped switch', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform({
-        config: {
-          'texra.chatgptCodex.preferSubscription': true,
-          'texra.chatgptCodex.subscriptionToolUseOnly': true,
-        },
-        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
-        secrets: {
-          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
-        },
-      }),
-    );
+    await initSubscriptionPlatform({
+      [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
+    });
     const access = createModelOptionsAccess(
       {
         useIncludedAccess: false,

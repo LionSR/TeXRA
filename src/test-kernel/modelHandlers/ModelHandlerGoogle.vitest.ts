@@ -1,27 +1,22 @@
-// Third-party imports
-import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
-
 // Standard library imports
+import { strict as assert } from 'node:assert';
 
 // Third-party imports
+import { describe, it } from 'vitest';
 import {
   FinishReason,
   GenerateContentResponse,
   createPartFromText,
+  type Content,
 } from '@google/genai';
+import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
-import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
-// Internal imports
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 
-// Type imports
-import type { Content } from '@google/genai';
-
-describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
-  const handler = new ModelHandlerGoogleGenAI({
+function createGoogleHandler(): ModelHandlerGoogleGenAI {
+  return new ModelHandlerGoogleGenAI({
     name: 'test-google-model',
     label: 'Test Google Model',
     fullName: 'google/test',
@@ -34,6 +29,10 @@ describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
     capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
     openRouterOnly: false,
   });
+}
+
+describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
+  const handler = createGoogleHandler();
 
   const agentSetting = {
     endTag: '</doc>',
@@ -72,19 +71,7 @@ describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
 });
 
 describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
-  const handler = new ModelHandlerGoogleGenAI({
-    name: 'test-google-model',
-    label: 'Test Google Model',
-    fullName: 'google/test',
-    shortName: 'google/test',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 4096,
-    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-    openRouterOnly: false,
-  });
+  const handler = createGoogleHandler();
 
   it('returns the SDK-provided tool call identifier', () => {
     const response: any = {
@@ -115,19 +102,7 @@ describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
 });
 
 describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
-  const handler = new ModelHandlerGoogleGenAI({
-    name: 'test-google-model',
-    label: 'Test Google Model',
-    fullName: 'google/test',
-    shortName: 'google/test',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 4096,
-    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-    openRouterOnly: false,
-  });
+  const handler = createGoogleHandler();
 
   it('omits unsupported identifier fields on follow-up function call parts', async () => {
     const providerCall = {
@@ -167,19 +142,7 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
   // forwards prior turns to the chat session unchanged, splitting off only
   // the final user message which is sent via sendMessage.
   it('forwards prior turns as chat history with SDK function-call ids intact', async () => {
-    const handler = new ModelHandlerGoogleGenAI({
-      name: 'test-google-model',
-      label: 'Test Google Model',
-      fullName: 'google/test',
-      shortName: 'google/test',
-      provider: ModelProvider.GOOGLE,
-      maxOutputTokens: 1024,
-      inputPrice: 0,
-      outputPrice: 0,
-      contextWindow: 4096,
-      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-      openRouterOnly: false,
-    });
+    const handler = createGoogleHandler();
 
     (handler as any).capabilities.supportsTokenCounting = false;
     (handler as any).logger = {
@@ -255,19 +218,7 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
   });
 
   it('aggregates streamed chunks without relying on SDK response promises', async () => {
-    const handler = new ModelHandlerGoogleGenAI({
-      name: 'test-google-model',
-      label: 'Test Google Model',
-      fullName: 'google/test',
-      shortName: 'google/test',
-      provider: ModelProvider.GOOGLE,
-      maxOutputTokens: 1024,
-      inputPrice: 0,
-      outputPrice: 0,
-      contextWindow: 4096,
-      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-      openRouterOnly: false,
-    });
+    const handler = createGoogleHandler();
 
     (handler as any).capabilities.supportsTokenCounting = false;
     handler.setOutputStreaming(true);
@@ -352,19 +303,7 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
   });
 
   it('concatenates automaticFunctionCallingHistory across streamed chunks', async () => {
-    const handler = new ModelHandlerGoogleGenAI({
-      name: 'test-google-model',
-      label: 'Test Google Model',
-      fullName: 'google/test',
-      shortName: 'google/test',
-      provider: ModelProvider.GOOGLE,
-      maxOutputTokens: 1024,
-      inputPrice: 0,
-      outputPrice: 0,
-      contextWindow: 4096,
-      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-      openRouterOnly: false,
-    });
+    const handler = createGoogleHandler();
 
     (handler as any).capabilities.supportsTokenCounting = false;
     handler.setOutputStreaming(true);

@@ -261,22 +261,11 @@ describe('resolveAgentTools delegation roster annotation', () => {
       { name: 'numerics', description: 'Run simulations.', tools: ['bash'] },
     ]);
 
-    const registry = new MapToolRegistry({
-      delegate_agent: {
-        definition: { name: 'delegate_agent' },
-        call: async () => ({ summary: '', output: '' }),
-      },
-    });
-
-    const { tools } = await resolveAgentTools({
-      tools: [
+    const { tools } = await resolveAgentTools(
+      resolveAgentToolsInput([
         { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
-      ],
-      registry,
-      logger: { warn: () => {} },
-      delegationBlocked: false,
-      toolInjections: new ToolInjectionRegistry(),
-    });
+      ]),
+    );
 
     const delegateAgent = tools.find((t) => t.name === 'delegate_agent');
     expect(delegateAgent?.description).toContain(
@@ -298,27 +287,12 @@ describe('resolveAgentTools delegation roster annotation', () => {
       { name: 'research', description: 'Derive and verify.' },
     ]);
 
-    const registry = new MapToolRegistry({
-      delegate_agent: {
-        definition: { name: 'delegate_agent' },
-        call: async () => ({ summary: '', output: '' }),
-      },
-      grep: {
-        definition: { name: 'grep', description: 'Search files.' },
-        call: async () => ({ summary: '', output: '' }),
-      },
-    });
-
-    const { tools } = await resolveAgentTools({
-      tools: [
+    const { tools } = await resolveAgentTools(
+      resolveAgentToolsInput([
         { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
         { name: 'grep', description: 'Search files.' },
-      ],
-      registry,
-      logger: { warn: () => {} },
-      delegationBlocked: false,
-      toolInjections: new ToolInjectionRegistry(),
-    });
+      ]),
+    );
 
     const grep = tools.find((t) => t.name === 'grep');
     expect(grep?.description).toBe('Search files.');

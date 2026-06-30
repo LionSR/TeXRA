@@ -154,6 +154,36 @@ function stubHandlerForTest(
   (handler as any).getStreamingConfig = () => false;
 }
 
+/**
+ * Build a client whose beta.messages.create records each request and returns a
+ * minimal successful message, capturing the recorded options for assertions.
+ */
+function createCapturingAnthropicClient(model: string): {
+  client: any;
+  messageOptions: any[];
+} {
+  const messageOptions: any[] = [];
+  const client = {
+    beta: {
+      messages: {
+        create: async (opts: any) => {
+          messageOptions.push(opts);
+          return {
+            id: 'msg',
+            type: 'message',
+            role: 'assistant',
+            model,
+            content: [{ type: 'text', text: 'ok' }],
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 1, output_tokens: 1 },
+          };
+        },
+      },
+    },
+  } as any;
+  return { client, messageOptions };
+}
+
 class PdfStubAnthropicHandler extends ModelHandlerAnthropic {
   private mediaContent: ContentBlockParam[] = [];
 
@@ -907,25 +937,8 @@ describe('ModelHandlerAnthropic message guards', () => {
         content: [{ type: 'text', text: 'hello', citations: null }],
       },
     ];
-    const messageOptions: any[] = [];
-    const client = {
-      beta: {
-        messages: {
-          create: async (opts: any) => {
-            messageOptions.push(opts);
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-opus-4-6',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            } as any;
-          },
-        },
-      },
-    } as any;
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-opus-4-6');
 
     stubCompactionThresholdPercent(75);
 
@@ -973,25 +986,8 @@ describe('ModelHandlerAnthropic message guards', () => {
         content: [{ type: 'text', text: 'hello', citations: null }],
       },
     ];
-    const messageOptions: any[] = [];
-    const client = {
-      beta: {
-        messages: {
-          create: async (opts: any) => {
-            messageOptions.push(opts);
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-opus-4-8',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            } as any;
-          },
-        },
-      },
-    } as any;
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-opus-4-8');
 
     stubCompactionThresholdPercent(75);
 
@@ -1031,25 +1027,8 @@ describe('ModelHandlerAnthropic message guards', () => {
         content: [{ type: 'text', text: 'hello', citations: null }],
       },
     ];
-    const messageOptions: any[] = [];
-    const client = {
-      beta: {
-        messages: {
-          create: async (opts: any) => {
-            messageOptions.push(opts);
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-opus-4-8',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            } as any;
-          },
-        },
-      },
-    } as any;
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-opus-4-8');
 
     await handler.createResponse({ client, messages, temperature: 0 });
 
@@ -1082,25 +1061,8 @@ describe('ModelHandlerAnthropic message guards', () => {
         content: [{ type: 'text', text: 'hello', citations: null }],
       },
     ];
-    const messageOptions: any[] = [];
-    const client = {
-      beta: {
-        messages: {
-          create: async (opts: any) => {
-            messageOptions.push(opts);
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-opus-4-8',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            } as any;
-          },
-        },
-      },
-    } as any;
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-opus-4-8');
 
     await handler.createResponse({ client, messages, temperature: 0 });
 
@@ -1129,25 +1091,8 @@ describe('ModelHandlerAnthropic message guards', () => {
         content: [{ type: 'text', text: 'hello', citations: null }],
       },
     ];
-    const messageOptions: any[] = [];
-    const client = {
-      beta: {
-        messages: {
-          create: async (opts: any) => {
-            messageOptions.push(opts);
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-opus-4-6',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            } as any;
-          },
-        },
-      },
-    } as any;
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-opus-4-6');
 
     stubCompactionThresholdPercent(0);
 
@@ -1186,25 +1131,8 @@ describe('ModelHandlerAnthropic message guards', () => {
         content: [{ type: 'text', text: 'hello', citations: null }],
       },
     ];
-    const messageOptions: any[] = [];
-    const client = {
-      beta: {
-        messages: {
-          create: async (opts: any) => {
-            messageOptions.push(opts);
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-sonnet-4-5',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            } as any;
-          },
-        },
-      },
-    } as any;
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-sonnet-4-5');
 
     stubCompactionThresholdPercent(75);
 

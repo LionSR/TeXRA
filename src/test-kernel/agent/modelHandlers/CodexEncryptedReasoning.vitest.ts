@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
+import {
+  DEFAULT_MODEL_CAPABILITIES,
+  type ModelConfig,
+  ModelProvider,
+} from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { AgentCategory } from '@shared/schemas/agent';
-import type { ModelConfig } from 'llm-zoo';
 import type { Response } from 'openai/resources/responses/responses';
 
 function loggerStub(): AgentTrace {

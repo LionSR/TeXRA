@@ -19,10 +19,25 @@ import {
   openRegisteredCliSlashForm,
 } from '@cli/chat/tui/commands/slashForms';
 import { LOGIN_FORM_ITEMS } from '@cli/chat/tui/forms/LoginForm';
-import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
+import {
+  cliState,
+  resetCliState,
+  type SessionMeta,
+} from '@cli/chat/tui/state/cliState';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { toErrorMessage } from '@common/errors';
+
+const INCLUDED_CHAT_SESSION: SessionMeta = {
+  agent: 'chat',
+  model: 'deepseekT',
+  modelSource: 'builtin',
+  cwd: '/tmp/workspace',
+  apiMode: 'included',
+  approvalPolicy: 'ask',
+  canDelegate: false,
+  version: 'test',
+};
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -180,16 +195,7 @@ describe('slashRegistry', () => {
   });
 
   it('chains selectable agent picks into the API-mode-aware model picker', async () => {
-    resetCliState({
-      agent: 'chat',
-      model: 'deepseekT',
-      modelSource: 'builtin',
-      cwd: '/tmp/workspace',
-      apiMode: 'included',
-      approvalPolicy: 'ask',
-      canDelegate: false,
-      version: 'test',
-    });
+    resetCliState(INCLUDED_CHAT_SESSION);
     registerBuiltinSlashCommands();
     const agent = listSlashCommands().find((cmd) => cmd.name === 'agent');
 
@@ -217,16 +223,7 @@ describe('slashRegistry', () => {
   });
 
   it('does not advance agent picks into the model form when model selection is unavailable', async () => {
-    resetCliState({
-      agent: 'chat',
-      model: 'deepseekT',
-      modelSource: 'builtin',
-      cwd: '/tmp/workspace',
-      apiMode: 'included',
-      approvalPolicy: 'ask',
-      canDelegate: false,
-      version: 'test',
-    });
+    resetCliState(INCLUDED_CHAT_SESSION);
     registerBuiltinSlashCommands({
       canSelectModel: () => false,
     });
@@ -248,16 +245,7 @@ describe('slashRegistry', () => {
   });
 
   it('marks the agent picker read-only when root selection is closed', () => {
-    resetCliState({
-      agent: 'chat',
-      model: 'deepseekT',
-      modelSource: 'builtin',
-      cwd: '/tmp/workspace',
-      apiMode: 'included',
-      approvalPolicy: 'ask',
-      canDelegate: false,
-      version: 'test',
-    });
+    resetCliState(INCLUDED_CHAT_SESSION);
     registerBuiltinSlashCommands({
       canSelectAgent: () => false,
       canSelectModel: () => true,
@@ -277,16 +265,7 @@ describe('slashRegistry', () => {
   });
 
   it('keeps the model picker selectable after root agent selection is closed', () => {
-    resetCliState({
-      agent: 'chat',
-      model: 'deepseekT',
-      modelSource: 'builtin',
-      cwd: '/tmp/workspace',
-      apiMode: 'included',
-      approvalPolicy: 'ask',
-      canDelegate: false,
-      version: 'test',
-    });
+    resetCliState(INCLUDED_CHAT_SESSION);
     registerBuiltinSlashCommands({
       canSelectAgent: () => false,
       canSelectModel: () => true,
@@ -398,16 +377,7 @@ describe('slashRegistry', () => {
   });
 
   it('routes API picker selection failures to the shared error handler', async () => {
-    resetCliState({
-      agent: 'chat',
-      model: 'deepseekT',
-      modelSource: 'builtin',
-      cwd: '/tmp/workspace',
-      apiMode: 'included',
-      approvalPolicy: 'ask',
-      canDelegate: false,
-      version: 'test',
-    });
+    resetCliState(INCLUDED_CHAT_SESSION);
     const errors: string[] = [];
     registerBuiltinSlashCommands({
       onApiModeSelect: async () => {
@@ -434,16 +404,7 @@ describe('slashRegistry', () => {
   });
 
   it('keeps the API picker open until API mode selection commits', async () => {
-    resetCliState({
-      agent: 'chat',
-      model: 'deepseekT',
-      modelSource: 'builtin',
-      cwd: '/tmp/workspace',
-      apiMode: 'included',
-      approvalPolicy: 'ask',
-      canDelegate: false,
-      version: 'test',
-    });
+    resetCliState(INCLUDED_CHAT_SESSION);
     const selection = deferredSelection();
     registerBuiltinSlashCommands({
       onApiModeSelect: () => selection.promise,

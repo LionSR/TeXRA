@@ -70,6 +70,39 @@ function createLoggerStub(): Partial<AgentTrace> {
   };
 }
 
+function stubHandlerForTest(handler: ModelHandlerDeepSeek): void {
+  handler.setLogger(createLoggerStub() as AgentTrace);
+  (handler as any).getStreamingConfig = () => false;
+}
+
+/**
+ * Build a Chat Completions client whose `create` records the request params and
+ * returns a minimal completion, exposing the captured params for assertions.
+ */
+function createCapturingClient(): { client: any; getParams: () => any } {
+  let capturedParams: any;
+  const client = {
+    chat: {
+      completions: {
+        create: async (params: any) => {
+          capturedParams = params;
+          return {
+            id: 'test-completion',
+            choices: [
+              {
+                index: 0,
+                message: { role: 'assistant', content: 'ok' },
+                finish_reason: 'stop',
+              },
+            ],
+          };
+        },
+      },
+    },
+  };
+  return { client, getParams: () => capturedParams };
+}
+
 describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
   it('deepseek-chat defaults OFF: omits param when reasoning disabled', () => {
     assert.equal(thinkingFor('deepseek-chat', false), undefined);
@@ -169,36 +202,17 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler);
 
-    let capturedParams: any;
-    const client = {
-      chat: {
-        completions: {
-          create: async (params: any) => {
-            capturedParams = params;
-            return {
-              id: 'test-completion',
-              choices: [
-                {
-                  index: 0,
-                  message: { role: 'assistant', content: 'ok' },
-                  finish_reason: 'stop',
-                },
-              ],
-            };
-          },
-        },
-      },
-    };
+    const { client, getParams } = createCapturingClient();
 
     await handler.createResponse({
-      client: client as any,
+      client,
       messages: [{ role: 'user', content: 'think' }],
       temperature: 0,
     });
 
+    const capturedParams = getParams();
     assert.deepEqual(capturedParams.thinking, { type: 'enabled' });
     assert.equal(capturedParams.extra_body, undefined);
     assert.equal(capturedParams.reasoning_effort, 'high');
@@ -216,36 +230,17 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler);
 
-    let capturedParams: any;
-    const client = {
-      chat: {
-        completions: {
-          create: async (params: any) => {
-            capturedParams = params;
-            return {
-              id: 'test-completion',
-              choices: [
-                {
-                  index: 0,
-                  message: { role: 'assistant', content: 'ok' },
-                  finish_reason: 'stop',
-                },
-              ],
-            };
-          },
-        },
-      },
-    };
+    const { client, getParams } = createCapturingClient();
 
     await handler.createResponse({
-      client: client as any,
+      client,
       messages: [{ role: 'user', content: 'think harder' }],
       temperature: 0,
     });
 
+    const capturedParams = getParams();
     assert.equal(capturedParams.thinking, undefined);
     assert.equal(capturedParams.reasoning_effort, 'max');
   });
@@ -262,36 +257,17 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler);
 
-    let capturedParams: any;
-    const client = {
-      chat: {
-        completions: {
-          create: async (params: any) => {
-            capturedParams = params;
-            return {
-              id: 'test-completion',
-              choices: [
-                {
-                  index: 0,
-                  message: { role: 'assistant', content: 'ok' },
-                  finish_reason: 'stop',
-                },
-              ],
-            };
-          },
-        },
-      },
-    };
+    const { client, getParams } = createCapturingClient();
 
     await handler.createResponse({
-      client: client as any,
+      client,
       messages: [{ role: 'user', content: 'think hardest' }],
       temperature: 0,
     });
 
+    const capturedParams = getParams();
     // The internal 'max' tier survives the shared OpenAI clamp (max -> xhigh)
     // and DeepSeek's own validateReasoningEffort (xhigh -> max), landing on the
     // 'max' effort its API accepts rather than leaking an invalid value.
@@ -468,29 +444,9 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
 
   it('sends nullable Chat Completions tools without SDK strict auto-parse validation', async () => {
     const handler = new ModelHandlerDeepSeek(buildConfig());
-    handler.setLogger(createLoggerStub() as AgentTrace);
-    (handler as any).getStreamingConfig = () => false;
+    stubHandlerForTest(handler);
 
-    let capturedParams: any;
-    const client = {
-      chat: {
-        completions: {
-          create: async (params: any) => {
-            capturedParams = params;
-            return {
-              id: 'test-completion',
-              choices: [
-                {
-                  index: 0,
-                  message: { role: 'assistant', content: 'ok' },
-                  finish_reason: 'stop',
-                },
-              ],
-            };
-          },
-        },
-      },
-    };
+    const { client, getParams } = createCapturingClient();
     const tools: ToolDefinition[] = [
       {
         name: 'delegate_workflow',
@@ -508,12 +464,13 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     ];
 
     await handler.createResponse({
-      client: client as any,
+      client,
       messages: [{ role: 'user', content: 'delegate this' }],
       temperature: 0,
       tools,
     });
 
+    const capturedParams = getParams();
     assert.equal(capturedParams.tools[0].function.name, 'delegate_workflow');
     assert.equal(capturedParams.tools[0].function.strict, undefined);
   });

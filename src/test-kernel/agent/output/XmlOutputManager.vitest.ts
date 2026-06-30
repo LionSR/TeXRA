@@ -56,6 +56,16 @@ function createXmlManager(
   );
 }
 
+function splitDocuments(
+  manager: XmlOutputManager,
+): ReturnType<XmlOutputManager['splitScratchpadMultipleOutputXml']> {
+  return manager.splitScratchpadMultipleOutputXml(
+    createExternalLocation('/tmp/run/output.xml'),
+    'documents',
+    0,
+  );
+}
+
 describe('XmlOutputManager', () => {
   beforeEach(async () => {
     formatterMocks.runLatexFormatter.mockReset();
@@ -128,11 +138,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'main.tex',
@@ -161,11 +167,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
     await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
@@ -194,11 +196,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
     await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
@@ -227,11 +225,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
     await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
@@ -260,11 +254,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
     await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
@@ -296,11 +286,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'main.tex',
@@ -328,11 +314,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['declared.tex']);
     await expect(AbsoluteFS.read('/tmp/run/declared.tex')).resolves.toBe(
@@ -359,11 +341,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'main.tex',
@@ -389,11 +367,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'main-file.tex',
@@ -419,11 +393,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       '_macros.tex',
@@ -444,11 +414,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'sections/intro.tex',
@@ -474,11 +440,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'main.tex',
@@ -515,11 +477,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'main.tex',
@@ -557,11 +515,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'main.tex',
@@ -596,11 +550,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['paper.tex']);
     await expect(AbsoluteFS.read('/tmp/run/paper.tex')).resolves.toBe(
@@ -629,11 +579,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['paper.tex']);
     await expect(AbsoluteFS.read('/tmp/run/paper.tex')).resolves.toBe(
@@ -661,11 +607,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents', ['main.tex', 'appendix.tex']);
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['appendix.tex']);
     await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
@@ -685,11 +627,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'main.tex',
@@ -718,11 +656,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'main.tex',
@@ -759,11 +693,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'main.tex',
@@ -799,11 +729,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
     await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
@@ -825,11 +751,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
     await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
@@ -854,11 +776,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
     await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
@@ -885,11 +803,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
     await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
@@ -920,11 +834,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'main.tex',
@@ -952,11 +862,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
     await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
@@ -972,11 +878,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'chunk.tex',
@@ -1004,11 +906,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'chunk.tex',
@@ -1033,11 +931,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual(['chunk.tex']);
     await expect(AbsoluteFS.read('/tmp/run/chunk.tex')).resolves.toBe(
@@ -1057,11 +951,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'sections/main.tex',
@@ -1087,11 +977,7 @@ describe('XmlOutputManager', () => {
     );
     const manager = createXmlManager('documents');
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      'documents',
-      0,
-    );
+    const outputs = await splitDocuments(manager);
 
     expect(outputs.map((output) => output.source)).toEqual([
       'output.tex',

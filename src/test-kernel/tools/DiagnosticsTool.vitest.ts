@@ -12,6 +12,13 @@ afterEach(() => {
   setAddCriticismSink(() => ({ accepted: false, resolvedPath: '' }));
 });
 
+function worktreeContext() {
+  return createRunContext({
+    runtimeHost: { emit: vi.fn() },
+    workingDirectory: '/worktree',
+  });
+}
+
 describe('DiagnosticsTool', () => {
   it('reads diagnostics from the active working directory root', async () => {
     const paths: string[] = [];
@@ -19,12 +26,7 @@ describe('DiagnosticsTool', () => {
       paths.push(path);
       return [];
     });
-    const context = createRunContext({
-      runtimeHost: { emit: vi.fn() },
-      workingDirectory: '/worktree',
-    });
-
-    const result = await withRunContext(context, () =>
+    const result = await withRunContext(worktreeContext(), () =>
       new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
     );
 
@@ -49,12 +51,8 @@ describe('DiagnosticsTool', () => {
 
   it('reports when the criticism sink does not accept (feature disabled)', async () => {
     setAddCriticismSink(() => ({ accepted: false, resolvedPath: '' }));
-    const context = createRunContext({
-      runtimeHost: { emit: vi.fn() },
-      workingDirectory: '/worktree',
-    });
 
-    const result = await withRunContext(context, () =>
+    const result = await withRunContext(worktreeContext(), () =>
       new DiagnosticsTool().call({
         command: 'add',
         path: 'paper.tex',
@@ -74,12 +72,8 @@ describe('DiagnosticsTool', () => {
       entries.push(entry);
       return { accepted: true, resolvedPath: entry.absolutePath };
     });
-    const context = createRunContext({
-      runtimeHost: { emit: vi.fn() },
-      workingDirectory: '/worktree',
-    });
 
-    const result = await withRunContext(context, () =>
+    const result = await withRunContext(worktreeContext(), () =>
       new DiagnosticsTool().call({
         command: 'add',
         path: 'paper.tex',

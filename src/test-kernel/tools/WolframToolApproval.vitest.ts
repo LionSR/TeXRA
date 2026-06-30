@@ -18,6 +18,19 @@ import * as wolframScriptUtils from '@tools/wolfram/wolframScriptUtils';
 import { createRecordingHost } from '../agent/progressTestUtils';
 import { waitForRecordedEvent } from '../support/asyncTestUtils';
 
+async function dispatchWolfram(streamId: StreamTabId, code: string) {
+  const explicit = createRecordingHost();
+  const result = withRunContext(
+    createRunContext({ runtimeHost: explicit.host, streamId }),
+    () => new WolframTool().call({ code }),
+  );
+  const show = await waitForRecordedEvent(
+    explicit.events,
+    'showBashPermission',
+  );
+  return { result, show };
+}
+
 describe('WolframTool approval', () => {
   afterEach(() => {
     cleanupAllApprovals();
@@ -25,7 +38,6 @@ describe('WolframTool approval', () => {
   });
 
   it('requests bash-style approval before executing wolframscript', async () => {
-    const explicit = createRecordingHost();
     const streamId = 'stream:wolfram-approval' as StreamTabId;
     const execute = vi
       .spyOn(wolframScriptUtils, 'executeWolframCode')
@@ -37,15 +49,7 @@ describe('WolframTool approval', () => {
         exitCode: 0,
       });
 
-    const result = withRunContext(
-      createRunContext({ runtimeHost: explicit.host, streamId }),
-      () => new WolframTool().call({ code: '1+1' }),
-    );
-
-    const show = await waitForRecordedEvent(
-      explicit.events,
-      'showBashPermission',
-    );
+    const { result, show } = await dispatchWolfram(streamId, '1+1');
     expect(show.payload).toMatchObject({
       command: wolframApprovalCommand('1+1'),
       allowBypass: true,
@@ -65,19 +69,10 @@ describe('WolframTool approval', () => {
   });
 
   it('does not execute wolframscript when approval is rejected', async () => {
-    const explicit = createRecordingHost();
     const streamId = 'stream:wolfram-rejected' as StreamTabId;
     const execute = vi.spyOn(wolframScriptUtils, 'executeWolframCode');
 
-    const result = withRunContext(
-      createRunContext({ runtimeHost: explicit.host, streamId }),
-      () => new WolframTool().call({ code: '2+2' }),
-    );
-
-    const show = await waitForRecordedEvent(
-      explicit.events,
-      'showBashPermission',
-    );
+    const { result, show } = await dispatchWolfram(streamId, '2+2');
     await handleProgressViewBashApprovalAction({
       requestId: show.payload.requestId,
       action: 'reject',
@@ -92,19 +87,10 @@ describe('WolframTool approval', () => {
   });
 
   it('tells the model not to retry after rejection without feedback', async () => {
-    const explicit = createRecordingHost();
     const streamId = 'stream:wolfram-rejected-default' as StreamTabId;
     const execute = vi.spyOn(wolframScriptUtils, 'executeWolframCode');
 
-    const result = withRunContext(
-      createRunContext({ runtimeHost: explicit.host, streamId }),
-      () => new WolframTool().call({ code: 'Factor[n^7 - n]' }),
-    );
-
-    const show = await waitForRecordedEvent(
-      explicit.events,
-      'showBashPermission',
-    );
+    const { result, show } = await dispatchWolfram(streamId, 'Factor[n^7 - n]');
     await handleProgressViewBashApprovalAction({
       requestId: show.payload.requestId,
       action: 'reject',

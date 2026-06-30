@@ -91,21 +91,37 @@ const compileFailure: CompileFailure = {
   logRelativePath: 'paper.log',
 };
 
+async function createLoadedState(): Promise<ProgressViewState> {
+  const state = new ProgressViewState(new MemoryMementoStorage());
+  await state.snapshots.load([]);
+  return state;
+}
+
+interface SyncCapture {
+  messages: SyncStreamContentPayload[];
+  updater: WebviewUpdater;
+  bridge: WebviewBridge;
+}
+
+function createSyncCapture(): SyncCapture {
+  const messages: SyncStreamContentPayload[] = [];
+  const updater = {
+    isAvailable: () => true,
+    sendSyncStreamContent: (payload: SyncStreamContentPayload) => {
+      messages.push(payload);
+    },
+  } as unknown as WebviewUpdater;
+  const bridge = {
+    syncStream: vi.fn(),
+    clearAll: vi.fn(),
+  } as unknown as WebviewBridge;
+  return { messages, updater, bridge };
+}
+
 describe('progress view snapshot hydration', () => {
   it('syncs the durable display snapshot from the shared progress-view backend', async () => {
-    const state = new ProgressViewState(new MemoryMementoStorage());
-    await state.snapshots.load([]);
-    const messages: SyncStreamContentPayload[] = [];
-    const updater = {
-      isAvailable: () => true,
-      sendSyncStreamContent: (payload: SyncStreamContentPayload) => {
-        messages.push(payload);
-      },
-    } as unknown as WebviewUpdater;
-    const bridge = {
-      syncStream: vi.fn(),
-      clearAll: vi.fn(),
-    } as unknown as WebviewBridge;
+    const state = await createLoadedState();
+    const { messages, updater, bridge } = createSyncCapture();
     const handler = new ProgressEventHandler(
       state,
       updater,
@@ -169,19 +185,8 @@ describe('progress view snapshot hydration', () => {
   });
 
   it('includes host-provided stream controls in synced content', async () => {
-    const state = new ProgressViewState(new MemoryMementoStorage());
-    await state.snapshots.load([]);
-    const messages: SyncStreamContentPayload[] = [];
-    const updater = {
-      isAvailable: () => true,
-      sendSyncStreamContent: (payload: SyncStreamContentPayload) => {
-        messages.push(payload);
-      },
-    } as unknown as WebviewUpdater;
-    const bridge = {
-      syncStream: vi.fn(),
-      clearAll: vi.fn(),
-    } as unknown as WebviewBridge;
+    const state = await createLoadedState();
+    const { messages, updater, bridge } = createSyncCapture();
     const controlledStream = 'stream:controls' as StreamTabId;
     const handler = new ProgressEventHandler(
       state,
