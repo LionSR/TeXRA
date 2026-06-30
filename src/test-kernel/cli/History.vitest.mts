@@ -162,6 +162,32 @@ describe('CLI history runtime', () => {
     );
   });
 
+  it('uses the history description for no-input chat rows', async () => {
+    const chatConfig = {
+      ...config,
+      agent: 'assistant',
+      agentCategory: 'toolUse',
+      inputFiles: [],
+    } as AgentConfig;
+    mocks.listExecutions.mockResolvedValue([
+      {
+        id: 'chat1' as ExecutionId,
+        timestamp: '2026-05-18T11:00:00.000Z',
+        agent: 'assistant',
+        model: 'deepseekT',
+        agentConfig: chatConfig,
+        terminalStatus: 'resumable',
+        description: 'Sketch a proof outline',
+      },
+    ]);
+
+    const entries = await listCliHistoryEntries();
+
+    expect(formatCliHistoryText(entries)).toBe(
+      'chat1\t2026-05-18T11:00:00.000Z\tassistant\tresumable\tSketch a proof outline',
+    );
+  });
+
   it('parses positive history list limits', () => {
     expect(parseHistoryListLimit('1')).toBe(1);
     expect(parseHistoryListLimit('25')).toBe(25);
