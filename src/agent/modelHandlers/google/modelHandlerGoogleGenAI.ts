@@ -25,7 +25,6 @@ import type { StreamHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
-import type { GenerateContentResponseUsageMetadata } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -74,6 +73,7 @@ import type {
   Content,
   Candidate,
   GenerateContentResponse,
+  GenerateContentResponseUsageMetadata,
   FunctionResponsePart,
   Tool as GeminiTool,
   GenerateContentConfig,

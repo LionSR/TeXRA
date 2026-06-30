@@ -193,17 +193,3 @@ export async function removeApiKey(): Promise<void> {
     );
   }
 }
-
-/**
- * Both `texra.setApiKey` and `texra.removeApiKey` are now registered through
- * the shared command registry in `extensionCommandSurface.ts`. The
- * registration function is kept as a no-op so existing call sites in
- * `commands.ts` don't have to be reshuffled — removing the dependency would
- * require dropping it from the `registerCommands` call list, which is
- * outside the scope of this batch.
- */
-export function registerApiKeyCommands(
-  _context: vscode.ExtensionContext,
-): void {
-  // Intentionally empty: handlers moved to the shared registry (#3781 batch 4).
-}

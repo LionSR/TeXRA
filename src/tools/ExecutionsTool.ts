@@ -22,6 +22,7 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   AgentExecutionHandle,
   ProcessExecutionHandle,
@@ -665,10 +666,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     }
 
     const success = currentSession().executions.kill(executionId, {
-      detachActiveChildren: platform().workspaceState.get<boolean>(
-        WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-        false,
-      ),
+      detachActiveChildren: detachSubagentsOnStop(),
     });
     if (success) {
       return { output: `Execution ${executionId} terminated.` };

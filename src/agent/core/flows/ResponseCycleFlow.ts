@@ -13,6 +13,7 @@ import {
   saveCycleDebug,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
+import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
@@ -29,7 +30,7 @@ import { extractScratchpad } from '@utils/text/xmlUtils';
 
 import { FlowTransition } from './FlowTransitions';
 import { ModelInvocationNode } from './ModelInvocationNode';
-import type { CycleParams, ResponseCycleServices } from './CycleServices';
+import type { ResponseCycleServices } from './CycleServices';
 
 // ============================================================================
 // Cycle Fields Schema (Extends Base)
@@ -104,7 +105,7 @@ interface ResponsePrepResult {
  */
 class ResponsePrepNode<C> extends BaseNode<
   ResponseCycleShared,
-  CycleParams,
+  FlowParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
@@ -224,7 +225,7 @@ export function responseCycleToolsForModel<C>(
  */
 class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleShared,
-  CycleParams,
+  FlowParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
@@ -441,7 +442,7 @@ class ResponseProcessNode<C> extends BaseNode<
  */
 class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleShared,
-  CycleParams,
+  FlowParams,
   ResponseCycleServices<C>
 > {
   /** Finalize the round by recording stats and invoking callback. */
@@ -475,7 +476,7 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
  */
 class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleShared,
-  CycleParams,
+  FlowParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
@@ -604,13 +605,13 @@ class ResponseContinuationNode<C> extends BaseNode<
  */
 export function createResponseCycleFlow<C>(): Flow<
   ResponseCycleShared,
-  CycleParams,
+  FlowParams,
   ResponseCycleServices<C>
 > {
   const prepNode = new ResponsePrepNode<C>();
   const invokeNode = new ModelInvocationNode<
     ResponseCycleShared,
-    CycleParams,
+    FlowParams,
     ResponseCycleServices<C>
   >({
     operationName: 'Model invocation',
@@ -644,7 +645,7 @@ export function createResponseCycleFlow<C>(): Flow<
 
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ResponseCycleShared, CycleParams, ResponseCycleServices<C>>(
+  return new Flow<ResponseCycleShared, FlowParams, ResponseCycleServices<C>>(
     prepNode,
   );
 }

@@ -166,7 +166,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
                     .value=${currentAgent}
                     @change=${this.handleAgentSelectChange}
                   >
-                    ${renderAgentOptions(agentOptions, currentAgent)}
+                    ${renderAgentOptions(agentOptions)}
                   </wa-select>
                 </div>
               `
@@ -184,7 +184,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
                     .value=${currentModel}
                     @change=${this.handleSelectChange}
                   >
-                    ${renderModelOptions(modelOptions, currentModel)}
+                    ${renderModelOptions(modelOptions)}
                   </wa-select>
                 </div>
               `

@@ -103,5 +103,3 @@ export interface ToolUseRoundServices<C = unknown> extends CycleRunServices<C> {
   /** Callback when a queued follow-up is consumed (clears UI display). */
   readonly onFollowUpConsumed?: () => void;
 }
-
-export type CycleParams = Record<string, unknown>;
