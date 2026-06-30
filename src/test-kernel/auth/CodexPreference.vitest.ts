@@ -11,9 +11,6 @@ import {
   setPreferCodexSubscription,
 } from '@auth/codex';
 
-// Local imports - platform
-import { initPlatform } from '@platform/platform';
-
 // Local imports - platform types
 import type {
   ConfigInspection,
@@ -21,6 +18,13 @@ import type {
   ConfigTarget,
 } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
+
+async function initTestPlatform(
+  platform: ReturnType<typeof createFakePlatform>,
+): Promise<void> {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(platform);
+}
 
 class FolderOverrideConfigProvider implements ConfigProvider {
   private readonly globalValues = new Map<string, unknown>();
@@ -75,7 +79,7 @@ describe('Codex subscription preference', () => {
     const platform = createFakePlatform({
       config: { [CODEX_PREFER_SUBSCRIPTION_KEY]: false },
     });
-    initPlatform(platform);
+    await initTestPlatform(platform);
 
     const update = await setPreferCodexSubscription(true);
 
@@ -91,7 +95,7 @@ describe('Codex subscription preference', () => {
 
   it('does not treat folder overrides as writable workspace config', async () => {
     const config = new FolderOverrideConfigProvider(false);
-    initPlatform(createFakePlatform({}, { config }));
+    await initTestPlatform(createFakePlatform({}, { config }));
 
     const update = await setPreferCodexSubscription(true);
 
