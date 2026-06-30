@@ -27,20 +27,18 @@ import {
 import {
   AgentCategory,
   type AgentProposalPermission,
-  type BashPermission,
   type ExternalInquiryPermission,
-  type PlanApprovalPermission,
   type ProgressViewOutboundMessage,
   type ProgressViewPlacement,
-  type RetryPermission,
   type StreamTabId,
-  type ToolEditPermission,
-  type UserQuestionPermission,
 } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
-import { ApprovalRequestHandler } from '@shared/progressView/backend/ApprovalRequestHandler';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
-import { createProgressBackendUiConfig } from '@shared/progressView/backend/progressBackendUiConfig';
+import {
+  buildApprovalRequestHandlerSet,
+  createProgressBackendUiConfig,
+  type ApprovalRequestHandlerSet,
+} from '@shared/progressView/backend/progressBackendUiConfig';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
@@ -98,34 +96,7 @@ export class ProgressViewProvider
   private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
   private _mainViewProvider?: MainViewProvider;
 
-  private toolEditHandler!: ApprovalRequestHandler<
-    ToolEditPermission,
-    'requestId'
-  >;
-  private bashApprovalHandler!: ApprovalRequestHandler<
-    BashPermission,
-    'requestId'
-  >;
-  private retryRequestHandler!: ApprovalRequestHandler<
-    RetryPermission,
-    'streamId'
-  >;
-  private agentProposalHandler!: ApprovalRequestHandler<
-    AgentProposalPermission,
-    'proposalId'
-  >;
-  private planApprovalHandler!: ApprovalRequestHandler<
-    PlanApprovalPermission,
-    'approvalId'
-  >;
-  private externalInquiryHandler!: ApprovalRequestHandler<
-    ExternalInquiryPermission,
-    'requestId'
-  >;
-  private userQuestionHandler!: ApprovalRequestHandler<
-    UserQuestionPermission,
-    'requestId'
-  >;
+  private approvalHandlers!: ApprovalRequestHandlerSet;
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
@@ -138,83 +109,38 @@ export class ProgressViewProvider
       getStreamControls: getProgressStreamControls,
       configureUi: ({ webviewUpdater: u }) => {
         const canSend = () => this.canSendToWebview();
-        this.toolEditHandler = new ApprovalRequestHandler(
-          'requestId',
-          (p) => u.showPermission({ kind: PERMISSION_KIND.TOOL_EDIT, data: p }),
-          (id) => u.resolvePermission(PERMISSION_KIND.TOOL_EDIT, id),
+        this.approvalHandlers = buildApprovalRequestHandlerSet({
+          webviewUpdater: u,
           canSend,
-        );
-        this.bashApprovalHandler = new ApprovalRequestHandler(
-          'requestId',
-          (p) => u.showPermission({ kind: PERMISSION_KIND.BASH, data: p }),
-          (id) => u.resolvePermission(PERMISSION_KIND.BASH, id),
-          canSend,
-        );
-        this.retryRequestHandler = new ApprovalRequestHandler(
-          'streamId',
-          (p) => u.showPermission({ kind: PERMISSION_KIND.RETRY, data: p }),
-          (id) => u.resolvePermission(PERMISSION_KIND.RETRY, id),
-          canSend,
-        );
-        this.agentProposalHandler = new ApprovalRequestHandler(
-          'proposalId',
-          (p) => {
-            // Show proposal immediately with basic model dropdown (synchronous)
-            u.showPermission({
-              kind: PERMISSION_KIND.PROPOSAL,
-              data: p,
-              modelOptionsData: buildVisibleBasicModelOptionsData(),
-            });
-            // Then upgrade with availability metadata if possible
-            void this.sendProposalModelOptions(p);
+          overrides: {
+            retry: {
+              show: (p) =>
+                u.showPermission({ kind: PERMISSION_KIND.RETRY, data: p }),
+              resolve: (id) => u.resolvePermission(PERMISSION_KIND.RETRY, id),
+            },
+            agentProposal: {
+              show: (p) => {
+                u.showPermission({
+                  kind: PERMISSION_KIND.PROPOSAL,
+                  data: p,
+                  modelOptionsData: buildVisibleBasicModelOptionsData(),
+                });
+                void this.sendProposalModelOptions(p);
+              },
+              resolve: (id) =>
+                u.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
+            },
           },
-          (id) => u.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
-          canSend,
-        );
-        this.planApprovalHandler = new ApprovalRequestHandler(
-          'approvalId',
-          (p) =>
-            u.showPermission({ kind: PERMISSION_KIND.PLAN_APPROVAL, data: p }),
-          (id) => u.resolvePermission(PERMISSION_KIND.PLAN_APPROVAL, id),
-          canSend,
-        );
-        this.externalInquiryHandler = new ApprovalRequestHandler(
-          'requestId',
-          (p) =>
-            u.showPermission({
-              kind: PERMISSION_KIND.EXTERNAL_INQUIRY,
-              data: p,
-            }),
-          (id) => u.resolvePermission(PERMISSION_KIND.EXTERNAL_INQUIRY, id),
-          canSend,
-        );
-        this.userQuestionHandler = new ApprovalRequestHandler(
-          'requestId',
-          (p) =>
-            u.showPermission({
-              kind: PERMISSION_KIND.USER_QUESTION,
-              data: p,
-            }),
-          (id) => u.resolvePermission(PERMISSION_KIND.USER_QUESTION, id),
-          canSend,
-        );
+        });
 
         // Retry is the one host-specific kind: the extension shows a retry
         // panel via its handler (so the handler also feeds the pending guard).
         return createProgressBackendUiConfig({
-          handlers: {
-            toolEdit: this.toolEditHandler,
-            bash: this.bashApprovalHandler,
-            retry: this.retryRequestHandler,
-            agentProposal: this.agentProposalHandler,
-            planApproval: this.planApprovalHandler,
-            externalInquiry: this.externalInquiryHandler,
-            userQuestion: this.userQuestionHandler,
-          },
+          handlers: this.approvalHandlers,
           webviewUpdater: u,
           canSend,
-          showRetryRequest: (p) => this.retryRequestHandler.show(p),
-          resolveRetryRequest: (id) => this.retryRequestHandler.resolve(id),
+          showRetryRequest: (p) => this.approvalHandlers.retry.show(p),
+          resolveRetryRequest: (id) => this.approvalHandlers.retry.resolve(id),
         });
       },
     });
@@ -301,7 +227,7 @@ export class ProgressViewProvider
    *
    * Guards against the RESOLVE-between-two-SHOWs race: if the user
    * approves/rejects while model options are loading, the proposal is
-   * removed from agentProposalHandler. We check before sending so the
+   * removed from the agent-proposal handler. We check before sending so the
    * late SHOW doesn't re-create an undismissable ghost proposal.
    *
    * Uses a 30-second TTL cache to avoid redundant async work when
@@ -327,7 +253,7 @@ export class ProgressViewProvider
       }).catch(() => buildVisibleBasicModelOptionsData()),
       loadAgentOptions().catch(() => undefined),
     ]);
-    if (!this.agentProposalHandler.get(proposal.proposalId)) return;
+    if (!this.approvalHandlers.agentProposal.get(proposal.proposalId)) return;
     this.webviewUpdater.showPermission({
       kind: PERMISSION_KIND.PROPOSAL,
       data: proposal,
@@ -445,7 +371,7 @@ export class ProgressViewProvider
    */
   private async hydrateOpenInquiries(): Promise<void> {
     if (!this.webviewUpdater.isAvailable()) return;
-    if (this.externalInquiryHandler.pendingSize > 0) return;
+    if (this.approvalHandlers.externalInquiry.pendingSize > 0) return;
 
     const open = await listOpenThreads().catch((error) => {
       // A storage read failure here silently skips inquiry hydration; log
@@ -494,7 +420,7 @@ export class ProgressViewProvider
               ...hydrationFields,
               mode: 'new',
             };
-        this.externalInquiryHandler.show(permission);
+        this.approvalHandlers.externalInquiry.show(permission);
       } catch {
         // Skip threads whose manifest can't be read; surface logs elsewhere.
       }
@@ -506,21 +432,21 @@ export class ProgressViewProvider
       return;
     }
 
-    this.toolEditHandler.replay();
-    this.bashApprovalHandler.replay();
-    this.externalInquiryHandler.replay();
+    this.approvalHandlers.toolEdit.replay();
+    this.approvalHandlers.bash.replay();
+    this.approvalHandlers.externalInquiry.replay();
     // YOLO / Super YOLO state is already sent by syncFullView() which is
     // always called before replayPendingPrompts() in markWebviewReady().
 
-    this.retryRequestHandler.replay();
-    this.agentProposalHandler.replay();
-    this.planApprovalHandler.replay();
+    this.approvalHandlers.retry.replay();
+    this.approvalHandlers.agentProposal.replay();
+    this.approvalHandlers.planApproval.replay();
   }
 
   public getPendingAgentProposal(
     proposalId: string,
   ): AgentProposalPermission | undefined {
-    return this.agentProposalHandler.get(proposalId);
+    return this.approvalHandlers.agentProposal.get(proposalId);
   }
 
   private canSendToWebview(): boolean {
