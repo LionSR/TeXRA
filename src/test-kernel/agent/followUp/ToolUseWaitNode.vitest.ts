@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
-import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
+import {
+  extractTouchedFiles,
+  type ToolUseRunShared,
+} from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import {
   StreamStatusRegistry,
@@ -641,5 +644,18 @@ describe('ToolUseWaitNode', () => {
     expect(info).toHaveBeenCalledWith('please revise the theorem', {
       messageType: MESSAGE_TYPES.USER_MESSAGE,
     });
+  });
+});
+
+describe('extractTouchedFiles', () => {
+  it('tolerates legacy partial state slices', () => {
+    expect(
+      extractTouchedFiles({} as Parameters<typeof extractTouchedFiles>[0]),
+    ).toEqual([]);
+    expect(
+      extractTouchedFiles({
+        workspaceSnapshot: {},
+      } as Parameters<typeof extractTouchedFiles>[0]),
+    ).toEqual([]);
   });
 });

@@ -46,13 +46,7 @@ export interface ModelClientServices<C = unknown> {
  */
 export async function withModelClient<C, T extends object>(
   base: T,
-  modelHandler: IModelHandler<
-    ProviderMessage,
-    unknown,
-    unknown,
-    SdkToolCall,
-    C
-  >,
+  modelHandler: IModelHandler<ProviderMessage, unknown, SdkToolCall, C>,
 ): Promise<T & ModelClientServices<C>> {
   let client = await modelHandler.getClient();
   return {
