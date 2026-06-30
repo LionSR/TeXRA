@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
+import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import * as logger from '@logger/logUtils';
-import { getConfig } from '@utils/config';
 
 const CHANNEL = 'FinalOutputOpener';
 logger.initialize(CHANNEL);
@@ -12,22 +12,14 @@ logger.initialize(CHANNEL);
  * users don't feel the file "vanished" into run storage. A dismissible
  * status-bar hint reminds users that workflow mode is slow by design.
  *
- * Gated by `texra.agentOutputs.autoOpenFinal` (default: true).
+ * The gate, outcome check, and which output counts as final live in
+ * {@link selectAutoOpenFinalOutput} (shared with the desktop host); this only
+ * supplies the VS Code open verb and status-bar hint.
  */
 export async function openFinalOutputIfAvailable(
   result: WorkflowFlowResult,
 ): Promise<void> {
-  if (!getConfig<boolean>('texra.agentOutputs.autoOpenFinal', true)) {
-    return;
-  }
-  // Only a completed workflow auto-opens its final output — cancelled runs
-  // may carry partial outputs the user did not ask to review.
-  if (result.outcome !== 'completed' || result.outputs.length === 0) {
-    return;
-  }
-
-  const lastRound = Math.max(...result.outputs.map((o) => o.round));
-  const primary = result.outputs.find((o) => o.round === lastRound);
+  const primary = selectAutoOpenFinalOutput(result);
   if (!primary) return;
 
   try {

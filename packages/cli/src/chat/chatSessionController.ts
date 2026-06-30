@@ -7,7 +7,6 @@
 
 import PQueue from 'p-queue';
 
-import { tryPlatform } from '@platform/platform';
 import { getDefaultStreamLogStore, StreamSnapshotStore } from '@transcript';
 import { registerExecution, writeTerminalStatus } from '@agent/storage';
 import {
@@ -16,6 +15,7 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import {
   executeAgent,
@@ -47,7 +47,6 @@ import {
   type ExecutionId,
   sumUsageStats,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
@@ -195,11 +194,7 @@ export function createChatSessionController(
     clearApprovals();
     if (!session.streamId) return;
     executionRegistry.stopAgentStream(session.streamId, {
-      detachActiveChildren:
-        tryPlatform()?.workspaceState.get<boolean>(
-          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-          false,
-        ) === true,
+      detachActiveChildren: detachSubagentsOnStop(),
       runtimeHost: session.runtimeHost,
     });
   };

@@ -24,7 +24,6 @@ import {
   buildVisibleBasicModelOptionsData,
   computeModelOptionsData,
 } from '@model/computeModelOptions';
-import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import {
   AgentCategory,
   type AgentProposalPermission,
@@ -39,7 +38,9 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
+import { ApprovalRequestHandler } from '@shared/progressView/backend/ApprovalRequestHandler';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
+import { createProgressBackendUiConfig } from '@shared/progressView/backend/progressBackendUiConfig';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
@@ -198,35 +199,23 @@ export class ProgressViewProvider
           canSend,
         );
 
-        return {
-          callbacks: {
-            showRetryRequest: (p) => this.retryRequestHandler.show(p),
-            resolveRetryRequest: (id) => this.retryRequestHandler.resolve(id),
-            showToolEditPermission: (p) => this.toolEditHandler.show(p),
-            resolveToolEditPermission: (id) => this.toolEditHandler.resolve(id),
-            updateToolEditApprovalBypassState: (streamId, bypassActive) => {
-              if (canSend())
-                u.updateBypassState(streamId, 'toolEdit', bypassActive);
-            },
-            updateSuperYoloBypassState: (streamId, bypassActive) => {
-              if (canSend())
-                u.updateBypassState(streamId, 'superYolo', bypassActive);
-            },
-            showBashPermission: (p) => this.bashApprovalHandler.show(p),
-            resolveBashPermission: (id) => this.bashApprovalHandler.resolve(id),
-            showAgentProposal: (p) => this.agentProposalHandler.show(p),
-            resolveAgentProposal: (id) => this.agentProposalHandler.resolve(id),
-            showPlanApproval: (p) => this.planApprovalHandler.show(p),
-            resolvePlanApproval: (id) => this.planApprovalHandler.resolve(id),
-            showExternalInquiry: (p) => this.externalInquiryHandler.show(p),
-            resolveExternalInquiry: (id) =>
-              this.externalInquiryHandler.resolve(id),
-            showUserQuestion: (p) => this.userQuestionHandler.show(p),
-            resolveUserQuestion: (id) => this.userQuestionHandler.resolve(id),
+        // Retry is the one host-specific kind: the extension shows a retry
+        // panel via its handler (so the handler also feeds the pending guard).
+        return createProgressBackendUiConfig({
+          handlers: {
+            toolEdit: this.toolEditHandler,
+            bash: this.bashApprovalHandler,
+            retry: this.retryRequestHandler,
+            agentProposal: this.agentProposalHandler,
+            planApproval: this.planApprovalHandler,
+            externalInquiry: this.externalInquiryHandler,
+            userQuestion: this.userQuestionHandler,
           },
-          hasPendingPermissions: (streamId) =>
-            this.hasPendingPermissionsForStream(streamId),
-        };
+          webviewUpdater: u,
+          canSend,
+          showRetryRequest: (p) => this.retryRequestHandler.show(p),
+          resolveRetryRequest: (id) => this.retryRequestHandler.resolve(id),
+        });
       },
     });
     this.state = this.backend.state;
@@ -532,22 +521,6 @@ export class ProgressViewProvider
     proposalId: string,
   ): AgentProposalPermission | undefined {
     return this.agentProposalHandler.get(proposalId);
-  }
-
-  /**
-   * Check if a stream has any pending approval requests (tool-edit, bash,
-   * retry, proposal, or plan approval) that require user interaction.
-   */
-  public hasPendingPermissionsForStream(streamId: string): boolean {
-    return (
-      this.retryRequestHandler.hasPendingForStream(streamId) ||
-      this.toolEditHandler.hasPendingForStream(streamId) ||
-      this.bashApprovalHandler.hasPendingForStream(streamId) ||
-      this.agentProposalHandler.hasPendingForStream(streamId) ||
-      this.planApprovalHandler.hasPendingForStream(streamId) ||
-      this.externalInquiryHandler.hasPendingForStream(streamId) ||
-      this.userQuestionHandler.hasPendingForStream(streamId)
-    );
   }
 
   private canSendToWebview(): boolean {

@@ -75,12 +75,15 @@ describe('desktop composition root and launch environment', () => {
   }
 
   it('keeps platform initialization in the Electron composition root', async () => {
+    // The raw initPlatform() call lives in the shared node host composition
+    // (src/platform/defaults/nodeHost.ts); the desktop drives it from exactly
+    // one place via initNodePlatform().
     const files = await walkTypeScriptFiles(DESKTOP_SRC_DIR);
     const initPlatformFiles: string[] = [];
 
     for (const filePath of files) {
       const source = await readFile(filePath, 'utf8');
-      if (source.includes('initPlatform(')) {
+      if (source.includes('initNodePlatform(')) {
         initPlatformFiles.push(relative(REPO_ROOT, filePath));
       }
     }
@@ -98,9 +101,9 @@ describe('desktop composition root and launch environment', () => {
 
     expect(source.indexOf('repairLaunchPath();')).toBeGreaterThanOrEqual(0);
     expect(source.indexOf('repairLaunchPath();')).toBeLessThan(
-      source.indexOf('initPlatform({'),
+      source.indexOf('initNodePlatform({'),
     );
-    expect(source.indexOf('initPlatform({')).toBeLessThan(
+    expect(source.indexOf('initNodePlatform({')).toBeLessThan(
       source.indexOf('bootstrapElectronAgentDirectories('),
     );
   });
