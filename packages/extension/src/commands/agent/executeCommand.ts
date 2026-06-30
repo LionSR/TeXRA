@@ -4,6 +4,7 @@ import { z, ZodError } from 'zod';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { runAgent } from '@agent/runtime/runAgent';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -40,9 +41,16 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
             config: unknown;
             executionId?: ExecutionId;
             preferHelperModel?: boolean;
+            modelHandlerCompatibilityKey?: unknown;
           })
         : null;
     const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
+    const modelHandlerCompatibilityKey =
+      wrapped && 'modelHandlerCompatibilityKey' in wrapped
+        ? ModelHandlerCompatibilityKeySchema.nullish().parse(
+            wrapped.modelHandlerCompatibilityKey,
+          )
+        : undefined;
 
     await runAgent(
       { config, executionId: wrapped?.executionId },
@@ -53,6 +61,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
         // progress-view compile fixer); a direct main-view launch omits it and
         // keeps the user's selected model.
         preferHelperModel: wrapped?.preferHelperModel === true,
+        modelHandlerCompatibilityKey,
       },
     );
   } catch (error) {
