@@ -31,6 +31,7 @@ import { ToolsListForm } from '../forms/ToolsListForm';
 import { cliState, setCliSessionModelOverride } from '../state/cliState';
 import { loginFromChat } from './handlers/loginCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
+import { openCliSlashCommandForm } from './slashForms';
 
 type AgentSelectHandler = (value: string) => void | Promise<void>;
 type ApprovalPolicySelectHandler = (
@@ -444,6 +445,7 @@ export function registerBuiltinSlashCommands(options?: {
               onApiModeSelect,
             );
           }}
+          openForm={(formName) => openCliSlashCommandForm(formName, '')}
           onClose={() => props.onDone(undefined)}
           onError={options?.onError}
         />
