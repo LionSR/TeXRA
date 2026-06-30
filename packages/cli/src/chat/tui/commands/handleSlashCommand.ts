@@ -213,8 +213,8 @@ export async function handleTuiSlashCommand(
     case 'compact':
       requestCliCompaction({
         streamId: cliState.activeStreamId.get(),
-        getFlowContext: (streamId) =>
-          executionRegistry.getToolUseFlowContext(streamId),
+        requestManualCompaction: (streamId) =>
+          executionRegistry.requestManualCompaction(streamId),
         notifyFollowUpSent,
         appendTranscript: appendLocalAssistantTranscript,
       });
