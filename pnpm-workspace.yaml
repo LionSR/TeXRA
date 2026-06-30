@@ -22,6 +22,10 @@ allowBuilds:
 patchedDependencies:
   ink@7.1.0: patches/ink@7.1.0.patch
 minimumReleaseAgeExclude:
+  # 2026-06-30: unblock the Sonnet 5 model bump (#6840); llm-zoo 1.12.0 adds
+  # claude-sonnet-5 and was published the same day. Safe to remove after
+  # 2026-07-01T20:44Z, once it ages past the 24h quarantine window.
+  - llm-zoo@1.12.0
   - '@anthropic-ai/sdk@0.103.0'
   # 2026-06-30: unblock reviewed production patch bumps from #6829 while
   # they clear the 24h quarantine. Safe to remove after 2026-07-01T13:47Z.
