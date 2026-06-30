@@ -102,7 +102,7 @@ function initWarning(
   apiMode: CliApiMode,
 ): InitSummary['warning'] {
   const chosen = models.find((model) => model.model.value === answers.model);
-  if (!chosen || chosen.available) return undefined;
+  if (chosen?.available === true) return undefined;
   return {
     model: answers.model,
     message: `"${answers.model}" is not usable in the current access mode.`,
