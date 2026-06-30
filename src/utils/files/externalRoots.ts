@@ -155,24 +155,24 @@ export function findExternalRoot(
     const relativePath = path.relative(root.absolutePath, resolved);
     const contained =
       relativePath === '' ||
-      (!relativePath.startsWith('..') &&
-        relativePath !== '..' &&
-        !path.isAbsolute(relativePath));
+      (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
     if (!contained) continue;
 
-    if (best === null) {
-      best = { ...root, relative: relativePath.replaceAll(path.sep, '/') };
-      continue;
-    }
+    const candidate: MatchedExternalRoot = {
+      ...root,
+      relative: relativePath.replaceAll(path.sep, '/'),
+    };
 
-    // Prefer the most-specific (longest) match; on ties, prefer read-only
-    // so a writable entry cannot override a colocated read-only one.
-    const thisLen = root.absolutePath.length;
-    const bestLen = best.absolutePath.length;
-    if (thisLen > bestLen) {
-      best = { ...root, relative: relativePath.replaceAll(path.sep, '/') };
-    } else if (thisLen === bestLen && best.writable && !root.writable) {
-      best = { ...root, relative: relativePath.replaceAll(path.sep, '/') };
+    // Prefer the most-specific (longest) match; on ties, prefer read-only so a
+    // writable entry cannot override a colocated read-only one.
+    if (
+      best === null ||
+      candidate.absolutePath.length > best.absolutePath.length ||
+      (candidate.absolutePath.length === best.absolutePath.length &&
+        best.writable &&
+        !candidate.writable)
+    ) {
+      best = candidate;
     }
   }
   return best;

@@ -110,23 +110,18 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
     ? `[Relay] ${originalSummaryText}`
     : originalSummaryText;
 
-  // Build error details from parsed data
-  const detailLines = ERROR_DETAIL_FIELDS.filter((key) => {
-    const value = errorData[key as keyof ErrorLogData];
-    // Skip null/undefined values and message if it duplicates the original summary
-    return (
-      value !== null &&
-      value !== undefined &&
-      !(key === 'message' && value === originalSummaryText)
-    );
-  }).map((key) => {
-    const value = errorData[key as keyof ErrorLogData];
+  // Build error details from parsed data, skipping null/undefined values and a
+  // message that merely duplicates the original summary.
+  const detailLines = ERROR_DETAIL_FIELDS.flatMap((key) => {
+    const value = errorData[key];
+    if (value === null || value === undefined) return [];
+    if (key === 'message' && value === originalSummaryText) return [];
     // Format objects (like rawErrorBody) as indented JSON
     const displayValue =
       typeof value === 'object'
         ? JSON.stringify(value, null, 2)
         : String(value);
-    return `${key}: ${displayValue}`;
+    return [`${key}: ${displayValue}`];
   });
 
   const detailText = detailLines.join('\n');

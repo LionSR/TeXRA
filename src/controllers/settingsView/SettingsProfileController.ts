@@ -79,16 +79,19 @@ export interface SettingsProfileControllerDeps {
 }
 
 export class SettingsProfileController {
-  private readonly allowedProviderSettingKeys: Set<string>;
+  private readonly providerSettingsByKey: Map<string, ProviderVscodeSettingDef>;
   private readonly reliabilitySettingKeys = new Set(
     SETTINGS_RELIABILITY_SETTINGS.map((setting) => setting.key),
   );
 
   constructor(private readonly deps: SettingsProfileControllerDeps) {
-    this.allowedProviderSettingKeys = new Set(
+    this.providerSettingsByKey = new Map(
       Object.values(deps.providerVscodeSettings)
         .flat()
-        .map((setting) => setting.key),
+        .map((setting): [string, ProviderVscodeSettingDef] => [
+          setting.key,
+          setting,
+        ]),
     );
   }
 
@@ -142,7 +145,7 @@ export class SettingsProfileController {
     key: string;
     value: SettingsProfileConfigValue;
   }): Promise<ProviderVscodeSettingUpdateResult> {
-    const providerSetting = this.findProviderSetting(input.key);
+    const providerSetting = this.providerSettingsByKey.get(input.key);
     const isReliabilitySetting = this.reliabilitySettingKeys.has(input.key);
     if (!providerSetting && !isReliabilitySetting) {
       return { kind: 'rejected', key: input.key };
@@ -189,14 +192,5 @@ export class SettingsProfileController {
           false)
         : this.deps.getConfig<boolean>(def.key, false),
     }));
-  }
-
-  private findProviderSetting(
-    key: string,
-  ): ProviderVscodeSettingDef | undefined {
-    if (!this.allowedProviderSettingKeys.has(key)) return undefined;
-    return Object.values(this.deps.providerVscodeSettings)
-      .flat()
-      .find((setting) => setting.key === key);
   }
 }

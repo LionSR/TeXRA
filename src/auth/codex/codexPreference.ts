@@ -18,12 +18,32 @@ export interface CodexSubscriptionPreferenceUpdate {
   readonly target: ConfigTarget;
 }
 
+/** Read a boolean preference, defaulting to off before platform init. */
+function readCodexFlag(key: string): boolean {
+  return tryPlatform()?.config.get<boolean>(key, false) ?? false;
+}
+
+function codexPreferenceUpdateTarget(key: string): ConfigTarget {
+  const inspection = tryPlatform()?.config.inspect<boolean>(key);
+  return inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
+}
+
+/** Write a boolean preference at the scope that currently controls its value. */
+async function writeCodexFlag(
+  key: string,
+  enabled: boolean,
+): Promise<CodexSubscriptionPreferenceUpdate> {
+  const host = tryPlatform();
+  const target = codexPreferenceUpdateTarget(key);
+  if (!host) return { effective: false, target };
+
+  await host.config.update(key, enabled, target);
+  return { effective: readCodexFlag(key), target };
+}
+
 /** Whether the user has switched on "prefer ChatGPT subscription". */
 export function isPreferCodexSubscription(): boolean {
-  return (
-    tryPlatform()?.config.get<boolean>(CODEX_PREFER_SUBSCRIPTION_KEY, false) ??
-    false
-  );
+  return readCodexFlag(CODEX_PREFER_SUBSCRIPTION_KEY);
 }
 
 /**
@@ -33,45 +53,19 @@ export function isPreferCodexSubscription(): boolean {
  * less stable for long workflow runs. Read per request by the Codex handler.
  */
 export function isCodexSubscriptionToolUseOnly(): boolean {
-  return (
-    tryPlatform()?.config.get<boolean>(
-      CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
-      false,
-    ) ?? false
-  );
+  return readCodexFlag(CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY);
 }
 
 /** Update the "subscription for tool-use only" switch at the controlling scope. */
 export async function setCodexSubscriptionToolUseOnly(
   enabled: boolean,
 ): Promise<CodexSubscriptionPreferenceUpdate> {
-  const host = tryPlatform();
-  const target = codexPreferenceUpdateTarget(
-    CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
-  );
-  if (!host) return { effective: false, target };
-
-  await host.config.update(
-    CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
-    enabled,
-    target,
-  );
-  return { effective: isCodexSubscriptionToolUseOnly(), target };
-}
-
-function codexPreferenceUpdateTarget(key: string): ConfigTarget {
-  const inspection = tryPlatform()?.config.inspect<boolean>(key);
-  return inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
+  return writeCodexFlag(CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY, enabled);
 }
 
 /** Update the preference at the scope that currently controls its value. */
 export async function setPreferCodexSubscription(
   enabled: boolean,
 ): Promise<CodexSubscriptionPreferenceUpdate> {
-  const host = tryPlatform();
-  const target = codexPreferenceUpdateTarget(CODEX_PREFER_SUBSCRIPTION_KEY);
-  if (!host) return { effective: false, target };
-
-  await host.config.update(CODEX_PREFER_SUBSCRIPTION_KEY, enabled, target);
-  return { effective: isPreferCodexSubscription(), target };
+  return writeCodexFlag(CODEX_PREFER_SUBSCRIPTION_KEY, enabled);
 }

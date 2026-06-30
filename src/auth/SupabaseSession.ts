@@ -8,7 +8,6 @@ import {
 } from './core/authCallback';
 import { fetchWithTimeout } from './fetchWithTimeout';
 import {
-  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   firstAccountLabel,
   parseStoredSupabaseSession,
   parseTokenExchangeResponse,
@@ -240,8 +239,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       return null;
     }
 
-    const refreshed = toStorableSupabaseSession(data.session);
-    return refreshed;
+    return toStorableSupabaseSession(data.session);
   }
 
   private async getFreshSession(
@@ -390,11 +388,9 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     }
 
     const data = await parseTokenExchangeResponse(response, this.options.log);
-    const refreshed = toStorableSupabaseSession(data, {
+    return toStorableSupabaseSession(data, {
       fallbackLabel: session.account.label,
       defaultExpiryMs: this.options.defaultSessionExpiryMs,
     });
-
-    return refreshed;
   }
 }

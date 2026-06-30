@@ -14,10 +14,10 @@ import { z } from 'zod';
 
 // Local imports - core
 import { defineTool } from '@tools/core/define';
-
-// Local imports - zotero
 import { filterNotNull } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
+
+// Local imports - zotero
 import {
   callBetterBibTeX,
   getZoteroPort,
@@ -89,25 +89,21 @@ function countNodes(nodes: CollectionNode[]): number {
  */
 function formatTree(
   nodes: CollectionNode[],
-  indent: number = 0,
   parentPrefix: string = '',
 ): string[] {
   const lines: string[] = [];
 
   for (const [i, node] of nodes.entries()) {
     const isLast = i === nodes.length - 1;
-    const connector = indent === 0 ? '' : isLast ? '└── ' : '├── ';
-    const childContinuation = indent === 0 ? '' : isLast ? '    ' : '│   ';
+    const connector = isLast ? '└── ' : '├── ';
+    const childContinuation = isLast ? '    ' : '│   ';
 
     lines.push(`${parentPrefix}${connector}${node.name}/ [${node.key}]`);
 
     if (node.children.length > 0) {
-      const childLines = formatTree(
-        node.children,
-        1,
-        `${parentPrefix}${childContinuation}`,
+      lines.push(
+        ...formatTree(node.children, `${parentPrefix}${childContinuation}`),
       );
-      lines.push(...childLines);
     }
   }
 
@@ -208,7 +204,7 @@ export class ZoteroCollectionsTool extends defineTool({
       totalCollections += displayTree?.matchCount ?? countNodes(fullTree);
       librariesWithResults++;
       outputParts.push(`Library: ${lib.name}`);
-      outputParts.push(...formatTree(tree, 1));
+      outputParts.push(...formatTree(tree));
     }
 
     if (outputParts.length === 0) {

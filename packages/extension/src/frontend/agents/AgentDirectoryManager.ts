@@ -25,12 +25,16 @@ logger.initialize(CHANNEL);
 
 type AgentDirectoryEventType = 'create' | 'change' | 'delete';
 
-export interface AgentDirectoryWatcherEvent {
+/** A local agent directory paired with the source it represents. */
+interface AgentDirectoryEntry {
+  directory: string;
+  source: AgentSource;
+}
+
+export interface AgentDirectoryWatcherEvent extends AgentDirectoryEntry {
   type: AgentDirectoryEventType;
   uri: vscode.Uri;
   relativePath: string;
-  directory: string;
-  source: AgentSource;
 }
 
 export interface AgentDirectoryWatcherOptions {
@@ -49,10 +53,7 @@ export class AgentDirectoryManager {
   private watcherDisposables: vscode.Disposable[] = [];
   private watcherSubscriptions = new Set<AgentDirectoryWatcherSubscription>();
   private externalWatcherDirectoryPaths = new Set<string>();
-  private watcherDirectories: Array<{
-    directory: string;
-    source: AgentSource;
-  }> | null = null;
+  private watcherDirectories: AgentDirectoryEntry[] | null = null;
   private watcherSetupPromise: Promise<void> | null = null;
   private watcherRebuildRequested = false;
 
@@ -107,9 +108,7 @@ export class AgentDirectoryManager {
    * Get all local agent directories (excludes Remote).
    * Returns directories in priority order: Custom, BuiltIn, BuiltInToolUse.
    */
-  async getAllLocal(): Promise<
-    Array<{ directory: string; source: AgentSource }>
-  > {
+  async getAllLocal(): Promise<AgentDirectoryEntry[]> {
     return this.getDirectoryService().getAllLocal();
   }
 
@@ -176,8 +175,8 @@ export class AgentDirectoryManager {
   }
 
   private sameDirectories(
-    current: Array<{ directory: string; source: AgentSource }>,
-    next: Array<{ directory: string; source: AgentSource }>,
+    current: AgentDirectoryEntry[],
+    next: AgentDirectoryEntry[],
   ): boolean {
     return (
       current.length === next.length &&
@@ -223,7 +222,7 @@ export class AgentDirectoryManager {
   }
 
   private async buildAgentWatchers(
-    directories: Array<{ directory: string; source: AgentSource }>,
+    directories: AgentDirectoryEntry[],
   ): Promise<void> {
     // Dispose old watchers
     const previousExternalWatcherDirectoryPaths = new Set(
@@ -274,7 +273,7 @@ export class AgentDirectoryManager {
   }
 
   private watchDirectoryTree(
-    entry: { directory: string; source: AgentSource },
+    entry: AgentDirectoryEntry,
     directoryUri: vscode.Uri,
     pattern: string,
     onCreateOrDelete?: (
@@ -302,7 +301,7 @@ export class AgentDirectoryManager {
   }
 
   private async watchExternalCustomDirectory(
-    entry: { directory: string; source: AgentSource },
+    entry: AgentDirectoryEntry,
     directoryUri: vscode.Uri,
     previousDirectoryPaths: ReadonlySet<string>,
   ): Promise<void> {
@@ -387,7 +386,7 @@ export class AgentDirectoryManager {
   }
 
   private async dispatchExistingYamlFiles(
-    entry: { directory: string; source: AgentSource },
+    entry: AgentDirectoryEntry,
     directories: readonly vscode.Uri[],
   ): Promise<void> {
     for (const directory of directories) {
@@ -445,7 +444,7 @@ export class AgentDirectoryManager {
   }
 
   private dispatchAgentEvent(
-    entry: { directory: string; source: AgentSource },
+    entry: AgentDirectoryEntry,
     type: AgentDirectoryEventType,
     uri: vscode.Uri,
   ): void {

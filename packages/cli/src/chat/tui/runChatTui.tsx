@@ -125,7 +125,6 @@ import {
   clearTuiSessionRunState,
   markChatTuiRunCompleted,
   markChatTuiRunPending,
-  publishChatTuiRootRunStartAvailability,
   type TuiSession,
 } from './state/sessionRunState';
 import type { SkillActivation } from './forms/SkillsListForm';

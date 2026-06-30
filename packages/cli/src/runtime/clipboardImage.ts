@@ -131,12 +131,18 @@ export async function attachClipboardImage(): Promise<ClipboardAttachResult> {
   const dir = await mkdtemp(join(tmpdir(), 'texra-clip-'));
   const tmpFile = join(dir, 'clipboard.png');
   try {
-    const read =
-      plat === 'darwin'
-        ? await readClipboardPngMac(tmpFile)
-        : plat === 'linux'
-          ? await readClipboardPngLinux()
-          : await readClipboardPngWindows(tmpFile);
+    let read: ClipboardRead;
+    switch (plat) {
+      case 'darwin':
+        read = await readClipboardPngMac(tmpFile);
+        break;
+      case 'linux':
+        read = await readClipboardPngLinux();
+        break;
+      default:
+        read = await readClipboardPngWindows(tmpFile);
+        break;
+    }
 
     if (read === 'unsupported') {
       return {

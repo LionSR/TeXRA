@@ -128,8 +128,9 @@ export class EditFileTool extends defineTool({
     recordToolFileRead(targetPath);
 
     const count = replace_all ? occurrences : 1;
-    const replacementSummary = `Replaced ${count} ${pluralize(count, 'occurrence')}.`;
-    const summary = `Edited ${displayPath}: replaced ${count} ${pluralize(count, 'occurrence')}`;
+    const occurrenceWord = pluralize(count, 'occurrence');
+    const replacementSummary = `Replaced ${count} ${occurrenceWord}.`;
+    const summary = `Edited ${displayPath}: replaced ${count} ${occurrenceWord}`;
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
       displayPath,

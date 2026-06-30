@@ -34,7 +34,11 @@ export interface MainViewDroppedFileAttachmentInput {
 export function planMainViewDroppedFileAttachments(
   input: MainViewDroppedFileAttachmentInput,
 ): MainViewDroppedFileAttachmentPlan {
-  const grouped = createEmptyCategorySets();
+  const grouped: Record<MainViewAttachableDropCategory, Set<string>> = {
+    input: new Set(),
+    context: new Set(),
+    media: new Set(),
+  };
   let rejectedCount = 0;
 
   for (const filePath of input.paths) {
@@ -72,17 +76,6 @@ export function normalizeMainViewFileExtension(filePath: string): string {
   const trimmed = filePath.trim();
   const extension = path.extname(trimmed) || trimmed;
   return extension.toLowerCase().replace(/^\./, '');
-}
-
-function createEmptyCategorySets(): Record<
-  MainViewAttachableDropCategory,
-  Set<string>
-> {
-  return {
-    input: new Set(),
-    context: new Set(),
-    media: new Set(),
-  };
 }
 
 function resolveDroppedFileCategory(

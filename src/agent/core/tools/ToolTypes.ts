@@ -2,16 +2,16 @@
  * Core tool type definitions: ITool, IToolRegistry, MapToolRegistry.
  */
 
-import type { ToolDefinition as ToolDefinitionType } from '@model/ToolDefinition';
-import type { ToolResult as ToolResultType } from '@shared/schemas/toolResult';
+import type { ToolDefinition } from '@model/ToolDefinition';
+import type { ToolResult } from '@shared/schemas/toolResult';
 
 /**
  * Contract for tool implementations.
  * BaseTool provides the canonical implementation with Zod validation.
  */
 export interface ITool {
-  readonly definition: ToolDefinitionType;
-  call(rawInput: unknown): Promise<ToolResultType>;
+  readonly definition: ToolDefinition;
+  call(rawInput: unknown): Promise<ToolResult>;
 }
 
 /** Tool lookup abstraction — supports dependency injection and mock tools. */

@@ -89,6 +89,11 @@ type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 // Helpers
 // ============================================================
 
+/** Pretty-print a non-string value for display inside an export block. */
+function prettyJson(value: unknown): string {
+  return JSON.stringify(value, null, 2);
+}
+
 function extractBlocks(msg: ConversationMessage): ContentBlock[] {
   // Google GenAI: field-based Parts → type-based ContentBlocks
   if (Array.isArray(msg.parts)) {
@@ -102,7 +107,7 @@ function extractBlocks(msg: ConversationMessage): ContentBlock[] {
     return msg.content as ContentBlock[];
   }
   if (msg.content != null) {
-    return [{ type: 'text', text: JSON.stringify(msg.content, null, 2) }];
+    return [{ type: 'text', text: prettyJson(msg.content) }];
   }
   return [];
 }
@@ -135,22 +140,16 @@ function googlePartToBlocks(part: Part): ContentBlock[] {
         content:
           typeof fr.response === 'string'
             ? fr.response
-            : JSON.stringify(fr.response ?? '', null, 2),
+            : prettyJson(fr.response ?? ''),
       },
     ];
   }
-  if (part.inlineData && typeof part.inlineData === 'object') {
-    const data = part.inlineData as { mimeType?: string };
-    return [
-      { type: data.mimeType?.startsWith('image/') ? 'image' : 'document' },
-    ];
-  }
-  // Google GenAI: URI-based file data (uploaded files over the inline threshold)
-  if (part.fileData && typeof part.fileData === 'object') {
-    const data = part.fileData as { mimeType?: string };
-    return [
-      { type: data.mimeType?.startsWith('image/') ? 'image' : 'document' },
-    ];
+  // Google GenAI: inline bytes or URI-based file data (uploads over the inline
+  // threshold). Both expose the media type the same way.
+  const blob = part.inlineData ?? part.fileData;
+  if (blob && typeof blob === 'object') {
+    const { mimeType } = blob as { mimeType?: string };
+    return [{ type: mimeType?.startsWith('image/') ? 'image' : 'document' }];
   }
   return [];
 }
@@ -182,7 +181,7 @@ function extractToolResultText(block: ContentBlock): string | undefined {
   if (block.type === 'tool_result') {
     return typeof block.content === 'string'
       ? block.content
-      : JSON.stringify(block.content, null, 2);
+      : prettyJson(block.content);
   }
   // Anthropic: 'text', OpenAI Response API: 'input_text'
   if ((block.type === 'text' || block.type === 'input_text') && block.text) {
@@ -208,7 +207,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
       return {
         kind: 'tool-call',
         name: block.name ?? 'unknown',
-        input: JSON.stringify(block.input ?? {}, null, 2),
+        input: prettyJson(block.input ?? {}),
       };
 
     // Tool result blocks: Anthropic tool_result + server-side code execution results
@@ -221,7 +220,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
         text:
           typeof block.content === 'string'
             ? block.content
-            : JSON.stringify(block.content ?? '', null, 2),
+            : prettyJson(block.content ?? ''),
       };
 
     case 'server_tool_use':
@@ -286,7 +285,7 @@ export function normalizeConversationForExport(
       const args =
         typeof responseToolCall.arguments === 'string'
           ? responseToolCall.arguments
-          : JSON.stringify(responseToolCall.arguments ?? {}, null, 2);
+          : prettyJson(responseToolCall.arguments ?? {});
       const name = responseToolCall.name ?? 'unknown';
       nodes.push({ kind: 'tool-call', name, input: args });
       lastAssistantHadToolUse = true;
@@ -311,9 +310,7 @@ export function normalizeConversationForExport(
         }
       } else {
         const outputText =
-          typeof output === 'string'
-            ? output
-            : JSON.stringify(output ?? '', null, 2);
+          typeof output === 'string' ? output : prettyJson(output ?? '');
         nodes.push({ kind: 'tool-result', text: outputText });
       }
       lastAssistantHadToolUse = false;
@@ -370,7 +367,7 @@ export function normalizeConversationForExport(
       const text =
         typeof openaiMsg.content === 'string'
           ? openaiMsg.content
-          : JSON.stringify(openaiMsg.content, null, 2);
+          : prettyJson(openaiMsg.content);
       nodes.push({ kind: 'tool-result', text });
       lastAssistantHadToolUse = false;
     }

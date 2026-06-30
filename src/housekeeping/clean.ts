@@ -17,6 +17,10 @@ import { findFilesFromPatterns, resolveHousekeepingTargets } from './utils';
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
+function toIgnoreGlobs(dirs: Iterable<string>): string[] {
+  return [...dirs].map((dir) => `**/${dir}/**`);
+}
+
 export async function runCleanSingle(
   model: string,
   inputFile: string,
@@ -78,8 +82,6 @@ export async function runCleanMultiple(
   );
   logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
 
-  let anyCleaned = false;
-
   const firstResult = await runCleanSingle(model, inputFile, agent);
   if (
     firstResult.status === 'missingParams' ||
@@ -87,20 +89,14 @@ export async function runCleanMultiple(
   ) {
     return firstResult;
   }
-  if (firstResult.status === 'success') {
-    anyCleaned = true;
-  }
+  let anyCleaned = firstResult.status === 'success';
 
-  if (inputFiles && inputFiles.length > 0) {
-    for (const file of inputFiles) {
-      const res = await runCleanSingle(model, file, agent);
-      if (res.status === 'error') {
-        return res;
-      }
-      if (res.status === 'success') {
-        anyCleaned = true;
-      }
+  for (const file of inputFiles) {
+    const res = await runCleanSingle(model, file, agent);
+    if (res.status === 'error') {
+      return res;
     }
+    anyCleaned ||= res.status === 'success';
   }
 
   logger.info(CHANNEL, 'Cleanup complete for multiple files.');
@@ -115,9 +111,9 @@ export async function runCleanBuild(): Promise<void> {
     return;
   }
 
-  const ignorePatterns = [...EXCLUDED_DIRS]
-    .filter((dir) => dir !== 'build')
-    .map((dir) => `**/${dir}/**`);
+  const ignorePatterns = toIgnoreGlobs(
+    [...EXCLUDED_DIRS].filter((dir) => dir !== 'build'),
+  );
 
   const buildDirs = globSync('**/build', {
     cwd: workspacePath,
@@ -149,9 +145,7 @@ export async function runCleanOutput(): Promise<void> {
   }
 
   const modelsPattern = MODELS.join(',');
-  const ignorePatterns = unique([...EXCLUDED_DIRS, HISTORY_DIR]).map(
-    (d) => `**/${d}/**`,
-  );
+  const ignorePatterns = toIgnoreGlobs(unique([...EXCLUDED_DIRS, HISTORY_DIR]));
 
   // Workspace-wide cleanup only uses legacy generated filename tokens.
   // Round-folder layouts like `r0/output.tex` are intentionally excluded:

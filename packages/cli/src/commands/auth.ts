@@ -67,14 +67,6 @@ function readBooleanArg(
   return args[hyphenKey] === true || args[camelKey] === true;
 }
 
-function readStringArg(
-  args: LoginCommandArgs,
-  hyphenKey: keyof LoginCommandArgs,
-  camelKey: keyof LoginCommandArgs,
-): string | undefined {
-  return optString(args[hyphenKey]) ?? optString(args[camelKey]);
-}
-
 export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
   const positional = optString(args.providerArg);
   const flag = optString(args.provider);
@@ -86,7 +78,7 @@ export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
       readBooleanArg(args, 'no-browser', 'noBrowser') || args.browser === false,
     device: readBooleanArg(args, 'device', 'device'),
     selectAccount: readBooleanArg(args, 'select-account', 'selectAccount'),
-    loginHint: readStringArg(args, 'login-hint', 'loginHint'),
+    loginHint: optString(args['login-hint']) ?? optString(args.loginHint),
   };
 }
 
@@ -142,14 +134,10 @@ async function runDeviceLogin(context: CliContext): Promise<number> {
 
 function emitLoginResult(context: CliContext, session: SupabaseSession): void {
   const expiresAt = new Date(session.expiresAt).toISOString();
+  const payload = { authenticated: true, account: session.account, expiresAt };
   emitCliResult(context, {
-    json: { authenticated: true, account: session.account, expiresAt },
-    ndjson: {
-      kind: 'auth',
-      authenticated: true,
-      account: session.account,
-      expiresAt,
-    },
+    json: payload,
+    ndjson: { kind: 'auth', ...payload },
     text: `Signed in as ${session.account.label}.`,
   });
 }
@@ -295,10 +283,13 @@ export const logoutCommand = defineCliCommand({
     // Sign-out only clears the stored session; a configured TEXRA_RELAY_TOKEN
     // keeps authenticating relay calls, so report it instead of a clean exit.
     const relayNotice = relayTokenStillActiveNotice();
-    const relayTokenConfigured = relayNotice !== undefined;
+    const payload = {
+      authenticated: false,
+      relayTokenConfigured: relayNotice !== undefined,
+    };
     emitCliResult(context, {
-      json: { authenticated: false, relayTokenConfigured },
-      ndjson: { kind: 'auth', authenticated: false, relayTokenConfigured },
+      json: payload,
+      ndjson: { kind: 'auth', ...payload },
       text: relayNotice ? `Signed out.\n${relayNotice}` : 'Signed out.',
     });
     return CliExitCode.Success;

@@ -63,10 +63,10 @@ export function createDesktopPreviewHost(
     try {
       await access(filePath);
     } catch (error) {
-      if (getErrorCode(error) !== 'ENOENT') {
-        await fail(`Cannot access file ${filePath}: ${toErrorMessage(error)}`);
+      if (getErrorCode(error) === 'ENOENT') {
+        await fail(`File not found: ${filePath}`);
       }
-      await fail(`File not found: ${filePath}`);
+      await fail(`Cannot access file ${filePath}: ${toErrorMessage(error)}`);
     }
   }
 

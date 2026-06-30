@@ -292,11 +292,7 @@ export function taskDetailFollowTailScrollOffsetForColumns({
     compact,
     tailLines,
   });
-  const maxOffset = taskDetailInitialScrollOffset(
-    scrollableRows,
-    visibleRowBudget,
-  );
-  return maxOffset;
+  return taskDetailInitialScrollOffset(scrollableRows, visibleRowBudget);
 }
 
 export function taskDetailVisibleOutputRowsFromOffsetForColumns({
@@ -321,14 +317,36 @@ export function taskDetailVisibleOutputRowsFromOffsetForColumns({
     return tailLines.slice(start, start + visibleRowBudget);
   }
 
-  const rows: string[] = [];
-  for (let index = 0; index < tailLines.length; index += 1) {
-    const wrappedRows = wrapAnsiToWidth(tailLines[index], outputColumns).split(
-      '\n',
-    );
-    rows.push(...wrappedRows);
-  }
+  const rows = tailLines.flatMap((line) =>
+    wrapAnsiToWidth(line, outputColumns).split('\n'),
+  );
   return rows.slice(start, start + visibleRowBudget);
+}
+
+function PickerItemHead({
+  highlighted,
+  index,
+  label,
+}: {
+  readonly highlighted: boolean;
+  readonly index: number;
+  readonly label: string;
+}): React.JSX.Element {
+  const color = highlighted ? 'cyan' : undefined;
+  return (
+    <>
+      <Box flexShrink={0}>
+        <Text color={color}>
+          {highlighted ? POINTER : ' '} {index + 1}.{' '}
+        </Text>
+      </Box>
+      <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>
+        <Text color={color} wrap="truncate-end">
+          {label}
+        </Text>
+      </Box>
+    </>
+  );
 }
 
 function renderItem(
@@ -342,16 +360,11 @@ function renderItem(
     return (
       <Box key={item.executionId} flexDirection="column" minWidth={0}>
         <Box minWidth={0}>
-          <Box flexShrink={0}>
-            <Text color={highlighted ? 'cyan' : undefined}>
-              {highlighted ? POINTER : ' '} {index + 1}.{' '}
-            </Text>
-          </Box>
-          <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>
-            <Text color={highlighted ? 'cyan' : undefined} wrap="truncate-end">
-              {item.label}
-            </Text>
-          </Box>
+          <PickerItemHead
+            highlighted={highlighted}
+            index={index}
+            label={item.label}
+          />
           {item.description ? (
             <Text dimColor wrap="truncate-end">{` — ${item.description}`}</Text>
           ) : null}
@@ -370,16 +383,11 @@ function renderItem(
   const detail = [item.description, commandDetail].filter(Boolean).join(' — ');
   return (
     <Box key={item.executionId} minWidth={0}>
-      <Box flexShrink={0}>
-        <Text color={highlighted ? 'cyan' : undefined}>
-          {highlighted ? POINTER : ' '} {index + 1}.{' '}
-        </Text>
-      </Box>
-      <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>
-        <Text color={highlighted ? 'cyan' : undefined} wrap="truncate-end">
-          {item.label}
-        </Text>
-      </Box>
+      <PickerItemHead
+        highlighted={highlighted}
+        index={index}
+        label={item.label}
+      />
       {detail ? (
         <Text dimColor wrap="truncate-end">{` — ${detail}`}</Text>
       ) : null}

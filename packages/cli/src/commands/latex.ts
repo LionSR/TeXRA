@@ -102,25 +102,16 @@ async function runLatexdiffCli(
           ...results.map(formatResultLine),
         ].join('\n');
 
+  const payload = {
+    source,
+    executionId: executionId ?? null,
+    totalOperations,
+    successCount,
+    results,
+  };
   emitCliResult(context, {
-    json: {
-      source,
-      executionId: executionId ?? null,
-      totalOperations,
-      successCount,
-      results,
-    },
-    ndjson: {
-      kind: 'result',
-      result: {
-        command: 'latexdiff',
-        source,
-        executionId: executionId ?? null,
-        totalOperations,
-        successCount,
-        results,
-      },
-    },
+    json: payload,
+    ndjson: { kind: 'result', result: { command: 'latexdiff', ...payload } },
     text,
   });
 

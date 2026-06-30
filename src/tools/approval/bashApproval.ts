@@ -156,16 +156,11 @@ export function buildBashApprovalRejectedResult(
   const preview = truncateWithEllipsis(command, 60);
   const message = `User rejected bash command: ${preview}`;
   const feedback = userMessage?.trim();
-  const result: ToolResult = {
+  return {
     output: message,
     summary: message,
     error: message,
     isError: true,
+    userInstruction: feedback || DEFAULT_BASH_REJECTION_INSTRUCTION,
   };
-  if (feedback) {
-    result.userInstruction = feedback;
-  } else {
-    result.userInstruction = DEFAULT_BASH_REJECTION_INSTRUCTION;
-  }
-  return result;
 }

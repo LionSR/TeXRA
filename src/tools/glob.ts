@@ -10,6 +10,7 @@ import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
   currentToolRoot,
+  type WorkspacePathResolution,
 } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
@@ -67,7 +68,7 @@ export class GlobTool extends defineTool({
     // Process matches in parallel for better performance
     const statPromises = matches.map(
       async (match): Promise<GlobMatchInfo | null> => {
-        let resolved;
+        let resolved: WorkspacePathResolution;
         try {
           resolved = joinWorkspaceRelativePath(path.relative, match, root);
         } catch (err) {

@@ -114,6 +114,25 @@ function formatMemoryMisses(
 }
 
 /**
+ * Shared opening lines for both delivery and error messages: wall-time,
+ * working-directory, then memory-misses, in that order.
+ */
+function formatDeliveryPreamble(options: {
+  wallTimeMs?: number;
+  workingDirectory?: string;
+  memoryMisses?: readonly AttachedMemoryMiss[];
+}): string[] {
+  const lines: string[] = [];
+  if (options.wallTimeMs !== undefined) {
+    lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
+  }
+  const wdElement = workingDirectoryElement(options.workingDirectory);
+  if (wdElement) lines.push(wdElement);
+  lines.push(...formatMemoryMisses(options.memoryMisses));
+  return lines;
+}
+
+/**
  * Format an AgentFlowResult as a delivery message.
  * Injected into the orchestrator's FollowUpQueue as a user-role message.
  *
@@ -137,13 +156,13 @@ export function formatSubagentDelivery(
     `<subagent-result id="${escapeAttr(result.executionId)}" agent="${escapeAttr(agentName)}" category="${escapeAttr(result.category)}" status="${escapeAttr(result.outcome)}">`,
   ];
 
-  if (options?.wallTimeMs !== undefined) {
-    lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
-  }
-
-  const wdElement = workingDirectoryElement(options?.workingDirectory);
-  if (wdElement) lines.push(wdElement);
-  lines.push(...formatMemoryMisses(result.memoryMisses));
+  lines.push(
+    ...formatDeliveryPreamble({
+      wallTimeMs: options?.wallTimeMs,
+      workingDirectory: options?.workingDirectory,
+      memoryMisses: result.memoryMisses,
+    }),
+  );
 
   if (result.category === 'workflow') {
     if (options?.diffsUnavailable) {
@@ -197,12 +216,13 @@ export function formatSubagentError(
   const lines = [
     `<subagent-error id="${escapeAttr(executionId)}" agent="${escapeAttr(agentName)}" retryable="${formatted.userRetryable ? 'true' : 'false'}">`,
   ];
-  if (options?.wallTimeMs !== undefined) {
-    lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
-  }
-  const wdElement = workingDirectoryElement(options?.workingDirectory);
-  if (wdElement) lines.push(wdElement);
-  lines.push(...formatMemoryMisses(options?.memoryMisses));
+  lines.push(
+    ...formatDeliveryPreamble({
+      wallTimeMs: options?.wallTimeMs,
+      workingDirectory: options?.workingDirectory,
+      memoryMisses: options?.memoryMisses,
+    }),
+  );
   lines.push(
     `<message>${escapeText(formatted.message)}</message>`,
     '</subagent-error>',

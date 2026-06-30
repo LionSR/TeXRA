@@ -196,7 +196,7 @@ function buildVSCodeUI(): AgentCreatorUI {
 export async function handleCreateAgentWithAI(
   context: vscode.ExtensionContext,
   category: AgentCategory,
-) {
+): Promise<void> {
   try {
     const config = await loadCreatorConfig(context);
     const flow = createAgentCreatorFlow(buildVSCodeUI());

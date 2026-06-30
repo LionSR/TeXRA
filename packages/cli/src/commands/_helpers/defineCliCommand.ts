@@ -59,12 +59,13 @@ export function defineCliCommand<const A extends ArgsDef>(
         ctx.args as ParsedGlobalArgs,
         ctx.rawArgs,
       );
+      const runCtx = ctx as CliCommandRunContext<A>;
       if (options.catchExitCode === undefined) {
-        setExitCode(await options.run(context, ctx as CliCommandRunContext<A>));
+        setExitCode(await options.run(context, runCtx));
         return;
       }
       try {
-        setExitCode(await options.run(context, ctx as CliCommandRunContext<A>));
+        setExitCode(await options.run(context, runCtx));
       } catch (error) {
         writeErrorStderr(error);
         setExitCode(options.catchExitCode);

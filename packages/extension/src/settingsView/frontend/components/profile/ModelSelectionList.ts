@@ -123,17 +123,21 @@ export class ModelSelectionList extends LitElement {
     this.expandedDeprecated = next;
   }
 
-  private handleHelperModelChange(e: Event): void {
+  private readSelectValue(e: Event): string {
     const select = e.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
+    return typeof select?.value === 'string' ? select.value : '';
+  }
+
+  private handleHelperModelChange(e: Event): void {
     this.dispatchEvent(
-      ModelSelectionEvents.setHelperModel({ modelName: value }),
+      ModelSelectionEvents.setHelperModel({
+        modelName: this.readSelectValue(e),
+      }),
     );
   }
 
   private handleReasoningLevelChange(modelName: string, e: Event): void {
-    const select = e.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
+    const value = this.readSelectValue(e);
     this.dispatchEvent(
       ModelSelectionEvents.setReasoningLevel({
         modelName,

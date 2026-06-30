@@ -192,10 +192,6 @@ function toOpenAISchemaObject(def: ToolDefinition): Record<string, unknown> {
   return toObjectParametersSchema(convertToolSchema(def), 'OpenAI');
 }
 
-function toAnthropicInputSchema(def: ToolDefinition): Record<string, unknown> {
-  return toObjectParametersSchema(convertToolSchema(def), 'Anthropic');
-}
-
 // Map local tool names to Anthropic remote tool types.
 // The custom `memory` tool (with pin/unpin) is sent as a regular function tool.
 // `memory_anthropic` maps to Anthropic's native memory server tool for cases
@@ -346,7 +342,10 @@ export function toAnthropicTools(
     return {
       name: d.name,
       description: d.description,
-      input_schema: toAnthropicInputSchema(d) as AnthropicTool['input_schema'],
+      input_schema: toObjectParametersSchema(
+        convertToolSchema(d),
+        'Anthropic',
+      ) as AnthropicTool['input_schema'],
     } as ToolUnion;
   });
 }

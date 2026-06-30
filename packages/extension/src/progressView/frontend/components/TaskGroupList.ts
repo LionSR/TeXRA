@@ -8,10 +8,13 @@ import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
-import { STREAM_STATUS } from '@shared/schemas';
-import type { GettingStartedAction } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  type GettingStartedAction,
+  type LogMessageData,
+  type TaskGroup,
+} from '@shared/schemas';
 
-// Local imports - shared utilities
 // Side-effect imports - register WA icon and spinner components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -19,7 +22,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 import { designTokens } from '@shared/styles';
-import type { LogMessageData, TaskGroup } from '@shared/schemas';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
 import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
@@ -550,10 +552,12 @@ export class TaskGroupList extends LitElement {
 
   private renderTerminalOutput(): TemplateResult {
     const tailText = processTerminalText(this.terminalBuffer.tail);
-    const committedClass = 'terminal-pre terminal-pre--committed';
-    const tailClass = 'terminal-pre terminal-pre--tail';
-    const committed = html`<pre class=${committedClass}></pre>`;
-    const tail = html`<pre class=${tailClass}>${tailText}</pre>`;
+    const committed = html`<pre
+      class="terminal-pre terminal-pre--committed"
+    ></pre>`;
+    const tail = html`<pre class="terminal-pre terminal-pre--tail">
+${tailText}</pre
+    >`;
     return html`<div class="terminal-container">${[committed, tail]}</div>`;
   }
 

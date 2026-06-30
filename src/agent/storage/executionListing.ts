@@ -58,11 +58,6 @@ let cache: ExecutionListingEntry[] | null = null;
 let migrated = false;
 let cachedWorkspacePath: string | undefined;
 
-/** Get the current workspace path for cache keying. */
-function getWorkspacePath(): string | undefined {
-  return WorkspaceFS.getPath();
-}
-
 export function invalidateListingCache(): void {
   cache = null;
 }
@@ -90,7 +85,7 @@ async function readDirOrEmpty(path: string): Promise<[string, number][]> {
  */
 export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   // Invalidate if workspace changed since last cache build
-  const currentPath = getWorkspacePath();
+  const currentPath = WorkspaceFS.getPath();
   if (currentPath !== cachedWorkspacePath) {
     cache = null;
     migrated = false;

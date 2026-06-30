@@ -64,14 +64,16 @@ export function planPackClean(
   const additionalInputFiles = filteredInputs.slice(1);
   const useMultiple = additionalInputFiles.length > 0;
 
-  const isPack = action === 'pack';
-  const command = isPack
-    ? useMultiple
+  let command: string;
+  if (action === 'pack') {
+    command = useMultiple
       ? MAIN_VIEW_COMMANDS.PACK_MULTIPLE
-      : MAIN_VIEW_COMMANDS.PACK_SINGLE
-    : useMultiple
+      : MAIN_VIEW_COMMANDS.PACK_SINGLE;
+  } else {
+    command = useMultiple
       ? MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE
       : MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
+  }
 
   const actionLabel = capitalize(action);
   const infoText = useMultiple
@@ -251,7 +253,7 @@ export function planLatexdiffVCPack(
       ? MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC
       : MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC;
 
-  const actionLabel = action === 'pack' ? 'Pack' : 'Clean';
+  const actionLabel = capitalize(action);
 
   return {
     valid: true,

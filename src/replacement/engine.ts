@@ -2,21 +2,13 @@
  * Utilities for managing text replacements in the codebase.
  */
 
-// Third-party imports
 import { LRUCache } from 'lru-cache';
 
-// Local imports - common
-
-// Local imports - log
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { getConfig } from '@utils/config/configUtils';
 
-const CHANNEL = 'ReplacementEngine';
-logger.initialize(CHANNEL);
-
-// Local file imports
 import { ReplacementCategory, ReplacementValue } from './types';
 import {
   applyLatexQuotesFormatting,
@@ -50,37 +42,31 @@ import {
   FENCED_LATEX_BLOCK_REPLACEMENTS,
 } from './rulesRegex';
 
-export interface ReplacementEngine {
-  applyNonRegex(text: string): string;
-  applyRegex(text: string): string;
-  applyAll(text: string): string;
-}
+const CHANNEL = 'ReplacementEngine';
+logger.initialize(CHANNEL);
 
-class ReplacementEngineImpl implements ReplacementEngine {
-  /**
-   * Apply all configured non-regex replacement rules.
-   */
+/**
+ * High-level APIs for applying text replacement rules.
+ */
+const replacementEngine = {
+  /** Apply all configured non-regex replacement rules. */
   applyNonRegex(text: string): string {
     const processed = applyReplacements(text, getAllReplacements()).trim();
     return shouldWrapCritiqueInAlign()
       ? wrapCritiqueInAlign(processed)
       : processed;
-  }
+  },
 
-  /**
-   * Apply all configured regex-based replacement rules.
-   */
+  /** Apply all configured regex-based replacement rules. */
   applyRegex(text: string): string {
     return applyReplacements(text, getAllReplacementsRegex()).trim();
-  }
+  },
 
   /**
-   * Apply every replacement rule in the recommended order.
-   * Non-regex replacements run before and after regex replacements to fix
-   * artifacts they may introduce.
-   *
-   * Config values are read once and reused across all passes. Whole-document
-   * cleanup runs once at the end instead of after each intermediate pass.
+   * Apply every replacement rule in the recommended order. Non-regex
+   * replacements run before and after regex replacements to fix artifacts they
+   * may introduce. Config values are read once and reused across all passes, and
+   * whole-document cleanup runs once at the end instead of after each pass.
    */
   applyAll(text: string): string {
     const replacements = getAllReplacements();
@@ -95,14 +81,12 @@ class ReplacementEngineImpl implements ReplacementEngine {
     }).trim();
     result = applyReplacements(result, replacements).trim();
     return wrapCritique ? wrapCritiqueInAlign(result) : result;
-  }
-}
+  },
+};
 
-// ===== LaTeX Content Formatting =====
-
-// Define all available non-regex categories
+// Non-regex categories, applied in this order.
 const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
-  // LaTeX Content Formatting
+  // LaTeX content formatting
   EQUATION_REPLACEMENTS,
   SECTION_REPLACEMENTS,
   LATEX_FORBIDDEN_REPLACEMENTS,
@@ -111,17 +95,17 @@ const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
   UNICODE_REPLACEMENTS,
   HTML_ENTITY_REPLACEMENTS,
   LATEX_SPACING_REPLACEMENTS,
-  // XML/Structural Formatting
+  // XML/structural formatting
   LATEX_XML_REPLACEMENTS,
   GPTNESS_REPLACEMENTS,
-  // Personal Style
+  // Personal style
   PERSONAL_STYLE_REPLACEMENTS,
   MAX_STYLE_REPLACEMENTS,
   // LaTeXdiff specific fixes
   LATEXDIFF_REPLACEMENTS,
 ];
 
-// Define all available regex categories
+// Regex categories, applied in this order.
 const REGEX_CATEGORIES: ReplacementCategory[] = [
   EQUATION_MACRO_REPLACEMENTS,
   FENCED_LATEX_BLOCK_REPLACEMENTS,
@@ -137,25 +121,33 @@ function shouldWrapCritiqueInAlign(): boolean {
   return getConfig('texra.latex.wrapCritiqueInAlign', true);
 }
 
+function selectEnabledCategories(
+  categories: ReplacementCategory[],
+  enabledNames: string[],
+): ReplacementCategory[] {
+  const enabled = new Set(enabledNames);
+  return categories.filter((category) => enabled.has(category.name));
+}
+
 /**
- * Get all non-regex replacements combined into a single category.
- * These replacements are subject to user configuration via enabledReplacements.
+ * Combine every enabled non-regex category into a single category. Custom
+ * replacements from user settings take precedence over predefined rules.
  */
 function getAllReplacements(): ReplacementCategory {
-  const enabledCategoryNames = getConfig<string[]>(
+  const enabledNames = getConfig<string[]>(
     'texra.latex.enabledReplacements',
     DEFAULT_CORE_SETTINGS.latex.enabledReplacements,
   );
-  const customReplacements = getConfig('texra.latex.customReplacements', {});
-
-  // Filter predefined categories based on user configuration
-  const enabledSet = new Set(enabledCategoryNames);
-  const enabledCategories = NON_REGEX_CATEGORIES.filter((category) =>
-    enabledSet.has(category.name),
+  const customReplacements = getConfig<Record<string, ReplacementValue>>(
+    'texra.latex.customReplacements',
+    {},
   );
 
-  // Combine patterns from all enabled categories with custom replacements taking precedence
-  const allPatterns: { [key: string]: ReplacementValue } = Object.assign(
+  const enabledCategories = selectEnabledCategories(
+    NON_REGEX_CATEGORIES,
+    enabledNames,
+  );
+  const patterns: Record<string, ReplacementValue> = Object.assign(
     {},
     ...enabledCategories.map((c) => c.patterns),
     customReplacements,
@@ -165,30 +157,28 @@ function getAllReplacements(): ReplacementCategory {
     name: 'all',
     description: 'Combined non-regex replacements',
     isRegex: false,
-    patterns: allPatterns,
+    patterns,
   };
 }
 
 /**
- * Get all regex replacement categories in order of application.
- * Filters by enabled categories from user configuration and includes
- * custom regex replacements from settings.
+ * Return every enabled regex category in application order, appending a custom
+ * category built from user settings whenever custom regex replacements exist.
  */
 function getAllReplacementsRegex(): ReplacementCategory[] {
-  const enabledCategoryNames = getConfig<string[]>(
+  const enabledNames = getConfig<string[]>(
     'texra.latex.enabledReplacementsRegex',
     DEFAULT_CORE_SETTINGS.latex.enabledReplacementsRegex,
   );
-  const customReplacements = getConfig(
+  const customReplacements = getConfig<Record<string, ReplacementValue>>(
     'texra.latex.customReplacementsRegex',
     {},
   );
 
-  const enabledSet = new Set(enabledCategoryNames);
-  const enabledCategories = REGEX_CATEGORIES.filter((category) =>
-    enabledSet.has(category.name),
+  const enabledCategories = selectEnabledCategories(
+    REGEX_CATEGORIES,
+    enabledNames,
   );
-
   if (Object.keys(customReplacements).length === 0) {
     return enabledCategories;
   }
@@ -212,7 +202,7 @@ function getAllReplacementsRegex(): ReplacementCategory[] {
  * streaming hot path.
  *
  * Bounded by an LRU so overflow evicts only the least-recently-used entry
- * rather than dropping every entry at once — a `Map.clear()` on overflow would
+ * rather than dropping every entry at once. A `Map.clear()` on overflow would
  * cold-recompile every active pattern on the next streamed chunk. Caching is
  * safe even for global (`g`) patterns: they are only ever consumed via
  * `String.prototype.replace`, which resets `lastIndex` around each call, so a
@@ -291,10 +281,5 @@ export function applyReplacements(
 
   return result;
 }
-
-/**
- * Provides high-level APIs for applying text replacement rules.
- */
-const replacementEngine: ReplacementEngine = new ReplacementEngineImpl();
 
 export default replacementEngine;

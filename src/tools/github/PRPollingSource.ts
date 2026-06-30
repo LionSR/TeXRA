@@ -36,7 +36,7 @@ import {
   formatReviewComment,
   formatSubscriptionError,
 } from './formatPREvent';
-import { getNewestTimestamp, trimSet } from './formatUtils';
+import { getNewestTimestamp, trimSet, withSince } from './formatUtils';
 import {
   ghGet,
   GitHubAuthError,
@@ -141,12 +141,6 @@ export interface PRSubscribeInput extends PRKey {
 
 export function prKeyToString(k: PRKey): string {
   return `${k.owner}/${k.repo}/pulls/${k.pullNumber}`;
-}
-
-function withSince(url: string, since: string | undefined): string {
-  if (!since) return url;
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}since=${encodeURIComponent(since)}`;
 }
 
 interface SubscriptionState extends BasePollSubscriptionState {

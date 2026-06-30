@@ -69,9 +69,7 @@ export const progressAppStyles = css`
     align-content: safe center;
     padding: var(--wa-space-l, 24px) var(--wa-space-s, 16px);
     overflow: auto;
-    font-family:
-      var(--wa-font-family-body, var(--wa-font-family-body, system-ui)),
-      sans-serif;
+    font-family: var(--wa-font-family-body, system-ui), sans-serif;
   }
 
   .progress-empty-panel {

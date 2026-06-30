@@ -46,15 +46,9 @@ export function TipRow(props: {
   readonly hour: number;
   readonly responseRunning?: boolean;
 }): React.JSX.Element {
-  const tip = tipRowText({
-    agentSelectionAvailable: props.agentSelectionAvailable,
-    hour: props.hour,
-    responseRunning: props.responseRunning,
-  });
-
   return (
     <Box paddingX={1}>
-      <Text dimColor>Tip: {tip}</Text>
+      <Text dimColor>Tip: {tipRowText(props)}</Text>
     </Box>
   );
 }

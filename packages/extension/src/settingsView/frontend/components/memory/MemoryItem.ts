@@ -252,14 +252,24 @@ export class MemoryItem extends LitElement {
     `;
   }
 
+  private renderPreviewBody(item: MemoryViewItem): TemplateResult {
+    if (item.preview === undefined) {
+      return item.previewError === true
+        ? html`<em class="text-secondary">Unable to load contents.</em>`
+        : html`<em class="text-secondary">Loading contents...</em>`;
+    }
+    if (!item.preview.trim()) {
+      return html`<em class="text-secondary">This note is empty.</em>`;
+    }
+    return html`<div class="markdown-content">
+      ${unsafeHTML(this.renderMarkdown(item.preview))}
+    </div>`;
+  }
+
   override render(): TemplateResult | typeof nothing {
     if (!this.item) {
       return nothing;
     }
-
-    const previewLoaded = this.item.preview !== undefined;
-    const previewError = this.item.previewError === true;
-    const previewText = this.item.preview?.trim() ? this.item.preview : null;
 
     return html`
       <div
@@ -285,17 +295,7 @@ export class MemoryItem extends LitElement {
         >
           ${this.contentsOpened
             ? html`<div class="memory-preview">
-                ${!previewLoaded
-                  ? previewError
-                    ? html`<em class="text-secondary"
-                        >Unable to load contents.</em
-                      >`
-                    : html`<em class="text-secondary">Loading contents...</em>`
-                  : previewText
-                    ? html`<div class="markdown-content">
-                        ${unsafeHTML(this.renderMarkdown(previewText))}
-                      </div>`
-                    : html`<em class="text-secondary">This note is empty.</em>`}
+                ${this.renderPreviewBody(this.item)}
               </div>`
             : nothing}
         </wa-details>
