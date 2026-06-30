@@ -107,4 +107,40 @@ describe('CLI transcript fallback dedupe', () => {
       entries().filter((entry) => entry.role === 'assistant'),
     ).toHaveLength(2);
   });
+
+  it('keeps answers that differ by mathematical operators or status glyphs', () => {
+    patchStream(root, (slice) => ({
+      ...slice,
+      entries: [
+        ...slice.entries,
+        {
+          id: 'user:comparison',
+          role: 'user',
+          text: 'Compare two proposed inequalities.',
+          finalized: true,
+        },
+        {
+          id: 'log:less-than',
+          role: 'assistant',
+          text: 'The condition is x < y and the check is ✓.',
+          finalized: true,
+        },
+      ],
+    }));
+
+    appendAssistantTranscriptIfMissing(
+      root,
+      'The condition is x > y and the check is ✓.',
+      'final:greater-than',
+    );
+    appendAssistantTranscriptIfMissing(
+      root,
+      'The condition is x > y and the check is ✗.',
+      'final:failed-check',
+    );
+
+    expect(
+      entries().filter((entry) => entry.role === 'assistant'),
+    ).toHaveLength(3);
+  });
 });
