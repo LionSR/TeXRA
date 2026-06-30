@@ -215,10 +215,6 @@ export const UpdatePermissionMessageSchema = z.discriminatedUnion('action', [
     id: z.string(),
   }),
 ]);
-export type UpdatePermissionMessage = z.infer<
-  typeof UpdatePermissionMessageSchema
->;
-
 const BypassTypeSchema = z.enum(['toolEdit', 'superYolo']);
 
 export const UpdateBypassMessageSchema = StreamScopedBaseSchema.extend({

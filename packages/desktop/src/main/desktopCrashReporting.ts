@@ -4,8 +4,7 @@ import { unique } from '@utils/core';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { StateStore } from '@platform/interfaces/state';
 
-export const DESKTOP_CRASH_REPORTING_DSN_SECRET =
-  'texra.desktop.crashReporting.dsn';
+const DESKTOP_CRASH_REPORTING_DSN_SECRET = 'texra.desktop.crashReporting.dsn';
 
 const REDACTED_PATH = '<redacted-path>';
 
@@ -14,7 +13,7 @@ export interface DesktopCrashReportingStatus {
   configured: boolean;
 }
 
-export interface DesktopCrashReportingInitOptions {
+interface DesktopCrashReportingInitOptions {
   globalState: StateStore;
   secrets: PlatformSecrets;
   sensitivePaths: readonly (string | undefined)[];
@@ -76,14 +75,7 @@ function scrubValue(value: unknown, scrubbers: readonly RegExp[]): unknown {
   return value;
 }
 
-export function scrubDesktopCrashEvent(
-  event: CrashEvent,
-  sensitivePaths: readonly (string | undefined)[],
-): CrashEvent | null {
-  return createDesktopCrashEventScrubber(sensitivePaths)(event);
-}
-
-export function createDesktopCrashEventScrubber(
+function createDesktopCrashEventScrubber(
   sensitivePaths: readonly (string | undefined)[],
 ): (event: CrashEvent) => CrashEvent | null {
   const scrubbers = buildPathScrubbers(sensitivePaths);

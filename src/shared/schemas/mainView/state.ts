@@ -38,7 +38,6 @@ export const PickerOptionBaseSchema = z.object({
   value: z.string(),
   label: z.string(),
 });
-export type PickerOptionBase = z.infer<typeof PickerOptionBaseSchema>;
 
 export const ModelAvailabilityKindSchema = z.enum([
   'included-access',
@@ -67,10 +66,6 @@ export const ModelAvailabilityFieldsSchema = z.object({
   requiresKey: z.boolean().optional(),
   disabled: z.boolean().optional(),
 });
-export type ModelAvailabilityFields = z.infer<
-  typeof ModelAvailabilityFieldsSchema
->;
-
 export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
   provider: z.string().optional(),
   context: z.string().optional(),

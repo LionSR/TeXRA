@@ -14,20 +14,15 @@ import {
 } from './sharedConfig';
 export {
   AUTH_BRIDGE_URL,
-  DEVICE_AUTH_BASE_URL,
   FREE_TIER,
   GITHUB_TOKEN_EXCHANGE_URL,
   GITHUB_TOKEN_REFRESH_URL,
   MAX_TIER,
-  OAUTH_PROVIDERS,
-  SERVER_SIDE_CACHE_TTL_MS,
   SUPABASE_CONFIG,
   SUPABASE_CUSTOM_DOMAIN,
   ULTRA_TIER,
-  UserTierSchema,
   isOAuthProvider,
   type OAuthProvider,
-  type SupabaseConfig,
   type UserTier,
 } from './sharedConfig';
 
