@@ -1,0 +1,205 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const retrieveSessionResumeDataMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
+  retrieveSessionResumeData: retrieveSessionResumeDataMock,
+}));
+
+import {
+  isResumeInFlight,
+  resolveAndResumeStream,
+  type ResumeStreamPorts,
+} from '@agent/runtime/resolveAndResumeStream';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+
+const STREAM = 'stream:resume' as StreamTabId;
+const runtimeHost = { emit: vi.fn() };
+
+function basePorts(
+  overrides: Partial<ResumeStreamPorts> = {},
+): ResumeStreamPorts {
+  return {
+    runtimeHost,
+    resolveResumeState: vi.fn(async () => ({
+      taskState: { agentConfig: { agent: 'a', model: 'm' } } as never,
+      executionId: 'exec-1' as never,
+    })),
+    resumeToolUseSnapshot: vi.fn(async () => true),
+    executeWorkflow: vi.fn(async () => {}),
+    reportNoResumableSession: vi.fn(),
+    reportFailure: vi.fn(),
+    ...overrides,
+  };
+}
+
+describe('resolveAndResumeStream', () => {
+  beforeEach(() => {
+    retrieveSessionResumeDataMock.mockReset();
+    runtimeHost.emit.mockReset();
+  });
+
+  afterEach(() => {
+    StreamStatusService.clear(STREAM, { emit: false });
+  });
+
+  it('routes a tool-use snapshot to the resume port', async () => {
+    const snapshot = { streamId: STREAM, executionId: 'exec-1' };
+    retrieveSessionResumeDataMock.mockResolvedValue({
+      type: 'toolUse',
+      snapshot,
+    });
+    const ports = basePorts();
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
+    expect(ports.resumeToolUseSnapshot).toHaveBeenCalledWith(snapshot);
+    expect(ports.executeWorkflow).not.toHaveBeenCalled();
+  });
+
+  it('flips RESUMING and launches the workflow executor with the resume data', async () => {
+    const agentConfig = { agent: 'a', model: 'm' } as never;
+    retrieveSessionResumeDataMock.mockResolvedValue({
+      type: 'workflow',
+      agentConfig,
+      executionId: 'exec-1',
+      modelHandlerCompatibilityKey: 'key-1',
+    });
+    let statusDuringLaunch: string | undefined;
+    const ports = basePorts({
+      executeWorkflow: vi.fn(async () => {
+        statusDuringLaunch = StreamStatusService.get(STREAM);
+      }),
+    });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
+    expect(statusDuringLaunch).toBe(STREAM_STATUS.RESUMING);
+    expect(ports.executeWorkflow).toHaveBeenCalledWith(
+      agentConfig,
+      'exec-1',
+      'key-1',
+    );
+  });
+
+  it('skips resume without resolving when the stream is already active', async () => {
+    StreamStatusService.set(STREAM, STREAM_STATUS.RUNNING, { emit: false });
+    const ports = basePorts();
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.resolveResumeState).not.toHaveBeenCalled();
+    expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
+  });
+
+  it('returns false (host owns its messaging) when no state resolves', async () => {
+    const ports = basePorts({
+      resolveResumeState: vi.fn(async () => undefined),
+    });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
+    expect(ports.reportNoResumableSession).not.toHaveBeenCalled();
+  });
+
+  it('reports no resumable session when retrieval finds nothing', async () => {
+    retrieveSessionResumeDataMock.mockResolvedValue(null);
+    const ports = basePorts();
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.reportNoResumableSession).toHaveBeenCalledWith(STREAM);
+    expect(ports.resumeToolUseSnapshot).not.toHaveBeenCalled();
+    expect(ports.executeWorkflow).not.toHaveBeenCalled();
+  });
+
+  it('keeps the in-flight guard until async no-session reporting completes', async () => {
+    retrieveSessionResumeDataMock.mockResolvedValue(null);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let markReportStarted!: () => void;
+    const reportStarted = new Promise<void>((resolve) => {
+      markReportStarted = resolve;
+    });
+    const ports = basePorts({
+      reportNoResumableSession: vi.fn(async () => {
+        markReportStarted();
+        await gate;
+      }),
+    });
+
+    const pending = resolveAndResumeStream(STREAM, ports);
+    await reportStarted;
+    expect(isResumeInFlight(STREAM)).toBe(true);
+
+    release();
+    await expect(pending).resolves.toBe(false);
+    expect(isResumeInFlight(STREAM)).toBe(false);
+  });
+
+  it('surfaces a retrieval failure without leaking the in-flight slot', async () => {
+    const error = new Error('kv boom');
+    retrieveSessionResumeDataMock.mockRejectedValue(error);
+    const ports = basePorts();
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.reportFailure).toHaveBeenCalledWith(STREAM, error);
+    expect(isResumeInFlight(STREAM)).toBe(false);
+  });
+
+  it('keeps the in-flight guard until async failure reporting completes', async () => {
+    const error = new Error('kv boom');
+    retrieveSessionResumeDataMock.mockRejectedValue(error);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let markReportStarted!: () => void;
+    const reportStarted = new Promise<void>((resolve) => {
+      markReportStarted = resolve;
+    });
+    const ports = basePorts({
+      reportFailure: vi.fn(async () => {
+        markReportStarted();
+        await gate;
+      }),
+    });
+
+    const pending = resolveAndResumeStream(STREAM, ports);
+    await reportStarted;
+    expect(isResumeInFlight(STREAM)).toBe(true);
+
+    release();
+    await expect(pending).resolves.toBe(false);
+    expect(isResumeInFlight(STREAM)).toBe(false);
+  });
+
+  it('reports in-flight while preparing and clears it once settled', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reachedPort!: () => void;
+    const reached = new Promise<void>((resolve) => {
+      reachedPort = resolve;
+    });
+    retrieveSessionResumeDataMock.mockResolvedValue({
+      type: 'toolUse',
+      snapshot: { streamId: STREAM },
+    });
+    const ports = basePorts({
+      resumeToolUseSnapshot: vi.fn(async () => {
+        reachedPort();
+        await gate;
+        return true;
+      }),
+    });
+
+    const pending = resolveAndResumeStream(STREAM, ports);
+    await reached;
+    expect(isResumeInFlight(STREAM)).toBe(true);
+
+    release();
+    await expect(pending).resolves.toBe(true);
+    expect(isResumeInFlight(STREAM)).toBe(false);
+  });
+});

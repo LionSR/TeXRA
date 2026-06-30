@@ -1511,6 +1511,38 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('runs a fresh stream through the shared workflow-actions controller', async () => {
+    const taskState = workflowTaskState();
+    const runAgent = vi.fn(async () => {});
+    const bridge = await createBridge([], { runAgent });
+
+    try {
+      bridge.handleProgressEvent('setTaskState', {
+        streamId: 'stream-new',
+        executionId: 'exec-new',
+        taskState,
+      });
+
+      const runNew =
+        bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW];
+      expect(runNew).toBeTypeOf('function');
+      await runNew?.({
+        command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
+        stream: 'stream-new',
+      });
+
+      // Fresh run: the existing execution id is dropped (no resume reuse).
+      expect(runAgent).toHaveBeenCalledWith(
+        { config: expect.objectContaining(taskState.agentConfig) },
+        expect.objectContaining({
+          runtimeHost: expect.objectContaining({ emit: expect.any(Function) }),
+        }),
+      );
+    } finally {
+      bridge.dispose();
+    }
+  });
+
   it('resumes hydrated ghost streams using hinted execution ids', async () => {
     const executionId = 'abc123';
     const taskState = workflowTaskState();

@@ -1,92 +1,58 @@
 /**
- * Shared snapshot-driven resume helper.
+ * Snapshot-driven auto-resume entry point for the VS Code host.
  *
  * Used by:
  *   - `texra.sendFollowUp` (auto-resume when a follow-up lands on a
  *     WAITING / children_running stream).
  *   - `AgentResumePort.tryResumeStream` (inquiry continuation path).
+ *
+ * This is a thin adapter: the host-neutral {@link resolveAndResumeStream}
+ * orchestrator owns the guard, retrieval, and tool-use/workflow branch; the
+ * extension supplies only how it resolves persisted state and launches a run.
  */
-import * as vscode from 'vscode';
-
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
-  retrieveSessionResumeData,
-  type SessionResumeData,
-} from '@agent/runtime/SessionResumeRetrieval';
+  isResumeInFlight,
+  resolveAndResumeStream,
+} from '@agent/runtime/resolveAndResumeStream';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';
 
-import { ResumeAgentResultSchema } from './resumeCommand';
+import { runExecuteCommand } from './executeCommand';
+import { resumeExtensionToolUseSnapshot } from './resumeCommand';
 
 const logger = createChannelTrace('resumeFromSnapshot');
 
-export async function tryResumeFromSnapshot(
-  streamId: StreamTabId,
-): Promise<boolean> {
-  if (StreamStatusService.isActiveOrResuming(streamId)) {
-    logger.debug(`Stream ${streamId} is active/resuming, skipping auto-resume`);
-    return false;
-  }
+export { isResumeInFlight };
 
-  const progressState = ProgressViewProvider.getInstance()?.state;
-  const executionId = progressState?.snapshots.getExecutionId(streamId);
-  const taskState = progressState?.snapshots.getTaskState(streamId);
-
-  if (!progressState) {
-    logger.warn(`No ProgressViewProvider found for stream: ${streamId}`);
-    return false;
-  }
-  if (!executionId) {
-    logger.warn(`No execution ID found for stream: ${streamId}`);
-    return false;
-  }
-  if (!taskState) {
-    logger.warn(`No task state found for stream: ${streamId}`);
-    return false;
-  }
-
-  let resumeData: SessionResumeData | null;
-  try {
-    resumeData = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      taskState,
-    );
-  } catch (error) {
-    // Retrieval failed unexpectedly (distinct from "no resumable session").
-    // Auto-resume is best-effort here, so degrade, but log the real failure
-    // rather than letting it masquerade as "nothing to resume".
-    logger.error(`Failed to retrieve resume data for stream: ${streamId}`, {
-      data: error,
-    });
-    return false;
-  }
-  if (!resumeData) return false;
-
-  logger.info(
-    `Auto-resuming ${resumeData.type} session for stream: ${streamId}`,
-  );
-  try {
-    if (resumeData.type === 'toolUse') {
-      const rawResult = await vscode.commands.executeCommand(
-        'texra.resumeAgent',
-        { snapshot: resumeData.snapshot },
-      );
-      const parseResult = ResumeAgentResultSchema.safeParse(rawResult);
-      return parseResult.success && parseResult.data.success;
-    }
-    // Workflow: execute returns void - success if no exception thrown
-    await vscode.commands.executeCommand('texra.execute', {
-      config: resumeData.agentConfig,
-      executionId: resumeData.executionId,
-      modelHandlerCompatibilityKey: resumeData.modelHandlerCompatibilityKey,
-    });
-    return true;
-  } catch (error) {
-    logger.error(`Failed to execute resume command for stream: ${streamId}`, {
-      data: error,
-    });
-    return false;
-  }
+export function tryResumeFromSnapshot(streamId: StreamTabId): Promise<boolean> {
+  return resolveAndResumeStream(streamId, {
+    runtimeHost: extensionAgentRuntimeHost,
+    resolveResumeState: async (id) => {
+      const progressState = ProgressViewProvider.getInstance()?.state;
+      if (!progressState) {
+        logger.warn(`No ProgressViewProvider found for stream: ${id}`);
+        return undefined;
+      }
+      const executionId = progressState.snapshots.getExecutionId(id);
+      const taskState = progressState.snapshots.getTaskState(id);
+      if (!executionId) {
+        logger.warn(`No execution ID found for stream: ${id}`);
+        return undefined;
+      }
+      if (!taskState) {
+        logger.warn(`No task state found for stream: ${id}`);
+        return undefined;
+      }
+      return { taskState, executionId };
+    },
+    resumeToolUseSnapshot: (snapshot) =>
+      resumeExtensionToolUseSnapshot(snapshot),
+    executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
+      runExecuteCommand({ config, executionId, modelHandlerCompatibilityKey }),
+    reportFailure: (id, error) => {
+      logger.error(`Failed to resume stream: ${id}`, { data: error });
+    },
+  });
 }
