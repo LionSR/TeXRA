@@ -620,6 +620,83 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('owns manual compaction admission for active tool-use flows', () => {
+    const explicit = createRecordingHost();
+    const registry = new ExecutionRegistry();
+    const streamId = 'stream-manual-compaction-test' as StreamTabId;
+    const unsupportedStreamId =
+      'stream-manual-compaction-unsupported-test' as StreamTabId;
+    const requestImmediateCompaction = vi.fn();
+    const context: LiveToolUseFlowContext = {
+      session: {
+        appendFollowUp: vi.fn(),
+      },
+      modelHandler: {
+        supportsManualCompaction: true,
+      },
+      runtimeHost: explicit.host,
+      requestImmediateCompaction,
+      modelSwitchDisabledReason: vi.fn(),
+      switchModel: vi.fn(),
+    };
+    const unsupportedContext: LiveToolUseFlowContext = {
+      ...context,
+      modelHandler: {
+        supportsManualCompaction: false,
+      },
+      requestImmediateCompaction: vi.fn(),
+    };
+
+    try {
+      expect(registry.requestManualCompaction(undefined)).toEqual({
+        kind: 'no_active_tool_use',
+      });
+      expect(registry.requestManualCompaction(streamId)).toEqual({
+        kind: 'no_active_tool_use',
+        streamId,
+      });
+
+      const handle = new AgentExecutionHandle(
+        'exec-manual-compaction-test',
+        streamId,
+        streamId,
+        'test-tool-use',
+        'toolUse',
+        explicit.host,
+      );
+      handle.attachToolUseFlow(context);
+      registry.track(handle);
+
+      const unsupportedHandle = new AgentExecutionHandle(
+        'exec-manual-compaction-unsupported-test',
+        unsupportedStreamId,
+        unsupportedStreamId,
+        'test-tool-use',
+        'toolUse',
+        explicit.host,
+      );
+      unsupportedHandle.attachToolUseFlow(unsupportedContext);
+      registry.track(unsupportedHandle);
+
+      expect(registry.requestManualCompaction(unsupportedStreamId)).toEqual({
+        kind: 'unsupported',
+        streamId: unsupportedStreamId,
+      });
+      expect(
+        unsupportedContext.requestImmediateCompaction,
+      ).not.toHaveBeenCalled();
+
+      expect(registry.requestManualCompaction(streamId)).toEqual({
+        kind: 'requested',
+        streamId,
+        runtimeHost: explicit.host,
+      });
+      expect(requestImmediateCompaction).toHaveBeenCalledOnce();
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('owns tool-use follow-up admission from status, context, and children', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusRegistry();
