@@ -88,11 +88,13 @@ export function normalizeOpenAIResponseUsage(
   rawUsage: ResponseUsage,
   responseTimeMs: number,
   config: OpenAIPricingConfig,
+  computePrice: (usage: ResponseUsage) => number = (usage) =>
+    computeOpenAIResponsePrice(usage, config),
 ): NormalizedUsage {
   return normalizeUsage(
     {
       provider: 'openai-response',
-      computePrice: (usage) => computeOpenAIResponsePrice(usage, config),
+      computePrice,
       extract: (usage) => ({
         inputTokens: usage.input_tokens ?? 0,
         outputTokens: usage.output_tokens ?? 0,

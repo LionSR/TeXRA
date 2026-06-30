@@ -2025,6 +2025,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       rawUsage,
       responseTimeMs,
       this.standardPricingConfig(),
+      (usage) => this.computePrice(usage),
     );
   }
 
