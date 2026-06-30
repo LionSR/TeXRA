@@ -19,7 +19,14 @@ import { createRequire } from 'node:module';
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(cliRoot));
 const require = createRequire(import.meta.url);
-const binaryPath = path.join(cliRoot, 'dist/bin/texra.js');
+const validationBinaryPath = path.join(
+  cliRoot,
+  '.texra-validate-run',
+  'texra.js',
+);
+const binaryPath = process.env.TEXRA_CLI_RUN_VALIDATOR_BINARY?.trim()
+  ? path.resolve(process.env.TEXRA_CLI_RUN_VALIDATOR_BINARY)
+  : validationBinaryPath;
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
 const validationFlagContent = 'texra-cli-run-validation\n';
@@ -108,7 +115,7 @@ function formatUsage() {
     '[validate-run] usage: node scripts/validate-run.mjs [--no-build]',
     '',
     'Options:',
-    '  --no-build  Reuse the existing dist/bin/texra.js validation bundle instead of rebuilding it',
+    '  --no-build  Reuse the existing validator-only CLI bundle instead of rebuilding it',
     '  -h, --help  Show this help',
   ].join('\n');
 }
@@ -148,7 +155,7 @@ function parseArgs(argv) {
 function preflightExistingValidationBundle() {
   if (!existsSync(binaryPath)) {
     console.error(
-      `[validate-run] --no-build requires an existing CLI bundle: ${binaryPath}`,
+      `[validate-run] --no-build requires an existing validator-only CLI bundle: ${binaryPath}`,
     );
     console.error(
       '[validate-run] omit --no-build once to build the validation bundle.',
@@ -162,7 +169,7 @@ function preflightExistingValidationBundle() {
       `[validate-run] --no-build requires ${binaryPath} to include the internal validation model.`,
     );
     console.error(
-      '[validate-run] omit --no-build once, or run `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL=1 pnpm --filter @texra-ai/cli run build`.',
+      '[validate-run] omit --no-build once so the validator can build its private bundle.',
     );
     process.exit(1);
   }
@@ -1019,7 +1026,10 @@ async function validateCliRunArtifacts(options = {}) {
   } else {
     const buildResult = run('pnpm', ['run', 'build'], {
       cwd: cliRoot,
-      env: { TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1' },
+      env: {
+        TEXRA_CLI_BUNDLE_OUTFILE: binaryPath,
+        TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
+      },
     });
     assertSuccess(buildResult, 'pnpm run build');
   }
@@ -1035,20 +1045,6 @@ async function validateCliRunArtifacts(options = {}) {
   console.log('CLI run validation passed');
 }
 
-function rebuildCliWithoutInternalValidationModel() {
-  const rebuildResult = run('pnpm', ['run', 'build'], {
-    cwd: cliRoot,
-    env: { TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '' },
-  });
-  assertSuccess(rebuildResult, 'pnpm run build after validation');
-}
-
 const args = parseArgs(process.argv.slice(2));
 
-try {
-  await validateCliRunArtifacts(args);
-} finally {
-  if (!args.noBuild) {
-    rebuildCliWithoutInternalValidationModel();
-  }
-}
+await validateCliRunArtifacts(args);
