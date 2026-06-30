@@ -13,6 +13,7 @@ import {
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
   computeModelOptionsData,
+  getModelUnavailableReason,
   invalidateModelOptionsCache,
   type ModelOptionsAccess,
   type ModelOptionsServerAccess,
@@ -149,6 +150,20 @@ describe('computeModelOptionsData relay quota state', () => {
 
     expect(model.availability).toBe('missing-key');
     expect(model.disabled).toBe(true);
+  });
+
+  it('does not tell users to configure API keys for keyless providers', async () => {
+    const access = createModelOptionsAccess({
+      useIncludedAccess: false,
+      relayQuotaExceeded: false,
+      quotaAutoSwitched: false,
+    });
+
+    const reason = await getModelUnavailableReason('copilot4o', access);
+
+    expect(reason).toBe(
+      'Model "copilot4o" is provided by Copilot, which does not use provider API keys. Use a host that supports Copilot models or choose another model.',
+    );
   });
 
   it('does not disable API-key access when ChatGPT subscription is preferred but signed out', async () => {

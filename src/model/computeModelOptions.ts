@@ -297,9 +297,12 @@ export async function getModelUnavailableReason(
     return `Model "${model}" is unavailable because your monthly TeXRA relay quota is exhausted. Switch to personal API keys or wait for the next quota period.`;
   }
 
-  // Personal key mode or unauthenticated — missing provider key
+  // Personal key mode or unauthenticated — missing key or keyless provider.
   const providerName =
     PROVIDER_DISPLAY_NAMES[config.provider] ?? config.provider;
+  if (!isApiProvider(config.provider)) {
+    return `Model "${model}" is provided by ${providerName}, which does not use provider API keys. Use a host that supports ${providerName} models or choose another model.`;
+  }
   return `Model "${model}" requires your ${providerName} API key. Provide it, or enable included access.`;
 }
 
