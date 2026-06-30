@@ -1,6 +1,9 @@
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports - agent runtime
+import type { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
+
 // Local imports - progress view
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -37,6 +40,37 @@ function createWebviewView(): vscode.WebviewView {
 type ProgressViewProviderFake = ProgressViewProvider & {
   refreshOnboardingFunnel: ReturnType<typeof vi.fn>;
 };
+
+type CoordinatorBridgeFake = Pick<
+  RunCoordinatorBridge,
+  | 'cancelRetry'
+  | 'clearRetryRequest'
+  | 'resolvePlanApproval'
+  | 'resolveProposal'
+  | 'triggerRetry'
+>;
+
+function createCoordinatorBridge(
+  overrides: Partial<CoordinatorBridgeFake> = {},
+): CoordinatorBridgeFake {
+  return {
+    cancelRetry: vi.fn(() => false),
+    clearRetryRequest: vi.fn(),
+    resolvePlanApproval: vi.fn(() => false),
+    resolveProposal: vi.fn(() => false),
+    triggerRetry: vi.fn(() => true),
+    ...overrides,
+  };
+}
+
+function createMessageHandler(
+  provider: ProgressViewProvider,
+  context: vscode.ExtensionContext,
+  host = new FakePromptHost(),
+  coordinators = createCoordinatorBridge(),
+): ProgressViewMessageHandler {
+  return new ProgressViewMessageHandler(provider, context, host, coordinators);
+}
 
 function createProgressViewProvider(): ProgressViewProviderFake {
   const snapshots = {
@@ -97,11 +131,7 @@ describe('progress-view onboarding refresh wiring', () => {
     const context = createExtensionContext();
     const provider = createProgressViewProvider();
     provider.refreshOnboardingFunnel.mockResolvedValue(undefined);
-    const handler = new ProgressViewMessageHandler(
-      provider,
-      context,
-      new FakePromptHost(),
-    );
+    const handler = createMessageHandler(provider, context);
 
     await handler.handleMessage(
       {
@@ -138,11 +168,7 @@ describe('progress-view onboarding refresh wiring', () => {
     async (action) => {
       const context = createExtensionContext();
       const provider = createProgressViewProvider();
-      const handler = new ProgressViewMessageHandler(
-        provider,
-        context,
-        new FakePromptHost(),
-      );
+      const handler = createMessageHandler(provider, context);
 
       await handler.handleMessage(
         {
@@ -171,7 +197,7 @@ describe('progress-view onboarding refresh wiring', () => {
       }
     ).keys = vi.fn(() => []);
 
-    const handler = new ProgressViewMessageHandler(provider, context, prompt);
+    const handler = createMessageHandler(provider, context, prompt);
 
     await handler.handleMessage(
       { command: PROGRESS_VIEW_COMMANDS.DELETE_ALL },
@@ -198,6 +224,124 @@ describe('progress-view onboarding refresh wiring', () => {
     expect(provider.webviewBridge.clearAll).toHaveBeenCalledOnce();
     expect(provider.syncFullView).toHaveBeenCalledWith({
       forceRebuild: true,
+    });
+  });
+
+  it('routes retry request actions through the injected coordinators', async () => {
+    const context = createExtensionContext();
+    const provider = createProgressViewProvider();
+    const coordinators = createCoordinatorBridge();
+    const handler = createMessageHandler(
+      provider,
+      context,
+      new FakePromptHost(),
+      coordinators,
+    );
+
+    await handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST,
+        stream: 'stream-a',
+        feedback: 'try the other branch',
+      },
+      createWebviewView(),
+    );
+    await handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST,
+        stream: 'stream-a',
+      },
+      createWebviewView(),
+    );
+
+    expect(coordinators.triggerRetry).toHaveBeenCalledWith(
+      'stream-a',
+      'try the other branch',
+    );
+    expect(coordinators.cancelRetry).toHaveBeenCalledWith('stream-a');
+  });
+
+  it('reports missing retry requests from the injected coordinators', async () => {
+    const context = createExtensionContext();
+    const provider = createProgressViewProvider();
+    const prompt = new FakePromptHost();
+    const coordinators = createCoordinatorBridge({
+      triggerRetry: vi.fn(() => false),
+    });
+    const handler = createMessageHandler(
+      provider,
+      context,
+      prompt,
+      coordinators,
+    );
+
+    await handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST,
+        stream: 'stream-a',
+      },
+      createWebviewView(),
+    );
+
+    expect(prompt.messages).toContainEqual({
+      kind: 'info',
+      message: 'No retryable request is available for this stream yet.',
+    });
+  });
+
+  it('routes agent proposal actions through the injected coordinators', async () => {
+    const context = createExtensionContext();
+    const provider = createProgressViewProvider();
+    const coordinators = createCoordinatorBridge();
+    const handler = createMessageHandler(
+      provider,
+      context,
+      new FakePromptHost(),
+      coordinators,
+    );
+
+    await handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+        proposalId: 'proposal-a',
+        action: 'approve',
+        model: 'gemini31p',
+        agent: 'critic',
+      },
+      createWebviewView(),
+    );
+
+    expect(coordinators.resolveProposal).toHaveBeenCalledWith('proposal-a', {
+      action: 'approve',
+      model: 'gemini31p',
+      agent: 'critic',
+    });
+  });
+
+  it('routes plan approval actions through the injected coordinators', async () => {
+    const context = createExtensionContext();
+    const provider = createProgressViewProvider();
+    const coordinators = createCoordinatorBridge();
+    const handler = createMessageHandler(
+      provider,
+      context,
+      new FakePromptHost(),
+      coordinators,
+    );
+
+    await handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+        approvalId: 'plan-a',
+        action: 'reject',
+        feedback: 'state the invariant first',
+      },
+      createWebviewView(),
+    );
+
+    expect(coordinators.resolvePlanApproval).toHaveBeenCalledWith('plan-a', {
+      action: 'reject',
+      feedback: 'state the invariant first',
     });
   });
 
