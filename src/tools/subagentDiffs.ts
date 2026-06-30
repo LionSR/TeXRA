@@ -112,7 +112,7 @@ export async function computeAndWriteWorkflowDiffs(
         let largeChange = false;
         const originalLines = countLines(original);
         if (originalLines > 0 && o.added !== null && o.removed !== null) {
-          const changedLines = (o.added ?? 0) + (o.removed ?? 0);
+          const changedLines = o.added + o.removed;
           largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
         }
 

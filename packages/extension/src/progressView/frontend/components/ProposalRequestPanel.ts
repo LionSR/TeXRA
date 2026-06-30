@@ -58,6 +58,14 @@ function proposalIdOf(
   return p?.kind === PERMISSION_KIND.PROPOSAL ? p.data.proposalId : undefined;
 }
 
+// Read from currentTarget (the wa-select host) instead of target. wa-select can
+// retarget events from internal elements, and HTMLSelectElement is the wrong type
+// for this Web Component anyway.
+function readSelectValue(event: Event): string {
+  const select = event.currentTarget as WaSelect | null;
+  return typeof select?.value === 'string' ? select.value : '';
+}
+
 @customElement('proposal-request-panel')
 export class ProposalRequestPanel extends BaseFeedbackPanel {
   static override styles = [
@@ -293,19 +301,14 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   };
 
   private handleSelectChange = (event: Event): void => {
-    // Read from currentTarget (the wa-select host) instead of target — wa-select
-    // can retarget events from internal elements, and HTMLSelectElement is the
-    // wrong type for this Web Component anyway.
-    const select = event.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
+    const value = readSelectValue(event);
     if (value) {
       this.selectedModel = value;
     }
   };
 
   private handleAgentSelectChange = (event: Event): void => {
-    const select = event.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
+    const value = readSelectValue(event);
     if (value) {
       this.selectedAgent = value;
     }

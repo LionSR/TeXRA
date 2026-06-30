@@ -29,6 +29,12 @@ import { ProgressEvents } from '../events';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type { FollowupOptionsState } from '../store';
 
+/** Read the current value from a wa-select change event, defaulting to ''. */
+function readSelectValue(event: Event): string {
+  const select = event.currentTarget as WaSelect | null;
+  return typeof select?.value === 'string' ? select.value : '';
+}
+
 @customElement('workflow-tool-use-followup-section')
 export class WorkflowToolUseFollowupSection extends LitElement {
   static override styles = [
@@ -237,15 +243,11 @@ export class WorkflowToolUseFollowupSection extends LitElement {
   };
 
   private handleAgentChange = (event: Event): void => {
-    const select = event.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
-    this.selectedAgent = value;
+    this.selectedAgent = readSelectValue(event);
   };
 
   private handleModelChange = (event: Event): void => {
-    const select = event.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
-    this.selectedModel = value;
+    this.selectedModel = readSelectValue(event);
   };
 
   private handleQuestionInput = (event: Event): void => {

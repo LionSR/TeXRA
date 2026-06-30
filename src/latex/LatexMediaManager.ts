@@ -16,9 +16,8 @@ import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 // Local file imports
 import { extractLatexFileDependencies } from './extractFileDependencies';
 import { extractFigurePathsFromLatex } from './extractFigure';
-import { resolveLatexDir } from './latexParsingUtils';
+import { resolveLatexDir, stripLatexComments } from './latexParsingUtils';
 import { tikzPictureManager } from './TikzPictureManager';
-import { stripLatexComments } from './latexParsingUtils';
 import { compileLatex2Pdf } from './texTools';
 
 /** LaTeX project siblings that should always ride alongside the main file. */

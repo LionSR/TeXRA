@@ -97,10 +97,7 @@ const cliPlatformLog: LogBackend = {
   debug: (channel, message) => logAt('debug', channel, message),
   info: (channel, message) => logAt('info', channel, message),
   warn: (channel, message) => logAt('warn', channel, message),
-  error: (channel, message) => {
-    if (quietPlatformLogs) return;
-    writeTextStderr(`[error] [${channel}] ${message}`);
-  },
+  error: (channel, message) => logAt('error', channel, message),
 };
 
 export function installCliShutdownSignalHandlers(

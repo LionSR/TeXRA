@@ -72,6 +72,22 @@ export function ConfirmCard({
     onFeedbackValueChange?.(value);
   }
 
+  function feedbackInput(marginTop: number): React.JSX.Element {
+    return (
+      <Box marginTop={marginTop}>
+        <Text>{'> '}</Text>
+        <BaseTextInput
+          value={feedback}
+          placeholder={feedbackPlaceholder}
+          onChange={updateFeedback}
+          onSubmit={(value) =>
+            onDecide({ accepted: false, userMessage: value.trim() })
+          }
+        />
+      </Box>
+    );
+  }
+
   useInput(
     (input, key) => {
       if (feedbackMode) {
@@ -162,21 +178,7 @@ export function ConfirmCard({
             </Text>
           </Text>
         )}
-        {feedbackMode ? (
-          <Box>
-            <Text>{'> '}</Text>
-            <BaseTextInput
-              value={feedback}
-              placeholder={feedbackPlaceholder}
-              onChange={updateFeedback}
-              onSubmit={(value) =>
-                onDecide({ accepted: false, userMessage: value.trim() })
-              }
-            />
-          </Box>
-        ) : (
-          children
-        )}
+        {feedbackMode ? feedbackInput(0) : children}
       </Box>
     );
   }
@@ -192,19 +194,7 @@ export function ConfirmCard({
         {title}
       </Text>
       {children}
-      {feedbackMode ? (
-        <Box marginTop={1}>
-          <Text>{'> '}</Text>
-          <BaseTextInput
-            value={feedback}
-            placeholder={feedbackPlaceholder}
-            onChange={updateFeedback}
-            onSubmit={(value) =>
-              onDecide({ accepted: false, userMessage: value.trim() })
-            }
-          />
-        </Box>
-      ) : null}
+      {feedbackMode ? feedbackInput(1) : null}
       <Box marginTop={1}>
         <KeyHints hints={hints} confirmCancel={false} />
       </Box>

@@ -186,18 +186,27 @@ export function maxDiffScrollOffset(
   });
 }
 
+function overflowMarkerCandidates(
+  kind: OverflowMarkerKind,
+  count: number,
+): readonly [string, string] {
+  switch (kind) {
+    case 'hidden':
+      return [`... ${count} rows hidden`, `... ${count} hidden`];
+    case 'previous':
+      return [`... ${count} previous rows`, `... ${count} prev rows`];
+    case 'more':
+      return [`... ${count} more rows`, `... +${count} rows`];
+  }
+}
+
 function overflowMarkerText(
   kind: OverflowMarkerKind,
   count: number,
   width?: number,
 ): string {
-  const candidates =
-    kind === 'hidden'
-      ? [`... ${count} rows hidden`, `... ${count} hidden`]
-      : kind === 'previous'
-        ? [`... ${count} previous rows`, `... ${count} prev rows`]
-        : [`... ${count} more rows`, `... +${count} rows`];
-  if (width === undefined) return candidates[0] ?? '';
+  const candidates = overflowMarkerCandidates(kind, count);
+  if (width === undefined) return candidates[0];
 
   const markerWidth = Math.max(MIN_DIFF_WIDTH, width);
   return (

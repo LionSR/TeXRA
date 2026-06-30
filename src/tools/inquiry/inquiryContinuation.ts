@@ -125,51 +125,40 @@ async function deliverContinuation(params: {
     params.session,
   );
 
-  switch (result.status) {
-    case 'sent':
-      await emitInquiryThreadUpdate(
-        params.threadId,
-        { resumeOutcome: 'sent' },
-        params.session,
-      );
-      return 'sent';
-    case 'queued': {
-      if (result.reason === 'waiting' || result.reason === 'children_running') {
-        const resumed = await platform().agentResume.tryResumeStream(
-          params.parentStreamId,
-        );
-        const outcome: InjectionOutcome = resumed ? 'resumed' : 'queued';
-        await emitInquiryThreadUpdate(
-          params.threadId,
-          {
-            resumeOutcome: outcome,
-          },
-          params.session,
-        );
-        return outcome;
-      }
-      await emitInquiryThreadUpdate(
-        params.threadId,
-        {
-          resumeOutcome: 'queued',
-        },
-        params.session,
-      );
-      return 'queued';
-    }
-    case 'no_session':
-      logger.warn(
-        `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} has no session.`,
-      );
-      await emitInquiryThreadUpdate(
-        params.threadId,
-        {
-          resumeOutcome: 'parent_finished',
-        },
-        params.session,
-      );
-      return 'archived';
+  if (result.status === 'no_session') {
+    logger.warn(
+      `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} has no session.`,
+    );
+    await emitInquiryThreadUpdate(
+      params.threadId,
+      { resumeOutcome: 'parent_finished' },
+      params.session,
+    );
+    return 'archived';
   }
+
+  // 'sent' resolves immediately. A 'queued' follow-up whose cycle has exited
+  // (waiting / children_running) is nudged via tryResumeStream so the parent
+  // stream actually picks the message up.
+  let outcome: 'sent' | 'queued' | 'resumed' = 'queued';
+  if (result.status === 'sent') {
+    outcome = 'sent';
+  } else if (
+    result.reason === 'waiting' ||
+    result.reason === 'children_running'
+  ) {
+    const resumed = await platform().agentResume.tryResumeStream(
+      params.parentStreamId,
+    );
+    outcome = resumed ? 'resumed' : 'queued';
+  }
+
+  await emitInquiryThreadUpdate(
+    params.threadId,
+    { resumeOutcome: outcome },
+    params.session,
+  );
+  return outcome;
 }
 
 export async function injectContinuationForAnsweredThread(

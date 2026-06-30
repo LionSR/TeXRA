@@ -25,7 +25,7 @@ import {
   formatIssueReopened,
   formatIssueSubscriptionError,
 } from './formatIssueEvent';
-import { getNewestTimestamp, trimSet } from './formatUtils';
+import { getNewestTimestamp, trimSet, withSince } from './formatUtils';
 import { ghGet } from './githubClient';
 import {
   PollingSourceBase,
@@ -79,12 +79,6 @@ function createInitialState(issue: IssueKey): SubscriptionState {
     consecutiveFailures: 0,
     skipPollUntilMs: 0,
   };
-}
-
-function withSince(url: string, since: string | undefined): string {
-  if (!since) return url;
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}since=${encodeURIComponent(since)}`;
 }
 
 class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {

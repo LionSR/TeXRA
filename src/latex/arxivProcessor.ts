@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import { createGunzip } from 'node:zlib';
 
 import { parse as parseContentDisposition } from 'content-disposition';
@@ -17,6 +16,7 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
+import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 
 export interface ExtractResult {
   success: boolean;
@@ -105,7 +105,7 @@ class ArxivSourceProcessor {
     }
 
     const isTar = contentType.includes('tar');
-    const isGzip = contentType.includes('gzip') || contentType.includes('gz');
+    const isGzip = contentType.includes('gz');
     const isTex = contentType.includes('tex') || contentType.includes('plain');
 
     if (isTar && isGzip) return '.tar.gz';

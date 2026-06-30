@@ -188,16 +188,11 @@ export class SessionHandle {
           logger.warn(`Idle session disposal failed: ${toErrorMessage(err)}`);
         });
       } else {
-        this.coordinators.cleanupAllRequests();
-        this.subscriptions.dispose();
-        this.executions.dispose();
-        this.interrupts.retainOnly(new Set());
-        this.resultListeners.clear();
+        this.teardownOwners();
       }
     } finally {
       if (!keepActiveExecutions) {
-        unregisterFlushers(this.flushers);
-        liveSessions.delete(this);
+        this.deregisterSession();
       }
     }
   }
@@ -213,14 +208,24 @@ export class SessionHandle {
       }
     } finally {
       this.flushPendingTraces();
-      this.coordinators.cleanupAllRequests();
-      this.subscriptions.dispose();
-      this.executions.dispose();
-      this.interrupts.retainOnly(new Set());
-      this.resultListeners.clear();
-      unregisterFlushers(this.flushers);
-      liveSessions.delete(this);
+      this.teardownOwners();
+      this.deregisterSession();
     }
+  }
+
+  /** Dispose the four runtime owners and drop result listeners. */
+  private teardownOwners(): void {
+    this.coordinators.cleanupAllRequests();
+    this.subscriptions.dispose();
+    this.executions.dispose();
+    this.interrupts.retainOnly(new Set());
+    this.resultListeners.clear();
+  }
+
+  /** Leave the process-wide trace drain and the cross-session registry. */
+  private deregisterSession(): void {
+    unregisterFlushers(this.flushers);
+    liveSessions.delete(this);
   }
 }
 

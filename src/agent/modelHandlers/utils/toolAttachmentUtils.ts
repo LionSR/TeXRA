@@ -152,21 +152,21 @@ export function extractToolAttachments(
       ? ('error' as const)
       : ('executed' as const);
 
+  // Error text precedence: explicit error, then output, then summary, then a
+  // generic fallback. Computed here to keep the discriminator stamp below flat.
+  let errorText: string | undefined;
+  if (status === 'error') {
+    if (hasError) errorText = result.error;
+    else if (hasOutput) errorText = result.output;
+    else if (hasSummary) errorText = result.summary;
+    else errorText = 'Tool failed';
+  }
+
   // Stamp the discriminator onto the raw result so the discriminated union
   // schema validates the correct variant.
   const parsed = ToolResultPayloadSchema.parse({
     ...result,
-    ...(status === 'error'
-      ? {
-          error: hasError
-            ? result.error
-            : hasOutput
-              ? result.output
-              : hasSummary
-                ? result.summary
-                : 'Tool failed',
-        }
-      : {}),
+    ...(status === 'error' ? { error: errorText } : {}),
     status,
   });
 

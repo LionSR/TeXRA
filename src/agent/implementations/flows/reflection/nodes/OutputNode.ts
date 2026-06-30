@@ -100,13 +100,7 @@ export class OutputNode<C = unknown> extends Node<
             outputLocation,
             setting.documentTag,
           ),
-        {
-          logger,
-          level: 'warn' as const,
-          label: 'XML structure',
-          messageType: MESSAGE_TYPES.DEFAULT,
-          recover: () => undefined,
-        },
+        this.recoverWarn('XML structure'),
       );
 
       await tryOperation(
@@ -118,62 +112,38 @@ export class OutputNode<C = unknown> extends Node<
             outputLocation,
             currentRound,
           ),
-        {
-          logger,
-          level: 'warn' as const,
-          label: 'Output processing',
-          messageType: MESSAGE_TYPES.DEFAULT,
-          recover: () => undefined,
-        },
+        this.recoverWarn('Output processing'),
       );
 
       if (hasRoundOutputs(outputState, currentRound)) {
         mapping = traceFileLineage(outputState, diffBaseFiles, currentRound);
 
-        await tryOperation(
-          async () => {
-            const diffArtifacts = await this.handleLatexdiff(
-              currentRound,
-              diffBaseFiles,
-              mapping!,
-              diffManager,
-            );
-            compiledArtifacts.push(...diffArtifacts);
-          },
-          {
-            logger,
-            level: 'warn' as const,
-            label: 'Latexdiff',
-            messageType: MESSAGE_TYPES.DEFAULT,
-            recover: () => undefined,
-          },
-        );
+        await tryOperation(async () => {
+          const diffArtifacts = await this.handleLatexdiff(
+            currentRound,
+            diffBaseFiles,
+            mapping!,
+            diffManager,
+          );
+          compiledArtifacts.push(...diffArtifacts);
+        }, this.recoverWarn('Latexdiff'));
 
-        await tryOperation(
-          async () => {
-            const hadCompileFailures = hasCompileFailures(
-              outputState,
-              currentRound,
-            );
-            const compileResult = await runCompileCheck(
-              this.services,
-              currentRound,
-            );
-            compileFailures = compileResult.failures;
-            compileRoundResult = compileResult.compileResult;
-            compiledArtifacts.push(...compileResult.artifacts);
-            setCompileFailures(outputState, currentRound, compileFailures);
-            emitCompileFailures =
-              compileFailures.length > 0 || hadCompileFailures;
-          },
-          {
-            logger,
-            level: 'warn' as const,
-            label: 'Compile check',
-            messageType: MESSAGE_TYPES.DEFAULT,
-            recover: () => undefined,
-          },
-        );
+        await tryOperation(async () => {
+          const hadCompileFailures = hasCompileFailures(
+            outputState,
+            currentRound,
+          );
+          const compileResult = await runCompileCheck(
+            this.services,
+            currentRound,
+          );
+          compileFailures = compileResult.failures;
+          compileRoundResult = compileResult.compileResult;
+          compiledArtifacts.push(...compileResult.artifacts);
+          setCompileFailures(outputState, currentRound, compileFailures);
+          emitCompileFailures =
+            compileFailures.length > 0 || hadCompileFailures;
+        }, this.recoverWarn('Compile check'));
       }
     }
 
@@ -273,7 +243,7 @@ export class OutputNode<C = unknown> extends Node<
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { streamId, logger, outputState, runtimeHost, workflowOutputPolicy } =
+    const { streamId, outputState, runtimeHost, workflowOutputPolicy } =
       this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary, roundOutput } = execRes;
@@ -316,36 +286,27 @@ export class OutputNode<C = unknown> extends Node<
 
     // Validate expected outputs if turn ended
     if (endTurn) {
-      await tryOperation(
-        async () => {
-          const validationResult = await checkExpectedOutputs(
-            outputState,
-            this.services,
-            outputLocation,
-            currentRound,
-            summary.stage,
-          );
+      await tryOperation(async () => {
+        const validationResult = await checkExpectedOutputs(
+          outputState,
+          this.services,
+          outputLocation,
+          currentRound,
+          summary.stage,
+        );
 
-          runtimeHost.emit('updateMissingOutputs', {
-            streamId,
-            filesByRound: { [currentRound]: validationResult.missing },
+        runtimeHost.emit('updateMissingOutputs', {
+          streamId,
+          filesByRound: { [currentRound]: validationResult.missing },
+        });
+
+        if (validationResult.missing.length > 0) {
+          runtimeHost.emit('requestShowInstruction', {
+            key: 'missingOutputsInfo',
+            message: 'Missing output files detected',
           });
-
-          if (validationResult.missing.length > 0) {
-            runtimeHost.emit('requestShowInstruction', {
-              key: 'missingOutputsInfo',
-              message: 'Missing output files detected',
-            });
-          }
-        },
-        {
-          logger,
-          level: 'warn' as const,
-          label: 'Validate expected outputs',
-          messageType: MESSAGE_TYPES.DEFAULT,
-          recover: () => undefined,
-        },
-      );
+        }
+      }, this.recoverWarn('Validate expected outputs'));
     }
 
     // Store round output
@@ -369,6 +330,21 @@ export class OutputNode<C = unknown> extends Node<
     }
 
     return FlowTransition.DEFAULT;
+  }
+
+  /**
+   * Recovery options for {@link tryOperation}: log the failure at `warn` with
+   * the DEFAULT message type, then continue. Shared by every best-effort output
+   * step so a single failing step never aborts the round.
+   */
+  private recoverWarn(label: string) {
+    return {
+      logger: this.services.logger,
+      level: 'warn' as const,
+      label,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      recover: () => undefined,
+    };
   }
 
   private async handleLatexdiff(

@@ -48,6 +48,22 @@ export interface DesktopDiffHostOptions {
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
 ): Pick<DiffViewHost, 'openDiff'> {
+  // Try to render the diff in the wa-dialog overlay. Returns `false` (so the
+  // caller falls back to the external editor) when the renderer rejects or
+  // throws; mirrors the preview host's contract.
+  function tryShowDiffInRenderer(message: unknown): boolean {
+    if (!options.postToRenderer || options.forceExternal) return false;
+    try {
+      return options.postToRenderer(message) !== false;
+    } catch (error) {
+      console.error(
+        '[desktop] desktopDiffHost: postToRenderer failed; falling back to external editor',
+        error,
+      );
+      return false;
+    }
+  }
+
   async function openDiff(
     original: DiffSource,
     proposed: DiffSource,
@@ -61,28 +77,17 @@ export function createDesktopDiffHost(
     // Prefer the in-app overlay when wired. A `false` return value or
     // a thrown error opts into the external-editor fallback (covers the
     // startup IPC race, destroyed BrowserWindow, and `forceExternal`).
-    if (options.postToRenderer && !options.forceExternal) {
-      let posted = false;
-      try {
-        const result = options.postToRenderer(
-          buildDesktopShowDiffMessage({
-            title,
-            originalText: originalContent,
-            proposedText: proposedContent,
-            language: monacoLanguageForFilePath(proposed.filePath),
-            originalPath: original.filePath,
-            proposedPath: proposed.filePath,
-          }),
-        );
-        posted = result !== false;
-      } catch (error) {
-        console.error(
-          '[desktop] desktopDiffHost: postToRenderer failed; falling back to external editor',
-          error,
-        );
-      }
-      if (posted) return { original, proposed, title };
-    }
+    const shownInRenderer = tryShowDiffInRenderer(
+      buildDesktopShowDiffMessage({
+        title,
+        originalText: originalContent,
+        proposedText: proposedContent,
+        language: monacoLanguageForFilePath(proposed.filePath),
+        originalPath: original.filePath,
+        proposedPath: proposed.filePath,
+      }),
+    );
+    if (shownInRenderer) return { original, proposed, title };
 
     // External-editor fallback: write a unified patch file and open it.
     const patch =

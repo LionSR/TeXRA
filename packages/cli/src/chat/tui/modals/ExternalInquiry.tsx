@@ -173,6 +173,10 @@ function maxExternalInquiryQuestionScrollOffset(
   });
 }
 
+function overflowLine(text: string): ExternalInquiryDisplayLine {
+  return { kind: 'overflow', text };
+}
+
 export function boundedExternalInquiryQuestionLines({
   maxDisplayLines,
   question,
@@ -190,9 +194,10 @@ export function boundedExternalInquiryQuestionLines({
 
   if (maxDisplayLines <= COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS) {
     const visibleCount = Math.max(1, maxDisplayLines - 1);
-    const offset = Math.max(
+    const offset = clamp(
+      scrollOffset,
       0,
-      Math.min(scrollOffset, Math.max(0, lines.length - visibleCount)),
+      Math.max(0, lines.length - visibleCount),
     );
     const visible = lines.slice(offset, offset + visibleCount);
     const hiddenBefore = offset;
@@ -201,12 +206,7 @@ export function boundedExternalInquiryQuestionLines({
     return [
       ...visible,
       ...(hiddenBefore > 0 || hiddenAfter > 0
-        ? [
-            {
-              kind: 'overflow' as const,
-              text: scrollStatusText(hiddenBefore, hiddenAfter),
-            },
-          ]
+        ? [overflowLine(scrollStatusText(hiddenBefore, hiddenAfter))]
         : []),
     ];
   }
@@ -219,23 +219,9 @@ export function boundedExternalInquiryQuestionLines({
   });
 
   return [
-    ...(hiddenBefore > 0
-      ? [
-          {
-            kind: 'overflow' as const,
-            text: previousRowsText(hiddenBefore),
-          },
-        ]
-      : []),
+    ...(hiddenBefore > 0 ? [overflowLine(previousRowsText(hiddenBefore))] : []),
     ...visibleRows,
-    ...(hiddenAfter > 0
-      ? [
-          {
-            kind: 'overflow' as const,
-            text: moreRowsText(hiddenAfter),
-          },
-        ]
-      : []),
+    ...(hiddenAfter > 0 ? [overflowLine(moreRowsText(hiddenAfter))] : []),
   ];
 }
 

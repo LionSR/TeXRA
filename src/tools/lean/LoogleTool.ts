@@ -293,16 +293,16 @@ Useful for finding the right lemma when you know roughly what type it should hav
     }
 
     const totalHits = allResults.length;
+    const allFailed = errorCount === queries.length;
     let summary: string;
     if (totalHits > 0) {
       summary = `${totalHits} result${totalHits > 1 ? 's' : ''} across ${queries.length} queries`;
-    } else if (errorCount === queries.length) {
+    } else if (allFailed) {
       summary = `All ${queries.length} queries failed`;
     } else {
       summary = `No results across ${queries.length} queries`;
     }
 
-    const allFailed = errorCount === queries.length;
     return {
       summary,
       output: sections.join('\n\n---\n\n'),

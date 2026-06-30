@@ -110,9 +110,9 @@ function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
 
 function commandCaseBlock(command: CompletionCommand): string {
   const key = commandKey(command.path);
-  const commands = command.subcommands.join(' ');
+  const subcommands = command.subcommands.join(' ');
   const flags = command.flags.flatMap(completionFlagTokens).join(' ');
-  return `${quote([key])}) subcommands=${quote([commands])}; flags=${quote([flags])} ;;`;
+  return `${quote([key])}) subcommands=${quote([subcommands])}; flags=${quote([flags])} ;;`;
 }
 
 export function bashCompletion(commands: readonly CompletionCommand[]): string {

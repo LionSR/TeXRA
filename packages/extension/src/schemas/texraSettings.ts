@@ -162,31 +162,21 @@ function getNestedJsonSchema(path: TexraSettingPath): JsonSchemaObject {
   return schema;
 }
 
-function pickPackageSchemaFields(
-  schema: JsonSchemaObject,
-): TexraPackageConfigurationProperty {
-  const property: Record<string, unknown> = {};
-  for (const field of GENERATED_PACKAGE_SCHEMA_FIELDS) {
-    const value = schema[field];
-    if (value !== undefined) {
-      property[field] = value;
-    }
-  }
-  return property as TexraPackageConfigurationProperty;
-}
-
 function buildTexraPackageConfigurationProperty(
   key: TexraSettingKey,
   existing: TexraPackageConfigurationProperty = {},
 ): TexraPackageConfigurationProperty {
   const path = stripPrefix(key) as TexraSettingPath;
-  const generated = pickPackageSchemaFields(getNestedJsonSchema(path));
-  if (generated.type !== 'null') {
-    generated.default = getTexraSettingDefault(path);
-  }
+  const schema = getNestedJsonSchema(path);
+  // Regenerate every managed field from the Zod-derived JSON schema, replacing
+  // whatever the package.json copy held. Non-null settings take their default
+  // from the parsed schema defaults rather than the raw JSON schema node.
   const property: Record<string, unknown> = { ...existing };
   for (const field of GENERATED_PACKAGE_SCHEMA_FIELDS) {
-    const value = generated[field];
+    const value =
+      field === 'default' && schema.type !== 'null'
+        ? getTexraSettingDefault(path)
+        : schema[field];
     if (value === undefined) {
       delete property[field];
     } else {

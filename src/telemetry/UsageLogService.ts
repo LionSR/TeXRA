@@ -141,11 +141,10 @@ class UsageLogServiceImpl {
       }
       return true;
     } catch (error) {
-      if (entries.length > 0) {
-        this.restoreFailedBatch(entries);
-      }
+      const requeued = entries.length;
+      if (requeued > 0) this.restoreFailedBatch(entries);
       const requeuedMessage =
-        entries.length > 0 ? `; requeued ${entries.length} entries` : '';
+        requeued > 0 ? `; requeued ${requeued} entries` : '';
       logger.warn(
         CHANNEL,
         `Failed to send usage batch${requeuedMessage}: ${toErrorMessage(error)}`,

@@ -11,7 +11,7 @@ import { animationStyles } from '@shared/styles/litStyles';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 
-// Import and re-export individual style modules
+// Import individual style modules
 import { logEntryStyles } from './logEntryStyles';
 import { groupStyles } from './groupStyles';
 import { codeBlockStyles } from './codeBlockStyles';
@@ -19,14 +19,6 @@ import { toolUseStyles } from './toolUseStyles';
 
 const katexStyleSheet = new CSSStyleSheet();
 katexStyleSheet.replaceSync(katexStyles);
-
-export {
-  logEntryStyles,
-  groupStyles,
-  codeBlockStyles,
-  toolUseStyles,
-  markdownStyles,
-};
 
 /**
  * Layout styles for Shadow DOM host and child elements.

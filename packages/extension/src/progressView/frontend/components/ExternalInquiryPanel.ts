@@ -78,6 +78,10 @@ function safeHttpUrl(link: string): string | undefined {
     : undefined;
 }
 
+function idsEqual(a: InquiryPermissionIds, b: InquiryPermissionIds): boolean {
+  return a.requestId === b.requestId && a.threadId === b.threadId;
+}
+
 /** Clear draft for a resolved inquiry. Called from eventHandlers on submit/drop. */
 export function clearInquiryDraft(requestId: string): void {
   draftCache.delete(requestId);
@@ -188,13 +192,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
       const pending = this.pendingDraftSave;
       this.pendingDraftSave = undefined;
       if (!pending) return;
-      const currentIds = this.getPermissionIds();
-      if (
-        currentIds.requestId !== pending.requestId ||
-        currentIds.threadId !== pending.threadId
-      ) {
-        return;
-      }
+      if (!idsEqual(this.getPermissionIds(), pending)) return;
       this.writeDraft(pending, pending.draft, { persist: true });
     }, DRAFT_SAVE_DELAY_MS);
     this.pendingDraftSave = { ...ids, draft, timer };
@@ -203,11 +201,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   private flushDraft(permission: { data: unknown } = this.permission): void {
     const ids = this.getPermissionIds(permission);
     const pending = this.pendingDraftSave;
-    if (
-      pending &&
-      pending.requestId === ids.requestId &&
-      pending.threadId === ids.threadId
-    ) {
+    if (pending && idsEqual(pending, ids)) {
       this.clearPendingDraftSave();
       this.writeDraft(ids, pending.draft, { persist: true });
       return;

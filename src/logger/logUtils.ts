@@ -128,18 +128,27 @@ function writeLine(
   );
 }
 
+/** Errors don't survive `JSON.stringify`, so flatten them before emit. */
+function normalizeLogData(data: unknown): unknown {
+  return data instanceof Error ? serializeError(data) : data;
+}
+
 function logAt(
   level: LogLevel,
   channel: string,
   message: string,
   options: LogUtilsOptions,
 ): void {
-  const data =
-    options.data instanceof Error ? serializeError(options.data) : options.data;
   // Functional callers (housekeeping, utils, common) never write to the
   // per-stream agent channels — that's exclusively the trace subscriber
   // path via `attachChannelSubscriber`.
-  writeLine(level, channel, /* isAgent */ false, message, data);
+  writeLine(
+    level,
+    channel,
+    /* isAgent */ false,
+    message,
+    normalizeLogData(options.data),
+  );
 }
 
 export function initialize(channel: string, isAgent = false): void {
@@ -220,14 +229,12 @@ export function attachChannelSubscriber(
     // upstream subscribers (debug telemetry, transcript) that opt in.
     if (event.messageType === MESSAGE_TYPES.INTERNAL) return;
 
-    const data =
-      event.data instanceof Error ? serializeError(event.data) : event.data;
     writeLine(
       event.level,
       options.channel,
       options.isAgent,
       event.message,
-      data,
+      normalizeLogData(event.data),
     );
   };
 
