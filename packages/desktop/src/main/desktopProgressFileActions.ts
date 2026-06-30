@@ -4,11 +4,7 @@ import path from 'node:path';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { DiffViewHost } from '@hosts/uiHosts';
-import {
-  buildAcceptConfirmMessage,
-  buildAcceptSuccessMessage,
-  getAcceptedFileTarget,
-} from '@latex/acceptedFileTarget';
+import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
@@ -123,43 +119,25 @@ export class DesktopProgressFileActions {
     baseFile: string,
     editedFile: string,
   ): Promise<boolean> {
-    const baseLocation = pathToLocation(baseFile);
-    const editedLocation = pathToLocation(editedFile);
-    const target = getAcceptedFileTarget(
-      baseLocation,
-      editedLocation.absolutePath,
+    return acceptEditedFileReplace(
+      pathToLocation(baseFile),
+      pathToLocation(editedFile),
+      {
+        exists: (location) => AbsoluteFS.exists(location.absolutePath),
+        readFile: (location) => readFile(location.absolutePath, 'utf8'),
+        writeFile: (location, content) =>
+          writeFile(location.absolutePath, content, 'utf8'),
+        confirm: (message) =>
+          this.options.confirmAcceptFile
+            ? this.options.confirmAcceptFile(message)
+            : Promise.resolve(true),
+        emitWritten: (absolutePath) =>
+          this.host.runtimeHost.emit('workspaceFilesWritten', {
+            absolutePaths: [absolutePath],
+          }),
+        showInfo: (message) => this.options.showInfoMessage?.(message),
+      },
     );
-    const { targetLocation, targetFileName, isNewFile } = target;
-    const targetExists =
-      isNewFile && (await AbsoluteFS.exists(targetLocation.absolutePath));
-    const confirmMessage = buildAcceptConfirmMessage(
-      target,
-      baseFile,
-      editedFile,
-      targetExists,
-    );
-
-    if (this.options.confirmAcceptFile) {
-      const confirmed = await this.options.confirmAcceptFile(confirmMessage);
-      if (!confirmed) return false;
-    }
-
-    const editedContent = await readFile(editedLocation.absolutePath, 'utf8');
-    await writeFile(targetLocation.absolutePath, editedContent, 'utf8');
-    if (targetLocation.kind === 'workspace') {
-      this.host.runtimeHost.emit('workspaceFilesWritten', {
-        absolutePaths: [targetLocation.absolutePath],
-      });
-    }
-
-    await this.options.showInfoMessage?.(
-      buildAcceptSuccessMessage(
-        targetFileName,
-        editedFile,
-        !isNewFile || targetExists,
-      ),
-    );
-    return true;
   }
 
   async runLatexdiffForRun(

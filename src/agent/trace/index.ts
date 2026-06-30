@@ -10,37 +10,13 @@
  *
  * See `docs/proposals/agent-trace-sdk-surface.md` for the design.
  */
-export type {
-  AgentEvent,
-  ContextStateData,
-  ContextStateEvent,
-  DomainEvent,
-  LogEvent,
-  ResultEvent,
-  StageEndEvent,
-  StageStartEvent,
-  StageStamp,
-  StreamChunkEvent,
-  StreamEndEvent,
-  StreamKind,
-  StreamStartEvent,
-  TokenUsageStats,
-  ToolEndEvent,
-  ToolStartEvent,
-  ToolStatus,
-  UsageEvent,
-} from './events';
+export type { AgentEvent, LogEvent, ResultEvent } from './events';
 
 export type {
   AgentTrace,
   AgentTraceSubscriber,
-  DomainEventInput,
-  LogOptions,
-  StagedEmitOptions,
   StageHandle,
-  StageOptions,
   StreamHandle,
-  StreamOptions,
 } from './AgentTrace';
 
 export { TraceEmitter } from './TraceEmitter';

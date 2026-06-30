@@ -15,6 +15,7 @@ import type {
   FileInteractionState,
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
+import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
@@ -31,7 +32,7 @@ import {
   normalizeToolCallError,
   parseToolInput,
 } from './toolCallParsing';
-import type { CycleParams, ToolUseRoundServices } from '../CycleServices';
+import type { ToolUseRoundServices } from '../CycleServices';
 import type { ToolUseRoundShared } from './roundShared';
 
 /** Tools that may take a while and benefit from showing in-progress state. */
@@ -85,7 +86,7 @@ interface ToolExecutionResult {
  */
 export class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseRoundShared,
-  CycleParams,
+  FlowParams,
   ToolUseRoundServices<C>
 > {
   /**

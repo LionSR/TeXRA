@@ -13,7 +13,6 @@ import type {
   TerminalHandle,
   TerminalHost,
   TerminalOptions,
-  UIHosts,
 } from '@hosts/uiHosts';
 
 export type PromptEventKind = 'info' | 'warning' | 'error';
@@ -282,6 +281,19 @@ export class FakeTerminalHandle implements TerminalHandle {
   createLookupHandle(): FakeTerminalHandle {
     return new FakeTerminalHandle(this.options, this.state);
   }
+}
+
+/**
+ * The five UI ports a host wires together. Production hosts (VS Code,
+ * desktop) inject each port individually; this aggregate exists only so
+ * test support can assemble and pass them as a single bundle.
+ */
+export interface UIHosts {
+  readonly prompt: PromptHost;
+  readonly externalOpener: ExternalOpener;
+  readonly diff: DiffViewHost;
+  readonly terminal: TerminalHost;
+  readonly clipboard: ClipboardHost;
 }
 
 export interface FakeUIHosts extends UIHosts {

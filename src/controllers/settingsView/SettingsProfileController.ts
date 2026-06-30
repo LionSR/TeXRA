@@ -78,6 +78,45 @@ export interface SettingsProfileControllerDeps {
   invalidateModelOptionsCache(): void;
 }
 
+/**
+ * Per-provider data needed to assemble a `ProviderKeyStatus`. Each host resolves
+ * these the same way, except `getProviderVscodeSettings`: the VS Code extension
+ * fills it from config while the desktop app returns [].
+ */
+export interface ProviderKeyStatusSources {
+  readonly providerIds: readonly string[];
+  loadProviderKeyStatuses(): Promise<
+    Record<string, ProviderKeyStatus['status']>
+  >;
+  getProviderDisplayName(provider: string): string;
+  getProviderKeyUrl(provider: string): string | undefined;
+  getProviderStreaming(provider: string): boolean;
+  getProviderEndpoint(provider: string): string;
+  supportsCustomEndpoint(provider: string): boolean;
+  getProviderVscodeSettings(provider: string): ProviderVscodeSetting[];
+}
+
+/**
+ * Map every provider id to its `ProviderKeyStatus`. Shared by the VS Code
+ * extension controller and the desktop settings IPC so the wire shape lives in
+ * exactly one place and the two hosts cannot drift.
+ */
+export async function buildProviderKeyStatuses(
+  sources: ProviderKeyStatusSources,
+): Promise<ProviderKeyStatus[]> {
+  const secretStatuses = await sources.loadProviderKeyStatuses();
+  return sources.providerIds.map((provider) => ({
+    provider,
+    displayName: sources.getProviderDisplayName(provider),
+    status: secretStatuses[provider] ?? 'not-set',
+    keyUrl: sources.getProviderKeyUrl(provider) ?? '',
+    streaming: sources.getProviderStreaming(provider),
+    customEndpoint: sources.getProviderEndpoint(provider),
+    supportsCustomEndpoint: sources.supportsCustomEndpoint(provider),
+    vscodeSettings: sources.getProviderVscodeSettings(provider),
+  }));
+}
+
 export class SettingsProfileController {
   private readonly providerSettingsByKey: Map<string, ProviderVscodeSettingDef>;
   private readonly reliabilitySettingKeys = new Set(
@@ -169,18 +208,22 @@ export class SettingsProfileController {
     return { kind: 'updated', affectsModelAvailability };
   }
 
-  private async getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
-    const secretStatuses = await this.deps.loadProviderKeyStatuses();
-    return this.deps.providerIds.map((provider) => ({
-      provider,
-      displayName: this.getProviderDisplayName(provider),
-      status: secretStatuses[provider] ?? 'not-set',
-      keyUrl: this.getProviderKeyUrl(provider) ?? '',
-      streaming: this.deps.getProviderStreaming(provider),
-      customEndpoint: this.deps.getProviderEndpoint(provider),
-      supportsCustomEndpoint: this.deps.supportsCustomEndpoint(provider),
-      vscodeSettings: this.getProviderVscodeSettings(provider),
-    }));
+  private getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
+    return buildProviderKeyStatuses({
+      providerIds: this.deps.providerIds,
+      loadProviderKeyStatuses: () => this.deps.loadProviderKeyStatuses(),
+      getProviderDisplayName: (provider) =>
+        this.getProviderDisplayName(provider),
+      getProviderKeyUrl: (provider) => this.getProviderKeyUrl(provider),
+      getProviderStreaming: (provider) =>
+        this.deps.getProviderStreaming(provider),
+      getProviderEndpoint: (provider) =>
+        this.deps.getProviderEndpoint(provider),
+      supportsCustomEndpoint: (provider) =>
+        this.deps.supportsCustomEndpoint(provider),
+      getProviderVscodeSettings: (provider) =>
+        this.getProviderVscodeSettings(provider),
+    });
   }
 
   private getProviderVscodeSettings(provider: string): ProviderVscodeSetting[] {

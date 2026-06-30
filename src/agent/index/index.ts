@@ -7,29 +7,15 @@ export { AgentSource } from '@shared/schemas/agent';
 export {
   AgentDirectoryService,
   type AbsoluteDirectoryAccess,
-  type AgentDirectoryDocsId,
+  type AgentDirectoryEntry,
   type AgentDirectoryIssueReporter,
   type AgentDirectoryPathStorage,
   type AgentDirectoryServiceLogger,
-  type AgentDirectoryServiceOptions,
-  type CustomAgentDirectoryStore,
 } from './AgentDirectoryService';
 
-export { type BundledAgentDirectoryName } from './BundledAgentDirectories';
+export { GlobalStorageAgentDirectoryStorage } from './AgentDirectorySync';
 
-export {
-  GlobalStorageAgentDirectoryStorage,
-  type AgentDirectoryBundleSource,
-  type AgentDirectoryStorage,
-  type AgentDirectorySyncLogger,
-  type AgentDirectoryVersionStore,
-  type BundledAgentDirectorySyncOptions,
-} from './AgentDirectorySync';
-
-export {
-  type AgentDirectories,
-  setAgentDirectories,
-} from './agentDirectoriesRegistry';
+export { setAgentDirectories } from './agentDirectoriesRegistry';
 
 export { toRemoteAgentProfileData } from './remoteAgentProfileData';
 

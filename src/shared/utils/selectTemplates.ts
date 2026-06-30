@@ -59,7 +59,6 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
 
 export function renderAgentOptions(
   options: AgentOptionData[],
-  _selectedValue: string,
   { includeBrowseAll = false }: { includeBrowseAll?: boolean } = {},
 ): TemplateResult {
   return html`
@@ -128,10 +127,7 @@ function renderModelOption(opt: ModelOptionData): TemplateResult {
   `;
 }
 
-export function renderModelOptions(
-  options: ModelOptionData[],
-  _selectedValue: string,
-): TemplateResult {
+export function renderModelOptions(options: ModelOptionData[]): TemplateResult {
   return html`
     ${repeat(
       options,

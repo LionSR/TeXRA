@@ -18,6 +18,7 @@
 // Local imports - core flow primitives
 import { Flow } from '@agent/node';
 import { defaultPostCompactionContext } from '@agent/core/flows/CommonCycleTypes';
+import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
@@ -25,7 +26,7 @@ import { ModelInvocationNode } from './ModelInvocationNode';
 import { ToolUseRoundPrepNode } from './toolUseRound/ToolUseRoundPrepNode';
 import { ToolUseProcessNode } from './toolUseRound/ToolUseProcessNode';
 import { ToolUseDispatchNode } from './toolUseRound/ToolUseDispatchNode';
-import type { CycleParams, ToolUseRoundServices } from './CycleServices';
+import type { ToolUseRoundServices } from './CycleServices';
 import type { ToolUseRoundShared } from './toolUseRound/roundShared';
 
 export {
@@ -48,13 +49,13 @@ export {
  */
 export function createToolUseRoundFlow<C>(): Flow<
   ToolUseRoundShared,
-  CycleParams,
+  FlowParams,
   ToolUseRoundServices<C>
 > {
   const prepNode = new ToolUseRoundPrepNode<C>();
   const callNode = new ModelInvocationNode<
     ToolUseRoundShared,
-    CycleParams,
+    FlowParams,
     ToolUseRoundServices<C>
   >({
     operationName: 'Tool-use call',
@@ -77,7 +78,7 @@ export function createToolUseRoundFlow<C>(): Flow<
   processNode.on(FlowTransition.CONTINUE, prepNode);
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ToolUseRoundShared, CycleParams, ToolUseRoundServices<C>>(
+  return new Flow<ToolUseRoundShared, FlowParams, ToolUseRoundServices<C>>(
     prepNode,
   );
 }
