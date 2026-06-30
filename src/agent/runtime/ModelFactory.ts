@@ -11,9 +11,17 @@ import {
 import { isCodexSignedIn, shouldUseCodexSubscription } from '@auth/codex';
 import * as logger from '@logger/logUtils';
 import { isGpt5ModelName } from '@model/modelNames';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
+import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
+
+export {
+  MODEL_HANDLER_COMPATIBILITY_KEYS,
+  ModelHandlerCompatibilityKeySchema,
+} from './modelHandlerCompatibilityKey';
+export type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
@@ -23,20 +31,9 @@ type ModelHandlerConstructor = new (
 ) => ModelHandler<ProviderMessage>;
 
 type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
-export type ModelHandlerCompatibilityKey =
-  | 'ModelHandlerValidation'
-  | 'ModelHandlerOpenAIResponse'
-  | 'ModelHandlerOpenRouterNative'
-  | 'ModelHandlerAnthropic'
-  | 'ModelHandlerOpenAI'
-  | 'ModelHandlerGoogleGenAI'
-  | 'ModelHandlerGoogleInteractions'
-  | 'ModelHandlerDeepSeek'
-  | 'ModelHandlerXAI'
-  | 'ModelHandlerKimi'
-  | 'ModelHandlerDashScope'
-  | 'ModelHandlerMiniMax'
-  | 'ModelHandlerGLM';
+type CompatibilityRoutedModelConfig = ModelConfig & {
+  readonly forceDirectProvider?: boolean;
+};
 
 interface ProviderHandlerRoute {
   readonly load: ProviderHandlerLoader | null;
@@ -188,7 +185,7 @@ function modelRequiresInteractionsAPI(config: ModelConfig): boolean {
  * Check if the Google Interactions API should be used for this config.
  *
  * Additive sibling to the chat/`generateContent` Google route, gated behind
- * `texra.model.useGoogleInteractionsAPI` (default off). OpenRouter can NOT proxy
+ * `texra.model.useGoogleInteractionsAPI` (default on). OpenRouter can NOT proxy
  * Interactions, so an active OpenRouter proxy always returns false — the chat
  * handler (or OpenRouter) remains the fallback. This is a PURE predicate (never
  * throws): the unsupported Interactions-only + OpenRouter combination is failed
@@ -205,7 +202,7 @@ export function shouldUseGoogleInteractionsAPI(
   }
   if (useOpenRouter) return false;
   if (modelRequiresInteractionsAPI(config)) return true;
-  return getConfig<boolean>('texra.model.useGoogleInteractionsAPI', false);
+  return getConfig<boolean>('texra.model.useGoogleInteractionsAPI', true);
 }
 
 /**
@@ -237,8 +234,12 @@ export function shouldUseResponsesAPI(
   return (
     requiresOpenAIResponsesAPI(config, useOpenRouter) ||
     (!useOpenRouter &&
-      (getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
-        config.fullName.startsWith('gpt-oss')))
+      (config.fullName.startsWith('gpt-oss') ||
+        (config.capabilities.supportsFunctionCalling !== false &&
+          getConfig<boolean>(
+            'texra.model.useOpenAIResponsesAPI',
+            DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI,
+          ))))
   );
 }
 
@@ -346,6 +347,22 @@ function withShortModelName(config: ModelConfig): ModelConfig {
   return resolved;
 }
 
+function withCompatibilityRoutingMode(
+  config: ModelConfig,
+  compatibilityKey: ModelHandlerCompatibilityKey,
+): ModelConfig {
+  if (compatibilityKey === 'ModelHandlerOpenRouterNative') {
+    return { ...config, openRouterOnly: true };
+  }
+
+  const routed: CompatibilityRoutedModelConfig = {
+    ...config,
+    openRouterOnly: false,
+    forceDirectProvider: true,
+  };
+  return routed;
+}
+
 /**
  * Creates a model handler instance based on provider and routing configuration.
  * Applies short model name preference and reasoning level overrides.
@@ -372,12 +389,52 @@ export async function createModelHandler(
     false,
   );
 
+  return createModelHandlerForResolvedCompatibilityKey(
+    config,
+    compatibilityKey,
+    useOpenRouter,
+    { allowCodexSubscriptionOverride: true },
+  );
+}
+
+/**
+ * Rebuild a handler for an already-persisted conversation format. This is used
+ * by resume paths: a snapshot may have been written before a routing default
+ * changed, so the transcript format must win over today's default route.
+ */
+export async function createModelHandlerForCompatibilityKey(
+  originalConfig: ModelConfig,
+  compatibilityKey: ModelHandlerCompatibilityKey,
+): Promise<ModelHandler> {
+  const routedConfig = withCompatibilityRoutingMode(
+    withShortModelName(originalConfig),
+    compatibilityKey,
+  );
+  const useOpenRouter = compatibilityKey === 'ModelHandlerOpenRouterNative';
+  return createModelHandlerForResolvedCompatibilityKey(
+    routedConfig,
+    compatibilityKey,
+    useOpenRouter,
+    {
+      allowCodexSubscriptionOverride:
+        compatibilityKey === 'ModelHandlerOpenAIResponse',
+    },
+  );
+}
+
+async function createModelHandlerForResolvedCompatibilityKey(
+  config: ModelConfig,
+  compatibilityKey: ModelHandlerCompatibilityKey | undefined,
+  useOpenRouter: boolean,
+  options: { allowCodexSubscriptionOverride: boolean },
+): Promise<ModelHandler> {
   // ChatGPT subscription (Codex backend via the user's OAuth session) — an
   // async, key-neutral override of the Responses path: these are OpenAI
   // Responses-shaped models the user has opted to drive through their
   // subscription instead of an API key. Gated on the key not being the
   // validation override so the package-validation gate still wins.
   if (
+    options.allowCodexSubscriptionOverride &&
     compatibilityKey !== 'ModelHandlerValidation' &&
     shouldUseCodexSubscription(config, useOpenRouter) &&
     (await isCodexSignedIn())

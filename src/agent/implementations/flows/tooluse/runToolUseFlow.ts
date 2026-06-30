@@ -8,6 +8,7 @@ import {
   createModelHandler,
   modelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
+import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   PersistedFlow,
@@ -42,7 +43,10 @@ import {
   migrateSharedState,
   type ToolUseRunShared,
 } from './nodes/types';
-import { setToolUseSharedModel } from './modelSwitchState';
+import {
+  currentModelFromUserChannels,
+  setToolUseSharedModel,
+} from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type {
@@ -286,9 +290,13 @@ export async function runToolUseFlow<C = unknown>(
   let touchedFiles: string[] | undefined;
   let totalCostUsd: number | undefined;
   let teardownSetup: (() => void) | undefined;
+  const compatibilityKey = activeModelHandlerCompatibilityKey(
+    services.modelHandler,
+  );
 
   let shared: ToolUseRunShared = {
     messages: [],
+    modelHandlerCompatibilityKey: compatibilityKey,
     shouldSkipCycle: false,
     stateSlices: null,
   };
@@ -309,10 +317,39 @@ export async function runToolUseFlow<C = unknown>(
         logger.warn('Failed to parse flow record shared state, starting fresh');
         await kv.delete(flowKey(executionId));
         flowRecord = null;
-      } else if (migrationResult.migrated) {
-        logger.debug('Migrated legacy shared state to flat format');
-        flowRecord.shared = migrationResult.data;
-        await kv.write(flowKey(executionId), flowRecord);
+      } else {
+        let migratedData = migrationResult.data;
+        let shouldWriteShared = migrationResult.migrated;
+        const sharedModel = migratedData.stateSlices
+          ? (currentModelFromUserChannels(
+              migratedData.stateSlices.userChannels,
+            ) ?? services.config.model)
+          : services.config.model;
+        const backfillCompatibilityKey =
+          inferPersistedModelHandlerCompatibilityKey(
+            sharedModel,
+            migratedData.messages,
+          ) ?? compatibilityKey;
+        if (
+          !migratedData.modelHandlerCompatibilityKey &&
+          backfillCompatibilityKey
+        ) {
+          logger.debug(
+            'Backfilled tool-use model-handler compatibility key in shared state.',
+          );
+          migratedData = {
+            ...migratedData,
+            modelHandlerCompatibilityKey: backfillCompatibilityKey,
+          };
+          shouldWriteShared = true;
+        }
+        if (shouldWriteShared) {
+          if (migrationResult.migrated) {
+            logger.debug('Migrated legacy shared state to flat format');
+          }
+          flowRecord.shared = migratedData;
+          await kv.write(flowKey(executionId), flowRecord);
+        }
       }
     }
 
