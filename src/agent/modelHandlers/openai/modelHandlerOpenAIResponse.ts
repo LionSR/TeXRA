@@ -19,7 +19,6 @@ import { type OpenAIAPIResponseUsage } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
 import {
   detectStatusCode,
@@ -47,6 +46,7 @@ import {
 } from '@utils/config/providerConfig';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import { normalizeUsage } from '../support/UsageNormalizer';
+import { computeOpenAIResponsePrice } from './openAIUsage';
 import { initializeOpenAiCompatibleOutputAndPrefill } from '../support/openAiCompatiblePrefill';
 import { tagOpenAISdkError } from './openAISdkError';
 import {
@@ -2014,32 +2014,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /** Price computation adapted for Responses API token fields. */
   computePrice(responseUsage: ResponseUsage): number {
-    const promptTokens = responseUsage.input_tokens ?? 0;
-    const completionTokens = responseUsage.output_tokens ?? 0;
-
-    let basePrice = calculateTokenPrice(
-      promptTokens,
-      completionTokens,
-      this.config.inputPrice,
-      this.config.outputPrice,
+    return computeOpenAIResponsePrice(
+      responseUsage,
+      this.standardPricingConfig(),
     );
-
-    const reasoningTokens =
-      responseUsage.output_tokens_details?.reasoning_tokens ?? 0;
-    const cachedTokens = responseUsage.input_tokens_details?.cached_tokens ?? 0;
-
-    if (reasoningTokens) {
-      basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
-    }
-    if (cachedTokens) {
-      basePrice -=
-        (cachedTokens *
-          this.config.inputPrice *
-          (1 - this.capabilities.cacheDiscountFactor)) /
-        1e6;
-    }
-
-    return basePrice;
   }
 
   /** Normalizes OpenAI Responses API usage data into a unified format. */
