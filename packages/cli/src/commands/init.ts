@@ -16,6 +16,7 @@ import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import {
+  formatCliNoAvailableModelsRecovery,
   getCliModelAccessList,
   type CliModelAccess,
 } from '../runtime/modelAccess';
@@ -98,15 +99,25 @@ interface InitSummary {
 function initWarning(
   answers: InitAnswers,
   models: readonly CliModelAccess[],
+  apiMode: CliApiMode,
 ): InitSummary['warning'] {
   const chosen = models.find((model) => model.model.value === answers.model);
   if (!chosen || chosen.available) return undefined;
   return {
     model: answers.model,
     message: `"${answers.model}" is not usable in the current access mode.`,
-    recovery:
-      'Run `texra login` for included relay access, set the provider API key, or run `texra models list` to pick another.',
+    recovery: `${formatCliNoAvailableModelsRecovery(apiMode)} Run \`texra models list --all\` to inspect access.`,
   };
+}
+
+function initNextSteps(warning: InitSummary['warning']): readonly string[] {
+  if (!warning) {
+    return ['Next: run `texra` for the launcher, or `texra chat` to start.'];
+  }
+  return [
+    `Next: ${warning.recovery}`,
+    'After a model is available, run `texra` for the launcher or `texra chat` to start.',
+  ];
 }
 
 function initGitignoreText(outcome: GitignoreOutcome | undefined): string[] {
@@ -126,11 +137,7 @@ function initTextSummary(summary: InitSummary): string {
     `  output: ${summary.outputFormat}`,
   ];
   if (summary.warning) {
-    lines.push(
-      '',
-      `Note: ${summary.warning.message}`,
-      summary.warning.recovery,
-    );
+    lines.push('', `Note: ${summary.warning.message}`);
   }
   lines.push('', ...summary.next);
   return lines.join('\n');
@@ -143,7 +150,9 @@ function emitInitSummary(
   config: InitConfigShape,
   models: readonly CliModelAccess[],
   gitignore: GitignoreOutcome | undefined,
+  apiMode: CliApiMode,
 ): void {
+  const warning = initWarning(answers, models, apiMode);
   const summary: InitSummary = {
     path: filePath,
     agent: answers.agent,
@@ -152,8 +161,8 @@ function emitInitSummary(
     outputFormat: answers.outputFormat,
     config,
     gitignore,
-    warning: initWarning(answers, models),
-    next: ['Next: run `texra` for the launcher, or `texra chat` to start.'],
+    warning,
+    next: initNextSteps(warning),
   };
   emitCliResult(context, {
     json: summary,
@@ -183,9 +192,8 @@ async function runInit(
     return CliExitCode.Usage;
   }
 
-  const { agents, models, seededRoster } = await gatherOptions(
-    effectiveCliApiMode(context),
-  );
+  const apiMode = effectiveCliApiMode(context);
+  const { agents, models, seededRoster } = await gatherOptions(apiMode);
 
   const interactive =
     !opts.yes &&
@@ -228,7 +236,15 @@ async function runInit(
     gitignoreOutcome = await ensureTexraGitignored(context.cwd);
   }
 
-  emitInitSummary(context, filePath, answers, config, models, gitignoreOutcome);
+  emitInitSummary(
+    context,
+    filePath,
+    answers,
+    config,
+    models,
+    gitignoreOutcome,
+    apiMode,
+  );
   return CliExitCode.Success;
 }
 
