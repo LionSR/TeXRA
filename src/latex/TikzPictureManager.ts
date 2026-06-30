@@ -14,6 +14,14 @@ import { compileLatex2Pdf } from './texTools';
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
+/**
+ * Pick the run-storage-relative path for a location, falling back to its
+ * absolute path for external (non-run-storage) locations.
+ */
+function runStoragePath(loc: FileLocation): string {
+  return loc.kind !== 'external' ? loc.relativePath : loc.absolutePath;
+}
+
 class TikzPictureManager {
   constructor(
     private readonly channel: string = CHANNEL,
@@ -108,11 +116,10 @@ class TikzPictureManager {
     });
 
     const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
-    const buildDir =
-      buildDirLocation.kind !== 'external'
-        ? buildDirLocation.relativePath
-        : buildDirLocation.absolutePath;
-    const fileRelativePath = path.join(buildDir, filename);
+    const fileRelativePath = path.join(
+      runStoragePath(buildDirLocation),
+      filename,
+    );
 
     const texLocation = this.createLocation(
       fileRelativePath,
@@ -135,11 +142,7 @@ class TikzPictureManager {
    */
   async compile(latexFile: FileLocation): Promise<FileLocation[]> {
     const inputName = path.parse(path.basename(latexFile.absolutePath)).name;
-    const inputDir = path.dirname(
-      latexFile.kind !== 'external'
-        ? latexFile.relativePath
-        : latexFile.absolutePath,
-    );
+    const inputDir = path.dirname(runStoragePath(latexFile));
     const buildRelativePath = path.join(inputDir, 'build', inputName);
 
     const buildDirLocation = this.createLocation(
@@ -185,11 +188,7 @@ class TikzPictureManager {
         const pdfFilename = path
           .basename(texLocation.absolutePath)
           .replace(/\.tex$/, '.pdf');
-        const texDir = path.dirname(
-          texLocation.kind !== 'external'
-            ? texLocation.relativePath
-            : texLocation.absolutePath,
-        );
+        const texDir = path.dirname(runStoragePath(texLocation));
         const pdfRelativePath = path.join(texDir, pdfFilename);
 
         const pdfLocation = this.createLocation(

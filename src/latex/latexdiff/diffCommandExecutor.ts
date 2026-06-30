@@ -134,6 +134,19 @@ export class DiffCommandExecutor {
     return command.toSpliced(position, 0, '--flatten');
   }
 
+  /** Markup-related flags shared by the latexdiff and latexdiff-vc commands. */
+  private markupFlags(
+    mathMarkup: MathMarkupOption,
+    subtype?: string,
+  ): string[] {
+    return [
+      '--graphics-markup=none',
+      buildLatexdiffTextCommandExclusionFlag(),
+      `--math-markup=${mathMarkup}`,
+      ...(subtype ? [`--subtype=${subtype}`] : []),
+    ];
+  }
+
   private buildLatexdiffCommand(
     inputFile: string,
     editedFile: string,
@@ -147,10 +160,7 @@ export class DiffCommandExecutor {
       '--encoding=utf8',
       '-c',
       `PICTUREENV=${pictureEnvs}`,
-      '--graphics-markup=none',
-      buildLatexdiffTextCommandExclusionFlag(),
-      `--math-markup=${mathMarkup}`,
-      ...(subtype ? [`--subtype=${subtype}`] : []),
+      ...this.markupFlags(mathMarkup, subtype),
       inputFile,
       editedFile,
     ];
@@ -172,10 +182,7 @@ export class DiffCommandExecutor {
       `PICTUREENV=${pictureEnvs}`,
       '--force',
       '--git',
-      '--graphics-markup=none',
-      buildLatexdiffTextCommandExclusionFlag(),
-      `--math-markup=${mathMarkup}`,
-      ...(subtype ? [`--subtype=${subtype}`] : []),
+      ...this.markupFlags(mathMarkup, subtype),
       '-r',
       commitHash,
       inputFile,

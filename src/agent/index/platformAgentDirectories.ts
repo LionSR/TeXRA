@@ -1,4 +1,3 @@
-// Local imports - agent index
 import { platform } from '@platform/platform';
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import * as logger from '@logger/logUtils';
@@ -10,10 +9,6 @@ import {
   type AgentDirectoryVersionStore,
 } from './AgentDirectorySync';
 import { setAgentDirectories } from './agentDirectoriesRegistry';
-
-// Local imports - common
-
-// Local imports - platform
 
 interface PlatformAgentDirectoryOptions {
   channel: string;

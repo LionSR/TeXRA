@@ -351,30 +351,28 @@ export function handleInvocationResult<T extends { response: unknown }>(
     return null;
   }
 
-  if (result.kind === 'cancelled') {
-    state.lastError = undefined;
+  function stop(lastError: RetryErrorInfo | undefined): null {
+    state.lastError = lastError;
     state.shouldStop = true;
     state.endTurn = false;
     return null;
+  }
+
+  if (result.kind === 'cancelled') {
+    return stop(undefined);
   }
 
   if (result.kind === 'failed') {
     const { kind: _, ...errorInfo } = result;
-    state.lastError = errorInfo;
-    state.shouldStop = true;
-    state.endTurn = false;
-    return null;
+    return stop(errorInfo);
   }
 
   if (!result.response) {
     logger.warn(EMPTY_RESPONSE_ERROR_MESSAGE);
-    state.lastError = {
+    return stop({
       message: EMPTY_RESPONSE_ERROR_MESSAGE,
       userRetryable: false,
-    };
-    state.shouldStop = true;
-    state.endTurn = false;
-    return null;
+    });
   }
 
   state.lastError = undefined;

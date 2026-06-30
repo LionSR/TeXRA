@@ -5,10 +5,9 @@
 // Third-party imports
 import { logWebFetch, logWebSearch, type AgentTrace } from '@agent/trace';
 import {
-  extractDomain,
+  mapAnthropicWebSearchEntries,
   type WebFetchResult,
   type WebSearchResult,
-  type WebSearchResultEntry,
 } from '@agent/modelHandlers/types/ServerToolTypes';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { StreamDiagnostics } from '@shared/schemas';
@@ -21,7 +20,6 @@ import type { BetaMessageStream } from '@anthropic-ai/sdk/lib/BetaMessageStream'
 import type {
   ServerToolUseBlock,
   WebSearchToolResultBlock,
-  WebSearchResultBlock,
   WebFetchToolResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
@@ -361,10 +359,10 @@ export class AnthropicStreamHandler {
     const searchData = this.state.pendingSearches.get(block.tool_use_id);
 
     // Parse query from accumulated input JSON
-    const query = this.parseSearchQuery(searchData?.input);
+    const query = this.parseStreamField(searchData?.input, 'query');
 
     // Extract results from the block content
-    const entries = this.extractSearchResults(block);
+    const entries = mapAnthropicWebSearchEntries(block.content);
 
     // Emit to progress view
     if (entries.length > 0 || query) {
@@ -389,7 +387,7 @@ export class AnthropicStreamHandler {
     const fetchData = this.state.pendingFetches.get(block.tool_use_id);
 
     // Parse URL from accumulated input JSON
-    const fetchUrl = this.parseFetchUrl(fetchData?.input);
+    const fetchUrl = this.parseStreamField(fetchData?.input, 'url');
 
     // Native discriminated-union narrowing on block.content
     // (WebFetchBlock | WebFetchToolResultErrorBlock) replaces the prior
@@ -457,35 +455,6 @@ export class AnthropicStreamHandler {
       return (parsed.value as Record<string, string>)[field] ?? '';
     const match = input.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`));
     return match?.[1] ?? '';
-  }
-
-  /** Parses the fetch URL from accumulated input JSON. */
-  private parseFetchUrl(input: string | undefined): string {
-    return this.parseStreamField(input, 'url');
-  }
-
-  /** Parses the search query from accumulated input JSON. */
-  private parseSearchQuery(input: string | undefined): string {
-    return this.parseStreamField(input, 'query');
-  }
-
-  /**
-   * Extracts search results from a web_search_tool_result block.
-   */
-  private extractSearchResults(
-    block: WebSearchToolResultBlock,
-  ): WebSearchResultEntry[] {
-    if (!Array.isArray(block.content)) return [];
-
-    return (block.content as WebSearchResultBlock[])
-      .filter((r) => r.type === 'web_search_result' && r.url)
-      .map((r) => ({
-        url: r.url,
-        title: r.title,
-        snippet: r.encrypted_content,
-        pageAge: r.page_age ?? undefined,
-        domain: extractDomain(r.url),
-      }));
   }
 
   /**
