@@ -21,30 +21,8 @@ allowBuilds:
   unrs-resolver: true
 patchedDependencies:
   ink@7.1.0: patches/ink@7.1.0.patch
-minimumReleaseAgeExclude:
-  - '@anthropic-ai/sdk@0.103.0'
-  # 2026-06-30: unblock reviewed production patch bumps from #6829 while
-  # they clear the 24h quarantine. Safe to remove after 2026-07-01T13:47Z.
-  - '@octokit/request@10.0.11'
-  - fs-extra@11.3.6
-  - p-map@7.0.5
-  - vscode-jsonrpc@9.0.1
-  # 2026-06-10: unblock installs; these cleared review but were <24h old.
-  # Safe to remove once they age past the default quarantine window.
-  - '@anthropic-ai/claude-agent-sdk@0.3.170'
-  - '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.170'
-  - '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.170'
-  - '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.170'
-  - '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.170'
-  - '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.170'
-  - '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.170'
-  - '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.170'
-  - '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.170'
-  - '@supabase/auth-js@2.108.1'
-  - '@supabase/functions-js@2.108.1'
-  - '@supabase/postgrest-js@2.108.1'
-  - '@supabase/realtime-js@2.108.1'
-  - '@supabase/storage-js@2.108.1'
-  - '@supabase/supabase-js@2.108.1'
-  - electron@42.4.0
-  - semver@7.8.4
+# pnpm 11 enables a 24h minimumReleaseAge supply-chain quarantine by default,
+# which blocked same-day dependency bumps (e.g. a fresh llm-zoo for a new model)
+# until they aged out, forcing a per-package allowlist. Disable it repo-wide so
+# reviewed bumps land immediately.
+minimumReleaseAge: 0
