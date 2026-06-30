@@ -57,6 +57,7 @@ export {
   ProfileUserSchema,
   RemoteAgentSchema,
   ApiAccessModeSchema,
+  API_ACCESS_MODE_OPTIONS,
   TierConstantsSchema,
   ProviderKeyStatusSchema,
   ProviderVscodeSettingSchema,
