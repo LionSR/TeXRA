@@ -22,6 +22,7 @@ import { platform, tryPlatform } from '@platform/platform';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
@@ -55,7 +56,6 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { assertNever } from '@utils/core';
 
@@ -719,11 +719,7 @@ export async function runChat(
       onKillExecution={(executionId) => {
         clearApprovals();
         executionRegistry.kill(executionId, {
-          detachActiveChildren:
-            tryPlatform()?.workspaceState.get<boolean>(
-              WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-              false,
-            ) === true,
+          detachActiveChildren: detachSubagentsOnStop(),
         });
       }}
       history={inputHistory}
