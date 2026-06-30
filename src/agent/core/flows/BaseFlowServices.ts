@@ -32,7 +32,6 @@ export interface AgentCore<C = unknown> {
   modelHandler: IModelHandler<
     ProviderMessage,
     unknown,
-    unknown,
     SdkToolCall,
     C
   >;

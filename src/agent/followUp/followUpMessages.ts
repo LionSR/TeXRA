@@ -15,7 +15,7 @@ import type { FollowUpQueueBatchItem } from './FollowUpQueue';
 
 interface FollowUpMessageServices<C> {
   readonly modelHandler: Pick<
-    IModelHandler<ProviderMessage, unknown, unknown, SdkToolCall, C>,
+    IModelHandler<ProviderMessage, unknown, SdkToolCall, C>,
     'addMediaToUserMessage' | 'capabilities' | 'createUserFollowUpMessages'
   >;
   readonly fileService: Pick<TaskRunFileService, 'createLocation'>;
