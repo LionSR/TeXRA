@@ -41,23 +41,16 @@ import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   STREAM_STATUS,
-  type AgentProposalPermission,
   type AgentCategoryFilter,
-  type BashPermission,
-  type ExternalInquiryPermission,
   type MainViewPersistedState,
-  type PlanApprovalPermission,
   type ProgressViewOutboundMessage,
-  type RetryPermission,
-  type ToolEditPermission,
-  type UserQuestionPermission,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
-import { ApprovalRequestHandler } from '@shared/progressView/backend/ApprovalRequestHandler';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import {
+  buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
   type ApprovalRequestHandlerSet,
 } from '@shared/progressView/backend/progressBackendUiConfig';
@@ -243,103 +236,25 @@ export class DesktopProgressBridge {
         // The desktop renderer is always attached (no sidebar/editor re-target),
         // so every show/resolve reaches the webview.
         const canSend = () => true;
-        this.approvalHandlers = {
-          toolEdit: new ApprovalRequestHandler<ToolEditPermission, 'requestId'>(
-            'requestId',
-            (p) =>
-              webviewUpdater.showPermission({
-                kind: PERMISSION_KIND.TOOL_EDIT,
-                data: p,
-              }),
-            (id) =>
-              webviewUpdater.resolvePermission(PERMISSION_KIND.TOOL_EDIT, id),
-            canSend,
-          ),
-          bash: new ApprovalRequestHandler<BashPermission, 'requestId'>(
-            'requestId',
-            (p) =>
-              webviewUpdater.showPermission({
-                kind: PERMISSION_KIND.BASH,
-                data: p,
-              }),
-            (id) => webviewUpdater.resolvePermission(PERMISSION_KIND.BASH, id),
-            canSend,
-          ),
-          // Desktop has no retry panel: showRetryRequest below cancels instead
-          // of showing, so this handler is never populated and contributes
-          // nothing to the pending guard. Its transport is therefore unused.
-          retry: new ApprovalRequestHandler<RetryPermission, 'streamId'>(
-            'streamId',
-            () => undefined,
-            () => undefined,
-            canSend,
-          ),
-          agentProposal: new ApprovalRequestHandler<
-            AgentProposalPermission,
-            'proposalId'
-          >(
-            'proposalId',
-            (p) =>
-              webviewUpdater.showPermission({
-                kind: PERMISSION_KIND.PROPOSAL,
-                data: p,
-              }),
-            (id) =>
-              webviewUpdater.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
-            canSend,
-          ),
-          planApproval: new ApprovalRequestHandler<
-            PlanApprovalPermission,
-            'approvalId'
-          >(
-            'approvalId',
-            (p) =>
-              webviewUpdater.showPermission({
-                kind: PERMISSION_KIND.PLAN_APPROVAL,
-                data: p,
-              }),
-            (id) =>
-              webviewUpdater.resolvePermission(
-                PERMISSION_KIND.PLAN_APPROVAL,
-                id,
-              ),
-            canSend,
-          ),
-          externalInquiry: new ApprovalRequestHandler<
-            ExternalInquiryPermission,
-            'requestId'
-          >(
-            'requestId',
-            (p) =>
-              webviewUpdater.showPermission({
-                kind: PERMISSION_KIND.EXTERNAL_INQUIRY,
-                data: p,
-              }),
-            (id) =>
-              webviewUpdater.resolvePermission(
-                PERMISSION_KIND.EXTERNAL_INQUIRY,
-                id,
-              ),
-            canSend,
-          ),
-          userQuestion: new ApprovalRequestHandler<
-            UserQuestionPermission,
-            'requestId'
-          >(
-            'requestId',
-            (p) =>
-              webviewUpdater.showPermission({
-                kind: PERMISSION_KIND.USER_QUESTION,
-                data: p,
-              }),
-            (id) =>
-              webviewUpdater.resolvePermission(
-                PERMISSION_KIND.USER_QUESTION,
-                id,
-              ),
-            canSend,
-          ),
-        };
+        this.approvalHandlers = buildApprovalRequestHandlerSet({
+          webviewUpdater,
+          canSend,
+          overrides: {
+            retry: {
+              show: () => undefined,
+              resolve: () => undefined,
+            },
+            agentProposal: {
+              show: (p) =>
+                webviewUpdater.showPermission({
+                  kind: PERMISSION_KIND.PROPOSAL,
+                  data: p,
+                }),
+              resolve: (id) =>
+                webviewUpdater.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
+            },
+          },
+        });
         return createProgressBackendUiConfig({
           handlers: this.approvalHandlers,
           webviewUpdater,

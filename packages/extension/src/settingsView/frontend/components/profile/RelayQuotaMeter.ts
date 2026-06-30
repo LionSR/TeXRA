@@ -7,16 +7,11 @@ import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 import { designTokens } from '@shared/styles';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { clamp } from '@utils/core';
+import { formatPercent } from '@utils/core/stringCore';
 
 import { profileViewStyles } from './styles';
 
 const WARNING_THRESHOLD_PCT = 80;
-
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '0%';
-  if (value < 1) return '<1%';
-  return `${Math.round(value)}%`;
-}
 
 type QuotaState = 'ok' | 'warning' | 'exhausted';
 
