@@ -62,25 +62,29 @@ function stripLegacySettingFields(input: unknown): unknown {
   return rest;
 }
 
-/** Derive endTag from documentTag when endTag is not explicitly set. */
-function deriveEndTag(input: unknown): unknown {
+/**
+ * Derive endTag from documentTag when none is set. `fallbackTag` supplies the
+ * tag when documentTag is absent/blank; `null` leaves the input unchanged.
+ */
+function deriveEndTagFrom(input: unknown, fallbackTag: string | null): unknown {
   if (typeof input !== 'object' || input === null) return input;
   const obj = input as Record<string, unknown>;
   if (obj.endTag !== undefined) return obj;
   const docTag = isNonEmptyString(obj.documentTag)
     ? obj.documentTag.trim()
-    : 'documents';
+    : fallbackTag;
+  if (docTag === null) return input;
   return { ...obj, endTag: `</${docTag}>` };
+}
+
+/** Derive endTag from documentTag when endTag is not explicitly set. */
+function deriveEndTag(input: unknown): unknown {
+  return deriveEndTagFrom(input, 'documents');
 }
 
 /** Preserve partial child blocks: derive only from explicitly written documentTag. */
 function deriveExplicitEndTag(input: unknown): unknown {
-  if (typeof input !== 'object' || input === null) return input;
-  const obj = input as Record<string, unknown>;
-  if (obj.endTag !== undefined || !isNonEmptyString(obj.documentTag)) {
-    return input;
-  }
-  return { ...obj, endTag: `</${obj.documentTag.trim()}>` };
+  return deriveEndTagFrom(input, null);
 }
 
 export const AgentSettingSchema = z.preprocess(

@@ -1369,6 +1369,22 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * validate reasoning across tool turns (resent each round in stateless mode;
    * retained server-side once sent in chained mode).
    */
+  /**
+   * Build a `thought` step from an optional signature and thinking summary, or
+   * `undefined` when both are empty (an empty thought step is noise on the wire).
+   */
+  private thoughtStep(
+    signature?: string,
+    thinking?: string,
+  ): ThoughtStep | undefined {
+    if (!signature && !thinking) return undefined;
+    return {
+      type: 'thought',
+      ...(signature ? { signature } : {}),
+      ...(thinking ? { summary: [{ type: 'text', text: thinking }] } : {}),
+    } satisfies ThoughtStep;
+  }
+
   private buildAssistantTurnSteps(
     calls: GoogleToolCall[],
     workspaceState: AgentWorkspaceState | undefined,
@@ -1377,14 +1393,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const steps: Step[] = [];
 
     for (const block of workspaceState?.reasoning.thinkingBlocks ?? []) {
-      if (!block.signature && !block.thinking) continue;
-      steps.push({
-        type: 'thought',
-        ...(block.signature ? { signature: block.signature } : {}),
-        ...(block.thinking
-          ? { summary: [{ type: 'text', text: block.thinking }] }
-          : {}),
-      } satisfies ThoughtStep);
+      const step = this.thoughtStep(block.signature, block.thinking);
+      if (step) steps.push(step);
     }
 
     if (text) {
@@ -2167,16 +2177,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const steps: Step[] = [];
     for (const [, slot] of ordered) {
       if (slot.type === 'thought') {
-        // Skip an empty thought (no signature and no summary) — matches
-        // buildAssistantTurnSteps; an empty thought step is noise on the wire.
-        if (!slot.signature && !slot.thought) continue;
-        steps.push({
-          type: 'thought',
-          ...(slot.signature ? { signature: slot.signature } : {}),
-          ...(slot.thought
-            ? { summary: [{ type: 'text', text: slot.thought }] }
-            : {}),
-        } satisfies ThoughtStep);
+        const step = this.thoughtStep(slot.signature, slot.thought);
+        if (step) steps.push(step);
       } else if (slot.type === 'function_call') {
         steps.push({
           type: 'function_call',
