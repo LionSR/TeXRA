@@ -80,6 +80,7 @@ export async function tryResumeFromSnapshot(
     await vscode.commands.executeCommand('texra.execute', {
       config: resumeData.agentConfig,
       executionId: resumeData.executionId,
+      modelHandlerCompatibilityKey: resumeData.modelHandlerCompatibilityKey,
     });
     return true;
   } catch (error) {

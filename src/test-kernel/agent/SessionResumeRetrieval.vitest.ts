@@ -29,6 +29,11 @@ const CONFIG: AgentConfig = {
   cliOutputFile: null,
   cliMultiAgentPresetId: null,
 };
+const GOOGLE_CONFIG: AgentConfig = { ...CONFIG, model: 'gemini35f' };
+const GOOGLE_WORKFLOW_CONFIG: AgentConfig = {
+  ...GOOGLE_CONFIG,
+  agentCategory: AgentCategory.Workflow,
+};
 
 beforeEach(async () => {
   const { initPlatform } = await import('@platform/platform');
@@ -68,5 +73,76 @@ describe('retrieveSessionResumeData', () => {
     if (resume?.type !== 'toolUse') return;
     expect(resume.snapshot.streamId).toBe(streamId);
     expect(resume.snapshot.agentConfig.model).toBe('gpt55');
+  });
+
+  it('infers the legacy Google GenAI handler for old Google Content transcripts', async () => {
+    const executionId = 'abc124' as ExecutionId;
+    const streamId = 'chat@gemini35f#abc124' as StreamTabId;
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        messages: [
+          {
+            role: 'user',
+            parts: [{ text: 'Continue the old chat transcript.' }],
+          },
+        ],
+        shouldSkipCycle: false,
+        stateSlices: {
+          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+          userChannels: {
+            input: Object.freeze({ MODEL: 'gemini35f' }),
+            transient: {},
+          },
+        },
+      },
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    });
+
+    const resume = await retrieveSessionResumeData(
+      streamId,
+      executionId,
+      agentConfigToTaskState(GOOGLE_CONFIG),
+    );
+
+    expect(resume?.type).toBe('toolUse');
+    if (resume?.type !== 'toolUse') return;
+    expect(resume.snapshot.modelHandlerCompatibilityKey).toBe(
+      'ModelHandlerGoogleGenAI',
+    );
+  });
+
+  it('infers the legacy Google GenAI handler for old workflow transcripts', async () => {
+    const executionId = 'abc125' as ExecutionId;
+    const streamId = 'workflow@gemini35f#abc125' as StreamTabId;
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        currentRound: 1,
+        totalRounds: 2,
+        conversation: [
+          {
+            role: 'user',
+            parts: [{ text: 'Continue the old workflow transcript.' }],
+          },
+        ],
+      },
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    });
+
+    const resume = await retrieveSessionResumeData(
+      streamId,
+      executionId,
+      agentConfigToTaskState(GOOGLE_WORKFLOW_CONFIG),
+    );
+
+    expect(resume?.type).toBe('workflow');
+    if (resume?.type !== 'workflow') return;
+    expect(resume.modelHandlerCompatibilityKey).toBe('ModelHandlerGoogleGenAI');
   });
 });

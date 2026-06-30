@@ -12,6 +12,7 @@ import {
   runReflectionFlow,
   type RunReflectionFlowResult,
 } from '@agent/implementations/flows/reflection/runReflectionFlow';
+import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import {
   type AgentConfig,
   type AgentConfigPayload,
@@ -57,6 +58,7 @@ import {
 } from './AgentFlowResult';
 import type { AgentExecutionHandle, AgentRunHandle } from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
+import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
@@ -371,6 +373,8 @@ export interface ExecuteAgentOptions {
   runtimeUnavailableTools?: readonly string[];
   /** Session owning this run's coordination state. Defaults to the process session. */
   session?: SessionHandle;
+  /** Resume using this persisted provider-message format instead of today's default route. */
+  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
   /** Fires after flow completes but before executionRegistry.untrack, so follow-ups are enqueued before waiters resolve. */
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   /** Fires when a subagent fails and should report the failure to its orchestrator. */
@@ -397,6 +401,7 @@ export async function executeAgent(
     enforceCategory: options.enforceCategory,
     suppressErrorNotification: options.isSubagent,
     session: options.session,
+    modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
   });
   ctx.delegationDepth = options.delegationDepth ?? 0;
   ctx.approvalPromptsUnavailable = options.approvalPromptsUnavailable;
@@ -474,11 +479,18 @@ export async function resumeToolUseFromSnapshot(
   runtimeHost: AgentRuntimeHost,
   options: ResumeToolUseFromSnapshotOptions = {},
 ): Promise<void> {
+  const modelHandlerCompatibilityKey =
+    snapshot.modelHandlerCompatibilityKey ??
+    inferPersistedModelHandlerCompatibilityKey(
+      snapshot.agentConfig.model,
+      snapshot.messages,
+    );
   const ctx = await buildAgentLaunchContext({
     configPayload: snapshot.agentConfig,
     executionId: snapshot.executionId,
     runtimeHost,
     streamTabIdOverride: snapshot.streamId,
+    modelHandlerCompatibilityKey,
     // resumeCommand surfaces its own warning toast on failure; skip the
     // bus-level error to avoid double-notifying.
     suppressErrorNotification: true,

@@ -6,7 +6,7 @@
  *
  * Resume strategies differ by agent type:
  * - Tool-use: Full snapshot needed (messages, state slices, etc.)
- * - Workflow: Just agentConfig + executionId (flow reads persisted state)
+ * - Workflow: agentConfig + executionId + transcript-format key
  */
 
 import { z } from 'zod';
@@ -32,6 +32,8 @@ import {
   type StreamTabId,
   type ExecutionId,
 } from '@shared/schemas';
+import { inferPersistedModelHandlerCompatibilityKey } from './modelHandlerCompatibilityInference';
+import { ModelHandlerCompatibilityKeySchema } from './modelHandlerCompatibilityKey';
 
 const logger = createChannelTrace('SessionResumeRetrieval');
 
@@ -41,11 +43,12 @@ const ToolUseResumeDataSchema = z.object({
   snapshot: ToolUseSessionSnapshotSchema,
 });
 
-/** Workflow session resume data: minimal — flow reads persisted state via executionId. */
+/** Workflow session resume data: flow reads full state via executionId. */
 const WorkflowResumeDataSchema = z.object({
   type: z.literal('workflow'),
   agentConfig: AgentConfigSchema,
   executionId: ExecutionIdSchema,
+  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
 });
 
 type ToolUseResumeData = z.infer<typeof ToolUseResumeDataSchema>;
@@ -58,15 +61,21 @@ const ToolUseStateFieldsSchema = z
   .union([
     z.object({
       messages: z.array(ProviderMessageSchema),
+      modelHandlerCompatibilityKey:
+        ModelHandlerCompatibilityKeySchema.nullish(),
       stateSlices: StateSlicesSchema,
     }),
     z.object({
       conversation: z.array(ProviderMessageSchema),
+      modelHandlerCompatibilityKey:
+        ModelHandlerCompatibilityKeySchema.nullish(),
       stateSlices: StateSlicesSchema,
     }),
   ])
   .transform((data) => ({
     messages: 'messages' in data ? data.messages : data.conversation,
+    modelHandlerCompatibilityKey:
+      data.modelHandlerCompatibilityKey ?? undefined,
     stateSlices: data.stateSlices,
   }));
 
@@ -91,6 +100,8 @@ type NormalizedToolUseState = z.infer<typeof ToolUseFlowRecordStateSchema>;
 const WorkflowFlowRecordStateSchema = z.object({
   currentRound: z.int().nonnegative(),
   totalRounds: z.int().nonnegative(),
+  conversation: z.array(ProviderMessageSchema).prefault([]),
+  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
 });
 
 /**
@@ -98,7 +109,7 @@ const WorkflowFlowRecordStateSchema = z.object({
  *
  * Returns appropriate resume data based on task type:
  * - Tool-use: Full snapshot with messages and state
- * - Workflow: Minimal data (agentConfig + executionId)
+ * - Workflow: agentConfig, executionId, and transcript-format key
  *
  * @param streamId - Stream tab ID (used for logging and tool-use snapshot)
  * @param executionId - The execution ID for the stream
@@ -175,6 +186,9 @@ async function retrieveToolUseResumeData(
         currentModelFromUserChannels(stateSlices.userChannels) ??
         taskState.agentConfig.model,
     };
+    const modelHandlerCompatibilityKey =
+      parseResult.data.modelHandlerCompatibilityKey ??
+      inferPersistedModelHandlerCompatibilityKey(agentConfig.model, messages);
 
     // Construct and validate the complete snapshot.
     // Validation provides defense-in-depth: even if flow record is valid,
@@ -184,6 +198,7 @@ async function retrieveToolUseResumeData(
       executionId,
       streamId,
       agentConfig,
+      modelHandlerCompatibilityKey,
       messages,
       run: stateSlices.runStateSnapshot,
       workspace: stateSlices.workspaceSnapshot,
@@ -241,10 +256,17 @@ async function retrieveWorkflowResumeData(
     logger.debug(
       `Retrieved workflow resume data for stream: ${streamId} (round ${parseResult.data.currentRound}/${parseResult.data.totalRounds})`,
     );
+    const modelHandlerCompatibilityKey =
+      parseResult.data.modelHandlerCompatibilityKey ??
+      inferPersistedModelHandlerCompatibilityKey(
+        taskState.agentConfig.model,
+        parseResult.data.conversation,
+      );
     return {
       type: 'workflow',
       agentConfig: taskState.agentConfig,
       executionId,
+      modelHandlerCompatibilityKey,
     };
   } catch (error) {
     // Unexpected failure (KV/IO error) is distinct from "no session to resume":
