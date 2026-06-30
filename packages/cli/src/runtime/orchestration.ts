@@ -173,8 +173,8 @@ function recentAgentItems(
   return items;
 }
 
-// Lists every available team (built-in and custom) so the user can pick — and
-// switch — among them in the launcher, rather than being pinned to one. The
+// Lists every available team (built-in and custom) so the user can pick and
+// switch among them in the launcher, rather than being pinned to one. The
 // Select component windows and scrolls the visible rows, so the full team list
 // is offered without an artificial data cap that would hide extra custom teams.
 function presetItems(
