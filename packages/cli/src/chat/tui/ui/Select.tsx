@@ -233,6 +233,11 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   // unmounts after this flips. Future persistent Select users should reset it.
   const cancelledRef = useRef(false);
 
+  function cancelAndDrop(): void {
+    cancelledRef.current = true;
+    props.onCancel();
+  }
+
   useEffect(() => {
     setHighlight((h) => clampIndex(h, props.items.length));
   }, [props.items.length]);
@@ -284,8 +289,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       (key.meta && !rawNavigationInput) ||
       isRawSelectEscChordInput(input)
     ) {
-      cancelledRef.current = true;
-      props.onCancel();
+      cancelAndDrop();
       return;
     }
     if (isPlainReturnInput(input, key)) {
@@ -295,8 +299,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
     }
     if (!key.ctrl && input.length > 2) {
       if (rawNavigationInput) return;
-      cancelledRef.current = true;
-      props.onCancel();
+      cancelAndDrop();
       return;
     }
     // Single-key jumps (1-9, then a-z) for direct selection. Ignore Ctrl
