@@ -940,7 +940,7 @@ const SCENARIOS = [
       'Claude Code permission',
       'Claude Code reasoning',
       'Auto-compile outputs',
-      '... 3 more',
+      '... 4 more',
       '↑/↓ navigate',
       'Enter toggle / edit',
       'Esc close',

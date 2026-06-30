@@ -22,6 +22,7 @@ import {
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - CLI runtime
+import { enableCliIncludedModelAccess } from './apiAccessMode';
 import { readCliEnv } from './cliContext';
 import { getCliSecrets } from './cliSecrets';
 import { openBrowser } from './browser';
@@ -160,7 +161,7 @@ export async function signInCliSupabase(
 
     const session = await callbackServer.waitForSession();
     getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
-    await getServerSideKeyService().setUseIncludedModelAccess(true);
+    await enableCliIncludedModelAccess();
     return session;
   } finally {
     await callbackServer.close();
@@ -206,7 +207,7 @@ export async function signInCliSupabaseDeviceCode(
   });
   await authCoordinator.storeSession(session);
   getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
-  await getServerSideKeyService().setUseIncludedModelAccess(true);
+  await enableCliIncludedModelAccess();
   return session;
 }
 
