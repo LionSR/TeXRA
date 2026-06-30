@@ -68,6 +68,10 @@ async function runCleanCommand(
   );
   if (!data) return;
 
+  if (outputFiles.length > 0) {
+    logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
+  }
+
   const result =
     outputFiles.length > 0
       ? await runCleanMultiple(
