@@ -1,6 +1,3 @@
-// Standard library imports
-import { Buffer } from 'node:buffer';
-
 // Third-party imports
 import { nanoid } from 'nanoid';
 import {
@@ -8,7 +5,6 @@ import {
   FinishReason,
   ThinkingLevel,
   PartMediaResolutionLevel,
-  File,
   createPartFromText,
   createPartFromUri,
   createPartFromFunctionCall,
@@ -42,16 +38,16 @@ import replacementEngine from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 // Local imports - utils
-import { isNonEmptyString } from '@utils/core';
-import { flexibleFS, getShortDisplayPath } from '@utils/files';
+import { getShortDisplayPath } from '@utils/files';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import {
+  initializeGooglePseudoPrefillOutputAndPrefill,
   isGemini3Model,
   resolveGeminiThinkingLevel,
   resolveGoogleClient,
+  uploadGoogleMediaEntries,
 } from './googleHandlerShared';
 import { computeGooglePrice, normalizeGoogleUsage } from './googleUsage';
-import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagGoogleSdkError } from './googleSdkError';
 import {
   extractNonThinkingText,
@@ -82,7 +78,6 @@ import type {
 } from '@google/genai';
 
 // Type imports
-import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type {
   CreateResponseOptions,
@@ -160,100 +155,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   protected async uploadMediaEntries(entries: MediaEntry[]): Promise<Part[]> {
-    if (entries.length === 0) {
-      return [];
-    }
-
-    const client = await this.getClient();
-    const uploadedParts: Part[] = [];
-    const uploadSummaries: MediaFileResult[] = [];
-    const uploadFailures: string[] = [];
-    const inlineLimit = this.getInlineUploadLimitBytes();
-
-    for (const entry of entries) {
-      const fileName = entry.file_name ?? 'unnamed-file';
-      const mimeType = entry.media_type ?? DEFAULT_ATTACHMENT_MIME_TYPE;
-      const inlinePayload = isNonEmptyString(entry.data) ? entry.data : null;
-
-      if (inlinePayload) {
-        const payloadBytes = Buffer.byteLength(inlinePayload, 'base64');
-        if (payloadBytes <= inlineLimit) {
-          this.logger.debug(
-            `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
-          );
-          const part = createPartFromBase64(
-            inlinePayload,
-            mimeType,
-            this.getMediaResolution(mimeType),
-          );
-          uploadedParts.push(part);
-          uploadSummaries.push({ path: fileName, ok: true });
-          continue;
-        }
-        this.logger.debug(
-          `Media entry ${fileName} is ${payloadBytes} bytes which exceeds inline limit of ${inlineLimit}. Falling back to upload.`,
-        );
-      }
-
-      const canUseSourcePath =
-        entry.source_path &&
-        entry.source_path.length > 0 &&
-        entry.bytes_match_source !== false;
-
-      if (!canUseSourcePath) {
-        this.logger.error(
-          `Skipping media entry ${fileName} due to missing upload source`,
-        );
-        uploadSummaries.push({ path: fileName, ok: false });
-        continue;
-      }
-
-      try {
-        const uploadPath = entry.source_path as string;
-        this.logger.debug(
-          `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
-        );
-        const uploadResult: File = await client.files.upload({
-          file: uploadPath,
-          config: {
-            mimeType,
-            displayName: fileName,
-          },
-        });
-        const fileUri = uploadResult.uri;
-
-        if (!fileUri) {
-          this.logger.error(
-            `Upload result for ${fileName} is missing a URI. Skipping entry.`,
-          );
-          uploadSummaries.push({ path: fileName, ok: false });
-          continue;
-        }
-
-        const resolvedMimeType =
-          uploadResult.mimeType ||
-          entry.media_type ||
-          DEFAULT_ATTACHMENT_MIME_TYPE;
-        const part = createPartFromUri(
-          fileUri,
-          resolvedMimeType,
-          this.getMediaResolution(resolvedMimeType),
-        );
-        uploadedParts.push(part);
-        uploadSummaries.push({ path: fileName, ok: true });
-      } catch (error) {
-        uploadSummaries.push({ path: fileName, ok: false });
-        uploadFailures.push(`${fileName}: ${getSdkErrorMessage(error)}`);
-      }
-    }
-
-    if (uploadSummaries.some((summary) => !summary.ok)) {
-      this.logger.warn(
-        'Some media files failed to upload via Google GenAI SDK' +
-          (uploadFailures.length > 0 ? `: ${uploadFailures.join('; ')}` : ''),
-      );
-    }
-    return uploadedParts;
+    return uploadGoogleMediaEntries<Part>(entries, {
+      getClient: () => this.getClient(),
+      inlineLimit: this.getInlineUploadLimitBytes(),
+      logger: this.logger,
+      buildInline: (data, mimeType) =>
+        createPartFromBase64(data, mimeType, this.getMediaResolution(mimeType)),
+      buildUploaded: (uri, mimeType) =>
+        createPartFromUri(uri, mimeType, this.getMediaResolution(mimeType)),
+    });
   }
 
   async getClient(): Promise<GoogleGenAI> {
@@ -880,79 +790,43 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   async initializeOutputAndPrefill(
-    agentConfig: AgentConfig,
+    _agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: Content[],
     workspaceState: AgentWorkspaceState,
     outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, Content[]]> {
-    this.logger.debug(
-      `Initializing output and prefill for ${outputLocation.absolutePath}. Prefill content: "${prefill.slice(0, 100)}..."`,
-    );
-
-    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
-      this.logger.debug(
-        `Output file ${outputLocation.absolutePath} does not exist or is empty.`,
-      );
-      workspaceState.assembly.accumulatedOutput = prefill;
-
-      if (prefill.length === 0) {
-        this.logger.debug(
-          'No prefill provided; skipping pseudo-prefill instruction',
-        );
-        return [false, messages];
-      }
-
-      // Add pseudo-prefill instruction to user message
-      // (Google's Chat API requires alternating user/model turns)
-      const lastMessage = messages.at(-1);
-      const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
-
-      if (lastMessage?.role === 'user') {
-        const parts = (lastMessage.parts ??= []);
-        parts.push(createPartFromText(pseudoPrefillMsg));
-      } else {
-        // Either no message or last is model - add new user message
-        messages.push(createUserContent(createPartFromText(pseudoPrefillMsg)));
-      }
-
-      this.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);
-      return [false, messages];
-    }
-
-    this.logger.debug(
-      `Output file ${outputLocation.absolutePath} exists and is non-trivial. Reading content.`,
-    );
-
-    // Prepare existing file content (read, clean, extract scratchpad, update state)
-    const { fileContent } = await prepareExistingOutputContent(
-      outputLocation,
-      workspaceState,
-      this.logger,
-    );
-
-    messages.push(createModelContent(createPartFromText(fileContent)));
-    this.logger.debug(
-      `Added existing file content to messages as 'model' role.`,
-    );
-
-    if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.debug(
-        'End tag detected in existing file content - skipping generation.',
-      );
-      return [true, messages];
-    }
-
-    this.logger.debug(
-      'Existing file content found without end tag - continuing generation.',
-    );
-    this.addContinueMessageWithoutPrefill(
+    return initializeGooglePseudoPrefillOutputAndPrefill<Content>(
+      {
+        logger: this.logger,
+        // Google's Chat API requires alternating user/model turns, so the
+        // pseudo-prefill rides on the last user message (or a new one).
+        appendPseudoPrefillToUserStep: (msgs, pseudoPrefillMsg) => {
+          const lastMessage = msgs.at(-1);
+          if (lastMessage?.role === 'user') {
+            (lastMessage.parts ??= []).push(
+              createPartFromText(pseudoPrefillMsg),
+            );
+          } else {
+            msgs.push(createUserContent(createPartFromText(pseudoPrefillMsg)));
+          }
+        },
+        pushModelText: (msgs, text) => {
+          msgs.push(createModelContent(createPartFromText(text)));
+          this.logger.debug(
+            `Added existing file content to messages as 'model' role.`,
+          );
+        },
+        addContinue: (msgs, ws, setting) =>
+          this.addContinueMessageWithoutPrefill(msgs, ws, setting),
+      },
+      agentSetting,
       messages,
       workspaceState,
-      agentSetting,
+      outputLocation,
+      prefill,
     );
-    return [false, messages];
   }
 
   shouldContinue(
