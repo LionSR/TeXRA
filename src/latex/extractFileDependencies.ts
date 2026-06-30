@@ -73,12 +73,9 @@ export async function extractLatexFileDependencies(
   const content = await flexibleFS.read(latexFileLocation);
   const uncommented = stripLatexComments(content);
 
-  const texInputPaths: string[] = [];
-  for (const pattern of [INPUT_PATTERN, INCLUDE_PATTERN]) {
-    for (const match of uncommented.matchAll(pattern)) {
-      texInputPaths.push(match[1]);
-    }
-  }
+  const texInputPaths = [INPUT_PATTERN, INCLUDE_PATTERN].flatMap((pattern) =>
+    [...uncommented.matchAll(pattern)].map((match) => match[1]),
+  );
 
   const bibCandidates = collectBibliographyPaths(latexDir, uncommented);
 
@@ -93,10 +90,7 @@ export async function extractLatexFileDependencies(
     }),
   ]);
 
-  const results = new Set<string>();
-  for (const resolved of [...texResolved, ...bibResolved]) {
-    if (resolved) results.add(resolved);
-  }
-
-  return [...results];
+  return [
+    ...new Set([...texResolved, ...bibResolved].filter((r) => r !== null)),
+  ];
 }

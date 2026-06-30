@@ -4,10 +4,7 @@ import { z } from 'zod';
 // Local imports - core flow primitives
 import { BaseCycleFieldsSchema } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
-import {
-  NormalizedUsageSchema,
-  type NormalizedUsage,
-} from '@agent/types/NormalizedUsage';
+import { NormalizedUsageSchema } from '@agent/types/NormalizedUsage';
 
 /**
  * Schema for serializable tool-use round fields.
@@ -71,8 +68,4 @@ export type ToolUseRoundFields = z.infer<typeof ToolUseRoundFieldsSchema>;
 export interface ToolUseRoundShared extends ToolUseRoundFields {
   /** Tool calls with proper typing (schema uses z.unknown()) */
   toolCalls?: SdkToolCall[];
-  /** Normalized usage with proper typing */
-  roundNormalizedUsage?: NormalizedUsage;
-  /** Last tool-result message index that received a blank-turn continuation. */
-  blankToolResultContinuationMessageIndex?: number;
 }

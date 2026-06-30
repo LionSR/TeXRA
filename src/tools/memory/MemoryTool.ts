@@ -60,8 +60,7 @@ const MemoryToolInputSchema = z.strictObject({
   path: z.string().nullish(),
   file_text: z.string().nullish(),
   view_range: z
-    .array(z.int().min(1))
-    .length(2)
+    .tuple([z.int().min(1), z.int().min(1)])
     .refine(([start, end]) => end >= start, {
       error: 'view_range[1] must be greater than or equal to view_range[0]',
     })
@@ -138,8 +137,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       case 'view':
         return this.view(
           locate(input.path, 'path'),
-          // Schema enforces length 2; cast since Zod infers number[]
-          input.view_range as [number, number] | undefined,
+          input.view_range ?? undefined,
           input.offset ?? 0,
           input.limit ?? 100,
         );
@@ -351,9 +349,9 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     if (occurrences > 1) {
       const lines = content.split('\n');
-      const lineNumbers = lines
-        .map((line, index) => (line.includes(oldStr) ? index + 1 : -1))
-        .filter((n) => n !== -1);
+      const lineNumbers = lines.flatMap((line, index) =>
+        line.includes(oldStr) ? [index + 1] : [],
+      );
       throw new ToolError(
         `old_str is not unique within ${inputPath} (found in lines ${lineNumbers.join(', ')}). Include more surrounding context to make it unique.`,
       );

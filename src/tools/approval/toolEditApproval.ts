@@ -348,11 +348,7 @@ export async function writeApprovedContent(
   // so comparisons work directly without extra normalization.
   const currentContent = await WorkspaceFS.read(path);
 
-  if (currentContent === finalContent) {
-    return { appliedContent: currentContent, baseContent: currentContent };
-  }
-
-  if (originalContent === finalContent) {
+  if (currentContent === finalContent || originalContent === finalContent) {
     return { appliedContent: currentContent, baseContent: currentContent };
   }
 

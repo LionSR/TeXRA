@@ -143,11 +143,8 @@ export async function compileLatex2Pdf(
     // Build kpathsea search-path overrides, prepending workspace/TikZ dirs onto
     // any inherited values. `path.delimiter` keeps it cross-platform.
     const env = buildLatexInputEnv(texInputParts, bibSearchParts);
-    for (const key of ['TEXINPUTS', 'BIBINPUTS', 'BSTINPUTS'] as const) {
-      const value = env[key];
-      if (value) {
-        logger.debug(channel, `Setting ${key} to: ${value}`);
-      }
+    for (const [key, value] of Object.entries(env)) {
+      logger.debug(channel, `Setting ${key} to: ${value}`);
     }
 
     const latexmkArgs = [
@@ -164,6 +161,15 @@ export async function compileLatex2Pdf(
       latexFile,
     ];
 
+    function runPdflatex() {
+      return runToolWithCheck('pdflatex', pdflatexArgs, {
+        channel,
+        env,
+        timeout,
+        showError: true, // Show error if pdflatex fails
+      });
+    }
+
     let result: Awaited<ReturnType<typeof runToolWithCheck>>;
     if (compiler === 'latexmk') {
       result = await runToolWithCheck('latexmk', latexmkArgs, {
@@ -178,20 +184,10 @@ export async function compileLatex2Pdf(
           'latexmk not found, falling back to single-pass pdflatex — ' +
             'bibliography, cross-references, and index may be incomplete',
         );
-        result = await runToolWithCheck('pdflatex', pdflatexArgs, {
-          channel,
-          env,
-          timeout,
-          showError: true, // Show error if pdflatex also fails
-        });
+        result = await runPdflatex();
       }
     } else {
-      result = await runToolWithCheck('pdflatex', pdflatexArgs, {
-        channel,
-        env,
-        timeout,
-        showError: true, // Show error for missing pdflatex
-      });
+      result = await runPdflatex();
     }
 
     if (result && result.success) {

@@ -112,20 +112,34 @@ async function addToIndex(streamId: StreamTabId): Promise<void> {
   await platform().workspaceState.update(INDEX_KEY, [...index, streamId]);
 }
 
+/**
+ * Rewrite INDEX_KEY from the unioned index and drop LEGACY_INDEX_KEY when
+ * present, so a removed entry can't resurface from `odysseys:index` on the next
+ * `readIndex`. Returns an empty list when nothing needs to change.
+ */
+function buildIndexWriteOps(
+  state: NonNullable<ReturnType<typeof tryWorkspaceState>>,
+  index: StreamTabId[],
+  nextIndex: StreamTabId[],
+  hasLegacyIndex: boolean,
+): PromiseLike<void>[] {
+  const ops: PromiseLike<void>[] = [];
+  if (hasLegacyIndex || nextIndex.length !== index.length) {
+    ops.push(state.update(INDEX_KEY, nextIndex));
+  }
+  if (hasLegacyIndex) {
+    ops.push(state.update(LEGACY_INDEX_KEY, undefined));
+  }
+  return ops;
+}
+
 async function removeFromIndex(streamId: StreamTabId): Promise<void> {
   const state = tryWorkspaceState();
   if (!state) return;
-  // `readIndex` unions in the legacy index, so a removal must also migrate
-  // that union into the new key and drop the legacy one — otherwise the
-  // removed entry resurfaces from `odysseys:index` on the next read.
   const hasLegacyIndex = state.get<unknown>(LEGACY_INDEX_KEY) != null;
   const index = readIndex();
   const next = index.filter((id) => id !== streamId);
-  if (!hasLegacyIndex && next.length === index.length) return;
-  await Promise.all([
-    state.update(INDEX_KEY, next),
-    hasLegacyIndex ? state.update(LEGACY_INDEX_KEY, undefined) : null,
-  ]);
+  await Promise.all(buildIndexWriteOps(state, index, next, hasLegacyIndex));
 }
 
 /**
@@ -299,13 +313,7 @@ export const GoalStore = {
     await Promise.all([
       ...toRemove.map((id) => state.update(streamKey(id), undefined)),
       ...toRemove.map((id) => state.update(legacyStreamKey(id), undefined)),
-      hasLegacyIndex || nextIndex.length !== index.length
-        ? state.update(INDEX_KEY, nextIndex)
-        : Promise.resolve(),
-      // Migrated into the union write above; see removeFromIndex.
-      hasLegacyIndex
-        ? state.update(LEGACY_INDEX_KEY, undefined)
-        : Promise.resolve(),
+      ...buildIndexWriteOps(state, index, nextIndex, hasLegacyIndex),
     ]);
     for (const id of toRemove)
       emitRuntimeEvent('goalStateChanged', { streamId: id });

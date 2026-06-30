@@ -20,6 +20,16 @@ export interface WolframScriptResult {
   exitCode: number | null;
 }
 
+function wolframFailure(error: string): WolframScriptResult {
+  return {
+    success: false,
+    output: null,
+    error,
+    timedOut: false,
+    exitCode: null,
+  };
+}
+
 /**
  * Internal helper to run wolframscript commands with installation check.
  * @param commandArgs Array of command-line arguments to pass to wolframscript (e.g., ['-code', 'expr'] or ['-file', 'path'])
@@ -32,18 +42,11 @@ async function runWolfram(
 ): Promise<WolframScriptResult> {
   const isInstalled = await checkToolInstalled('wolframscript', false);
   if (!isInstalled) {
-    return {
-      success: false,
-      output: null,
-      error: WOLFRAM_NOT_INSTALLED_ERROR,
-      timedOut: false,
-      exitCode: null,
-    };
+    return wolframFailure(WOLFRAM_NOT_INSTALLED_ERROR);
   }
 
   try {
-    const command = ['wolframscript', ...commandArgs];
-    const result = await executeCommand(command, {
+    const result = await executeCommand(['wolframscript', ...commandArgs], {
       truncate: false,
       timeout,
       channel: WOLFRAM_CHANNEL,
@@ -57,15 +60,7 @@ async function runWolfram(
       exitCode: result.exitCode ?? null,
     };
   } catch (err) {
-    const errorMessage = toErrorMessage(err);
-
-    return {
-      success: false,
-      output: null,
-      error: errorMessage,
-      timedOut: false,
-      exitCode: null,
-    };
+    return wolframFailure(toErrorMessage(err));
   }
 }
 

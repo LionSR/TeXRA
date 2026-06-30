@@ -120,10 +120,11 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
   // Serialize approvals so only one prompt is in flight at a time.
   const queue = new PQueue({ concurrency: 1 });
 
-  function rejectMatching(streamId?: StreamTabId): void {
+  function rejectWhere(
+    predicate: (entry: PendingApproval<R>) => boolean,
+  ): void {
     for (const entry of pending.values()) {
-      const matches = streamId === undefined || entry.streamId === streamId;
-      if (matches && !entry.isSettled()) {
+      if (!entry.isSettled() && predicate(entry)) {
         entry.settle(options.rejectionResult());
       }
     }
@@ -146,21 +147,17 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
       return queue.add(run) as Promise<T>;
     },
     rejectPendingForStream(streamId) {
-      rejectMatching(streamId);
+      rejectWhere((entry) => entry.streamId === streamId);
     },
     rejectUnscopedPending(runtimeHost) {
-      for (const entry of pending.values()) {
-        if (
+      rejectWhere(
+        (entry) =>
           !entry.streamId &&
-          !entry.isSettled() &&
-          (runtimeHost === undefined || entry.runtimeHost === runtimeHost)
-        ) {
-          entry.settle(options.rejectionResult());
-        }
-      }
+          (runtimeHost === undefined || entry.runtimeHost === runtimeHost),
+      );
     },
     rejectAllPending() {
-      rejectMatching();
+      rejectWhere(() => true);
     },
   };
 }

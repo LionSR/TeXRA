@@ -141,22 +141,15 @@ function getBasicVars(
   providerFlags: ModelProviderFlags,
   workspacePath?: string,
 ): UserVars {
-  // Build agent lists for template use
+  // Build agent lists for template use. Tool-use agents append their tools.
   function formatAgentList(
-    agents: { name: string; description?: string }[],
-  ): string {
-    return agents
-      .map((a) => `- ${a.name}: ${a.description || 'No description'}`)
-      .join('\n');
-  }
-
-  // Format tool-use agents with their available tools
-  function formatToolUseAgentList(
     agents: Pick<AgentEntry, 'name' | 'description' | 'tools'>[],
+    includeTools = false,
   ): string {
     return agents
       .map((a) => {
-        const toolsStr = a.tools?.length ? ` [${a.tools.join(', ')}]` : '';
+        const toolsStr =
+          includeTools && a.tools?.length ? ` [${a.tools.join(', ')}]` : '';
         return `- ${a.name}: ${a.description || 'No description'}${toolsStr}`;
       })
       .join('\n');
@@ -167,8 +160,9 @@ function getBasicVars(
   const workflowAgentsList = formatAgentList(
     getVisibleAgents('workflow').filter((a) => a.name !== selfName),
   );
-  const toolUseAgentsList = formatToolUseAgentList(
+  const toolUseAgentsList = formatAgentList(
     getVisibleAgents('toolUse').filter((a) => a.name !== selfName),
+    true,
   );
 
   // Get default bib path from settings (empty string if not configured)
