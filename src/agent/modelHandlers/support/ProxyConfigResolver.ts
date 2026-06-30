@@ -54,6 +54,7 @@ export interface ProxyConfig {
   openRouterOnly: boolean;
   customBaseUrl?: string; // Per-model custom base URL (overrides provider default)
   requiresResponsesAPI?: boolean; // Models requiring direct API access (bypasses OpenRouter)
+  forceDirectProvider?: boolean; // Runtime replay override that bypasses OpenRouter
   useServerSideKeys?: boolean; // Pre-computed by caller to avoid duplicated checks
   logger?: { debug: (message: string) => void };
 }

@@ -1,0 +1,120 @@
+// Third-party imports
+import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
+
+// Local imports
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import {
+  ModelHandlerCompatibilityKeySchema,
+  type ModelHandlerCompatibilityKey,
+} from './modelHandlerCompatibilityKey';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isGoogleGenAIContentMessage(message: ProviderMessage): boolean {
+  if (!isRecord(message)) return false;
+  const record = message as Record<string, unknown>;
+  if ('type' in record) return false;
+  const role = record.role;
+  if (role !== 'user' && role !== 'model' && role !== 'system') {
+    return false;
+  }
+  return Array.isArray(record.parts);
+}
+
+function isGoogleInteractionsStepMessage(message: ProviderMessage): boolean {
+  if (!isRecord(message)) return false;
+  const type = (message as Record<string, unknown>).type;
+  return (
+    type === 'user_input' ||
+    type === 'model_output' ||
+    type === 'thought' ||
+    type === 'function_call' ||
+    type === 'function_result'
+  );
+}
+
+function isOpenRouterChatMessage(message: ProviderMessage): boolean {
+  if (!isRecord(message)) return false;
+  const record = message as Record<string, unknown>;
+  if ('type' in record || 'parts' in record) return false;
+  const role = record.role;
+  return (
+    (role === 'system' ||
+      role === 'user' ||
+      role === 'assistant' ||
+      role === 'tool') &&
+    'content' in record
+  );
+}
+
+export function inferPersistedModelHandlerCompatibilityKey(
+  model: string,
+  messages: readonly ProviderMessage[],
+): ModelHandlerCompatibilityKey | undefined {
+  const modelConfig = MODEL_CONFIGS[model];
+  if (modelConfig?.provider !== ModelProvider.GOOGLE) return undefined;
+  if (messages.some(isGoogleGenAIContentMessage)) {
+    return 'ModelHandlerGoogleGenAI';
+  }
+  if (messages.some(isGoogleInteractionsStepMessage)) {
+    return 'ModelHandlerGoogleInteractions';
+  }
+  return messages.some(isOpenRouterChatMessage)
+    ? 'ModelHandlerOpenRouterNative'
+    : undefined;
+}
+
+function arrayOfProviderMessages(value: unknown): ProviderMessage[] | null {
+  return Array.isArray(value) ? (value as ProviderMessage[]) : null;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function currentModelFromRawSharedState(
+  shared: Record<string, unknown>,
+): string | undefined {
+  const stateSlices = shared.stateSlices;
+  if (!isRecord(stateSlices)) return undefined;
+  const userChannels = stateSlices.userChannels;
+  if (!isRecord(userChannels)) return undefined;
+  const transient = userChannels.transient;
+  const input = userChannels.input;
+  return (
+    (isRecord(transient) ? stringValue(transient.MODEL) : undefined) ??
+    (isRecord(input) ? stringValue(input.MODEL) : undefined)
+  );
+}
+
+function unwrapSharedState(shared: unknown): Record<string, unknown> | null {
+  if (!isRecord(shared)) return null;
+  return isRecord(shared.state)
+    ? (shared.state as Record<string, unknown>)
+    : shared;
+}
+
+export function inferPersistedFlowModelHandlerCompatibilityKey(
+  model: string,
+  shared: unknown,
+): ModelHandlerCompatibilityKey | undefined {
+  const record = unwrapSharedState(shared);
+  if (!record) return undefined;
+
+  const parsedKey = ModelHandlerCompatibilityKeySchema.nullish().safeParse(
+    record.modelHandlerCompatibilityKey,
+  );
+  if (parsedKey.success && parsedKey.data) return parsedKey.data;
+
+  const messages =
+    arrayOfProviderMessages(record.messages) ??
+    arrayOfProviderMessages(record.conversation);
+  if (!messages) return undefined;
+
+  return inferPersistedModelHandlerCompatibilityKey(
+    currentModelFromRawSharedState(record) ?? model,
+    messages,
+  );
+}

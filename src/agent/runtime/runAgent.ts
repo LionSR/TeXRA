@@ -8,6 +8,7 @@ import { executeAgent } from './executeAgent';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 import type { AgentRunHandle } from './executionRegistry';
+import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 import type { SessionHandle } from './SessionHandle';
 
 export interface RunAgentOptions {
@@ -27,6 +28,8 @@ export interface RunAgentOptions {
   preferHelperModel?: boolean;
   /** Session owning this run's coordination state. Defaults to the process session. */
   session?: SessionHandle;
+  /** Resume using this persisted provider-message format instead of today's default route. */
+  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
   /**
    * Fires once with the live per-run handle right after it is tracked (F-2):
    * `handle.result` settles with the terminal outcome, `handle.trace` is the
@@ -83,6 +86,7 @@ export async function runAgent(
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     session: options.session,
+    modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
     onRun: options.onRun,
   });
   if (result.category === 'workflow') {
