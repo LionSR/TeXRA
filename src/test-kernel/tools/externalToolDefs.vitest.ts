@@ -1,8 +1,8 @@
-// Third-party imports
-import * as assert from 'node:assert';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
 // Node.js built-in imports
+import * as assert from 'node:assert';
+
+// Third-party imports
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform/test support/tools
 import { createFakePlatform } from '@test/support/FakePlatform';
@@ -12,23 +12,6 @@ import { BinaryResolver } from '@utils/system/binaryResolver';
 afterEach(() => {
   vi.restoreAllMocks();
 });
-
-// Dynamic import: the no-platform-init-outside-composition-root lint rule
-// reserves static initPlatform imports for composition roots. Installs a fake
-// platform for the duration of `body`, then restores the previous one.
-async function withFakePlatform(
-  overrides: Parameters<typeof createFakePlatform>[1],
-  body: () => Promise<void>,
-): Promise<void> {
-  const { initPlatform, tryPlatform } = await import('@platform/platform');
-  const previousPlatform = tryPlatform();
-  initPlatform(createFakePlatform({}, overrides));
-  try {
-    await body();
-  } finally {
-    initPlatform(previousPlatform ?? createFakePlatform());
-  }
-}
 
 describe('external tool definitions', () => {
   it('keeps Zotero visible as a user-toggleable tool group', () => {
