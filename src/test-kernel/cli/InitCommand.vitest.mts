@@ -69,6 +69,22 @@ async function makeTempProject(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'texra-init-test-'));
 }
 
+function expectUnavailableDefaultRecovery(output: string): void {
+  expect(output).toContain(
+    'Note: "deepseekproT" is not usable in the current access mode.',
+  );
+  expect(output).toContain(
+    'Next: Add a provider API key with `texra setup` for personal mode',
+  );
+  expect(output).toContain('Run `texra models list --all` to inspect access.');
+  expect(output).toContain(
+    'After a model is available, run `texra` for the launcher or `texra chat` to start.',
+  );
+  expect(output).not.toContain(
+    'Next: run `texra` for the launcher, or `texra chat` to start.',
+  );
+}
+
 describe('CLI init command', () => {
   let stdout = '';
   let stderr = '';
@@ -318,6 +334,74 @@ describe('CLI init command', () => {
       );
       expect(stdout).toContain('  agent: assistant');
       expect(stdout).toContain('Next: run `texra` for the launcher');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('points non-interactive init at model recovery when the default model is unavailable', async () => {
+    mocks.getCliModelAccessList.mockResolvedValue([
+      modelAccess('deepseekproT', {
+        available: false,
+        status: 'missing key',
+        model: {
+          value: 'deepseekproT',
+          label: 'DeepSeek Pro',
+          availability: 'missing-key',
+          requiresKey: true,
+        },
+      }),
+    ]);
+    const root = await makeTempProject();
+    try {
+      const result = await runCli([
+        '--cwd',
+        root,
+        'init',
+        '--print',
+        '--api-mode',
+        'personal',
+        '--gitignore',
+        '--no-color',
+      ]);
+
+      expect(result.exitCode).toBe(0);
+      expect(stderr).toBe('');
+      expectUnavailableDefaultRecovery(stdout);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('points init at model recovery when the fallback default has no access entry', async () => {
+    mocks.getCliModelAccessList.mockResolvedValue([
+      modelAccess('sonnet46T', {
+        available: false,
+        status: 'login required',
+        model: {
+          value: 'sonnet46T',
+          label: 'Sonnet',
+          availability: 'included-login-required',
+          disabled: true,
+        },
+      }),
+    ]);
+    const root = await makeTempProject();
+    try {
+      const result = await runCli([
+        '--cwd',
+        root,
+        'init',
+        '--print',
+        '--api-mode',
+        'personal',
+        '--gitignore',
+        '--no-color',
+      ]);
+
+      expect(result.exitCode).toBe(0);
+      expect(stderr).toBe('');
+      expectUnavailableDefaultRecovery(stdout);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
