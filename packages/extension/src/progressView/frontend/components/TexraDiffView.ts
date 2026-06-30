@@ -3,12 +3,13 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 
-// Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
-
-// Local imports - shared webview
+// Local imports - shared modules
 import { themeContext } from '@shared/BaseWebviewApp';
+import { commonViewStyles, designTokens } from '@shared/styles';
 import { DESKTOP_THEME_KIND } from '@shared/constants/desktopTheme';
+
+// Local imports - shared Web Awesome helpers
+import { renderLoadingState } from '@shared/wa/loadingState';
 
 type MonacoModule = typeof import('monaco-editor/esm/vs/editor/editor.api.js');
 type MonacoWorkerModule = { default: new () => Worker };
@@ -119,7 +120,6 @@ export class TexraDiffView extends LitElement {
         min-height: 0;
       }
 
-      .placeholder,
       .error {
         display: flex;
         align-items: center;
@@ -133,6 +133,12 @@ export class TexraDiffView extends LitElement {
 
       .error {
         color: var(--color-error);
+      }
+
+      .loading-state {
+        min-height: 240px;
+        border: var(--border-thin) solid var(--color-border);
+        background: var(--color-bg-secondary);
       }
     `,
   ];
@@ -192,9 +198,7 @@ export class TexraDiffView extends LitElement {
       return html`<div class="error">${this.errorMessage}</div>`;
     }
     return html`
-      ${this.loading
-        ? html`<div class="placeholder">Loading diff...</div>`
-        : nothing}
+      ${this.loading ? renderLoadingState('Loading diff...') : nothing}
       <div class="diff-view" ?hidden=${this.loading}>
         <div class="editor"></div>
       </div>

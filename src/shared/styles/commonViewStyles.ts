@@ -314,8 +314,8 @@ export const commonViewStyles: CSSResult = css`
     border-radius: var(--border-radius-small);
   }
 
-  /* Toggle icon for collapsible details - applies to any summary */
-  summary .toggle-icon {
+  /* Toggle icon for collapsible native details summaries. */
+  .details-summary .toggle-icon {
     opacity: var(--opacity-subtle);
     font-size: var(--font-size-sm);
     display: inline-block;
@@ -324,6 +324,18 @@ export const commonViewStyles: CSSResult = css`
 
   details[open] > summary .toggle-icon {
     transform: rotate(90deg);
+  }
+
+  /* Compact banner variant used by progress-view custom-element panels. */
+  wa-details.banner-details::part(base) {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  wa-details.banner-details::part(header),
+  wa-details.banner-details::part(content) {
+    padding: 0;
   }
 
   .text-secondary {

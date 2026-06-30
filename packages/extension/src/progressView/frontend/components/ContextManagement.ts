@@ -5,12 +5,16 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+
+// Local imports - progress view helpers
+import { buildDetailsSummary } from '../formatters/htmlBuilders';
 
 // Local imports - local components (re-use StatItem type)
 import type { StatItem } from './StatisticsPanel';
@@ -33,19 +37,15 @@ export class ContextManagement extends LitElement {
         margin: var(--wa-space-2xs) 0;
       }
 
-      details {
+      wa-details {
         margin: 0;
       }
 
       /* Extend .details-summary from commonViewStyles with accent color */
-      summary,
-      .context-icon,
+      .details-summary,
+      .details-summary .icon,
       .context-title {
         color: var(--accent-color, var(--wa-color-text-normal));
-      }
-
-      .context-icon {
-        margin-right: var(--wa-space-2xs);
       }
 
       .context-title {
@@ -118,25 +118,17 @@ export class ContextManagement extends LitElement {
     }
 
     return html`
-      <details
+      <wa-details
         class="banner-details"
+        appearance="plain"
         style="--accent-color: ${this.config.color}"
       >
-        <summary class="details-summary">
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="chevron-right"
-            class="toggle-icon"
-            aria-hidden="true"
-          ></wa-icon>
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name=${this.config.icon}
-            class="context-icon"
-            aria-hidden="true"
-          ></wa-icon>
-          <span class="context-title">${this.config.label}</span>
-        </summary>
+        ${buildDetailsSummary({
+          iconName: this.config.icon,
+          label: this.config.label,
+          labelClass: 'context-title',
+          summarySlot: true,
+        })}
         <div class="context-content" data-log-id=${this.logId}>
           ${repeat(
             this.items,
@@ -168,7 +160,7 @@ export class ContextManagement extends LitElement {
               `
             : nothing}
         </div>
-      </details>
+      </wa-details>
     `;
   }
 }
