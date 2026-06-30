@@ -14,7 +14,10 @@ import {
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latex';
-import { USE_OPENROUTER_PROVIDER_SETTING } from '@shared/constants/providers';
+import {
+  PROVIDER_ENDPOINT_STATE_ENTRIES,
+  USE_OPENROUTER_PROVIDER_SETTING,
+} from '@shared/constants/providers';
 import {
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
@@ -166,6 +169,12 @@ const OPENROUTER_ROUTING_RUNTIME_REACHABILITY = {
   through:
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/utils/config/providerConfig.ts',
 } satisfies CliRuntimeReachability;
+const PROVIDER_ENDPOINT_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --model <provider-model> --instruction "answer a short question"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/support/ProxyConfigResolver.ts',
+} satisfies CliRuntimeReachability;
 const CODEX_AGENT_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "launch a Codex subagent"',
@@ -178,6 +187,24 @@ const CLAUDE_AGENT_RUNTIME_REACHABILITY = {
   through:
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/claudeAgent.ts -> src/tools/claudeAgentConfig.ts',
 } satisfies CliRuntimeReachability;
+
+const PROVIDER_ENDPOINT_CONSUMER =
+  'src/agent/modelHandlers/support/ProxyConfigResolver.ts';
+
+const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
+  ({ endpointKey, displayName }) =>
+    ({
+      key: endpointKey,
+      schema: z.string().prefault(''),
+      title: `${displayName} endpoint`,
+      description: `Custom base URL for ${displayName} API requests. Leave empty to use the default endpoint.`,
+      category: 'model',
+      store: 'globalState',
+      hosts: ['cli'],
+      cliConsumer: PROVIDER_ENDPOINT_CONSUMER,
+      cliRuntimeReachability: PROVIDER_ENDPOINT_RUNTIME_REACHABILITY,
+    }) satisfies StateSettingEntry,
+);
 
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Git commit author marking ---------------------------------------------
@@ -473,6 +500,13 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: 'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
     cliRuntimeReachability: OPENAI_WEBSOCKET_RUNTIME_REACHABILITY,
   },
+
+  // --- Provider endpoints ---------------------------------------------------
+  // The extension/desktop Models tab already has per-provider endpoint inputs.
+  // The CLI consumes the same global-state keys in `ProxyConfigResolver`, so
+  // these rows expose that existing runtime behavior through `/config` without
+  // adding another imperative settings list.
+  ...PROVIDER_ENDPOINT_SETTINGS,
 
   // --- OpenRouter routing ----------------------------------------------------
   // Read by `getUseOpenRouter()` during model-handler routing. The extension
